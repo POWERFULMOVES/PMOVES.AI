@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    environment:
+      - TZ=America/New_York
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+volumes:
+  npm_data:
+  npm_letsencrypt:

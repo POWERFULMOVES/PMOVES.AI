@@ -1,0 +1,8 @@
+version: "3.8"
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=YOUR_TUNNEL_TOKEN_HERE
+    restart: unless-stopped
