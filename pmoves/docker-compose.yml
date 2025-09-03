@@ -163,6 +163,24 @@ services:
     profiles: ["workers","orchestration"]
     networks: [pmoves]
 
+  pmoves-yt:
+    build: ./services/pmoves-yt
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
+      - YT_BUCKET=${YT_BUCKET:-assets}
+      - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+    depends_on: [minio]
+    ports: ["8077:8077"]
+    profiles: ["orchestration","workers","agents"]
+    networks: [pmoves]
+
   # Optional: experimental v2 gateway with rerank providers
   hi-rag-gateway-v2:
     build: ./services/hi-rag-gateway-v2
