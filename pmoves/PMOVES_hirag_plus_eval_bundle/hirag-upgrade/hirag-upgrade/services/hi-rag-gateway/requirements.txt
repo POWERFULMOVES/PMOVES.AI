@@ -1,0 +1,7 @@
+fastapi==0.114.2
+uvicorn==0.30.6
+qdrant-client==1.9.1
+sentence-transformers==3.0.1
+rapidfuzz==3.9.4
+requests==2.32.3
+neo4j==5.23.1
