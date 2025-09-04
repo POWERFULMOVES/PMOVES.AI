@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "analysis.entities.v1",
+  "type": "object",
+  "properties": {
+    "video_id": {"type": ["string","null"]},
+    "namespace": {"type": ["string","null"]},
+    "detections": {"type": "array", "items": {
+      "type": "object",
+      "properties": {
+        "label": {"type":"string"},
+        "score": {"type":"number"},
+        "ts_seconds": {"type": ["number","null"]},
+        "frame": {"type": ["string","null"]}
+      },
+      "required": ["label","score"]
+    }}
+  },
+  "required": ["detections"]
+}

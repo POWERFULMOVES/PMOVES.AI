@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  agent-zero-ultimate:
+    image: frdel/agent-zero:latest
+    container_name: agent-zero-ultimate
+    restart: unless-stopped
+
+    # Prefer modern GPU flag
+    gpus: all
+    # runtime: nvidia  # fallback if needed
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_MODULE_LOADING=LAZY
+      # PyTorch allocator tuning for very large models
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:4096,roundup_power2_divisions:2
+      - CUDA_LAUNCH_BLOCKING=0
+      - TORCH_CUDNN_V8_API_ENABLED=1
+      - CUBLAS_WORKSPACE_CONFIG=:4096:8
+      - NCCL_DEBUG=WARN
+      # Cache/paths for transformers/HF if used
+      - TRANSFORMERS_CACHE=/models/cache
+      - HF_HOME=/models/hf-cache
+      # Agent Zero app
+      - WEB_UI_PORT=5000
+      - PYTHON_UNBUFFERED=1
+
+    ports:
+      - "5000:5000"     # App UI
+      - "11434:11434"   # Ollama API (if embedded)
+      - "7860:7860"     # Gradio (optional)
+
+    volumes:
+      - agent_models_2025:/models
+      - agent_ollama:/root/.ollama
+      - agent_data:/app/data
+      - agent_config:/app/config
+      - /dev/shm:/dev/shm
+
+    # Large shared memory for model loading
+    shm_size: 64g
+
+    # Performance
+    ipc: host
+    privileged: false
+    ulimits:
+      memlock: -1
+      stack: 134217728
+      nofile: 65536
+
+  # Optional: dedicated Ollama server (separate process)
+  ollama-server:
+    image: ollama/ollama:latest
+    container_name: ollama-2025
+    restart: unless-stopped
+    gpus: all
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - OLLAMA_MAX_LOADED_MODELS=5
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_GPU_OVERHEAD=2048
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_models_2025:/root/.ollama
+    command: ["ollama", "serve"]
+
+volumes:
+  agent_models_2025:
+  agent_ollama:
+  agent_data:
+  agent_config:
+  ollama_models_2025:
+

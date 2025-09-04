@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # Agent Zero with 2025 model support
+  agent-zero-ultimate:
+    image: frdel/agent-zero:latest
+    container_name: agent-zero-ultimate
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, utility]
+        limits:
+          memory: 96G        # Large allocation for multiple models
+          cpus: '24'         # Max out your CPU cores
+    
+    environment:
+      # RTX 5090 + 2025 model optimizations
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_MODULE_LOADING=LAZY
+      
+      # Memory optimizations for large models
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:4096,roundup_power2_divisions:2
+      - PYTORCH_CUDA_CACHE_ALLOC_MAX_SIZE=0.1
+      - CUDA_LAUNCH_BLOCKING=0
+      
+      # TensorCore + FP4 optimizations for GLM-4.5/Qwen3
+      - TORCH_CUDNN_V8_API_ENABLED=1
+      - CUBLAS_WORKSPACE_CONFIG=:4096:8
+      - NCCL_DEBUG=WARN
+      
+      # Model-specific settings
+      - TRANSFORMERS_CACHE=/models/cache
+      - HF_HOME=/models/hf-cache
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_MAX_LOADED_MODELS=3
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_NUM_PARALLEL=4
+      
+      # Agent Zero optimizations
+      - WEB_UI_PORT=5000
+      - PYTHON_UNBUFFERED=1
+      
+    ports:
+      - "5000:5000"     # Agent Zero UI
+      - "11434:11434"   # Ollama API
+      - "8000:8000"     # Additional API
+      - "7860:7860"     # Gradio interfaces
+    
+    volumes:
+      # Massive model storage
+      - agent_models_2025:/models
+      - agent_ollama:/root/.ollama
+      - agent_data:/app/data
+      - agent_config:/app/config
+      
+      # Performance optimizations
+      - /dev/shm:/dev/shm  # Use host shared memory
+    
+    # Maximum shared memory for large model loading  
+    shm_size: '64gb'
+    
+    # Performance settings
+    ipc: host
+    network_mode: host
+    privileged: false
+    
+    ulimits:
+      memlock: -1
+      stack: 134217728    # 128MB stack
+      nofile: 65536       # More file handles
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Dedicated Ollama service for model serving
+  ollama-server:
+    image: ollama/ollama:latest
+    container_name: ollama-2025
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 64G
+    
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - OLLAMA_MAX_LOADED_MODELS=5
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_GPU_OVERHEAD=2048  # Reserve 2GB for system
+      
+    ports:
+      - "11435:11434"
+    
+    volumes:
+      - ollama_models_2025:/root/.ollama
+    
+    command: ["ollama", "serve"]
+
+volumes:
+  agent_models_2025:
+  agent_ollama:
+  agent_data:
+  agent_config:
+  ollama_models_2025:
+

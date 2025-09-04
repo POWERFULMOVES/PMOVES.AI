@@ -1,4 +1,4 @@
-import os, re, time, threading, ipaddress, math, requests
+import os, re, time, threading, ipaddress, math, requests, logging
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +32,10 @@ TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0
 app = FastAPI(title="PMOVES Hi‑RAG Gateway")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+# basic logging for easier debugging in container logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("hirag.gateway")
+
 qdrant = QdrantClient(url=QDRANT_URL, timeout=20.0)
 driver = GraphDatabase.driver(NEO4J_URL, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
@@ -39,13 +43,27 @@ _model = None
 def embed_query(text: str):
     global _model
     if USE_OLLAMA_EMBED:
-        r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model":"nomic-embed-text","prompt":text}, timeout=30)
-        if not r.ok:
-            raise HTTPException(502, f"Ollama embed error: {r.text[:160]}")
-        return r.json().get("embedding")
+        try:
+            r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model":"nomic-embed-text","prompt":text}, timeout=30)
+            if not r.ok:
+                logger.error("Ollama embed bad response: %s", r.text[:300])
+                raise HTTPException(502, f"Ollama embed error: {r.status_code}")
+            return r.json().get("embedding")
+        except requests.RequestException as e:
+            logger.exception("Ollama request failed")
+            raise HTTPException(502, f"Ollama request failed: {e}")
     if _model is None:
-        _model = SentenceTransformer(SENTENCE_MODEL)
-    return _model.encode([text], normalize_embeddings=True).tolist()[0]
+        try:
+            _model = SentenceTransformer(SENTENCE_MODEL)
+        except Exception as e:
+            logger.exception("Failed to load sentence transformer model %s", SENTENCE_MODEL)
+            raise HTTPException(500, f"SentenceTransformer load error: {e}")
+    try:
+        emb = _model.encode([text], normalize_embeddings=True)
+        return emb.tolist()[0]
+    except Exception as e:
+        logger.exception("SentenceTransformer encode error")
+        raise HTTPException(500, f"Embedding encode error: {e}")
 
 def hybrid_score(vec_score: float, lex_score: float, alpha: float=0.7) -> float:
     return alpha*vec_score + (1.0-alpha)*lex_score
@@ -85,7 +103,7 @@ def refresh_warm_dictionary():
         _warm_entities = tmp
         _warm_last = time.time()
     except Exception as e:
-        print("warm dictionary error:", e)
+        logger.exception("warm dictionary error")
 
 def warm_loop():
     while True:
@@ -97,7 +115,8 @@ import threading as _t
 _t.Thread(target=warm_loop, daemon=True).start()
 
 def graph_terms(query: str, limit: int = 8, entity_types=None):
-    toks = [t.lower() for t in re.split(r"\\W+", query) if t and len(t) > 2]
+    # split on non-word characters
+    toks = [t.lower() for t in re.split(r"\W+", query) if t and len(t) > 2]
     if not toks: return []
     types_norm = set([x.upper() for x in (entity_types or [])]) if entity_types else None
     out = set()
@@ -127,6 +146,7 @@ def meili_lexical(query, namespace, limit):
             out[cid] = float(score)
         return out
     except Exception:
+        logger.exception("meili lexical error")
         return {}
 
 def _client_ip(request: Request) -> str:
@@ -146,6 +166,7 @@ def _ip_in_cidrs(ip: str, cidrs):
             except Exception:
                 continue
     except Exception:
+        logger.exception("_ip_in_cidrs parse error for ip %s", ip)
         return False
     return False
 
@@ -159,7 +180,11 @@ def require_tailscale(request: Request):
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
     emb = embed_query(query)
     cond = Filter(must=[FieldCondition(key="namespace", match=MatchValue(value=namespace))])
-    sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=max(16,k), query_filter=cond, with_payload=True, with_vectors=False)
+    try:
+        sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=max(16,k), query_filter=cond, with_payload=True, with_vectors=False)
+    except Exception as e:
+        logger.exception("Qdrant search error")
+        raise HTTPException(503, f"Qdrant search error: {e}")
     gterms = set([t.lower() for t in graph_terms(query, entity_types=entity_types)])
     meili_scores = meili_lexical(query, namespace, k) if USE_MEILI else {}
     results = []
@@ -184,13 +209,34 @@ def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_
 from fastapi import Depends
 @app.post("/hirag/query")
 def http_query(body: dict):
-    q = body.get("query","")
-    ns = body.get("namespace","default")
-    k = int(body.get("k",8))
-    alpha = float(body.get("alpha",0.7))
-    gb = float(body.get("graph_boost", GRAPH_BOOST))
-    et = body.get("entity_types")
-    return {"query": q, "results": run_query(q, ns, k, alpha, gb, et)}
+    # validate payload
+    try:
+        q = body.get("query", "")
+        ns = body.get("namespace", "default")
+        k = int(body.get("k", 8))
+        if k <= 0:
+            raise ValueError("k must be > 0")
+        alpha = float(body.get("alpha", 0.7))
+        if not (0.0 <= alpha <= 1.0):
+            raise ValueError("alpha must be between 0.0 and 1.0")
+        gb = float(body.get("graph_boost", GRAPH_BOOST))
+        et = body.get("entity_types")
+    except Exception as e:
+        logger.exception("Invalid query payload")
+        raise HTTPException(status_code=400, detail=f"Invalid payload: {e}")
+
+    # run query and log request/results for observability
+    try:
+        logger.info("/hirag/query received: q=%s namespace=%s k=%d alpha=%s entity_types=%s", q if len(q) < 200 else q[:200] + "...", ns, k, alpha, et)
+        results = run_query(q, ns, k, alpha, gb, et)
+        logger.info("/hirag/query results count=%d for q=%s", len(results), q if len(q) < 80 else q[:80] + "...")
+        return {"query": q, "results": results}
+    except HTTPException:
+        # re-raise HTTPExceptions from lower layers
+        raise
+    except Exception as e:
+        logger.exception("Unhandled error running query")
+        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
 
 @app.get("/hirag/admin/stats")
 def hirag_admin_stats(_=Depends(require_tailscale)):

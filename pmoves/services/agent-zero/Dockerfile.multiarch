@@ -1,0 +1,27 @@
+# Multi-arch Dockerfile for Agent Zero (desktop RTX + Jetson)
+# Build with buildx for linux/amd64 and linux/arm64
+
+ARG TARGETARCH
+
+# Desktop x86_64 (CUDA 12.8, Ubuntu 24.04)
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04 AS base_amd64
+
+# Jetson ARM64 (JetPack r36.4, Ubuntu 24.04, CUDA 12.8, PyTorch 2.8)
+FROM dustynv/pytorch:2.8-r36.4-cu128-24.04 AS base_arm64
+
+# Select base by architecture
+FROM base_${TARGETARCH} AS app
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+EXPOSE 8080
+CMD ["python","main.py"]
+
