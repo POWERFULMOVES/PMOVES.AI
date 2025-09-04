@@ -163,6 +163,48 @@ services:
     profiles: ["workers","orchestration"]
     networks: [pmoves]
 
+  ffmpeg-whisper:
+    build: ./services/ffmpeg-whisper
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
+    ports: ["8078:8078"]
+    profiles: ["workers","orchestration","agents"]
+    networks: [pmoves]
+
+  media-video:
+    build: ./services/media-video
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
+      - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
+      - FRAME_EVERY=${FRAME_EVERY:-5}
+      - SCORE_THRES=${SCORE_THRES:-0.25}
+    ports: ["8079:8079"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves]
+
+  media-audio:
+    build: ./services/media-audio
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
+      - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
+    ports: ["8082:8082"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves]
   pmoves-yt:
     build: ./services/pmoves-yt
     restart: unless-stopped

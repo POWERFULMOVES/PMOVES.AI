@@ -13,6 +13,12 @@
     "analysis.extract_topics.result.v1": {
       "schema": "schemas/analysis/extract-topics.result.v1.schema.json"
     },
+    "analysis.entities.v1": {
+      "schema": "schemas/analysis/entities.v1.schema.json"
+    },
+    "analysis.audio.v1": {
+      "schema": "schemas/analysis/audio.v1.schema.json"
+    },
     "gen.text.request.v1": {
       "schema": "schemas/gen/text.request.v1.schema.json"
     },
