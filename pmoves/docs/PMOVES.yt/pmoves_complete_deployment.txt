@@ -1,0 +1,822 @@
+# PMOVES.AI YouTube RAG Complete Deployment Script
+# Deploys: Channel Monitor, Chrome Extension, API Integration
+
+param(
+    [Parameter(Position=0)]
+    [ValidateSet('all', 'monitor', 'extension', 'api', 'test')]
+    [string]$Component = 'all',
+    
+    [switch]$Production,
+    [switch]$SkipDependencies
+)
+
+$ErrorActionPreference = "Stop"
+
+# Configuration
+$PMOVES_ROOT = "C:\Users\russe\Documents\GitHub\PMOVES.AI"
+$YOUTUBE_RAG_DIR = Join-Path $PMOVES_ROOT "youtube-rag"
+
+# ASCII Art
+function Show-Banner {
+    Write-Host @"
+
+    ╔══════════════════════════════════════════════════╗
+    ║     PMOVES.AI YouTube RAG Advanced Features     ║
+    ║  Channel Monitor | Chrome Extension | API v1.0  ║
+    ╚══════════════════════════════════════════════════╝
+
+"@ -ForegroundColor Cyan
+}
+
+# ============================================
+# 1. CHANNEL MONITOR DEPLOYMENT
+# ============================================
+function Deploy-ChannelMonitor {
+    Write-Host "`n📡 Deploying YouTube Channel Monitor..." -ForegroundColor Yellow
+    
+    $monitorPath = "$YOUTUBE_RAG_DIR\monitor"
+    
+    # Create directory
+    if (!(Test-Path $monitorPath)) {
+        New-Item -ItemType Directory -Path $monitorPath -Force | Out-Null
+    }
+    
+    # Create channel config
+    $channelConfig = @{
+        channels = @(
+            @{
+                channel_id = "UCsBjURrPoezykLs9EqgamOA"
+                channel_name = "Fireship"
+                enabled = $true
+                check_interval_minutes = 120
+                auto_process = $true
+                filters = @{
+                    exclude_keywords = @("#shorts")
+                }
+                priority = 1
+                tags = @("tech", "tutorials")
+            },
+            @{
+                channel_id = "UC8butISFwT-Wl7EV0hUK0BQ"
+                channel_name = "freeCodeCamp"
+                enabled = $true
+                check_interval_minutes = 240
+                auto_process = $true
+                filters = @{
+                    min_duration_seconds = 600
+                }
+                priority = 2
+                tags = @("education", "programming")
+            }
+        )
+        global_settings = @{
+            max_videos_per_check = 10
+            use_rss_feed = $true
+            check_on_startup = $true
+            batch_processing = $true
+            batch_size = 5
+        }
+        monitoring_schedule = @{
+            enabled = $true
+            type = "interval"
+            interval_minutes = 60
+        }
+    } | ConvertTo-Json -Depth 10
+    
+    Set-Content -Path "$monitorPath\channel_config.json" -Value $channelConfig
+    
+    # Create systemd service (for Linux/Docker) or Windows Task
+    if ($IsWindows) {
+        # Create Windows Task Scheduler task
+        $action = New-ScheduledTaskAction -Execute "python" `
+            -Argument "$monitorPath\channel_monitor.py" `
+            -WorkingDirectory $monitorPath
+        
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        
+        $settings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries `
+            -DontStopIfGoingOnBatteries `
+            -RestartInterval (New-TimeSpan -Minutes 5) `
+            -RestartCount 3
+        
+        Register-ScheduledTask -TaskName "PMOVES-ChannelMonitor" `
+            -Action $action `
+            -Trigger $trigger `
+            -Settings $settings `
+            -Description "PMOVES.AI YouTube Channel Monitor" `
+            -Force
+        
+        Write-Host "✅ Windows Task created for Channel Monitor" -ForegroundColor Green
+    }
+    
+    # Create Docker service
+    $dockerCompose = @"
+version: '3.8'
+
+services:
+  channel-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.monitor
+    container_name: pmoves-channel-monitor
+    environment:
+      - DATABASE_URL=\${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - QUEUE_API_URL=http://batch-processor:8081
+    volumes:
+      - ./channel_config.json:/app/channel_config.json
+      - monitor_data:/data
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - pmoves_network
+
+volumes:
+  monitor_data:
+
+networks:
+  pmoves_network:
+    external: true
+"@
+    
+    Set-Content -Path "$monitorPath\docker-compose.yml" -Value $dockerCompose
+    
+    # Create Dockerfile
+    $dockerfile = @"
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY channel_monitor.py .
+COPY channel_config.json .
+
+CMD ["python", "channel_monitor.py"]
+"@
+    
+    Set-Content -Path "$monitorPath\Dockerfile.monitor" -Value $dockerfile
+    
+    Write-Host "✅ Channel Monitor deployed" -ForegroundColor Green
+}
+
+# ============================================
+# 2. CHROME EXTENSION DEPLOYMENT
+# ============================================
+function Deploy-ChromeExtension {
+    Write-Host "`n🌐 Building Chrome Extension..." -ForegroundColor Yellow
+    
+    $extensionPath = "$YOUTUBE_RAG_DIR\chrome-extension"
+    
+    # Create directory structure
+    $dirs = @(
+        $extensionPath,
+        "$extensionPath\icons",
+        "$extensionPath\popup",
+        "$extensionPath\options"
+    )
+    
+    foreach ($dir in $dirs) {
+        if (!(Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+    }
+    
+    # Create manifest.json
+    $manifest = @{
+        manifest_version = 3
+        name = "PMOVES.AI YouTube RAG Processor"
+        version = "1.0.0"
+        description = "One-click processing of YouTube videos with CoCa-enhanced RAG"
+        permissions = @("activeTab", "storage", "notifications", "contextMenus")
+        host_permissions = @(
+            "https://www.youtube.com/*",
+            "https://youtube.com/*",
+            "http://localhost:8000/*",
+            "http://localhost:8081/*"
+        )
+        background = @{
+            service_worker = "background.js"
+            type = "module"
+        }
+        content_scripts = @(
+            @{
+                matches = @("*://www.youtube.com/*", "*://youtube.com/*")
+                js = @("content.js")
+                css = @("styles.css")
+                run_at = "document_idle"
+            }
+        )
+        action = @{
+            default_popup = "popup/popup.html"
+            default_icon = @{
+                "16" = "icons/icon16.png"
+                "48" = "icons/icon48.png"
+                "128" = "icons/icon128.png"
+            }
+        }
+        icons = @{
+            "16" = "icons/icon16.png"
+            "48" = "icons/icon48.png"
+            "128" = "icons/icon128.png"
+        }
+    } | ConvertTo-Json -Depth 10
+    
+    Set-Content -Path "$extensionPath\manifest.json" -Value $manifest
+    
+    # Create popup.html
+    $popupHtml = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>PMOVES.AI YouTube RAG</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <div class="header">
+            <img src="../icons/icon48.png" alt="PMOVES">
+            <h1>PMOVES.AI</h1>
+        </div>
+        
+        <div class="status-section">
+            <div class="status-item">
+                <span class="label">Queue Status:</span>
+                <span id="queue-status" class="value">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Processed Today:</span>
+                <span id="processed-count" class="value">0</span>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button id="process-current" class="btn btn-primary">
+                Process Current Video
+            </button>
+            <button id="process-page" class="btn btn-secondary">
+                Process All on Page
+            </button>
+            <button id="monitor-channel" class="btn btn-secondary">
+                Monitor Channel
+            </button>
+        </div>
+        
+        <div class="footer">
+            <a href="#" id="open-dashboard">Open Dashboard</a>
+            <a href="#" id="settings">Settings</a>
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>
+"@
+    
+    Set-Content -Path "$extensionPath\popup\popup.html" -Value $popupHtml
+    
+    # Create popup.css
+    $popupCss = @"
+.popup-container {
+    width: 320px;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 18px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.status-section {
+    background: #f5f5f5;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.status-item:last-child {
+    margin-bottom: 0;
+}
+
+.label {
+    color: #666;
+    font-size: 13px;
+}
+
+.value {
+    font-weight: 600;
+    color: #333;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: white;
+    color: #667eea;
+    border: 1px solid #667eea;
+}
+
+.btn-secondary:hover {
+    background: #f0f4ff;
+}
+
+.footer {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.footer a {
+    color: #667eea;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
+"@
+    
+    Set-Content -Path "$extensionPath\popup\popup.css" -Value $popupCss
+    
+    # Create icons (placeholder)
+    Write-Host "Creating extension icons..." -ForegroundColor Gray
+    
+    # You would need actual icon files here
+    # For now, create placeholder files
+    @(16, 48, 128) | ForEach-Object {
+        $iconPath = "$extensionPath\icons\icon$_.png"
+        if (!(Test-Path $iconPath)) {
+            # Create a simple placeholder
+            "ICON_$_" | Out-File $iconPath
+        }
+    }
+    
+    # Package extension
+    if ($Production) {
+        Write-Host "Packaging extension for Chrome Web Store..." -ForegroundColor Yellow
+        
+        # Create ZIP file
+        $zipPath = "$YOUTUBE_RAG_DIR\pmoves-chrome-extension.zip"
+        Compress-Archive -Path "$extensionPath\*" -DestinationPath $zipPath -Force
+        
+        Write-Host "✅ Extension packaged: $zipPath" -ForegroundColor Green
+        Write-Host "Upload this file to Chrome Web Store" -ForegroundColor Cyan
+    } else {
+        Write-Host "✅ Extension ready for development" -ForegroundColor Green
+        Write-Host "Load unpacked extension from: $extensionPath" -ForegroundColor Cyan
+    }
+}
+
+# ============================================
+# 3. API INTEGRATION DEPLOYMENT
+# ============================================
+function Deploy-API {
+    Write-Host "`n🚀 Deploying PMOVES.AI API Integration..." -ForegroundColor Yellow
+    
+    $apiPath = "$YOUTUBE_RAG_DIR\api"
+    
+    if (!(Test-Path $apiPath)) {
+        New-Item -ItemType Directory -Path $apiPath -Force | Out-Null
+    }
+    
+    # Create requirements.txt
+    $requirements = @"
+fastapi==0.108.0
+uvicorn[standard]==0.25.0
+pydantic==2.5.0
+asyncpg==0.29.0
+aiohttp==3.9.1
+redis==5.0.1
+qdrant-client==1.7.0
+sentence-transformers==2.2.2
+tiktoken==0.5.2
+pyjwt==2.8.0
+python-multipart==0.0.6
+"@
+    
+    Set-Content -Path "$apiPath\requirements.txt" -Value $requirements
+    
+    # Create .env template
+    $envTemplate = @"
+# PMOVES.AI API Configuration
+API_VERSION=1.0.0
+API_TITLE=PMOVES.AI YouTube RAG API
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost/pmoves
+REDIS_URL=redis://localhost:6379
+
+# Qdrant
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+
+# Authentication
+JWT_SECRET=change-this-to-a-secure-secret-key
+JWT_ALGORITHM=HS256
+JWT_EXPIRY_HOURS=24
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=3600
+
+# Embeddings
+EMBEDDING_MODEL=sentence-transformers/all-mpnet-base-v2
+EMBEDDING_DIM=3584
+"@
+    
+    Set-Content -Path "$apiPath\.env.example" -Value $envTemplate
+    
+    # Create Dockerfile for API
+    $dockerfile = @"
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY api.py .
+COPY .env .
+
+# Expose port
+EXPOSE 8000
+
+# Run application
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+"@
+    
+    Set-Content -Path "$apiPath\Dockerfile" -Value $dockerfile
+    
+    # Create nginx config for production
+    $nginxConfig = @"
+upstream pmoves_api {
+    server localhost:8000;
+}
+
+server {
+    listen 80;
+    server_name api.pmoves.cataclysmstudios.net;
+
+    location / {
+        return 301 https://\$server_name\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.pmoves.cataclysmstudios.net;
+
+    ssl_certificate /etc/letsencrypt/live/api.pmoves.cataclysmstudios.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.pmoves.cataclysmstudios.net/privkey.pem;
+
+    location / {
+        proxy_pass http://pmoves_api;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # WebSocket support for streaming
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+    
+    location /health {
+        proxy_pass http://pmoves_api/health;
+        access_log off;
+    }
+}
+"@
+    
+    Set-Content -Path "$apiPath\nginx.conf" -Value $nginxConfig
+    
+    # Create API client for testing
+    $apiClient = @"
+# PMOVES.AI API Client Example
+
+import asyncio
+import aiohttp
+import json
+
+class PMOVESClient:
+    def __init__(self, api_key: str, base_url: str = "http://localhost:8000"):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.session = None
+    
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(
+            headers={"X-API-Key": self.api_key}
+        )
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.session.close()
+    
+    async def search(self, query: str, **kwargs):
+        """Search YouTube transcripts"""
+        async with self.session.post(
+            f"{self.base_url}/api/v1/search",
+            json={"query": query, **kwargs}
+        ) as response:
+            return await response.json()
+    
+    async def process_videos(self, urls: list, **kwargs):
+        """Process YouTube videos"""
+        async with self.session.post(
+            f"{self.base_url}/api/v1/process",
+            json={"urls": urls, **kwargs}
+        ) as response:
+            return await response.json()
+    
+    async def chat(self, message: str, **kwargs):
+        """Chat with YouTube knowledge base"""
+        async with self.session.post(
+            f"{self.base_url}/api/v1/chat",
+            json={"message": message, **kwargs}
+        ) as response:
+            return await response.json()
+
+# Example usage
+async def main():
+    async with PMOVESClient("your-api-key") as client:
+        # Search
+        results = await client.search(
+            "how to create knowledge graphs",
+            search_type="coca",
+            limit=5
+        )
+        print(f"Found {results['total_results']} results")
+        
+        # Process video
+        job = await client.process_videos([
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ])
+        print(f"Job ID: {job['job_id']}")
+        
+        # Chat
+        response = await client.chat(
+            "What are the main concepts in the videos about RAG?"
+        )
+        print(f"Response: {response['message']}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+"@
+    
+    Set-Content -Path "$apiPath\client.py" -Value $apiClient
+    
+    Write-Host "✅ API deployed" -ForegroundColor Green
+}
+
+# ============================================
+# 4. TESTING
+# ============================================
+function Test-Deployment {
+    Write-Host "`n🧪 Testing deployment..." -ForegroundColor Yellow
+    
+    $tests = @(
+        @{
+            Name = "API Health"
+            Url = "http://localhost:8000/health"
+            Expected = "healthy"
+        },
+        @{
+            Name = "Qdrant"
+            Url = "http://localhost:6333/collections"
+            Expected = "result"
+        },
+        @{
+            Name = "Redis"
+            Command = "redis-cli ping"
+            Expected = "PONG"
+        }
+    )
+    
+    foreach ($test in $tests) {
+        try {
+            if ($test.Url) {
+                $response = Invoke-RestMethod -Uri $test.Url -Method Get
+                if ($response -match $test.Expected) {
+                    Write-Host "✅ $($test.Name) - OK" -ForegroundColor Green
+                } else {
+                    Write-Host "❌ $($test.Name) - Failed" -ForegroundColor Red
+                }
+            } elseif ($test.Command) {
+                $result = Invoke-Expression $test.Command 2>$null
+                if ($result -eq $test.Expected) {
+                    Write-Host "✅ $($test.Name) - OK" -ForegroundColor Green
+                } else {
+                    Write-Host "❌ $($test.Name) - Failed" -ForegroundColor Red
+                }
+            }
+        } catch {
+            Write-Host "❌ $($test.Name) - Error: $_" -ForegroundColor Red
+        }
+    }
+}
+
+# ============================================
+# 5. DOCUMENTATION
+# ============================================
+function Create-Documentation {
+    Write-Host "`n📚 Creating documentation..." -ForegroundColor Yellow
+    
+    $readme = @"
+# PMOVES.AI YouTube RAG System
+
+## Advanced Features
+
+### 1. Automated Channel Monitoring
+- Monitors specified YouTube channels for new videos
+- Automatically processes new content with CoCa embeddings
+- Configurable check intervals and filters
+- RSS and API support
+
+### 2. Chrome Extension
+- One-click processing from YouTube pages
+- Batch processing support
+- Visual status indicators
+- Context menu integration
+
+### 3. API Integration
+- RESTful API for all operations
+- WebSocket support for streaming
+- Rate limiting and authentication
+- Comprehensive analytics
+
+## Quick Start
+
+\`\`\`powershell
+# Install all components
+.\deploy-pmoves.ps1 all
+
+# Start services
+.\start.ps1
+
+# Test deployment
+.\deploy-pmoves.ps1 test
+\`\`\`
+
+## API Usage
+
+\`\`\`python
+from client import PMOVESClient
+
+async with PMOVESClient("your-api-key") as client:
+    results = await client.search("your query")
+\`\`\`
+
+## Chrome Extension
+
+1. Open Chrome Extensions (chrome://extensions)
+2. Enable Developer Mode
+3. Click "Load unpacked"
+4. Select the chrome-extension folder
+
+## Configuration
+
+Edit config files:
+- Channel Monitor: \`monitor/channel_config.json\`
+- API: \`api/.env\`
+- Extension: Load in Chrome and use Options page
+
+## Support
+
+- GitHub: https://github.com/POWERFULMOVES/PMOVES.AI
+- Website: https://pmoves.cataclysmstudios.net
+
+## License
+
+Copyright © 2024 POWERFULMOVES / Cataclysm Studios Inc.
+"@
+    
+    Set-Content -Path "$YOUTUBE_RAG_DIR\README.md" -Value $readme
+    
+    Write-Host "✅ Documentation created" -ForegroundColor Green
+}
+
+# ============================================
+# MAIN EXECUTION
+# ============================================
+Show-Banner
+
+# Check prerequisites
+if (!$SkipDependencies) {
+    Write-Host "Checking prerequisites..." -ForegroundColor Yellow
+    
+    $required = @("python", "node", "docker", "redis-cli")
+    $missing = @()
+    
+    foreach ($cmd in $required) {
+        if (!(Get-Command $cmd -ErrorAction SilentlyContinue)) {
+            $missing += $cmd
+        }
+    }
+    
+    if ($missing.Count -gt 0) {
+        Write-Host "Missing: $($missing -join ', ')" -ForegroundColor Red
+        Write-Host "Install missing dependencies and try again" -ForegroundColor Yellow
+        exit 1
+    }
+}
+
+# Deploy components
+switch ($Component) {
+    'all' {
+        Deploy-ChannelMonitor
+        Deploy-ChromeExtension
+        Deploy-API
+        Create-Documentation
+        Test-Deployment
+    }
+    'monitor' {
+        Deploy-ChannelMonitor
+    }
+    'extension' {
+        Deploy-ChromeExtension
+    }
+    'api' {
+        Deploy-API
+    }
+    'test' {
+        Test-Deployment
+    }
+}
+
+Write-Host "`n✨ Deployment complete!" -ForegroundColor Green
+Write-Host "Your PMOVES.AI YouTube RAG system is ready with:" -ForegroundColor Cyan
+Write-Host "  • Automated channel monitoring" -ForegroundColor White
+Write-Host "  • Chrome extension for one-click processing" -ForegroundColor White
+Write-Host "  • Full API for integration with your app" -ForegroundColor White
+
+Write-Host "`nNext steps:" -ForegroundColor Yellow
+Write-Host "1. Update configuration files with your credentials" -ForegroundColor White
+Write-Host "2. Start services: .\start.ps1" -ForegroundColor White
+Write-Host "3. Load Chrome extension in developer mode" -ForegroundColor White
+Write-Host "4. Test API: http://localhost:8000/docs" -ForegroundColor White
+
+Write-Host "`nDashboard: http://localhost:3001/dashboard/youtube-rag" -ForegroundColor Cyan
+Write-Host "API Docs: http://localhost:8000/docs" -ForegroundColor Cyan
+
+# Save deployment script
+$scriptPath = Join-Path $YOUTUBE_RAG_DIR "deploy-pmoves.ps1"
+Write-Host "`nDeployment script saved to: $scriptPath" -ForegroundColor Gray

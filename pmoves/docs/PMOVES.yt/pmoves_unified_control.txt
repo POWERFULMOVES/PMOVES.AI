@@ -1,0 +1,625 @@
+# ============================================
+# PMOVES.AI Unified Control Center
+# Complete system management and integration
+# ============================================
+
+param(
+    [Parameter(Position=0)]
+    [ValidateSet('start', 'stop', 'status', 'restart', 'logs', 'backup', 'update')]
+    [string]$Action = 'status'
+)
+
+$ErrorActionPreference = "Stop"
+
+# Configuration
+$Global:PMOVES = @{
+    Root = "C:\Users\russe\Documents\GitHub\PMOVES.AI"
+    YouTubeRAG = "C:\Users\russe\Documents\GitHub\PMOVES.AI\youtube-rag"
+    Docs = "C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docs"
+    LogFile = "C:\Users\russe\Documents\GitHub\PMOVES.AI\youtube-rag\logs\pmoves.log"
+    Services = @{
+        API = @{ Port = 8000; Process = $null; Status = "Unknown" }
+        Frontend = @{ Port = 3001; Process = $null; Status = "Unknown" }
+        Qdrant = @{ Port = 6333; Process = $null; Status = "Unknown" }
+        Redis = @{ Port = 6379; Process = $null; Status = "Unknown" }
+        ChannelMonitor = @{ Port = 8002; Process = $null; Status = "Unknown" }
+        BatchProcessor = @{ Port = 8081; Process = $null; Status = "Unknown" }
+        N8N = @{ Port = 5678; Process = $null; Status = "Unknown" }
+    }
+}
+
+# ASCII Art Logo
+function Show-Logo {
+    Clear-Host
+    Write-Host @"
+    
+    ╔════════════════════════════════════════════════════════════════╗
+    ║                                                                ║
+    ║     ██████╗ ███╗   ███╗ ██████╗ ██╗   ██╗███████╗███████╗    ║
+    ║     ██╔══██╗████╗ ████║██╔═══██╗██║   ██║██╔════╝██╔════╝    ║
+    ║     ██████╔╝██╔████╔██║██║   ██║██║   ██║█████╗  ███████╗    ║
+    ║     ██╔═══╝ ██║╚██╔╝██║██║   ██║╚██╗ ██╔╝██╔══╝  ╚════██║    ║
+    ║     ██║     ██║ ╚═╝ ██║╚██████╔╝ ╚████╔╝ ███████╗███████║    ║
+    ║     ╚═╝     ╚═╝     ╚═╝ ╚═════╝   ╚═══╝  ╚══════╝╚══════╝    ║
+    ║                                                                ║
+    ║              YouTube RAG System Control Center v1.0           ║
+    ║                  Powered by CoCa & Qdrant                     ║
+    ╚════════════════════════════════════════════════════════════════╝
+    
+"@ -ForegroundColor Cyan
+}
+
+# Logging
+function Write-Log {
+    param(
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "$timestamp [$Level] $Message"
+    
+    # Console output with color
+    switch ($Level) {
+        "ERROR" { Write-Host $logEntry -ForegroundColor Red }
+        "WARNING" { Write-Host $logEntry -ForegroundColor Yellow }
+        "SUCCESS" { Write-Host $logEntry -ForegroundColor Green }
+        "INFO" { Write-Host $logEntry -ForegroundColor Cyan }
+        default { Write-Host $logEntry }
+    }
+    
+    # File output
+    Add-Content -Path $Global:PMOVES.LogFile -Value $logEntry
+}
+
+# ============================================
+# SERVICE MANAGEMENT
+# ============================================
+
+function Start-AllServices {
+    Write-Log "Starting PMOVES.AI YouTube RAG System..." "INFO"
+    
+    # 1. Start Infrastructure
+    Write-Log "Starting infrastructure services..." "INFO"
+    
+    # Redis
+    Start-Service-Process "Redis" {
+        docker run -d --name pmoves-redis `
+            -p 6379:6379 `
+            --network pmoves_network `
+            redis:7-alpine
+    }
+    
+    # Qdrant
+    Start-Service-Process "Qdrant" {
+        docker run -d --name pmoves-qdrant `
+            -p 6333:6333 -p 6334:6334 `
+            -v "$($Global:PMOVES.YouTubeRAG)\data\qdrant:/qdrant/storage" `
+            --network pmoves_network `
+            qdrant/qdrant:latest
+    }
+    
+    Start-Sleep -Seconds 5
+    
+    # 2. Start Backend Services
+    Write-Log "Starting backend services..." "INFO"
+    
+    # API
+    Start-Service-Process "API" {
+        Start-Process pwsh -ArgumentList "-NoExit", "-Command", @"
+            cd '$($Global:PMOVES.YouTubeRAG)\api'
+            & '.\venv\Scripts\Activate.ps1'
+            python api.py
+"@ -PassThru
+    }
+    
+    # Batch Processor
+    Start-Service-Process "BatchProcessor" {
+        Start-Process pwsh -ArgumentList "-NoExit", "-Command", @"
+            cd '$($Global:PMOVES.YouTubeRAG)\batch'
+            & '.\venv\Scripts\Activate.ps1'
+            python batch_processor.py
+"@ -PassThru
+    }
+    
+    # Channel Monitor
+    Start-Service-Process "ChannelMonitor" {
+        Start-Process pwsh -ArgumentList "-NoExit", "-Command", @"
+            cd '$($Global:PMOVES.YouTubeRAG)\monitor'
+            & '.\venv\Scripts\Activate.ps1'
+            python channel_monitor.py
+"@ -PassThru
+    }
+    
+    Start-Sleep -Seconds 5
+    
+    # 3. Start Frontend
+    Write-Log "Starting frontend dashboard..." "INFO"
+    
+    Start-Service-Process "Frontend" {
+        Start-Process pwsh -ArgumentList "-NoExit", "-Command", @"
+            cd '$($Global:PMOVES.YouTubeRAG)\frontend'
+            npm run dev
+"@ -PassThru
+    }
+    
+    # 4. Start n8n (optional)
+    if (Test-Path "$($Global:PMOVES.YouTubeRAG)\n8n-workflows") {
+        Write-Log "Starting n8n workflow engine..." "INFO"
+        Start-Service-Process "N8N" {
+            docker run -d --name pmoves-n8n `
+                -p 5678:5678 `
+                -v "$($Global:PMOVES.YouTubeRAG)\n8n-workflows:/home/node/.n8n" `
+                --network pmoves_network `
+                n8nio/n8n
+        }
+    }
+    
+    Start-Sleep -Seconds 5
+    
+    # Verify all services
+    Test-Services
+    
+    Write-Log "All services started successfully!" "SUCCESS"
+    Show-ServiceUrls
+}
+
+function Start-Service-Process {
+    param(
+        [string]$ServiceName,
+        [scriptblock]$StartCommand
+    )
+    
+    try {
+        Write-Log "Starting $ServiceName..." "INFO"
+        $process = & $StartCommand
+        $Global:PMOVES.Services[$ServiceName].Process = $process
+        $Global:PMOVES.Services[$ServiceName].Status = "Running"
+        Write-Log "$ServiceName started" "SUCCESS"
+    } catch {
+        Write-Log "Failed to start $ServiceName: $_" "ERROR"
+        $Global:PMOVES.Services[$ServiceName].Status = "Failed"
+    }
+}
+
+function Stop-AllServices {
+    Write-Log "Stopping PMOVES.AI services..." "INFO"
+    
+    # Stop processes
+    foreach ($service in $Global:PMOVES.Services.Keys) {
+        $svc = $Global:PMOVES.Services[$service]
+        if ($svc.Process) {
+            try {
+                if ($svc.Process -is [System.Diagnostics.Process]) {
+                    Stop-Process -Id $svc.Process.Id -Force
+                }
+                Write-Log "$service stopped" "SUCCESS"
+            } catch {
+                Write-Log "Error stopping $service: $_" "WARNING"
+            }
+        }
+    }
+    
+    # Stop Docker containers
+    @("pmoves-redis", "pmoves-qdrant", "pmoves-n8n") | ForEach-Object {
+        docker stop $_ 2>$null
+        docker rm $_ 2>$null
+    }
+    
+    Write-Log "All services stopped" "SUCCESS"
+}
+
+function Test-Services {
+    Write-Log "Testing service connectivity..." "INFO"
+    
+    foreach ($service in $Global:PMOVES.Services.Keys) {
+        $port = $Global:PMOVES.Services[$service].Port
+        
+        try {
+            $connection = Test-NetConnection -ComputerName localhost -Port $port -InformationLevel Quiet
+            if ($connection) {
+                $Global:PMOVES.Services[$service].Status = "Running"
+                Write-Log "$service is running on port $port" "SUCCESS"
+            } else {
+                $Global:PMOVES.Services[$service].Status = "Stopped"
+                Write-Log "$service is not responding on port $port" "WARNING"
+            }
+        } catch {
+            $Global:PMOVES.Services[$service].Status = "Unknown"
+        }
+    }
+}
+
+function Show-ServiceUrls {
+    Write-Host "`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Host " SERVICE URLS" -ForegroundColor White
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    
+    Write-Host " 📊 Dashboard:     " -NoNewline -ForegroundColor Yellow
+    Write-Host "http://localhost:3001/dashboard/youtube-rag" -ForegroundColor Green
+    
+    Write-Host " 🚀 API Docs:      " -NoNewline -ForegroundColor Yellow
+    Write-Host "http://localhost:8000/docs" -ForegroundColor Green
+    
+    Write-Host " 🔍 Qdrant UI:     " -NoNewline -ForegroundColor Yellow
+    Write-Host "http://localhost:6333/dashboard" -ForegroundColor Green
+    
+    Write-Host " 🔄 n8n Workflows: " -NoNewline -ForegroundColor Yellow
+    Write-Host "http://localhost:5678" -ForegroundColor Green
+    
+    Write-Host " 📡 Monitor API:   " -NoNewline -ForegroundColor Yellow
+    Write-Host "http://localhost:8002/api/monitor/stats" -ForegroundColor Green
+    
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+}
+
+# ============================================
+# STATUS DASHBOARD
+# ============================================
+
+function Show-Status {
+    Clear-Host
+    Show-Logo
+    
+    Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║                     SYSTEM STATUS                         ║" -ForegroundColor Cyan
+    Write-Host "╠════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    
+    # Test all services
+    Test-Services
+    
+    # Display status
+    foreach ($service in $Global:PMOVES.Services.Keys | Sort-Object) {
+        $svc = $Global:PMOVES.Services[$service]
+        $statusIcon = switch ($svc.Status) {
+            "Running" { "✅" }
+            "Stopped" { "❌" }
+            "Failed" { "⚠️" }
+            default { "❓" }
+        }
+        
+        $statusColor = switch ($svc.Status) {
+            "Running" { "Green" }
+            "Stopped" { "Red" }
+            "Failed" { "Yellow" }
+            default { "Gray" }
+        }
+        
+        Write-Host "║ $statusIcon " -NoNewline -ForegroundColor White
+        Write-Host ("{0,-20}" -f $service) -NoNewline -ForegroundColor White
+        Write-Host ("{0,-10}" -f $svc.Status) -NoNewline -ForegroundColor $statusColor
+        Write-Host ("Port: {0,-6}" -f $svc.Port) -NoNewline -ForegroundColor Gray
+        Write-Host "      ║" -ForegroundColor Cyan
+    }
+    
+    Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    
+    # Get queue statistics
+    Show-QueueStats
+    
+    # Get recent activity
+    Show-RecentActivity
+}
+
+function Show-QueueStats {
+    Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║                     QUEUE STATISTICS                      ║" -ForegroundColor Cyan
+    Write-Host "╠════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    
+    try {
+        $stats = Invoke-RestMethod -Uri "http://localhost:8081/queue/status" -Method Get
+        
+        Write-Host "║ 📥 Pending:    " -NoNewline -ForegroundColor White
+        Write-Host ("{0,-10}" -f $stats.pending) -NoNewline -ForegroundColor Yellow
+        Write-Host "    " -NoNewline
+        
+        Write-Host "🔄 Processing: " -NoNewline -ForegroundColor White
+        Write-Host ("{0,-10}" -f $stats.processing) -ForegroundColor Blue
+        
+        Write-Host "║ ✅ Completed:  " -NoNewline -ForegroundColor White
+        Write-Host ("{0,-10}" -f $stats.completed) -NoNewline -ForegroundColor Green
+        Write-Host "    " -NoNewline
+        
+        Write-Host "❌ Failed:     " -NoNewline -ForegroundColor White
+        Write-Host ("{0,-10}" -f $stats.failed) -ForegroundColor Red
+        
+    } catch {
+        Write-Host "║ Queue service not available                               ║" -ForegroundColor Yellow
+    }
+    
+    Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+}
+
+function Show-RecentActivity {
+    Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║                    RECENT ACTIVITY                        ║" -ForegroundColor Cyan
+    Write-Host "╠════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    
+    try {
+        # Get recent videos from API
+        $videos = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/videos?limit=5" -Method Get
+        
+        foreach ($video in $videos.videos) {
+            $title = if ($video.title.Length -gt 40) { 
+                $video.title.Substring(0, 37) + "..." 
+            } else { 
+                $video.title 
+            }
+            
+            Write-Host "║ 📹 " -NoNewline -ForegroundColor White
+            Write-Host ("{0,-54}" -f $title) -NoNewline -ForegroundColor Gray
+            Write-Host " ║" -ForegroundColor Cyan
+        }
+    } catch {
+        Write-Host "║ No recent activity                                        ║" -ForegroundColor Gray
+    }
+    
+    Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+}
+
+# ============================================
+# LOG VIEWER
+# ============================================
+
+function Show-Logs {
+    param(
+        [string]$Service = "all",
+        [int]$Lines = 50
+    )
+    
+    Write-Host "`n📜 SYSTEM LOGS" -ForegroundColor Cyan
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    
+    if (Test-Path $Global:PMOVES.LogFile) {
+        Get-Content $Global:PMOVES.LogFile -Tail $Lines | ForEach-Object {
+            if ($_ -match "\[ERROR\]") {
+                Write-Host $_ -ForegroundColor Red
+            } elseif ($_ -match "\[WARNING\]") {
+                Write-Host $_ -ForegroundColor Yellow
+            } elseif ($_ -match "\[SUCCESS\]") {
+                Write-Host $_ -ForegroundColor Green
+            } else {
+                Write-Host $_ -ForegroundColor Gray
+            }
+        }
+    } else {
+        Write-Host "No logs found" -ForegroundColor Gray
+    }
+}
+
+# ============================================
+# BACKUP & RESTORE
+# ============================================
+
+function Backup-System {
+    Write-Log "Creating system backup..." "INFO"
+    
+    $backupDir = "$($Global:PMOVES.YouTubeRAG)\backups\$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss')"
+    New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+    
+    # Backup databases
+    Write-Log "Backing up Qdrant data..." "INFO"
+    Copy-Item -Path "$($Global:PMOVES.YouTubeRAG)\data\qdrant" `
+              -Destination "$backupDir\qdrant" `
+              -Recurse -Force
+    
+    # Backup configurations
+    Write-Log "Backing up configurations..." "INFO"
+    @(
+        "channel_config.json",
+        ".env",
+        "config.yaml"
+    ) | ForEach-Object {
+        $file = Get-ChildItem -Path $Global:PMOVES.YouTubeRAG -Filter $_ -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($file) {
+            Copy-Item -Path $file.FullName -Destination $backupDir
+        }
+    }
+    
+    # Export PostgreSQL data
+    Write-Log "Exporting database..." "INFO"
+    $exportFile = "$backupDir\pmoves_youtube_rag.sql"
+    
+    # Create backup info
+    @{
+        Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Version = "1.0.0"
+        Services = $Global:PMOVES.Services.Keys
+        BackupPath = $backupDir
+    } | ConvertTo-Json | Out-File "$backupDir\backup_info.json"
+    
+    # Compress backup
+    $zipFile = "$($Global:PMOVES.YouTubeRAG)\backups\backup_$(Get-Date -Format 'yyyyMMdd_HHmmss').zip"
+    Compress-Archive -Path $backupDir -DestinationPath $zipFile -Force
+    
+    # Clean up
+    Remove-Item -Path $backupDir -Recurse -Force
+    
+    Write-Log "Backup completed: $zipFile" "SUCCESS"
+    return $zipFile
+}
+
+# ============================================
+# UPDATE SYSTEM
+# ============================================
+
+function Update-System {
+    Write-Log "Checking for updates..." "INFO"
+    
+    # Pull latest from GitHub
+    Set-Location $Global:PMOVES.Root
+    $gitStatus = git status --porcelain
+    
+    if ($gitStatus) {
+        Write-Log "You have uncommitted changes. Commit or stash them first." "WARNING"
+        return
+    }
+    
+    Write-Log "Pulling latest changes from GitHub..." "INFO"
+    git pull origin main
+    
+    # Update Python dependencies
+    Write-Log "Updating Python dependencies..." "INFO"
+    Set-Location "$($Global:PMOVES.YouTubeRAG)\api"
+    & ".\venv\Scripts\pip.exe" install -r requirements.txt --upgrade
+    
+    # Update Node dependencies
+    Write-Log "Updating Node dependencies..." "INFO"
+    Set-Location "$($Global:PMOVES.YouTubeRAG)\frontend"
+    npm update
+    
+    # Update Docker images
+    Write-Log "Updating Docker images..." "INFO"
+    @("qdrant/qdrant:latest", "redis:7-alpine", "n8nio/n8n:latest") | ForEach-Object {
+        docker pull $_
+    }
+    
+    Write-Log "System updated successfully!" "SUCCESS"
+    Write-Log "Please restart services for changes to take effect." "INFO"
+}
+
+# ============================================
+# INTERACTIVE MENU
+# ============================================
+
+function Show-Menu {
+    Clear-Host
+    Show-Logo
+    
+    Write-Host "`n  MAIN MENU" -ForegroundColor White
+    Write-Host "  ═════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "  [1] " -NoNewline -ForegroundColor Yellow; Write-Host "Start All Services"
+    Write-Host "  [2] " -NoNewline -ForegroundColor Yellow; Write-Host "Stop All Services"
+    Write-Host "  [3] " -NoNewline -ForegroundColor Yellow; Write-Host "Show Status Dashboard"
+    Write-Host "  [4] " -NoNewline -ForegroundColor Yellow; Write-Host "View Logs"
+    Write-Host "  [5] " -NoNewline -ForegroundColor Yellow; Write-Host "Open Web Dashboard"
+    Write-Host "  [6] " -NoNewline -ForegroundColor Yellow; Write-Host "Process YouTube URLs"
+    Write-Host "  [7] " -NoNewline -ForegroundColor Yellow; Write-Host "Monitor New Channel"
+    Write-Host "  [8] " -NoNewline -ForegroundColor Yellow; Write-Host "Backup System"
+    Write-Host "  [9] " -NoNewline -ForegroundColor Yellow; Write-Host "Update System"
+    Write-Host "  [0] " -NoNewline -ForegroundColor Yellow; Write-Host "Exit"
+    Write-Host "  ═════════════════════════════════════════" -ForegroundColor Cyan
+    
+    $choice = Read-Host "`n  Select option"
+    
+    switch ($choice) {
+        "1" { Start-AllServices; Pause }
+        "2" { Stop-AllServices; Pause }
+        "3" { Show-Status; Pause }
+        "4" { Show-Logs; Pause }
+        "5" { Start-Process "http://localhost:3001/dashboard/youtube-rag" }
+        "6" { Process-YouTubeURLs; Pause }
+        "7" { Add-ChannelMonitor; Pause }
+        "8" { Backup-System; Pause }
+        "9" { Update-System; Pause }
+        "0" { exit }
+        default { Write-Host "Invalid option" -ForegroundColor Red; Start-Sleep 2 }
+    }
+    
+    Show-Menu
+}
+
+function Process-YouTubeURLs {
+    Write-Host "`n📹 PROCESS YOUTUBE VIDEOS" -ForegroundColor Cyan
+    Write-Host "Enter YouTube URLs (one per line, empty line to finish):" -ForegroundColor Yellow
+    
+    $urls = @()
+    while ($true) {
+        $url = Read-Host "URL"
+        if ([string]::IsNullOrWhiteSpace($url)) { break }
+        $urls += $url
+    }
+    
+    if ($urls.Count -gt 0) {
+        Write-Host "Processing $($urls.Count) videos..." -ForegroundColor Green
+        
+        $body = @{
+            urls = $urls
+            priority = "normal"
+        } | ConvertTo-Json
+        
+        try {
+            $response = Invoke-RestMethod -Uri "http://localhost:8081/queue/add" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body $body
+            
+            Write-Host "✅ Successfully queued $($response.added) videos" -ForegroundColor Green
+        } catch {
+            Write-Host "❌ Error: $_" -ForegroundColor Red
+        }
+    }
+}
+
+function Add-ChannelMonitor {
+    Write-Host "`n📡 ADD CHANNEL TO MONITOR" -ForegroundColor Cyan
+    
+    $url = Read-Host "Enter YouTube channel URL"
+    
+    if ($url) {
+        try {
+            $response = Invoke-RestMethod -Uri "http://localhost:8002/api/monitor/channel" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body (@{ url = $url } | ConvertTo-Json)
+            
+            Write-Host "✅ Channel added to monitoring" -ForegroundColor Green
+        } catch {
+            Write-Host "❌ Error: $_" -ForegroundColor Red
+        }
+    }
+}
+
+function Pause {
+    Write-Host "`nPress any key to continue..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+# ============================================
+# MAIN EXECUTION
+# ============================================
+
+# Create log directory if it doesn't exist
+$logDir = Split-Path $Global:PMOVES.LogFile -Parent
+if (!(Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+
+# Handle action parameter or show menu
+switch ($Action) {
+    'start' { 
+        Show-Logo
+        Start-AllServices 
+    }
+    'stop' { 
+        Show-Logo
+        Stop-AllServices 
+    }
+    'status' { 
+        Show-Status 
+    }
+    'restart' { 
+        Show-Logo
+        Stop-AllServices
+        Start-Sleep -Seconds 5
+        Start-AllServices 
+    }
+    'logs' { 
+        Show-Logs 
+    }
+    'backup' { 
+        Show-Logo
+        Backup-System 
+    }
+    'update' { 
+        Show-Logo
+        Update-System 
+    }
+    default { 
+        Show-Menu 
+    }
+}
+
+# Save this script
+$scriptPath = Join-Path $Global:PMOVES.YouTubeRAG "pmoves-control.ps1"
+Write-Host "`n💾 Control script saved to: $scriptPath" -ForegroundColor Gray

@@ -44,3 +44,56 @@ curl -s "http://localhost:3000/studio_board?order=id.desc&limit=1" | jq .
 
 ## Presign
 - Use curl examples in `COMFYUI_MINIO_PRESIGN.md` to PUT/GET a text file.
+
+## PMOVES.YT
+Info + download + transcript (replace URL):
+```
+curl -s -X POST http://localhost:8077/yt/info \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://www.youtube.com/watch?v=XXXXXXXX"}' | jq .
+
+curl -s -X POST http://localhost:8077/yt/download \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://www.youtube.com/watch?v=XXXXXXXX","bucket":"assets","namespace":"pmoves"}' | jq .
+
+# Use the returned video_id from /yt/download
+curl -s -X POST http://localhost:8077/yt/transcript \
+  -H 'content-type: application/json' \
+  -d '{"video_id":"<id>","bucket":"assets"}' | jq .
+
+# Verify rows
+curl -s "http://localhost:3000/videos?order=id.desc&limit=1" | jq .
+curl -s "http://localhost:3000/transcripts?order=id.desc&limit=1" | jq .
+```
+
+## FFmpeg+Whisper
+Transcribe directly from raw video:
+```
+curl -s -X POST http://localhost:8078/transcribe \
+  -H 'content-type: application/json' \
+  -d '{"bucket":"assets","key":"yt/<id>/raw.mp4","out_audio_key":"yt/<id>/audio.m4a"}' | jq .
+```
+
+## Media-Video (YOLO)
+Detect objects on frames every N seconds:
+```
+curl -s -X POST http://localhost:8079/detect \
+  -H 'content-type: application/json' \
+  -d '{"bucket":"assets","key":"yt/<id>/raw.mp4","video_id":"<id>"}' | jq .
+```
+
+## Media-Audio (Emotion)
+Classify top emotion per 5s window:
+```
+curl -s -X POST http://localhost:8082/emotion \
+  -H 'content-type: application/json' \
+  -d '{"bucket":"assets","key":"yt/<id>/audio.m4a","video_id":"<id>"}' | jq .
+```
+
+## Agents Profile
+Bring up: `docker compose --profile agents up -d nats agent-zero archon`
+Health:
+```
+curl -s http://localhost:8080/healthz | jq .   # agent-zero
+curl -s http://localhost:8091/healthz | jq .   # archon
+```
