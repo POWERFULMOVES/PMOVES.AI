@@ -4,4 +4,6 @@ openai-whisper==20231117
 ffmpeg-python==0.2.0
 boto3==1.34.162
 requests==2.32.3
-torch==2.4.0
+# Torch 2.4.0 requires Triton 3, which conflicts with
+# openai-whisper's constraint (triton < 3). Pin to 2.3.x.
+torch==2.3.1
