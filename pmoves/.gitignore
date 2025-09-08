@@ -1,0 +1,32 @@
+# Core
+.env
+.env.*
+*.log
+.last_logs.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Build/output
+dist/
+build/
+*.egg-info/
+
+# Binaries and large docs
+*.zip
+tools/bin/
+
+# Local data
+neo4j/data/
+minio-data/
+supabase-data/

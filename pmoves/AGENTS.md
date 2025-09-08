@@ -37,3 +37,30 @@
 - Use Compose profiles (`data`, `workers`) to scope what runs locally.
 - Validate payloads against schemas before publishing events (`services/common/events.py`).
 
+
+## Environment Bootstrap (Codex + Local)
+
+- Preferred Python: Conda 3.10+ (env name: `PMOVES.AI` or `pmoves-ai`). A ready-to-use `environment.yml` is at the repo root.
+- One‑time setup on Windows (PowerShell 7+):
+  - Install GNU Make (Chocolatey): `choco install make -y` (requires admin PowerShell).
+  - Create/refresh Conda env: `conda env create -f environment.yml -n PMOVES.AI` (or use the default name inside the file).
+  - Install service deps: `pwsh -File scripts/install_all_requirements.ps1 -CondaEnvName PMOVES.AI`.
+- Linux/macOS:
+  - `conda env create -f environment.yml -n pmoves-ai`
+  - `bash scripts/install_all_requirements.sh pmoves-ai`
+
+### Codex VM / Profiles
+
+- For maximum autonomy, use a Codex profile with:
+  - `approval_policy = "never"` (auto-approve),
+  - `sandbox_mode = "danger-full-access"`,
+  - `network_access = true`.
+- When opening this repo, run the bootstrap:
+  - Windows: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_bootstrap.ps1 -CondaEnvName PMOVES.AI`
+  - Linux/macOS: `bash scripts/codex_bootstrap.sh PMOVES.AI`
+- See `docs/codex_full_config_bundle/README-Codex-MCP-Full.md` for a complete `config.toml` with sensible profiles.
+
+### Notes
+
+- The bootstrap prefers `uv pip` if available (faster); otherwise falls back to `python -m pip`.
+- The scripts install requirements from `services/*/requirements.txt` and `tools/*/requirements.txt`. Pass `-IncludeDocs` (PowerShell) or `INCLUDE_DOCS=1` (Bash) to include `docs/**/requirements.txt`.

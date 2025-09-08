@@ -1,99 +1,87 @@
 # Smoke Tests
-Last updated: 2025-08-29
 
-## Quick commands
-- Start stack: `make up`
-- Stop all: `make down`
-- Nuke local volumes: `make clean`
-- One-shot smoke: `make smoke`
+This guide covers preflight wiring, starting the core stack, and running the local smoke tests. Use it as a quick readiness checklist before deeper testing.
 
-## Health checks
-- Presign: http://localhost:8088/healthz
-- Render Webhook: http://localhost:8085/healthz
-- Hi‑RAG v2 stats: http://localhost:8087/hirag/admin/stats
-- Retrieval Eval UI: http://localhost:8090
-- PostgREST: http://localhost:3000
+## Prerequisites
+- Docker Desktop (Compose v2 available via `docker compose`)
+- PowerShell 7+ on Windows, or Bash/Zsh on macOS/Linux
+- Optional: `jq` (required for `make smoke`; PowerShell script does not require it)
 
-## Example queries
-Hybrid + rerank query:
-```
-curl -s localhost:8087/hirag/query \
-  -H 'content-type: application/json' \
-  -d '{"query":"what is pmoves?","namespace":"pmoves","k":8,"alpha":0.7}' | jq .
-```
+## 1) Environment Wiring
+1. Create `.env` from the sample and append service snippets:
+   - Windows (PowerShell):
+     - `Copy-Item .env.example .env`
+     - `Get-Content env.presign.additions, env.render_webhook.additions | Add-Content .env`
+     - Optional rerank config: `Get-Content env.hirag.reranker.additions, env.hirag.reranker.providers.additions | Add-Content .env`
+   - macOS/Linux (Bash):
+     - `cp .env.example .env`
+     - `cat env.presign.additions env.render_webhook.additions >> .env`
+     - Optional: `cat env.hirag.reranker.additions env.hirag.reranker.providers.additions >> .env`
+2. Set shared secrets (change these):
+   - `PRESIGN_SHARED_SECRET`
+   - `RENDER_WEBHOOK_SHARED_SECRET`
+3. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.
 
-Webhook insert + verify:
-```
-curl -s -X POST http://localhost:8085/comfy/webhook \
-  -H 'content-type: application/json' \
-  -H "Authorization: Bearer ${RENDER_WEBHOOK_SHARED_SECRET:-change_me}" \
-  -d '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}'
+## 2) Preflight (Recommended)
+- Cross‑platform: `make flight-check`
+- Windows direct script: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1`
 
-curl -s "http://localhost:3000/studio_board?order=id.desc&limit=1" | jq .
-```
+This checks tool availability, common ports, `.env` keys vs `.env.example`, and validates `contracts/topics.json`.
 
-## Individual smoke targets
-- `make smoke`: end-to-end presign/webhook/postgrest and a basic Hi-RAG query.
-- `make smoke-rerank`: calls Hi-RAG with reranking enabled (requires the model to be available).
-- `make smoke-presign-put`: obtains a presigned PUT URL and uploads a small text file to MinIO.
+## 3) Start Core Stack
+- Start data + workers profile (v2 gateway):
+  - `make up`
+- Wait ~15–30s for services to become ready.
 
-## Publisher Enrichments
-- Archive: `PMOVES_publisher_enrich_smoketest.zip`
-- Script: `smoketest_publisher_enrich.sh`
-- Validates: `published_events` record + `publisher_audit` rows and (optionally) Discord notification.
+Useful health checks:
+- Presign: `curl http://localhost:8088/healthz`
+- Render Webhook: `curl http://localhost:8085/healthz`
+- PostgREST: `curl http://localhost:3000`
+- Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
 
-## Presign
-- Use curl examples in `COMFYUI_MINIO_PRESIGN.md` to PUT/GET a text file.
+## 4) Seed Demo Data (Optional but helpful)
+- `make seed-data` (loads small sample docs into Qdrant/Meilisearch)
+- Alternatively: `make load-jsonl FILE=$(pwd)/datasets/queries_demo.jsonl`
 
-## PMOVES.YT
-Info + download + transcript (replace URL):
-```
-curl -s -X POST http://localhost:8077/yt/info \
-  -H 'content-type: application/json' \
-  -d '{"url":"https://www.youtube.com/watch?v=XXXXXXXX"}' | jq .
+## 5) Run Smoke Tests
+Choose one:
+- macOS/Linux: `make smoke` (requires `jq`)
+- Windows (no `jq` required): `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1`
 
-curl -s -X POST http://localhost:8077/yt/download \
-  -H 'content-type: application/json' \
-  -d '{"url":"https://www.youtube.com/watch?v=XXXXXXXX","bucket":"assets","namespace":"pmoves"}' | jq .
+What the smoke covers:
+1) Qdrant ready (6333)
+2) Meilisearch health (7700, warned if missing)
+3) Neo4j UI reachable (7474, warned if not)
+4) Presign health (8088)
+5) Render Webhook health (8085)
+6) PostgREST reachable (3000)
+7) Insert a demo row via Render Webhook
+8) Verify a `studio_board` row exists via PostgREST
+9) Run a Hi‑RAG v2 query (8087)
 
-# Use the returned video_id from /yt/download
-curl -s -X POST http://localhost:8077/yt/transcript \
-  -H 'content-type: application/json' \
-  -d '{"video_id":"<id>","bucket":"assets"}' | jq .
+Optional smoke targets:
+- `make smoke-presign-put` — end‑to‑end presign PUT and upload
+- `make smoke-rerank` — query with `use_rerank=true` (provider optional)
+- `make smoke-langextract` — extract chunks from XML via `langextract` and load
 
-# Verify rows
-curl -s "http://localhost:3000/videos?order=id.desc&limit=1" | jq .
-curl -s "http://localhost:3000/transcripts?order=id.desc&limit=1" | jq .
-```
+## Troubleshooting
+- Port in use: change the host port in `docker-compose.yml` or stop the conflicting process.
+- Qdrant not ready: `docker compose logs -f qdrant` and retry after a few seconds.
+- 401 from Render Webhook: ensure `Authorization: Bearer $RENDER_WEBHOOK_SHARED_SECRET` matches `.env`.
+- PostgREST errors: confirm `postgres` is up and `/supabase/initdb` scripts finished; check `docker compose logs -f postgres postgrest`.
+- Rerank disabled: if providers are unreachable, set `RERANK_ENABLE=false` or configure provider keys in `.env`.
 
-## FFmpeg+Whisper
-Transcribe directly from raw video:
-```
-curl -s -X POST http://localhost:8078/transcribe \
-  -H 'content-type: application/json' \
-  -d '{"bucket":"assets","key":"yt/<id>/raw.mp4","out_audio_key":"yt/<id>/audio.m4a"}' | jq .
-```
+## Log Triage
+- List services and status: `docker compose ps`
+- Tail recent logs for core services:
+  - `docker compose logs --since 15m presign render-webhook postgrest hi-rag-gateway-v2`
+  - `docker compose logs -f render-webhook` (follow live)
+  - Shortcut: `make logs-core` (follow) or `make logs-core-15m`
+- Common signals:
+  - render-webhook JSONDecodeError on insert → ensure PostgREST returns JSON. Rebuild service after updating to headers with `Prefer: return=representation`:
+    - `docker compose build render-webhook && docker compose up -d render-webhook`
+  - Neo4j UnknownLabelWarning (e.g., `Entity`) → expected until graph/dictionary is seeded.
 
-## Media-Video (YOLO)
-Detect objects on frames every N seconds:
-```
-curl -s -X POST http://localhost:8079/detect \
-  -H 'content-type: application/json' \
-  -d '{"bucket":"assets","key":"yt/<id>/raw.mp4","video_id":"<id>"}' | jq .
-```
-
-## Media-Audio (Emotion)
-Classify top emotion per 5s window:
-```
-curl -s -X POST http://localhost:8082/emotion \
-  -H 'content-type: application/json' \
-  -d '{"bucket":"assets","key":"yt/<id>/audio.m4a","video_id":"<id>"}' | jq .
-```
-
-## Agents Profile
-Bring up: `docker compose --profile agents up -d nats agent-zero archon`
-Health:
-```
-curl -s http://localhost:8080/healthz | jq .   # agent-zero
-curl -s http://localhost:8091/healthz | jq .   # archon
-```
+## Cleanup
+- Stop containers: `make down`
+- Remove volumes (destructive): `make clean`

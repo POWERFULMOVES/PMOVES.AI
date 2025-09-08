@@ -9,6 +9,21 @@
   - `make up`
   - Or directly: `docker compose --profile data --profile workers up -d qdrant neo4j minio meilisearch presign hi-rag-gateway-v2 retrieval-eval render-webhook`
 
+### Dev Environment (Conda + Windows/macOS/Linux)
+
+- Conda: create the env and install deps once:
+  - Windows (PowerShell 7+):
+    - (Admin) `choco install make -y` to get GNU Make
+    - `conda env create -f environment.yml -n PMOVES.AI`
+    - `pwsh -File scripts/install_all_requirements.ps1 -CondaEnvName PMOVES.AI`
+  - Linux/macOS:
+    - `conda env create -f environment.yml -n pmoves-ai`
+    - `bash scripts/install_all_requirements.sh pmoves-ai`
+
+Activate your env before running local services (example):
+- Windows: `conda activate PMOVES.AI`
+- Linux/macOS: `conda activate pmoves-ai`
+
 Services
 - `hi-rag-gateway-v2` (8087→8086 in-container): Hybrid RAG with reranker providers (Flag/Qwen/Cohere/Azure). See `docs/HI_RAG_RERANKER.md` and `docs/HI_RAG_RERANK_PROVIDERS.md`.
 - `retrieval-eval` (8090): Dashboard/tests; points to `hi-rag-gateway-v2`.
@@ -29,3 +44,11 @@ Agents Profile
 Supabase (Full)
 - Recommended: Supabase CLI (see `docs/SUPABASE_FULL.md`). Or use `docker-compose.supabase.yml` with `./scripts/pmoves.ps1 up-fullsupabase`.
 - Realtime demo: `http://localhost:8090/static/realtime.html` (subscribe to `studio_board`, `it_errors`; upload avatar and assign to a row).
+
+## Codex VM Bootstrap
+
+- Recommended profile: auto-approve with full access when you need maximum autonomy; otherwise use a safer `workspace-write` profile for day-to-day.
+- When the project loads in Codex, run:
+  - Windows: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_bootstrap.ps1 -CondaEnvName PMOVES.AI`
+  - Linux/macOS: `bash scripts/codex_bootstrap.sh PMOVES.AI`
+- Full Codex config examples live in `docs/codex_full_config_bundle/README-Codex-MCP-Full.md`.

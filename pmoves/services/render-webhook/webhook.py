@@ -18,12 +18,26 @@ def ok_sig(auth: Optional[str]) -> bool:
     return hmac.compare_digest(token, SHARED)
 
 def supa_insert(table, row: Dict[str,Any]):
-    r = requests.post(f"{SUPA}/{table}", headers={"content-type":"application/json"}, data=json.dumps(row), timeout=30)
-    r.raise_for_status(); return r.json()
+    headers = {
+        "content-type": "application/json",
+        "accept": "application/json",
+        # Ask PostgREST to return the inserted row so JSON is present
+        "prefer": "return=representation"
+    }
+    r = requests.post(f"{SUPA}/{table}", headers=headers, data=json.dumps(row), timeout=30)
+    r.raise_for_status()
+    # Some deployments may still return empty body; guard to avoid 500s
+    return (r.json() if r.text and r.text.strip() else {"status": r.status_code})
 
 def supa_update(table, id, patch: Dict[str,Any]):
-    r = requests.patch(f"{SUPA}/{table}?id=eq.{id}", headers={"content-type":"application/json"}, data=json.dumps(patch), timeout=30)
-    r.raise_for_status(); return r.json()
+    headers = {
+        "content-type": "application/json",
+        "accept": "application/json",
+        "prefer": "return=representation"
+    }
+    r = requests.patch(f"{SUPA}/{table}?id=eq.{id}", headers=headers, data=json.dumps(patch), timeout=30)
+    r.raise_for_status()
+    return (r.json() if r.text and r.text.strip() else {"status": r.status_code})
 
 class RenderPayload(BaseModel):
     bucket: str

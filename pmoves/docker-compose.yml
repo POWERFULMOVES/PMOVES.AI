@@ -156,7 +156,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
   langextract:
-    build: ./services/langextract
+    build:
+      context: .
+      dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
     env_file: [.env]
     ports: ["8084:8084"]
@@ -225,7 +227,9 @@ services:
 
   # Optional: experimental v2 gateway with rerank providers
   hi-rag-gateway-v2:
-    build: ./services/hi-rag-gateway-v2
+    build:
+      context: .
+      dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
     env_file: [.env]
     environment:

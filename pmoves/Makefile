@@ -81,17 +81,72 @@ export-jsonl:
 .PHONY: smoke-langextract
 smoke-langextract:
 	@echo "Extracting chunks from datasets/log_sample.xml via langextract..."
-	@JSONL=$$(curl -s -X POST http://localhost:8084/extract/jsonl -H 'content-type: application/json' --data-binary @- <<'EOF'
-{
-  "xml": "$$(python - <<'PY'
-import json
-print(open('datasets/log_sample.xml','r',encoding='utf-8').read().replace('\\','\\\\').replace('"','\\"').replace('\n','\\n'))
-PY
-)"
-}
-EOF
-) && echo "OK: parsed" || (echo FAIL && exit 1)
+	@JSONL=$$(curl -s -X POST http://localhost:8084/extract/jsonl -H 'content-type: application/json' --data-binary @- <<- 'EOF'
+	{
+	  "xml": "$$(python - <<- 'PY'
+	import json
+	print(open('datasets/log_sample.xml','r',encoding='utf-8').read().replace('\\','\\\\').replace('"','\\"').replace('\n','\\n'))
+	PY
+	)"
+	}
+	EOF
+	) && echo "OK: parsed" || (echo FAIL && exit 1)
 	@echo "Writing temp jsonl and loading to Qdrant/Meili..."
 	@echo "$$JSONL" | jq -r .jsonl > .tmp_extracted.jsonl
 	@make load-jsonl FILE=$(PWD)/.tmp_extracted.jsonl NAMESPACE=pmoves
 	@rm -f .tmp_extracted.jsonl
+
+.PHONY: flight-check
+flight-check:
+	@if [ "$(OS)" = "Windows_NT" ]; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 ; \
+	else \
+		bash scripts/env_check.sh ; \
+	fi
+
+.PHONY: flight-check-retro
+flight-check-retro:
+	@echo "Installing retro flightcheck deps (uv preferred, fallback to pip)" && \
+	( command -v uv >/dev/null 2>&1 && uv pip install -q -r tools/flightcheck/requirements.txt || python -m pip install -q -r tools/flightcheck/requirements.txt ) && \
+	python tools/flightcheck/retro_flightcheck.py
+
+.PHONY: env-dedupe
+env-dedupe:
+	@python tools/env_dedupe.py
+
+.PHONY: help
+help:
+	@echo "Targets:"
+	@echo "  up               Start core data + workers via docker compose"
+	@echo "  down             Stop all containers"
+	@echo "  clean            Stop and remove volumes (destructive)"
+	@echo "  smoke            Run local smoke tests"
+	@echo "  smoke-rerank     Run a sample query with rerank=true"
+	@echo "  seed-data        Seed Qdrant/Meilisearch with demo docs"
+	@echo "  load-jsonl       Load a JSONL file (FILE=/abs/path)"
+	@echo "  load-csv         Load a CSV file (FILE=/abs/path)"
+	@echo "  export-jsonl     Export namespace to JSONL (OUT=/abs/path)"
+	@echo "  smoke-presign-put Test presign PUT and upload"
+	@echo "  smoke-langextract Extract chunks via langextract and load"
+	@echo "  flight-check     Run environment preflight (deps, ports, .env)"
+	@echo "  flight-check-retro Retro-styled Rich CLI preflight"
+	@echo "  env-dedupe       Remove duplicate keys from .env (keeps last, writes .bak)"
+	@echo "  logs-core        Tail core services (docker compose logs -f ...)"
+	@echo "  setup            Run Codex/bootstrap env setup (make, conda deps)"
+
+.PHONY: logs-core
+logs-core:
+	@echo "Tailing core services (Ctrl-C to stop)..."
+	@docker compose logs -f qdrant meilisearch neo4j postgres postgrest minio presign render-webhook hi-rag-gateway-v2 retrieval-eval
+
+.PHONY: logs-core-15m
+logs-core-15m:
+	@docker compose logs --since 15m qdrant meilisearch neo4j postgres postgrest minio presign render-webhook hi-rag-gateway-v2 retrieval-eval
+
+.PHONY: setup
+setup:
+	@if [ "$(OS)" = "Windows_NT" ]; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_bootstrap.ps1 -CondaEnvName $${CONDA_ENV:-PMOVES.AI} ; \
+	else \
+		bash scripts/codex_bootstrap.sh $${CONDA_ENV:-pmoves-ai} ; \
+	fi

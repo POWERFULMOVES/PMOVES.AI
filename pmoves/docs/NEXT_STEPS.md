@@ -1,9 +1,10 @@
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-03_
+_Last updated: 2025-09-07_
 
 ## Immediate
 - [x] Prepare PR and branch for feature rollup (done in this PR)
 - [x] Add/refresh ROADMAP and NEXT_STEPS (committed in this PR)
+- [x] Add SMOKETESTS.md and run local smoke tests
 - [ ] Set Discord webhook in `.env` and activate n8n flows (pending: env + flow wiring)
 - [ ] Configure Jellyfin API key (+ optional user id) (pending: local instance)
 - [ ] Test PDF + MinIO ingestion with a sample object (pending: PDF lane is not yet implemented in this repo)

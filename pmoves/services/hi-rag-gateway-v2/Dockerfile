@@ -1,12 +1,13 @@
 FROM python:3.11-slim
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app/libs
 RUN pip install --no-cache-dir --upgrade pip
-COPY ../../libs /app/libs
-COPY requirements.txt ./
+# With build context at repo root
+COPY libs /app/libs
+COPY services/hi-rag-gateway-v2/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-# Include local scripts for seeding
-COPY scripts /app/scripts
+COPY services/hi-rag-gateway-v2/ ./
+# Include local scripts for seeding explicitly
+COPY services/hi-rag-gateway-v2/scripts /app/scripts
 EXPOSE 8086
 CMD ["uvicorn","app:app","--host","0.0.0.0","--port","8086"]

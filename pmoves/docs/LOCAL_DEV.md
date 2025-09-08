@@ -41,20 +41,34 @@ OpenAI-compatible presets:
 - Legacy gateway: `make up-legacy`
 - Seed demo data (Qdrant/Meili): `make seed-data`
 
+### Flight Check (recommended)
+
+- Quick preflight (cross-platform): `make flight-check`
+- Retro UI (Rich, retro console vibe): `make flight-check-retro`
+  - Or run directly: `python tools/flightcheck/retro_flightcheck.py --quick`
+  - Installs deps from `tools/flightcheck/requirements.txt` if needed
+  - Options: `--theme amber` for amber CRT look, `--beep` for a tiny chiptune on success
+  - Full mode adds a Docker services panel (state/health) when compose is up
+  - Extra themes: `--theme neon` (blue/purple neon), `--theme galaxy` (deep space blue/purple), `--theme cb` (colorblind-safe)
+
 ## Health Checks
+
 - Presign: `curl http://localhost:8088/healthz`
 - Webhook: `curl http://localhost:8085/healthz`
 - Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
 - Retrieval‑Eval UI: `http://localhost:8090`
 - PostgREST: `http://localhost:3000`
- - After seeding: try a query with `namespace=pmoves` in `/hirag/query`
+  - After seeding: try a query with `namespace=pmoves` in `/hirag/query`
 
 ## Avatars & Realtime (full Supabase)
+
 - Bring up full stack: `./scripts/pmoves.ps1 up-fullsupabase` (or `supabase start`)
 - Create Storage bucket: `./scripts/pmoves.ps1 init-avatars`
 - Open realtime UI: `http://localhost:8090/static/realtime.html` (connect with CLI anon key)
 - Upload avatar: use the Upload control; preview and assign to latest `studio_board` row.
 
 ## Notes
+
 - A local Postgres + PostgREST are included. `render-webhook` points to `http://postgrest:3000` by default; override `SUPA_REST_URL` in `.env` to target your self‑hosted instance.
 - For Cataclysm Provisioning, the stable network name `pmoves-net` allows cross‑stack service discovery.
+- Clean up duplicate .env keys: `make env-dedupe` (keeps last occurrence, writes `.env.bak`).
