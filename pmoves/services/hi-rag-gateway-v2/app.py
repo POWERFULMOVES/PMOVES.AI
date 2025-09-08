@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Body, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import Filter, FieldCondition, MatchValue, SearchRequest, Distance, VectorParams
+from qdrant_client.http.models import Filter, FieldCondition, MatchValue, Distance, VectorParams
 from sentence_transformers import SentenceTransformer
 from FlagEmbedding import FlagReranker
 from rapidfuzz import fuzz
@@ -236,12 +236,14 @@ def hirag_query(req: QueryReq = Body(...)):
         except Exception:
             pass
         must = [FieldCondition(key="namespace", match=MatchValue(value=req.namespace))]
-        sr = SearchRequest(
-            vector=vec, limit=max(req.k, RERANK_TOPN),
-            filter=Filter(must=must),
-            with_payload=True, with_vectors=False
+        hits = qdrant.search(
+            collection_name=COLL,
+            query_vector=vec,
+            limit=max(req.k, RERANK_TOPN),
+            query_filter=Filter(must=must),
+            with_payload=True,
+            with_vectors=False,
         )
-        hits = qdrant.search(collection_name=COLL, search_request=sr)
     except Exception as e:
         logger.exception("Qdrant search error")
         raise HTTPException(503, f"Qdrant search error: {e}")
