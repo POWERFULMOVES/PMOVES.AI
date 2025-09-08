@@ -2,9 +2,10 @@ import os, json, tempfile, shutil, subprocess
 from typing import Dict, Any
 from fastapi import FastAPI, Body, HTTPException
 import boto3
-import whisper
+from faster_whisper import WhisperModel
+import shutil as _shutil
 
-app = FastAPI(title="FFmpeg+Whisper", version="1.0.0")
+app = FastAPI(title="FFmpeg+Whisper (faster-whisper)", version="2.0.0")
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID") or "minioadmin"
@@ -23,6 +24,17 @@ def ffmpeg_extract_audio(src: str, dst: str):
     # Example: convert to m4a AAC
     cmd = ['ffmpeg','-y','-i', src,'-vn','-acodec','aac','-b:a','128k', dst]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def _select_device() -> str:
+    # Prefer CUDA if available; allow override via WHISPER_DEVICE / USE_CUDA
+    dev = os.environ.get("WHISPER_DEVICE")
+    if dev:
+        return dev
+    if os.environ.get("USE_CUDA","false").lower() == "true":
+        return "cuda"
+    if _shutil.which("nvidia-smi"):
+        return "cuda"
+    return "cpu"
 
 @app.post('/transcribe')
 def transcribe(body: Dict[str,Any] = Body(...)):
@@ -46,15 +58,16 @@ def transcribe(body: Dict[str,Any] = Body(...)):
             s3.upload_file(audio_path, bucket, out_audio_key)
             scheme = 'https' if MINIO_SECURE else 'http'
             s3_uri = f"{scheme}://{MINIO_ENDPOINT}/{bucket}/{out_audio_key}"
-        # whisper
-        model = whisper.load_model(model_name)
-        res = model.transcribe(audio_path, language=lang)
-        text = res.get('text') or ''
-        return {'ok': True, 'text': text, 'language': res.get('language') or lang, 's3_uri': s3_uri}
+        # faster-whisper (ctranslate2). Uses CUDA if available.
+        device = _select_device()
+        compute_type = 'float16' if device == 'cuda' else 'int8'
+        model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        segments, info = model.transcribe(audio_path, language=lang)
+        text = ''.join(seg.text or '' for seg in segments)
+        return {'ok': True, 'text': text, 'language': info.language or lang, 's3_uri': s3_uri, 'device': device}
     except subprocess.CalledProcessError as e:
         raise HTTPException(500, f"ffmpeg error: {e}")
     except Exception as e:
         raise HTTPException(500, f"transcribe error: {e}")
     finally:
         shutil.rmtree(tmpd, ignore_errors=True)
-
