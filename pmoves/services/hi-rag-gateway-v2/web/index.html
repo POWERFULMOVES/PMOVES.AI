@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PMOVES Geometry Live</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>PMOVES Geometry Live</h1>
+    <div>
+      <label>Room <input id="room" value="public" /></label>
+      <label>Passphrase <input id="pass" type="password" placeholder="optional for signing" /></label>
+      <label><input id="encrypt" type="checkbox" /> Encrypt anchors</label>
+      <label><input id="decrypt" type="checkbox" /> Decrypt on receive</label>
+      <button id="connectBtn">Connect</button>
+      <button id="disconnectBtn">Disconnect</button>
+      <button id="shareBtn">Share Shape Hello</button>
+      <button id="sendCgpBtn">Send Current CGP</button>
+      <button id="sendMeshBtn">Send Signed CGP → Mesh</button>
+      <button id="saveCapsuleBtn">Save Capsule</button>
+      <span id="status"></span>
+    </div>
+  </header>
+  <main>
+    <canvas id="canvas" width="960" height="540"></canvas>
+    <div>
+      <div id="peers">Peers: 0</div>
+      <ul id="peerList"></ul>
+      <pre id="log"></pre>
+    </div>
+  </main>
+  <script src="./script.js"></script>
+</body>
+</html>

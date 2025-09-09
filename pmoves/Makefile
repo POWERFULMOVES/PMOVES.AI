@@ -133,6 +133,13 @@ help:
 	@echo "  env-dedupe       Remove duplicate keys from .env (keeps last, writes .bak)"
 	@echo "  logs-core        Tail core services (docker compose logs -f ...)"
 	@echo "  setup            Run Codex/bootstrap env setup (make, conda deps)"
+	@echo "  supabase-migrate Apply supabase/migrations/*.sql via docker compose"
+	@echo "  smoke-geometry   Post a CGP, jump a point, decode text, and run calibration"
+	@echo "  codebook-gen     Generate structured_dataset.jsonl from a source JSONL"
+	@echo "  mcp-agent-zero   Run Agent Zero MCP stdio shim (FORM=CREATOR|RESEARCHER|POWERFULMOVES)"
+	@echo "  mcp-archon       Run Archon MCP stdio shim (FORM=...)"
+	@echo "  mesh-up          Start NATS + mesh-agent"
+	@echo "  mesh-handshake   Publish a shape-capsule to the mesh (FILE=cgp.json)"
 
 .PHONY: logs-core
 logs-core:
@@ -150,3 +157,44 @@ setup:
 	else \
 		bash scripts/codex_bootstrap.sh $${CONDA_ENV:-pmoves-ai} ; \
 	fi
+
+.PHONY: supabase-migrate
+supabase-migrate:
+	@if [ "$(OS)" = "Windows_NT" ]; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/apply_migrations_docker.ps1 ; \
+	else \
+		bash scripts/apply_migrations_docker.sh ; \
+	fi
+
+.PHONY: smoke-geometry
+smoke-geometry:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-geometry" && exit 1)
+	@echo '{"type":"geometry.cgp.v1","data":{"spec":"chit.cgp.v0.1","super_nodes":[{"constellations":[{"id":"c.test.1","summary":"beat-aligned hook","spectrum":[0.05,0.1,0.2,0.3,0.2,0.1,0.03,0.02],"points":[{"id":"p.test.1","modality":"video","ref_id":"yt123","t_start":12.5,"frame_idx":300,"proj":0.8,"conf":0.9,"text":"chorus line"}]}]}]}}' > .tmp_cgp.json
+	@echo "[1/4] POST /geometry/event" && curl -sf http://localhost:8087/geometry/event -H 'content-type: application/json' -d @.tmp_cgp.json >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
+	@echo "[2/4] GET /shape/point/p.test.1/jump" && curl -sf http://localhost:8087/shape/point/p.test.1/jump | jq -e '.locator.modality=="video" and .locator.ref_id=="yt123"' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
+	@echo "[3/4] POST /geometry/decode/text (geometry mode)" && curl -sf http://localhost:8087/geometry/decode/text -H 'content-type: application/json' -d '{"mode":"geometry","constellation_id":"c.test.1","k":3}' | jq -e '.points|length>=1' >/dev/null && echo OK || (echo WARN: decoder disabled; true)
+	@echo "[4/4] POST /geometry/calibration/report" && curl -sf http://localhost:8087/geometry/calibration/report -H 'content-type: application/json' -d @.tmp_cgp.json | jq -e '.constellations|length>=1' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
+	@rm -f .tmp_cgp.json
+	@echo "Geometry smoke passed."
+
+.PHONY: codebook-gen
+codebook-gen:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make codebook-gen FILE=/abs/source.jsonl OUT=datasets/structured_dataset.jsonl"; exit 1; fi
+	@python tools/chit_codebook_gen.py $(FILE) $(OUT)
+
+.PHONY: mcp-agent-zero
+mcp-agent-zero:
+	@AGENT_FORM=$${FORM:-POWERFULMOVES} python services/agent-zero/mcp_server.py
+
+.PHONY: mcp-archon
+mcp-archon:
+	@ARCHON_FORM=$${FORM:-POWERFULMOVES} python services/archon/mcp_server.py
+
+.PHONY: mesh-up
+mesh-up:
+	docker compose --profile agents up -d nats mesh-agent
+
+.PHONY: mesh-handshake
+mesh-handshake:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make mesh-handshake FILE=cgp.json"; exit 1; fi
+	@python tools/publish_handshake.py $(FILE)

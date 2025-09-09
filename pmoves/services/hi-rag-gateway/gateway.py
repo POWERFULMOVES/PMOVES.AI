@@ -1,4 +1,13 @@
-import os, re, time, threading, ipaddress, math, requests, logging
+import os, re, time, threading, ipaddress, math, requests, logging, json, sys
+from pathlib import Path
+
+# ensure repo root is on sys.path for importing tools/* when running from service folder
+try:
+    _repo_root = Path(__file__).resolve().parents[2]
+    if str(_repo_root) not in sys.path:
+        sys.path.append(str(_repo_root))
+except Exception:
+    pass
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,7 +38,7 @@ TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","true").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","true").lower()=="true"
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
 
-app = FastAPI(title="PMOVES Hi‑RAG Gateway")
+app = FastAPI(title="PMOVES Hi-RAG Gateway")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # basic logging for easier debugging in container logs
@@ -38,6 +47,53 @@ logger = logging.getLogger("hirag.gateway")
 
 qdrant = QdrantClient(url=QDRANT_URL, timeout=20.0)
 driver = GraphDatabase.driver(NEO4J_URL, auth=(NEO4J_USER, NEO4J_PASSWORD))
+
+# --- Geometry Bus ShapeStore (in-memory) ---
+try:
+    from services.common.shape_store import ShapeStore
+    shape_store = ShapeStore(capacity=10_000)
+    logger.info("ShapeStore initialized with capacity 10000")
+except Exception as e:
+    logger.exception("Failed to initialize ShapeStore: %s", e)
+    shape_store = None
+
+# --- CHIT security and decode flags ---
+CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
+CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
+CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower() == "true"
+CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_dataset.jsonl")
+CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
+CHIT_DECODE_IMAGE = os.environ.get("CHIT_DECODE_IMAGE", "false").lower() == "true"
+CHIT_DECODE_AUDIO = os.environ.get("CHIT_DECODE_AUDIO", "false").lower() == "true"
+
+_codebook_cache = None
+_codebook_mtime = None
+
+def _load_codebook(path: str):
+    import os
+    global _codebook_cache, _codebook_mtime
+    try:
+        st = os.stat(path)
+        if _codebook_cache is not None and _codebook_mtime == st.st_mtime:
+            return _codebook_cache
+        items = []
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except Exception:
+                    continue
+        _codebook_cache = items
+        _codebook_mtime = st.st_mtime
+        return items
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        logger.exception("codebook load error")
+        return []
 
 _model = None
 def embed_query(text: str):
@@ -255,6 +311,171 @@ def hirag_admin_refresh(_=Depends(require_tailscale)):
 def hirag_admin_cache_clear(_=Depends(require_tailscale)):
     _cache_entities.clear(); _cache_order.clear()
     return {"ok": True}
+
+# ---------------- Geometry Bus minimal stub ----------------
+@app.get("/shape/point/{point_id}/jump")
+def shape_point_jump(point_id: str):
+    if shape_store is None:
+        raise HTTPException(503, "ShapeStore unavailable")
+    loc = shape_store.jump_locator(point_id)
+    if not loc:
+        raise HTTPException(404, f"point '{point_id}' not found")
+    return {"ok": True, "locator": loc}
+
+
+@app.post("/geometry/event")
+def geometry_event(body: Dict[str, Any]):
+    """Accept geometry.cgp.v1 events. Body example:
+    {"type":"geometry.cgp.v1", "data": { ... CGP ... }}
+    """
+    if shape_store is None:
+        raise HTTPException(503, "ShapeStore unavailable")
+    try:
+        payload = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(payload, dict):
+            raise ValueError("missing data")
+        if CHIT_REQUIRE_SIGNATURE:
+            try:
+                from tools.chit_security import verify_cgp, decrypt_anchors
+            except Exception:
+                raise HTTPException(500, "security module not available")
+            if not CHIT_PASSPHRASE:
+                raise HTTPException(500, "CHIT_REQUIRE_SIGNATURE=true but CHIT_PASSPHRASE not set")
+            if not verify_cgp(payload, CHIT_PASSPHRASE):
+                raise HTTPException(401, "invalid CGP signature")
+            if CHIT_DECRYPT_ANCHORS:
+                try:
+                    payload = decrypt_anchors(payload, CHIT_PASSPHRASE)
+                except Exception as e:
+                    raise HTTPException(400, f"anchor decrypt failed: {e}")
+        shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": payload})
+        return {"ok": True}
+    except Exception as e:
+        logger.exception("geometry_event error")
+        raise HTTPException(400, f"geometry event error: {e}")
+
+
+@app.post("/geometry/decode/text")
+def geometry_decode_text(body: Dict[str, Any]):
+    if not CHIT_DECODE_TEXT:
+        raise HTTPException(501, "text decoder disabled")
+    # mode: "learned" | "geometry"
+    mode = (body.get("mode") or "geometry").lower()
+    const_id = body.get("constellation_id")
+    point_ids = body.get("point_ids") or []
+    k = int(body.get("k", 5))
+    if const_id:
+        const = shape_store.get_constellation(const_id) if shape_store else None
+        if not const:
+            raise HTTPException(404, f"constellation '{const_id}' not found")
+    if mode == "learned":
+        # lazy import transformers
+        try:
+            from transformers import pipeline  # type: ignore
+        except Exception:
+            raise HTTPException(500, "transformers not installed; set CHIT_DECODE_TEXT=false or install extras")
+        texts = []
+        # pull codebook examples
+        cb = _load_codebook(CHIT_CODEBOOK_PATH)
+        for rec in cb[: min(64, len(cb))]:
+            t = rec.get("text") or rec.get("summary")
+            if t: texts.append(t)
+        if const_id and const:
+            s = const.get("summary")
+            if s: texts.insert(0, s)
+        if not texts:
+            raise HTTPException(400, "no codebook or constellation text available")
+        nlp = pipeline("summarization", model=os.environ.get("CHIT_T5_MODEL","t5-small"))
+        out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
+        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+    else:
+        # geometry-only: return top-k point snippets ordered by confidence/proj
+        pts = []
+        if const_id and const:
+            for p in const.get("points", []) or []:
+                cid = p.get("id");
+                if not cid: continue
+                pts.append({
+                    "id": cid,
+                    "text": p.get("text"),
+                    "proj": p.get("proj"),
+                    "conf": p.get("conf"),
+                })
+        for pid in point_ids:
+            sp = shape_store.get_point(str(pid)) if shape_store else None
+            if sp:
+                pts.append({"id": sp.id, "proj": sp.proj, "conf": sp.conf})
+        pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
+        return {"mode": mode, "points": pts[:k]}
+
+
+def _js_divergence(p: List[float], q: List[float]) -> float:
+    import math
+    def _kl(a, b):
+        eps = 1e-9
+        s = 0.0
+        for i in range(min(len(a), len(b))):
+            ai = max(a[i], eps); bi = max(b[i], eps)
+            s += ai * math.log(ai/bi)
+        return s
+    m = [(pi + qi) * 0.5 for pi, qi in zip(p, q)]
+    return 0.5 * (_kl(p, m) + _kl(q, m))
+
+
+def _wasserstein_1d(p: List[float], q: List[float]) -> float:
+    # discrete 1D: sum |CDF_p - CDF_q|
+    import itertools
+    from itertools import accumulate
+    import math
+    cdp = list(accumulate(p))
+    cdq = list(accumulate(q))
+    return sum(abs(a-b) for a, b in itertools.zip_longest(cdp, cdq, fillvalue=1.0)) / max(1, len(cdp))
+
+
+@app.post("/geometry/calibration/report")
+def geometry_calibration_report(body: Dict[str, Any]):
+    data = body.get("data")
+    const_ids = body.get("constellation_ids") or []
+    report = []
+    consts = []
+    if isinstance(data, dict):
+        for sn in data.get("super_nodes", []) or []:
+            consts.extend(sn.get("constellations", []) or [])
+    for cid in const_ids:
+        c = shape_store.get_constellation(cid) if shape_store else None
+        if c: consts.append(c)
+    if not consts:
+        raise HTTPException(400, "no constellations provided")
+    for c in consts:
+        spec = c.get("spectrum") or []
+        if not spec:
+            report.append({"id": c.get("id"), "coverage": 0.0, "js": None, "w1": None}); continue
+        s = [float(x) for x in spec]
+        mass = sum(s) or 1.0
+        s = [x/mass for x in s]
+        # uniform baseline for now
+        u = [1.0/len(s)]*len(s)
+        js = _js_divergence(s, u)
+        w1 = _wasserstein_1d(s, u)
+        coverage = sum(1 for x in s if x > 0.01) / float(len(s))
+        report.append({"id": c.get("id"), "coverage": coverage, "js": js, "w1": w1})
+    return {"constellations": report}
+
+
+@app.post("/geometry/decode/image")
+def geometry_decode_image(body: Dict[str, Any]):
+    if not CHIT_DECODE_IMAGE:
+        raise HTTPException(501, "image decoder disabled")
+    # Placeholder stub. Implement CLIP-based decode here.
+    return {"ok": False, "detail": "CLIP-based image decoder not yet implemented; install extras and set CHIT_DECODE_IMAGE=true"}
+
+
+@app.post("/geometry/decode/audio")
+def geometry_decode_audio(body: Dict[str, Any]):
+    if not CHIT_DECODE_AUDIO:
+        raise HTTPException(501, "audio decoder disabled")
+    # Placeholder stub. Implement CLAP-based decode here.
+    return {"ok": False, "detail": "CLAP-based audio decoder not yet implemented; install extras and set CHIT_DECODE_AUDIO=true"}
 
 @app.get("/")
 def index():

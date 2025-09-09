@@ -1,5 +1,8 @@
 fastapi==0.111.0
 uvicorn==0.30.0
 pydantic==2.8.2
+PyYAML==6.0.2
+# Optional if using MCP python library
+# model-context-protocol
 nats-py==2.7.2
 jsonschema==4.22.0

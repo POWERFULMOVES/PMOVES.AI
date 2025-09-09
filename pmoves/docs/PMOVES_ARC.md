@@ -248,6 +248,100 @@ This integration creates a powerful synergy for research, data processing, and c
 
 --------------------------------------------------------------------------------
 
+## 4. Geometry Bus and Multimodal Anchors (CHIT)
+
+The Geometry Bus is a new logical layer that standardizes how all PMOVES agents describe, exchange, and explore content across video, audio, image, and text. It is grounded in the CHIT Geometry Packet (CGP v0.1) defined in `docs/understand/PMOVESCHIT.md` and extended by the decoders in `docs/understand/PMOVESCHIT_DECODERv0.1.md` and `docs/understand/PMOVESCHIT_DECODER_MULTIv0.1.md`.
+
+- Canonical packet: `spec: chit.cgp.v0.1` with `super_nodes[] → constellations[] → points[]`.
+- Anchor space: every constellation provides an `anchor` (direction) with soft spectrum bins for “where” content lives; points carry cross-modal metadata.
+- Shape IDs: stable `shape_id` keys address anchors/points across DB and in-memory caches.
+- Time/space alignment: each point may include `{video_id, t_start, t_end, frame_idx}` or `{audio_id, t_start, t_end}` or `{doc_id, token_start, token_end}` to jump between modalities.
+
+Recommended Supabase tables (minimal):
+- `anchors(id, kind, dim, meta)`
+- `constellations(id, anchor_id, summary, radial_min, radial_max, spectrum, meta)`
+- `shape_points(id, constellation_id, modality, ref_id, t_start, t_end, frame_idx, token_start, token_end, proj, conf, meta)`
+- `shape_index(shape_id, modality, ref_id, loc_hash, meta)` for fast cross-modal lookup.
+
+Event topics (publish/subscribe):
+- `geometry.cgp.v1` — new/updated CGP packets
+- `analysis.entities.v1` — entity graphs from LangExtract/Neo4j
+- `analysis.audio.v1` — emotions/segments (audio)
+- `analysis.video.v1` — detections/segments (video)
+
+In-memory “ShapeStore” (service-local cache):
+- Keyed by `shape_id` with LRU retention; mirrors recent `shape_points` and `constellations` to support sub‑100ms interactive scrubbing/jumping between modalities.
+
+Exploration UI (agent + user):
+- A single canvas where anchors/constellations are the primary navigation. From any point, jump to the corresponding video frame, audio span, or text snippet.
+- Decoders provide “geometry‑only” retrieval and learned summarization; security utilities (HMAC/AES‑GCM) optionally sign and encrypt anchors when sharing.
+
+References:
+- See `docs/understand/PMOVESCHIT.md` for the CGP spec and backend/frontend notes.
+- See `docs/understand/PMOVESCHIT_DECODERv0.1.md` and `docs/understand/PMOVESCHIT_DECODER_MULTIv0.1.md` for decoders, metrics, and security.
+
+--------------------------------------------------------------------------------
+
+## 5. YouTube Ingestion as a First-Class Source (upgrade from PMOVES_YT)
+
+Consolidating `docs/PMOVES.yt/PMOVES_YT.md` into the architecture view. The YouTube worker is both an ingestion source and a Geometry Bus participant.
+
+Endpoints (worker):
+- `POST /yt/info` → `{ id, title, uploader, duration, webpage_url }`
+- `POST /yt/download` → downloads MP4 to S3 `yt/<id>/raw.mp4`; inserts `videos`; emits `ingest.file.added.v1`
+- `POST /yt/transcript` → extracts audio + Whisper; inserts `transcripts`; emits `ingest.transcript.ready.v1`
+- `POST /yt/ingest` → convenience: info + download + transcript
+
+Compose profiles: `workers|orchestration|agents` expose `pmoves-yt` (8077) and `ffmpeg-whisper` (8078).
+
+Data model (Supabase):
+- `videos(video_id, namespace, title, source_url, s3_base_prefix, meta)`
+- `transcripts(video_id, language, text, s3_uri, meta)`
+- Next: `detections`, `segments`, `emotions` feeding the Geometry Bus tables above.
+
+Flow → Geometry Bus tie‑in:
+1) `/yt/ingest` yields raw media + transcript rows and events.
+2) Analysis workers produce detections/segments/emotions; derive CGP `constellations` aligned by timestamps.
+3) Publish `geometry.cgp.v1`; UI/agents update views and enable cross‑modal jumps.
+
+Notes:
+- Switch `ffmpeg-whisper` to `faster-whisper` for GPU auto‑detect (desktop/Jetson).
+- For Jetson, use L4T PyTorch bases; keep CLIP/CLAP optional by profile.
+
+--------------------------------------------------------------------------------
+
+## 6. Geometry Decoders, Security, and Calibration
+
+- Endpoints:
+  - `POST /geometry/event` — accepts CGP packets; if `CHIT_REQUIRE_SIGNATURE=true`, verifies HMAC; if `CHIT_DECRYPT_ANCHORS=true`, decrypts `anchor_enc`.
+  - `GET /shape/point/{id}/jump` — returns a compact locator for UI/agents to jump (video/audio/text).
+  - `POST /geometry/decode/text` — geometry-only or learned (Tiny T5) summaries; gated by `CHIT_DECODE_TEXT`.
+  - `POST /geometry/decode/image` — CLIP-based (optional); gated by `CHIT_DECODE_IMAGE`.
+  - `POST /geometry/decode/audio` — CLAP-based (optional); gated by `CHIT_DECODE_AUDIO`.
+  - `POST /geometry/calibration/report` — basic JS/Wasserstein-1D/coverage metrics for spectra.
+
+- Env flags (gateway):
+  - `CHIT_REQUIRE_SIGNATURE`, `CHIT_PASSPHRASE`, `CHIT_DECRYPT_ANCHORS`
+  - `CHIT_DECODE_TEXT`, `CHIT_DECODE_IMAGE`, `CHIT_DECODE_AUDIO`
+  - `CHIT_CODEBOOK_PATH` (default `datasets/structured_dataset.jsonl`), `CHIT_T5_MODEL`
+
+- Security helpers: `tools/chit_security.py` (sign/verify/encrypt/decrypt).
+
+- UI contract: UI drives interaction; server returns locators and summaries without side effects, leaving room for rich client-side choreography.
+
+--------------------------------------------------------------------------------
+
+## 7. Agents as MCP Providers (Local-First)
+
+- Agent Zero (Conductor) and Archon (Librarian) expose MCP-style tools over stdio shims:
+  - Paths: `services/agent-zero/mcp_server.py`, `services/archon/mcp_server.py`.
+  - Run via Make: `make mcp-agent-zero FORM=POWERFULMOVES` or `make mcp-archon FORM=CREATOR`.
+  - Tools include: `geometry.publish_cgp`, `geometry.decode_text`, `geometry.jump`, `knowledge.rag.query`, `knowledge.codebook.update`, etc.
+- Forms (temperaments) in `configs/agents/forms/*.yaml`:
+  - `POWERFULMOVES` (default), `CREATOR`, `RESEARCHER` — tunable weights for decode/retrieve/generate and mesh offload thresholds.
+- Privacy defaults: shapes-only sharing; artifact sharing requires explicit approval.
+
+
 ## 4. HiRAG Integration Workflow
 
 This diagram details how HiRAG (Hierarchical Retrieval-Augmented Generation) is integrated into PMOVES, showing its role in building hierarchical knowledge structures and enhancing fact-based reasoning capabilities.
@@ -327,6 +421,18 @@ HiRAG integration provides hierarchical knowledge structuring and deeper, fact-b
 4. Advanced RAG Strategy (HiRAG in Action): When a User Query (from Agent Zero) comes in, HiRAG Query Processing dynamically selects information from local entities, communities, and global bridges, assembling an optimal context for the LLM based on query complexity. This rich context enables Local Models (LLMs) to perform deeper, fact-based reasoning, producing generated responses with higher accuracy and reduced contradictions. This enhances Agent Zero's persistent memory and improves online search by formulating more precise queries and learning dynamic policies for knowledge acquisition.
 
 --------------------------------------------------------------------------------
+
+## 8. Live Geometry UI + WebRTC Shape Handshakes
+
+- Static UI hosted by v2 gateway at `/geometry/` shows a canvas of recent points and listens for `geometry.cgp.v1` updates (broadcast locally on ingest).
+- WebRTC signaling: clients connect to `/ws/signaling/{room}` and exchange offers/candidates. DataChannel `shapes` sends:
+  - `shape-hello` (nodeId optional, forms, policy: shapes_only)
+  - `shape-share` (CGP headers or signed capsule)
+  - `shape-capsule` (signed CGP payload)
+- Publish to mesh: `POST /mesh/handshake` publishes to NATS subject `mesh.shape.handshake.v1`. Mesh Agent verifies (if `MESH_PASSPHRASE` set) and forwards to `/geometry/event` on local nodes.
+- Optional in-browser encryption: UI can AES‑GCM encrypt `anchor` → `anchor_enc` with PBKDF2(passphrase) + IV, and sign the CGP (HMAC). Receiving gateway can decrypt when `CHIT_DECRYPT_ANCHORS=true`.
+- This enables PMOVES-to-PMOVES local collaboration: share only “shapes” (CGP) by default; artifacts shared on explicit approval.
+
 
 ## 5. Crush CLI Integration Context
 

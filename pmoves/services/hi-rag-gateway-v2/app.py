@@ -1,7 +1,9 @@
 
-import os, time, math, json, logging, re
+import os, time, math, json, logging, re, sys
+from pathlib import Path
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, Body, HTTPException, Request, Depends
+from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, Distance, VectorParams
@@ -10,6 +12,9 @@ from FlagEmbedding import FlagReranker
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
+import asyncio
+import nats
+import psycopg
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
@@ -56,6 +61,32 @@ def _get_embedder():
     if _embedder is None:
         _embedder = SentenceTransformer(MODEL)
     return _embedder
+
+# --- In-memory rooms for WebSocket signaling and geometry broadcast ---
+_rooms: Dict[str, List[WebSocket]] = {}
+
+def _room_get(name: str) -> List[WebSocket]:
+    return _rooms.setdefault(name, [])
+
+async def _room_add(name: str, ws: WebSocket):
+    _room_get(name).append(ws)
+
+def _room_remove(name: str, ws: WebSocket):
+    lst = _rooms.get(name, [])
+    if ws in lst:
+        lst.remove(ws)
+
+async def _room_broadcast(name: str, msg: Dict[str, Any], skip: WebSocket | None = None):
+    dead = []
+    for ws in list(_rooms.get(name, [])):
+        if skip is not None and ws is skip:
+            continue
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            dead.append(ws)
+    for d in dead:
+        _room_remove(name, d)
 
 def embed_query(text: str):
     # Try provider chain first; fall back to local SentenceTransformer
@@ -184,6 +215,68 @@ class QueryResp(BaseModel):
     hits: List[QueryHit]
 
 app = FastAPI(title="PMOVES Hi-RAG Gateway v2 (hybrid + rerank)", version="2.1.0")
+
+# ensure repo root on sys.path for importing shared tools
+try:
+    _repo_root = Path(__file__).resolve().parents[2]
+    if str(_repo_root) not in sys.path:
+        sys.path.append(str(_repo_root))
+except Exception:
+    pass
+
+# Geometry Bus: ShapeStore and CHIT flags
+try:
+    from services.common.shape_store import ShapeStore
+    shape_store = ShapeStore(capacity=10_000)
+    logging.getLogger("hirag.gateway.v2").info("ShapeStore initialized (v2)")
+except Exception as _e:
+    logging.getLogger("hirag.gateway.v2").exception("ShapeStore init failed: %s", _e)
+    shape_store = None
+
+CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower()=="true"
+CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
+CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower()=="true"
+CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower()=="true"
+CHIT_DECODE_IMAGE = os.environ.get("CHIT_DECODE_IMAGE", "false").lower()=="true"
+CHIT_DECODE_AUDIO = os.environ.get("CHIT_DECODE_AUDIO", "false").lower()=="true"
+CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_dataset.jsonl")
+CHIT_T5_MODEL = os.environ.get("CHIT_T5_MODEL","t5-small")
+CHIT_CLIP_MODEL = os.environ.get("CHIT_CLIP_MODEL","clip-ViT-B-32")
+CHIT_PERSIST_DB = os.environ.get("CHIT_PERSIST_DB","false").lower()=="true"
+
+PGHOST = os.environ.get("PGHOST")
+PGPORT = int(os.environ.get("PGPORT","5432"))
+PGUSER = os.environ.get("PGUSER")
+PGPASSWORD = os.environ.get("PGPASSWORD")
+PGDATABASE = os.environ.get("PGDATABASE")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+
+_codebook_cache = None
+_codebook_mtime = None
+
+def _load_codebook(path: str):
+    global _codebook_cache, _codebook_mtime
+    try:
+        st = os.stat(path)
+        if _codebook_cache is not None and _codebook_mtime == st.st_mtime:
+            return _codebook_cache
+        items = []
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line=line.strip()
+                if not line: continue
+                try:
+                    items.append(json.loads(line))
+                except Exception:
+                    continue
+        _codebook_cache = items
+        _codebook_mtime = st.st_mtime
+        return items
+    except FileNotFoundError:
+        return []
+    except Exception:
+        logger.exception("codebook load error")
+        return []
 
 def _client_ip(request: Request) -> str:
     xff = request.headers.get("x-forwarded-for")
@@ -333,3 +426,309 @@ def _get_reranker():
     except Exception as e:
         logger.exception("Reranker init failed")
         return None
+
+
+# ---------------- Geometry Bus endpoints (v2) ----------------
+from fastapi import UploadFile
+import io
+
+@app.post("/geometry/event")
+def geometry_event(body: Dict[str, Any]):
+    if shape_store is None:
+        raise HTTPException(503, "ShapeStore unavailable")
+    payload = body.get("data") if isinstance(body, dict) else None
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "missing data")
+    if CHIT_REQUIRE_SIGNATURE:
+        try:
+            from tools.chit_security import verify_cgp, decrypt_anchors
+        except Exception:
+            raise HTTPException(500, "security module not available")
+        if not CHIT_PASSPHRASE:
+            raise HTTPException(500, "CHIT_REQUIRE_SIGNATURE=true but CHIT_PASSPHRASE not set")
+        if not verify_cgp(payload, CHIT_PASSPHRASE):
+            raise HTTPException(401, "invalid CGP signature")
+        if CHIT_DECRYPT_ANCHORS:
+            payload = decrypt_anchors(payload, CHIT_PASSPHRASE)
+    shape_store.on_geometry_event({"type":"geometry.cgp.v1","data":payload})
+    # optional persistence to Postgres for Supabase Realtime
+    if CHIT_PERSIST_DB and PGHOST and PGUSER and PGPASSWORD and PGDATABASE:
+        try:
+            _persist_cgp_to_db(payload)
+        except Exception:
+            logger.exception("persist CGP failed")
+    # notify websocket geometry channel (best-effort)
+    try:
+        import anyio
+        async def _notify():
+            await _room_broadcast("geometry", {"type":"geometry.cgp.v1","data": payload})
+        anyio.from_thread.run(_notify)
+    except Exception:
+        pass
+    return {"ok": True}
+
+@app.get("/shape/point/{point_id}/jump")
+def shape_point_jump(point_id: str):
+    if shape_store is None:
+        raise HTTPException(503, "ShapeStore unavailable")
+    loc = shape_store.jump_locator(point_id)
+    if not loc:
+        raise HTTPException(404, f"point '{point_id}' not found")
+    return {"ok": True, "locator": loc}
+
+@app.post("/geometry/decode/text")
+def geometry_decode_text(body: Dict[str, Any]):
+    if not CHIT_DECODE_TEXT:
+        raise HTTPException(501, "text decoder disabled")
+    mode = (body.get("mode") or "geometry").lower()
+    const_id = body.get("constellation_id")
+    k = int(body.get("k", 5))
+    const = shape_store.get_constellation(const_id) if (shape_store and const_id) else None
+    if mode == "learned":
+        try:
+            from transformers import pipeline  # type: ignore
+        except Exception:
+            raise HTTPException(500, "transformers not installed")
+        texts = []
+        cb = _load_codebook(CHIT_CODEBOOK_PATH)
+        for rec in cb[: min(64, len(cb))]:
+            t = rec.get("text") or rec.get("summary")
+            if t: texts.append(t)
+        if const:
+            s = const.get("summary");
+            if s: texts.insert(0, s)
+        if not texts:
+            raise HTTPException(400, "no codebook or constellation text available")
+        nlp = pipeline("summarization", model=CHIT_T5_MODEL)
+        out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
+        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+    else:
+        pts = []
+        if const:
+            for p in const.get("points", []) or []:
+                cid = p.get("id");
+                if not cid: continue
+                pts.append({
+                    "id": cid,
+                    "text": p.get("text"),
+                    "proj": p.get("proj"),
+                    "conf": p.get("conf")
+                })
+        pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
+        return {"mode": mode, "points": pts[:k]}
+
+@app.post("/geometry/calibration/report")
+def geometry_calibration_report(body: Dict[str, Any]):
+    def _js(p, q):
+        import math
+        def _kl(a, b):
+            eps = 1e-9
+            s = 0.0
+            for i in range(min(len(a), len(b))):
+                ai = max(a[i], eps); bi = max(b[i], eps)
+                s += ai * math.log(ai/bi)
+            return s
+        m = [(pi+qi)*0.5 for pi,qi in zip(p,q)]
+        return 0.5*(_kl(p,m)+_kl(q,m))
+    def _w1(p, q):
+        from itertools import accumulate
+        cdp=list(accumulate(p)); cdq=list(accumulate(q))
+        n=max(1,len(cdp));
+        return sum(abs((cdp[i] if i<len(cdp) else 1.0)-(cdq[i] if i<len(cdq) else 1.0)) for i in range(n))/n
+    data = body.get("data")
+    const_ids = body.get("constellation_ids") or []
+    consts = []
+    if isinstance(data, dict):
+        for sn in data.get("super_nodes", []) or []:
+            consts.extend(sn.get("constellations", []) or [])
+    for cid in const_ids:
+        c = shape_store.get_constellation(cid) if shape_store else None
+        if c: consts.append(c)
+    report=[]
+    for c in consts:
+        s = c.get("spectrum") or []
+        if not s:
+            report.append({"id": c.get("id"), "coverage": 0.0, "js": None, "w1": None}); continue
+        s=[float(x) for x in s]; mass=sum(s) or 1.0; s=[x/mass for x in s]
+        u=[1.0/len(s)]*len(s)
+        js=_js(s,u); w1=_w1(s,u); coverage=sum(1 for x in s if x>0.01)/float(len(s))
+        report.append({"id": c.get("id"), "coverage": coverage, "js": js, "w1": w1})
+    return {"constellations": report}
+
+@app.post("/geometry/decode/image")
+def geometry_decode_image(body: Dict[str, Any]):
+    if not CHIT_DECODE_IMAGE:
+        raise HTTPException(501, "image decoder disabled")
+    try:
+        from sentence_transformers import SentenceTransformer
+        from PIL import Image
+        import numpy as np
+    except Exception:
+        raise HTTPException(500, "missing dependencies for image decode (sentence-transformers, Pillow)")
+    const_id = body.get("constellation_id")
+    images = body.get("images") or []
+    if not images:
+        raise HTTPException(400, "images list required")
+    const = shape_store.get_constellation(const_id) if (shape_store and const_id) else None
+    text = body.get("text") or (const.get("summary") if const else None)
+    if not text:
+        raise HTTPException(400, "text or constellation summary required for anchor")
+    try:
+        model = SentenceTransformer(CHIT_CLIP_MODEL)
+        text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
+        img_list=[]
+        for url in images:
+            r = requests.get(url, timeout=20)
+            r.raise_for_status()
+            img = Image.open(io.BytesIO(r.content)).convert('RGB')
+            img_list.append(img)
+        img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
+        sims = (img_embs @ text_emb.T).squeeze()  # cosine if normalized
+        ranked = sorted(zip(images, sims.tolist()), key=lambda x: x[1], reverse=True)
+        return {"ranked": [{"url": u, "score": float(s)} for u,s in ranked]}
+    except Exception as e:
+        logger.exception("image decode error")
+        raise HTTPException(500, f"image decode error: {e}")
+
+@app.post("/geometry/decode/audio")
+def geometry_decode_audio(body: Dict[str, Any]):
+    if not CHIT_DECODE_AUDIO:
+        raise HTTPException(501, "audio decoder disabled")
+    try:
+        from laion_clap import CLAP_Module  # type: ignore
+    except Exception:
+        raise HTTPException(500, "missing laion-clap/torch; install extras and set CHIT_DECODE_AUDIO=true")
+    const_id = body.get("constellation_id")
+    audios = body.get("audios") or []
+    if not audios:
+        raise HTTPException(400, "audios list required")
+    const = shape_store.get_constellation(const_id) if (shape_store and const_id) else None
+    text = body.get("text") or (const.get("summary") if const else None)
+    if not text:
+        raise HTTPException(400, "text or constellation summary required for anchor")
+    try:
+        model = CLAP_Module(enable_fusion=True)
+        # Will download default ckpt if not provided; can be heavy
+        model.load_ckpt()
+        a_emb = model.get_audio_embedding_from_filelist(x=audios, use_tensor=False)
+        t_emb = model.get_text_embedding([text], use_tensor=False)
+        # cosine similarity when normalized
+        import numpy as np
+        a = np.asarray(a_emb, dtype=float)
+        t = np.asarray(t_emb, dtype=float).reshape(1,-1)
+        # normalize
+        a = a / (np.linalg.norm(a, axis=1, keepdims=True) + 1e-9)
+        t = t / (np.linalg.norm(t, axis=1, keepdims=True) + 1e-9)
+        sims = (a @ t.T).squeeze()
+        ranked = sorted(zip(audios, sims.tolist()), key=lambda x: x[1], reverse=True)
+        return {"ranked": [{"path": u, "score": float(s)} for u,s in ranked]}
+    except Exception as e:
+        logger.exception("audio decode error")
+        raise HTTPException(500, f"audio decode error: {e}")
+
+
+def _persist_cgp_to_db(cgp: Dict[str, Any]):
+    """Persist anchors, constellations, and points to Postgres.
+    This is a best-effort dev helper for Supabase Realtime; RLS must allow service inserts.
+    """
+    conn = psycopg.connect(host=PGHOST, port=PGPORT, user=PGUSER, password=PGPASSWORD, dbname=PGDATABASE, autocommit=False)
+    try:
+        with conn.cursor() as cur:
+            for sn in cgp.get("super_nodes", []) or []:
+                for const in sn.get("constellations", []) or []:
+                    anchor = const.get("anchor")
+                    anchor_enc = const.get("anchor_enc")
+                    dim = (len(anchor) if isinstance(anchor, (list, tuple)) else (0))
+                    # insert anchor
+                    cur.execute(
+                        """
+                        INSERT INTO public.anchors(kind, dim, anchor, anchor_enc, meta)
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            'multi', int(dim) if dim else 0,
+                            anchor if isinstance(anchor, list) else None,
+                            json.dumps(anchor_enc) if anchor_enc else None,
+                            json.dumps({})
+                        )
+                    )
+                    anchor_id = cur.fetchone()[0]
+                    spectrum = const.get("spectrum") if isinstance(const.get("spectrum"), list) else None
+                    radial = const.get("radial_minmax") if isinstance(const.get("radial_minmax"), list) else [None, None]
+                    summary = const.get("summary")
+                    # insert constellation
+                    cur.execute(
+                        """
+                        INSERT INTO public.constellations(anchor_id, summary, radial_min, radial_max, spectrum, meta)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (anchor_id, summary, radial[0] if radial else None, radial[1] if radial else None, spectrum, json.dumps({}))
+                    )
+                    constellation_id = cur.fetchone()[0]
+                    # insert points
+                    pts = const.get("points", []) or []
+                    for p in pts:
+                        modality = p.get("modality") or p.get("mod") or 'text'
+                        ref_id = p.get("ref_id") or p.get("video_id") or p.get("doc_id") or ''
+                        cur.execute(
+                            """
+                            INSERT INTO public.shape_points(
+                              constellation_id, modality, ref_id, t_start, t_end, frame_idx, token_start, token_end, proj, conf, meta)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            """,
+                            (
+                              constellation_id, modality, ref_id,
+                              p.get("t_start"), p.get("t_end"), p.get("frame_idx"),
+                              p.get("token_start"), p.get("token_end"),
+                              p.get("proj"), p.get("conf"), json.dumps({k:v for k,v in p.items() if k not in {
+                                'id','modality','mod','ref_id','video_id','doc_id','t_start','t_end','frame_idx','token_start','token_end','proj','conf','text'
+                              }})
+                            )
+                        )
+        conn.commit()
+    finally:
+        conn.close()
+
+# ---------------- Static UI and WebSockets ----------------
+app.mount("/geometry", StaticFiles(directory=str(Path(__file__).resolve().parent / "web"), html=True), name="geometry")
+
+@app.websocket("/ws/signaling/{room}")
+async def ws_signaling(ws: WebSocket, room: str):
+    await ws.accept()
+    await _room_add(room, ws)
+    try:
+        while True:
+            data = await ws.receive_json()
+            # broadcast to room peers (simple relay)
+            await _room_broadcast(room, {"room": room, "relay": data}, skip=ws)
+    except WebSocketDisconnect:
+        _room_remove(room, ws)
+    except Exception:
+        _room_remove(room, ws)
+        try:
+            await ws.close()
+        except Exception:
+            pass
+
+
+@app.post("/mesh/handshake")
+def mesh_handshake(body: Dict[str, Any]):
+    """Publish a shape-capsule to NATS mesh subject (mesh.shape.handshake.v1).
+    Body: { capsule: {...} }
+    """
+    capsule = body.get("capsule")
+    if not isinstance(capsule, dict):
+        raise HTTPException(400, "capsule required")
+    payload = {"type": "shape-capsule", "capsule": capsule}
+    try:
+        async def _pub():
+            nc = await nats.connect(servers=[NATS_URL])
+            await nc.publish("mesh.shape.handshake.v1", json.dumps(payload).encode())
+            await nc.flush(); await nc.drain()
+        asyncio.run(_pub())
+        return {"ok": True}
+    except Exception as e:
+        logger.exception("mesh publish failed")
+        raise HTTPException(500, f"mesh publish failed: {e}")

@@ -1,0 +1,23 @@
+services:
+  realtime:
+    image: supabase/realtime:v2.21.0
+    restart: unless-stopped
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=${POSTGRES_DB:-pmoves}
+      - DB_USER=${POSTGRES_USER:-pmoves}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-pmoves}
+      - DB_PORT=5432
+      - SECRET_KEY_BASE=${REALTIME_SECRET_KEY_BASE:-dev_secret_key}
+      - PORT=4000
+    ports:
+      - "4000:4000"
+    depends_on: [postgres]
+    profiles: ["orchestration"]
+    networks: [pmoves]
+
+networks:
+  pmoves:
+    external: true
+    name: pmoves-net
+

@@ -3,3 +3,6 @@ uvicorn==0.30.0
 pydantic==2.8.2
 nats-py==2.7.2
 jsonschema==4.22.0
+PyYAML==6.0.2
+# Optional if using MCP python library
+# model-context-protocol

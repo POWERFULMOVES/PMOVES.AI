@@ -174,6 +174,14 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
+      - USE_CUDA=${USE_CUDA:-true}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              count: ${GPU_COUNT:-all}
     ports: ["8078:8078"]
     profiles: ["workers","orchestration","agents"]
     networks: [pmoves]
@@ -187,9 +195,16 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
       - FRAME_EVERY=${FRAME_EVERY:-5}
       - SCORE_THRES=${SCORE_THRES:-0.25}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              count: ${GPU_COUNT:-all}
     ports: ["8079:8079"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -203,7 +218,14 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              count: ${GPU_COUNT:-all}
     ports: ["8082:8082"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -262,6 +284,49 @@ services:
     profiles: ["workers"]
     networks: [pmoves]
 
+  # GPU-enabled variant of v2 gateway with CLAP/torch installed
+  hi-rag-gateway-v2-gpu:
+    build:
+      context: .
+      dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+      - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
+      - ALPHA=${ALPHA:-0.7}
+      - USE_MEILI=${USE_MEILI:-false}
+      - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
+      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
+      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
+      - NEO4J_URL=${NEO4J_URL}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
+      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
+      - CHIT_DECODE_TEXT=${CHIT_DECODE_TEXT:-true}
+      - CHIT_DECODE_IMAGE=${CHIT_DECODE_IMAGE:-true}
+      - CHIT_DECODE_AUDIO=${CHIT_DECODE_AUDIO:-true}
+      - CHIT_PERSIST_DB=${CHIT_PERSIST_DB:-false}
+      - PGHOST=${PGHOST:-postgres}
+      - PGPORT=${PGPORT:-5432}
+      - PGUSER=${POSTGRES_USER:-pmoves}
+      - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
+      - PGDATABASE=${POSTGRES_DB:-pmoves}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              count: ${GPU_COUNT:-all}
+    ports: ["8087:8086"]
+    profiles: ["gpu"]
+    networks: [pmoves]
+
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
@@ -291,6 +356,18 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
     depends_on: [nats]
     ports: ["8091:8091"]
+    profiles: ["agents"]
+    networks: [pmoves]
+
+  mesh-agent:
+    build: ./services/mesh-agent
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
+      - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
+    depends_on: [nats]
     profiles: ["agents"]
     networks: [pmoves]
 volumes:

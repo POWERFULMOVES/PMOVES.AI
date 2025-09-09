@@ -57,7 +57,85 @@ What the smoke covers:
 6) PostgREST reachable (3000)
 7) Insert a demo row via Render Webhook
 8) Verify a `studio_board` row exists via PostgREST
-9) Run a Hi‑RAG v2 query (8087)
+9) Run a Hi-RAG v2 query (8087)
+
+## 6) Geometry Bus (CHIT) — End-to-end
+
+1. Create minimal CGP payload `cgp.json`:
+   ```json
+   {
+     "type": "geometry.cgp.v1",
+     "data": {
+       "spec": "chit.cgp.v0.1",
+       "super_nodes": [
+         { "constellations": [
+           { "id": "c.test.1", "summary": "beat-aligned hook",
+             "spectrum": [0.05,0.1,0.2,0.3,0.2,0.1,0.03,0.02],
+             "points": [ { "id": "p.test.1", "modality": "video", "ref_id": "yt123", "t_start": 12.5, "frame_idx": 300, "proj": 0.8, "conf": 0.9, "text": "chorus line" } ]
+           }
+         ] }
+       ]
+     }
+   }
+   ```
+
+2. Optional signing (if `CHIT_REQUIRE_SIGNATURE=true` in gateway):
+   ```bash
+   python - << 'PY'
+   import json,sys
+   from tools.chit_security import sign_cgp
+   doc=json.load(open('cgp.json'))
+   signed=sign_cgp(doc['data'],'change-me')
+   json.dump({'type':'geometry.cgp.v1','data':signed}, open('cgp.signed.json','w'))
+   PY
+   ```
+
+3. POST event:
+   ```bash
+   curl -s http://localhost:8086/geometry/event -H 'content-type: application/json' -d @cgp.json
+   # or @cgp.signed.json if signing enabled
+   ```
+
+4. Jump test:
+   ```bash
+   curl -s http://localhost:8086/shape/point/p.test.1/jump
+   ```
+
+5. (Optional) Learned text decode (requires `CHIT_DECODE_TEXT=true` and `transformers`):
+   ```bash
+   curl -s http://localhost:8086/geometry/decode/text \
+     -H 'content-type: application/json' \
+     -d '{"mode":"learned","constellation_id":"c.test.1"}'
+   ```
+
+6. Calibration report:
+   ```bash
+   curl -s http://localhost:8086/geometry/calibration/report \
+     -H 'content-type: application/json' \
+     -d @cgp.json
+   ```
+
+Expected: 200s; locator shows `{ "modality":"video","ref_id":"yt123","t":12.5,"frame":300 }`.
+
+## 7) Live Geometry UI + WebRTC
+
+1. Start v2 GPU gateway or v2 gateway (serves UI):
+   - `docker compose --profile gpu up -d hi-rag-gateway-v2-gpu` (GPU) or `docker compose --profile workers up -d hi-rag-gateway-v2`
+2. Open http://localhost:8087/geometry/
+3. Click Connect (room `public`). Post a CGP (make smoke-geometry) and watch points animate.
+4. Open the page in a second browser window; both connect to `public` room. Use Share Shape to send a `shape-hello` on the DataChannel.
+5. Click “Send Current CGP” to share the last geometry over the DataChannel; add a passphrase to sign the CGP capsule.
+6. Toggle “Encrypt anchors” and set a passphrase to AES‑GCM encrypt constellation anchors client‑side before sending; the receiving gateway can decrypt if `CHIT_DECRYPT_ANCHORS=true`.
+
+## 8) Mesh Handshake (NATS)
+
+1. Start mesh: `make mesh-up` (starts NATS + mesh-agent).
+2. In the UI, click “Send Signed CGP → Mesh”. This calls the gateway, which publishes to `mesh.shape.handshake.v1`.
+3. The mesh-agent receives the capsule, verifies HMAC if `MESH_PASSPHRASE` is set, and posts it to `/geometry/event` so your UI updates locally.
+4. Optional: set `MESH_PASSPHRASE` to enforce signature verification across nodes; use the same passphrase in the UI when signing.
+4. Alternatively, publish via CLI: `make mesh-handshake FILE=cgp.json`.
+   - Signaling goes through `/ws/signaling/public`. DataChannel is p2p.
+
 
 Optional smoke targets:
 - `make smoke-presign-put` — end‑to‑end presign PUT and upload

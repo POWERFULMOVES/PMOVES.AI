@@ -1,8 +1,0 @@
-fastapi==0.112.1
-uvicorn[standard]==0.30.6
-qdrant-client==1.9.1
-sentence-transformers==3.0.1
-neo4j==5.23.1
-requests==2.32.3
-FlagEmbedding==1.2.10
-pydantic==2.8.2
