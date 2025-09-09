@@ -9,6 +9,13 @@ main { display: grid; grid-template-columns: 1fr 340px; gap: 12px; padding: 12px
 .peer-ok { color: #6df1a5; }
 .peer-warn { color: #ffd166; }
 .peer-bad { color: #ff6b6b; }
+.file-label { margin-left: 8px; }
+
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+.modal.hidden { display: none; }
+.modal-content { background: #11151c; border: 1px solid #1f2430; padding: 12px; width: 600px; max-width: 90vw; }
+.modal-content h3 { margin: 0 0 8px 0; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .pt { fill: #5ad4e6; }
 .pt.lowconf { fill: #a27db7; opacity: 0.6; }
 .pt.video { stroke: #6df1a5; }

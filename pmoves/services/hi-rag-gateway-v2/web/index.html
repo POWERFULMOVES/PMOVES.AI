@@ -20,6 +20,7 @@
       <button id="sendCgpBtn">Send Current CGP</button>
       <button id="sendMeshBtn">Send Signed CGP → Mesh</button>
       <button id="saveCapsuleBtn">Save Capsule</button>
+      <label class="file-label">Load Capsule <input id="loadCapsule" type="file" accept="application/json" /></label>
       <span id="status"></span>
     </div>
   </header>
@@ -31,6 +32,18 @@
       <pre id="log"></pre>
     </div>
   </main>
+  <!-- Simple modal for preview -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Capsule Preview</h3>
+      <pre id="modalBody"></pre>
+      <div class="modal-actions">
+        <button id="modalSendP2P">Send P2P</button>
+        <button id="modalSendMesh">Send Mesh</button>
+        <button id="modalClose">Cancel</button>
+      </div>
+    </div>
+  </div>
   <script src="./script.js"></script>
 </body>
 </html>
