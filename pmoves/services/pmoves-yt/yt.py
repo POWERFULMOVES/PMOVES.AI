@@ -613,6 +613,7 @@ def yt_emit(body: Dict[str,Any] = Body(...)):
     segs = tr.get('segments') or []
     if not (text or segs): raise HTTPException(404, 'transcript not found; run /yt/transcript first')
     doc_id = f"yt:{vid}"
+    tuned = None
     if segs and YT_SEG_AUTOTUNE:
         tuned = _auto_tune_segment_params(segs, text)
         chunks = _segment_from_whisper_segments(
@@ -644,4 +645,11 @@ def yt_emit(body: Dict[str,Any] = Body(...)):
         r2.raise_for_status()
     except Exception as e:
         raise HTTPException(502, f"CGP emit failed: {e}")
-    return {'ok': True, 'video_id': vid, 'chunks': len(chunks), 'upserted': (up or {}).get('upserted'), 'lexical_indexed': (up or {}).get('lexical_indexed')}
+    return {
+        'ok': True,
+        'video_id': vid,
+        'chunks': len(chunks),
+        'upserted': (up or {}).get('upserted'),
+        'lexical_indexed': (up or {}).get('lexical_indexed'),
+        'profile': (tuned or {}).get('profile') if tuned else None
+    }

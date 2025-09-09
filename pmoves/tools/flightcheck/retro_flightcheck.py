@@ -43,7 +43,7 @@ TOOLS = [
     ("make", ["make", "--version"]),
 ]
 
-PORTS = [6333, 7474, 7700, 8088, 8085, 3000, 8087, 8084]
+PORTS = [6333, 7474, 7700, 8088, 8085, 3000, 8087, 8084, 8077, 8078]
 PORT_MAP = {
     6333: "qdrant",
     7474: "neo4j-ui",
@@ -53,6 +53,8 @@ PORT_MAP = {
     3000: "postgrest",
     8087: "hi-rag-gateway-v2",
     8084: "langextract",
+    8077: "pmoves-yt",
+    8078: "ffmpeg-whisper",
 }
 
 ENV_FILES = [ROOT / ".env", ROOT / ".env.example"]
