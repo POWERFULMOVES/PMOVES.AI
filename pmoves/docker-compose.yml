@@ -388,6 +388,32 @@ services:
     depends_on: [nats]
     profiles: ["agents"]
     networks: [pmoves]
+
+  publisher-discord:
+    build: ./services/publisher-discord
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
+    depends_on: [nats]
+    ports: ["8092:8092"]
+    profiles: ["orchestration","agents"]
+    networks: [pmoves]
+
+  jellyfin-bridge:
+    build: ./services/jellyfin-bridge
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - JELLYFIN_URL=${JELLYFIN_URL}
+      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
+      - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+    ports: ["8093:8093"]
+    profiles: ["orchestration"]
+    networks: [pmoves]
 volumes:
   neo4j-data: {}
   minio-data: {}

@@ -206,6 +206,22 @@ HTTP endpoints checked:
 - Hi‑RAG v2 `/` (expects `{ok:true}`)
 - PMOVES.YT `/healthz` (expects `{ok:true}`)
 - ffmpeg‑whisper `/healthz` (expects `{ok:true}`)
+- publisher-discord `/healthz` (expects `{ok:true}`)
+- jellyfin-bridge `/healthz` (expects `{ok:true}`)
+
+## Discord Publisher
+
+- Set `DISCORD_WEBHOOK_URL` in `.env` to your channel webhook.
+- Start service: `docker compose --profile orchestration up -d publisher-discord nats`.
+- Smoke: `curl -X POST http://localhost:8092/publish -H 'content-type: application/json' -d '{"content":"PMOVES test ping"}'`
+  - Expect 200/204 from Discord webhook (message in channel).
+
+## Jellyfin Bridge
+
+- Optional: set `JELLYFIN_URL` and `JELLYFIN_API_KEY` in `.env` to enable live checks.
+- Link a video: `curl -X POST http://localhost:8093/jellyfin/link -H 'content-type: application/json' -d '{"video_id":"<id>","jellyfin_item_id":"<jf_id>"}'`
+- Get playback URL: `curl -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d '{"video_id":"<id>","t":42}'`
+  - Expect a URL pointing at Jellyfin web with start time.
 
 ## Playlist/Channel Ingestion
 
