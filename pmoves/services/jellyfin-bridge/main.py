@@ -75,3 +75,52 @@ def jellyfin_playback_url(body: Dict[str,Any] = Body(...)):
     url = f"{JELLYFIN_URL}/web/index.html#!/details?id={item}&serverId=local&startTime={int(t)}"
     return {"ok": True, "url": url}
 
+@app.get("/jellyfin/search")
+def jellyfin_search(query: str):
+    if not (JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID):
+        raise HTTPException(412, 'JELLYFIN_URL, JELLYFIN_API_KEY, and JELLYFIN_USER_ID required')
+    try:
+        r = httpx.get(
+            f"{JELLYFIN_URL}/Users/{JELLYFIN_USER_ID}/Items",
+            params={"searchTerm": query, "IncludeItemTypes": "Movie,Video"},
+            headers={"X-Emby-Token": JELLYFIN_API_KEY}, timeout=8
+        )
+        r.raise_for_status()
+        j = r.json()
+        items = j.get('Items') or []
+        out = [{"Id": it.get('Id'), "Name": it.get('Name'), "ProductionYear": it.get('ProductionYear')} for it in items]
+        return {"ok": True, "items": out}
+    except Exception as e:
+        raise HTTPException(502, f"jellyfin search error: {e}")
+
+@app.post("/jellyfin/map-by-title")
+def jellyfin_map_by_title(body: Dict[str,Any] = Body(...)):
+    vid = body.get('video_id'); title = body.get('title')
+    if not vid: raise HTTPException(400, 'video_id required')
+    if not title:
+        rows = _supa_get('videos', {'video_id': vid})
+        if not rows:
+            raise HTTPException(404, 'video not found')
+        title = rows[0].get('title')
+    if not (JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID):
+        raise HTTPException(412, 'JELLYFIN_URL, JELLYFIN_API_KEY, and JELLYFIN_USER_ID required')
+    # search and pick best match by simple case-insensitive inclusion
+    r = httpx.get(
+        f"{JELLYFIN_URL}/Users/{JELLYFIN_USER_ID}/Items",
+        params={"searchTerm": title, "IncludeItemTypes": "Movie,Video"},
+        headers={"X-Emby-Token": JELLYFIN_API_KEY}, timeout=8
+    )
+    r.raise_for_status()
+    items = (r.json().get('Items') or [])
+    best = None
+    tnorm = (title or '').lower()
+    for it in items:
+        name = (it.get('Name') or '').lower()
+        if tnorm in name or name in tnorm:
+            best = it; break
+    if not best and items:
+        best = items[0]
+    if not best:
+        raise HTTPException(404, 'no jellyfin items matched')
+    _supa_patch('videos', {'video_id': vid}, {"meta": {"jellyfin_item_id": best.get('Id')}})
+    return {"ok": True, "mapped": {"video_id": vid, "jellyfin_item_id": best.get('Id'), "name": best.get('Name')}}

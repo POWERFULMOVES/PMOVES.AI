@@ -394,6 +394,11 @@ def yt_summarize(body: Dict[str,Any] = Body(...)):
         summary = _summarize_ollama(text, style)
     # persist into videos + studio_board meta
     supa_update('videos', {'video_id': vid}, {'meta': {'gemma': {'style': style, 'provider': provider, 'summary': summary}}})
+    # emit event for downstream (Discord/NATS)
+    try:
+        _publish_event('ingest.summary.ready.v1', {'video_id': vid, 'style': style, 'provider': provider, 'summary': summary[:500]})
+    except Exception:
+        pass
     return {'ok': True, 'video_id': vid, 'provider': provider, 'style': style, 'summary': summary}
 
 @app.post('/yt/chapters')
@@ -418,6 +423,10 @@ def yt_chapters(body: Dict[str,Any] = Body(...)):
         # fallback: split lines
         chapters = [{ 'title': line.strip('- ').strip(), 'blurb': '' } for line in raw.splitlines() if line.strip()][:10]
     supa_update('videos', {'video_id': vid}, {'meta': {'gemma': {'chapters': chapters}}})
+    try:
+        _publish_event('ingest.chapters.ready.v1', {'video_id': vid, 'n': len(chapters), 'chapters': chapters[:6]})
+    except Exception:
+        pass
     return {'ok': True, 'video_id': vid, 'chapters': chapters}
 
 # -------------------- Segmentation → JSONL + CGP emit --------------------
