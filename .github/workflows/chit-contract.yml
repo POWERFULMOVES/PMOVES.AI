@@ -1,0 +1,15 @@
+name: CHIT Contract Check
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ripgrep checks
+        run: |
+          rg -n "create table .*(anchors|constellations|shape_points|shape_index)" migrations/ sql/ db/ || (echo "Missing CHIT tables" && exit 1)
+          rg -n "POST /geometry/event|/geometry/decode/(text|image|audio)|/geometry/calibration/report" services/ gateway/ api/ || (echo "Missing CHIT endpoints" && exit 1)
+          rg -n "geometry.cgp.v1" -S || (echo "Missing event publish 'geometry.cgp.v1'" && exit 1)
+          rg -n "CHIT_REQUIRE_SIGNATURE|CHIT_PASSPHRASE|CHIT_DECRYPT_ANCHORS" -S || (echo "Missing security flags" && exit 1)
+      - name: unit tests
+        run: pytest -q
