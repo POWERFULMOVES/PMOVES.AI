@@ -9,6 +9,8 @@ JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "")
 JELLYFIN_API_KEY = os.environ.get("JELLYFIN_API_KEY", "")
 JELLYFIN_USER_ID = os.environ.get("JELLYFIN_USER_ID", "")
 SUPA = os.environ.get("SUPA_REST_URL", "http://postgrest:3000")
+AUTOLINK = os.environ.get("JELLYFIN_AUTOLINK", "false").lower() == "true"
+AUTOLINK_SEC = float(os.environ.get("AUTOLINK_INTERVAL_SEC", "60"))
 
 @app.get("/healthz")
 def healthz():
@@ -124,3 +126,35 @@ def jellyfin_map_by_title(body: Dict[str,Any] = Body(...)):
         raise HTTPException(404, 'no jellyfin items matched')
     _supa_patch('videos', {'video_id': vid}, {"meta": {"jellyfin_item_id": best.get('Id')}})
     return {"ok": True, "mapped": {"video_id": vid, "jellyfin_item_id": best.get('Id'), "name": best.get('Name')}}
+
+def _list_recent_unmapped(limit: int = 25):
+    # Fetch recent videos and filter locally for those without jellyfin map
+    r = httpx.get(f"{SUPA}/videos?order=id.desc&limit={limit}", timeout=10)
+    r.raise_for_status()
+    rows = r.json()
+    out = []
+    for row in rows:
+        meta = row.get('meta') or {}
+        if not meta.get('jellyfin_item_id'):
+            out.append({"video_id": row.get('video_id'), "title": row.get('title')})
+    return out
+
+async def _autolink_loop():
+    import asyncio
+    while True:
+        try:
+            unmapped = _list_recent_unmapped(25)
+            for it in unmapped:
+                try:
+                    jellyfin_map_by_title({"video_id": it.get('video_id'), "title": it.get('title')})
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        await asyncio.sleep(AUTOLINK_SEC)
+
+@app.on_event("startup")
+async def _maybe_start_autolink():
+    import asyncio
+    if AUTOLINK and JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID:
+        asyncio.create_task(_autolink_loop())
