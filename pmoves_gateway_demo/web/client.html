@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>PMOVES — CHIT Web Client</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui; max-width: 900px; margin: 2rem auto; }
+    textarea { width: 100%; height: 160px; }
+    pre { background:#111; color:#0f0; padding:1rem; min-height:140px; white-space:pre-wrap; }
+    button { padding:.5rem 1rem; margin-right:.4rem; }
+    input { padding:.4rem }
+  </style>
+</head>
+<body>
+  <h1>PMOVES — CHIT Web Client</h1>
+  <p>Paste a CGP JSON below. Try the demo fixture from <code>tests/data/cgp_fixture.json</code>.</p>
+  <label>Server base: <input id="base" value="http://localhost:8000"></label>
+  <div>
+    <textarea id="cgp"></textarea>
+  </div>
+  <div>
+    <label><input type="checkbox" id="sign"> Sign (HMAC)</label>
+    <label><input type="checkbox" id="enc"> Encrypt anchors (AES-GCM)</label>
+    <input id="pass" placeholder="passphrase (default: change-me)">
+  </div>
+  <div>
+    <button id="publish">Publish</button>
+    <button id="decode">Decode</button>
+    <button id="calib">Calibration</button>
+  </div>
+  <h3>Result</h3>
+  <pre id="out"></pre>
+  <div id="links" style="margin:.6rem 0 0;color:#64748b"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const show = o => $("#out").textContent = JSON.stringify(o, null, 2);
+const links = (shapeId, base) => {
+  const el = $("#links");
+  if (!shapeId) { el.textContent = ""; return; }
+  const svg = `${base}/viz/shape/${shapeId}.svg`;
+  const raw = `${base}/data/${shapeId}.json`;
+  const dec = `${base}/viz/decode/${shapeId}.html`;
+  el.innerHTML = `View: <a href="${svg}" target="_blank">Shape SVG</a> · <a href="${raw}" target="_blank">Raw JSON</a> · <a href="${dec}" target="_blank">Decode</a>`;
+};
+async function maybeSign(cgp) {
+  const sign = $("#sign").checked;
+  const enc  = $("#enc").checked;
+  const pass = $("#pass").value || "change-me";
+  if (!sign && !enc) return cgp;
+  // call local signer endpoint? For demo we do it client-side: no cryptography libs here.
+  // Instead, we send flags to server-side publish which accepts HMAC-less when REQ_SIGNATURE=false.
+  alert("Web signer not implemented in browser demo. Use scripts/chit_sign.py or server env to enforce signatures.");
+  return cgp;
+}
+$("#publish").onclick = async () => {
+  const base = $("#base").value.trim();
+  let cgp = JSON.parse($("#cgp").value || "{}");
+  cgp = await maybeSign(cgp);
+  const r = await fetch(base + "/geometry/event", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cgp)});
+  const obj = await r.json();
+  show(obj);
+  links(obj.shape_id, base);
+};
+$("#decode").onclick = async () => {
+  const base = $("#base").value.trim();
+  let cgp = JSON.parse($("#cgp").value || "{}");
+  const r = await fetch(base + "/geometry/decode/text", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cgp)});
+  show(await r.json());
+};
+$("#calib").onclick = async () => {
+  const base = $("#base").value.trim();
+  let cgp = JSON.parse($("#cgp").value || "{}");
+  const r = await fetch(base + "/geometry/calibration/report", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cgp)});
+  show(await r.json());
+};
+</script>
+</body>
+</html>
