@@ -53,6 +53,13 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     name = name.strip()
     emb = {"title": name, "fields": []}
     thumb = None
+    color_map = {
+        "ingest.file.added.v1": 0x2b90d9,
+        "ingest.transcript.ready.v1": 0x10b981,
+        "ingest.summary.ready.v1": 0xf59e0b,
+        "ingest.chapters.ready.v1": 0x8b5cf6,
+    }
+    emb["color"] = color_map.get(name, 0x94a3b8)  # default slate-400
     if name == "ingest.file.added.v1":
         title = payload.get("title") or payload.get("key")
         emb["title"] = f"Ingest: {title}"
@@ -61,6 +68,9 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if payload.get("video_id"):
             emb["fields"].append({"name":"Video ID", "value": str(payload.get("video_id")), "inline": True})
         thumb = (payload.get("thumb") if isinstance(payload.get("thumb"), str) else None)
+        # Optional link to the asset if provided
+        if isinstance(payload.get("content_url"), str):
+            emb["url"] = payload.get("content_url")
     elif name == "ingest.transcript.ready.v1":
         emb["title"] = f"Transcript ready: {payload.get('video_id')}"
         emb["fields"].append({"name":"Language", "value": str(payload.get("language") or "auto"), "inline": True})

@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>PMOVES WebRTC Demo</title>
+  <style>
+    body{font-family:ui-sans-serif,system-ui;margin:2rem auto;max-width:1100px}
+    textarea{width:100%;height:160px}
+    pre{background:#0b1020;color:#b7fbce;padding:1rem;border-radius:10px;border:1px solid #1f2a44;min-height:140px}
+    .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+    .panel{border:1px solid #1f2a44;border-radius:10px;padding:14px;background:#0b102008}
+    .hint{color:#8da2c0;font-size:14px;margin:.2rem 0 1rem}
+    code{background:#0b162b;padding:2px 6px;border-radius:6px;border:1px solid #223457}
+    button{padding:.5rem .8rem;margin-right:.4rem}
+    input{padding:.4rem}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #2a3b62;background:#0b162b;color:#b6c8e2;font-size:12px}
+    .ok{color:#16a34a}
+    .warn{color:#f59e0b}
+    @media (max-width: 900px){ .grid{grid-template-columns: 1fr} }
+  </style>
+</head>
+<body>
+  <h1>PMOVES - WebRTC Shapes</h1>
+  <p class="hint">Open in two tabs. Use the same <code>Room</code>. Click <strong>Join</strong> in both, then click <strong>Connect</strong> in one tab (the other will auto-answer). Both tabs can send and receive.</p>
+
+  <div class="grid">
+    <div class="panel">
+      <div>
+        Room <input id="room" value="demo-room"/> Peer <input id="peer" placeholder="optional"/>
+        <button id="join">Join</button> <button id="connect" disabled>Connect</button>
+        <button id="open2">Open second tab</button>
+      </div>
+      <div class="hint">
+        <span class="pill">WS: <span id="wsState" class="warn">disconnected</span></span>
+        <span class="pill">WebRTC: <span id="rtcState" class="warn">idle</span></span>
+        <span class="pill">DC: <span id="dcState" class="warn">closed</span></span>
+      </div>
+      <div style="margin-top:10px">
+        <button id="send-shape">Send Demo Shape</button> <button id="send-text">Send Text</button>
+      </div>
+      <h3>Log</h3>
+      <pre id="log"></pre>
+    </div>
+    <div class="panel">
+      <h3>Received Shape / Message</h3>
+      <pre id="viewer">(nothing received yet)</pre>
+      <div style="margin-top:10px">
+        <img id="shapeviz" alt="shape visualization" style="max-width:100%;border:1px solid #1f2a44;border-radius:8px;display:none"/>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  let ws, pc, dc;
+  const $ = s => document.querySelector(s);
+  const log = m => { const el = $("#log"); el.textContent += m + "\n"; el.scrollTop = el.scrollHeight; };
+  const show = obj => { const el = $("#viewer"); try { el.textContent = (typeof obj === 'string') ? obj : JSON.stringify(obj, null, 2); } catch(e) { el.textContent = String(obj); } };
+  const renderShape = async (shape) => {
+    try {
+      const s = shape?.super_nodes?.[0]?.constellations?.[0];
+      if (!s) { $("#shapeviz").style.display='none'; return; }
+      const r = await fetch('/viz/constellation.svg', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(s) });
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const img = $("#shapeviz");
+      img.src = url; img.style.display='block';
+    } catch (e) { console.warn('viz error', e); }
+  };
+
+  function setWsState(s){ $("#wsState").textContent=s; $("#wsState").className = s==='connected'?'ok':'warn'; $("#connect").disabled = (s!=='connected'); }
+  function setRtcState(s){ $("#rtcState").textContent=s; $("#rtcState").className = (s==='connected'?'ok':'warn'); }
+  function setDcState(s){ $("#dcState").textContent=s; $("#dcState").className = (s==='open'?'ok':'warn'); }
+
+  function createPeer(){
+    if (pc) return pc;
+    const iceServers = [{urls:'stun:stun.l.google.com:19302'}];
+    pc = new RTCPeerConnection({iceServers});
+    pc.onicecandidate = ev => { if (ev.candidate) ws && ws.send(JSON.stringify({type:'candidate', candidate:ev.candidate})); };
+    pc.onconnectionstatechange = ()=>{ setRtcState(pc.connectionState || 'unknown'); };
+    pc.ondatachannel = ev => { setDataChannel(ev.channel); };
+    return pc;
+  }
+
+  function setDataChannel(channel){
+    dc = channel;
+    dc.onopen = () => { log("datachannel open"); setDcState('open'); };
+    dc.onclose = () => { setDcState('closed'); };
+    dc.onmessage = ev => {
+      log("recv: " + ev.data);
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg && msg.type === 'shape-share' && msg.shape) { show(msg.shape); renderShape(msg.shape); }
+        else { show(msg); }
+      } catch (_) {
+        show(ev.data);
+      }
+    };
+  }
+
+  $("#join").onclick = () => {
+    const q = new URLSearchParams({ room: $("#room").value, peer: $("#peer").value });
+    ws = new WebSocket(`ws://${location.host}/ws/signaling?` + q);
+    ws.onopen = () => { log("signaling connected"); setWsState('connected'); };
+    ws.onclose = () => { setWsState('disconnected'); };
+    ws.onmessage = async ev => {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'offer') {
+        const peer = createPeer();
+        await peer.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        const ans = await pc.createAnswer();
+        await peer.setLocalDescription(ans);
+        ws.send(JSON.stringify({ type: 'answer', sdp: ans }));
+        log("answer sent"); setRtcState('connecting');
+      }
+      if (msg.type === 'answer' && pc && pc.signalingState === 'have-local-offer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        log("connected"); setRtcState('connected');
+      }
+      if (msg.type === 'candidate') {
+        try { (pc || createPeer()); await pc.addIceCandidate(msg.candidate); } catch(e) {}
+      }
+    };
+  };
+
+  $("#connect").onclick = async () => {
+    const peer = createPeer();
+    setDataChannel(peer.createDataChannel('shapes'));
+    const off = await peer.createOffer();
+    await peer.setLocalDescription(off);
+    ws && ws.send(JSON.stringify({ type: 'offer', sdp: off }));
+    log("offer sent"); setRtcState('connecting');
+  };
+
+  $("#open2").onclick = () => {
+    const r = encodeURIComponent($("#room").value || 'demo-room');
+    const p = Math.random().toString(16).slice(2,10);
+    window.open(`/demo/shapes-webrtc?room=${r}&peer=${p}`, '_blank');
+  };
+
+  $("#send-shape").onclick = () => {
+    if (!dc || dc.readyState !== 'open') return;
+    const shape = {
+      spec: "chit.cgp.v0.1",
+      meta: { backend: "mini-vec-4d", bins: 5 },
+      super_nodes: [
+        { id: "super_0", constellations: [ { id: "const_0_0", anchor: [0.8, 0.2, 0, 0], radial_minmax: [0, 1], spectrum: [0.05, 0.15, 0.30, 0.30, 0.20], points: [] } ] }
+      ]
+    };
+    const msg = { type: "shape-share", shape };
+    dc.send(JSON.stringify(msg));
+    log("shape sent");
+    show(shape);
+    renderShape(shape);
+  };
+
+  $("#send-text").onclick = () => {
+    if (!dc || dc.readyState !== 'open') return;
+    dc.send("hello");
+  };
+
+  // Auto-join from URL params
+  (function(){
+    const params = new URLSearchParams(location.search);
+    const room = params.get('room'); const peer = params.get('peer');
+    if (room) { $("#room").value = room; }
+    if (peer) { $("#peer").value = peer; }
+    if (room) { $("#join").click(); }
+  })();
+  </script>
+</body>
+</html>

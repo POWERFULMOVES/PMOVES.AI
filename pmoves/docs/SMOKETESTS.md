@@ -222,6 +222,9 @@ HTTP endpoints checked:
 - Link a video: `curl -X POST http://localhost:8093/jellyfin/link -H 'content-type: application/json' -d '{"video_id":"<id>","jellyfin_item_id":"<jf_id>"}'`
 - Get playback URL: `curl -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d '{"video_id":"<id>","t":42}'`
   - Expect a URL pointing at Jellyfin web with start time.
+- Auto-linking (optional): set `JELLYFIN_AUTOLINK=true` and (optionally) `AUTOLINK_INTERVAL_SEC=60` to periodically map recent videos by title.
+- Search: `curl 'http://localhost:8093/jellyfin/search?query=<title>'`
+- Map by title: `curl -X POST http://localhost:8093/jellyfin/map-by-title -H 'content-type: application/json' -d '{"video_id":"<id>","title":"<title>"}'`
 
 ## Playlist/Channel Ingestion
 
