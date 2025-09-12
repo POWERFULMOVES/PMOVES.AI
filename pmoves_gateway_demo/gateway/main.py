@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -31,8 +32,10 @@ def demo():
 
 @app.get("/", response_class=HTMLResponse)
 def root():
+    learned = os.getenv("CHIT_LEARNED_TEXT","false").lower()=="true"
+    supa = os.getenv("SUPABASE_ENABLED","false").lower()=="true"
     return (
-        """
+        f"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -87,6 +90,9 @@ def root():
             .badge{ padding:6px 10px; border:1px solid #223457; border-radius:999px; background:#0b162b; }
             .kbd{ font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; padding:2px 6px; border-radius:6px; border:1px solid #2a3b62; background:#0b162b; }
             .note{ margin-left:auto; }
+            .pill{{ padding:6px 10px; border-radius:999px; border:1px solid #223457; background:#0b162b; }}
+            .ok{{ color:#34d399 }} .warn{{ color:#fbbf24 }}
+            .inline-btn{{ display:inline-block; padding:8px 12px; border-radius:8px; border:1px solid #223457; background:#0e1830; color:#e5e7eb; text-decoration:none; }}
           </style>
         </head>
         <body>
@@ -149,6 +155,20 @@ def root():
               </section>
 
               <section style="margin-top:24px">
+                <h2 style="margin:0 0 12px;font-size:18px;color:var(--mut);letter-spacing:.4px">Workflow Demo (One‑click)</h2>
+                <div style="border:1px solid #223457;border-radius:12px;padding:14px;background:#0b162b70">
+                  <div class="row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <button class="inline-btn" id="runDemo">Run Demo</button>
+                    <a class="inline-btn" href="/events/stream" target="_blank">Open Events Stream (SSE)</a>
+                    <span class="pill">Learned Decode: <b style="color:{'var(--acc)' if learned else '#ef4444'}">{'ON' if learned else 'OFF'}</b></span>
+                    <span class="pill">Supabase: <b style="color:{'#34d399' if supa else '#ef4444'}">{'ENABLED' if supa else 'DISABLED'}</b></span>
+                  </div>
+                  <pre id="demoOut" style="margin-top:10px;white-space:pre-wrap;background:#0b162b;color:#b7fbce;border:1px solid #223457;border-radius:8px;padding:10px;min-height:80px"></pre>
+                  <div id="demoLinks" class="meta"></div>
+                </div>
+              </section>
+
+              <section style="margin-top:24px">
                 <h2 style="margin:0 0 12px;font-size:18px;color:var(--mut);letter-spacing:.4px">Quick Instructions</h2>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
                   <div style="border:1px solid #223457;border-radius:12px;padding:14px;background:#0b162b70">
@@ -196,10 +216,33 @@ curl -s http://localhost:8000/geometry/calibration/report \
                 <span class="badge">FastAPI</span>
                 <span class="badge">Uvicorn</span>
                 <span class="badge">WebSocket</span>
-                <span class="note">Env: <code>CHIT_REQUIRE_SIGNATURE</code>, <code>CHIT_DECRYPT_ANCHORS</code>, <code>CHIT_PASSPHRASE</code></span>
+                <span class="note">Env: <code>CHIT_REQUIRE_SIGNATURE</code>, <code>CHIT_DECRYPT_ANCHORS</code>, <code>CHIT_PASSPHRASE</code>, <code>CHIT_LEARNED_TEXT</code>, <code>SUPABASE_ENABLED</code></span>
               </div>
             </main>
           </div>
+          <script>
+          const $ = s => document.querySelector(s);
+          const show = (el, obj) => { try { el.textContent = JSON.stringify(obj, null, 2); } catch(e){ el.textContent = String(obj); } };
+          const mklinks = (base, shapeId) => {
+            if (!shapeId) return '';
+            const svg = `${{}}base}/viz/shape/${{}}shapeId}.svg`;
+            const raw = `${{}}base}/data/${{}}shapeId}.json`;
+            const rep = `${{}}base}/artifacts/reconstruction_report.md`;
+            return `View: <a href="${{}}svg" target="_blank">Shape SVG</a> · <a href="${{}}raw" target="_blank">Raw JSON</a> · <a href="${{}}rep" target="_blank">Reconstruction Report</a>`;
+          };
+          const base = '';
+          const out = document.getElementById('demoOut');
+          const links = document.getElementById('demoLinks');
+          document.getElementById('runDemo').onclick = async () => {
+            out.textContent = 'Running demo…';
+            try{
+              const r = await fetch('/workflow/demo_run', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ per_constellation: 20 }) });
+              const obj = await r.json();
+              show(out, obj);
+              links.innerHTML = mklinks('', obj.shape_id);
+            }catch(e){ out.textContent = String(e); }
+          };
+          </script>
         </body>
         </html>
         """

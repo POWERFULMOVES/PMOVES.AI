@@ -30,11 +30,21 @@
   </div>
   <h3>Result</h3>
   <pre id="out"></pre>
+  <div id="learned" style="margin:.5rem 0 0; color:#22d3ee"></div>
   <div id="links" style="margin:.6rem 0 0;color:#64748b"></div>
 
 <script>
 const $ = s => document.querySelector(s);
-const show = o => $("#out").textContent = JSON.stringify(o, null, 2);
+const show = o => {
+  $("#out").textContent = JSON.stringify(o, null, 2);
+  const L = document.querySelector('#learned');
+  if (o && o.learned) {
+    if (o.learned.summary) L.textContent = 'Learned summary: ' + o.learned.summary;
+    else if (o.learned.keywords) L.textContent = 'Keywords: ' + o.learned.keywords;
+  } else {
+    L.textContent = '';
+  }
+};
 const links = (shapeId, base) => {
   const el = $("#links");
   if (!shapeId) { el.textContent = ""; return; }
@@ -66,7 +76,8 @@ $("#decode").onclick = async () => {
   const base = $("#base").value.trim();
   let cgp = JSON.parse($("#cgp").value || "{}");
   const r = await fetch(base + "/geometry/decode/text", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cgp)});
-  show(await r.json());
+  const obj = await r.json();
+  show(obj);
 };
 $("#calib").onclick = async () => {
   const base = $("#base").value.trim();
