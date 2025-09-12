@@ -65,3 +65,4 @@ Response includes:
 - `POST /viz/constellation.svg` — render SVG for a Constellation.
 - `GET /viz/recent` — list recent shape IDs.
 
+
