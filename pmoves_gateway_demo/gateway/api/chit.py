@@ -10,6 +10,14 @@ CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="t
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
 CHIT_PASSPHRASE = os.getenv("CHIT_PASSPHRASE","change-me")
 CHIT_CODEBOOK_PATH = os.getenv("CHIT_CODEBOOK_PATH","tests/data/codebook.jsonl")
+CHIT_LEARNED_TEXT = os.getenv("CHIT_LEARNED_TEXT","false").lower()=="true"
+CHIT_T5_MODEL = os.getenv("CHIT_T5_MODEL")  # optional HF model path/name
+
+# Optional integrations
+try:
+    from gateway.integrations import supabase as supa
+except Exception:  # pragma: no cover
+    supa = None
 
 SHAPES: Dict[str, Dict[str, Any]] = {}
 POINTS: Dict[str, Dict[str, Any]] = {}
@@ -91,6 +99,21 @@ def geometry_event(cgp: CGP):
                 p["id"] = pid; POINTS[pid] = p
     os.makedirs("data", exist_ok=True)
     json.dump(obj, open(f"data/{shape_hash}.json","w"), indent=2)
+
+    # Publish to Supabase (optional)
+    try:
+        if supa and supa.enabled():
+            supa.publish_cgp(shape_hash, obj)
+    except Exception:
+        pass
+
+    # Emit realtime event (SSE mock)
+    try:
+        from gateway.api.events import emit_event  # late import to avoid cycles
+        emit_event({"type": "geometry.event", "shape_id": shape_hash})
+    except Exception:
+        pass
+
     return {"ok": True, "shape_id": shape_hash, "event": "geometry.cgp.v1"}
 
 @router.get("/shape/point/{pid}/jump")
@@ -147,6 +170,12 @@ def geometry_decode_text(cgp: CGP, per_constellation: int=10, codebook_path: Opt
             sel.sort(key=lambda x: x[1], reverse=True)
             for idx,w,proj in sel[:per_constellation]:
                 out.append({"constellation_id": const.id, "text": items[idx].get("text"), "proj_est": proj, "score": w})
+
+    # Optional learned text decoder
+    if CHIT_LEARNED_TEXT:
+        learned = _learned_enhance(out)
+        return {"items": out, "learned": learned}
+
     return {"items": out}
 
 @router.post("/geometry/calibration/report")
@@ -179,3 +208,32 @@ def geometry_calibration_report(cgp: CGP, codebook_path: Optional[str] = None):
     os.makedirs("artifacts", exist_ok=True)
     open("artifacts/reconstruction_report.md","w").write(f"# CHIT Calibration Report\n\n- KL: {kl(tgt,emp):.4f}\n- JS: {js(tgt,emp):.4f}\n- Coverage: {cov:.2f}\n")
     return {"KL": kl(tgt,emp), "JS": js(tgt,emp), "coverage": cov, "report": "artifacts/reconstruction_report.md"}
+
+
+# --- Learned text decoding (optional) ------------------------------------------------------------
+
+def _learned_enhance(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Optionally apply a small learned model to produce summaries.
+
+    Tries HuggingFace Transformers pipeline if available and `CHIT_T5_MODEL` is set.
+    Falls back to a simple frequency-driven summarizer when transformers are not installed.
+    """
+    try:
+        if CHIT_T5_MODEL:
+            from transformers import pipeline  # type: ignore
+            texts = [it.get("text","") for it in items]
+            head = "\n".join(texts[:10]) or ""
+            summarizer = pipeline("summarization", model=CHIT_T5_MODEL)
+            summ = summarizer(head, max_length=64, min_length=10, do_sample=False)[0]["summary_text"]
+            return {"mode": "transformers", "summary": summ}
+    except Exception:
+        pass
+
+    # Fallback: naive keyword summary
+    from collections import Counter
+    import re
+    words = []
+    for it in items:
+        words += re.findall(r"[a-zA-Z][a-zA-Z0-9]+", (it.get("text") or "").lower())
+    common = ", ".join(w for w,_ in Counter(words).most_common(8))
+    return {"mode": "freq", "keywords": common}
