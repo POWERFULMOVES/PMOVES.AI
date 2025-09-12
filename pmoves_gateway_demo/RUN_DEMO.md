@@ -24,8 +24,14 @@ curl -s http://localhost:8000/workflow/demo_run \
 The response includes:
 
 - `shape_id` and a `data_url` of the persisted CGP (`/data/{id}.json`).
-- Geometry‑only decoded text per constellation.
+- Geometry-only decoded text per constellation.
 - Paths to calibration artifacts and a link to the SVG renderer.
+
+### Optional toggles
+- `CHIT_LEARNED_TEXT=true` to add a learned summary in decode output.
+- `CHIT_T5_MODEL=/path/to/local/t5` if you have a local HF model.
+- `SUPABASE_ENABLED=true`, plus `SUPABASE_URL` and `SUPABASE_KEY` to insert into Supabase tables (`anchors`, `constellations`, `shape_points`).
+- Realtime mock stream: `GET /events/stream` (SSE).
 
 ## APIs
 POST /geometry/event
