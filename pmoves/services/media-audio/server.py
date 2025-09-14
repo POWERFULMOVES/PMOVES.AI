@@ -1,4 +1,4 @@
-import os, io, json, tempfile, shutil
+import os, io, json, tempfile, shutil, asyncio
 from typing import Dict, Any
 from fastapi import FastAPI, Body, HTTPException
 import boto3
@@ -6,6 +6,9 @@ import soundfile as sf
 import numpy as np
 
 from transformers import pipeline
+
+from services.common.supabase import insert_emotions
+from services.common.events import publish
 
 EMOTION_MODEL = os.environ.get('EMOTION_MODEL','superb/hubert-large-superb-er')
 
@@ -32,7 +35,7 @@ def load_emotion():
 
 @app.post('/emotion')
 def emotion(body: Dict[str,Any] = Body(...)):
-    bucket = body.get('bucket'); key = body.get('key'); vid = body.get('video_id')
+    bucket = body.get('bucket'); key = body.get('key'); vid = body.get('video_id'); ns = body.get('namespace') or 'pmoves'
     if not bucket or not key:
         raise HTTPException(400, 'bucket and key required')
     tmpd = tempfile.mkdtemp(prefix='ma-')
@@ -59,7 +62,19 @@ def emotion(body: Dict[str,Any] = Body(...)):
             if res:
                 top = res[0]
                 out.append({'video_id': vid, 'ts_seconds': i*5, 'label': top['label'], 'score': float(top['score'])})
-        return {'ok': True, 'count': len(out), 'emotions': out}
+        rows = [
+            {
+                'video_id': e.get('video_id'),
+                'ts_seconds': e.get('ts_seconds'),
+                'label': e.get('label'),
+                'score': e.get('score')
+            }
+            for e in out
+        ]
+        insert_emotions(rows)
+        payload = {'video_id': vid, 'namespace': ns, 'emotions': out}
+        env = asyncio.run(publish('analysis.audio.v1', payload, source='media-audio'))
+        return {'ok': True, 'count': len(out), 'emotions': out, 'event': env}
     except Exception as e:
         raise HTTPException(500, f'emotion error: {e}')
     finally:

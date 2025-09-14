@@ -1,8 +1,11 @@
-import os, io, json, tempfile, shutil, subprocess
+import os, io, json, tempfile, shutil, subprocess, asyncio
 from typing import Dict, Any
 from fastapi import FastAPI, Body, HTTPException
 import boto3
 from PIL import Image
+
+from services.common.supabase import insert_detections
+from services.common.events import publish
 
 YOLO_MODEL = os.environ.get('YOLO_MODEL','yolov8n.pt')
 FRAME_EVERY = int(os.environ.get('FRAME_EVERY','5'))  # seconds
@@ -55,18 +58,34 @@ def detect(body: Dict[str,Any] = Body(...)):
             raise HTTPException(501, 'YOLO model not available')
         detections = []
         for fname in sorted(os.listdir(frames_dir)):
-            if not fname.endswith('.jpg'): continue
+            if not fname.endswith('.jpg'):
+                continue
             fpath = os.path.join(frames_dir, fname)
             res = yolo(fpath, verbose=False)
             for r in res:
                 for b in r.boxes:
                     cls = int(b.cls.item())
                     score = float(b.conf.item())
-                    if score < SCORE_THRES: continue
+                    if score < SCORE_THRES:
+                        continue
                     label = r.names.get(cls) or str(cls)
                     ts = None  # could derive from frame index * every_sec
                     detections.append({'video_id': vid, 'label': label, 'score': score, 'ts_seconds': ts, 'frame': fname})
-        return {'ok': True, 'count': len(detections), 'detections': detections}
+        # Persist
+        rows = [
+            {
+                'video_id': d.get('video_id'),
+                'ts_seconds': d.get('ts_seconds'),
+                'label': d.get('label'),
+                'score': d.get('score'),
+                'frame_uri': d.get('frame')
+            }
+            for d in detections
+        ]
+        insert_detections(rows)
+        payload = {'video_id': vid, 'namespace': ns, 'detections': detections}
+        env = asyncio.run(publish('analysis.entities.v1', payload, source='media-video'))
+        return {'ok': True, 'count': len(detections), 'detections': detections, 'event': env}
     except subprocess.CalledProcessError as e:
         raise HTTPException(500, f'ffmpeg error: {e}')
     except Exception as e:
