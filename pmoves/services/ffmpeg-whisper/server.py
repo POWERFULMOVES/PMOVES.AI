@@ -5,6 +5,8 @@ import boto3
 from faster_whisper import WhisperModel
 import shutil as _shutil
 
+from services.common.supabase import insert_segments
+
 app = FastAPI(title="FFmpeg+Whisper (faster-whisper)", version="2.0.0")
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
@@ -38,8 +40,9 @@ def _select_device() -> str:
 
 @app.post('/transcribe')
 def transcribe(body: Dict[str,Any] = Body(...)):
-    bucket = body.get('bucket'); key = body.get('key')
-    if not bucket or not key: raise HTTPException(400, 'bucket and key required')
+    bucket = body.get('bucket'); key = body.get('key'); vid = body.get('video_id')
+    if not bucket or not key:
+        raise HTTPException(400, 'bucket and key required')
     lang = body.get('language'); model_name = body.get('whisper_model') or 'base'
     out_audio_key = body.get('out_audio_key')
     tmpd = tempfile.mkdtemp(prefix='ffw-')
@@ -76,6 +79,17 @@ def transcribe(body: Dict[str,Any] = Body(...)):
             except Exception:
                 continue
         text = ''.join(text_parts)
+        rows = [
+            {
+                'video_id': vid,
+                'ts_start': s['start'],
+                'ts_end': s['end'],
+                'uri': s3_uri,
+                'meta': {'text': s['text']}
+            }
+            for s in segs
+        ]
+        insert_segments(rows)
         return {'ok': True, 'text': text, 'segments': segs, 'language': getattr(info, 'language', None) or lang, 's3_uri': s3_uri, 'device': device}
     except subprocess.CalledProcessError as e:
         raise HTTPException(500, f"ffmpeg error: {e}")
