@@ -143,10 +143,13 @@ async def _autolink_loop():
     import asyncio
     while True:
         try:
-            unmapped = _list_recent_unmapped(25)
+            unmapped = await asyncio.to_thread(_list_recent_unmapped, 25)
             for it in unmapped:
                 try:
-                    jellyfin_map_by_title({"video_id": it.get('video_id'), "title": it.get('title')})
+                    await asyncio.to_thread(
+                        jellyfin_map_by_title,
+                        {"video_id": it.get('video_id'), "title": it.get('title')},
+                    )
                 except Exception:
                     continue
         except Exception:
