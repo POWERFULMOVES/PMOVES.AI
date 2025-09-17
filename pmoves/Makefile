@@ -1,7 +1,7 @@
 .PHONY: up down clean
 up:
 	docker compose --profile data up -d qdrant neo4j minio meilisearch postgres postgrest presign
-	docker compose --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
+        docker compose --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest
 
 down:
 	docker compose down
@@ -48,8 +48,32 @@ eval-jsonl:
 smoke-presign-put:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
 	@echo "Generating presign PUT and uploading a small text file..."
-	@URL=$$(curl -s -X POST http://localhost:8088/presign/put -H 'content-type: application/json' -H "Authorization: Bearer $${PRESIGN_SHARED_SECRET:-change_me}" -d '{"bucket":"outputs","key":"hello.txt","content_type":"text/plain","expires":300}') && \
-	 echo $$URL | jq -r '.url' | xargs -I {} sh -c "echo 'hello pmoves' | curl -s -X PUT -H 'Content-Type: text/plain' --data-binary @- '{}' >/dev/null" && echo OK || (echo FAIL && exit 1)
+	@URL=$$(curl -s -X POST http://localhost:8088/presign/put \
+	  -H 'content-type: application/json' \
+	  -H "Authorization: Bearer $${PRESIGN_SHARED_SECRET:-change_me}" \
+	  -d '{"bucket":"outputs","key":"hello.txt","content_type":"text/plain","expires":300}' ) && \
+	  echo $$URL | jq -r '.url' | xargs -I {} sh -c "echo 'hello pmoves' | curl -s -X PUT -H 'Content-Type: text/plain' --data-binary @- '{}' >/dev/null" && echo OK || (echo FAIL && exit 1)
+
+.PHONY: smoke-pdf
+smoke-pdf:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-pdf" && exit 1)
+	@test -f pmoves/datasets/sample.pdf || (echo "datasets/sample.pdf missing" && exit 1)
+	@echo "[1/4] Create presign URL for sample.pdf" && \
+	URL=$$(curl -s -X POST http://localhost:8088/presign/put \
+	  -H 'content-type: application/json' \
+	  -H "Authorization: Bearer $${PRESIGN_SHARED_SECRET:-change_me}" \
+	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","content_type":"application/pdf","expires":300}' ) && echo OK || (echo FAIL && exit 1)
+	@echo "[2/4] Upload sample.pdf to MinIO" && \
+	echo "$$URL" | jq -r .url | xargs -I {} curl -s -X PUT -H 'Content-Type: application/pdf' --data-binary @pmoves/datasets/sample.pdf '{}' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[3/4] Trigger pdf-ingest" && \
+	curl -sf http://localhost:8092/pdf/ingest -H 'content-type: application/json' \
+	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","namespace":"pmoves","title":"Sample PDF","publish_events":false}' \
+	  | jq -e '.ok == true and .chunks >= 1' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[4/4] Verify chunks in extract-worker response" && \
+	curl -sf http://localhost:8092/pdf/ingest -H 'content-type: application/json' \
+	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","namespace":"pmoves","doc_id":"pdf:sample","publish_events":false}' \
+	  | jq -e '.ingest.chunks >= 1' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "PDF ingest smoke passed."
 
 .PHONY: seed-data
 seed-data:
@@ -57,6 +81,7 @@ seed-data:
 	docker compose build hi-rag-gateway-v2
 	@echo "Seeding Qdrant + Meilisearch with small demo docs..."
 	docker compose run --rm --entrypoint python hi-rag-gateway-v2 /app/scripts/seed_local.py
+
 
 .PHONY: load-jsonl
 load-jsonl:
@@ -133,6 +158,7 @@ help:
 	@echo "  load-csv         Load a CSV file (FILE=/abs/path)"
 	@echo "  export-jsonl     Export namespace to JSONL (OUT=/abs/path)"
 	@echo "  smoke-presign-put Test presign PUT and upload"
+	@echo "  smoke-pdf        Upload and index a sample PDF via pdf-ingest"
 	@echo "  smoke-langextract Extract chunks via langextract and load"
 	@echo "  flight-check     Run environment preflight (deps, ports, .env)"
 	@echo "  flight-check-retro Retro-styled Rich CLI preflight"

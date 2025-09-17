@@ -163,6 +163,30 @@ services:
     networks: [pmoves]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+  pdf-ingest:
+    build:
+      context: .
+      dockerfile: services/pdf-ingest/Dockerfile
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
+      - PDF_DEFAULT_BUCKET=${PDF_DEFAULT_BUCKET:-assets}
+      - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
+      - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
+      - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+    depends_on:
+      extract-worker:
+        condition: service_started
+      minio:
+        condition: service_started
+    ports: ["8092:8092"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves]
   langextract:
     build:
       context: .
