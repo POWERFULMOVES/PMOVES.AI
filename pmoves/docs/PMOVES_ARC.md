@@ -316,8 +316,8 @@ Notes:
   - `POST /geometry/event` — accepts CGP packets; if `CHIT_REQUIRE_SIGNATURE=true`, verifies HMAC; if `CHIT_DECRYPT_ANCHORS=true`, decrypts `anchor_enc`.
   - `GET /shape/point/{id}/jump` — returns a compact locator for UI/agents to jump (video/audio/text).
   - `POST /geometry/decode/text` — geometry-only or learned (Tiny T5) summaries; gated by `CHIT_DECODE_TEXT`.
-  - `POST /geometry/decode/image` — CLIP-based (optional); gated by `CHIT_DECODE_IMAGE`.
-  - `POST /geometry/decode/audio` — CLAP-based (optional); gated by `CHIT_DECODE_AUDIO`.
+  - `POST /geometry/decode/image` — CLIP-based (optional); gated by `CHIT_DECODE_IMAGE` and requires the SentenceTransformer CLIP weights + Pillow for fetching/ranking supplied URLs.
+  - `POST /geometry/decode/audio` — CLAP-based (optional); gated by `CHIT_DECODE_AUDIO` and requires the `laion-clap` + `torch` stack so the gateway can cache the checkpoint locally.
   - `POST /geometry/calibration/report` — basic JS/Wasserstein-1D/coverage metrics for spectra.
 
 - Env flags (gateway):
