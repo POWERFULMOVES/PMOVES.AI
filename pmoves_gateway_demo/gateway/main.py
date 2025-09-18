@@ -15,6 +15,7 @@ if str(_repo_root) not in sys.path:
 from gateway.api import chit
 from gateway.api.signaling import router as sig_router
 from gateway.api.viz import router as viz_router
+from gateway.api.mindmap import router as mindmap_router
 from gateway.api.workflow import router as workflow_router
 
 app = FastAPI(title="PMOVES.AI Gateway Demo")
@@ -39,6 +40,11 @@ app.include_router(chit.router)
 app.include_router(sig_router)
 app.include_router(viz_router)
 app.include_router(workflow_router)
+
+app.include_router(events_router)
+app.include_router(mindmap_router)
+
+
 app.mount("/web", StaticFiles(directory="web"), name="web")
 # Expose generated outputs as read-only static routes
 app.mount("/data", StaticFiles(directory="data", check_dir=False), name="data")
