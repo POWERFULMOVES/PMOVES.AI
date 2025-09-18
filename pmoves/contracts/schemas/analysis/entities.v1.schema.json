@@ -11,7 +11,8 @@
         "label": {"type":"string"},
         "score": {"type":"number"},
         "ts_seconds": {"type": ["number","null"]},
-        "frame": {"type": ["string","null"]}
+        "frame": {"type": ["string","null"]},
+        "frame_uri": {"type": ["string","null"]}
       },
       "required": ["label","score"]
     }}

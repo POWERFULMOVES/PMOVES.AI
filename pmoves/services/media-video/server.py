@@ -15,6 +15,7 @@ MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID") or "minioadmin"
 MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY") or "minioadmin"
 MINIO_SECURE = (os.environ.get("MINIO_SECURE","false").lower() == "true")
+FRAME_BUCKET = os.environ.get("FRAME_BUCKET") or os.environ.get("FRAME_S3_BUCKET")
 
 app = FastAPI(title='Media-Video', version='1.0.0')
 
@@ -47,6 +48,9 @@ def detect(body: Dict[str,Any] = Body(...)):
         raise HTTPException(400, 'bucket and key required')
     tmpd = tempfile.mkdtemp(prefix='mv-')
     s3 = s3_client()
+    frame_bucket = FRAME_BUCKET or bucket
+    if not frame_bucket:
+        raise HTTPException(500, 'frame bucket not configured')
     try:
         src = os.path.join(tmpd, 'raw.mp4')
         with open(src, 'wb') as w:
@@ -57,10 +61,23 @@ def detect(body: Dict[str,Any] = Body(...)):
         if yolo is None:
             raise HTTPException(501, 'YOLO model not available')
         detections = []
+        base_key = os.path.splitext(os.path.basename(key))[0] or 'video'
+        frame_prefix_parts = ['frames', ns]
+        if vid:
+            frame_prefix_parts.append(str(vid))
+        else:
+            frame_prefix_parts.append(base_key)
+        frame_prefix = '/'.join(part.strip('/') for part in frame_prefix_parts if part)
         for fname in sorted(os.listdir(frames_dir)):
             if not fname.endswith('.jpg'):
                 continue
             fpath = os.path.join(frames_dir, fname)
+            frame_key = f"{frame_prefix}/{fname}"
+            try:
+                s3.upload_file(fpath, frame_bucket, frame_key)
+            except Exception as exc:
+                raise HTTPException(500, f'frame upload error: {exc}')
+            frame_uri = f"s3://{frame_bucket}/{frame_key}"
             res = yolo(fpath, verbose=False)
             for r in res:
                 for b in r.boxes:
@@ -70,7 +87,14 @@ def detect(body: Dict[str,Any] = Body(...)):
                         continue
                     label = r.names.get(cls) or str(cls)
                     ts = None  # could derive from frame index * every_sec
-                    detections.append({'video_id': vid, 'label': label, 'score': score, 'ts_seconds': ts, 'frame': fname})
+                    detections.append({
+                        'video_id': vid,
+                        'label': label,
+                        'score': score,
+                        'ts_seconds': ts,
+                        'frame': fname,
+                        'frame_uri': frame_uri
+                    })
         # Persist
         rows = [
             {
@@ -78,7 +102,7 @@ def detect(body: Dict[str,Any] = Body(...)):
                 'ts_seconds': d.get('ts_seconds'),
                 'label': d.get('label'),
                 'score': d.get('score'),
-                'frame_uri': d.get('frame')
+                'frame_uri': d.get('frame_uri')
             }
             for d in detections
         ]

@@ -22,6 +22,7 @@ Create `.env` (or start with `.env.example`) and include keys from:
 
 Defaults baked into compose:
 - `MINIO_ENDPOINT` defaults to `minio:9000` for in-network access.
+- `FRAME_BUCKET` (optional) directs media-video frame uploads to a specific bucket; falls back to the source bucket when unset.
 - `HIRAG_URL` in `retrieval-eval` points to `hi-rag-gateway-v2:8086`.
  - Local PostgREST at `http://postgrest:3000` with a local Postgres database.
 
