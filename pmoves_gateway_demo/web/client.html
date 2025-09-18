@@ -53,6 +53,39 @@ const links = (shapeId, base) => {
   const dec = `${base}/viz/decode/${shapeId}.html`;
   el.innerHTML = `View: <a href="${svg}" target="_blank">Shape SVG</a> · <a href="${raw}" target="_blank">Raw JSON</a> · <a href="${dec}" target="_blank">Decode</a>`;
 };
+const cloneCgp = cgp => {
+  if (typeof structuredClone === 'function') return structuredClone(cgp);
+  return JSON.parse(JSON.stringify(cgp || {}));
+};
+const canon = value => {
+  if (Array.isArray(value)) {
+    return '[' + value.map(canon).join(',') + ']';
+  }
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    return '{' + keys.map(k => JSON.stringify(k) + ':' + canon(value[k])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+};
+const computeShapeId = async (cgp) => {
+  const copy = cloneCgp(cgp);
+  if (copy && typeof copy === 'object') delete copy.sig;
+  const canonical = canon(copy);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+};
+const collectConstellationIds = cgp => {
+  const ids = [];
+  if (!cgp || !cgp.super_nodes) return ids;
+  for (const sn of cgp.super_nodes) {
+    for (const constel of (sn.constellations || [])) {
+      if (constel && constel.id) ids.push(constel.id);
+    }
+  }
+  return ids;
+};
+let lastCgp = null;
+let lastShapeId = null;
 async function maybeSign(cgp) {
   const sign = $("#sign").checked;
   const enc  = $("#enc").checked;
@@ -67,15 +100,24 @@ $("#publish").onclick = async () => {
   const base = $("#base").value.trim();
   let cgp = JSON.parse($("#cgp").value || "{}");
   cgp = await maybeSign(cgp);
-  const r = await fetch(base + "/geometry/event", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cgp)});
+  lastCgp = cgp;
+  const env = { type: "geometry.cgp.v1", data: cgp };
+  const r = await fetch(base + "/geometry/event", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(env)});
   const obj = await r.json();
+  lastShapeId = await computeShapeId(cgp);
+  obj.shape_id = lastShapeId;
   show(obj);
-  links(obj.shape_id, base);
+  links(lastShapeId, base);
 };
 $("#decode").onclick = async () => {
   const base = $("#base").value.trim();
-  let cgp = JSON.parse($("#cgp").value || "{}");
-  const r = await fetch(base + "/geometry/decode/text", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cgp)});
+  if (!lastCgp) lastCgp = JSON.parse($("#cgp").value || "{}");
+  if (!lastShapeId) lastShapeId = await computeShapeId(lastCgp);
+  const decodeBody = {
+    shape_id: lastShapeId,
+    constellation_ids: collectConstellationIds(lastCgp),
+  };
+  const r = await fetch(base + "/geometry/decode/text", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(decodeBody)});
   const obj = await r.json();
   show(obj);
 };

@@ -3,7 +3,7 @@ from fastapi.responses import Response, HTMLResponse
 from typing import List, Dict, Any, Optional
 import json, os, math
 
-from gateway.api.chit import Constellation, CGP
+from gateway.api.chit import Constellation, CGP, decode_constellations
 
 router = APIRouter(tags=["Viz"], prefix="/viz")
 
@@ -132,16 +132,16 @@ def _norm_vec(v: List[float]) -> List[float]:
 
 
 def _decode_with_server(cgp: CGP, per_constellation: int) -> Dict[str, Any]:
-    # Reuse the existing geometry-only decoder endpoint's logic in-process
-    from gateway.api.chit import geometry_decode_text
-    return geometry_decode_text(cgp=cgp, per_constellation=per_constellation)
+    # Reuse the geometry-only decoder logic on a list of constellations
+    consts: List[Constellation] = []
+    for sn in cgp.super_nodes:
+        consts.extend(sn.constellations)
+    return decode_constellations(consts, per_constellation=per_constellation)
 
 
 @router.post("/preview/decode")
 def preview_decode(const: Constellation, per_constellation: int = 20, codebook_path: Optional[str] = Query(None)):
-    cgp = CGP(spec="chit.cgp.v0.1", meta={}, super_nodes=[{"id": "s0", "constellations": [json.loads(const.model_dump_json())]}])
-    from gateway.api.chit import geometry_decode_text
-    return geometry_decode_text(cgp=cgp, per_constellation=per_constellation, codebook_path=codebook_path)
+    return decode_constellations([const], per_constellation=per_constellation, codebook_path=codebook_path)
 
 
 @router.post("/mix/decode")
@@ -172,9 +172,7 @@ def mix_and_decode(payload: Dict[str, Any], per_constellation: int = 20, codeboo
         spectrum=spec,
         points=[],
     )
-    cgp = CGP(spec="chit.cgp.v0.1", meta={}, super_nodes=[{"id": "s0", "constellations": [mixed]}])
-    from gateway.api.chit import geometry_decode_text
-    return geometry_decode_text(cgp=cgp, per_constellation=per_constellation, codebook_path=codebook_path)
+    return decode_constellations([mixed], per_constellation=per_constellation, codebook_path=codebook_path)
 
 
 @router.get("/recent", response_model=List[str])

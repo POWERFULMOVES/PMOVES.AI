@@ -1,9 +1,18 @@
 import os
+import sys
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
-from gateway.api.chit import router as chit_router
+
+# Ensure repo root is importable for shared services (ShapeStore, etc.)
+_repo_root = Path(__file__).resolve().parents[2]
+if str(_repo_root) not in sys.path:
+    sys.path.append(str(_repo_root))
+
+from gateway.api import chit
 from gateway.api.signaling import router as sig_router
 from gateway.api.viz import router as viz_router
 from gateway.api.workflow import router as workflow_router
@@ -11,12 +20,23 @@ from gateway.api.events import router as events_router
 
 app = FastAPI(title="PMOVES.AI Gateway Demo")
 
+# Initialize shared ShapeStore for demo geometry features
+try:
+    from pmoves.services.common.shape_store import ShapeStore
+
+    _shape_store = ShapeStore(capacity=10_000)
+    chit.set_shape_store(_shape_store)
+    app.state.shape_store = _shape_store
+except Exception:
+    _shape_store = None
+    chit.set_shape_store(None)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
-app.include_router(chit_router)
+app.include_router(chit.router)
 app.include_router(sig_router)
 app.include_router(viz_router)
 app.include_router(workflow_router)

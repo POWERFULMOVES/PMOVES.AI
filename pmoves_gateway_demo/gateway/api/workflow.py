@@ -7,9 +7,10 @@ from pydantic import BaseModel
 
 from gateway.api.chit import (
     CGP,
-    geometry_event,
+    GeometryDecodeTextRequest,
     geometry_decode_text,
     geometry_calibration_report,
+    ingest_cgp,
 )
 
 
@@ -46,14 +47,17 @@ def demo_run(body: DemoRunRequest) -> Dict[str, Any]:
     cgp = CGP.model_validate(cgp_obj)
 
     # 2) Ingest/persist (shape_id is derived inside the endpoint from payload content)
-    ingest_resp = geometry_event(cgp=cgp)
-    shape_id = ingest_resp.get("shape_id")
+    shape_id = ingest_cgp(cgp.model_dump())
 
     # 3) Decode text (geometry-only)
+    const_ids = [const.id for sn in cgp.super_nodes for const in sn.constellations if const.id]
     decode_resp = geometry_decode_text(
-        cgp=cgp,
-        per_constellation=body.per_constellation,
-        codebook_path=body.codebook_path,
+        GeometryDecodeTextRequest(
+            shape_id=shape_id,
+            constellation_ids=const_ids,
+            per_constellation=body.per_constellation,
+            codebook_path=body.codebook_path,
+        )
     )
 
     # 4) Calibration / reconstruction artifacts
@@ -61,7 +65,7 @@ def demo_run(body: DemoRunRequest) -> Dict[str, Any]:
 
     # 5) Compose a manifest with helpful links
     manifest = {
-        "shape_id": ingest_resp.get("shape_id", shape_id),
+        "shape_id": shape_id,
         "data_url": f"/data/{shape_id}.json",
         "artifacts": {
             "reconstruction_report": "/artifacts/reconstruction_report.md",

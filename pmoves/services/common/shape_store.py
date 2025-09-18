@@ -81,7 +81,12 @@ class ShapeStore:
                             id=pid,
                             constellation_id=cid,
                             modality=p.get("modality") or p.get("mod", "text"),
-                            ref_id=p.get("ref_id") or p.get("video_id") or p.get("doc_id") or "",
+                            ref_id=
+                                p.get("ref_id")
+                                or p.get("video_id")
+                                or p.get("doc_id")
+                                or p.get("source_ref")
+                                or "",
                             t_start=p.get("t_start"),
                             t_end=p.get("t_end"),
                             frame_idx=p.get("frame_idx"),

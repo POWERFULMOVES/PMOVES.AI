@@ -14,6 +14,8 @@ Steps:
 """
 import os, json, argparse, requests, tempfile, subprocess, sys
 
+from gateway.api.chit import compute_shape_id
+
 def maybe_sign(cgp: dict, sign: str=None, encrypt: bool=False) -> dict:
     if not sign and not encrypt: 
         return cgp
@@ -48,13 +50,27 @@ def main():
 
     s = requests.Session()
 
+    shape_id = compute_shape_id(cgp)
+
     # 1) publish
-    r = s.post(f"{args.base}/geometry/event", json=cgp, timeout=20)
+    envelope = {"type": "geometry.cgp.v1", "data": cgp}
+    r = s.post(f"{args.base}/geometry/event", json=envelope, timeout=20)
     r.raise_for_status()
-    print("Publish:", r.json())
+    print("Publish:", r.json(), "shape_id=", shape_id)
 
     # 2) decode
-    r = s.post(f"{args.base}/geometry/decode/text?per_constellation={args.per_constellation}", json=cgp, timeout=20)
+    const_ids = []
+    for sn in cgp.get("super_nodes", []) or []:
+        for const in sn.get("constellations", []) or []:
+            cid = const.get("id")
+            if cid:
+                const_ids.append(cid)
+    decode_body = {
+        "shape_id": shape_id,
+        "constellation_ids": const_ids,
+        "per_constellation": args.per_constellation,
+    }
+    r = s.post(f"{args.base}/geometry/decode/text", json=decode_body, timeout=20)
     r.raise_for_status()
     items = r.json().get("items", [])
     print(f"Decode: got {len(items)} items")
