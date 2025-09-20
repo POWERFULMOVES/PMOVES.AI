@@ -1,6 +1,7 @@
 """MindMap router wiring for the gateway demo service."""
 from __future__ import annotations
 
+import logging
 import os
 from typing import List
 
@@ -10,11 +11,19 @@ from pydantic import BaseModel
 
 router = APIRouter(tags=["MindMap"])
 
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASS = os.getenv("NEO4J_PASS", "password")
+logger = logging.getLogger("pmoves.gateway.mindmap")
 
-driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS))
+NEO4J_URL = os.getenv("NEO4J_URL") or os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD") or os.getenv("NEO4J_PASS", "neo4j")
+
+driver = None
+if NEO4J_URL:
+    try:  # pragma: no cover - depends on external DB
+        driver = GraphDatabase.driver(NEO4J_URL, auth=(NEO4J_USER, NEO4J_PASSWORD))
+    except Exception as exc:  # pragma: no cover - optional dependency
+        logger.warning("Neo4j unavailable at %s: %s", NEO4J_URL, exc)
+        driver = None
 
 
 class MindMapItem(BaseModel):
@@ -35,6 +44,9 @@ def mindmap(
     limit: int = 200,
 ):
     """Return MindMap points and media for a constellation."""
+    if driver is None:
+        raise HTTPException(status_code=503, detail="Neo4j unavailable")
+
     mods = [m.strip() for m in modalities.split(",") if m.strip()]
     if not mods:
         raise HTTPException(status_code=400, detail="At least one modality is required")
