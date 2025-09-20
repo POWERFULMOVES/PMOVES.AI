@@ -150,10 +150,30 @@ class AudioProcessor:
             audio = self._download_audio(request.bucket, request.key)
             transcript = self._resolve_transcript(request, audio)
             segments = transcript.get("segments") or []
-            features = self._compute_features(audio.samples, audio.sample_rate, segments) if request.compute_features else {}
-            emotions = self._extract_emotions(request, audio.samples, audio.sample_rate, segments) if request.compute_emotions else []
+            features = (
+                self._compute_features(audio.samples, audio.sample_rate, segments)
+                if request.compute_features
+                else {}
+            )
+            emotions = (
+                self._extract_emotions(
+                    request,
+                    audio.samples,
+                    audio.sample_rate,
+                    segments,
+                    namespace,
+                )
+                if request.compute_emotions
+                else []
+            )
             audio_uri = transcript.get("audio_uri") or self._build_s3_uri(request.bucket, request.key)
-            segment_rows = self._prepare_segment_rows(request.video_id, segments, audio_uri, features)
+            segment_rows = self._prepare_segment_rows(
+                request.video_id,
+                segments,
+                audio_uri,
+                features,
+                namespace,
+            )
             return ProcessResult(
                 transcript=transcript,
                 segments=segments,
@@ -379,6 +399,7 @@ class AudioProcessor:
         samples: np.ndarray,
         sample_rate: int,
         segments: Iterable[Dict[str, Any]],
+        namespace: str,
     ) -> List[Dict[str, Any]]:
         clf = self._load_emotion_pipeline()
         if clf is None:
@@ -400,6 +421,7 @@ class AudioProcessor:
                 return None
             top = preds[0]
             return {
+                "namespace": namespace,
                 "video_id": request.video_id,
                 "ts_seconds": ts_seconds,
                 "label": top.get("label"),
@@ -432,6 +454,7 @@ class AudioProcessor:
         segments: Iterable[Dict[str, Any]],
         audio_uri: Optional[str],
         features: Dict[str, Any],
+        namespace: str,
     ) -> List[Dict[str, Any]]:
         feature_map = features.get("by_segment", {}) if isinstance(features, dict) else {}
         rows = []
@@ -448,6 +471,7 @@ class AudioProcessor:
                 meta["features"] = feature_map[seg_id]
             rows.append(
                 {
+                    "namespace": namespace,
                     "video_id": video_id,
                     "ts_start": float(segment.get("start", 0.0)),
                     "ts_end": float(segment.get("end", 0.0)),
