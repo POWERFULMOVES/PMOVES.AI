@@ -241,6 +241,13 @@ HTTP endpoints checked:
 - Search: `curl 'http://localhost:8093/jellyfin/search?query=<title>'`
 - Map by title: `curl -X POST http://localhost:8093/jellyfin/map-by-title -H 'content-type: application/json' -d '{"video_id":"<id>","title":"<title>"}'`
 
+## Content Publisher
+
+- The publisher listens on `content.publish.approved.v1` and stages media as `<MEDIA_LIBRARY_PATH>/<namespace>/<slug>.<ext>`.
+- Outgoing `content.published.v1` envelopes now include the source `description`, `tags`, and merged `meta` fields, plus optional
+  `public_url`/`jellyfin_item_id` whenever Jellyfin confirms a library refresh.
+- Configure `MEDIA_LIBRARY_PUBLIC_BASE_URL` to advertise HTTP paths for the downloaded artifacts.
+
 ## Playlist/Channel Ingestion
 
 - `make yt-playlist-smoke URL=<playlist_or_channel_url>`
