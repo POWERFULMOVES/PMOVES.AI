@@ -12,9 +12,9 @@ Endpoints
 - POST `/yt/emit`: { video_id, namespace?, text? } → segments transcript into retrieval chunks (JSONL) and emits CGP to the Geometry Bus; pushes chunks via `hi-rag-v2 /hirag/upsert-batch`.
 ## Playlist/Channel ingest
 
-### Concurrent processing
+### Concurrency & rate limiting
 
-Playlists and channels can be processed in parallel. `YT_CONCURRENCY` controls how many videos are handled at once (default `2`). `YT_RATE_LIMIT` adds a delay in seconds between starting each video to avoid quota issues (default `0`, meaning no delay).
+Playlist and channel ingestion runs asynchronously: the service fans out individual video jobs to a worker pool so downloads and transcripts can progress in parallel. `YT_CONCURRENCY` sets the maximum number of videos processed at once and defaults to `2` when the variable is unset. To slow down launches—for example, to stay within YouTube quota limits—set `YT_RATE_LIMIT` to the number of seconds to wait between starting each video; the default is `0`, which disables the delay.
 
 Example:
 
