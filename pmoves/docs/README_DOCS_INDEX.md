@@ -10,3 +10,4 @@ _Last updated: 2025-08-29_
 - **Render Completion Webhook** — `RENDER_COMPLETION_WEBHOOK.md`
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md`
 - **Smoke Tests** — `SMOKETESTS.md`
+- **Next Steps** — current plan: [`NEXT_STEPS.md`](NEXT_STEPS.md); archive: [`NEXT_STEPS_2025-09-08`](archive/NEXT_STEPS_2025-09-08.md)
