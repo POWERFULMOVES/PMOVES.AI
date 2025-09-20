@@ -55,3 +55,42 @@ External Research and Integration
 • LangExtract can process text directly from URLs to extract structured information from online resources identified by Agent Zero or Archon.
 
 In summary, a coding agent operating within PMOVES would leverage Agent Zero for overall task orchestration and learning, Archon for specialized agent building, knowledge management, and RAG capabilities, and n8n for automating workflows and inter-agent communication, all powered by distributed local models and a unified Supabase backend, enabling a continuous cycle of research and self-improvement.
+
+## Agent Zero MCP Runtime Integration
+
+Agent Zero now exposes its MCP-compatible runtime to FastAPI clients, enabling HTTP workflows, WebSocket bridges, or MCP hubs to interact with the same helper commands that previously required the stdio shim.
+
+### Runtime API Endpoints
+
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/healthz` | GET | Basic liveness probe for container orchestration. |
+| `/config/environment` | GET | Returns the resolved configuration (ports, upstream services, runtime directories) with OpenAPI descriptions for each field. |
+| `/mcp/commands` | GET | Lists all available MCP commands along with the active form metadata and runtime directories. |
+| `/mcp/execute` | POST | Executes an MCP command; accepts `{ "cmd": "geometry.jump", "arguments": { ... } }` and returns the upstream result. |
+| `/events/publish` | POST | Publishes an envelope-wrapped payload to NATS using the configured topic. |
+
+### Environment Variables
+
+The FastAPI OpenAPI schema documents the full configuration model; key variables include:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `8080` | HTTP port for the Agent Zero FastAPI application. |
+| `NATS_URL` | `nats://nats:4222` | Connection string for publishing envelopes to the event bus. |
+| `HIRAG_URL`/`GATEWAY_URL` | `http://localhost:8087` | Base URL for geometry gateway commands (fallback to `GATEWAY_URL` when `HIRAG_URL` is unset). |
+| `YT_URL` | `http://localhost:8077` | YouTube ingest and transcript runtime. |
+| `RENDER_WEBHOOK_URL` | `http://localhost:8085` | ComfyUI render webhook used by `comfy.render`. |
+| `AGENT_FORM` | `POWERFULMOVES` | Default MCP form to load when serving metadata. |
+| `AGENT_FORMS_DIR` | `configs/agents/forms` | Directory containing YAML form definitions that power MCP command palettes. |
+| `AGENT_KNOWLEDGE_BASE_DIR` | `runtime/knowledge` | Local directory for Agent Zero knowledge base snapshots and embeddings. |
+| `AGENT_MCP_RUNTIME_DIR` | `runtime/mcp` | Working directory for sockets, logs, or shared files used by MCP shims. |
+
+### Operational Flow
+
+1. On startup the FastAPI worker resolves the configuration above and connects to NATS.
+2. `/config/environment` and `/mcp/commands` expose the computed runtime state so downstream systems (n8n, MCP hubs, WebSocket bridges) can introspect capabilities without shell access.
+3. Clients invoke `/mcp/execute` with the desired command and payload; the service maps the request to the upstream helpers defined in `mcp_server.py` (geometry gateway, YouTube ingest, ComfyUI renderer) and streams the response back as JSON.
+4. Traditional event publication continues via `/events/publish`, allowing Agent Zero to publish envelopes while simultaneously serving MCP workflows.
+
+This integration allows platform operators to orchestrate Agent Zero entirely over HTTP, simplifying deployment behind API gateways and enabling richer monitoring through the documented configuration model.

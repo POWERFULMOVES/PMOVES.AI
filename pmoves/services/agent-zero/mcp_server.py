@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 import yaml
@@ -12,6 +12,8 @@ import yaml
 GATEWAY_URL = os.environ.get("HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8087"))
 FORM_NAME = os.environ.get("AGENT_FORM", "POWERFULMOVES")
 FORMS_DIR = Path(os.environ.get("AGENT_FORMS_DIR", "configs/agents/forms"))
+KNOWLEDGE_BASE_DIR = Path(os.environ.get("AGENT_KNOWLEDGE_BASE_DIR", "runtime/knowledge"))
+MCP_RUNTIME_DIR = Path(os.environ.get("AGENT_MCP_RUNTIME_DIR", "runtime/mcp"))
 
 
 def load_form(name: str) -> Dict[str, Any]:
@@ -68,6 +70,76 @@ def _stdout(msg: Dict[str, Any]):
     sys.stdout.write(json.dumps(msg) + "\n"); sys.stdout.flush()
 
 
+COMMAND_REGISTRY: Dict[str, str] = {
+    "geometry.publish_cgp": "Publish a constellation graph program to the geometry gateway",
+    "geometry.jump": "Jump to a geometry point by ID",
+    "geometry.decode_text": "Decode text embeddings from a constellation",
+    "geometry.calibration.report": "Send calibration results to geometry gateway",
+    "ingest.youtube": "Ingest a YouTube URL via the ingest pipeline",
+    "media.transcribe": "Generate or fetch transcript for a video",
+    "comfy.render": "Trigger a ComfyUI render via render webhook",
+    "form.get": "Return the currently configured MCP form",
+    "form.switch": "Switch the active MCP form",
+}
+
+
+def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Execute an MCP command using the local runtime helpers."""
+
+    payload = payload or {}
+    if not cmd:
+        raise ValueError("'cmd' is required")
+    if cmd == "geometry.publish_cgp":
+        return geometry_publish_cgp(payload.get("cgp") or {})
+    if cmd == "geometry.jump":
+        point_id = payload.get("point_id")
+        if not point_id:
+            raise ValueError("'point_id' is required")
+        return geometry_jump(point_id)
+    if cmd == "geometry.decode_text":
+        mode = payload.get("mode", "geometry")
+        constellation_id = payload.get("constellation_id")
+        if not constellation_id:
+            raise ValueError("'constellation_id' is required")
+        k = int(payload.get("k", 5))
+        return geometry_decode_text(mode, constellation_id, k)
+    if cmd == "geometry.calibration.report":
+        return geometry_calibration_report(payload.get("data") or {})
+    if cmd == "ingest.youtube":
+        url = payload.get("url")
+        if not url:
+            raise ValueError("'url' is required")
+        return ingest_youtube(url)
+    if cmd == "media.transcribe":
+        video_id = payload.get("video_id")
+        if not video_id:
+            raise ValueError("'video_id' is required")
+        return media_transcript(video_id)
+    if cmd == "comfy.render":
+        flow_id = payload.get("flow_id")
+        if not flow_id:
+            raise ValueError("'flow_id' is required")
+        inputs = payload.get("inputs") or {}
+        return comfy_render(flow_id, inputs)
+    if cmd == "form.get":
+        current_form = payload.get("name", FORM_NAME)
+        return {"form": load_form(current_form)}
+    if cmd == "form.switch":
+        name = payload.get("name", FORM_NAME)
+        new_form = load_form(name)
+        return {"ok": True, "form": new_form}
+    raise ValueError(f"unknown_cmd:{cmd}")
+
+
+def list_commands() -> List[Dict[str, Any]]:
+    """Return metadata for exposed MCP commands."""
+
+    return [
+        {"name": name, "description": desc}
+        for name, desc in sorted(COMMAND_REGISTRY.items())
+    ]
+
+
 def main():
     # Lightweight MCP-like shim over stdio: accepts line-delimited JSON commands
     form = load_form(FORM_NAME)
@@ -82,28 +154,7 @@ def main():
             _stdout({"error": "invalid_json"}); continue
         cmd = req.get("cmd")
         try:
-            if cmd == "geometry.publish_cgp":
-                _stdout(geometry_publish_cgp(req.get("cgp") or {}))
-            elif cmd == "geometry.jump":
-                _stdout(geometry_jump(req.get("point_id")))
-            elif cmd == "geometry.decode_text":
-                _stdout(geometry_decode_text(req.get("mode","geometry"), req.get("constellation_id"), int(req.get("k",5))))
-            elif cmd == "geometry.calibration.report":
-                _stdout(geometry_calibration_report(req.get("data") or {}))
-            elif cmd == "ingest.youtube":
-                _stdout(ingest_youtube(req.get("url")))
-            elif cmd == "media.transcribe":
-                _stdout(media_transcript(req.get("video_id")))
-            elif cmd == "comfy.render":
-                _stdout(comfy_render(req.get("flow_id"), req.get("inputs") or {}))
-            elif cmd == "form.get":
-                _stdout({"form": form})
-            elif cmd == "form.switch":
-                name = req.get("name", "POWERFULMOVES")
-                newf = load_form(name)
-                _stdout({"ok": True, "form": newf})
-            else:
-                _stdout({"error": f"unknown_cmd:{cmd}"})
+            _stdout(execute_command(cmd, req))
         except Exception as e:
             _stdout({"error": str(e)})
 
