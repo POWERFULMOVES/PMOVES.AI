@@ -1,0 +1,51 @@
+# Agent Zero Service
+
+Agent Zero is the core PMOVES coordinator. The FastAPI worker exposes both the classic event publication endpoint and an HTTP bridge for the MCP-compatible helpers defined in `mcp_server.py`.
+
+## API Overview
+
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/healthz` | GET | Liveness probe for the container. |
+| `/config/environment` | GET | Returns resolved configuration (ports, upstream runtimes, runtime directories). |
+| `/mcp/commands` | GET | Lists MCP commands and advertises the active form and runtime directories. |
+| `/mcp/execute` | POST | Execute an MCP command, e.g. `{ "cmd": "geometry.jump", "arguments": { "point_id": "..." } }`. |
+| `/events/publish` | POST | Publish a NATS envelope `{ "topic": "...", "payload": { ... } }`. |
+
+### MCP Commands
+
+The `/mcp/commands` endpoint enumerates the available helpers. The following commands are currently supported:
+
+- `geometry.publish_cgp`
+- `geometry.jump`
+- `geometry.decode_text`
+- `geometry.calibration.report`
+- `ingest.youtube`
+- `media.transcribe`
+- `comfy.render`
+- `form.get`
+- `form.switch`
+
+Refer to the FastAPI docs (`/docs`) for the payload schema of `/mcp/execute`.
+
+## Configuration
+
+The service reads configuration from environment variables and exposes the resolved values via `/config/environment`:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `8080` | FastAPI listen port. |
+| `NATS_URL` | `nats://nats:4222` | Event bus connection string. |
+| `HIRAG_URL` / `GATEWAY_URL` | `http://localhost:8087` | Geometry gateway base URL. |
+| `YT_URL` | `http://localhost:8077` | YouTube ingest + transcript gateway. |
+| `RENDER_WEBHOOK_URL` | `http://localhost:8085` | ComfyUI render webhook. |
+| `AGENT_FORM` | `POWERFULMOVES` | Default MCP form. |
+| `AGENT_FORMS_DIR` | `configs/agents/forms` | Directory for YAML form definitions. |
+| `AGENT_KNOWLEDGE_BASE_DIR` | `runtime/knowledge` | Knowledge base artifacts and caches. |
+| `AGENT_MCP_RUNTIME_DIR` | `runtime/mcp` | Working directory for MCP sockets/logs. |
+
+## Runtime Notes
+
+1. On startup the app loads configuration and connects to NATS; `/healthz` remains available even if NATS is still warming up.
+2. MCP executions are dispatched through the existing helper functions in `mcp_server.py`, so updates to those helpers automatically surface via HTTP.
+3. The configuration endpoints make it easy to surface runtime state inside OpenAPI clients, MCP hubs, or n8n workflows without shell access.
