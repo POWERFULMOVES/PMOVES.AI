@@ -3,17 +3,98 @@
   "title": "analysis.audio.v1",
   "type": "object",
   "properties": {
-    "video_id": {"type": ["string","null"]},
-    "namespace": {"type": ["string","null"]},
-    "emotions": {"type": "array", "items": {
-      "type": "object",
-      "properties": {
-        "label": {"type":"string"},
-        "score": {"type":"number"},
-        "ts_seconds": {"type": ["number","null"]}
-      },
-      "required": ["label","score"]
-    }}
+    "video_id": {"type": ["string", "null"]},
+    "namespace": {"type": ["string", "null"]},
+    "audio_uri": {"type": ["string", "null"]},
+    "emotions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {"type": "string"},
+          "score": {"type": "number"},
+          "ts_seconds": {"type": ["number", "null"]},
+          "speaker": {"type": ["string", "null"]}
+        },
+        "required": ["label", "score"],
+        "additionalProperties": true
+      }
+    },
+    "transcript": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "text": {"type": ["string", "null"]},
+            "language": {"type": ["string", "null"]},
+            "segments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": ["string", "number", "null"]},
+                  "start": {"type": ["number", "null"]},
+                  "end": {"type": ["number", "null"]},
+                  "text": {"type": ["string", "null"]},
+                  "speaker": {"type": ["string", "null"]},
+                  "words": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "start": {"type": ["number", "null"]},
+                        "end": {"type": ["number", "null"]},
+                        "word": {"type": ["string", "null"]},
+                        "confidence": {"type": ["number", "null"]},
+                        "speaker": {"type": ["string", "null"]}
+                      },
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "speakers": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "features": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "global": {
+              "type": "object",
+              "properties": {
+                "duration": {"type": ["number", "null"]},
+                "rms": {"type": ["number", "null"]},
+                "spectral_centroid": {"type": ["number", "null"]},
+                "zero_crossing_rate": {"type": ["number", "null"]},
+                "tempo": {"type": ["number", "null"]}
+              },
+              "additionalProperties": true
+            },
+            "by_segment": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    }
   },
-  "required": ["emotions"]
+  "required": ["emotions"],
+  "additionalProperties": true
 }
