@@ -79,7 +79,7 @@ async def startup():
         return
 
     async def _try_connect():
-        nonlocal NATS_URL
+        global _nc
         nc = NATS()
         try:
             # Short timeout, no reconnect storm
