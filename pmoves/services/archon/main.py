@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import asyncio
@@ -191,8 +190,6 @@ bridge and the lightweight agent worker pool) are launched alongside the main
 FastAPI server. The goal is to provide a drop-in compatible process for the
 Archon UI/IDE clients so all REST and streaming endpoints work as expected.
 """
-
-from __future__ import annotations
 
 import asyncio
 import logging
