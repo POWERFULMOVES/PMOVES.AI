@@ -133,6 +133,7 @@ class ArchonOrchestrator:
             raise
         except Exception as exc:  # pragma: no cover - defensive logging
             self._logger.exception("Failed to process crawl request for %s", task_id)
+            await self._record_task_state(task_id, "failed", url=url, extra=metadata)
             await self._publish_task_update(
                 task_id,
                 status="failed",
