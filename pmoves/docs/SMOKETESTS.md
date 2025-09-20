@@ -38,6 +38,48 @@ Useful health checks:
 - Render Webhook: `curl http://localhost:8085/healthz`
 - PostgREST: `curl http://localhost:3000`
 - Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
+- Discord Publisher: `curl http://localhost:8092/healthz`
+
+### Discord Publisher (content.published.v1)
+
+Verify Discord wiring by emitting a `content.published.v1` event after the stack is up:
+
+```bash
+python - <<'PY'
+import asyncio, json, os
+from nats.aio.client import Client as NATS
+
+async def main():
+    nc = NATS()
+    await nc.connect(os.getenv("NATS_URL", "nats://localhost:4222"))
+    await nc.publish(
+        "content.published.v1",
+        json.dumps(
+            {
+                "topic": "content.published.v1",
+                "payload": {
+                    "title": "Smoke Story",
+                    "namespace": "smoke-test",
+                    "published_path": "smoke/story.md",
+                    "public_url": "https://example.org/smoke-story",
+                    "tags": ["demo", "smoke"],
+                    "cover_art": {
+                        "thumbnails": [
+                            {"url": "https://placehold.co/640x360.png", "width": 640, "height": 360}
+                        ]
+                    },
+                },
+            }
+        ).encode("utf-8"),
+    )
+    await nc.flush()
+    await nc.drain()
+
+asyncio.run(main())
+PY
+```
+
+Expected: the Discord channel receives a rich embed with the Smoke Story title, namespace, published path, thumbnail, and tags. Remove `public_url` from the payload if you want to confirm the local-path fallback formatting.
 
 ## 4) Seed Demo Data (Optional but helpful)
 - `make seed-data` (loads small sample docs into Qdrant/Meilisearch)
