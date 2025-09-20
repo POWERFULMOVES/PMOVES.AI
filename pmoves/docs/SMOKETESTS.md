@@ -101,12 +101,27 @@ What the smoke covers:
    curl -s http://localhost:8086/shape/point/p.test.1/jump
    ```
 
-5. (Optional) Learned text decode (requires `CHIT_DECODE_TEXT=true` and `transformers`):
-   ```bash
-   curl -s http://localhost:8086/geometry/decode/text \
-     -H 'content-type: application/json' \
-     -d '{"mode":"learned","constellation_id":"c.test.1"}'
-   ```
+5. Optional decoders (set the matching `CHIT_DECODE_*` env var to `true` and install extras):
+   - Learned text decode (requires `transformers`):
+     ```bash
+     curl -s http://localhost:8086/geometry/decode/text \
+       -H 'content-type: application/json' \
+       -d '{"mode":"learned","constellation_id":"c.test.1"}'
+     ```
+   - CLIP image decode (requires `sentence-transformers`, `pillow`; downloads assets on first run):
+     ```bash
+     curl -s http://localhost:8086/geometry/decode/image \
+       -H 'content-type: application/json' \
+       -d '{"constellation_id":"c.test.1","images":["https://example.org/sample.jpg"]}'
+     ```
+     The endpoint ranks provided image URLs against the constellation summary (or supplied `text`).
+   - CLAP audio decode (requires `laion-clap`, `torch`, `numpy`):
+     ```bash
+     curl -s http://localhost:8086/geometry/decode/audio \
+       -H 'content-type: application/json' \
+       -d '{"constellation_id":"c.test.1","audios":["/path/to/sample.wav"]}'
+     ```
+     On first invocation the legacy gateway will download the CLAP checkpoint; subsequent calls reuse the cached model.
 
 6. Calibration report:
    ```bash

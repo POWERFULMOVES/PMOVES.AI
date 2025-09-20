@@ -1,0 +1,12 @@
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# Update the handles below to match the real GitHub users or teams responsible for each area.
+# Entries lower in the file take precedence over the catch-all rule at the top.
+
+* @PowerfulMoves
+
+# Domain ownership (override the wildcard as needed)
+pmoves/contracts/ @PowerfulMoves
+pmoves/services/ @PowerfulMoves
+pmoves/docs/ @PowerfulMoves
+CATACLYSM_STUDIOS_INC/ @PowerfulMoves
+pmoves_gateway_demo/ @PowerfulMoves

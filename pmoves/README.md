@@ -37,6 +37,10 @@ Notes
 - Legacy `hi-rag-gateway` remains available. Use `make up-legacy` to start it with `retrieval-eval` targeting the legacy gateway.
 - Compose snippets for services are already merged in `docker-compose.yml` for ease-of-use.
 
+### Tests
+
+- Smoke tests stub external dependencies and can run offline: `pytest pmoves/tests`.
+
 Agents Profile
 - Start: `docker compose --profile agents up -d nats agent-zero archon`
 - Defaults: both use `NATS_URL=nats://nats:4222`; change via `.env` if external broker is used.

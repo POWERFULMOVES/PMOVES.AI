@@ -1,0 +1,11 @@
+create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto";
+create table if not exists anchors (id uuid primary key default gen_random_uuid(), model text not null, dim int not null, anchor float8[], label text, modality text default 'text', created_at timestamptz default now());
+create table if not exists constellations (id uuid primary key default gen_random_uuid(), super_id uuid, anchor_id uuid references anchors(id) on delete cascade, modality text default 'text', spectrum real[] not null, radial_min real not null, radial_max real not null, bins int not null, summary text, created_at timestamptz default now());
+create table if not exists shape_points (id uuid primary key default gen_random_uuid(), constellation_id uuid references constellations(id) on delete cascade, source_ref text, proj real, conf real, x real, y real, modality text default 'text', text text, created_at timestamptz default now());
+create table if not exists shape_index (id uuid primary key default gen_random_uuid(), shape_hash text not null, owner text, sig text, created_at timestamptz default now());
+create table if not exists modalities (id uuid primary key default gen_random_uuid(), point_id uuid references shape_points(id) on delete cascade, modality text not null, ref_id text, t_start real, t_end real, frame_idx int, token_start int, token_end int, extra jsonb);
+create index if not exists idx_constellations_anchor on constellations(anchor_id);
+create index if not exists idx_points_constellation on shape_points(constellation_id);
+create index if not exists idx_modalities_point on modalities(point_id);
+create index if not exists idx_shape_index_hash on shape_index(shape_hash);

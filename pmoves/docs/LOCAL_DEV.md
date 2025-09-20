@@ -19,9 +19,13 @@ Create `.env` (or start with `.env.example`) and include keys from:
 - `env.presign.additions` (MINIO creds and shared secret)
 - `env.render_webhook.additions` (webhook shared secret)
 - `env.hirag.reranker.additions`, `env.hirag.reranker.providers.additions` (optional reranker config)
+- `MEDIA_VIDEO_FRAMES_BUCKET` (optional) to store extracted video frames separately from the source bucket; defaults to the
+  incoming media bucket when unset. Use `MEDIA_VIDEO_FRAMES_PREFIX` to customize the object key prefix (defaults to
+  `media-video/frames`).
 
 Defaults baked into compose:
 - `MINIO_ENDPOINT` defaults to `minio:9000` for in-network access.
+- `FRAME_BUCKET` (optional) directs media-video frame uploads to a specific bucket; falls back to the source bucket when unset.
 - `HIRAG_URL` in `retrieval-eval` points to `hi-rag-gateway-v2:8086`.
  - Local PostgREST at `http://postgrest:3000` with a local Postgres database.
 

@@ -393,6 +393,22 @@ def _get_transcript(video_id: str) -> Dict[str,Any]:
     meta = row.get('meta') or {}
     return {'text': row.get('text') or '', 'segments': meta.get('segments') or []}
 
+def _merge_video_meta(video_id: str, gemma_patch: Dict[str, Any]) -> None:
+    rows = supa_get('videos', {'video_id': video_id}) or []
+    meta: Dict[str, Any] = {}
+    if rows:
+        existing_meta = rows[0].get('meta')
+        if isinstance(existing_meta, dict):
+            meta = dict(existing_meta)
+    gemma_meta = meta.get('gemma')
+    if isinstance(gemma_meta, dict):
+        merged_gemma = dict(gemma_meta)
+    else:
+        merged_gemma = {}
+    merged_gemma.update(gemma_patch)
+    meta['gemma'] = merged_gemma
+    supa_update('videos', {'video_id': video_id}, {'meta': meta})
+
 @app.post('/yt/summarize')
 def yt_summarize(body: Dict[str,Any] = Body(...)):
     vid = body.get('video_id'); provider = (body.get('provider') or YT_SUMMARY_PROVIDER).lower()
@@ -406,7 +422,7 @@ def yt_summarize(body: Dict[str,Any] = Body(...)):
     else:
         summary = _summarize_ollama(text, style)
     # persist into videos + studio_board meta
-    supa_update('videos', {'video_id': vid}, {'meta': {'gemma': {'style': style, 'provider': provider, 'summary': summary}}})
+    _merge_video_meta(vid, {'style': style, 'provider': provider, 'summary': summary})
     # emit event for downstream (Discord/NATS)
     try:
         _publish_event('ingest.summary.ready.v1', {'video_id': vid, 'style': style, 'provider': provider, 'summary': summary[:500]})
@@ -435,7 +451,7 @@ def yt_chapters(body: Dict[str,Any] = Body(...)):
     except Exception:
         # fallback: split lines
         chapters = [{ 'title': line.strip('- ').strip(), 'blurb': '' } for line in raw.splitlines() if line.strip()][:10]
-    supa_update('videos', {'video_id': vid}, {'meta': {'gemma': {'chapters': chapters}}})
+    _merge_video_meta(vid, {'chapters': chapters})
     try:
         _publish_event('ingest.chapters.ready.v1', {'video_id': vid, 'n': len(chapters), 'chapters': chapters[:6]})
     except Exception:

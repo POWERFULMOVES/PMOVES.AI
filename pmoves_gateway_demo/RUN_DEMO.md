@@ -30,8 +30,7 @@ The response includes:
 ### Optional toggles
 - `CHIT_LEARNED_TEXT=true` to add a learned summary in decode output.
 - `CHIT_T5_MODEL=/path/to/local/t5` if you have a local HF model.
-- `SUPABASE_ENABLED=true`, plus `SUPABASE_URL` and `SUPABASE_KEY` to insert into Supabase tables (`anchors`, `constellations`, `shape_points`).
-- Realtime mock stream: `GET /events/stream` (SSE).
+- `SUPABASE_ENABLED=true`, plus `SUPABASE_URL` and `SUPABASE_KEY` to insert into Supabase tables (`anchors`, `constellations`, `shape_points`) and receive realtime updates the same way production gateways do.
 
 ## APIs
 POST /geometry/event

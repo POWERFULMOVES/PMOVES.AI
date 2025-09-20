@@ -26,3 +26,16 @@ def envelope(topic: str, payload: dict, correlation_id: str|None=None, parent_id
     if correlation_id: env["correlation_id"] = correlation_id
     if parent_id: env["parent_id"] = parent_id
     return env
+
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+
+async def publish(topic: str, payload: dict, *, correlation_id: str | None = None, parent_id: str | None = None, source: str = "agent"):
+    """Publish an envelope to NATS and return the envelope."""
+    from nats.aio.client import Client as NATS
+    env = envelope(topic, payload, correlation_id=correlation_id, parent_id=parent_id, source=source)
+    nc = NATS()
+    await nc.connect(servers=[NATS_URL])
+    await nc.publish(topic.encode(), json.dumps(env).encode())
+    await nc.close()
+    return env
+

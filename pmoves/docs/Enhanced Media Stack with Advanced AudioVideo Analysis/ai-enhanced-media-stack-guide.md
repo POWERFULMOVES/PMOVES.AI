@@ -126,6 +126,90 @@ graph LR
     I --> J[Knowledge Graph]
 ```
 
+### 🎬 Media-Video Microservice API (YOLO + ViT + CLIP + Flamingo)
+
+The `media-video` FastAPI worker now orchestrates multi-model inference for each sampled frame. It extracts YOLO objects, scene
+classifications (ViT), CLIP-style captions, sentiment-driven mood scores, and Flamingo/BLIP2-style video-language reasoning.
+
+**POST** `http://localhost:8079/detect`
+
+```json
+{
+  "bucket": "media",
+  "key": "videos/demo.mp4",
+  "namespace": "pmoves",
+  "video_id": "demo-001",
+  "prompt": "Summarize the emotional arc in this clip"
+}
+```
+
+**Response excerpt**
+
+```json
+{
+  "ok": true,
+  "count": 18,
+  "detections": [
+    {
+      "label": "person",
+      "score": 0.91,
+      "ts_seconds": 5,
+      "frame_uri": "s3://media-frames/pmoves/demo-001/frame_000002.jpg",
+      "scene": {"label": "studio", "score": 0.77},
+      "caption": "Two presenters smile on stage",
+      "mood": {"label": "POSITIVE", "score": 0.98}
+    }
+  ],
+  "scenes": [
+    {
+      "label": "studio",
+      "score": 0.77,
+      "ts_start": 2.5,
+      "ts_end": 7.5,
+      "frame_uri": "s3://media-frames/pmoves/demo-001/frame_000002.jpg"
+    }
+  ],
+  "captions": [
+    {
+      "ts_seconds": 5,
+      "text": "Two presenters smile on stage"
+    }
+  ],
+  "moods": [
+    {
+      "ts_seconds": 5,
+      "label": "POSITIVE",
+      "score": 0.98
+    }
+  ],
+  "reasoning": {
+    "response": "The hosts introduce the show with high energy while the audience applauds.",
+    "samples": [
+      {"ts_seconds": 0, "frame_uri": "s3://.../frame_000001.jpg"},
+      {"ts_seconds": 5, "frame_uri": "s3://.../frame_000002.jpg"}
+    ]
+  }
+}
+```
+
+All detections, scene segments, and mood scores are persisted in Supabase (`detections`, `segments`, and `emotions` tables) and a
+rich `analysis.entities.v1` event is emitted to NATS for downstream consumers.
+
+#### Key environment variables
+
+| Variable | Description |
+| --- | --- |
+| `YOLO_MODEL` | Ultralytics checkpoint for object detection (default `yolov8n.pt`). |
+| `SCENE_MODEL` | Hugging Face ViT scene classifier (default `dima806/scene_classification_vit`). |
+| `CAPTION_MODEL` | Image captioning model used for CLIP-style descriptions (default `Salesforce/blip-image-captioning-base`). |
+| `MOOD_MODEL` | Text sentiment pipeline that converts captions into mood scores (default `distilbert-base-uncased-finetuned-sst-2-english`). |
+| `VIDEO_REASONER_MODEL` | Flamingo/BLIP2-style video-language reasoner (default `Salesforce/blip2-flan-t5-base`). |
+| `VIDEO_REASONER_MAX_FRAMES` | Maximum number of frames passed to the video reasoner (default `4`). |
+
+The accompanying Docker image now targets `pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` to provide CUDA-enabled inference for
+ViT, BLIP, and Flamingo-class models. Ensure `nvidia-container-toolkit` is installed and run with `--gpus all` for full
+acceleration.
+
 ### **4. Entity Extraction & RAG Strategy**
 ```mermaid
 graph LR

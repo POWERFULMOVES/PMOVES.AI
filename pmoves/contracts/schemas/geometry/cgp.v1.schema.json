@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CHIT Geometry Packet (CGP) v1",
+  "type": "object",
+  "required": [
+    "spec",
+    "super_nodes"
+  ],
+  "properties": {
+    "spec": {
+      "type": "string",
+      "const": "chit.cgp.v0.1"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "meta": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "super_nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "constellations"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "r": {
+            "type": "number"
+          },
+          "meta": {
+            "type": "object"
+          },
+          "constellations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/constellation"
+            }
+          }
+        }
+      }
+    },
+    "constellations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/constellation"
+      }
+    },
+    "points": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/point"
+      }
+    },
+    "sig": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "constellation": {
+      "type": "object",
+      "required": [
+        "id",
+        "points"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "anchor": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "anchor_enc": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "alg": {
+                  "type": "string"
+                },
+                "iv": {
+                  "type": "string"
+                },
+                "salt": {
+                  "type": "string"
+                },
+                "ct": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "alg",
+                "iv",
+                "salt",
+                "ct"
+              ]
+            }
+          ]
+        },
+        "radial_minmax": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "spectrum": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/point"
+          }
+        },
+        "meta": {
+          "type": "object"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "modality": {
+          "type": "string"
+        },
+        "ref_id": {
+          "type": "string"
+        },
+        "video_id": {
+          "type": "string"
+        },
+        "doc_id": {
+          "type": "string"
+        },
+        "t_start": {
+          "type": "number"
+        },
+        "t_end": {
+          "type": "number"
+        },
+        "frame_idx": {
+          "type": "integer"
+        },
+        "token_start": {
+          "type": "integer"
+        },
+        "token_end": {
+          "type": "integer"
+        },
+        "proj": {
+          "type": "number"
+        },
+        "conf": {
+          "type": "number"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "text": {
+          "type": "string"
+        },
+        "char_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "word_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "token_range": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "meta": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

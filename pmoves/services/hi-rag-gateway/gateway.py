@@ -1,4 +1,4 @@
-import os, re, time, threading, ipaddress, math, requests, logging, json, sys
+import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io
 from pathlib import Path
 
 # ensure repo root is on sys.path for importing tools/* when running from service folder
@@ -73,9 +73,14 @@ CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_d
 CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
 CHIT_DECODE_IMAGE = os.environ.get("CHIT_DECODE_IMAGE", "false").lower() == "true"
 CHIT_DECODE_AUDIO = os.environ.get("CHIT_DECODE_AUDIO", "false").lower() == "true"
+CHIT_CLIP_MODEL = os.environ.get("CHIT_CLIP_MODEL", "clip-ViT-B-32")
 
 _codebook_cache = None
 _codebook_mtime = None
+_clip_model = None
+_clip_lock = threading.Lock()
+_clap_model = None
+_clap_lock = threading.Lock()
 
 def _load_codebook(path: str):
     import os
@@ -128,6 +133,40 @@ def embed_query(text: str):
     except Exception as e:
         logger.exception("SentenceTransformer encode error")
         raise HTTPException(500, f"Embedding encode error: {e}")
+
+
+def _get_clip_model():
+    global _clip_model
+    if _clip_model is None:
+        with _clip_lock:
+            if _clip_model is None:
+                try:
+                    _clip_model = SentenceTransformer(CHIT_CLIP_MODEL)
+                except Exception as e:
+                    logger.exception("Failed to load CLIP model %s", CHIT_CLIP_MODEL)
+                    raise HTTPException(500, f"CLIP model load error: {e}")
+    return _clip_model
+
+
+def _get_clap_model():
+    global _clap_model
+    if _clap_model is None:
+        with _clap_lock:
+            if _clap_model is None:
+                try:
+                    from laion_clap import CLAP_Module  # type: ignore
+                except Exception:
+                    raise HTTPException(500, "missing laion-clap/torch; install extras and set CHIT_DECODE_AUDIO=true")
+                try:
+                    model = CLAP_Module(enable_fusion=True)
+                    model.load_ckpt()
+                    _clap_model = model
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.exception("Failed to initialize CLAP model")
+                    raise HTTPException(500, f"CLAP model load error: {e}")
+    return _clap_model
 
 def hybrid_score(vec_score: float, lex_score: float, alpha: float=0.7) -> float:
     return alpha*vec_score + (1.0-alpha)*lex_score
@@ -479,16 +518,77 @@ def geometry_calibration_report(body: Dict[str, Any]):
 def geometry_decode_image(body: Dict[str, Any]):
     if not CHIT_DECODE_IMAGE:
         raise HTTPException(501, "image decoder disabled")
-    # Placeholder stub. Implement CLIP-based decode here.
-    return {"ok": False, "detail": "CLIP-based image decoder not yet implemented; install extras and set CHIT_DECODE_IMAGE=true"}
+    try:
+        from PIL import Image  # type: ignore
+        import numpy as np  # type: ignore
+    except Exception:
+        raise HTTPException(500, "missing dependencies for image decode (sentence-transformers, Pillow)")
+    const_id = body.get("constellation_id")
+    images = body.get("images") or []
+    if not images:
+        raise HTTPException(400, "images list required")
+    const = shape_store.get_constellation(const_id) if (shape_store and const_id) else None
+    text = body.get("text") or (const.get("summary") if const else None)
+    if not text:
+        raise HTTPException(400, "text or constellation summary required for anchor")
+    try:
+        model = _get_clip_model()
+        text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
+        img_list = []
+        for url in images:
+            try:
+                r = requests.get(url, timeout=20)
+                r.raise_for_status()
+            except requests.RequestException as e:
+                raise HTTPException(502, f"failed to fetch image {url}: {e}")
+            try:
+                img = Image.open(io.BytesIO(r.content)).convert("RGB")
+            except Exception as e:
+                raise HTTPException(400, f"invalid image payload for {url}: {e}")
+            img_list.append(img)
+        img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
+        sims = (img_embs @ text_emb.T).squeeze()
+        ranked = sorted(zip(images, np.asarray(sims).tolist()), key=lambda x: x[1], reverse=True)
+        return {"ranked": [{"url": u, "score": float(s)} for u, s in ranked]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("image decode error")
+        raise HTTPException(500, f"image decode error: {e}")
 
 
 @app.post("/geometry/decode/audio")
 def geometry_decode_audio(body: Dict[str, Any]):
     if not CHIT_DECODE_AUDIO:
         raise HTTPException(501, "audio decoder disabled")
-    # Placeholder stub. Implement CLAP-based decode here.
-    return {"ok": False, "detail": "CLAP-based audio decoder not yet implemented; install extras and set CHIT_DECODE_AUDIO=true"}
+    try:
+        import numpy as np  # type: ignore
+    except Exception:
+        raise HTTPException(500, "missing numpy dependency for audio decode")
+    const_id = body.get("constellation_id")
+    audios = body.get("audios") or []
+    if not audios:
+        raise HTTPException(400, "audios list required")
+    const = shape_store.get_constellation(const_id) if (shape_store and const_id) else None
+    text = body.get("text") or (const.get("summary") if const else None)
+    if not text:
+        raise HTTPException(400, "text or constellation summary required for anchor")
+    try:
+        model = _get_clap_model()
+        audio_embs = model.get_audio_embedding_from_filelist(x=audios, use_tensor=False)
+        text_emb = model.get_text_embedding([text], use_tensor=False)
+        a = np.asarray(audio_embs, dtype=float)
+        t = np.asarray(text_emb, dtype=float).reshape(1, -1)
+        a = a / (np.linalg.norm(a, axis=1, keepdims=True) + 1e-9)
+        t = t / (np.linalg.norm(t, axis=1, keepdims=True) + 1e-9)
+        sims = (a @ t.T).squeeze()
+        ranked = sorted(zip(audios, np.asarray(sims).tolist()), key=lambda x: x[1], reverse=True)
+        return {"ranked": [{"path": u, "score": float(s)} for u, s in ranked]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("audio decode error")
+        raise HTTPException(500, f"audio decode error: {e}")
 
 @app.get("/")
 def index():
