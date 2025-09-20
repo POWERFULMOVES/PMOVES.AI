@@ -386,6 +386,13 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
     depends_on: [nats]
     ports: ["8080:8080"]
+    volumes:
+      # Default host directories keep Agent Zero runtime data between restarts.
+      # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
+      - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/app/runtime/memory
+      - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/app/runtime/knowledge
+      - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/app/runtime/instruments
+      - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/app/logs
     profiles: ["agents"]
     networks: [pmoves]
 
