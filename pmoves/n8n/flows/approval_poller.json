@@ -56,7 +56,8 @@
                 "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
               }
             ]
-          }
+          },
+          "splitIntoItems": true
         }
       },
       "id": "fetch_supabase",
