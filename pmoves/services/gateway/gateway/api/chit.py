@@ -156,7 +156,7 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
 
 
     try:
-        from gateway.api.events import emit_event  # late import to avoid cycles
+        from pmoves.services.gateway.gateway.api.events import emit_event  # late import to avoid cycles
         emit_event({"type": "geometry.event", "shape_id": shape_id})
     except Exception:
         pass
