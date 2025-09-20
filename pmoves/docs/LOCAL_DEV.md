@@ -41,6 +41,26 @@ OpenAI-compatible presets:
 - Legacy gateway: `make up-legacy`
 - Seed demo data (Qdrant/Meili): `make seed-data`
 
+### Supabase: Local CLI vs Self‑Hosted
+
+- Local parity (via Supabase CLI):
+  - Install CLI (Windows): `winget install supabase.supabase` (or `npm i -g supabase`)
+  - Init once: `make supa-init`
+  - Start: `make supa-start`
+  - Use local endpoints: `make supa-use-local` then run `make supa-status` and paste keys into `.env.local`
+  - Bring up pmoves: `make up` (default `SUPA_PROVIDER=cli` skips Compose Postgres/PostgREST)
+  - Stop CLI: `make supa-stop`
+
+- Self‑hosted remote:
+  - Prefill endpoints: `.env.supa.remote` (committed without secrets)
+  - Extract keys from `supa.md` locally: `make supa-extract-remote`
+  - Activate remote: `make supa-use-remote` (copies to `.env.local`)
+  - Run pmoves: `make up`
+
+- Compose alternative (lite Supabase):
+  - `SUPA_PROVIDER=compose make up` then `make supabase-up`
+  - Stop: `make supabase-stop` or `make down`
+
 ### Flight Check (recommended)
 
 - Quick preflight (cross-platform): `make flight-check`

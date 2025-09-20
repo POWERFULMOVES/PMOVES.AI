@@ -1,6 +1,12 @@
 # Core
 .env
 .env.*
+.env.local
+.env.supa.remote
+supa.md
+# But keep templates checked in
+!.env.*.example
+!.env.local.example
 *.log
 .last_logs.txt
 

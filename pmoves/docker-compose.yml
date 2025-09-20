@@ -71,7 +71,7 @@ services:
   hi-rag-gateway:
     build: ./services/hi-rag-gateway
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
@@ -102,7 +102,7 @@ services:
   retrieval-eval:
     build: ./services/retrieval-eval
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
       - EVAL_HTTP_PORT=${EVAL_HTTP_PORT}
@@ -119,7 +119,7 @@ services:
   presign:
     build: ./services/presign
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -135,7 +135,7 @@ services:
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
@@ -150,7 +150,7 @@ services:
   extract-worker:
     build: ./services/extract-worker
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -168,7 +168,7 @@ services:
       context: .
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     ports: ["8084:8084"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -176,7 +176,7 @@ services:
   ffmpeg-whisper:
     build: ./services/ffmpeg-whisper
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -197,7 +197,7 @@ services:
   media-video:
     build: ./services/media-video
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -220,7 +220,7 @@ services:
   media-audio:
     build: ./services/media-audio
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -240,7 +240,7 @@ services:
   pmoves-yt:
     build: ./services/pmoves-yt
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -261,7 +261,7 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -303,7 +303,7 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -356,7 +356,7 @@ services:
   agent-zero:
     build: ./services/agent-zero
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -368,7 +368,7 @@ services:
   archon:
     build: ./services/archon
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - PORT=8091
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -380,7 +380,7 @@ services:
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
@@ -392,7 +392,7 @@ services:
   publisher-discord:
     build: ./services/publisher-discord
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -405,7 +405,7 @@ services:
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [.env, .env.local]
     environment:
       - JELLYFIN_URL=${JELLYFIN_URL}
       - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
