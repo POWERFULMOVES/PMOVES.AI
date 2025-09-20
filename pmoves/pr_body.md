@@ -27,3 +27,12 @@ This update adds a clean local Supabase CLI mode (no Compose Postgres/PostgREST 
 
 ### Rebuild pmoves.yt if needed
 `docker compose -p pmoves --profile data --profile workers build --no-cache pmoves-yt && docker compose -p pmoves --profile data --profile workers up -d pmoves-yt`
+
+### Reviewer Checklist
+- [ ] Pull branch: `git fetch origin feat/supabase-cli-switch && git checkout feat/supabase-cli-switch`
+- [ ] Supabase CLI local mode: `make supa-start && make supa-use-local` (paste keys from `make supa-status` into `.env.local`)
+- [ ] Bring up stack: `make up` then verify `docker compose -p pmoves ps`
+- [ ] pmoves.yt health: `curl http://localhost:8077/healthz` returns `{ "ok": true }`
+- [ ] Optional events: `make up-nats`, restart emitters (e.g., `docker compose -p pmoves up -d pmoves-yt`), verify no NATS errors in logs
+- [ ] Self‑hosted switch: `make supa-extract-remote && make supa-use-remote && make up` (endpoints, keys respected)
+- [ ] Docs render: skim `docs/MAKE_TARGETS.md` and `docs/SUPABASE_SWITCH.md`
