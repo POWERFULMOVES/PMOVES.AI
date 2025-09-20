@@ -9,6 +9,24 @@ _Last updated: 2025-09-07_
 - [ ] Configure Jellyfin API key (+ optional user id) (pending: local instance)
 - [ ] Test PDF + MinIO ingestion with a sample object (pending: PDF lane is not yet implemented in this repo)
 
+## n8n Flow Operations
+- **Importing**
+  1. Open n8n → *Workflows* → *Import from File* and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
+  2. Rename the flows if desired and keep them inactive until credentials are configured.
+- **Required environment**
+  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3000`).
+  - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
+  - `AGENT_ZERO_BASE_URL` – Agent Zero events endpoint base (defaults to `http://agent-zero:8080`).
+  - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.
+  - `DISCORD_WEBHOOK_URL` – Discord channel webhook (flows post embeds here).
+  - `DISCORD_WEBHOOK_USERNAME` – optional override for the Discord display name.
+- **Manual verification checklist**
+  1. Insert a `studio_board` row with `status='approved'`, `content_url='s3://...'`, and confirm `meta.publish_event_sent_at` is null.
+  2. Trigger the approval poller (activate or execute once) and confirm Agent Zero logs a `content.publish.approved.v1` event.
+  3. Verify Supabase row updates to `status='published'` with `meta.publish_event_sent_at` timestamp.
+  4. POST a `content.published.v1` envelope to the webhook (`/webhook/pmoves/content-published`) and confirm Discord receives an embed (title, path, artifact, optional thumbnail).
+  5. Deactivate flows after testing or leave active with schedules confirmed.
+
 ## Short-term (September)
 - [ ] Publisher: Jellyfin library refresh (cron/webhook) — not implemented yet
 - [ ] Discord: rich embeds (cover art, duration, links) — not implemented yet

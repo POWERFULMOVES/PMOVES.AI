@@ -1,3 +1,170 @@
 {
-  "name": "Echo Publisher"
+  "meta": {
+    "instanceId": "pmoves-demo"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pmoves/content-published",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook_content_published",
+      "name": "Webhook: Content Published",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.topic }}",
+              "operation": "equal",
+              "value2": "content.published.v1"
+            }
+          ]
+        }
+      },
+      "id": "check_topic",
+      "name": "Check Topic",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -120,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const event = $json || {};\nconst payload = event.payload || {};\nconst meta = (payload.meta && typeof payload.meta === 'object') ? payload.meta : {};\nconst tags = Array.isArray(meta.tags) ? meta.tags : [];\n\nconst fields = [];\n\nif (payload.artifact_uri) {\n  fields.push({\n    name: 'Artifact URI',\n    value: payload.artifact_uri,\n    inline: false\n  });\n}\n\nif (payload.namespace) {\n  fields.push({\n    name: 'Namespace',\n    value: payload.namespace,\n    inline: true\n  });\n}\n\nif (payload.published_path) {\n  fields.push({\n    name: 'Published Path',\n    value: payload.published_path,\n    inline: true\n  });\n}\n\nif (tags.length) {\n  fields.push({\n    name: 'Tags',\n    value: tags.join(', '),\n    inline: false\n  });\n}\n\nconst embed = {\n  title: meta.title || payload.published_path || 'Content Published',\n  description: meta.description || (payload.public_url ? `Content published to ${payload.public_url}` : 'Content approved and published.'),\n  url: payload.public_url || undefined,\n  fields\n};\n\nif (meta.thumbnail_url) {\n  embed.thumbnail = { url: meta.thumbnail_url };\n}\n\nreturn {\n  json: {\n    discordUrl: $env.DISCORD_WEBHOOK_URL,\n    discordBody: {\n      username: $env.DISCORD_WEBHOOK_USERNAME || 'PMOVES Publisher',\n      embeds: [embed]\n    }\n  }\n};"
+      },
+      "id": "prepare_discord",
+      "name": "Prepare Discord Payload",
+      "type": "n8n-nodes-base.functionItem",
+      "typeVersion": 1,
+      "position": [
+        200,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "={{ $json.discordUrl }}",
+        "jsonParameters": true,
+        "sendBody": true,
+        "bodyParametersJson": "={{ JSON.stringify($json.discordBody) }}",
+        "options": {
+          "headerParametersUi": {
+            "parameter": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "send_discord",
+      "name": "Send Discord Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "responseBody": "Publish notification relayed to Discord"
+      },
+      "id": "respond_success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        720,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "responseBody": "Ignored: topic is not content.published.v1"
+      },
+      "id": "respond_ignored",
+      "name": "Respond Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        360
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Content Published": {
+      "main": [
+        [
+          {
+            "node": "Check Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Topic": {
+      "main": [
+        [
+          {
+            "node": "Prepare Discord Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Ignored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Discord Payload": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "staticData": null,
+  "id": "PMOVES • Content Published → Discord v1"
 }
