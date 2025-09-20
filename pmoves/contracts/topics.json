@@ -64,6 +64,15 @@
     "kb.search.result.v1": {
       "schema": "schemas/kb/search.result.v1.schema.json"
     },
+    "archon.crawl.request.v1": {
+      "schema": "schemas/archon/crawl.request.v1.schema.json"
+    },
+    "archon.crawl.result.v1": {
+      "schema": "schemas/archon/crawl.result.v1.schema.json"
+    },
+    "archon.task.update.v1": {
+      "schema": "schemas/archon/task.update.v1.schema.json"
+    },
     "content.publish.approved.v1": {
       "schema": "schemas/content/publish.approved.v1.schema.json"
     },
