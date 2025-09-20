@@ -7,8 +7,8 @@ Endpoints
 - POST `/yt/ingest`: convenience: info + download + transcript.
 - POST `/yt/playlist`: { url, namespace?, bucket?, max_videos?, … } → iterates playlist, tracks job state in `yt_jobs/yt_items`, downloads + transcribes each video.
 - POST `/yt/channel`: { url|channel_id, ... } → same as playlist for a channel.
-- POST `/yt/summarize`: { video_id, style: short|long, provider?: ollama|hf } → uses Gemma (Ollama or HF) to summarize transcript; stores in `videos.meta.gemma`.
-- POST `/yt/chapters`: { video_id, provider? } → handles chapter extraction, returns JSON array [{title, blurb}], stores in `videos.meta.gemma.chapters`.
+- POST `/yt/summarize`: { video_id, style, provider?: ollama|hf } → uses Gemma (Ollama or HF) to summarize transcript; stores in `videos.meta.gemma`. `style` must be either `short` or `long`.
+- POST `/yt/chapters`: { video_id, provider? } → handles chapter extraction.
 - POST `/yt/emit`: { video_id, namespace?, text? } → segments transcript into retrieval chunks (JSONL) and emits CGP to the Geometry Bus; pushes chunks via `hi-rag-v2 /hirag/upsert-batch`.
 ## Playlist/Channel ingest
 
@@ -55,5 +55,12 @@ Notes
   - Tunables (env): `YT_SEG_TARGET_DUR` (sec), `YT_SEG_GAP_THRESH` (sec), `YT_SEG_MIN_CHARS`, `YT_SEG_MAX_CHARS`, `YT_SEG_MAX_DUR` (sec)
 - Indexing:
   - `YT_INDEX_LEXICAL=true|false` (default true). When true, `/yt/emit` asks Hi‑RAG v2 to also index in Meili via `index_lexical`.
- - Auto‑tune:
+- Auto‑tune:
    - `YT_SEG_AUTOTUNE=true|false` (default true). When enabled, thresholds are auto‑tuned per video using Whisper segment stats (avg duration, gap, words/sec, short‑line ratio) to choose profiles: dialogue, talk, or lyrics.
+
+## `/yt/chapters`
+
+- Body: `{ video_id, provider? }`.
+- Output: JSON array of chapter objects `[{title, blurb}]`.
+- Persistence: results are stored under `videos.meta.gemma.chapters`.
+- Providers: uses the same Gemma configuration as `/yt/summarize` (`YT_SUMMARY_PROVIDER`, `OLLAMA_URL`, `YT_GEMMA_MODEL`, `HF_GEMMA_MODEL`, `HF_USE_GPU`, `HF_TOKEN`).
