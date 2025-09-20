@@ -94,3 +94,51 @@ The FastAPI OpenAPI schema documents the full configuration model; key variables
 4. Traditional event publication continues via `/events/publish`, allowing Agent Zero to publish envelopes while simultaneously serving MCP workflows.
 
 This integration allows platform operators to orchestrate Agent Zero entirely over HTTP, simplifying deployment behind API gateways and enabling richer monitoring through the documented configuration model.
+
+## Archon Service Operations
+
+### Components, Ports, and Compose Targets
+
+Archon is deployed as a bundle of API, MCP, agent, and UI services. The PMOVES orchestration mesh exposes an `archon` profile that can be started alongside the core stack (`make up` → `make up-archon`) for a full deployment, or you can build the lightweight Archon FastAPI bridge included in this repository for NATS event publication on port `8091` (`services/archon` in `docker-compose.yml`).【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L784-L801】【F:pmoves/docker-compose.yml†L399-L409】
+
+Upstream Archon images expose the following ports when the compose profile is enabled:
+
+* Archon API (`archon_api`) – `8050/tcp`
+* MCP HTTP server (`archon_mcp`) – `8051/tcp`
+* Streaming agents (`archon_agents`) – `8053/tcp`
+* React UI (`archon_ui`) – `8052/tcp` (defaults to `3000` inside the container)
+
+These services are wired together inside `compose.archon.yml` with environment variables that point each container at the API host, Ollama/OpenAI backends, and the published MCP endpoint.【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L823-L865】 The upstream reference stack documents equivalent port assignments (UI `3737`, API `8181`, MCP `8051`, Agents `8052`) when running everything with `docker compose up --build -d` from the Archon repository.【F:docs/repoingest/coleam00-archon.txt†L523-L555】【F:docs/repoingest/coleam00-archon.txt†L1124-L1132】
+
+### Required Environment Variables
+
+* **Supabase / Postgres** – `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and (when using the upstream images) `SUPABASE_ANON_KEY` are required so Archon can read and write projects, tasks, knowledge, and embeddings. Populate these in `.env` before running `make up-archon` and share the same Supabase project you already use for PMOVES vectors.【F:docs/repoingest/coleam00-archon.txt†L523-L535】【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L872-L875】【F:docs/repoingest/coleam00-archon.txt†L53832-L53841】
+* **MCP + callbacks** – Containers use `ARCHON_MCP_PORT`, `ARCHON_API_URL`, and `TRANSPORT` (defaults to HTTP SSE) to expose the MCP tool server. Downstream services such as Agent Zero map the MCP endpoint via `archon: mcp://http?endpoint=http://archon_mcp:${ARCHON_MCP_PORT}` inside their environment files.【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L839-L845】【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L872-L875】【F:docs/repoingest/coleam00-archon.txt†L53822-L53841】
+* **NATS bridge** – The in-repo Archon FastAPI shim publishes envelopes to the event bus using `NATS_URL` and exposes `/events/publish` on its configured `PORT` (defaults to `8090`, overridden to `8091` in Compose). Ensure the NATS broker profile is running so Archon can announce events to the rest of PMOVES.【F:pmoves/services/archon/main.py†L6-L34】【F:pmoves/docker-compose.yml†L399-L409】
+* **RAG/Geometry callbacks** – The Archon MCP implementation reads `HIRAG_URL`/`GATEWAY_URL`, `ARCHON_FORM`, and `AGENT_FORMS_DIR` to reach Hierarchical RAG endpoints and serve dynamic MCP forms to clients. Set these so geometry and knowledge commands forward correctly to the Hi-RAG gateway and shared form bundles.【F:pmoves/services/archon/mcp_server.py†L12-L33】【F:pmoves/services/archon/mcp_server.py†L60-L80】
+* **LLMs and agents** – Point `OPENAI_API_KEY`, `OLLAMA_HOST`, and related keys at your preferred inference providers when running the upstream `archon_agents` container. Leave them unset if you only need the event bridge and MCP server.【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L848-L856】【F:docs/repoingest/coleam00-archon.txt†L523-L555】
+
+### Build and Startup Flow
+
+1. Copy `.env.example` → `.env`, fill in Supabase credentials, and (optionally) provider keys for embeddings and agents.【F:docs/repoingest/coleam00-archon.txt†L523-L555】【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L784-L801】
+2. Apply the upstream migration bundle (`migration/complete_setup.sql`) in your Supabase project so the `sources`, `documents`, `projects`, `tasks`, and `code_examples` tables exist before Archon boots.【F:docs/repoingest/coleam00-archon.txt†L523-L535】【F:docs/repoingest/coleam00-archon.txt†L1238-L1246】
+3. Start the baseline PMOVES data plane with `make up`, then bring the Archon profile online via `make up-archon` (or run the upstream `docker compose up --build -d` if you prefer the full Archon repository).【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L784-L801】【F:docs/repoingest/coleam00-archon.txt†L536-L555】
+4. Confirm the MCP server responds on `http://localhost:8051` and that Socket.IO updates stream from the API on port `8181`/`8050`, then wire Agent Zero or other MCP clients to the published endpoint via the compose network mapping.【F:docs/repoingest/coleam00-archon.txt†L1124-L1132】【F:docs/repoingest/coleam00-archon.txt†L1172-L1193】【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L839-L845】
+
+### Supabase Schema Expectations
+
+Archon persists knowledge and project data in Supabase. At minimum it expects the following tables, created by the upstream migration scripts:
+
+* `sources` – crawled websites and raw uploads
+* `documents` – processed document chunks plus embeddings
+* `projects` – optional project management records
+* `tasks` – kanban task data tied to projects
+* `code_examples` – extracted code snippets for reuse
+
+Run `migration/complete_setup.sql` from the Archon repository (and related reset scripts when needed) to bootstrap or refresh these tables before connecting PMOVES services.【F:docs/repoingest/coleam00-archon.txt†L523-L535】【F:docs/repoingest/coleam00-archon.txt†L1238-L1246】
+
+### MCP and Realtime Interfaces
+
+The Archon API exposes MCP tooling over HTTP: `GET /api/mcp/tools` to enumerate commands, `POST /api/mcp/tools/{tool_name}` to invoke them, and `GET /api/mcp/health` for status checks. Project and task APIs live under `/api/projects` when the feature is enabled. Real-time feedback (crawl progress, project creation, task updates, knowledge refresh) streams to the UI and other subscribers over Socket.IO from the main server port.【F:docs/repoingest/coleam00-archon.txt†L1172-L1201】
+
+Inside PMOVES, other agents connect through the compose overlay network using the HTTP MCP endpoint advertised in `agent-zero.env`, while the Archon bridge service forwards geometry and Hi-RAG callbacks to `HIRAG_URL` and emits envelopes to the shared NATS bus so downstream automation (n8n, mesh agents, Discord publishers) receive Archon events immediately.【F:pmoves/docs/PMOVES.ffmpeg/pmoves_orchestration_mesh_repo_scaffold.md†L872-L875】【F:pmoves/services/archon/mcp_server.py†L12-L80】【F:pmoves/services/archon/main.py†L6-L34】
