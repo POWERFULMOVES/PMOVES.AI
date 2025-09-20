@@ -1,6 +1,24 @@
 {
   "v": 1,
   "topics": {
+    "agentzero.event.log.v1": {
+      "schema": "schemas/agentzero/event.log.v1.schema.json"
+    },
+    "agentzero.memory.ack.v1": {
+      "schema": "schemas/agentzero/memory.ack.v1.schema.json"
+    },
+    "agentzero.memory.update": {
+      "schema": "schemas/agentzero/memory.update.schema.json"
+    },
+    "agentzero.task.result.v1": {
+      "schema": "schemas/agentzero/task.result.v1.schema.json"
+    },
+    "agentzero.task.status.v1": {
+      "schema": "schemas/agentzero/task.status.v1.schema.json"
+    },
+    "agentzero.task.v1": {
+      "schema": "schemas/agentzero/task.v1.schema.json"
+    },
     "ingest.transcript.ready.v1": {
       "schema": "schemas/ingest/transcript-ready.v1.schema.json"
     },

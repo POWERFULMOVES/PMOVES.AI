@@ -6,3 +6,5 @@ jsonschema==4.22.0
 PyYAML==6.0.2
 # Optional if using MCP python library
 # model-context-protocol
+pytest==8.3.2
+pytest-asyncio==0.24.0
