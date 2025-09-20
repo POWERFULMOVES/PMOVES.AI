@@ -1,18 +1,117 @@
-.PHONY: up down clean
+.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote
+
+# Pin a stable Docker Compose project name so make targets
+# always operate on the same stack regardless of cwd/path.
+PROJECT ?= pmoves
+# Supabase provider: 'cli' for Supabase CLI stack, 'compose' for docker-compose stack
+SUPA_PROVIDER ?= cli
+
+# Data services differ by provider: with CLI we don't run Postgres/PostgREST here
+ifeq ($(SUPA_PROVIDER),cli)
+DATA_SERVICES := qdrant neo4j minio meilisearch presign
+else
+DATA_SERVICES := qdrant neo4j minio meilisearch postgres postgrest presign
+endif
 up:
+
+	docker compose -p $(PROJECT) --profile data up -d $(DATA_SERVICES)
+	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
+	$(MAKE) up-yt
+	$(MAKE) up-jellyfin
+ifneq ($(SUPA_PROVIDER),cli)
+	$(MAKE) supabase-up
+endif
+
 	docker compose --profile data up -d qdrant neo4j minio meilisearch postgres postgrest presign
         docker compose --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest
 
+
 down:
-	docker compose down
+	docker compose -p $(PROJECT) down
 
 clean:
-	docker compose down -v
+	docker compose -p $(PROJECT) down -v --remove-orphans
+
+# Bring only worker services (ensures data deps are active)
+up-workers:
+	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
+
+# YouTube ingest + whisper stack
+up-yt:
+	docker compose -p $(PROJECT) --profile data --profile workers up -d ffmpeg-whisper pmoves-yt
+
+# Optional media analyzers (video+audio)
+up-media:
+	docker compose -p $(PROJECT) --profile data --profile workers up -d media-video media-audio
+
+# Jellyfin bridge only
+up-jellyfin:
+	docker compose -p $(PROJECT) up -d jellyfin-bridge
+
+# Status helper
+ps:
+	docker compose -p $(PROJECT) ps
+
+# Switch between local (CLI) and self-hosted Supabase by swapping .env.local
+.PHONY: supa-use-local supa-use-remote up-cli up-compose
+supa-use-local:
+	- pwsh -NoProfile -Command "Copy-Item -Force .env.supa.local.example .env.local"
+	- sh -c 'cp -f .env.supa.local.example .env.local 2>/dev/null || true'
+
+supa-use-remote:
+	- pwsh -NoProfile -Command "if (Test-Path .\.env.supa.remote) { Copy-Item -Force .\.env.supa.remote .\.env.local } else { Copy-Item -Force .\.env.supa.remote.example .\.env.local }"
+	- sh -c 'if [ -f .env.supa.remote ]; then cp -f .env.supa.remote .env.local; else cp -f .env.supa.remote.example .env.local; fi 2>/dev/null || true'
+
+up-cli:
+	SUPA_PROVIDER=cli $(MAKE) up
+
+up-compose:
+	SUPA_PROVIDER=compose $(MAKE) up
+
+# Start a local NATS broker and enable events in .env.local
+up-nats:
+	docker compose -p $(PROJECT) --profile agents up -d nats
+	- pwsh -NoProfile -Command "if (-not (Test-Path .\.env.local)) { New-Item -ItemType File -Path .\.env.local | Out-Null }; $c = Get-Content .\.env.local | Where-Object { $_ -notmatch '^(YT_NATS_ENABLE|NATS_URL)=' }; $c + @('YT_NATS_ENABLE=true','NATS_URL=nats://nats:4222') | Set-Content .\.env.local"
+	- sh -c 'touch .env.local; tmp=$$(mktemp); grep -v -E "^(YT_NATS_ENABLE|NATS_URL)=" .env.local > "$$tmp"; printf "YT_NATS_ENABLE=true\nNATS_URL=nats://nats:4222\n" >> "$$tmp"; mv "$$tmp" .env.local' 2>/dev/null || true
+
+# Supabase lightweight services (realtime/storage/gotrue/studio) using main Postgres (Compose mode)
+SUPA_FILE ?= docker-compose.supabase.yml
+SUPA_PROJECT ?= pmoves
+
+supabase-up:
+	docker compose -p $(PROJECT) -f docker-compose.yml -f $(SUPA_FILE) up -d gotrue realtime storage studio
+
+supabase-stop:
+	docker compose -p $(PROJECT) -f docker-compose.yml -f $(SUPA_FILE) stop gotrue realtime storage studio
+
+supabase-clean:
+	- docker volume rm $(PROJECT)_supabase-storage 2> NUL || true
+
+# Supabase CLI targets (Option A). Requires 'supabase' CLI in PATH.
+.PHONY: supa-init supa-start supa-stop supa-status
+supa-init:
+	where supabase > NUL 2>&1 || (echo Supabase CLI not found. Install via 'winget install supabase.supabase' or 'npm i -g supabase' && exit 1)
+	supabase init
+
+supa-start:
+	where supabase > NUL 2>&1 || (echo Supabase CLI not found. Install via 'winget install supabase.supabase' or 'npm i -g supabase' && exit 1)
+	supabase start
+
+supa-stop:
+	where supabase > NUL 2>&1 || (echo Supabase CLI not found. Install via 'winget install supabase.supabase' or 'npm i -g supabase' && exit 1)
+	supabase stop
+
+supa-status:
+	where supabase > NUL 2>&1 || (echo Supabase CLI not found. Install via 'winget install supabase.supabase' or 'npm i -g supabase' && exit 1)
+	supabase status
+
+supa-extract-remote:
+	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/extract_supa_md.ps1 -Source supa.md -Out .env.supa.remote
 
 .PHONY: up-legacy
 up-legacy:
-	docker compose --profile data up -d qdrant neo4j minio meilisearch presign
-	docker compose --profile workers up -d hi-rag-gateway retrieval-eval render-webhook
+	docker compose -p $(PROJECT) --profile data up -d qdrant neo4j minio meilisearch presign
+	docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway retrieval-eval render-webhook
 
 .PHONY: smoke
 smoke:

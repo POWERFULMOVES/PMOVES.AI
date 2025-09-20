@@ -33,7 +33,8 @@ MINIO_SECURE = (os.environ.get("MINIO_SECURE","false").lower() == "true")
 DEFAULT_BUCKET = os.environ.get("YT_BUCKET","assets")
 DEFAULT_NAMESPACE = os.environ.get("INDEXER_NAMESPACE","pmoves")
 SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
-NATS_URL = os.environ.get("NATS_URL","nats://nats:4222")
+NATS_URL = (os.environ.get("NATS_URL") or "").strip()
+YT_NATS_ENABLE = os.environ.get("YT_NATS_ENABLE", "false").lower() == "true"
 FFW_URL = os.environ.get("FFW_URL","http://ffmpeg-whisper:8078")
 HIRAG_URL = os.environ.get("HIRAG_URL","http://hi-rag-gateway-v2:8086")
 
@@ -71,12 +72,24 @@ def s3_client():
 
 @app.on_event("startup")
 async def startup():
+    # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
     global _nc
-    _nc = NATS()
-    try:
-        await _nc.connect(servers=[NATS_URL])
-    except Exception:
+    if not YT_NATS_ENABLE or not NATS_URL:
         _nc = None
+        return
+
+    async def _try_connect():
+        global _nc
+        nc = NATS()
+        try:
+            # Short timeout, no reconnect storm
+            await asyncio.wait_for(nc.connect(servers=[NATS_URL], allow_reconnect=False), timeout=1.0)
+            _nc = nc
+        except Exception:
+            _nc = None
+
+    # Fire and forget; errors are suppressed and won't block startup
+    asyncio.create_task(_try_connect())
 
 @app.get("/healthz")
 def healthz():

@@ -12,7 +12,8 @@ services:
       GOTRUE_JWT_EXP: 3600
       DATABASE_URL: postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}?sslmode=disable
     ports: ["9999:9999"]
-    depends_on: [postgres]
+    # Compose may be invoked standalone for Supabase; we rely on network DNS to reach 'postgres'
+    # and start order is handled by Makefile bringing data stack up first.
     networks: [pmoves]
 
   realtime:
@@ -28,7 +29,7 @@ services:
       SECRET_KEY_BASE: ${SUPABASE_REALTIME_SECRET:-dev_realtime_secret}
       JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_jwt_secret}
     ports: ["4000:4000"]
-    depends_on: [postgres]
+    # See note above; avoid hard depends_on across files.
     networks: [pmoves]
 
   storage:
@@ -46,7 +47,7 @@ services:
     volumes:
       - supabase-storage:/var/lib/storage
     ports: ["5000:5000"]
-    depends_on: [postgrest]
+    # Avoid cross-file depends_on; postgrest lives in main compose.
     networks: [pmoves]
 
   studio:
@@ -57,7 +58,7 @@ services:
       SUPABASE_URL: http://localhost:9999
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-dev_anon_key}
     ports: ["54323:3000"]
-    depends_on: [postgrest, gotrue]
+    # Avoid cross-file depends_on to prevent invalid compose project errors.
     networks: [pmoves]
 
 volumes:
