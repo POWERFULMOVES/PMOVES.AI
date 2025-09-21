@@ -22,6 +22,11 @@ This stack integrates:
 ### Installation
 
 1. **Clone/Download the configuration files**
+   - If you're running this stack without the core PMOVES services, create the shared network first:
+     ```bash
+     docker network create pmoves-net
+     ```
+     (Safe to rerun; Docker will reuse the network if it already exists.)
 2. **Run the setup script:**
    ```bash
    chmod +x setup.sh

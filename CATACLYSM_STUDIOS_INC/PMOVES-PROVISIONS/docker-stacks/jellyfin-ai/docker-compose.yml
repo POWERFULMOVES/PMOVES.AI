@@ -6,7 +6,7 @@ networks:
     driver: bridge
   supabase-network:
     external: true
-    name: supabase_default
+    name: pmoves-net
 
 services:
   # Jellyfin Media Server
