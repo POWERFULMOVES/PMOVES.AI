@@ -1,4 +1,3 @@
-
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -7,6 +6,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    libsndfile1 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
