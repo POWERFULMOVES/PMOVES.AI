@@ -2,8 +2,13 @@
 version: '3.8'
 
 networks:
+
   media-stack:
     driver: bridge
+
+  media-stack:
+    driver: bridge
+
   supabase-network:
     external: true
     name: pmoves-net
