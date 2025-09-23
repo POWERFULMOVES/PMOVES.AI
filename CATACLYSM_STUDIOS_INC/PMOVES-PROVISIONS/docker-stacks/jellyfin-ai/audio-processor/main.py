@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 
 class MediaProcessor:
     def __init__(self):
+
+        self.jellyfin_url = os.getenv("JELLYFIN_URL", "http://jellyfin:8096")
+        self.supabase_url = os.getenv("SUPABASE_URL")
+        self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+        self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "mediapassword123")
+        self.qwen_url = os.getenv("QWEN_AUDIO_URL", "http://qwen-audio:8000")
+
         self.jellyfin_url = os.getenv("JELLYFIN_URL", "http://jellyfin:8096")
         self.jellyfin_username = os.getenv("JELLYFIN_USERNAME")
         self.jellyfin_password = os.getenv("JELLYFIN_PASSWORD")
@@ -33,9 +42,11 @@ class MediaProcessor:
         self.qwen_url = os.getenv("QWEN_AUDIO_URL", "http://qwen-audio:8000")
         self._jellyfin_headers: Optional[Dict[str, str]] = None
 
+
         # Initialize clients
+        self.supabase: Optional[Client] = None
         if self.supabase_url and self.supabase_key:
-            self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+            self.supabase = create_client(self.supabase_url, self.supabase_key)
 
         self.neo4j_driver = GraphDatabase.driver(
             self.neo4j_uri,
@@ -219,6 +230,7 @@ class MediaProcessor:
         """Store data in Supabase"""
         try:
             if not self.supabase:
+                logger.info("Supabase client not configured; skipping Supabase storage.")
                 return
 
             # Store in media table
