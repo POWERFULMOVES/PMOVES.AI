@@ -9,6 +9,14 @@
 - `datasets/`, `docs/`: Sample data and documentation.
 - Root: `docker-compose.yml`, `Makefile`, `.env.example`.
 
+## Planning & Documentation Expectations
+- **Mandatory context before changes:** read `docs/ROADMAP.md` and `docs/NEXT_STEPS.md` to align with the current sprint focus (M2 — Creator & Publishing). These documents spell out the active priorities, including Jellyfin refresh polish, Discord embeds, and Supabase→Discord automation; confirm your work reinforces or explicitly updates those targets before you start coding.
+- **Maintainer cadence:** when significant features ship, priorities move between columns, or we start a new sprint, refresh both `docs/ROADMAP.md` and `docs/NEXT_STEPS.md` (and adjust their `_Last updated` timestamps) so contributors always land on the latest plan.
+- **Supporting references:**
+  - `docs/MAKE_TARGETS.md` — authoritative Make targets, smoke checks, and automation entry points.
+  - `docs/README_DOCS_INDEX.md` — high-level index of the documentation set and where to find service-specific guides.
+  - Additional operational primers live alongside services (e.g., `services/**/README.md`) and should be consulted when touching those areas.
+
 ## Build, Test, and Development Commands
 - `make up`: Starts core data services and workers (qdrant, neo4j, minio, meilisearch, hi-rag-gateway, retrieval-eval) via Docker Compose profiles.
 - `make down`: Stops all containers.
