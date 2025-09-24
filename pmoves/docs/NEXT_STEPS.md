@@ -1,19 +1,38 @@
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-24_
+_Last updated: 2025-09-25_
 
 ## Immediate
-- [x] Prepare PR and branch for feature rollup (done in this PR)
-- [x] Add/refresh ROADMAP and NEXT_STEPS (committed in this PR)
-- [x] Add SMOKETESTS.md and run local smoke tests
 
-### Setup & Validation
-- [ ] Follow the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) before enabling automation in shared environments.
-- [ ] Wire Discord webhook credentials into `.env` and validate delivery via manual webhook ping.
-- [ ] Enable n8n approval poller + echo publisher flows once secrets are present and document the activation timestamp.
-- [ ] Configure Jellyfin API key (+ optional user id) and confirm the client can list libraries from the target server. Document any optional dependency gaps surfaced during validation so we can extend the new publisher guardrails if needed.
-- [ ] (Optional) Run a PDF → MinIO ingestion dry-run once the lane lands in `main`, capturing the presign + upload log output.
+### 1. Finish the M2 Automation Loop
+- [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
+- [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
+- [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
+- [ ] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; note any dependency gaps that require new guardrails.
+- [ ] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
 
-- [ ] Validate the enriched publisher metadata in downstream consumers (Agent Zero, Discord) and backfill legacy rows if necessary.
+### 2. Jellyfin Publisher Reliability
+- [ ] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
+- [ ] Expand error/reporting hooks so failures surface with actionable messages (Jellyfin HTTP errors, dependency mismatches, asset gaps).
+- [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields.
+
+### 3. Graph & Retrieval Enhancements (Kickoff M3)
+- [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations.
+- [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
+- [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI.
+
+### 4. PMOVES.YT High-Priority Lane
+- [ ] Design and document the resilient download module (resume, retries, rate limiting, playlist/channel ingestion, bounded worker pool).
+- [ ] Specify multipart upload + checksum verification approach for MinIO, including lifecycle/retention tag configuration.
+- [ ] Enumerate metadata enrichment requirements (duration, channel, tags, provenance) and map them to Supabase schema updates.
+- [ ] Draft the faster-whisper GPU migration plan (language auto-detect, diarization flags, partial transcript updates).
+- [ ] Document Gemma integration paths: Ollama (`gemma2:9b-instruct`) and HF Transformers (`google/gemma-2-9b-it`), including feature toggles and embedding backstops.
+- [ ] Define API hardening, observability, and security tasks (validation, OpenAPI, health/readiness probes, metrics, signed URL enforcement, optional content filters).
+
+### 5. Platform Operations & Tooling
+- [ ] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
+- [ ] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits.
+- [ ] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests.
+- [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
 
 ## n8n Flow Operations
 - **Importing**
@@ -33,48 +52,50 @@ _Last updated: 2025-09-24_
   4. POST a `content.published.v1` envelope to the webhook (`/webhook/pmoves/content-published`) and confirm Discord receives an embed (title, path, artifact, optional thumbnail).
   5. Deactivate flows after testing or leave active with schedules confirmed.
 
-## Short-term (September)
-- [ ] Publisher: Jellyfin library refresh (cron/webhook) — not implemented yet
-- [ ] Discord: rich embeds (cover art, duration, links) — not implemented yet
-- [x] ComfyUI ↔ MinIO presign endpoint — implemented (services/presign); example notebook still pending
-- [~] Hi‑RAG: reranker toggle (bge‑rerank‑base) + eval sweep — toggle + eval scripts done; labeled sweeps/CI pending
-- [x] Publisher: namespace-aware filenames, dependency guardrails, and enriched metadata/logging — landed in publisher worker
-- [ ] Neo4j: seed brand alias dictionary (DARKXSIDE, POWERFULMOVES) — pending
-- [ ] Windows/WSL polish: add scripts/smoke.ps1 and helper commands — pending
-- [ ] (Optional) Expand Discord embeds with follow-up actions (approve/reject) using button components.
+## Backlog Snapshot
+
+### Jellyfin & Discord Polish
+- [ ] Jellyfin library refresh automation (cron/webhook).
+- [ ] Discord rich embeds (cover art, duration, deep links) wired to `content.published.v1`.
+- [ ] (Optional) Discord follow-up buttons (approve/reject) for moderation workflows.
+
+### Retrieval & Graph
+- [~] Hi‑RAG reranker toggle (bge‑rerank‑base) + eval sweep — toggle + eval scripts done; labeled sweeps/CI pending.
+- [ ] Neo4j alias seeding and enrichment pipelines.
+
+### Tooling & Docs
+- [x] ComfyUI ↔ MinIO presign endpoint — implemented; example notebook pending.
+- [ ] Windows/WSL polish: smoke script + helper commands.
 - [ ] (Optional) Draft ComfyUI ↔ MinIO presign notebook walk-through for inclusion in `docs/`.
 
-## PMOVES.YT Enhancements (High Priority)
+### PMOVES.YT Enhancements (Detailed)
 - [ ] Robust downloads: resume support, retry with exponential backoff, per-domain rate limiting, playlist/channel ingestion, and concurrent worker pool with bounded memory.
 - [ ] Storage: multipart uploads to MinIO for large files; checksum verification; lifecycle and retention tags.
 - [ ] Metadata: enrich `videos` with duration, channel, tags; track ingest provenance and versioning in `meta`.
 - [ ] Transcripts: switch `ffmpeg-whisper` to `faster-whisper` GPU path; language auto-detect and diarization flags; partial updates for long videos.
 - [ ] Events/NATS: standardize `ingest.*` topics and dead-letter queue; idempotent handlers using `s3_base_prefix`.
-- [ ] Gemma integration (summaries):
-  - Option A (Ollama): call `gemma2:9b-instruct` to generate chapter/short/long summaries and thumbnails text; store under `studio_board.meta.gemma`.
-  - Option B (HF Transformers): run `google/gemma-2-9b-it` when GPU available, gated by env `YT_GEMMA_ENABLE`.
-  - Embeddings: use `google/embeddinggemma-300M` for transcript segments; fall back to MiniLM when disabled.
-- [ ] API hardening: request validation, structured errors, OpenAPI docs, health and readiness probes.
+- [ ] Gemma integration (summaries) with Ollama/HF options and embedding fallbacks.
+- [ ] API hardening: request validation, structured errors, OpenAPI docs, health/readiness probes.
 - [ ] Observability: structured logs, Prometheus metrics (download time, upload time, transcript latency), and S3 object sizes.
 - [ ] Security: signed URLs only; optional content filters; domain allowlist.
 
 ## Later
-- [ ] Office docs conversion lane (libreoffice headless → PDF)
-- [ ] OCR: image ingestion with text extraction + tagging
-- [ ] CI: retrieval‑eval in GH Actions with artifacts
-- [ ] Proxmox templates and cluster notes
+- [ ] Office docs conversion lane (LibreOffice headless → PDF).
+- [ ] OCR: image ingestion with text extraction + tagging.
+- [ ] CI: retrieval‑eval in GitHub Actions with artifacts.
+- [ ] Proxmox templates and cluster notes.
 - [ ] (Optional) Infrastructure-as-code starter kit for hybrid GPU + Jetson deployments.
 
 ## Next Session Focus
-- [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1`
-- [ ] media-audio: insert `emotions` into Supabase and emit `analysis.audio.v1`
-- [ ] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop)
-- [ ] CLIP embeddings on keyframes (optional; desktop on by default, Jetson off)
-- [ ] n8n flows: end-to-end ingest → transcribe → extract → index → notify
-- [ ] Jellyfin refresh hook + Discord rich embeds (cover art, duration, link)
-- [ ] Supabase RLS hardening pass (non-dev)
-- [ ] Qwen2-Audio provider (desktop-only toggle) for advanced audio QA/summarization
- - [ ] PMOVES.YT: wire Gemma summaries (Ollama by default), add `/yt/summarize` and `/yt/chapters` endpoints; add smoke target `make yt-smoke URL=...`
+- [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1`.
+- [ ] media-audio: insert `emotions` into Supabase and emit `analysis.audio.v1`.
+- [ ] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop).
+- [ ] CLIP embeddings on keyframes (optional; desktop on by default, Jetson off).
+- [ ] n8n flows: end-to-end ingest → transcribe → extract → index → notify.
+- [ ] Jellyfin refresh hook + Discord rich embeds (cover art, duration, link).
+- [ ] Supabase RLS hardening pass (non-dev).
+- [ ] Qwen2-Audio provider (desktop-only toggle) for advanced audio QA/summarization.
+- [ ] PMOVES.YT: wire Gemma summaries (Ollama by default), add `/yt/summarize` and `/yt/chapters` endpoints; add smoke target `make yt-smoke URL=...`.
 
 ---
 
