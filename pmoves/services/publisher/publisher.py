@@ -99,12 +99,33 @@ def slugify(value: Optional[str]) -> str:
     return replaced or "item"
 
 
+def _normalize_extension(ext: Optional[str]) -> str:
+    if not ext:
+        return ""
+    return ext if ext.startswith(".") else f".{ext}"
+
+
+def _build_namespace_filename(namespace_slug: str, slug: str, extension: str) -> str:
+    slug_part = slug
+    if slug_part == namespace_slug:
+        return f"{namespace_slug}{extension}"
+    if slug_part.startswith(f"{namespace_slug}-") or slug_part.startswith(f"{namespace_slug}--"):
+        slug_part = slug_part[len(namespace_slug) + 1 :]
+        if slug_part.startswith("-"):
+            slug_part = slug_part[1:]
+        slug_part = slug_part or namespace_slug
+    filename_slug = f"{namespace_slug}--{slug_part}" if slug_part else namespace_slug
+    return f"{filename_slug}{extension}"
+
+
 def derive_output_path(base: str, namespace: Optional[str], slug: str, ext: str) -> str:
     namespace_slug = slugify(namespace or "default")
+    slug_value = slugify(slug)
     directory = os.path.join(base, namespace_slug)
     ensure_path(directory)
-    extension = ext if ext.startswith(".") else f".{ext}" if ext else ""
-    return os.path.join(directory, f"{slug}{extension}")
+    extension = _normalize_extension(ext)
+    filename = _build_namespace_filename(namespace_slug, slug_value, extension)
+    return os.path.join(directory, filename)
 
 
 def merge_metadata(
@@ -112,6 +133,11 @@ def merge_metadata(
     description: Optional[str],
     tags: Optional[Any],
     incoming_meta: Optional[Dict[str, Any]],
+    *,
+    slug: str,
+    namespace_slug: str,
+    filename: str,
+    extension: str,
 ) -> Dict[str, Any]:
     meta: Dict[str, Any] = dict(incoming_meta or {})
     meta.setdefault("title", title)
@@ -119,6 +145,10 @@ def merge_metadata(
         meta["description"] = description
     if tags:
         meta["tags"] = list(tags)
+    meta.setdefault("slug", slug)
+    meta.setdefault("namespace_slug", namespace_slug)
+    meta["filename"] = filename
+    meta["extension"] = extension.lstrip(".") if extension else ""
     return meta
 
 
@@ -133,12 +163,25 @@ def build_published_payload(
     incoming_meta: Optional[Dict[str, Any]],
     public_url: Optional[str],
     jellyfin_item_id: Optional[str],
+    slug: str,
+    namespace_slug: str,
+    filename: str,
+    extension: str,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "artifact_uri": artifact_uri,
         "published_path": published_path,
         "namespace": namespace,
-        "meta": merge_metadata(title, description, tags, incoming_meta),
+        "meta": merge_metadata(
+            title,
+            description,
+            tags,
+            incoming_meta,
+            slug=slug,
+            namespace_slug=namespace_slug,
+            filename=filename,
+            extension=extension,
+        ),
     }
     if public_url:
         payload["public_url"] = public_url
@@ -254,7 +297,10 @@ async def main() -> None:
         name = (key or "").split("/")[-1]
         ext = "." + name.split(".")[-1] if "." in name else ".png"
         slug = slugify(payload.get("slug") or title)
+        namespace_slug = slugify(namespace or "default")
         out_path = derive_output_path(MEDIA_LIBRARY_PATH, namespace, slug, ext)
+        filename = os.path.basename(out_path)
+        extension = os.path.splitext(filename)[1]
 
         try:
             await download_with_retries(s3, bucket, key, out_path)
@@ -287,6 +333,10 @@ async def main() -> None:
             incoming_meta=payload.get("meta"),
             public_url=public_url or _derive_public_url(out_path),
             jellyfin_item_id=jellyfin_item_id,
+            slug=slug,
+            namespace_slug=namespace_slug,
+            filename=filename,
+            extension=extension,
         )
 
         evt = envelope(
@@ -302,7 +352,12 @@ async def main() -> None:
             extra={
                 "artifact_uri": artifact_uri,
                 "published_path": out_path,
+                "published_filename": filename,
                 "namespace": namespace,
+                "namespace_slug": namespace_slug,
+                "event_id": env.get("id"),
+                "correlation_id": env.get("correlation_id"),
+                "public_url": published_payload.get("public_url"),
                 "metrics": asdict(METRICS),
             },
         )

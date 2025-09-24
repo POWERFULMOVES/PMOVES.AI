@@ -17,7 +17,7 @@ def test_slugify_and_output_path(tmp_path):
     out_path = publisher.derive_output_path(str(base), "Creative Works", slug, ".png")
     expected_dir = base / "creative-works"
     assert Path(out_path).parent == expected_dir
-    assert Path(out_path).name == "summer-gala-2024.png"
+    assert Path(out_path).name == "creative-works--summer-gala-2024.png"
     assert expected_dir.exists()
 
 
@@ -32,6 +32,10 @@ def test_build_published_payload_merges_metadata():
         incoming_meta={"title": "Custom Title", "camera": "FX3"},
         public_url="http://media.local/creative-works/summer-gala-2024.png",
         jellyfin_item_id="abc123",
+        slug="summer-gala-2024",
+        namespace_slug="creative-works",
+        filename="creative-works--summer-gala-2024.png",
+        extension=".png",
     )
 
     assert payload["artifact_uri"] == "s3://bucket/key"
@@ -45,3 +49,25 @@ def test_build_published_payload_merges_metadata():
     assert meta["description"] == "A highlight reel"
     assert meta["tags"] == ["events", "summer"]
     assert meta["camera"] == "FX3"
+    assert meta["slug"] == "summer-gala-2024"
+    assert meta["namespace_slug"] == "creative-works"
+    assert meta["filename"] == "creative-works--summer-gala-2024.png"
+    assert meta["extension"] == "png"
+
+
+def test_merge_metadata_preserves_existing_slug_and_namespace():
+    meta = publisher.merge_metadata(
+        "Test",
+        None,
+        None,
+        {"slug": "custom", "namespace_slug": "custom-ns"},
+        slug="generated",
+        namespace_slug="generated-ns",
+        filename="generated-ns--generated.png",
+        extension=".png",
+    )
+
+    assert meta["slug"] == "custom"
+    assert meta["namespace_slug"] == "custom-ns"
+    assert meta["filename"] == "generated-ns--generated.png"
+    assert meta["extension"] == "png"
