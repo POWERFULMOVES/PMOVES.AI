@@ -56,6 +56,12 @@ class MediaProcessor:
         self.neo4j_password = os.getenv("NEO4J_PASSWORD", "mediapassword123")
         self.qwen_url = os.getenv("QWEN_AUDIO_URL", "http://qwen-audio:8000")
 
+
+        # Initialize clients
+        self.supabase: Optional[Client] = None
+        if self.supabase_url and self.supabase_key:
+            self.supabase = create_client(self.supabase_url, self.supabase_key)
+
         self.jellyfin_url = os.getenv("JELLYFIN_URL", "http://jellyfin:8096")
         self.jellyfin_username = os.getenv("JELLYFIN_USERNAME")
         self.jellyfin_password = os.getenv("JELLYFIN_PASSWORD")
@@ -73,6 +79,7 @@ class MediaProcessor:
         self.supabase: Optional[Client] = None
         if self.supabase_url and self.supabase_key:
             self.supabase = create_client(self.supabase_url, self.supabase_key)
+
 
         self.neo4j_driver = GraphDatabase.driver(
             self.neo4j_uri,
