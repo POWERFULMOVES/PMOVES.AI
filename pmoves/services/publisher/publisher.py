@@ -6,14 +6,58 @@ import pathlib
 import re
 import unicodedata
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
-import requests
-from minio import Minio
-from nats.aio.client import Client as NATS
 from urllib.parse import urljoin
 
-from services.common.events import envelope
+try:  # pragma: no cover - optional dependency for runtime environments
+    import requests
+except ImportError:  # pragma: no cover - exercised in tests when requests missing
+    requests = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency for runtime environments
+    from minio import Minio as _MinioClient
+except ImportError:  # pragma: no cover - exercised in tests when minio missing
+    _MinioClient = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency for runtime environments
+    from nats.aio.client import Client as _NATSClient
+except ImportError:  # pragma: no cover - exercised in tests when nats missing
+    _NATSClient = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:  # pragma: no cover - typing helpers
+    from minio import Minio as MinioClientType
+    from nats.aio.client import Client as NATSClientType
+else:  # pragma: no cover - typing fallback for runtime when deps absent
+    MinioClientType = Any  # type: ignore[misc,assignment]
+    NATSClientType = Any  # type: ignore[misc,assignment]
+
+try:  # pragma: no cover - optional shared helper
+    from services.common.events import envelope
+except Exception:  # pragma: no cover - fallback used in tests without dependency
+    import datetime
+    import uuid
+
+    def envelope(
+        topic: str,
+        payload: Dict[str, Any],
+        parent_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        source: str = "publisher",
+    ) -> Dict[str, Any]:
+        env: Dict[str, Any] = {
+            "id": str(uuid.uuid4()),
+            "topic": topic,
+            "version": "v1",
+            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "source": source,
+            "payload": payload,
+        }
+        if parent_id:
+            env["parent_id"] = parent_id
+        if correlation_id:
+            env["correlation_id"] = correlation_id
+        return env
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
@@ -190,7 +234,7 @@ def build_published_payload(
     return payload
 
 
-async def download_with_retries(minio: Minio, bucket: str, key: str, dest: str) -> None:
+async def download_with_retries(minio: MinioClientType, bucket: str, key: str, dest: str) -> None:
     last_error: Optional[Exception] = None
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
         try:
@@ -211,6 +255,9 @@ async def download_with_retries(minio: Minio, bucket: str, key: str, dest: str) 
 
 
 def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str]]:
+    if requests is None:
+        logger.debug("requests dependency missing; skipping Jellyfin lookup")
+        return None, None
     if not (JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID):
         return None, None
     try:
@@ -254,6 +301,13 @@ def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str]]:
 def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optional[str]]:
     if not (JELLYFIN_URL and JELLYFIN_API_KEY):
         return None, None
+    if requests is None:
+        METRICS.record_refresh_failure()
+        logger.warning(
+            "Requests dependency missing; cannot refresh Jellyfin",
+            extra={"namespace": namespace, "title": title},
+        )
+        raise JellyfinRefreshError("requests dependency is not installed")
 
     METRICS.record_refresh_attempt()
     headers = {"X-Emby-Token": JELLYFIN_API_KEY}
@@ -272,9 +326,13 @@ def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optiona
 
 async def main() -> None:
     _configure_logging()
-    nc = NATS()
+    if _NATSClient is None:
+        raise RuntimeError("nats-py client is required to run the publisher service")
+    nc: NATSClientType = _NATSClient()
     await nc.connect(servers=[NATS_URL])
-    s3 = Minio(
+    if _MinioClient is None:
+        raise RuntimeError("minio client is required to run the publisher service")
+    s3: MinioClientType = _MinioClient(
         MINIO_ENDPOINT,
         access_key=MINIO_ACCESS_KEY,
         secret_key=MINIO_SECRET_KEY,

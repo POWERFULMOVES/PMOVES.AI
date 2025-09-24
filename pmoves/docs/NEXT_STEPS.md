@@ -1,5 +1,5 @@
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-20_
+_Last updated: 2025-09-24_
 
 ## Immediate
 - [x] Prepare PR and branch for feature rollup (done in this PR)
@@ -10,7 +10,7 @@ _Last updated: 2025-09-20_
 - [ ] Follow the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) before enabling automation in shared environments.
 - [ ] Wire Discord webhook credentials into `.env` and validate delivery via manual webhook ping.
 - [ ] Enable n8n approval poller + echo publisher flows once secrets are present and document the activation timestamp.
-- [ ] Configure Jellyfin API key (+ optional user id) and confirm the client can list libraries from the target server.
+- [ ] Configure Jellyfin API key (+ optional user id) and confirm the client can list libraries from the target server. Document any optional dependency gaps surfaced during validation so we can extend the new publisher guardrails if needed.
 - [ ] (Optional) Run a PDF → MinIO ingestion dry-run once the lane lands in `main`, capturing the presign + upload log output.
 
 - [ ] Validate the enriched publisher metadata in downstream consumers (Agent Zero, Discord) and backfill legacy rows if necessary.
@@ -38,7 +38,7 @@ _Last updated: 2025-09-20_
 - [ ] Discord: rich embeds (cover art, duration, links) — not implemented yet
 - [x] ComfyUI ↔ MinIO presign endpoint — implemented (services/presign); example notebook still pending
 - [~] Hi‑RAG: reranker toggle (bge‑rerank‑base) + eval sweep — toggle + eval scripts done; labeled sweeps/CI pending
-- [x] Publisher: namespace-aware filenames + enriched metadata/logging — landed in publisher worker
+- [x] Publisher: namespace-aware filenames, dependency guardrails, and enriched metadata/logging — landed in publisher worker
 - [ ] Neo4j: seed brand alias dictionary (DARKXSIDE, POWERFULMOVES) — pending
 - [ ] Windows/WSL polish: add scripts/smoke.ps1 and helper commands — pending
 - [ ] (Optional) Expand Discord embeds with follow-up actions (approve/reject) using button components.
