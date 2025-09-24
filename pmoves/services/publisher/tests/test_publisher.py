@@ -1,5 +1,7 @@
+import asyncio
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[4]
 PMOVES_ROOT = Path(__file__).resolve().parents[3]
@@ -71,3 +73,46 @@ def test_merge_metadata_preserves_existing_slug_and_namespace():
     assert meta["namespace_slug"] == "custom-ns"
     assert meta["filename"] == "generated-ns--generated.png"
     assert meta["extension"] == "png"
+
+
+def test_request_jellyfin_refresh_webhook(monkeypatch):
+    attempts_before = publisher.METRICS.refresh_attempts
+    success_before = publisher.METRICS.refresh_success
+    failures_before = publisher.METRICS.refresh_failures
+
+    class DummyResponse:
+        status_code = 204
+
+        def raise_for_status(self) -> None:
+            return None
+
+    recorded = {}
+
+    def fake_post(url, json, headers=None, timeout=None):
+        recorded["url"] = url
+        recorded["json"] = json
+        recorded["headers"] = headers
+        recorded["timeout"] = timeout
+        return DummyResponse()
+
+    try:
+        monkeypatch.setattr(publisher, "requests", SimpleNamespace(post=fake_post))
+        monkeypatch.setattr(publisher, "_lookup_jellyfin_item", lambda _title: ("http://public/item", "item-123"))
+        monkeypatch.setattr(publisher, "JELLYFIN_REFRESH_WEBHOOK_URL", "http://hook.local/refresh")
+        monkeypatch.setattr(publisher, "JELLYFIN_REFRESH_WEBHOOK_TOKEN", "secret-token")
+        monkeypatch.setattr(publisher, "JELLYFIN_REFRESH_DELAY_SEC", 0)
+
+        url, item_id = asyncio.run(publisher.request_jellyfin_refresh("Sample", "pmoves"))
+        assert url == "http://public/item"
+        assert item_id == "item-123"
+        assert recorded["url"] == "http://hook.local/refresh"
+        assert recorded["json"] == {"title": "Sample", "namespace": "pmoves"}
+        assert recorded["headers"] == {"Authorization": "Bearer secret-token"}
+        assert recorded["timeout"] == 10
+        assert publisher.METRICS.refresh_attempts == attempts_before + 1
+        assert publisher.METRICS.refresh_success == success_before + 1
+        assert publisher.METRICS.refresh_failures == failures_before
+    finally:
+        publisher.METRICS.refresh_attempts = attempts_before
+        publisher.METRICS.refresh_success = success_before
+        publisher.METRICS.refresh_failures = failures_before

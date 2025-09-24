@@ -1,5 +1,5 @@
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-25_
+_Last updated: 2025-09-27_
 
 ## Immediate
 
@@ -11,7 +11,7 @@ _Last updated: 2025-09-25_
 - [ ] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
 
 ### 2. Jellyfin Publisher Reliability
-- [ ] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
+- [x] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
 - [ ] Expand error/reporting hooks so failures surface with actionable messages (Jellyfin HTTP errors, dependency mismatches, asset gaps).
 - [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields.
 
@@ -29,7 +29,7 @@ _Last updated: 2025-09-25_
 - [ ] Define API hardening, observability, and security tasks (validation, OpenAPI, health/readiness probes, metrics, signed URL enforcement, optional content filters).
 
 ### 5. Platform Operations & Tooling
-- [ ] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
+- [x] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
 - [ ] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits.
 - [ ] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests.
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
@@ -55,7 +55,7 @@ _Last updated: 2025-09-25_
 ## Backlog Snapshot
 
 ### Jellyfin & Discord Polish
-- [ ] Jellyfin library refresh automation (cron/webhook).
+- [x] Jellyfin library refresh automation (cron/webhook).
 - [ ] Discord rich embeds (cover art, duration, deep links) wired to `content.published.v1`.
 - [ ] (Optional) Discord follow-up buttons (approve/reject) for moderation workflows.
 

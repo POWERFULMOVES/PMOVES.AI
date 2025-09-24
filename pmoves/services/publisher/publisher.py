@@ -68,6 +68,9 @@ JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "http://jellyfin:8096")
 JELLYFIN_API_KEY = os.environ.get("JELLYFIN_API_KEY")
 JELLYFIN_USER_ID = os.environ.get("JELLYFIN_USER_ID")
 JELLYFIN_PUBLIC_BASE_URL = os.environ.get("JELLYFIN_PUBLIC_BASE_URL", JELLYFIN_URL)
+JELLYFIN_REFRESH_WEBHOOK_URL = os.environ.get("JELLYFIN_REFRESH_WEBHOOK_URL")
+JELLYFIN_REFRESH_WEBHOOK_TOKEN = os.environ.get("JELLYFIN_REFRESH_WEBHOOK_TOKEN")
+JELLYFIN_REFRESH_DELAY_SEC = float(os.environ.get("JELLYFIN_REFRESH_DELAY_SEC", "0"))
 MEDIA_LIBRARY_PATH = os.environ.get("MEDIA_LIBRARY_PATH", "/library/images")
 MEDIA_LIBRARY_PUBLIC_BASE_URL = os.environ.get("MEDIA_LIBRARY_PUBLIC_BASE_URL")
 DOWNLOAD_RETRIES = int(os.environ.get("PUBLISHER_DOWNLOAD_RETRIES", "3"))
@@ -324,6 +327,44 @@ def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optiona
     return public_url, item_id
 
 
+async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optional[str]]:
+    if JELLYFIN_REFRESH_DELAY_SEC > 0:
+        await asyncio.sleep(JELLYFIN_REFRESH_DELAY_SEC)
+
+    if JELLYFIN_REFRESH_WEBHOOK_URL:
+        if requests is None:
+            METRICS.record_refresh_failure()
+            logger.warning(
+                "Requests dependency missing; cannot invoke Jellyfin refresh webhook",
+                extra={"namespace": namespace, "title": title},
+            )
+            raise JellyfinRefreshError("requests dependency is not installed")
+
+        METRICS.record_refresh_attempt()
+        headers = {"Authorization": f"Bearer {JELLYFIN_REFRESH_WEBHOOK_TOKEN}"} if JELLYFIN_REFRESH_WEBHOOK_TOKEN else None
+        try:
+            response = requests.post(
+                JELLYFIN_REFRESH_WEBHOOK_URL,
+                json={"title": title, "namespace": namespace},
+                headers=headers,
+                timeout=10,
+            )
+            response.raise_for_status()
+            METRICS.record_refresh_success()
+        except Exception as exc:  # pragma: no cover - network failures
+            METRICS.record_refresh_failure()
+            logger.warning(
+                "Jellyfin refresh webhook failed",
+                exc_info=exc,
+                extra={"namespace": namespace, "title": title, "webhook": JELLYFIN_REFRESH_WEBHOOK_URL},
+            )
+            raise JellyfinRefreshError("Webhook refresh failed") from exc
+
+        return _lookup_jellyfin_item(title)
+
+    return await asyncio.to_thread(jellyfin_refresh, title, namespace)
+
+
 async def main() -> None:
     _configure_logging()
     if _NATSClient is None:
@@ -373,7 +414,7 @@ async def main() -> None:
         public_url: Optional[str] = None
         jellyfin_item_id: Optional[str] = None
         try:
-            public_url, jellyfin_item_id = jellyfin_refresh(title, namespace)
+            public_url, jellyfin_item_id = await request_jellyfin_refresh(title, namespace)
         except JellyfinRefreshError as exc:
             logger.warning(
                 "Jellyfin refresh error",

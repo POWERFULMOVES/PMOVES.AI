@@ -82,6 +82,31 @@ OpenAI-compatible presets:
   - Full mode adds a Docker services panel (state/health) when compose is up
   - Extra themes: `--theme neon` (blue/purple neon), `--theme galaxy` (deep space blue/purple), `--theme cb` (colorblind-safe)
 
+### Windows/WSL smoke script
+
+- Purpose: fast confidence check for local Docker stacks without requiring GNU Make.
+- Location: `scripts/smoke.ps1`.
+- Prerequisites:
+  - Docker Desktop (or WSL2 backend) with the PMOVES stack running (`make up` or `./scripts/pmoves.ps1 up`).
+  - PostgREST + presign + render-webhook endpoints exposed to `localhost` (default compose config).
+- Run it from an elevated PowerShell or WSL session:
+  - Windows PowerShell 7+: `pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke.ps1`
+  - WSL (pwsh installed): `pwsh -NoLogo -File ./scripts/smoke.ps1`
+- Optional parameters:
+  - `-TimeoutSec <int>`: per-check deadline (default `60`). Increase to give containers more time on cold boots.
+  - `-RetryDelayMs <int>`: delay between retries (default `1000`).
+- What it validates (in order):
+  1. Qdrant readiness probe.
+  2. Meilisearch health (warning-only).
+  3. Neo4j browser availability (warning-only).
+  4. Presign service `/healthz`.
+  5. Render-webhook `/healthz`.
+  6. PostgREST root endpoint.
+  7. Authenticated render-webhook insert (uses `RENDER_WEBHOOK_SHARED_SECRET` or `change_me`).
+  8. `studio_board` latest row returned via PostgREST.
+  9. Hi-RAG v2 query returns hits.
+- Successful runs exit with code `0` and print `Smoke tests passed.` Any failure stops the script and surfaces the failing check.
+
 ## Health Checks
 
 - Presign: `curl http://localhost:8088/healthz`
