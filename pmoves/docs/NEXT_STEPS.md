@@ -1,13 +1,16 @@
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-07_
+_Last updated: 2025-09-09_
 
 ## Immediate
 - [x] Prepare PR and branch for feature rollup (done in this PR)
 - [x] Add/refresh ROADMAP and NEXT_STEPS (committed in this PR)
 - [x] Add SMOKETESTS.md and run local smoke tests
-- [ ] Set Discord webhook in `.env` and activate n8n flows (pending: env + flow wiring)
-- [ ] Configure Jellyfin API key (+ optional user id) (pending: local instance)
-- [ ] Test PDF + MinIO ingestion with a sample object (pending: PDF lane is not yet implemented in this repo)
+
+### Setup & Validation
+- [ ] Wire Discord webhook credentials into `.env` and validate delivery via manual webhook ping.
+- [ ] Enable n8n approval poller + echo publisher flows once secrets are present and document the activation timestamp.
+- [ ] Configure Jellyfin API key (+ optional user id) and confirm the client can list libraries from the target server.
+- [ ] (Optional) Run a PDF → MinIO ingestion dry-run once the lane lands in `main`, capturing the presign + upload log output.
 
 ## n8n Flow Operations
 - **Importing**
@@ -34,6 +37,8 @@ _Last updated: 2025-09-07_
 - [~] Hi‑RAG: reranker toggle (bge‑rerank‑base) + eval sweep — toggle + eval scripts done; labeled sweeps/CI pending
 - [ ] Neo4j: seed brand alias dictionary (DARKXSIDE, POWERFULMOVES) — pending
 - [ ] Windows/WSL polish: add scripts/smoke.ps1 and helper commands — pending
+- [ ] (Optional) Expand Discord embeds with follow-up actions (approve/reject) using button components.
+- [ ] (Optional) Draft ComfyUI ↔ MinIO presign notebook walk-through for inclusion in `docs/`.
 
 ## PMOVES.YT Enhancements (High Priority)
 - [ ] Robust downloads: resume support, retry with exponential backoff, per-domain rate limiting, playlist/channel ingestion, and concurrent worker pool with bounded memory.
@@ -54,6 +59,7 @@ _Last updated: 2025-09-07_
 - [ ] OCR: image ingestion with text extraction + tagging
 - [ ] CI: retrieval‑eval in GH Actions with artifacts
 - [ ] Proxmox templates and cluster notes
+- [ ] (Optional) Infrastructure-as-code starter kit for hybrid GPU + Jetson deployments.
 
 ## Next Session Focus
 - [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1`
