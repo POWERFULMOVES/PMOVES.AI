@@ -114,6 +114,7 @@ services:
       context: ./audio-processor
       dockerfile: Dockerfile
     container_name: audio-processor
+
     environment:
       - JELLYFIN_URL=http://jellyfin:8096
       - JELLYFIN_USERNAME=${JELLYFIN_USERNAME}
@@ -122,6 +123,16 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - NEO4J_URI=bolt://neo4j:7687
+
+    environment:
+      - JELLYFIN_URL=http://jellyfin:8096
+      - JELLYFIN_USERNAME=${JELLYFIN_USERNAME}
+      - JELLYFIN_PASSWORD=${JELLYFIN_PASSWORD}
+      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEO4J_URI=bolt://neo4j:7687
+
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=mediapassword123
       - QWEN_AUDIO_URL=http://qwen-audio:8000
