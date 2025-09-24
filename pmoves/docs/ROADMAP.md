@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-09-18_
+_Last updated: 2025-09-19_
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -27,6 +27,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - finalize the publisher metadata/envelope polish (namespace-aware filenames, richer logging)
 - add published-event Discord embeds via `content.published.v1`
 - build the Supabase→Discord automation inside the n8n exports
+- execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log the validation timestamp
 
 ### M3 — Retrieval Quality & Graph Enrichment
 - Entity linking dictionaries (DARKXSIDE / POWERFULMOVES aliases)

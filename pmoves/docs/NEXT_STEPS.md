@@ -1,5 +1,5 @@
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-09_
+_Last updated: 2025-09-19_
 
 ## Immediate
 - [x] Prepare PR and branch for feature rollup (done in this PR)
@@ -7,6 +7,7 @@ _Last updated: 2025-09-09_
 - [x] Add SMOKETESTS.md and run local smoke tests
 
 ### Setup & Validation
+- [ ] Follow the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) before enabling automation in shared environments.
 - [ ] Wire Discord webhook credentials into `.env` and validate delivery via manual webhook ping.
 - [ ] Enable n8n approval poller + echo publisher flows once secrets are present and document the activation timestamp.
 - [ ] Configure Jellyfin API key (+ optional user id) and confirm the client can list libraries from the target server.
