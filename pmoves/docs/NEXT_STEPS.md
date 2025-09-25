@@ -1,5 +1,5 @@
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-27_
+_Last updated: 2025-09-30_
 
 ## Immediate
 
@@ -9,6 +9,7 @@ _Last updated: 2025-09-27_
 - [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
 - [ ] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; note any dependency gaps that require new guardrails.
 - [ ] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
+- [ ] Record step-by-step evidence in `SESSION_IMPLEMENTATION_PLAN.md` while executing the operational reminders list.
 
 ### 2. Jellyfin Publisher Reliability
 - [x] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
@@ -16,22 +17,22 @@ _Last updated: 2025-09-27_
 - [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields.
 
 ### 3. Graph & Retrieval Enhancements (Kickoff M3)
-- [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations.
+- [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
-- [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI.
+- [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI, aligning with the prep checklist captured in `SESSION_IMPLEMENTATION_PLAN.md`.
 
 ### 4. PMOVES.YT High-Priority Lane
 - [ ] Design and document the resilient download module (resume, retries, rate limiting, playlist/channel ingestion, bounded worker pool).
 - [ ] Specify multipart upload + checksum verification approach for MinIO, including lifecycle/retention tag configuration.
 - [ ] Enumerate metadata enrichment requirements (duration, channel, tags, provenance) and map them to Supabase schema updates.
-- [ ] Draft the faster-whisper GPU migration plan (language auto-detect, diarization flags, partial transcript updates).
+- [ ] Draft the faster-whisper GPU migration plan (language auto-detect, diarization flags, partial transcript updates) and confirm smoke expectations defined in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] Document Gemma integration paths: Ollama (`gemma2:9b-instruct`) and HF Transformers (`google/gemma-2-9b-it`), including feature toggles and embedding backstops.
 - [ ] Define API hardening, observability, and security tasks (validation, OpenAPI, health/readiness probes, metrics, signed URL enforcement, optional content filters).
 
 ### 5. Platform Operations & Tooling
 - [x] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
 - [ ] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits.
-- [ ] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests.
+- [ ] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (initial research threads logged in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
 
 ## n8n Flow Operations
@@ -87,12 +88,12 @@ _Last updated: 2025-09-27_
 - [ ] (Optional) Infrastructure-as-code starter kit for hybrid GPU + Jetson deployments.
 
 ## Next Session Focus
-- [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1`.
+- [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1` — reference activation notes in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] media-audio: insert `emotions` into Supabase and emit `analysis.audio.v1`.
-- [ ] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop).
+- [ ] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop); confirm GPU smoke path documented in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] CLIP embeddings on keyframes (optional; desktop on by default, Jetson off).
 - [ ] n8n flows: end-to-end ingest → transcribe → extract → index → notify.
-- [ ] Jellyfin refresh hook + Discord rich embeds (cover art, duration, link).
+- [ ] Jellyfin refresh hook + Discord rich embeds (cover art, duration, link) with validation evidence logged in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] Supabase RLS hardening pass (non-dev).
 - [ ] Qwen2-Audio provider (desktop-only toggle) for advanced audio QA/summarization.
 - [ ] PMOVES.YT: wire Gemma summaries (Ollama by default), add `/yt/summarize` and `/yt/chapters` endpoints; add smoke target `make yt-smoke URL=...`.
