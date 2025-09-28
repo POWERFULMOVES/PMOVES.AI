@@ -18,6 +18,22 @@ This bundle lets you mass-deploy your homelab and workstations **in parallel** w
 5. **Jetson**: Flash JetPack as usual. Then run `jetson/jetson-postinstall.sh` on first boot. Use `jetson/ngc_login.sh` to authenticate to NGC, and `jetson/pull_and_save.sh` to pre-pull/save containers.
 6. **Stacks**: On your main host/VM, `docker compose -f docker-stacks/portainer.yml up -d`, then deploy the rest from Portainer.
 
+## Regular PMOVES Install (Pop!_OS / Ubuntu Desktop)
+
+Run `linux/scripts/pop-postinstall.sh` on a fresh Pop!_OS/Ubuntu desktop to provision a ready-to-develop workstation:
+
+1. **Prepare the bundle**: Copy this provisioning folder to your media (Ventoy USB, external disk, etc.). Drop a Tailnet auth key in `tailscale/tailscale_authkey.txt` (first line only) so the helper can run `tailscale up` without prompts.
+2. **Execute the script**: From the copied bundle, run `sudo bash linux/scripts/pop-postinstall.sh`. The script:
+   - Upgrades the OS, installs Docker + NVIDIA container toolkit, and adds RustDesk via the upstream apt repository.
+   - Installs Python tooling (`python3`, `pip`, `venv`) required for the PMOVES stack.
+   - Sources `tailscale/tailscale_up.sh`, using the colocated auth key (or `$TAILSCALE_AUTHKEY`) to join the Tailnet non-interactively.
+   - Clones or refreshes the `PMOVES.AI` repo into `/opt/pmoves` (override with `PMOVES_INSTALL_DIR=/some/path` or change the repo URL via `PMOVES_REPO_URL=`).
+   - Copies `.env` templates (`.env.example`, `.env.local.example`, `.env.supa.*.example`) into live `.env` files if they do not exist yet.
+   - Runs `pmoves/scripts/install_all_requirements.sh` so every service dependency is installed on first boot.
+   - Symlinks the `docker-stacks/` bundle into the install directory for quick compose access.
+3. **Post-install secrets**: Replace the placeholder values in `/opt/pmoves/pmoves/.env`, `.env.local`, and Supabase `.env` files with real credentials/API keys. The defaults mirror the compose stack but should be rotated for production use.
+4. **RustDesk pairing**: Once the script completes, RustDesk is installed and ready to be paired using your preferred relay/ID server.
+
 ## Secrets
 - Replace placeholders like `YOUR_TUNNEL_TOKEN_HERE` and fill both `tailscale/tailscale_up.sh` (Linux) and `tailscale/tailscale_up.ps1` (Windows) with your Tailnet preferences.
 - Store the Tailnet auth key in `tailscale/tailscale_authkey.txt` (not committed) or set a `TAILSCALE_AUTHKEY` environment variable before running the helpers. Both the Windows (`tailscale_up.ps1`) and Linux (`tailscale_up.sh`) scripts read from those sources so the unattended Ubuntu install and the Windows post-install stay in sync on tags/flags.
