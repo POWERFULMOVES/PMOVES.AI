@@ -35,6 +35,10 @@ if ($authKey) {
 Write-Host "Executing tailscale.exe up $($tailscaleArgs -join ' ')" -ForegroundColor Cyan
 try {
     tailscale.exe up @tailscaleArgs
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        throw "tailscale.exe exited with code $exitCode"
+    }
     Write-Host 'Tailnet join command completed.' -ForegroundColor Green
 }
 catch {
