@@ -43,6 +43,7 @@ ENTITY_CACHE_TTL = int(os.environ.get("ENTITY_CACHE_TTL","60"))
 ENTITY_CACHE_MAX = int(os.environ.get("ENTITY_CACHE_MAX","1000"))
 
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
+TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
 
 HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
@@ -327,15 +328,36 @@ def _ip_in_cidrs(ip: str, cidrs):
         return False
     return False
 
-def require_tailscale(request: Request):
-    if not TAILSCALE_ONLY:
-        return
+def _tailscale_required(admin_only: bool) -> bool:
+    if TAILSCALE_ONLY:
+        return True
+    if admin_only and TAILSCALE_ADMIN_ONLY:
+        return True
+    return False
+
+
+def _tailscale_ip_allowed(ip: str, admin_only: bool) -> bool:
+    if not _tailscale_required(admin_only):
+        return True
+    return _ip_in_cidrs(ip, TAILSCALE_CIDRS)
+
+
+def require_tailscale(request: Request, admin_only: bool = False):
     ip = _client_ip(request)
-    if not _ip_in_cidrs(ip, TAILSCALE_CIDRS):
-        raise HTTPException(status_code=403, detail="Admin restricted to Tailscale network")
+    if not _tailscale_ip_allowed(ip, admin_only):
+        detail = (
+            "Admin endpoints restricted to Tailscale network"
+            if admin_only
+            else "Service restricted to Tailscale network"
+        )
+        raise HTTPException(status_code=403, detail=detail)
+
+
+def require_admin_tailscale(request: Request):
+    return require_tailscale(request, admin_only=True)
 
 @app.get("/hirag/admin/stats")
-def stats(_=Depends(require_tailscale)):
+def stats(_=Depends(require_admin_tailscale)):
     return {
         "rerank_enabled": RERANK_ENABLE,
         "rerank_model": RERANK_MODEL if RERANK_ENABLE else None,
@@ -347,7 +369,7 @@ def stats(_=Depends(require_tailscale)):
     }
 
 @app.post("/hirag/query", response_model=QueryResp)
-def hirag_query(req: QueryReq = Body(...)):
+def hirag_query(req: QueryReq = Body(...), _=Depends(require_tailscale)):
     try:
         vec = embed_query(req.query)
         # Lazily ensure collection exists with cosine + correct dim
@@ -426,18 +448,18 @@ def hirag_query(req: QueryReq = Body(...)):
     return {"query": req.query, "k": len(base), "used_rerank": used, "hits": base}
 
 @app.post("/hirag/admin/refresh")
-def hirag_admin_refresh(_=Depends(require_tailscale)):
+def hirag_admin_refresh(_=Depends(require_admin_tailscale)):
     refresh_warm_dictionary()
     return {"ok": True, "last_refresh": _warm_last}
 
 @app.post("/hirag/admin/cache/clear")
-def hirag_admin_cache_clear(_=Depends(require_tailscale)):
+def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
     # no explicit cache; warm dictionary reload covers
     refresh_warm_dictionary()
     return {"ok": True}
 
 @app.get("/")
-def index():
+def index(_=Depends(require_tailscale)):
     return {"ok": True, "service": "hi-rag-gateway-v2", "hint": "POST /hirag/query"}
 
 # lazy-init reranker to reduce cold start time
@@ -461,7 +483,7 @@ from fastapi import UploadFile
 import io
 
 @app.post("/geometry/event")
-def geometry_event(body: Dict[str, Any]):
+def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     payload = body.get("data") if isinstance(body, dict) else None
@@ -496,7 +518,7 @@ def geometry_event(body: Dict[str, Any]):
     return {"ok": True}
 
 @app.get("/shape/point/{point_id}/jump")
-def shape_point_jump(point_id: str):
+def shape_point_jump(point_id: str, _=Depends(require_tailscale)):
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     loc = shape_store.jump_locator(point_id)
@@ -505,7 +527,7 @@ def shape_point_jump(point_id: str):
     return {"ok": True, "locator": loc}
 
 @app.post("/geometry/decode/text")
-def geometry_decode_text(body: Dict[str, Any]):
+def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_TEXT:
         raise HTTPException(501, "text decoder disabled")
     mode = (body.get("mode") or "geometry").lower()
@@ -546,7 +568,7 @@ def geometry_decode_text(body: Dict[str, Any]):
         return {"mode": mode, "points": pts[:k]}
 
 @app.post("/geometry/calibration/report")
-def geometry_calibration_report(body: Dict[str, Any]):
+def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
     def _js(p, q):
         import math
         def _kl(a, b):
@@ -584,7 +606,7 @@ def geometry_calibration_report(body: Dict[str, Any]):
     return {"constellations": report}
 
 @app.post("/geometry/decode/image")
-def geometry_decode_image(body: Dict[str, Any]):
+def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_IMAGE:
         raise HTTPException(501, "image decoder disabled")
     try:
@@ -619,7 +641,7 @@ def geometry_decode_image(body: Dict[str, Any]):
         raise HTTPException(500, f"image decode error: {e}")
 
 @app.post("/geometry/decode/audio")
-def geometry_decode_audio(body: Dict[str, Any]):
+def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_AUDIO:
         raise HTTPException(501, "audio decoder disabled")
     try:
@@ -724,6 +746,11 @@ app.mount("/geometry", StaticFiles(directory=str(Path(__file__).resolve().parent
 
 @app.websocket("/ws/signaling/{room}")
 async def ws_signaling(ws: WebSocket, room: str):
+    ip = ws.client.host if ws.client else "127.0.0.1"
+    if not _tailscale_ip_allowed(ip, admin_only=False):
+        logger.warning("Rejecting websocket connection from non-Tailnet IP %s", ip)
+        await ws.close(code=1008, reason="Tailnet required")
+        return
     await ws.accept()
     await _room_add(room, ws)
     try:
@@ -756,7 +783,7 @@ async def ws_signaling(ws: WebSocket, room: str):
 
 
 @app.post("/mesh/handshake")
-def mesh_handshake(body: Dict[str, Any]):
+def mesh_handshake(body: Dict[str, Any], _=Depends(require_admin_tailscale)):
     """Publish a shape-capsule to NATS mesh subject (mesh.shape.handshake.v1).
     Body: { capsule: {...} }
     """
@@ -777,7 +804,7 @@ def mesh_handshake(body: Dict[str, Any]):
 
 
 @app.post("/geometry/import_db")
-def import_db(body: Dict[str, Any]):
+def import_db(body: Dict[str, Any], _=Depends(require_admin_tailscale)):
     """Persist a CGP directly into Postgres (forces persistence), update ShapeStore, and broadcast.
     Accepts either { data: <CGP> } or { capsule: { kind:'cgp', data: <CGP> } }.
     """
@@ -822,7 +849,7 @@ class UpsertReq(BaseModel):
     index_lexical: bool = False
 
 @app.post("/hirag/upsert-batch")
-def hirag_upsert_batch(req: UpsertReq = Body(...)):
+def hirag_upsert_batch(req: UpsertReq = Body(...), _=Depends(require_admin_tailscale)):
     # Parse items from jsonl if provided
     items: List[Dict[str, Any]] = []
     if req.items:

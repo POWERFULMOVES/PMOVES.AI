@@ -41,6 +41,24 @@ Compose service snippet (paste under services):
     depends_on: [qdrant, neo4j]
 ```
 
+### Tailnet gating
+
+- `TAILSCALE_ONLY=true` restricts **every** endpoint (REST + WebSocket) to Tailnet source IPs.
+- `TAILSCALE_ADMIN_ONLY=true` keeps the public `/hirag/query` and geometry helpers open while still locking admin, ingest, and mutation endpoints to Tailnet clients when `TAILSCALE_ONLY` is `false`.
+- Both Hi‑RAG gateways (`hi-rag-gateway` and `hi-rag-gateway-v2`) share the same environment variables and CIDR list.
+
+Example configurations:
+
+```env
+# Admin-only Tailnet enforcement
+TAILSCALE_ONLY=false
+TAILSCALE_ADMIN_ONLY=true
+
+# Full service behind Tailnet (overrides the admin flag)
+TAILSCALE_ONLY=true
+TAILSCALE_ADMIN_ONLY=true
+```
+
 Endpoints:
 
 - POST /hirag/query
