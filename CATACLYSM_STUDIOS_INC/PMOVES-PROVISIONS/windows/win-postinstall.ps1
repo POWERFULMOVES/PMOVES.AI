@@ -5,6 +5,103 @@ Write-Host "Starting Windows Post-Install..." -ForegroundColor Cyan
 $scriptPath = $MyInvocation.MyCommand.Path
 $scriptDir = Split-Path -Parent $scriptPath
 $bundleRoot = Split-Path -Parent $scriptDir
+$repoUrl = "https://github.com/Cataclysm-Industries/PMOVES.AI.git"
+
+function Invoke-WingetInstall {
+  param([string]$Id)
+  try {
+    winget install -e --id $Id --silent --accept-package-agreements --accept-source-agreements
+  } catch {
+    Write-Warning "winget install failed for $Id: $($_.Exception.Message)"
+  }
+}
+
+function Prompt-YesNo {
+  param(
+    [string]$Message,
+    [switch]$DefaultYes
+  )
+
+  $suffix = if ($DefaultYes) { "[Y/n]" } else { "[y/N]" }
+  $answer = Read-Host "$Message $suffix"
+  if ([string]::IsNullOrWhiteSpace($answer)) {
+    return [bool]$DefaultYes
+  }
+  return $answer.Trim().ToLowerInvariant().StartsWith('y')
+}
+
+function Ensure-Directory {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) {
+    Write-Host "Creating $Path" -ForegroundColor Yellow
+    [System.IO.Directory]::CreateDirectory($Path) | Out-Null
+  }
+}
+
+function Update-PmovesRepository {
+  param(
+    [string]$RepoPath,
+    [string]$Url
+  )
+
+  if (-not (Test-Path $RepoPath)) {
+    Write-Host "Cloning PMOVES into $RepoPath" -ForegroundColor Cyan
+    git clone $Url $RepoPath
+  }
+  else {
+    Write-Host "Updating PMOVES repo in $RepoPath" -ForegroundColor Cyan
+    Push-Location $RepoPath
+    try {
+      git fetch --all
+      git pull --ff-only
+    }
+    finally {
+      Pop-Location
+    }
+  }
+}
+
+function Seed-PmovesEnvFiles {
+  param([string]$RepoPath)
+
+  $envExample = Join-Path $RepoPath 'pmoves/.env.example'
+  $envFile = Join-Path $RepoPath 'pmoves/.env'
+  if ((Test-Path $envExample) -and -not (Test-Path $envFile)) {
+    Copy-Item $envExample $envFile
+    Write-Host "Seeded pmoves/.env from .env.example" -ForegroundColor Green
+  }
+
+  $envLocalExample = Join-Path $RepoPath 'pmoves/.env.local.example'
+  $envLocal = Join-Path $RepoPath 'pmoves/.env.local'
+  if ((Test-Path $envLocalExample) -and -not (Test-Path $envLocal)) {
+    Copy-Item $envLocalExample $envLocal
+    Write-Host "Seeded pmoves/.env.local from template" -ForegroundColor Green
+  }
+}
+
+function Install-WslUbuntu {
+  Write-Host "Checking for existing WSL distributions..." -ForegroundColor Cyan
+  $hasUbuntu = $false
+  try {
+    $list = wsl.exe -l -q 2>$null
+    if ($LASTEXITCODE -eq 0 -and $list) {
+      $hasUbuntu = (($list -split "`n") | Where-Object { $_.Trim().ToLowerInvariant() -eq 'ubuntu' }).Count -gt 0
+    }
+  } catch {}
+
+  if ($hasUbuntu) {
+    Write-Host "Ubuntu distribution already registered with WSL." -ForegroundColor Green
+    return
+  }
+
+  Write-Host "Installing WSL with Ubuntu (this may request a reboot)..." -ForegroundColor Yellow
+  try {
+    wsl.exe --install -d Ubuntu
+  }
+  catch {
+    Write-Warning "WSL installation failed: $($_.Exception.Message)"
+  }
+}
 
 # Enable long paths & show file extensions
 reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f | Out-Null
@@ -22,7 +119,7 @@ $apps = @(
   "7zip.7zip"
 )
 foreach ($app in $apps) {
-  try { winget install -e --id $app --silent --accept-package-agreements --accept-source-agreements } catch {}
+  Invoke-WingetInstall -Id $app
 }
 
 # Docker Desktop first-run tweaks
@@ -32,6 +129,65 @@ if (Test-Path $settings) {
   $json.autoStart = $true
   $json.wslEngineEnabled = $true
   $json | ConvertTo-Json -Depth 10 | Set-Content $settings -Encoding UTF8
+}
+
+# Clone/refresh PMOVES repo
+$defaultWorkspace = Join-Path $env:USERPROFILE 'workspace'
+if (-not (Test-Path $defaultWorkspace)) { $defaultWorkspace = $env:USERPROFILE }
+$chosen = Read-Host "Directory to store PMOVES.AI repo`n(leave blank for $defaultWorkspace)"
+$workspace = if ([string]::IsNullOrWhiteSpace($chosen)) { $defaultWorkspace } else { $chosen.Trim() }
+Ensure-Directory -Path $workspace
+$repoPath = Join-Path $workspace 'PMOVES.AI'
+Update-PmovesRepository -RepoPath $repoPath -Url $repoUrl
+
+# Install PMOVES runtime requirements
+$installScript = Join-Path $repoPath 'pmoves/scripts/install_all_requirements.ps1'
+if (Test-Path $installScript) {
+  Write-Host "Installing PMOVES dependencies..." -ForegroundColor Cyan
+  try {
+    $currentPolicy = Get-ExecutionPolicy -Scope Process
+    if ($currentPolicy -ne 'Bypass') {
+      try { Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force } catch {}
+    }
+    Push-Location $repoPath
+    try {
+      & $installScript
+    }
+    finally {
+      Pop-Location
+    }
+  }
+  catch {
+    Write-Warning "Dependency installation failed: $($_.Exception.Message)"
+  }
+} else {
+  Write-Warning "Could not locate pmoves/scripts/install_all_requirements.ps1"
+}
+
+Seed-PmovesEnvFiles -RepoPath $repoPath
+
+# Offer to enable WSL
+if (Prompt-YesNo -Message "Enable WSL and install Ubuntu" -DefaultYes) {
+  Install-WslUbuntu
+}
+
+# Apply RustDesk bundle config if present
+$rustdeskConfig = Join-Path $bundleRoot 'windows/rustdesk/server.conf'
+if (Test-Path $rustdeskConfig) {
+  $rustdeskTarget = Join-Path $env:APPDATA 'RustDesk/config/RustDesk2/RustDesk/config'
+  Ensure-Directory -Path $rustdeskTarget
+  Copy-Item $rustdeskConfig (Join-Path $rustdeskTarget 'server.conf') -Force
+  Write-Host "RustDesk server.conf copied into AppData." -ForegroundColor Green
+}
+
+# Offer to start Docker Desktop (ensures it initializes on first boot)
+if (Prompt-YesNo -Message "Launch Docker Desktop now" -DefaultYes) {
+  $dockerExe = "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"
+  if (Test-Path $dockerExe) {
+    Start-Process -FilePath $dockerExe
+  } else {
+    Write-Warning "Docker Desktop executable not found at $dockerExe"
+  }
 }
 
 $tailscaleScript = Join-Path $bundleRoot 'tailscale/tailscale_up.ps1'
