@@ -6,18 +6,83 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
-from nats.aio.client import Client as NATS
-from nats.aio.msg import Msg
-from nats.js.api import (
-    AckPolicy,
-    ConsumerConfig,
-    DeliverPolicy,
-    RetentionPolicy,
-    StreamConfig,
-)
-from nats.js.errors import APIError, NotFoundError
+try:
+    from nats.aio.client import Client as NATS
+    from nats.aio.msg import Msg
+    from nats.js.api import (
+        AckPolicy,
+        ConsumerConfig,
+        DeliverPolicy,
+        RetentionPolicy,
+        StreamConfig,
+    )
+    from nats.js.errors import APIError, NotFoundError
+except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
+    NATS = None  # type: ignore[assignment]
+    Msg = Any  # type: ignore[assignment]
 
-from services.common.events import envelope
+    class _StubError(Exception):
+        pass
+
+    class AckPolicy:  # type: ignore[no-redef]
+        EXPLICIT = "explicit"
+
+    class DeliverPolicy:  # type: ignore[no-redef]
+        NEW = "new"
+
+    class RetentionPolicy:  # type: ignore[no-redef]
+        WORKQUEUE = "workqueue"
+
+    @dataclass
+    class ConsumerConfig:  # type: ignore[no-redef]
+        durable_name: str
+        ack_policy: str
+        ack_wait: float
+        max_deliver: int
+        deliver_policy: str
+
+    @dataclass
+    class StreamConfig:  # type: ignore[no-redef]
+        name: str
+        subjects: List[str]
+        retention: str
+
+    class APIError(_StubError):
+        def __init__(self, err_code: int) -> None:
+            super().__init__(f"NATS unavailable (err_code={err_code})")
+            self.err_code = err_code
+
+    class NotFoundError(_StubError):
+        pass
+
+
+try:
+    from services.common.events import envelope
+except Exception:  # pragma: no cover - optional dependency for unit tests
+    import datetime
+    import uuid
+
+    def envelope(
+        topic: str,
+        payload: Dict[str, Any],
+        *,
+        correlation_id: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        source: str = "agent",
+    ) -> Dict[str, Any]:
+        event: Dict[str, Any] = {
+            "id": str(uuid.uuid4()),
+            "topic": topic,
+            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "version": "v1",
+            "source": source,
+            "payload": payload,
+        }
+        if correlation_id:
+            event["correlation_id"] = correlation_id
+        if parent_id:
+            event["parent_id"] = parent_id
+        return event
 
 
 logger = logging.getLogger(__name__)
@@ -48,12 +113,15 @@ class ControllerSettings:
     queue_name: Optional[str] = os.environ.get("AGENTZERO_QUEUE", "agentzero-workers")
     ack_wait_seconds: float = float(os.environ.get("AGENTZERO_ACK_WAIT_SECONDS", "30"))
     max_deliver: int = int(os.environ.get("AGENTZERO_MAX_DELIVER", "5"))
-    subjects: Tuple[str, ...] = field(default_factory=lambda: tuple(
-        s.strip() for s in os.environ.get(
-            "AGENTZERO_SUBJECTS", "agentzero.task.v1,agentzero.memory.update"
-        ).split(",")
-        if s.strip()
-    ))
+    subjects: Tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            s.strip()
+            for s in os.environ.get(
+                "AGENTZERO_SUBJECTS", "agentzero.task.v1,agentzero.memory.update"
+            ).split(",")
+            if s.strip()
+        )
+    )
 
 
 @dataclass
@@ -74,7 +142,9 @@ class AgentZeroRuntime:
     def __init__(self, publisher: Callable[..., Awaitable[None]]):
         self._publish = publisher
 
-    async def handle(self, session_id: str, event: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+    async def handle(
+        self, session_id: str, event: Dict[str, Any]
+    ) -> List[Tuple[str, Dict[str, Any]]]:
         topic = event.get("topic")
         payload = event.get("payload", {})
         correlation_id = event.get("correlation_id")
@@ -168,7 +238,9 @@ class AgentZeroSessionManager:
             self._sessions[session_id] = state
             return state
 
-    async def _worker(self, session_id: str, queue: "asyncio.Queue[SessionJob]") -> None:
+    async def _worker(
+        self, session_id: str, queue: "asyncio.Queue[SessionJob]"
+    ) -> None:
         while True:
             job = await queue.get()
             try:
@@ -205,7 +277,9 @@ class AgentZeroSessionManager:
                     loop.create_future(),
                 )
             )
-        await asyncio.gather(*(state.task for _, state in sessions), return_exceptions=True)
+        await asyncio.gather(
+            *(state.task for _, state in sessions), return_exceptions=True
+        )
         async with self._lock:
             self._sessions.clear()
 
@@ -215,7 +289,9 @@ class AgentZeroController:
         self.settings = settings or ControllerSettings()
         self._nc: Optional[NATS] = None
         self._js = None
-        self._session_manager = AgentZeroSessionManager(AgentZeroRuntime(self._publish_enveloped))
+        self._session_manager = AgentZeroSessionManager(
+            AgentZeroRuntime(self._publish_enveloped)
+        )
         self._subscriptions: List[Any] = []
         self._metrics = {
             "received": defaultdict(int),
@@ -227,14 +303,21 @@ class AgentZeroController:
 
     @property
     def metrics(self) -> Dict[str, Dict[str, int]]:
-        return {
-            name: dict(counter)
-            for name, counter in self._metrics.items()
-        }
+        return {name: dict(counter) for name, counter in self._metrics.items()}
+
+    @property
+    def is_started(self) -> bool:
+        return self._started
+
+    @property
+    def is_connected(self) -> bool:
+        return bool(self._nc and self._nc.is_connected)
 
     async def start(self) -> None:
         if self._started:
             return
+        if NATS is None:
+            raise RuntimeError("nats-py is required to start the Agent Zero controller")
         logger.info("Connecting to NATS at %s", self.settings.nats_url)
         self._nc = NATS()
         await self._nc.connect(servers=[self.settings.nats_url])
@@ -258,15 +341,42 @@ class AgentZeroController:
         self._js = None
         self._started = False
 
-    async def publish(self, topic: str, payload: Dict[str, Any], *, correlation_id: Optional[str] = None, parent_id: Optional[str] = None, source: str = "agent-zero") -> Dict[str, Any]:
+    async def publish(
+        self,
+        topic: str,
+        payload: Dict[str, Any],
+        *,
+        correlation_id: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        source: str = "agent-zero",
+    ) -> Dict[str, Any]:
         if not self._nc:
             raise RuntimeError("Controller not started")
-        env = envelope(topic, payload, correlation_id=correlation_id, parent_id=parent_id, source=source)
+        env = envelope(
+            topic,
+            payload,
+            correlation_id=correlation_id,
+            parent_id=parent_id,
+            source=source,
+        )
         await self._nc.publish(topic.encode(), json.dumps(env).encode())
         return env
 
-    async def _publish_enveloped(self, topic: str, payload: Dict[str, Any], *, correlation_id: Optional[str] = None, parent_id: Optional[str] = None) -> None:
-        await self.publish(topic, payload, correlation_id=correlation_id, parent_id=parent_id, source="agent-zero")
+    async def _publish_enveloped(
+        self,
+        topic: str,
+        payload: Dict[str, Any],
+        *,
+        correlation_id: Optional[str] = None,
+        parent_id: Optional[str] = None,
+    ) -> None:
+        await self.publish(
+            topic,
+            payload,
+            correlation_id=correlation_id,
+            parent_id=parent_id,
+            source="agent-zero",
+        )
 
     async def _ensure_stream(self) -> None:
         assert self._js is not None
@@ -277,7 +387,11 @@ class AgentZeroController:
         )
         try:
             await self._js.add_stream(stream_config)
-            logger.info("Created stream %s for subjects %s", self.settings.stream_name, stream_config.subjects)
+            logger.info(
+                "Created stream %s for subjects %s",
+                self.settings.stream_name,
+                stream_config.subjects,
+            )
         except APIError as exc:
             if exc.err_code == 10058:  # stream name already in use
                 logger.debug("Stream %s already exists", self.settings.stream_name)
@@ -286,7 +400,11 @@ class AgentZeroController:
                 try:
                     await self._js.update_stream(stream_config)
                 except Exception:  # noqa: BLE001
-                    logger.warning("Unable to update stream %s", self.settings.stream_name, exc_info=exc)
+                    logger.warning(
+                        "Unable to update stream %s",
+                        self.settings.stream_name,
+                        exc_info=exc,
+                    )
 
     async def _create_subscriptions(self) -> None:
         assert self._js is not None
@@ -326,7 +444,9 @@ class AgentZeroController:
         )
         await self._js.add_consumer(self.settings.stream_name, consumer)
 
-    def _wrap_handler(self, config: SubscriptionConfig) -> Callable[[Msg], Awaitable[None]]:
+    def _wrap_handler(
+        self, config: SubscriptionConfig
+    ) -> Callable[[Msg], Awaitable[None]]:
         async def handler(msg: Msg) -> None:
             subject = msg.subject
             self._metrics["received"][subject] += 1
