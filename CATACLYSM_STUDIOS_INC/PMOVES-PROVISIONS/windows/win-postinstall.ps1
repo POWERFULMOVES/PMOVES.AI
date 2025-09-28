@@ -38,6 +38,48 @@ function Ensure-Directory {
   }
 }
 
+function Add-ToPath {
+  param([string]$Path)
+
+  if ([string]::IsNullOrWhiteSpace($Path)) { return }
+  if (-not (Test-Path $Path)) { return }
+
+  $segments = $env:PATH -split ';'
+  $alreadyPresent = $segments | Where-Object { $_.Trim().ToLowerInvariant() -eq $Path.Trim().ToLowerInvariant() }
+  if (-not $alreadyPresent) {
+    $env:PATH = "$Path;$env:PATH"
+  }
+}
+
+function Refresh-PathForWingetInstalls {
+  Write-Host "Refreshing PATH for newly installed tools..." -ForegroundColor Cyan
+
+  $gitRoot = Join-Path $env:ProgramFiles 'Git'
+  if (Test-Path $gitRoot) {
+    Add-ToPath -Path (Join-Path $gitRoot 'cmd')
+    Add-ToPath -Path (Join-Path $gitRoot 'bin')
+  }
+
+  $pythonRoots = @(
+    Join-Path $env:LOCALAPPDATA 'Programs\Python',
+    Join-Path $env:ProgramFiles 'Python'
+  )
+  foreach ($root in $pythonRoots) {
+    if (-not (Test-Path $root)) { continue }
+    $latestPython = Get-ChildItem -Path $root -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latestPython) {
+      Add-ToPath -Path $latestPython.FullName
+      Add-ToPath -Path (Join-Path $latestPython.FullName 'Scripts')
+      break
+    }
+  }
+
+  $nodeDir = Join-Path $env:ProgramFiles 'nodejs'
+  if (Test-Path $nodeDir) {
+    Add-ToPath -Path $nodeDir
+  }
+}
+
 function Update-PmovesRepository {
   param(
     [string]$RepoPath,
@@ -121,6 +163,8 @@ $apps = @(
 foreach ($app in $apps) {
   Invoke-WingetInstall -Id $app
 }
+
+Refresh-PathForWingetInstalls
 
 # Docker Desktop first-run tweaks
 $settings = "$env:APPDATA\Docker\settings.json"
