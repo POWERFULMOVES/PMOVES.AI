@@ -1,5 +1,5 @@
 
-import os, time, math, json, logging, re, sys
+import os, time, math, json, logging, re, sys, contextlib
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
@@ -41,6 +41,20 @@ NEO4J_DICT_REFRESH_SEC = int(os.environ.get("NEO4J_DICT_REFRESH_SEC","60"))
 NEO4J_DICT_LIMIT = int(os.environ.get("NEO4J_DICT_LIMIT","50000"))
 ENTITY_CACHE_TTL = int(os.environ.get("ENTITY_CACHE_TTL","60"))
 ENTITY_CACHE_MAX = int(os.environ.get("ENTITY_CACHE_MAX","1000"))
+
+SUPABASE_REST_URL = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL")
+SUPABASE_SERVICE_KEY = (
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_KEY")
+    or os.environ.get("SUPABASE_KEY")
+)
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+SUPABASE_REALTIME_URL = os.environ.get("SUPABASE_REALTIME_URL") or os.environ.get("REALTIME_URL")
+SUPABASE_REALTIME_KEY = (
+    SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY or os.environ.get("REALTIME_ANON_KEY")
+)
+GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
+GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
 
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
@@ -261,6 +275,146 @@ try:
 except Exception as _e:
     logging.getLogger("hirag.gateway.v2").exception("ShapeStore init failed: %s", _e)
     shape_store = None
+
+_geometry_realtime_task: Optional[asyncio.Task] = None
+
+
+def _derive_realtime_url() -> Optional[str]:
+    if SUPABASE_REALTIME_URL:
+        return SUPABASE_REALTIME_URL
+    if not SUPABASE_REST_URL:
+        return None
+    rest = SUPABASE_REST_URL.rstrip("/")
+    if "postgrest" in rest or rest.endswith(":3000"):
+        return "ws://realtime:4000/socket/websocket"
+    base = rest
+    if base.endswith("/rest/v1"):
+        base = base[: -len("/rest/v1")]
+    if base.startswith("https://"):
+        base = "wss://" + base[len("https://"):]
+    elif base.startswith("http://"):
+        base = "ws://" + base[len("http://"):]
+    return base.rstrip("/") + "/realtime/v1"
+
+
+async def _warm_shapes_from_supabase() -> None:
+    if shape_store is None or not SUPABASE_REST_URL:
+        if shape_store is not None:
+            logger.info("ShapeStore warm skipped; SUPA_REST_URL not configured")
+        return
+    key = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
+    try:
+        count = await shape_store.warm_from_db(
+            rest_url=SUPABASE_REST_URL,
+            service_key=key,
+            limit=GEOMETRY_CACHE_WARM_LIMIT,
+        )
+        logger.info("ShapeStore warmed with %d Supabase constellations", count)
+    except Exception:
+        logger.exception("ShapeStore warm_from_db failed")
+
+
+async def _phoenix_heartbeat(ws, interval: float = 25.0) -> None:
+    ref = 1
+    try:
+        while True:
+            msg = {"topic": "phoenix", "event": "heartbeat", "payload": {}, "ref": str(ref)}
+            await ws.send(json.dumps(msg))
+            ref += 1
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        return
+    except Exception:
+        logger.exception("Supabase heartbeat error")
+
+
+async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
+    try:
+        import websockets
+    except ImportError:
+        logger.warning("websockets not installed; skipping Supabase realtime subscription")
+        return
+
+    while True:
+        full_url = ws_url
+        if "apikey=" not in full_url:
+            sep = "&" if "?" in full_url else "?"
+            full_url = f"{full_url}{sep}apikey={api_key}&vsn=2.0.0"
+        try:
+            async with websockets.connect(full_url, ping_interval=20, ping_timeout=20, max_queue=None) as ws:
+                join_payload = {
+                    "topic": "realtime:geometry.cgp.v1",
+                    "event": "phx_join",
+                    "payload": {"config": {"broadcast": {"ack": False, "self": True}}},
+                    "ref": "1",
+                }
+                await ws.send(json.dumps(join_payload))
+                logger.info("Subscribed to Supabase realtime geometry.cgp.v1 channel")
+                heartbeat = asyncio.create_task(_phoenix_heartbeat(ws))
+                try:
+                    async for raw in ws:
+                        try:
+                            msg = json.loads(raw)
+                        except Exception:
+                            continue
+                        if msg.get("topic") != "realtime:geometry.cgp.v1":
+                            continue
+                        payload = msg.get("payload") or {}
+                        event_payload: Optional[Dict[str, Any]] = None
+                        if isinstance(payload, dict):
+                            if payload.get("type") == "geometry.cgp.v1" and isinstance(payload.get("data"), dict):
+                                event_payload = payload
+                            elif payload.get("type") == "geometry.cgp.v1" and isinstance(payload.get("payload"), dict):
+                                event_payload = {"type": "geometry.cgp.v1", "data": payload.get("payload")}
+                            else:
+                                evt = payload.get("event") or payload.get("type")
+                                data = (
+                                    payload.get("data")
+                                    or payload.get("payload")
+                                    or payload.get("record")
+                                    or payload.get("new")
+                                )
+                                if evt == "geometry.cgp.v1" and isinstance(data, dict):
+                                    event_payload = {"type": "geometry.cgp.v1", "data": data}
+                        if event_payload:
+                            try:
+                                shape_store.on_geometry_event(event_payload)
+                            except Exception:
+                                logger.exception("Failed to apply Supabase geometry event")
+                finally:
+                    heartbeat.cancel()
+                    with contextlib.suppress(Exception):
+                        await heartbeat
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception(
+                "Supabase realtime listener error; retrying in %.1fs", max(1.0, GEOMETRY_REALTIME_BACKOFF)
+            )
+            await asyncio.sleep(max(1.0, GEOMETRY_REALTIME_BACKOFF))
+
+
+@app.on_event("startup")
+async def _on_startup() -> None:
+    await _warm_shapes_from_supabase()
+    global _geometry_realtime_task
+    if _geometry_realtime_task is None and shape_store is not None:
+        ws_url = _derive_realtime_url()
+        api_key = SUPABASE_REALTIME_KEY
+        if ws_url and api_key:
+            _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
+        else:
+            logger.info("Supabase realtime subscription skipped; missing URL or API key")
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    global _geometry_realtime_task
+    if _geometry_realtime_task is not None:
+        _geometry_realtime_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_realtime_task
+        _geometry_realtime_task = None
 
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower()=="true"
 CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
