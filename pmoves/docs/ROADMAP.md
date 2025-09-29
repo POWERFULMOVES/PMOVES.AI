@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-10-01_
+_Last updated: 2025-10-05_
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -19,7 +19,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 | ✅ | ComfyUI ↔ MinIO Presign microservice | `services/presign/api.py` provides presigned PUT/GET/POST helpers for MinIO/S3. |
 | ✅ | Render Webhook (Comfy → Supabase Studio) | `services/render-webhook/webhook.py` inserts submissions into `studio_board` with optional auto-approval. |
 | 🚧 | Publisher (Jellyfin) | `services/publisher/publisher.py` consumes approval events and refreshes Jellyfin; optional dependency guards and envelope fallback landed, but richer metadata handling and error reporting are still pending. |
-| ✅ | Publisher telemetry & ROI rollups | `/metrics` endpoint plus Supabase rollups from `services/publisher/publisher.py` make turnaround/latency/cost telemetry queryable for dashboards. |
+| ✅ | Publisher telemetry & ROI rollups | `/metrics` feeds from `services/publisher/publisher.py` and `services/publisher-discord/main.py` expose turnaround/latency/cost telemetry, with Supabase rollups powering the ROI dashboards documented in `pmoves/docs/TELEMETRY_ROI.md`. |
 | ✅ | PDF/MinIO ingestion | `services/pdf-ingest/app.py` pulls PDFs from MinIO, extracts text, forwards chunks, and emits ingest events. |
 | ⏳ | n8n flows (Discord/webhooks) | `n8n/flows/*.json` only define placeholder workflows; Supabase pollers and Discord actions must be configured. |
 | 🚧 | Jellyfin library refresh hook + Discord rich cards | Jellyfin refresh occurs in the publisher, and `services/publisher-discord` formats embeds, but published-event wiring and asset deep links remain. Automation activation plan logged in `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`. |
@@ -27,7 +27,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 **Outstanding to close M2:**
 - publisher metadata/envelope polish — namespace-aware filenames, dependency guards, and fallback envelopes merged; monitor adoption and backfill historic assets if needed
 - add published-event Discord embeds via `content.published.v1`; execution plan staged in `SESSION_IMPLEMENTATION_PLAN.md`
-- wire Supabase ROI dashboards to the new publisher telemetry rollups; document interpretation guidance alongside ROI reporting.
+- wire Supabase ROI dashboards to the new publisher telemetry rollups; document interpretation guidance alongside ROI reporting (**see `docs/TELEMETRY_ROI.md` for the latest walkthrough**).
 - build the Supabase→Discord automation inside the n8n exports and track discrete workflow validation steps in the implementation log
 - execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log the validation timestamp (see operational reminders captured in the implementation plan)
 
