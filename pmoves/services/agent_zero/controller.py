@@ -359,7 +359,7 @@ class AgentZeroController:
             parent_id=parent_id,
             source=source,
         )
-        await self._nc.publish(topic.encode(), json.dumps(env).encode())
+        await self._nc.publish(topic, json.dumps(env).encode())
         return env
 
     async def _publish_enveloped(

@@ -20,7 +20,7 @@ async def main():
         topics = extract_topics(text, data["payload"].get("top_k",5))
         payload = {"media_id": data["payload"].get("media_id","unknown"), "topics": topics}
         env = envelope("analysis.extract_topics.result.v1", payload, correlation_id=data.get("correlation_id"), parent_id=data.get("id"), source="analysis-echo")
-        await nc.publish("analysis.extract_topics.result.v1".encode(), json.dumps(env).encode())
+        await nc.publish("analysis.extract_topics.result.v1", json.dumps(env).encode())
 
     await nc.subscribe("analysis.extract_topics.request.v1", cb=handle_request)
     print("analysis-echo worker listening on analysis.extract_topics.request.v1")

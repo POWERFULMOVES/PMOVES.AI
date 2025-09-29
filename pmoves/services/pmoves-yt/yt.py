@@ -99,7 +99,7 @@ def _publish_event(topic: str, payload: Dict[str,Any]):
     if _nc is None:
         return
     msg = envelope(topic, payload, source="pmoves-yt")
-    asyncio.create_task(_nc.publish(topic.encode(), json.dumps(msg).encode()))
+    asyncio.create_task(_nc.publish(topic, json.dumps(msg).encode()))
 
 def upload_to_s3(local_path: str, bucket: str, key: str):
     s3 = s3_client()

@@ -103,7 +103,7 @@ def _publish_event(topic: str, payload: Dict[str, Any]) -> None:
         msg = envelope(topic, payload, source="pdf-ingest")
     except Exception:
         return
-    asyncio.create_task(_nc.publish(topic.encode(), json.dumps(msg).encode()))
+    asyncio.create_task(_nc.publish(topic, json.dumps(msg).encode()))
 
 
 def _read_pdf_bytes(bucket: str, key: str) -> bytes:

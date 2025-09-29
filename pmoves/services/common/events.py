@@ -35,7 +35,7 @@ async def publish(topic: str, payload: dict, *, correlation_id: str | None = Non
     env = envelope(topic, payload, correlation_id=correlation_id, parent_id=parent_id, source=source)
     nc = NATS()
     await nc.connect(servers=[NATS_URL])
-    await nc.publish(topic.encode(), json.dumps(env).encode())
+    await nc.publish(topic, json.dumps(env).encode())
     await nc.close()
     return env
 

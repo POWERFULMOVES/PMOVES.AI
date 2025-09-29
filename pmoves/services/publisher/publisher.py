@@ -445,7 +445,7 @@ async def main() -> None:
             correlation_id=env.get("correlation_id"),
             source="publisher",
         )
-        await nc.publish("content.published.v1".encode(), json.dumps(evt).encode())
+        await nc.publish("content.published.v1", json.dumps(evt).encode())
         logger.info(
             "Published content",
             extra={

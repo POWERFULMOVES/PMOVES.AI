@@ -73,7 +73,7 @@ async def run():
                     if presigned: meta["presigned_url"] = presigned
                     env = envelope("gen.image.result.v1", payload, source="comfy-watcher")
                     env["payload"]["meta"] = meta
-                    await nc.publish("gen.image.result.v1".encode(), json.dumps(env).encode())
+                    await nc.publish("gen.image.result.v1", json.dumps(env).encode())
                     print("Uploaded and announced:", key)
                 except Exception as e:
                     print("Error processing", path, e)
