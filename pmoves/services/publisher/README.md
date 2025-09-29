@@ -91,6 +91,9 @@ each artifact, aggregated by namespace. Average turnaround and approval latency
 highlight operational friction; spikes should trigger reviews of automation
 queues or manual approval load.
 
+See `pmoves/docs/TELEMETRY_ROI.md` for step-by-step guidance on charting the
+rollup tables and pairing them with Discord delivery telemetry.
+
 ## Local Smoke Test
 
 1. Ensure the PMOVES stack is running (`make up`).

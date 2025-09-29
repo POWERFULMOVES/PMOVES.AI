@@ -2,7 +2,7 @@
 
 _Last updated: 2025-09-26 (geometry cache sync)_
 
-_Last updated: 2025-10-01_
+_Last updated: 2025-10-05_
 
 
 ## Immediate
@@ -13,15 +13,15 @@ _Last updated: 2025-10-01_
 - [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
 - [ ] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; note any dependency gaps that require new guardrails.
 - [ ] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
-- [ ] Hit the publisher `/metrics` endpoint and capture the turnaround/latency summary for the runbook.
-- [ ] Confirm Supabase `publisher_metrics_rollup` rows are created with engagement + cost payloads and link the ROI dashboard query.
+- [ ] Hit the publisher and publisher-discord `/metrics` endpoints and capture the turnaround/latency summary for the runbook.
+- [ ] Confirm Supabase `publisher_metrics_rollup` and `publisher_discord_metrics` rows are created with engagement + cost payloads and link the ROI dashboard query.
 - [ ] Record step-by-step evidence in `SESSION_IMPLEMENTATION_PLAN.md` while executing the operational reminders list.
 
 ### 2. Jellyfin Publisher Reliability
 - [x] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
 - [ ] Expand error/reporting hooks so failures surface with actionable messages (Jellyfin HTTP errors, dependency mismatches, asset gaps).
 - [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields.
-- [ ] Plot baseline ROI visuals (turnaround vs engagement vs cost) using the Supabase rollup table and document interpretation guidance in the dashboard notes.
+- [ ] Plot baseline ROI visuals (turnaround vs engagement vs cost) using the Supabase rollup tables and incorporate the guidance captured in `TELEMETRY_ROI.md` into the dashboard notes.
 
 ### 3. Graph & Retrieval Enhancements (Kickoff M3)
 - [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).

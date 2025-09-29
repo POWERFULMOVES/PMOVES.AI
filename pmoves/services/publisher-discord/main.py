@@ -1,10 +1,23 @@
-import os, json, asyncio, logging
+import asyncio
+import datetime
+import json
+import logging
+import os
+import re
 from collections import Counter
-from typing import Dict, Any, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional
 
 import httpx
-from fastapi import FastAPI, Body, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from nats.aio.client import Client as NATS
+
+try:  # pragma: no cover - optional Supabase helper
+    from services.common import supabase as supabase_common
+except Exception:  # pragma: no cover - supabase is optional for local/dev
+    supabase_common = None  # type: ignore[assignment]
+
+from services.common.telemetry import PublisherMetrics, PublishTelemetry, compute_publish_telemetry
+
 
 app = FastAPI(title="Publisher-Discord", version="0.1.0")
 
@@ -16,9 +29,12 @@ SUBJECTS = os.environ.get(
     "DISCORD_SUBJECTS",
     "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1",
 ).split(",")
+DISCORD_METRICS_TABLE = os.environ.get("DISCORD_METRICS_TABLE", "publisher_discord_metrics")
+DISCORD_METRICS_CONFLICT = os.environ.get("DISCORD_METRICS_CONFLICT", "published_event_id")
 
 _nc: Optional[NATS] = None
-_metrics = Counter()
+_webhook_counters = Counter()
+_telemetry_metrics = PublisherMetrics()
 logger = logging.getLogger("publisher_discord")
 
 
@@ -69,22 +85,113 @@ def _pick_thumbnail(payload: Dict[str, Any]) -> Optional[str]:
                 return ranked[0][1]
     return None
 
+
+def _coerce_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    return str(value)
+
+
+def _safe_slug(*values: Optional[str]) -> str:
+    for value in values:
+        if not value:
+            continue
+        slug = re.sub(r"[^a-z0-9]+", "-", str(value).lower()).strip("-")
+        if slug:
+            return slug
+    return "discord-event"
+
+
+def _webhook_snapshot() -> Dict[str, int]:
+    return {
+        "webhook_success": _webhook_counters.get("discord_webhook_success", 0),
+        "webhook_failures": _webhook_counters.get("discord_webhook_failures", 0),
+        "webhook_missing": _webhook_counters.get("discord_webhook_missing", 0),
+    }
+
+
+def _record_publish_telemetry(telemetry: PublishTelemetry) -> None:
+    _telemetry_metrics.record_turnaround(telemetry.turnaround_seconds)
+    _telemetry_metrics.record_approval_latency(telemetry.approval_latency_seconds)
+    _telemetry_metrics.record_engagement(telemetry.engagement)
+    _telemetry_metrics.record_cost(telemetry.cost)
+
+
+async def _persist_discord_rollup(
+    telemetry: PublishTelemetry,
+    payload: Dict[str, Any],
+    envelope: Dict[str, Any],
+    webhook_success: bool,
+) -> None:
+    if supabase_common is None:
+        logger.debug("Supabase client unavailable; skipping Discord metrics rollup persistence")
+        return
+
+    artifact_uri = _coerce_text(payload.get("artifact_uri")) or _coerce_text(payload.get("content_url"))
+    published_event_id = _coerce_text(envelope.get("id"))
+    if not artifact_uri:
+        artifact_uri = f"discord::{published_event_id or _safe_slug(payload.get('title'), payload.get('slug'))}"
+
+    namespace = _coerce_text(payload.get("namespace") or payload.get("workspace") or "pmoves") or "pmoves"
+    slug = _safe_slug(
+        payload.get("slug"),
+        payload.get("title"),
+        payload.get("published_path"),
+        published_event_id,
+    )
+
+    row = telemetry.to_rollup_row(
+        artifact_uri=artifact_uri,
+        namespace=namespace,
+        slug=slug,
+    )
+    row.update(
+        {
+            "published_event_id": published_event_id,
+            "event_topic": _coerce_text(envelope.get("topic") or envelope.get("subject")),
+            "channel": "discord",
+            "webhook_success": webhook_success,
+        }
+    )
+
+    try:
+        await asyncio.to_thread(
+            supabase_common.upsert_row,
+            DISCORD_METRICS_TABLE,
+            row,
+            DISCORD_METRICS_CONFLICT or None,
+        )
+    except Exception as exc:  # pragma: no cover - external dependency
+        logger.warning(
+            "Failed to persist Discord metrics rollup",
+            extra={"table": DISCORD_METRICS_TABLE, "row": row},
+            exc_info=exc,
+        )
+
 @app.get("/healthz")
 async def healthz():
     return {
         "ok": True,
         "webhook": bool(DISCORD_WEBHOOK_URL),
-        "metrics": {
-            "webhook_success": _metrics.get("discord_webhook_success", 0),
-            "webhook_failures": _metrics.get("discord_webhook_failures", 0),
-            "webhook_missing": _metrics.get("discord_webhook_missing", 0),
-        },
+        "metrics": _webhook_snapshot(),
+        "telemetry": _telemetry_metrics.summary(),
+    }
+
+
+@app.get("/metrics")
+async def metrics():
+    return {
+        "webhook": _webhook_snapshot(),
+        "telemetry": _telemetry_metrics.summary(),
     }
 
 async def _post_discord(content: Optional[str], embeds: Optional[list] = None, retries: int = 3):
     if not DISCORD_WEBHOOK_URL:
         logger.warning("discord_webhook_missing", extra={"event": "discord_webhook_missing"})
-        _metrics["discord_webhook_missing"] += 1
+        _webhook_counters["discord_webhook_missing"] += 1
         return False
     payload = {"username": DISCORD_USERNAME}
     if DISCORD_AVATAR_URL:
@@ -111,7 +218,7 @@ async def _post_discord(content: Optional[str], embeds: Optional[list] = None, r
                 backoff = min(backoff * 2.0, 8.0)
                 continue
             if r.status_code in (200, 204):
-                _metrics["discord_webhook_success"] += 1
+                _webhook_counters["discord_webhook_success"] += 1
                 return True
             if r.status_code == 429:
                 try:
@@ -134,13 +241,13 @@ async def _post_discord(content: Optional[str], embeds: Optional[list] = None, r
                     "body": r.text[:256],
                 },
             )
-            _metrics["discord_webhook_failures"] += 1
+            _webhook_counters["discord_webhook_failures"] += 1
             return False
     logger.warning(
         "discord_webhook_failed",
         extra={"event": "discord_webhook_failed", "status_code": None, "attempt": retries},
     )
-    _metrics["discord_webhook_failures"] += 1
+    _webhook_counters["discord_webhook_failures"] += 1
     return False
 
 def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -238,11 +345,24 @@ async def startup():
     async def handler(msg):
         try:
             data = json.loads(msg.data.decode("utf-8"))
-            name = data.get("topic") or msg.subject
-            payload = data.get("payload") or data
+            envelope: Dict[str, Any] = data if isinstance(data, dict) else {}
         except Exception:
-            name = msg.subject
-            payload = {"raw": msg.data.decode("utf-8",errors="ignore")}
+            envelope = {}
+
+        name = envelope.get("topic") or msg.subject
+        payload = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else envelope or {}
+        if not isinstance(payload, dict):
+            payload = {"raw": msg.data.decode("utf-8", errors="ignore")}
+
+        meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
+        published_at = datetime.datetime.now(datetime.timezone.utc)
+        telemetry = compute_publish_telemetry(
+            meta,
+            envelope.get("ts") if isinstance(envelope, dict) else None,
+            published_at,
+        )
+        _record_publish_telemetry(telemetry)
+
         rendered = _format_event(name, payload)
         ok = await _post_discord(rendered.get("content"), rendered.get("embeds"))
         if not ok:
@@ -254,6 +374,20 @@ async def startup():
                     "nats_subject": msg.subject,
                 },
             )
+
+        await _persist_discord_rollup(telemetry, payload, envelope if isinstance(envelope, dict) else {}, ok)
+        logger.info(
+            "discord_event_processed",
+            extra={
+                "subject": name,
+                "nats_subject": msg.subject,
+                "webhook_success": ok,
+                "metrics": {
+                    "webhook": _webhook_snapshot(),
+                    "telemetry": _telemetry_metrics.summary(),
+                },
+            },
+        )
     for subj in SUBJECTS:
         s = subj.strip()
         if not s:

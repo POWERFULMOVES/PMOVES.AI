@@ -25,6 +25,16 @@ CREATE INDEX IF NOT EXISTS idx_publisher_audit_status ON public.publisher_audit 
 CREATE INDEX IF NOT EXISTS idx_publisher_audit_artifact_path ON public.publisher_audit (artifact_path);
 CREATE INDEX IF NOT EXISTS idx_publisher_audit_namespace ON public.publisher_audit (namespace);
 CREATE INDEX IF NOT EXISTS idx_publisher_audit_reviewer ON public.publisher_audit (reviewer);
+CREATE INDEX IF NOT EXISTS idx_publisher_audit_processed_at ON public.publisher_audit (processed_at DESC);
+
+COMMENT ON TABLE public.publisher_audit IS 'Per-event audit records for the publisher pipeline.';
+COMMENT ON COLUMN public.publisher_audit.publish_event_id IS 'Inbound approval event identifier (content.publish.approved.v1).';
+COMMENT ON COLUMN public.publisher_audit.artifact_uri IS 'Original S3/MinIO URI supplied by the approval payload.';
+COMMENT ON COLUMN public.publisher_audit.artifact_path IS 'Filesystem target chosen by the publisher for the downloaded artifact.';
+COMMENT ON COLUMN public.publisher_audit.reviewer IS 'Reviewer identity captured from the approval payload metadata.';
+COMMENT ON COLUMN public.publisher_audit.status IS 'Processing status flag (published | failed).';
+COMMENT ON COLUMN public.publisher_audit.failure_reason IS 'Exception or validation detail recorded for failed rows.';
+COMMENT ON COLUMN public.publisher_audit.meta IS 'JSON metadata blob with slug, namespace, and stage breadcrumbs.';
 
 -- Helper trigger to keep updated_at fresh on updates
 CREATE OR REPLACE FUNCTION public.set_current_timestamp_updated_at()

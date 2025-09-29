@@ -10,7 +10,7 @@ import os
 import pathlib
 import re
 import unicodedata
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from urllib.parse import urljoin
@@ -75,6 +75,12 @@ try:  # pragma: no cover - optional dependency for runtime environments
 except Exception:  # pragma: no cover - supabase is optional for local/dev testing
     supabase_client = None  # type: ignore[assignment]
 
+from services.common.telemetry import (
+    PublisherMetrics,
+    PublishTelemetry,
+    compute_publish_telemetry,
+)
+
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
@@ -109,88 +115,6 @@ def _configure_logging() -> None:
         )
 
 
-@dataclass
-class PublisherMetrics:
-    downloads: int = 0
-    download_failures: int = 0
-    refresh_attempts: int = 0
-    refresh_success: int = 0
-    refresh_failures: int = 0
-    turnaround_samples: int = 0
-    total_turnaround_seconds: float = 0.0
-    max_turnaround_seconds: float = 0.0
-    approval_latency_samples: int = 0
-    total_approval_latency_seconds: float = 0.0
-    max_approval_latency_seconds: float = 0.0
-    engagement_events: int = 0
-    engagement_totals: Dict[str, float] = field(default_factory=dict)
-    cost_events: int = 0
-    cost_totals: Dict[str, float] = field(default_factory=dict)
-
-    def record_download_success(self) -> None:
-        self.downloads += 1
-
-    def record_download_failure(self) -> None:
-        self.download_failures += 1
-
-    def record_refresh_attempt(self) -> None:
-        self.refresh_attempts += 1
-
-    def record_refresh_success(self) -> None:
-        self.refresh_success += 1
-
-    def record_refresh_failure(self) -> None:
-        self.refresh_failures += 1
-
-    def record_turnaround(self, seconds: Optional[float]) -> None:
-        if seconds is None or seconds < 0:
-            return
-        self.turnaround_samples += 1
-        self.total_turnaround_seconds += seconds
-        if seconds > self.max_turnaround_seconds:
-            self.max_turnaround_seconds = seconds
-
-    def record_approval_latency(self, seconds: Optional[float]) -> None:
-        if seconds is None or seconds < 0:
-            return
-        self.approval_latency_samples += 1
-        self.total_approval_latency_seconds += seconds
-        if seconds > self.max_approval_latency_seconds:
-            self.max_approval_latency_seconds = seconds
-
-    def record_engagement(self, engagement: Dict[str, float]) -> None:
-        if not engagement:
-            return
-        self.engagement_events += 1
-        for key, value in engagement.items():
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError):
-                continue
-            self.engagement_totals[key] = self.engagement_totals.get(key, 0.0) + numeric
-
-    def record_cost(self, cost: Dict[str, float]) -> None:
-        if not cost:
-            return
-        self.cost_events += 1
-        for key, value in cost.items():
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError):
-                continue
-            self.cost_totals[key] = self.cost_totals.get(key, 0.0) + numeric
-
-    def summary(self) -> Dict[str, Any]:
-        data = asdict(self)
-        if self.turnaround_samples:
-            data["avg_turnaround_seconds"] = self.total_turnaround_seconds / self.turnaround_samples
-        if self.approval_latency_samples:
-            data["avg_approval_latency_seconds"] = (
-                self.total_approval_latency_seconds / self.approval_latency_samples
-            )
-        return data
-
-
 METRICS = PublisherMetrics()
 _METRICS_SERVER: Optional[asyncio.AbstractServer] = None
 
@@ -201,44 +125,6 @@ class DownloadError(Exception):
 
 class JellyfinRefreshError(Exception):
     """Raised when Jellyfin fails to refresh or respond."""
-
-
-
-@dataclass
-class PublishTelemetry:
-    published_at: datetime.datetime
-    turnaround_seconds: Optional[float]
-    approval_latency_seconds: Optional[float]
-    engagement: Dict[str, float]
-    cost: Dict[str, float]
-
-    def to_meta(self) -> Dict[str, Any]:
-        meta: Dict[str, Any] = {
-            "published_at": self.published_at.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        }
-        if self.turnaround_seconds is not None:
-            meta["turnaround_seconds"] = self.turnaround_seconds
-        if self.approval_latency_seconds is not None:
-            meta["approval_to_publish_seconds"] = self.approval_latency_seconds
-        if self.engagement:
-            meta["engagement"] = self.engagement
-        if self.cost:
-            meta["cost"] = self.cost
-        return meta
-
-    def to_rollup_row(self, *, artifact_uri: str, namespace: str, slug: str) -> Dict[str, Any]:
-        return {
-            "artifact_uri": artifact_uri,
-            "namespace": namespace,
-            "slug": slug,
-            "published_at": self.published_at.isoformat(),
-            "turnaround_seconds": self.turnaround_seconds,
-            "approval_latency_seconds": self.approval_latency_seconds,
-            "engagement": self.engagement or None,
-            "cost": self.cost or None,
-        }
-
-
 
 def _utc_now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -290,6 +176,11 @@ def _combine_meta(base: Optional[Dict[str, Any]], extra: Optional[Dict[str, Any]
     return meta or None
 
 
+def _describe_exception(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text or exc.__class__.__name__
+
+
 def _record_audit(
     *,
     publish_event_id: Optional[str],
@@ -311,6 +202,11 @@ def _record_audit(
         return
 
     now_iso = _utc_now_iso()
+    normalized_failure = _coerce_text(failure_reason)
+    if normalized_failure is not None:
+        normalized_failure = normalized_failure.strip() or None
+    if status == "failed" and not normalized_failure:
+        normalized_failure = "unspecified failure"
 
     row = {
         "publish_event_id": publish_event_id,
@@ -322,7 +218,7 @@ def _record_audit(
         "reviewer": reviewer,
         "reviewed_at": reviewed_at,
         "status": status,
-        "failure_reason": failure_reason,
+        "failure_reason": normalized_failure,
         "published_event_id": published_event_id,
         "public_url": public_url,
         "published_at": published_at,
@@ -479,100 +375,6 @@ async def download_with_retries(minio: MinioClientType, bucket: str, key: str, d
             if attempt < DOWNLOAD_RETRIES:
                 await asyncio.sleep(DOWNLOAD_RETRY_BACKOFF_SEC * attempt)
     raise DownloadError(f"Failed to download s3://{bucket}/{key}") from last_error
-
-
-def _parse_iso8601(value: Optional[Any]) -> Optional[datetime.datetime]:
-    if not value or not isinstance(value, str):
-        return None
-    value = value.strip()
-    if not value:
-        return None
-    try:
-        if value.endswith("Z"):
-            value = value[:-1] + "+00:00"
-        return datetime.datetime.fromisoformat(value)
-    except ValueError:
-        return None
-
-
-def _coerce_numeric(value: Any) -> Optional[float]:
-    try:
-        if value is None:
-            return None
-        numeric = float(value)
-        if numeric != numeric:  # NaN
-            return None
-        return numeric
-    except (TypeError, ValueError):
-        return None
-
-
-def _extract_first(meta: Dict[str, Any], keys: Tuple[str, ...]) -> Optional[str]:
-    for key in keys:
-        candidate = meta.get(key)
-        if isinstance(candidate, str) and candidate:
-            return candidate
-    return None
-
-
-def compute_publish_telemetry(
-    incoming_meta: Optional[Dict[str, Any]],
-    event_ts: Optional[str],
-    published_at: datetime.datetime,
-) -> PublishTelemetry:
-    meta = incoming_meta or {}
-    start_keys = (
-        "ingest_started_at",
-        "submitted_at",
-        "created_at",
-        "capture_completed_at",
-    )
-    approval_keys = (
-        "approval_granted_at",
-        "approved_at",
-        "approval_completed_at",
-    )
-
-    start_ts = _parse_iso8601(_extract_first(meta, start_keys))
-    approval_ts = _parse_iso8601(_extract_first(meta, approval_keys))
-    event_timestamp = _parse_iso8601(event_ts)
-
-    turnaround_seconds: Optional[float] = None
-    if start_ts is not None:
-        turnaround_seconds = (published_at - start_ts).total_seconds()
-
-    approval_latency_seconds: Optional[float] = None
-    reference_ts = approval_ts or event_timestamp
-    if reference_ts is not None:
-        approval_latency_seconds = (published_at - reference_ts).total_seconds()
-
-    engagement: Dict[str, float] = {}
-    for key in ("engagement", "analytics", "metrics"):
-        candidate = meta.get(key)
-        if isinstance(candidate, dict):
-            for metric_key, value in candidate.items():
-                numeric = _coerce_numeric(value)
-                if numeric is None:
-                    continue
-                engagement[metric_key] = engagement.get(metric_key, 0.0) + numeric
-
-    cost: Dict[str, float] = {}
-    for key in ("cost", "spend", "usage"):
-        candidate = meta.get(key)
-        if isinstance(candidate, dict):
-            for cost_key, value in candidate.items():
-                numeric = _coerce_numeric(value)
-                if numeric is None:
-                    continue
-                cost[cost_key] = cost.get(cost_key, 0.0) + numeric
-
-    return PublishTelemetry(
-        published_at=published_at,
-        turnaround_seconds=turnaround_seconds,
-        approval_latency_seconds=approval_latency_seconds,
-        engagement=engagement,
-        cost=cost,
-    )
 
 
 async def persist_publish_rollup(row: Dict[str, Any]) -> None:
@@ -794,6 +596,10 @@ async def main() -> None:
         out_path = derive_output_path(MEDIA_LIBRARY_PATH, namespace, slug, ext)
         filename = os.path.basename(out_path)
         extension = os.path.splitext(filename)[1]
+        path_meta_base = _combine_meta(
+            meta_with_slug,
+            {"output_path": out_path, "filename": filename, "extension": extension},
+        )
 
         try:
             await download_with_retries(s3, bucket, key, out_path)
@@ -820,8 +626,8 @@ async def main() -> None:
                 status="failed",
                 failure_reason=str(exc),
                 meta=_combine_meta(
-                    meta_with_slug,
-                    {"stage": "download", "output_path": out_path, "attempts": DOWNLOAD_RETRIES},
+                    path_meta_base,
+                    {"stage": "download", "attempts": DOWNLOAD_RETRIES},
                 ),
             )
             return
@@ -843,56 +649,93 @@ async def main() -> None:
         published_at = datetime.datetime.now(datetime.timezone.utc)
 
         derived_public_url = public_url or _derive_public_url(out_path)
+        path_meta_with_url = _combine_meta(path_meta_base, {"public_url": derived_public_url})
 
-        published_payload = build_published_payload(
-            artifact_uri=artifact_uri,
-            published_path=out_path,
-            namespace=namespace,
-            title=title,
-            description=payload.get("description"),
-            tags=payload.get("tags"),
-            incoming_meta=payload.get("meta"),
-            public_url=derived_public_url,
-            jellyfin_item_id=jellyfin_item_id,
-            slug=slug,
-            namespace_slug=namespace_slug,
-            filename=filename,
-            extension=extension,
-        )
+        published_payload: Dict[str, Any] = {}
+        evt: Optional[Dict[str, Any]] = None
+        failure_stage = "build_payload"
 
-        telemetry = compute_publish_telemetry(payload.get("meta"), env.get("ts"), published_at)
-        published_payload.setdefault("meta", {}).update(telemetry.to_meta())
-
-        METRICS.record_turnaround(telemetry.turnaround_seconds)
-        METRICS.record_approval_latency(telemetry.approval_latency_seconds)
-        METRICS.record_engagement(telemetry.engagement)
-        METRICS.record_cost(telemetry.cost)
-
-        await persist_publish_rollup(
-            telemetry.to_rollup_row(
+        try:
+            published_payload = build_published_payload(
                 artifact_uri=artifact_uri,
+                published_path=out_path,
                 namespace=namespace,
+                title=title,
+                description=payload.get("description"),
+                tags=payload.get("tags"),
+                incoming_meta=payload.get("meta"),
+                public_url=derived_public_url,
+                jellyfin_item_id=jellyfin_item_id,
                 slug=slug,
+                namespace_slug=namespace_slug,
+                filename=filename,
+                extension=extension,
             )
-        )
 
-        evt = envelope(
-            "content.published.v1",
-            published_payload,
-            parent_id=env.get("id"),
-            correlation_id=env.get("correlation_id"),
-            source="publisher",
-        )
-        await nc.publish("content.published.v1", json.dumps(evt).encode())
+            failure_stage = "telemetry"
+            telemetry = compute_publish_telemetry(payload.get("meta"), env.get("ts"), published_at)
+            published_payload.setdefault("meta", {}).update(telemetry.to_meta())
 
-        extra_meta = {
-            "stage": "published",
-            "filename": filename,
-            "extension": extension,
-            "jellyfin_item_id": jellyfin_item_id,
-        }
-        extra_meta.update(jellyfin_meta)
-        success_meta = _combine_meta(meta_with_slug, extra_meta)
+            METRICS.record_turnaround(telemetry.turnaround_seconds)
+            METRICS.record_approval_latency(telemetry.approval_latency_seconds)
+            METRICS.record_engagement(telemetry.engagement)
+            METRICS.record_cost(telemetry.cost)
+
+            failure_stage = "persist_rollup"
+            await persist_publish_rollup(
+                telemetry.to_rollup_row(
+                    artifact_uri=artifact_uri,
+                    namespace=namespace,
+                    slug=slug,
+                )
+            )
+
+            failure_stage = "emit_event"
+            evt = envelope(
+                "content.published.v1",
+                published_payload,
+                parent_id=env.get("id"),
+                correlation_id=env.get("correlation_id"),
+                source="publisher",
+            )
+            await nc.publish("content.published.v1", json.dumps(evt).encode())
+        except Exception as exc:
+            logger.exception(
+                "Failed to finalize publish pipeline",
+                extra={
+                    "publish_event_id": publish_event_id,
+                    "artifact_uri": artifact_uri,
+                    "artifact_path": out_path,
+                    "stage": failure_stage,
+                    "namespace": namespace,
+                },
+            )
+
+            failure_context = {"stage": failure_stage, "public_url": derived_public_url}
+            if jellyfin_item_id:
+                failure_context["jellyfin_item_id"] = jellyfin_item_id
+            failure_context.update(jellyfin_meta)
+
+            _record_audit(
+                publish_event_id=publish_event_id,
+                approval_event_ts=approval_event_ts,
+                correlation_id=correlation_id,
+                artifact_uri=artifact_uri,
+                artifact_path=out_path,
+                namespace=namespace,
+                reviewer=reviewer,
+                reviewed_at=reviewed_at,
+                status="failed",
+                failure_reason=_describe_exception(exc),
+                meta=_combine_meta(path_meta_with_url, failure_context),
+            )
+            return
+
+        success_context: Dict[str, Any] = {"stage": "published"}
+        if jellyfin_item_id:
+            success_context["jellyfin_item_id"] = jellyfin_item_id
+        success_context.update(jellyfin_meta)
+        success_meta = _combine_meta(path_meta_with_url, success_context)
 
         _record_audit(
             publish_event_id=publish_event_id,
@@ -922,13 +765,10 @@ async def main() -> None:
                 "event_id": env.get("id"),
                 "correlation_id": env.get("correlation_id"),
                 "public_url": published_payload.get("public_url"),
-
-                "metrics": METRICS.summary(),
-
+                "metrics_summary": METRICS.summary(),
                 "publish_event_id": publish_event_id,
                 "reviewer": reviewer,
-                "metrics": asdict(METRICS),
-
+                "metrics_state": asdict(METRICS),
             },
         )
 

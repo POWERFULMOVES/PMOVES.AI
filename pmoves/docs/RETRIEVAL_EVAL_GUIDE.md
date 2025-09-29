@@ -1,5 +1,5 @@
 # Retrieval Evaluation Playbook
-_Last updated: 2025-02-15_
+_Last updated: 2025-02-18_
 
 This guide covers end-to-end retrieval quality evaluation for the hi-RAG stack, including:
 
@@ -18,7 +18,7 @@ This guide covers end-to-end retrieval quality evaluation for the hi-RAG stack, 
    ```bash
    export HIRAG_URL=http://localhost:8087  # adjust for your deployment
    ```
-3. **Datasets** – JSONL files where each line represents a query definition (examples live under `pmoves/datasets/`). Minimum schema:
+3. **Datasets** – JSONL files where each line represents a query definition. Canonical samples live under `pmoves/datasets/retrieval/`; copy or extend them to add your own evaluation packs. Minimum schema:
    ```json
    {
      "query": "Find docs about EvalOps",
@@ -85,9 +85,10 @@ Key options:
 - `--include-hits`: attach retrieved hit summaries to the JSON payload.
 
 Output JSON structure highlights:
-- `overall`: average `mrr`/`ndcg`, query count, evaluation parameters.
+- `overall`: contains `count`, `k`, and a nested `metrics` object with averaged `mrr`/`ndcg` values.
 - `per_query`: per-query metrics plus hit relevance flags (omit with `--no-query-details`).
 - `suites`: grouped metrics for each bias/stress slice, including threshold pass/fail signals.
+- `suite_config`: SHA256 + path metadata for the bias/stress configuration used during the run.
 
 ## Rerank Evaluation Harness (`eval_rerank.py`)
 
@@ -122,13 +123,13 @@ After producing one or more JSON results, create a Model Card bundle:
 python pmoves/services/retrieval-eval/generate_model_card.py \
   --model-name "hi-RAG Cohere Rerank" \
   --results artifacts/retrieval/baseline_results.json artifacts/retrieval/rerank_results.json \
-  --output-dir pmoves/docs/evals
+  --output-dir docs/evals
 ```
 
 Artifacts created under `docs/evals/<slug>/<timestamp>/`:
 - `model_card.md`: Markdown report summarising datasets, metrics, and suite outcomes.
 - `model_card.html`: HTML rendering (falls back to `<pre>` if the `markdown` package is unavailable).
-- `summary.json`: Machine-readable bundle of runs, datasets, comparisons, and optional notes (`--notes path/to/context.json`).
+- `summary.json`: Machine-readable bundle covering runs, dataset provenance (including SHA256 hashes), suite configs, comparisons, and optional notes (`--notes path/to/context.json`).
 
 Include these files when publishing evaluation packs or sharing Model Cards with stakeholders.
 

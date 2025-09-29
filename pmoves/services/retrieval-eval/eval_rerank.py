@@ -138,6 +138,7 @@ def evaluate_setting(
         "overall": {
             "count": len(per_query),
             "metrics": overall_metrics,
+            "k": k,
         },
     }
     if suite_results:

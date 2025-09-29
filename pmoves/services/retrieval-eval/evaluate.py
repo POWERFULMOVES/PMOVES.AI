@@ -159,10 +159,13 @@ def evaluate_dataset(args: argparse.Namespace) -> Tuple[Dict[str, Any], List[Dic
         )
         results.append(result)
 
-    overall = {
-        "count": len(results),
+    overall_metrics = {
         "mrr": sum(r["metrics"]["mrr"] for r in results) / len(results) if results else 0.0,
         "ndcg": sum(r["metrics"]["ndcg"] for r in results) / len(results) if results else 0.0,
+    }
+    overall = {
+        "count": len(results),
+        "metrics": overall_metrics,
         "k": args.k,
     }
 
