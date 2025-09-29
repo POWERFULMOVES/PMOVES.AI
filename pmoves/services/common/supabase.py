@@ -26,3 +26,8 @@ def insert_segments(rows: List[Dict[str, Any]]) -> None:
 def insert_emotions(rows: List[Dict[str, Any]]) -> None:
     if rows:
         client().table("emotions").insert(rows).execute()
+
+
+def upsert_publisher_audit(row: Dict[str, Any]) -> None:
+    if row:
+        client().table("publisher_audit").upsert(row, on_conflict="publish_event_id").execute()
