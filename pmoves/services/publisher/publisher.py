@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import logging
 import os
@@ -58,6 +59,11 @@ except Exception:  # pragma: no cover - fallback used in tests without dependenc
         if correlation_id:
             env["correlation_id"] = correlation_id
         return env
+
+try:  # pragma: no cover - optional dependency for runtime environments
+    from services.common import supabase as supabase_client
+except Exception:  # pragma: no cover - supabase is optional for local/dev testing
+    supabase_client = None  # type: ignore[assignment]
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
@@ -122,6 +128,112 @@ class DownloadError(Exception):
 class JellyfinRefreshError(Exception):
     """Raised when Jellyfin fails to refresh or respond."""
 
+
+def _utc_now_iso() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _coerce_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _extract_reviewer(payload: Dict[str, Any]) -> Optional[str]:
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    candidates = [
+        payload.get("reviewer"),
+        payload.get("approved_by"),
+        payload.get("reviewed_by"),
+        meta.get("reviewer") if isinstance(meta, dict) else None,
+        meta.get("approved_by") if isinstance(meta, dict) else None,
+        meta.get("reviewed_by") if isinstance(meta, dict) else None,
+    ]
+    for candidate in candidates:
+        text = _coerce_text(candidate)
+        if text:
+            return text
+    return None
+
+
+def _extract_reviewed_at(payload: Dict[str, Any], fallback: Optional[str]) -> Optional[str]:
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    if isinstance(meta, dict):
+        for key in ("approved_at", "reviewed_at", "status_changed_at"):
+            value = meta.get(key)
+            if value:
+                return _coerce_text(value)
+    return _coerce_text(fallback)
+
+
+def _combine_meta(base: Optional[Dict[str, Any]], extra: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    meta: Dict[str, Any] = {}
+    if isinstance(base, dict):
+        meta.update(base)
+    if isinstance(extra, dict):
+        for key, value in extra.items():
+            if value is not None:
+                meta[key] = value
+    return meta or None
+
+
+def _record_audit(
+    *,
+    publish_event_id: Optional[str],
+    approval_event_ts: Optional[str],
+    correlation_id: Optional[str],
+    artifact_uri: Optional[str],
+    artifact_path: Optional[str],
+    namespace: Optional[str],
+    reviewer: Optional[str],
+    reviewed_at: Optional[str],
+    status: str,
+    failure_reason: Optional[str],
+    published_event_id: Optional[str] = None,
+    public_url: Optional[str] = None,
+    published_at: Optional[str] = None,
+    meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    if not publish_event_id or supabase_client is None:
+        return
+
+    now_iso = _utc_now_iso()
+
+    row = {
+        "publish_event_id": publish_event_id,
+        "approval_event_ts": approval_event_ts,
+        "correlation_id": correlation_id,
+        "artifact_uri": artifact_uri,
+        "artifact_path": artifact_path,
+        "namespace": namespace,
+        "reviewer": reviewer,
+        "reviewed_at": reviewed_at,
+        "status": status,
+        "failure_reason": failure_reason,
+        "published_event_id": published_event_id,
+        "public_url": public_url,
+        "published_at": published_at,
+        "processed_at": now_iso,
+        "meta": meta or None,
+        "updated_at": now_iso,
+    }
+
+    try:
+        supabase_client.upsert_publisher_audit(row)
+    except RuntimeError as exc:  # pragma: no cover - supabase config missing
+        logger.debug(
+            "Supabase not configured; skipping publisher audit",
+            extra={"publish_event_id": publish_event_id},
+            exc_info=exc,
+        )
+    except Exception as exc:  # pragma: no cover - network/driver errors
+        logger.warning(
+            "Failed to persist publisher audit entry",
+            extra={"publish_event_id": publish_event_id, "status": status},
+            exc_info=exc,
+        )
 
 def parse_s3(uri: str) -> Tuple[str, str]:
     m = re.match(r"^s3://([^/]+)/(.+)$", uri)
@@ -382,21 +494,78 @@ async def main() -> None:
 
     async def handle(msg):
         env = json.loads(msg.data.decode())
-        payload = env.get("payload", {})
-        artifact_uri = payload.get("artifact_uri")
-        title = payload.get("title", "untitled")
-        namespace = payload.get("namespace", "pmoves-demo")
+        payload_raw = env.get("payload") or {}
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
+
+        publish_event_id = _coerce_text(env.get("id"))
+        approval_event_ts = _coerce_text(env.get("ts"))
+        correlation_id = _coerce_text(env.get("correlation_id"))
+        artifact_uri = _coerce_text(payload.get("artifact_uri"))
+        title = _coerce_text(payload.get("title")) or "untitled"
+        namespace = _coerce_text(payload.get("namespace")) or "pmoves-demo"
+        reviewer = _extract_reviewer(payload)
+        reviewed_at = _extract_reviewed_at(payload, approval_event_ts)
+
+        base_meta: Dict[str, Any] = {}
+        if isinstance(payload.get("meta"), dict):
+            base_meta["source_meta"] = payload["meta"]
+
+        if not artifact_uri:
+            logger.error(
+                "Missing artifact URI",
+                extra={
+                    "publish_event_id": publish_event_id,
+                    "payload_keys": list(payload.keys()),
+                },
+            )
+            _record_audit(
+                publish_event_id=publish_event_id,
+                approval_event_ts=approval_event_ts,
+                correlation_id=correlation_id,
+                artifact_uri=artifact_uri,
+                artifact_path=None,
+                namespace=namespace,
+                reviewer=reviewer,
+                reviewed_at=reviewed_at,
+                status="failed",
+                failure_reason="missing artifact_uri",
+                meta=_combine_meta(base_meta, {"stage": "validate"}),
+            )
+            return
 
         try:
             bucket, key = parse_s3(artifact_uri)
         except Exception as exc:
-            logger.error("Invalid artifact URI", exc_info=exc, extra={"artifact_uri": artifact_uri})
+            logger.error(
+                "Invalid artifact URI",
+                exc_info=exc,
+                extra={"artifact_uri": artifact_uri, "publish_event_id": publish_event_id},
+            )
+            _record_audit(
+                publish_event_id=publish_event_id,
+                approval_event_ts=approval_event_ts,
+                correlation_id=correlation_id,
+                artifact_uri=artifact_uri,
+                artifact_path=None,
+                namespace=namespace,
+                reviewer=reviewer,
+                reviewed_at=reviewed_at,
+                status="failed",
+                failure_reason=str(exc),
+                meta=_combine_meta(base_meta, {"stage": "parse_uri"}),
+            )
             return
 
+        meta_with_source = _combine_meta(base_meta, {"bucket": bucket, "key": key})
         name = (key or "").split("/")[-1]
         ext = "." + name.split(".")[-1] if "." in name else ".png"
-        slug = slugify(payload.get("slug") or title)
+        slug_source = _coerce_text(payload.get("slug")) or title
+        slug = slugify(slug_source)
         namespace_slug = slugify(namespace or "default")
+        meta_with_slug = _combine_meta(
+            meta_with_source,
+            {"slug": slug, "namespace_slug": namespace_slug},
+        )
         out_path = derive_output_path(MEDIA_LIBRARY_PATH, namespace, slug, ext)
         filename = os.path.basename(out_path)
         extension = os.path.splitext(filename)[1]
@@ -407,21 +576,45 @@ async def main() -> None:
             logger.error(
                 "Failed to download artifact",
                 exc_info=exc,
-                extra={"artifact_uri": artifact_uri, "namespace": namespace, "output": out_path},
+                extra={
+                    "artifact_uri": artifact_uri,
+                    "namespace": namespace,
+                    "output": out_path,
+                    "publish_event_id": publish_event_id,
+                },
+            )
+            _record_audit(
+                publish_event_id=publish_event_id,
+                approval_event_ts=approval_event_ts,
+                correlation_id=correlation_id,
+                artifact_uri=artifact_uri,
+                artifact_path=out_path,
+                namespace=namespace,
+                reviewer=reviewer,
+                reviewed_at=reviewed_at,
+                status="failed",
+                failure_reason=str(exc),
+                meta=_combine_meta(
+                    meta_with_slug,
+                    {"stage": "download", "output_path": out_path, "attempts": DOWNLOAD_RETRIES},
+                ),
             )
             return
 
         public_url: Optional[str] = None
         jellyfin_item_id: Optional[str] = None
+        jellyfin_meta: Dict[str, Any] = {}
         try:
             public_url, jellyfin_item_id = await request_jellyfin_refresh(title, namespace)
         except JellyfinRefreshError as exc:
             logger.warning(
                 "Jellyfin refresh error",
                 exc_info=exc,
-                extra={"namespace": namespace, "title": title},
+                extra={"namespace": namespace, "title": title, "publish_event_id": publish_event_id},
             )
+            jellyfin_meta = {"jellyfin_refresh_error": str(exc)}
 
+        derived_public_url = public_url or _derive_public_url(out_path)
         published_payload = build_published_payload(
             artifact_uri=artifact_uri,
             published_path=out_path,
@@ -430,7 +623,7 @@ async def main() -> None:
             description=payload.get("description"),
             tags=payload.get("tags"),
             incoming_meta=payload.get("meta"),
-            public_url=public_url or _derive_public_url(out_path),
+            public_url=derived_public_url,
             jellyfin_item_id=jellyfin_item_id,
             slug=slug,
             namespace_slug=namespace_slug,
@@ -446,6 +639,33 @@ async def main() -> None:
             source="publisher",
         )
         await nc.publish("content.published.v1", json.dumps(evt).encode())
+
+        extra_meta = {
+            "stage": "published",
+            "filename": filename,
+            "extension": extension,
+            "jellyfin_item_id": jellyfin_item_id,
+        }
+        extra_meta.update(jellyfin_meta)
+        success_meta = _combine_meta(meta_with_slug, extra_meta)
+
+        _record_audit(
+            publish_event_id=publish_event_id,
+            approval_event_ts=approval_event_ts,
+            correlation_id=correlation_id,
+            artifact_uri=artifact_uri,
+            artifact_path=out_path,
+            namespace=namespace,
+            reviewer=reviewer,
+            reviewed_at=reviewed_at,
+            status="published",
+            failure_reason=None,
+            published_event_id=_coerce_text(evt.get("id")),
+            public_url=published_payload.get("public_url"),
+            published_at=_coerce_text(evt.get("ts")),
+            meta=success_meta,
+        )
+
         logger.info(
             "Published content",
             extra={
@@ -457,6 +677,8 @@ async def main() -> None:
                 "event_id": env.get("id"),
                 "correlation_id": env.get("correlation_id"),
                 "public_url": published_payload.get("public_url"),
+                "publish_event_id": publish_event_id,
+                "reviewer": reviewer,
                 "metrics": asdict(METRICS),
             },
         )
