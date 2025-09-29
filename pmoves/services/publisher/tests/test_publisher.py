@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -116,3 +117,31 @@ def test_request_jellyfin_refresh_webhook(monkeypatch):
         publisher.METRICS.refresh_attempts = attempts_before
         publisher.METRICS.refresh_success = success_before
         publisher.METRICS.refresh_failures = failures_before
+
+
+def test_compute_publish_telemetry_and_metrics_summary():
+    published_at = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
+    incoming_meta = {
+        "ingest_started_at": "2024-01-01T09:00:00Z",
+        "approved_at": "2024-01-01T11:30:00Z",
+        "engagement": {"views": "10", "ctr": 0.25},
+        "cost": {"storage_gb": "0.5", "transfer_gb": 0.1},
+    }
+    telemetry = publisher.compute_publish_telemetry(incoming_meta, "2024-01-01T11:45:00Z", published_at)
+
+    assert telemetry.turnaround_seconds == 10800.0
+    assert telemetry.approval_latency_seconds == 1800.0
+    assert telemetry.engagement == {"views": 10.0, "ctr": 0.25}
+    assert telemetry.cost == {"storage_gb": 0.5, "transfer_gb": 0.1}
+
+    metrics = publisher.PublisherMetrics()
+    metrics.record_turnaround(telemetry.turnaround_seconds)
+    metrics.record_approval_latency(telemetry.approval_latency_seconds)
+    metrics.record_engagement(telemetry.engagement)
+    metrics.record_cost(telemetry.cost)
+
+    summary = metrics.summary()
+    assert summary["avg_turnaround_seconds"] == 10800.0
+    assert summary["avg_approval_latency_seconds"] == 1800.0
+    assert summary["engagement_totals"]["views"] == 10.0
+    assert summary["cost_totals"]["storage_gb"] == 0.5

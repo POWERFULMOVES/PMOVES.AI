@@ -1,11 +1,13 @@
 import asyncio
+import contextlib
+import datetime
 import json
 import logging
 import os
 import pathlib
 import re
 import unicodedata
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from urllib.parse import urljoin
@@ -59,6 +61,11 @@ except Exception:  # pragma: no cover - fallback used in tests without dependenc
             env["correlation_id"] = correlation_id
         return env
 
+try:  # pragma: no cover - optional Supabase client helper
+    from services.common import supabase as supabase_common
+except Exception:  # pragma: no cover - Supabase optional in most environments
+    supabase_common = None  # type: ignore[assignment]
+
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_USE_SSL = os.environ.get("MINIO_USE_SSL", "false").lower() == "true"
@@ -75,6 +82,10 @@ MEDIA_LIBRARY_PATH = os.environ.get("MEDIA_LIBRARY_PATH", "/library/images")
 MEDIA_LIBRARY_PUBLIC_BASE_URL = os.environ.get("MEDIA_LIBRARY_PUBLIC_BASE_URL")
 DOWNLOAD_RETRIES = int(os.environ.get("PUBLISHER_DOWNLOAD_RETRIES", "3"))
 DOWNLOAD_RETRY_BACKOFF_SEC = float(os.environ.get("PUBLISHER_DOWNLOAD_RETRY_BACKOFF", "1.5"))
+METRICS_HOST = os.environ.get("PUBLISHER_METRICS_HOST", "0.0.0.0")
+METRICS_PORT = int(os.environ.get("PUBLISHER_METRICS_PORT", "9095"))
+METRICS_ROLLUP_TABLE = os.environ.get("PUBLISHER_METRICS_TABLE", "publisher_metrics_rollup")
+ROLLUP_CONFLICT_COLUMN = os.environ.get("PUBLISHER_METRICS_CONFLICT", "artifact_uri")
 
 
 logger = logging.getLogger("pmoves.publisher")
@@ -95,6 +106,16 @@ class PublisherMetrics:
     refresh_attempts: int = 0
     refresh_success: int = 0
     refresh_failures: int = 0
+    turnaround_samples: int = 0
+    total_turnaround_seconds: float = 0.0
+    max_turnaround_seconds: float = 0.0
+    approval_latency_samples: int = 0
+    total_approval_latency_seconds: float = 0.0
+    max_approval_latency_seconds: float = 0.0
+    engagement_events: int = 0
+    engagement_totals: Dict[str, float] = field(default_factory=dict)
+    cost_events: int = 0
+    cost_totals: Dict[str, float] = field(default_factory=dict)
 
     def record_download_success(self) -> None:
         self.downloads += 1
@@ -111,8 +132,57 @@ class PublisherMetrics:
     def record_refresh_failure(self) -> None:
         self.refresh_failures += 1
 
+    def record_turnaround(self, seconds: Optional[float]) -> None:
+        if seconds is None or seconds < 0:
+            return
+        self.turnaround_samples += 1
+        self.total_turnaround_seconds += seconds
+        if seconds > self.max_turnaround_seconds:
+            self.max_turnaround_seconds = seconds
+
+    def record_approval_latency(self, seconds: Optional[float]) -> None:
+        if seconds is None or seconds < 0:
+            return
+        self.approval_latency_samples += 1
+        self.total_approval_latency_seconds += seconds
+        if seconds > self.max_approval_latency_seconds:
+            self.max_approval_latency_seconds = seconds
+
+    def record_engagement(self, engagement: Dict[str, float]) -> None:
+        if not engagement:
+            return
+        self.engagement_events += 1
+        for key, value in engagement.items():
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            self.engagement_totals[key] = self.engagement_totals.get(key, 0.0) + numeric
+
+    def record_cost(self, cost: Dict[str, float]) -> None:
+        if not cost:
+            return
+        self.cost_events += 1
+        for key, value in cost.items():
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            self.cost_totals[key] = self.cost_totals.get(key, 0.0) + numeric
+
+    def summary(self) -> Dict[str, Any]:
+        data = asdict(self)
+        if self.turnaround_samples:
+            data["avg_turnaround_seconds"] = self.total_turnaround_seconds / self.turnaround_samples
+        if self.approval_latency_samples:
+            data["avg_approval_latency_seconds"] = (
+                self.total_approval_latency_seconds / self.approval_latency_samples
+            )
+        return data
+
 
 METRICS = PublisherMetrics()
+_METRICS_SERVER: Optional[asyncio.AbstractServer] = None
 
 
 class DownloadError(Exception):
@@ -121,6 +191,41 @@ class DownloadError(Exception):
 
 class JellyfinRefreshError(Exception):
     """Raised when Jellyfin fails to refresh or respond."""
+
+
+@dataclass
+class PublishTelemetry:
+    published_at: datetime.datetime
+    turnaround_seconds: Optional[float]
+    approval_latency_seconds: Optional[float]
+    engagement: Dict[str, float]
+    cost: Dict[str, float]
+
+    def to_meta(self) -> Dict[str, Any]:
+        meta: Dict[str, Any] = {
+            "published_at": self.published_at.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        }
+        if self.turnaround_seconds is not None:
+            meta["turnaround_seconds"] = self.turnaround_seconds
+        if self.approval_latency_seconds is not None:
+            meta["approval_to_publish_seconds"] = self.approval_latency_seconds
+        if self.engagement:
+            meta["engagement"] = self.engagement
+        if self.cost:
+            meta["cost"] = self.cost
+        return meta
+
+    def to_rollup_row(self, *, artifact_uri: str, namespace: str, slug: str) -> Dict[str, Any]:
+        return {
+            "artifact_uri": artifact_uri,
+            "namespace": namespace,
+            "slug": slug,
+            "published_at": self.published_at.isoformat(),
+            "turnaround_seconds": self.turnaround_seconds,
+            "approval_latency_seconds": self.approval_latency_seconds,
+            "engagement": self.engagement or None,
+            "cost": self.cost or None,
+        }
 
 
 def parse_s3(uri: str) -> Tuple[str, str]:
@@ -257,6 +362,117 @@ async def download_with_retries(minio: MinioClientType, bucket: str, key: str, d
     raise DownloadError(f"Failed to download s3://{bucket}/{key}") from last_error
 
 
+def _parse_iso8601(value: Optional[Any]) -> Optional[datetime.datetime]:
+    if not value or not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _coerce_numeric(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        numeric = float(value)
+        if numeric != numeric:  # NaN
+            return None
+        return numeric
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_first(meta: Dict[str, Any], keys: Tuple[str, ...]) -> Optional[str]:
+    for key in keys:
+        candidate = meta.get(key)
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
+
+
+def compute_publish_telemetry(
+    incoming_meta: Optional[Dict[str, Any]],
+    event_ts: Optional[str],
+    published_at: datetime.datetime,
+) -> PublishTelemetry:
+    meta = incoming_meta or {}
+    start_keys = (
+        "ingest_started_at",
+        "submitted_at",
+        "created_at",
+        "capture_completed_at",
+    )
+    approval_keys = (
+        "approval_granted_at",
+        "approved_at",
+        "approval_completed_at",
+    )
+
+    start_ts = _parse_iso8601(_extract_first(meta, start_keys))
+    approval_ts = _parse_iso8601(_extract_first(meta, approval_keys))
+    event_timestamp = _parse_iso8601(event_ts)
+
+    turnaround_seconds: Optional[float] = None
+    if start_ts is not None:
+        turnaround_seconds = (published_at - start_ts).total_seconds()
+
+    approval_latency_seconds: Optional[float] = None
+    reference_ts = approval_ts or event_timestamp
+    if reference_ts is not None:
+        approval_latency_seconds = (published_at - reference_ts).total_seconds()
+
+    engagement: Dict[str, float] = {}
+    for key in ("engagement", "analytics", "metrics"):
+        candidate = meta.get(key)
+        if isinstance(candidate, dict):
+            for metric_key, value in candidate.items():
+                numeric = _coerce_numeric(value)
+                if numeric is None:
+                    continue
+                engagement[metric_key] = engagement.get(metric_key, 0.0) + numeric
+
+    cost: Dict[str, float] = {}
+    for key in ("cost", "spend", "usage"):
+        candidate = meta.get(key)
+        if isinstance(candidate, dict):
+            for cost_key, value in candidate.items():
+                numeric = _coerce_numeric(value)
+                if numeric is None:
+                    continue
+                cost[cost_key] = cost.get(cost_key, 0.0) + numeric
+
+    return PublishTelemetry(
+        published_at=published_at,
+        turnaround_seconds=turnaround_seconds,
+        approval_latency_seconds=approval_latency_seconds,
+        engagement=engagement,
+        cost=cost,
+    )
+
+
+async def persist_publish_rollup(row: Dict[str, Any]) -> None:
+    if supabase_common is None:
+        logger.debug("Supabase client unavailable; skipping metrics rollup persistence")
+        return
+    try:
+        await asyncio.to_thread(
+            supabase_common.upsert_row,
+            METRICS_ROLLUP_TABLE,
+            row,
+            ROLLUP_CONFLICT_COLUMN or None,
+        )
+    except Exception as exc:  # pragma: no cover - Supabase failures
+        logger.warning(
+            "Failed to persist metrics rollup", extra={"table": METRICS_ROLLUP_TABLE, "row": row}, exc_info=exc
+        )
+
+
 def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str]]:
     if requests is None:
         logger.debug("requests dependency missing; skipping Jellyfin lookup")
@@ -380,6 +596,8 @@ async def main() -> None:
         secure=MINIO_USE_SSL,
     )
 
+    await start_metrics_server()
+
     async def handle(msg):
         env = json.loads(msg.data.decode())
         payload = env.get("payload", {})
@@ -422,6 +640,7 @@ async def main() -> None:
                 extra={"namespace": namespace, "title": title},
             )
 
+        published_at = datetime.datetime.now(datetime.timezone.utc)
         published_payload = build_published_payload(
             artifact_uri=artifact_uri,
             published_path=out_path,
@@ -436,6 +655,22 @@ async def main() -> None:
             namespace_slug=namespace_slug,
             filename=filename,
             extension=extension,
+        )
+
+        telemetry = compute_publish_telemetry(payload.get("meta"), env.get("ts"), published_at)
+        published_payload.setdefault("meta", {}).update(telemetry.to_meta())
+
+        METRICS.record_turnaround(telemetry.turnaround_seconds)
+        METRICS.record_approval_latency(telemetry.approval_latency_seconds)
+        METRICS.record_engagement(telemetry.engagement)
+        METRICS.record_cost(telemetry.cost)
+
+        await persist_publish_rollup(
+            telemetry.to_rollup_row(
+                artifact_uri=artifact_uri,
+                namespace=namespace,
+                slug=slug,
+            )
         )
 
         evt = envelope(
@@ -457,7 +692,7 @@ async def main() -> None:
                 "event_id": env.get("id"),
                 "correlation_id": env.get("correlation_id"),
                 "public_url": published_payload.get("public_url"),
-                "metrics": asdict(METRICS),
+                "metrics": METRICS.summary(),
             },
         )
 
@@ -465,6 +700,39 @@ async def main() -> None:
     logger.info("Publisher ready", extra={"topic": "content.publish.approved.v1"})
     while True:
         await asyncio.sleep(3600)
+
+
+async def _handle_metrics_request(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    try:
+        request = await reader.read(4096)
+        request_line = request.split(b"\r\n", 1)[0].decode(errors="ignore")
+        if request_line.startswith("GET /metrics"):
+            payload = json.dumps(METRICS.summary()).encode()
+            headers = (
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(payload)}\r\n"
+                "Cache-Control: no-store\r\n"
+                "Connection: close\r\n\r\n"
+            ).encode()
+            writer.write(headers + payload)
+        else:
+            writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        await writer.drain()
+    finally:
+        writer.close()
+        with contextlib.suppress(Exception):  # pragma: no cover - platform dependent
+            await writer.wait_closed()
+
+
+async def start_metrics_server() -> asyncio.AbstractServer:
+    global _METRICS_SERVER
+    server = await asyncio.start_server(_handle_metrics_request, METRICS_HOST, METRICS_PORT)
+    _METRICS_SERVER = server
+    sockets = server.sockets or []
+    bound = [sock.getsockname() for sock in sockets]
+    logger.info("Metrics endpoint ready", extra={"bind": bound})
+    return server
 
 
 def _derive_public_url(path: str) -> Optional[str]:
