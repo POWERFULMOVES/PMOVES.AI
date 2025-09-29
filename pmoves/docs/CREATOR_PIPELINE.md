@@ -1,5 +1,5 @@
 # PMOVES v5 • Creator Pipeline (ComfyUI → MinIO → Webhook → Supabase → Indexer → Publisher)
-_Last updated: 2025-08-29_
+_Last updated: 2025-09-11_
 
 This doc shows the end‑to‑end creative flow from **ComfyUI** render to **Discord/Jellyfin** publish.
 
@@ -79,7 +79,11 @@ Every approval event that reaches the Publisher now lands in the Supabase table 
 | `published_event_id` / `published_at` | Envelope data for the downstream `content.published.v1` emission when it succeeds. |
 | `public_url` | Publicly accessible URL recorded for Discord/Jellyfin consumption. |
 | `processed_at` / `updated_at` | When the publisher handled the event. These auto-update on retries/upserts. |
-| `meta` | JSON payload containing the source `meta`, resolved slug/namespace, Jellyfin refresh notes, etc. |
+| `meta` | JSON payload containing the source `meta`, resolved slug/namespace, Jellyfin refresh notes, pipeline `stage`, etc. |
+
+**Indexes:** `status`, `artifact_path`, `namespace`, `reviewer`, and `processed_at` are indexed for quick forensics across large backlogs.
+
+**Stage breadcrumbs:** `meta->>'stage'` shows which portion of the pipeline handled or failed the event (`validate`, `parse_uri`, `download`, `telemetry`, `persist_rollup`, `emit_event`, `published`). Failures without explicit exception text are labeled `unspecified failure` for audit completeness.
 
 ### Playback workflow when something goes wrong
 
@@ -89,7 +93,7 @@ Every approval event that reaches the Publisher now lands in the Supabase table 
    from publisher_audit
    where publish_event_id = '...';
    ```
-2. **Check status & failure_reason** – if the row is `failed`, the text explains which stage (validation, download, Jellyfin, etc.) blew up. The `meta` JSON also records the stage for faster triage.
+2. **Check status, failure_reason, and stage** – if the row is `failed`, inspect `failure_reason` alongside `meta->>'stage'` to see which portion of the publisher (`download`, `telemetry`, `emit_event`, etc.) blew up. Jellyfin refresh hiccups appear under `meta->>'jellyfin_refresh_error'`.
 3. **Rehydrate the artifact** – use `artifact_uri` to pull from MinIO/S3 (e.g., `mc cp`) or inspect the partially written file at `artifact_path` if the download finished.
 4. **Follow the correlation chain** – `correlation_id` lets you query upstream services (render webhook, indexer) for matching entries or envelopes.
 5. **Replay downstream effects** – on successful publishes, the `published_event_id`/`published_at` pair helps confirm what Discord/Jellyfin saw. Use the ID to search the NATS event log or your monitoring sink for the emitted envelope.

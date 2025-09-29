@@ -36,8 +36,16 @@ def load_results(path: Path) -> Dict[str, Any]:
 def extract_runs(results: Dict[str, Any], source: Path) -> List[EvaluationRun]:
     runs: List[EvaluationRun] = []
     overall = results.get("overall")
-    if isinstance(overall, dict) and {"mrr", "ndcg"} & set(overall.keys()):
-        metrics = {k: overall[k] for k in overall if k not in {"count", "k"}}
+    if isinstance(overall, dict):
+        metrics = {}
+        if isinstance(overall.get("metrics"), dict):
+            metrics = overall["metrics"]
+        else:
+            metrics = {
+                k: v
+                for k, v in overall.items()
+                if k not in {"count", "k"} and isinstance(v, (int, float))
+            }
         run = EvaluationRun(
             name=results.get("run_label") or source.stem,
             metrics=metrics,
@@ -217,7 +225,7 @@ def main() -> None:
     parser.add_argument("--model-name", required=True, help="Display name for the evaluated model/system.")
     parser.add_argument(
         "--output-dir",
-        default="pmoves/docs/evals",
+        default="docs/evals",
         help="Root directory (relative to repo) where artifacts are stored.",
     )
     parser.add_argument("--slug", help="Optional slug override for output folder naming.")

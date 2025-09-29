@@ -176,6 +176,11 @@ def _combine_meta(base: Optional[Dict[str, Any]], extra: Optional[Dict[str, Any]
     return meta or None
 
 
+def _describe_exception(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text or exc.__class__.__name__
+
+
 def _record_audit(
     *,
     publish_event_id: Optional[str],
@@ -197,6 +202,11 @@ def _record_audit(
         return
 
     now_iso = _utc_now_iso()
+    normalized_failure = _coerce_text(failure_reason)
+    if normalized_failure is not None:
+        normalized_failure = normalized_failure.strip() or None
+    if status == "failed" and not normalized_failure:
+        normalized_failure = "unspecified failure"
 
     row = {
         "publish_event_id": publish_event_id,
@@ -208,7 +218,7 @@ def _record_audit(
         "reviewer": reviewer,
         "reviewed_at": reviewed_at,
         "status": status,
-        "failure_reason": failure_reason,
+        "failure_reason": normalized_failure,
         "published_event_id": published_event_id,
         "public_url": public_url,
         "published_at": published_at,
@@ -586,6 +596,10 @@ async def main() -> None:
         out_path = derive_output_path(MEDIA_LIBRARY_PATH, namespace, slug, ext)
         filename = os.path.basename(out_path)
         extension = os.path.splitext(filename)[1]
+        path_meta_base = _combine_meta(
+            meta_with_slug,
+            {"output_path": out_path, "filename": filename, "extension": extension},
+        )
 
         try:
             await download_with_retries(s3, bucket, key, out_path)
@@ -612,8 +626,8 @@ async def main() -> None:
                 status="failed",
                 failure_reason=str(exc),
                 meta=_combine_meta(
-                    meta_with_slug,
-                    {"stage": "download", "output_path": out_path, "attempts": DOWNLOAD_RETRIES},
+                    path_meta_base,
+                    {"stage": "download", "attempts": DOWNLOAD_RETRIES},
                 ),
             )
             return
@@ -635,56 +649,93 @@ async def main() -> None:
         published_at = datetime.datetime.now(datetime.timezone.utc)
 
         derived_public_url = public_url or _derive_public_url(out_path)
+        path_meta_with_url = _combine_meta(path_meta_base, {"public_url": derived_public_url})
 
-        published_payload = build_published_payload(
-            artifact_uri=artifact_uri,
-            published_path=out_path,
-            namespace=namespace,
-            title=title,
-            description=payload.get("description"),
-            tags=payload.get("tags"),
-            incoming_meta=payload.get("meta"),
-            public_url=derived_public_url,
-            jellyfin_item_id=jellyfin_item_id,
-            slug=slug,
-            namespace_slug=namespace_slug,
-            filename=filename,
-            extension=extension,
-        )
+        published_payload: Dict[str, Any] = {}
+        evt: Optional[Dict[str, Any]] = None
+        failure_stage = "build_payload"
 
-        telemetry = compute_publish_telemetry(payload.get("meta"), env.get("ts"), published_at)
-        published_payload.setdefault("meta", {}).update(telemetry.to_meta())
-
-        METRICS.record_turnaround(telemetry.turnaround_seconds)
-        METRICS.record_approval_latency(telemetry.approval_latency_seconds)
-        METRICS.record_engagement(telemetry.engagement)
-        METRICS.record_cost(telemetry.cost)
-
-        await persist_publish_rollup(
-            telemetry.to_rollup_row(
+        try:
+            published_payload = build_published_payload(
                 artifact_uri=artifact_uri,
+                published_path=out_path,
                 namespace=namespace,
+                title=title,
+                description=payload.get("description"),
+                tags=payload.get("tags"),
+                incoming_meta=payload.get("meta"),
+                public_url=derived_public_url,
+                jellyfin_item_id=jellyfin_item_id,
                 slug=slug,
+                namespace_slug=namespace_slug,
+                filename=filename,
+                extension=extension,
             )
-        )
 
-        evt = envelope(
-            "content.published.v1",
-            published_payload,
-            parent_id=env.get("id"),
-            correlation_id=env.get("correlation_id"),
-            source="publisher",
-        )
-        await nc.publish("content.published.v1", json.dumps(evt).encode())
+            failure_stage = "telemetry"
+            telemetry = compute_publish_telemetry(payload.get("meta"), env.get("ts"), published_at)
+            published_payload.setdefault("meta", {}).update(telemetry.to_meta())
 
-        extra_meta = {
-            "stage": "published",
-            "filename": filename,
-            "extension": extension,
-            "jellyfin_item_id": jellyfin_item_id,
-        }
-        extra_meta.update(jellyfin_meta)
-        success_meta = _combine_meta(meta_with_slug, extra_meta)
+            METRICS.record_turnaround(telemetry.turnaround_seconds)
+            METRICS.record_approval_latency(telemetry.approval_latency_seconds)
+            METRICS.record_engagement(telemetry.engagement)
+            METRICS.record_cost(telemetry.cost)
+
+            failure_stage = "persist_rollup"
+            await persist_publish_rollup(
+                telemetry.to_rollup_row(
+                    artifact_uri=artifact_uri,
+                    namespace=namespace,
+                    slug=slug,
+                )
+            )
+
+            failure_stage = "emit_event"
+            evt = envelope(
+                "content.published.v1",
+                published_payload,
+                parent_id=env.get("id"),
+                correlation_id=env.get("correlation_id"),
+                source="publisher",
+            )
+            await nc.publish("content.published.v1", json.dumps(evt).encode())
+        except Exception as exc:
+            logger.exception(
+                "Failed to finalize publish pipeline",
+                extra={
+                    "publish_event_id": publish_event_id,
+                    "artifact_uri": artifact_uri,
+                    "artifact_path": out_path,
+                    "stage": failure_stage,
+                    "namespace": namespace,
+                },
+            )
+
+            failure_context = {"stage": failure_stage, "public_url": derived_public_url}
+            if jellyfin_item_id:
+                failure_context["jellyfin_item_id"] = jellyfin_item_id
+            failure_context.update(jellyfin_meta)
+
+            _record_audit(
+                publish_event_id=publish_event_id,
+                approval_event_ts=approval_event_ts,
+                correlation_id=correlation_id,
+                artifact_uri=artifact_uri,
+                artifact_path=out_path,
+                namespace=namespace,
+                reviewer=reviewer,
+                reviewed_at=reviewed_at,
+                status="failed",
+                failure_reason=_describe_exception(exc),
+                meta=_combine_meta(path_meta_with_url, failure_context),
+            )
+            return
+
+        success_context: Dict[str, Any] = {"stage": "published"}
+        if jellyfin_item_id:
+            success_context["jellyfin_item_id"] = jellyfin_item_id
+        success_context.update(jellyfin_meta)
+        success_meta = _combine_meta(path_meta_with_url, success_context)
 
         _record_audit(
             publish_event_id=publish_event_id,
