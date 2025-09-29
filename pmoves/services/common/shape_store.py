@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from __future__ import annotations
 
 import inspect
@@ -8,7 +7,9 @@ import os
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
+
+import json
 
 
 logger = logging.getLogger(__name__)
@@ -245,18 +246,31 @@ class ShapeStore:
             "limit": str(max(1, int(limit))),
         }
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            try:
-                resp = await client.get(endpoint_base, params=params, headers=headers)
-                resp.raise_for_status()
-                records = resp.json()
-            except Exception:
-                logger.exception("ShapeStore warm fetch failed")
-                return 0
+        base_url = rest_url.rstrip("/")
 
-        if not isinstance(records, list):
-            logger.warning("Unexpected Supabase response for constellations: %s", type(records))
-            return 0
+        limit_str = str(max(1, int(limit)))
+
+        def _coerce_payload(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            candidate: Optional[Dict[str, Any]] = None
+            for key in ("payload", "data", "cgp", "packet", "body", "value"):
+                if key not in rec:
+                    continue
+                value = rec.get(key)
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except Exception:
+                        continue
+                if isinstance(value, dict) and value:
+                    candidate = value
+                    break
+            if candidate is None and "super_nodes" in rec:
+                candidate = rec
+            if not isinstance(candidate, dict):
+                return None
+            if "spec" not in candidate:
+                candidate = {**candidate, "spec": "geometry.cgp.v1"}
+            return candidate
 
         def _map_constellation(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             cid = rec.get("id")
@@ -302,20 +316,77 @@ class ShapeStore:
                     point["meta"] = meta_pt
                 points.append(point)
             const["points"] = points
-            return const
-
-        count = 0
-        for rec in records:
-            if not isinstance(rec, dict):
-                continue
-            const = _map_constellation(rec)
-            if not const:
-                continue
-            cgp = {
+            return {
                 "spec": "geometry.cgp.v1",
                 "source": "supabase",
                 "super_nodes": [{"constellations": [const]}],
             }
+
+        fetch_plan: List[tuple[str, Dict[str, str], Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]]] = [
+            (
+                "geometry_cgp_packets",
+                {"select": "payload,created_at", "order": "created_at.desc", "limit": limit_str},
+                _coerce_payload,
+            ),
+            (
+                "geometry_cgp_v1",
+                {"select": "payload,created_at", "order": "created_at.desc", "limit": limit_str},
+                _coerce_payload,
+            ),
+            (
+                "constellations",
+                {
+                    "select": "*,anchor:anchors(*),points:shape_points(*)",
+                    "order": "created_at.desc",
+                    "limit": limit_str,
+                },
+                _map_constellation,
+            ),
+        ]
+
+        cgps: List[Dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for path, query, mapper in fetch_plan:
+                url = f"{base_url}/{path}"
+                try:
+                    resp = await client.get(url, params=query, headers=headers)
+                    if resp.status_code == 404:
+                        continue
+                    resp.raise_for_status()
+                    records = resp.json()
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 404:
+                        continue
+                    logger.exception("ShapeStore warm fetch failed for %s", path)
+                    continue
+                except Exception:
+                    logger.exception("ShapeStore warm fetch error for %s", path)
+                    continue
+
+                if not isinstance(records, list):
+                    logger.warning(
+                        "Unexpected Supabase response for %s: %s", path, type(records)
+                    )
+                    continue
+
+                for rec in records:
+                    if not isinstance(rec, dict):
+                        continue
+                    try:
+                        cgp = mapper(rec)
+                    except Exception:
+                        logger.exception("ShapeStore warm mapping error for %s", path)
+                        continue
+                    if cgp:
+                        cgps.append(cgp)
+                if cgps:
+                    break
+
+        if not cgps:
+            return 0
+
+        count = 0
+        for cgp in cgps:
             try:
                 self.put_cgp(cgp)
                 count += 1

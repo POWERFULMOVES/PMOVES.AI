@@ -284,13 +284,14 @@ HiRAG integration provides hierarchical knowledge structuring and deeper, fact-b
 Hi-RAG's geometry cache mirrors the `geometry.cgp.v1` event stream in Supabase so that agents and UI clients can jump across modalities with sub‑100 ms lookups. The persistence contract is:
 
 - **Tables** – `anchors`, `constellations`, and `shape_points` capture the normalized CGP payload. Each `constellations` row links back to an anchor; `shape_points` rows provide modality-specific jump data (token span, timestamp, frame index, etc.).
+- **Packets view** – When present, the `geometry_cgp_packets` materialized view mirrors the full CGP envelope (`{spec, super_nodes[]}`) for quick hydration/debugging. `ShapeStore.warm_from_db` prefers this view and falls back to the normalized join so the cache still warms even if the packets view is not provisioned yet.
 - **Warm start** – On service boot the gateway calls `ShapeStore.warm_from_db`, pulling the latest constellations (and their anchors/points) via PostgREST to hydrate the in-memory cache before the first request. A `ShapeStore warmed with … Supabase constellations` log line confirms the warm-up succeeded.
 - **Realtime feed** – After the warm, the gateway subscribes to Supabase Realtime (`realtime:geometry.cgp.v1`). Broadcast messages with fresh CGPs are fed back into the cache immediately, so cache coherence is bounded only by WebSocket latency.
 
 **Validation checklist**
 
-1. Confirm the tables exist and contain recent rows: `GET $SUPA_REST_URL/constellations?select=id,created_at&order=created_at.desc&limit=5` should return the latest cached constellations.
-2. Restart `hi-rag-gateway-v2` and watch the logs for the warm-up message. If the count is `0`, verify the service role key and PostgREST URL in `.env`.
+1. Confirm persistence: `GET $SUPA_REST_URL/geometry_cgp_packets?select=created_at&order=created_at.desc&limit=5` (or the fallback `constellations` query if the view is absent) should surface the latest payloads.
+2. Restart `hi-rag-gateway-v2` and watch the logs for the warm-up message. If the count is `0`, verify the service role key/PostgREST URL in `.env` and ensure at least one of `geometry_cgp_packets` or `constellations` returns rows.
 3. Run `python pmoves/tools/realtime_listener.py` (or the browser canvas at `/geometry/`) to see `geometry.cgp.v1` notifications propagate. New inserts should appear in Supabase within seconds and be reflected in ShapeStore lookups immediately.
 
 --------------------------------------------------------------------------------

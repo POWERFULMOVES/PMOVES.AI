@@ -396,13 +396,17 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
 
 @app.on_event("startup")
 async def _on_startup() -> None:
+    if shape_store is None:
+        logger.info("ShapeStore unavailable; geometry cache warm skipped")
+        return
     await _warm_shapes_from_supabase()
     global _geometry_realtime_task
-    if _geometry_realtime_task is None and shape_store is not None:
+    if _geometry_realtime_task is None:
         ws_url = _derive_realtime_url()
         api_key = SUPABASE_REALTIME_KEY
         if ws_url and api_key:
             _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
+            logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
         else:
             logger.info("Supabase realtime subscription skipped; missing URL or API key")
 
