@@ -28,6 +28,7 @@ def insert_emotions(rows: List[Dict[str, Any]]) -> None:
         client().table("emotions").insert(rows).execute()
 
 
+
 def upsert_row(table: str, row: Dict[str, Any], on_conflict: Optional[str] = None) -> None:
     query = client().table(table)
     if on_conflict:
@@ -35,3 +36,8 @@ def upsert_row(table: str, row: Dict[str, Any], on_conflict: Optional[str] = Non
     else:
         query = query.insert(row)
     query.execute()
+
+def upsert_publisher_audit(row: Dict[str, Any]) -> None:
+    if row:
+        client().table("publisher_audit").upsert(row, on_conflict="publish_event_id").execute()
+
