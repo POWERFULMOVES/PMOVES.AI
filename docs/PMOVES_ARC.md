@@ -279,6 +279,22 @@ HiRAG integration provides hierarchical knowledge structuring and deeper, fact-b
 
 --------------------------------------------------------------------------------
 
+## Geometry Cache Persistence & Validation
+
+Hi-RAG's geometry cache mirrors the `geometry.cgp.v1` event stream in Supabase so that agents and UI clients can jump across modalities with sub‑100 ms lookups. The persistence contract is:
+
+- **Tables** – `anchors`, `constellations`, and `shape_points` capture the normalized CGP payload. Each `constellations` row links back to an anchor; `shape_points` rows provide modality-specific jump data (token span, timestamp, frame index, etc.).
+- **Warm start** – On service boot the gateway calls `ShapeStore.warm_from_db`, pulling the latest constellations (and their anchors/points) via PostgREST to hydrate the in-memory cache before the first request. A `ShapeStore warmed with … Supabase constellations` log line confirms the warm-up succeeded.
+- **Realtime feed** – After the warm, the gateway subscribes to Supabase Realtime (`realtime:geometry.cgp.v1`). Broadcast messages with fresh CGPs are fed back into the cache immediately, so cache coherence is bounded only by WebSocket latency.
+
+**Validation checklist**
+
+1. Confirm the tables exist and contain recent rows: `GET $SUPA_REST_URL/constellations?select=id,created_at&order=created_at.desc&limit=5` should return the latest cached constellations.
+2. Restart `hi-rag-gateway-v2` and watch the logs for the warm-up message. If the count is `0`, verify the service role key and PostgREST URL in `.env`.
+3. Run `python pmoves/tools/realtime_listener.py` (or the browser canvas at `/geometry/`) to see `geometry.cgp.v1` notifications propagate. New inserts should appear in Supabase within seconds and be reflected in ShapeStore lookups immediately.
+
+--------------------------------------------------------------------------------
+
 ## 5. Crush CLI Integration Context
 
 This diagram focuses on the Crush interactive CLI agent for software engineering, showing its internal structure, memory, and operational guidelines within the PMOVES ecosystem [43-96].

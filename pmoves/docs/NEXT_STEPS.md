@@ -1,5 +1,9 @@
 # PMOVES v5 • NEXT_STEPS
+
+_Last updated: 2025-09-26 (geometry cache sync)_
+
 _Last updated: 2025-10-01_
+
 
 ## Immediate
 
@@ -44,7 +48,10 @@ _Last updated: 2025-10-01_
 - [ ] Seed baseline YAML manifests (`personas/archon@1.0.yaml`, `packs/pmoves-architecture@1.0.yaml`) and record publish commands plus resulting IDs in the runbook.
 - [ ] Wire the retrieval-eval harness as a persona publish gate; store dataset locations, metric thresholds, and last-run results in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] Exercise the creator pipeline end-to-end (presign → webhook → approval → index → publish) and document emitted events (`kb.ingest.asset.created.v1`, `kb.pack.published.v1`, `persona.published.v1`, `content.published.v1`).
-- [ ] Confirm geometry bus emissions (`geometry.cgp.v1`) populate the ShapeStore cache and note verification steps (API/CLI) in the runbook.
+- [ ] Confirm geometry bus emissions (`geometry.cgp.v1`) populate the ShapeStore cache.
+  - Watch the `hi-rag-gateway-v2` startup logs for `ShapeStore warmed with … Supabase constellations` once the Supabase tables are seeded.
+  - Hit `$SUPA_REST_URL/constellations?select=id,created_at&order=created_at.desc&limit=5` to verify PostgREST is returning the rows used for cache warm-up.
+  - Use `python pmoves/tools/realtime_listener.py` (or the `/geometry/` UI) to confirm realtime `geometry.cgp.v1` broadcasts continue to refresh the cache after boot.
 - [ ] Draft a CI-oriented pack manifest linter (selectors, age, size limits) and reference the proposal in `pmoves/docs/ROADMAP.md` once scoped.
 
 ## n8n Flow Operations
