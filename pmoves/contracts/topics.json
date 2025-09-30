@@ -81,6 +81,15 @@
     },
     "geometry.cgp.v1": {
       "schema": "schemas/geometry/cgp.v1.schema.json"
+    },
+    "persona.publish.request.v1": {
+      "schema": "schemas/persona/publish.request.v1.schema.json"
+    },
+    "persona.publish.failed.v1": {
+      "schema": "schemas/persona/publish.failed.v1.schema.json"
+    },
+    "persona.published.v1": {
+      "schema": "schemas/persona/published.v1.schema.json"
     }
   }
 }
