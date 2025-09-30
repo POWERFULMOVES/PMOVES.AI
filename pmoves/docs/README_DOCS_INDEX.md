@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2025-09-30_
+_Last updated: 2025-10-05_
 
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
@@ -14,6 +14,7 @@ _Last updated: 2025-09-30_
 - **Supabase→Discord Playbook** — `SUPABASE_DISCORD_AUTOMATION.md`
 - **M2 Validation Guide** — `M2_VALIDATION_GUIDE.md`
 - **n8n Quick Checklist (wiki)** — `N8N_CHECKLIST.md`
+- **PMOVES v5.12 Task Backlog** — `context/pmoves_v_5.12_tasks.md`
 
 ## Codex + MCP
 - Full bundle and profiles: `codex_full_config_bundle/README-Codex-MCP-Full.md`
