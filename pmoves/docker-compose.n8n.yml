@@ -1,0 +1,31 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    environment:
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_HOST=localhost
+      - WEBHOOK_URL=http://localhost:5678
+      - GENERIC_TIMEZONE=${TZ:-America/New_York}
+      - TZ=${TZ:-America/New_York}
+      # Supabase CLI (host) — n8n reaches host via host.docker.internal
+      - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # Agent Zero in same compose project (service name)
+      - AGENT_ZERO_BASE_URL=${AGENT_ZERO_BASE_URL:-http://agent-zero:8080}
+      - AGENT_ZERO_EVENTS_TOKEN=${AGENT_ZERO_EVENTS_TOKEN}
+      # Discord webhook for echo publisher
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
+    ports: ["5678:5678"]
+    networks: [pmoves]
+    volumes:
+      - n8n-data:/home/node/.n8n
+networks:
+  pmoves:
+    external: true
+    name: pmoves-net
+volumes:
+  n8n-data: {}
+

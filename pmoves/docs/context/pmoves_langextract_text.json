@@ -1,0 +1,74 @@
+{
+  "name": "PMOVES LangExtract (Text \u2192 Chunks)",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "json",
+        "json": "{\"langextract_base\": \"http://localhost:8092\"}"
+      },
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "json",
+        "json": "{\"text\":\"Paste text here about your document. It will be chunked.\",\"namespace\":\"docs\",\"doc_id\":\"demo-001\"}"
+      },
+      "name": "Set Extraction Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        360,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.langextract_base}}/extract/text",
+        "method": "POST",
+        "sendBody": true,
+        "jsonParameters": true,
+        "options": {
+          "response": "json"
+        },
+        "bodyParametersJson": "={{$json[\"Set Extraction Payload\"].json}}"
+      },
+      "name": "POST /extract/text",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 5,
+      "position": [
+        620,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Set Extraction Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Extraction Payload": {
+      "main": [
+        [
+          {
+            "node": "POST /extract/text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

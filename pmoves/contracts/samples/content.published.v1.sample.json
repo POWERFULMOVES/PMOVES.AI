@@ -1,0 +1,17 @@
+{
+  "artifact_uri": "s3://outputs/demo/example.png",
+  "published_path": "pmoves/2025/09/example.png",
+  "public_url": "https://example.local/pmoves/2025/09/example.png",
+  "namespace": "pmoves",
+  "tags": ["demo", "publish", "discord"],
+  "duration": 123.4,
+  "jellyfin_item_id": "abcd1234efgh5678",
+  "thumbnail_url": "https://placehold.co/320x180",
+  "title": "Demo Publish Example",
+  "description": "A small demo event to preview Discord embed rendering.",
+  "meta": {
+    "thumbnail_url": "https://placehold.co/320x180?text=thumb",
+    "tags": ["media", "image"],
+    "jellyfin_base_url": "http://localhost:8093"
+  }
+}

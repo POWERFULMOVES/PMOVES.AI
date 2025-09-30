@@ -1,0 +1,30 @@
+# Root ignores
+
+# Python virtual environments
+.venv/
+venv/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Local data caches (safety)
+*.tmp
+*.temp
+
+# dotenv: keep local env files out of the repo
+# Tracked examples like pmoves/.env.example should remain in the repo
+/pmoves/.env
+/pmoves/.env.local

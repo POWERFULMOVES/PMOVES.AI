@@ -61,3 +61,23 @@ This working session establishes the concrete implementation tasks needed to clo
 - `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`
 - `pmoves/docs/NEXT_STEPS.md`
 - `pmoves/docs/ROADMAP.md`
+
+---
+
+## Validation Log (M2 Automation Loop)
+
+Use this section to capture evidence as steps are executed. Attach screenshots/log snippets adjacent to this file as needed.
+
+| Step | Timestamp (UTC) | Evidence Link/Note |
+| --- | --- | --- |
+| agent-zero health OK |  |  |
+| jellyfin-bridge health OK |  |  |
+| publisher-discord health OK |  |  |
+| Discord webhook ping successful |  |  |
+| n8n approval_poller imported + creds set |  |  |
+| n8n echo_publisher imported + creds set |  |  |
+| n8n activated (poller → echo publisher) |  |  |
+| Supabase row seeded (status=approved) |  |  |
+| Agent Zero received content.publish.approved.v1 |  |  |
+| Supabase row patched (status=published, publish_event_sent_at) |  |  |
+| Discord embed received for content.published.v1 |  |  |

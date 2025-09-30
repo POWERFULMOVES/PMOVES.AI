@@ -33,8 +33,16 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/.../...
 DISCORD_WEBHOOK_USERNAME=PMOVES Publisher
 ```
 
+### Env alignment notes
+- Both `SUPA_REST_URL` and `SUPABASE_REST_URL` are now supported for local development. Compose services use `SUPA_REST_URL`; n8n flows reference `SUPABASE_REST_URL`. The example `.env` defines both and points them at `http://postgrest:3000`.
+- Prefer `DISCORD_WEBHOOK_USERNAME` for webhook display name. `services/publisher-discord` also supports `DISCORD_USERNAME` for backward compatibility.
+
+### Quick manual webhook ping
+- Bash: `export DISCORD_WEBHOOK_URL=...; export DISCORD_WEBHOOK_USERNAME="PMOVES Publisher"; ./pmoves/scripts/discord_ping.sh "PMOVES Discord wiring check"`
+- PowerShell: `setx DISCORD_WEBHOOK_URL "<url>"; setx DISCORD_WEBHOOK_USERNAME "PMOVES Publisher"; pwsh -File ./pmoves/scripts/discord_ping.ps1 -Message "PMOVES Discord wiring check"`
+
 ## Import & Configure n8n Workflows
-1. In the n8n UI, import `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
+1. In the n8n UI, import `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json` (see also `N8N_SETUP.md`).
 2. Open **Credentials** and create the following entries:
    - `Supabase Service Role` — HTTP Basic auth with the service role key (username blank, password set to the key).
    - `Agent Zero Events` — HTTP Header Auth with `Authorization: Bearer <AGENT_ZERO_EVENTS_TOKEN>`.
@@ -52,11 +60,19 @@ Perform the following steps in order to validate the pipeline:
    - Use `curl -H "Content-Type: application/json" -d '{"content":"PMOVES Discord wiring check"}' $DISCORD_WEBHOOK_URL`.
    - Confirm the Discord channel receives the message.
 2. **Supabase approval trigger**
+
+   - Use helper to insert an `approved` row with a valid `content_url`:
+     - Make (Bash): `make -C pmoves seed-approval TITLE="Demo" URL="s3://outputs/demo/example.png"`
+     - PowerShell: `make -C pmoves seed-approval-ps TITLE="Demo" URL="s3://outputs/demo/example.png"`
+   - Ensure `meta->>'publish_event_sent_at'` is `null` prior to poller run (default when inserting with the helper).
+3. **Enable `approval_poller` workflow**
+
    - Insert or update a `studio_board` row to `status='approved'` with a valid `content_url` (e.g., `s3://outputs/comfy/sample.png`).
    - Ensure `meta->>'publish_event_sent_at'` is `null`.
 3. **Verify Agent Zero controller health**
    - Call `GET ${AGENT_ZERO_BASE_URL}/healthz` and confirm `nats.connected=true` and `nats.controller_started=true`. JetStream metrics should increment once the poller is running.
 4. **Enable `approval_poller` workflow**
+
    - Activate once and watch n8n execution logs.
    - Verify Agent Zero logs a `content.publish.approved.v1` event.
 5. **Enable `echo_publisher` workflow**

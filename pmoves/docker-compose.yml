@@ -429,7 +429,7 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on: [nats]
-    ports: ["8092:8092"]
+    ports: ["8094:8092"]
     profiles: ["orchestration","agents"]
     networks: [pmoves]
 

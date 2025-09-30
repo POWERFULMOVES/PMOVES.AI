@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Fill in your Tailnet settings then run with sudo
+tailscale up --ssh --accept-routes --advertise-tags=tag:lab
+
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -20,3 +24,4 @@ else
 fi
 
 tailscale "${TAILSCALE_ARGS[@]}"
+

@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2025-08-29_
+_Last updated: 2025-09-30_
 
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
@@ -10,6 +10,19 @@ _Last updated: 2025-08-29_
 - **Render Completion Webhook** — `RENDER_COMPLETION_WEBHOOK.md`
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md`
 - **Smoke Tests** — `SMOKETESTS.md`
+- **n8n Setup (Supabase→Agent Zero→Discord)** — `N8N_SETUP.md`
+- **Supabase→Discord Playbook** — `SUPABASE_DISCORD_AUTOMATION.md`
+- **M2 Validation Guide** — `M2_VALIDATION_GUIDE.md`
+- **n8n Quick Checklist (wiki)** — `N8N_CHECKLIST.md`
+
+## Codex + MCP
+- Full bundle and profiles: `codex_full_config_bundle/README-Codex-MCP-Full.md`
+  - Includes `config.toml` with Docker MCP gateway, web search enabled, and multiple profiles for network/sandbox modes.
+
+## Evidence
+- Evidence folder (screenshots/logs): `pmoves/docs/evidence/`
+- CSV log helper: created by `make evidence-log` at `pmoves/docs/evidence/log.csv`
+- How to capture: see `M2_VALIDATION_GUIDE.md` (Helpers section)
 
 
 ## Link Validation Checklist
