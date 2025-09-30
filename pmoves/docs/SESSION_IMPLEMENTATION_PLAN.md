@@ -70,6 +70,30 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 
 | Step | Timestamp (UTC) | Evidence Link/Note |
 | --- | --- | --- |
+
+| agent-zero health OK |  |  |
+| jellyfin-bridge health OK |  |  |
+| publisher-discord health OK |  |  |
+| Discord webhook ping successful |  |  |
+| n8n approval_poller imported + creds set |  |  |
+| n8n echo_publisher imported + creds set |  |  |
+| n8n activated (poller → echo publisher) |  |  |
+| Supabase row seeded (status=approved) |  |  |
+| Agent Zero received content.publish.approved.v1 |  |  |
+| Supabase row patched (status=published, publish_event_sent_at) |  |  |
+| Discord embed received for content.published.v1 |  |  |
+
+## 2025-09-30 – Rollout Attempt Notes (Codex environment)
+
+The following checklist captures what could be validated within the hosted Codex workspace. Supabase/Postgres and long-running Docker services are not available in this environment, so database migrations, seeds, and geometry smoke checks could not be executed directly. Use the recorded commands as guidance when rerunning on an operator workstation.
+
+| Task | Status | Notes |
+| --- | --- | --- |
+| Apply SQL bundles (`db/v5_12_grounded_personas.sql`, `db/v5_12_geometry_rls.sql`, `db/v5_12_geometry_realtime.sql`) | Blocked | `psql` access to the target Supabase/Postgres instance is not available inside the Codex sandbox. Re-run using `psql $DATABASE_URL -f <file>` and capture `ANALYZE`/`VACUUM` output plus `\d` schema diffs for the runbook. |
+| Refresh `.env` toggles and restart gateway/workers/geometry | Partially documented | Added reranker/publisher/geometry flags to `.env` & `.env.example`. Service restarts (`docker compose restart hi-rag-gateway-v2 publisher-discord geometry-gateway geometry-decoder`) could not be issued without Docker access—rerun locally to confirm toggles are honored. |
+| Seed sample packs/personas (`db/v5_12_seed.sql` or YAML) | Blocked | Database connectivity unavailable. Execute `psql $DATABASE_URL -f db/v5_12_seed.sql` (or `supabase db execute`) in a full environment, record generated IDs via `select pack_id, name from pmoves_core.grounding_packs;` and append publish commands here. |
+| Geometry smoke script (`scripts/chit_client.py`) | Blocked | Geometry gateway is not running in this environment. After services are up, run `python scripts/chit_client.py --host http://localhost:8086` (adjust for profile) and capture request/response logs in this table. |
+
 | agent-zero health OK | — | Blocked in Codex sandbox; service not running. |
 | jellyfin-bridge health OK | — | Not applicable to this session; focus remained on Supabase ↔ Discord automation. |
 | publisher-discord health OK | — | Service unreachable without docker-compose stack. |
@@ -87,3 +111,4 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 - Provision a reproducible local automation profile that bundles Supabase, Agent Zero, and n8n so the activation checklist can be executed without manual service orchestration.
 - Add mock credentials or a dedicated staging webhook to `.env.example` to clarify which secrets must be sourced before running the workflows; document rotation expectations.
 - Automate evidence capture (timestamps, log snapshots) through a scriptable checklist to reduce manual copy/paste during validation sessions.
+
