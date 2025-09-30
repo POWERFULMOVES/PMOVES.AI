@@ -278,12 +278,38 @@ def _ip_in_cidrs(ip: str, cidrs):
         return False
     return False
 
-def require_tailscale(request: Request):
-    if not TAILSCALE_ONLY:
+def _tailscale_required(admin_only: bool) -> bool:
+    if TAILSCALE_ONLY:
+        return True
+    if admin_only:
+        return TAILSCALE_ADMIN_ONLY
+    return False
+
+
+def _tailscale_violation_detail(admin_only: bool) -> str:
+    return (
+        "Admin endpoints restricted to Tailscale network"
+        if admin_only
+        else "Service restricted to Tailscale network"
+    )
+
+
+def _tailscale_ip_allowed(ip: str, admin_only: bool) -> bool:
+    if not _tailscale_required(admin_only):
+        return True
+    return _ip_in_cidrs(ip, TAILSCALE_CIDRS)
+
+
+def require_tailscale(request: Request, admin_only: bool = False):
+    if not _tailscale_required(admin_only):
         return
     ip = _client_ip(request)
-    if not _ip_in_cidrs(ip, TAILSCALE_CIDRS):
-        raise HTTPException(status_code=403, detail="Admin restricted to Tailscale network")
+    if not _tailscale_ip_allowed(ip, admin_only):
+        raise HTTPException(status_code=403, detail=_tailscale_violation_detail(admin_only))
+
+
+def require_admin_tailscale(request: Request):
+    return require_tailscale(request, admin_only=True)
 
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
     emb = embed_query(query)
@@ -314,9 +340,8 @@ def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_
     results.sort(key=lambda x: x["score"], reverse=True)
     return results[:k]
 
-from fastapi import Depends
 @app.post("/hirag/query")
-def http_query(body: dict):
+def http_query(body: dict, _=Depends(require_tailscale)):
     # validate payload
     try:
         q = body.get("query", "")
@@ -347,7 +372,7 @@ def http_query(body: dict):
         raise HTTPException(status_code=500, detail=f"Query failed: {e}")
 
 @app.get("/hirag/admin/stats")
-def hirag_admin_stats(_=Depends(require_tailscale)):
+def hirag_admin_stats(_=Depends(require_admin_tailscale)):
     return {
         "entity_cache": {"keys": len(_cache_entities), "ttl": ENTITY_CACHE_TTL, "max": ENTITY_CACHE_MAX},
         "warm_dictionary": {"types": len(_warm_entities), "entries": int(sum(len(s) for s in _warm_entities.values())), "last_refresh": _warm_last},
@@ -355,18 +380,18 @@ def hirag_admin_stats(_=Depends(require_tailscale)):
     }
 
 @app.post("/hirag/admin/refresh")
-def hirag_admin_refresh(_=Depends(require_tailscale)):
+def hirag_admin_refresh(_=Depends(require_admin_tailscale)):
     refresh_warm_dictionary()
     return {"ok": True, "entries": int(sum(len(s) for s in _warm_entities.values()))}
 
 @app.post("/hirag/admin/cache/clear")
-def hirag_admin_cache_clear(_=Depends(require_tailscale)):
+def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
     _cache_entities.clear(); _cache_order.clear()
     return {"ok": True}
 
 # ---------------- Geometry Bus minimal stub ----------------
 @app.get("/shape/point/{point_id}/jump")
-def shape_point_jump(point_id: str):
+def shape_point_jump(point_id: str, _=Depends(require_tailscale)):
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     loc = shape_store.jump_locator(point_id)
@@ -376,7 +401,7 @@ def shape_point_jump(point_id: str):
 
 
 @app.post("/geometry/event")
-def geometry_event(body: Dict[str, Any]):
+def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
     """Accept geometry.cgp.v1 events. Body example:
     {"type":"geometry.cgp.v1", "data": { ... CGP ... }}
     """
@@ -408,7 +433,7 @@ def geometry_event(body: Dict[str, Any]):
 
 
 @app.post("/geometry/decode/text")
-def geometry_decode_text(body: Dict[str, Any]):
+def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_TEXT:
         raise HTTPException(501, "text decoder disabled")
     # mode: "learned" | "geometry"
@@ -485,7 +510,7 @@ def _wasserstein_1d(p: List[float], q: List[float]) -> float:
 
 
 @app.post("/geometry/calibration/report")
-def geometry_calibration_report(body: Dict[str, Any]):
+def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
     data = body.get("data")
     const_ids = body.get("constellation_ids") or []
     report = []
@@ -515,7 +540,7 @@ def geometry_calibration_report(body: Dict[str, Any]):
 
 
 @app.post("/geometry/decode/image")
-def geometry_decode_image(body: Dict[str, Any]):
+def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_IMAGE:
         raise HTTPException(501, "image decoder disabled")
     try:
@@ -558,7 +583,7 @@ def geometry_decode_image(body: Dict[str, Any]):
 
 
 @app.post("/geometry/decode/audio")
-def geometry_decode_audio(body: Dict[str, Any]):
+def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_AUDIO:
         raise HTTPException(501, "audio decoder disabled")
     try:
@@ -591,7 +616,7 @@ def geometry_decode_audio(body: Dict[str, Any]):
         raise HTTPException(500, f"audio decode error: {e}")
 
 @app.get("/")
-def index():
+def index(_=Depends(require_tailscale)):
     return {"ok": True, "hint": "POST /hirag/query"}
 
 if __name__ == "__main__":

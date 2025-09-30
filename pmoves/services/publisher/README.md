@@ -35,6 +35,10 @@ library, and publishes a `content.published.v1` envelope to NATS.
 | `JELLYFIN_REFRESH_DELAY_SEC` | `0` | Optional delay before refresh/webhook execution (seconds). |
 | `PUBLISHER_DOWNLOAD_RETRIES` | `3` | Artifact download retry count. |
 | `PUBLISHER_DOWNLOAD_RETRY_BACKOFF` | `1.5` | Seconds added per retry attempt. |
+| `PUBLISHER_METRICS_HOST` | `0.0.0.0` | Bind address for the lightweight `/metrics` endpoint. |
+| `PUBLISHER_METRICS_PORT` | `9095` | TCP port for the `/metrics` endpoint. |
+| `PUBLISHER_METRICS_TABLE` | `publisher_metrics_rollup` | Supabase table used to persist publish rollups. |
+| `PUBLISHER_METRICS_CONFLICT` | `artifact_uri` | Optional Supabase `on_conflict` key when upserting rollups. |
 
 ### Refresh Strategies
 
@@ -65,9 +69,30 @@ out to additional workflows. Non-2xx responses raise a
 
 ## Metrics & Logging
 
-`PublisherMetrics` tracks download counts and refresh success/failures. The
-metrics snapshot is included with the `Published content` log line so operators
-can inspect retry trends and webhook errors quickly.
+`PublisherMetrics` now records turnaround time, approval-to-publish latency,
+downstream engagement proxies (e.g. views, click-through rates), and cost
+drivers surfaced in approval metadata. The running summary is exposed via
+`GET /metrics` on the configured host/port and is also embedded in the
+`Published content` log line. Every publish emits a rollup row to Supabase
+(`publisher_metrics_rollup` by default) so ROI dashboards can chart trends
+without scraping logs.
+
+### ROI Dashboards
+
+Supabase rollups persist the following keys for downstream analytics:
+
+- `turnaround_seconds` – time from ingest/submission until publish.
+- `approval_latency_seconds` – lag between approval and publication.
+- `engagement` – JSON map of numeric engagement metrics (views, CTR, etc.).
+- `cost` – JSON map of cost drivers (processing minutes, storage/egress).
+
+Dashboards can derive ROI by correlating engagement totals with cost totals for
+each artifact, aggregated by namespace. Average turnaround and approval latency
+highlight operational friction; spikes should trigger reviews of automation
+queues or manual approval load.
+
+See `pmoves/docs/TELEMETRY_ROI.md` for step-by-step guidance on charting the
+rollup tables and pairing them with Discord delivery telemetry.
 
 ## Local Smoke Test
 

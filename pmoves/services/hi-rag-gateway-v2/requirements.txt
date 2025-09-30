@@ -4,6 +4,8 @@ qdrant-client==1.8.2
 sentence-transformers==3.0.1
 neo4j==5.23.1
 requests==2.32.3
+httpx==0.27.0
+websockets==12.0
 FlagEmbedding==1.2.10
 pydantic==2.8.2
 rapidfuzz==3.9.6

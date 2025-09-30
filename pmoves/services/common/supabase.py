@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
 from supabase import create_client, Client
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -26,3 +26,18 @@ def insert_segments(rows: List[Dict[str, Any]]) -> None:
 def insert_emotions(rows: List[Dict[str, Any]]) -> None:
     if rows:
         client().table("emotions").insert(rows).execute()
+
+
+
+def upsert_row(table: str, row: Dict[str, Any], on_conflict: Optional[str] = None) -> None:
+    query = client().table(table)
+    if on_conflict:
+        query = query.upsert(row, on_conflict=on_conflict)
+    else:
+        query = query.insert(row)
+    query.execute()
+
+def upsert_publisher_audit(row: Dict[str, Any]) -> None:
+    if row:
+        client().table("publisher_audit").upsert(row, on_conflict="publish_event_id").execute()
+

@@ -10,7 +10,7 @@ Agent Zero is the core PMOVES coordinator. The FastAPI worker exposes both the c
 | `/config/environment` | GET | Returns resolved configuration (ports, upstream runtimes, runtime directories). |
 | `/mcp/commands` | GET | Lists MCP commands and advertises the active form and runtime directories. |
 | `/mcp/execute` | POST | Execute an MCP command, e.g. `{ "cmd": "geometry.jump", "arguments": { "point_id": "..." } }`. |
-| `/events/publish` | POST | Publish a NATS envelope `{ "topic": "...", "payload": { ... } }`. |
+| `/events/publish` | POST | Publish a NATS envelope `{ "topic": "...", "payload": { ... } }`. Optional `correlation_id`, `parent_id`, and `source` fields are forwarded into the envelope metadata. |
 
 ### MCP Commands
 
@@ -46,6 +46,7 @@ The service reads configuration from environment variables and exposes the resol
 
 ## Runtime Notes
 
-1. On startup the app loads configuration and connects to NATS; `/healthz` remains available even if NATS is still warming up.
-2. MCP executions are dispatched through the existing helper functions in `mcp_server.py`, so updates to those helpers automatically surface via HTTP.
-3. The configuration endpoints make it easy to surface runtime state inside OpenAPI clients, MCP hubs, or n8n workflows without shell access.
+1. On startup the supervisor now launches both the UI runtime and the JetStream controller. The controller reconnect loop keeps retrying until `NATS_URL` is reachable, which is especially important for the provisioning bundle and Tailscale-hosted agents.
+2. `/healthz` reports controller status (`connected`, `controller_started`) plus the current JetStream metrics so automation checks can confirm subscriptions are alive.
+3. MCP executions are dispatched through the existing helper functions in `mcp_server.py`, so updates to those helpers automatically surface via HTTP.
+4. The configuration endpoints make it easy to surface runtime state inside OpenAPI clients, MCP hubs, or n8n workflows without shell access.

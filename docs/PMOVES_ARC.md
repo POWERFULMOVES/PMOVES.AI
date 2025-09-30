@@ -10,28 +10,28 @@ This diagram provides a top-level view of the PMOVES system, categorizing its ma
 
 ```mermaid
 graph TD
-    subgraph Central Brain (Primary Orchestration)
+    subgraph central_brain["Central Brain (Primary Orchestration)"]
         A[Agent Zero: Core Decision-Maker & Orchestrator]
     end
 
-    subgraph Support Systems (Agent Building, Knowledge & Workflow)
+    subgraph support_systems["Support Systems (Agent Building, Knowledge & Workflow)"]
         B[Archon: Specialized Agent Builder & Knowledge/Task Mgmt]
         C[n8n: Workflow Orchestration & MCP Hub]
     end
 
-    subgraph Specialized AI "Muscles" (Deep Processing & Generation)
+    subgraph specialized_ai_muscles["Specialized AI Muscles (Deep Processing & Generation)"]
         D[HiRAG: Hierarchical RAG for Deep Reasoning]
         E[LangExtract: Structured Information Extraction]
         F[ComfyUI: Sophisticated Content Creation]
     end
 
-    subgraph Data & Operational Backbones
+    subgraph data_backbones["Data & Operational Backbones"]
         G[Firefly III: Personal Finance Manager]
         H[Supabase: Unified Database with Vector Capabilities]
         I[Local Models: Ollama, NVIDIA NIM, Nemo]
     end
 
-    subgraph Underlying Infrastructure
+    subgraph infrastructure["Underlying Infrastructure"]
         J[Distributed Computing: Workstations & Edge Devices]
         K[Docker: Component Isolation & Deployment]
     end
@@ -73,13 +73,13 @@ This diagram illustrates the interactions and data flow across different functio
 
 ```mermaid
 graph TD
-    subgraph Layer 1: User Interaction & Interfaces
+    subgraph layer1["Layer 1: User Interaction & Interfaces"]
         UI_AZ[Agent Zero UI: Interactive Terminal] --> L2_AZ
         UI_ARCHON[Archon UI: Web Interface (Knowledge/Tasks)] --> L3_ARCHON
         UI_FIREFLY[Firefly III UI: Web Interface (Finance)] --> L4_FIII
     end
 
-    subgraph Layer 2: Primary Orchestration & Adaptive Learning
+    subgraph layer2["Layer 2: Primary Orchestration & Adaptive Learning"]
         L2_AZ[Agent Zero: Primary Orchestrator]
         L2_N8N[n8n: Workflow Orchestrator & MCP Hub]
         L2_AZ -- "Receives User Tasks" --> L2_N8N
@@ -90,7 +90,7 @@ graph TD
         L2_AZ -- "Self-Learning (UR2 Principles)" --> L4_LM
     end
 
-    subgraph Layer 3: Specialized Knowledge & Agent Services
+    subgraph layer3["Layer 3: Specialized Knowledge & Agent Services"]
         L3_ARCHON[Archon: Agent Builder & Knowledge Mgmt]
         L3_LE[LangExtract: Structured Info Extraction]
         L3_HRAG[HiRAG: Hierarchical RAG]
@@ -101,7 +101,7 @@ graph TD
         L3_HRAG -- "Builds Hierarchical Indices" --> L4_SB
     end
 
-    subgraph Layer 4: External Services & Data Storage
+    subgraph layer4["Layer 4: External Services & Data Storage"]
         L4_FIII[Firefly III: Personal Finance Manager]
         L4_CUI[ComfyUI: Content Creation Workflows]
         L4_SB[Supabase: Unified DB w/ Vector Capabilities]
@@ -119,7 +119,7 @@ graph TD
         L4_LM -- "LLM Inference" --> L4_CUI
     end
 
-    subgraph Layer 5: Hardware & Infrastructure
+    subgraph layer5["Layer 5: Hardware & Infrastructure"]
         L5_DOCKER[Docker Runtime]
         L5_HARDWARE[Distributed Hardware Network]
         L5_DOCKER -- "Isolates & Deploys" --> L2_AZ
@@ -156,14 +156,14 @@ This diagram illustrates the workflow for integrating the Jellyfin AI Media Stac
 
 ```mermaid
 graph TD
-    subgraph Media Ingestion & Processing
+    subgraph media_ingestion["Media Ingestion & Processing"]
         A[YouTube Downloader (yt-dlp)] -->|Downloads Video/Audio & Metadata| B
         B[Local Media Files] --> C
         C[FFmpeg Video Processing] --> D
         D[Jellyfin Media Server]
     end
 
-    subgraph AI Analysis & Extraction
+    subgraph ai_analysis["AI Analysis & Extraction"]
         D -- "Sends Media to" --> E[Audio AI Service (Whisper, Pyannote, Sortformer)]
         D -- "Sends Media to" --> F[Video AI Service (YOLO, ViT, CLIP, Flamingo)]
         E -- "Extracts Audio Features" --> G
@@ -172,7 +172,7 @@ graph TD
         H[Neo4j Graph Database] -- "Content Relationships" --> K
     end
 
-    subgraph PMOVES Knowledge & Orchestration
+    subgraph knowledge_orchestration["PMOVES Knowledge & Orchestration"]
         I[Archon Knowledge Management] -- "Ingests Metadata & Structured Data" --> J
         J[HiRAG (Hierarchical RAG)] -- "Deeper Reasoning & Hierarchical Indices" --> K
         K[Supabase (Unified PMOVES Database)] -- "Stores Media Metadata, Analysis Results, Entities & Indices" --> L
@@ -218,13 +218,13 @@ This diagram details how HiRAG (Hierarchical Retrieval-Augmented Generation) is 
 
 ```mermaid
 graph TD
-    subgraph Data Ingestion & Structuring
+    subgraph data_ingestion_structuring["Data Ingestion & Structuring"]
         A[Raw Data (Web Crawls, Docs, Transcripts)] --> B[Archon Smart Web Crawling & Document Processing]
         B -- "Ingests & Processes" --> C[LangExtract Structured Information Extraction (Gemini-powered)]
         C -- "Processes Unstructured Text" --> D[Structured Entities & Relationships]
     end
 
-    subgraph Hierarchical Index Building (HiRAG)
+    subgraph hierarchical_index_building["Hierarchical Index Building (HiRAG)"]
         D --> E[HiRAG: Hierarchical Indexing]
         F(Layer Zero Entities)
         G(Layer One Entities)
@@ -238,7 +238,7 @@ graph TD
         E -- "Bridges (Fact-based reasoning paths linking local to global)" --> J
     end
 
-    subgraph Knowledge Storage & Retrieval
+    subgraph knowledge_storage_retrieval["Knowledge Storage & Retrieval"]
         K[Supabase: Unified Database with Vector Capabilities]
         F -- "Stored in" --> K
         G -- "Stored in" --> K
@@ -247,7 +247,7 @@ graph TD
         J -- "Stored in" --> K
     end
 
-    subgraph Advanced RAG Strategy (HiRAG in Action)
+    subgraph advanced_rag_strategy["Advanced RAG Strategy (HiRAG in Action)"]
         L[User Query (Agent Zero)] --> M[HiRAG Query Processing]
         M -- "Selects Info from" --> K
         M -- "Assembles Optimal Context" --> N[LLM (Local Models)]
@@ -279,17 +279,34 @@ HiRAG integration provides hierarchical knowledge structuring and deeper, fact-b
 
 --------------------------------------------------------------------------------
 
+## Geometry Cache Persistence & Validation
+
+Hi-RAG's geometry cache mirrors the `geometry.cgp.v1` event stream in Supabase so that agents and UI clients can jump across modalities with sub‑100 ms lookups. The persistence contract is:
+
+- **Tables** – `anchors`, `constellations`, and `shape_points` capture the normalized CGP payload. Each `constellations` row links back to an anchor; `shape_points` rows provide modality-specific jump data (token span, timestamp, frame index, etc.).
+- **Packets view** – When present, the `geometry_cgp_packets` materialized view mirrors the full CGP envelope (`{spec, super_nodes[]}`) for quick hydration/debugging. `ShapeStore.warm_from_db` prefers this view and falls back to the normalized join so the cache still warms even if the packets view is not provisioned yet.
+- **Warm start** – On service boot the gateway calls `ShapeStore.warm_from_db`, pulling the latest constellations (and their anchors/points) via PostgREST to hydrate the in-memory cache before the first request. A `ShapeStore warmed with … Supabase constellations` log line confirms the warm-up succeeded.
+- **Realtime feed** – After the warm, the gateway subscribes to Supabase Realtime (`realtime:geometry.cgp.v1`). Broadcast messages with fresh CGPs are fed back into the cache immediately, so cache coherence is bounded only by WebSocket latency.
+
+**Validation checklist**
+
+1. Confirm persistence: `GET $SUPA_REST_URL/geometry_cgp_packets?select=created_at&order=created_at.desc&limit=5` (or the fallback `constellations` query if the view is absent) should surface the latest payloads.
+2. Restart `hi-rag-gateway-v2` and watch the logs for the warm-up message. If the count is `0`, verify the service role key/PostgREST URL in `.env` and ensure at least one of `geometry_cgp_packets` or `constellations` returns rows.
+3. Run `python pmoves/tools/realtime_listener.py` (or the browser canvas at `/geometry/`) to see `geometry.cgp.v1` notifications propagate. New inserts should appear in Supabase within seconds and be reflected in ShapeStore lookups immediately.
+
+--------------------------------------------------------------------------------
+
 ## 5. Crush CLI Integration Context
 
 This diagram focuses on the Crush interactive CLI agent for software engineering, showing its internal structure, memory, and operational guidelines within the PMOVES ecosystem [43-96].
 
 ```mermaid
 flowchart TD
-    subgraph User Interaction
+    subgraph user_interaction_flow["User Interaction"]
         U[User] -- "Input Query/Task" --> CCLI
     end
 
-    subgraph Crush CLI Agent (Software Engineering "Bestie")
+    subgraph crush_cli_agent["Crush CLI Agent (Software Engineering \"Bestie\")"]
         CCLI[Crush CLI Interface] -- "Processes Input" --> CP
         CP(Crush Core Processing & LLM Integration)
         CP -- "Loads Context from CRUSH.md" --> CMM
@@ -299,13 +316,13 @@ flowchart TD
         CP -- "Selects & Executes Tools" --> T
     end
 
-    subgraph Crush Internal Memory & Prompts
+    subgraph crush_internal_memory["Crush Internal Memory & Prompts"]
         CMM[CRUSH.md: Stored Commands, Code Style, Codebase Structure]
         PP[Internal Prompts (e.g., anthropic.md, gemini.md): Define Tone, Style, Workflows, Mandates]
         MNG[Core Mandates & Guidelines: Rigorous Conventions, No Comments, No Emojis, No Auto-Commit]
     end
 
-    subgraph Tooling & External Integrations
+    subgraph tooling_external_integrations["Tooling & External Integrations"]
         T[Crush Tool Executor]
         T -- "File System Tools (view, edit, write, grep, glob)" --> FS(File System)
         T -- "Shell Commands (bash, test, lint, typecheck)" --> SHELL(Operating System Shell)

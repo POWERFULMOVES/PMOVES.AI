@@ -1,5 +1,5 @@
 # Supabase → Agent Zero → Discord Automation Playbook
-_Last updated: 2025-09-19_
+_Last updated: 2025-10-01_
 
 This guide captures the concrete steps and validation checks for wiring the M2 "Creator & Publishing" automation path end to end. It augments the high-level context in `pmoves/docs/CREATOR_PIPELINE.md` and the operational checklist in `pmoves/docs/NEXT_STEPS.md` with implementation-ready instructions.
 
@@ -60,19 +60,27 @@ Perform the following steps in order to validate the pipeline:
    - Use `curl -H "Content-Type: application/json" -d '{"content":"PMOVES Discord wiring check"}' $DISCORD_WEBHOOK_URL`.
    - Confirm the Discord channel receives the message.
 2. **Supabase approval trigger**
+
    - Use helper to insert an `approved` row with a valid `content_url`:
      - Make (Bash): `make -C pmoves seed-approval TITLE="Demo" URL="s3://outputs/demo/example.png"`
      - PowerShell: `make -C pmoves seed-approval-ps TITLE="Demo" URL="s3://outputs/demo/example.png"`
    - Ensure `meta->>'publish_event_sent_at'` is `null` prior to poller run (default when inserting with the helper).
 3. **Enable `approval_poller` workflow**
+
+   - Insert or update a `studio_board` row to `status='approved'` with a valid `content_url` (e.g., `s3://outputs/comfy/sample.png`).
+   - Ensure `meta->>'publish_event_sent_at'` is `null`.
+3. **Verify Agent Zero controller health**
+   - Call `GET ${AGENT_ZERO_BASE_URL}/healthz` and confirm `nats.connected=true` and `nats.controller_started=true`. JetStream metrics should increment once the poller is running.
+4. **Enable `approval_poller` workflow**
+
    - Activate once and watch n8n execution logs.
    - Verify Agent Zero logs a `content.publish.approved.v1` event.
-4. **Enable `echo_publisher` workflow**
+5. **Enable `echo_publisher` workflow**
    - Activate once after step 3 succeeds.
    - Confirm Discord receives an embed containing title, namespace, and presigned asset link.
-5. **Supabase audit verification**
+6. **Supabase audit verification**
    - Query `studio_board` for the modified row and confirm `status='published'`, `meta->>'publish_event_sent_at'` populated, and `meta->>'discord_webhook_response'` stored when available.
-6. **Deactivate workflows (optional)**
+7. **Deactivate workflows (optional)**
    - If running in staging, deactivate after validation. For continuous operation, confirm schedule intervals and leave active.
 
 ## Troubleshooting Tips

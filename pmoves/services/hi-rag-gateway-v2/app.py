@@ -1,5 +1,5 @@
 
-import os, time, math, json, logging, re, sys
+import os, time, math, json, logging, re, sys, contextlib
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
@@ -42,7 +42,22 @@ NEO4J_DICT_LIMIT = int(os.environ.get("NEO4J_DICT_LIMIT","50000"))
 ENTITY_CACHE_TTL = int(os.environ.get("ENTITY_CACHE_TTL","60"))
 ENTITY_CACHE_MAX = int(os.environ.get("ENTITY_CACHE_MAX","1000"))
 
+SUPABASE_REST_URL = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL")
+SUPABASE_SERVICE_KEY = (
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_KEY")
+    or os.environ.get("SUPABASE_KEY")
+)
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+SUPABASE_REALTIME_URL = os.environ.get("SUPABASE_REALTIME_URL") or os.environ.get("REALTIME_URL")
+SUPABASE_REALTIME_KEY = (
+    SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY or os.environ.get("REALTIME_ANON_KEY")
+)
+GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
+GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
+
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
+TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
 
 HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
@@ -261,6 +276,150 @@ except Exception as _e:
     logging.getLogger("hirag.gateway.v2").exception("ShapeStore init failed: %s", _e)
     shape_store = None
 
+_geometry_realtime_task: Optional[asyncio.Task] = None
+
+
+def _derive_realtime_url() -> Optional[str]:
+    if SUPABASE_REALTIME_URL:
+        return SUPABASE_REALTIME_URL
+    if not SUPABASE_REST_URL:
+        return None
+    rest = SUPABASE_REST_URL.rstrip("/")
+    if "postgrest" in rest or rest.endswith(":3000"):
+        return "ws://realtime:4000/socket/websocket"
+    base = rest
+    if base.endswith("/rest/v1"):
+        base = base[: -len("/rest/v1")]
+    if base.startswith("https://"):
+        base = "wss://" + base[len("https://"):]
+    elif base.startswith("http://"):
+        base = "ws://" + base[len("http://"):]
+    return base.rstrip("/") + "/realtime/v1"
+
+
+async def _warm_shapes_from_supabase() -> None:
+    if shape_store is None or not SUPABASE_REST_URL:
+        if shape_store is not None:
+            logger.info("ShapeStore warm skipped; SUPA_REST_URL not configured")
+        return
+    key = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
+    try:
+        count = await shape_store.warm_from_db(
+            rest_url=SUPABASE_REST_URL,
+            service_key=key,
+            limit=GEOMETRY_CACHE_WARM_LIMIT,
+        )
+        logger.info("ShapeStore warmed with %d Supabase constellations", count)
+    except Exception:
+        logger.exception("ShapeStore warm_from_db failed")
+
+
+async def _phoenix_heartbeat(ws, interval: float = 25.0) -> None:
+    ref = 1
+    try:
+        while True:
+            msg = {"topic": "phoenix", "event": "heartbeat", "payload": {}, "ref": str(ref)}
+            await ws.send(json.dumps(msg))
+            ref += 1
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        return
+    except Exception:
+        logger.exception("Supabase heartbeat error")
+
+
+async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
+    try:
+        import websockets
+    except ImportError:
+        logger.warning("websockets not installed; skipping Supabase realtime subscription")
+        return
+
+    while True:
+        full_url = ws_url
+        if "apikey=" not in full_url:
+            sep = "&" if "?" in full_url else "?"
+            full_url = f"{full_url}{sep}apikey={api_key}&vsn=2.0.0"
+        try:
+            async with websockets.connect(full_url, ping_interval=20, ping_timeout=20, max_queue=None) as ws:
+                join_payload = {
+                    "topic": "realtime:geometry.cgp.v1",
+                    "event": "phx_join",
+                    "payload": {"config": {"broadcast": {"ack": False, "self": True}}},
+                    "ref": "1",
+                }
+                await ws.send(json.dumps(join_payload))
+                logger.info("Subscribed to Supabase realtime geometry.cgp.v1 channel")
+                heartbeat = asyncio.create_task(_phoenix_heartbeat(ws))
+                try:
+                    async for raw in ws:
+                        try:
+                            msg = json.loads(raw)
+                        except Exception:
+                            continue
+                        if msg.get("topic") != "realtime:geometry.cgp.v1":
+                            continue
+                        payload = msg.get("payload") or {}
+                        event_payload: Optional[Dict[str, Any]] = None
+                        if isinstance(payload, dict):
+                            if payload.get("type") == "geometry.cgp.v1" and isinstance(payload.get("data"), dict):
+                                event_payload = payload
+                            elif payload.get("type") == "geometry.cgp.v1" and isinstance(payload.get("payload"), dict):
+                                event_payload = {"type": "geometry.cgp.v1", "data": payload.get("payload")}
+                            else:
+                                evt = payload.get("event") or payload.get("type")
+                                data = (
+                                    payload.get("data")
+                                    or payload.get("payload")
+                                    or payload.get("record")
+                                    or payload.get("new")
+                                )
+                                if evt == "geometry.cgp.v1" and isinstance(data, dict):
+                                    event_payload = {"type": "geometry.cgp.v1", "data": data}
+                        if event_payload:
+                            try:
+                                shape_store.on_geometry_event(event_payload)
+                            except Exception:
+                                logger.exception("Failed to apply Supabase geometry event")
+                finally:
+                    heartbeat.cancel()
+                    with contextlib.suppress(Exception):
+                        await heartbeat
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception(
+                "Supabase realtime listener error; retrying in %.1fs", max(1.0, GEOMETRY_REALTIME_BACKOFF)
+            )
+            await asyncio.sleep(max(1.0, GEOMETRY_REALTIME_BACKOFF))
+
+
+@app.on_event("startup")
+async def _on_startup() -> None:
+    if shape_store is None:
+        logger.info("ShapeStore unavailable; geometry cache warm skipped")
+        return
+    await _warm_shapes_from_supabase()
+    global _geometry_realtime_task
+    if _geometry_realtime_task is None:
+        ws_url = _derive_realtime_url()
+        api_key = SUPABASE_REALTIME_KEY
+        if ws_url and api_key:
+            _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
+            logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
+        else:
+            logger.info("Supabase realtime subscription skipped; missing URL or API key")
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    global _geometry_realtime_task
+    if _geometry_realtime_task is not None:
+        _geometry_realtime_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_realtime_task
+        _geometry_realtime_task = None
+
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower()=="true"
 CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
 CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower()=="true"
@@ -327,15 +486,41 @@ def _ip_in_cidrs(ip: str, cidrs):
         return False
     return False
 
-def require_tailscale(request: Request):
-    if not TAILSCALE_ONLY:
+def _tailscale_required(admin_only: bool) -> bool:
+    if TAILSCALE_ONLY:
+        return True
+    if admin_only:
+        return TAILSCALE_ADMIN_ONLY
+    return False
+
+
+def _tailscale_violation_detail(admin_only: bool) -> str:
+    return (
+        "Admin endpoints restricted to Tailscale network"
+        if admin_only
+        else "Service restricted to Tailscale network"
+    )
+
+
+def _tailscale_ip_allowed(ip: str, admin_only: bool) -> bool:
+    if not _tailscale_required(admin_only):
+        return True
+    return _ip_in_cidrs(ip, TAILSCALE_CIDRS)
+
+
+def require_tailscale(request: Request, admin_only: bool = False):
+    if not _tailscale_required(admin_only):
         return
     ip = _client_ip(request)
-    if not _ip_in_cidrs(ip, TAILSCALE_CIDRS):
-        raise HTTPException(status_code=403, detail="Admin restricted to Tailscale network")
+    if not _tailscale_ip_allowed(ip, admin_only):
+        raise HTTPException(status_code=403, detail=_tailscale_violation_detail(admin_only))
+
+
+def require_admin_tailscale(request: Request):
+    return require_tailscale(request, admin_only=True)
 
 @app.get("/hirag/admin/stats")
-def stats(_=Depends(require_tailscale)):
+def stats(_=Depends(require_admin_tailscale)):
     return {
         "rerank_enabled": RERANK_ENABLE,
         "rerank_model": RERANK_MODEL if RERANK_ENABLE else None,
@@ -347,7 +532,7 @@ def stats(_=Depends(require_tailscale)):
     }
 
 @app.post("/hirag/query", response_model=QueryResp)
-def hirag_query(req: QueryReq = Body(...)):
+def hirag_query(req: QueryReq = Body(...), _=Depends(require_tailscale)):
     try:
         vec = embed_query(req.query)
         # Lazily ensure collection exists with cosine + correct dim
@@ -426,18 +611,18 @@ def hirag_query(req: QueryReq = Body(...)):
     return {"query": req.query, "k": len(base), "used_rerank": used, "hits": base}
 
 @app.post("/hirag/admin/refresh")
-def hirag_admin_refresh(_=Depends(require_tailscale)):
+def hirag_admin_refresh(_=Depends(require_admin_tailscale)):
     refresh_warm_dictionary()
     return {"ok": True, "last_refresh": _warm_last}
 
 @app.post("/hirag/admin/cache/clear")
-def hirag_admin_cache_clear(_=Depends(require_tailscale)):
+def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
     # no explicit cache; warm dictionary reload covers
     refresh_warm_dictionary()
     return {"ok": True}
 
 @app.get("/")
-def index():
+def index(_=Depends(require_tailscale)):
     return {"ok": True, "service": "hi-rag-gateway-v2", "hint": "POST /hirag/query"}
 
 # lazy-init reranker to reduce cold start time
@@ -461,7 +646,7 @@ from fastapi import UploadFile
 import io
 
 @app.post("/geometry/event")
-def geometry_event(body: Dict[str, Any]):
+def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     payload = body.get("data") if isinstance(body, dict) else None
@@ -496,7 +681,7 @@ def geometry_event(body: Dict[str, Any]):
     return {"ok": True}
 
 @app.get("/shape/point/{point_id}/jump")
-def shape_point_jump(point_id: str):
+def shape_point_jump(point_id: str, _=Depends(require_tailscale)):
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     loc = shape_store.jump_locator(point_id)
@@ -505,7 +690,7 @@ def shape_point_jump(point_id: str):
     return {"ok": True, "locator": loc}
 
 @app.post("/geometry/decode/text")
-def geometry_decode_text(body: Dict[str, Any]):
+def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_TEXT:
         raise HTTPException(501, "text decoder disabled")
     mode = (body.get("mode") or "geometry").lower()
@@ -546,7 +731,7 @@ def geometry_decode_text(body: Dict[str, Any]):
         return {"mode": mode, "points": pts[:k]}
 
 @app.post("/geometry/calibration/report")
-def geometry_calibration_report(body: Dict[str, Any]):
+def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
     def _js(p, q):
         import math
         def _kl(a, b):
@@ -584,7 +769,7 @@ def geometry_calibration_report(body: Dict[str, Any]):
     return {"constellations": report}
 
 @app.post("/geometry/decode/image")
-def geometry_decode_image(body: Dict[str, Any]):
+def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_IMAGE:
         raise HTTPException(501, "image decoder disabled")
     try:
@@ -619,7 +804,7 @@ def geometry_decode_image(body: Dict[str, Any]):
         raise HTTPException(500, f"image decode error: {e}")
 
 @app.post("/geometry/decode/audio")
-def geometry_decode_audio(body: Dict[str, Any]):
+def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_AUDIO:
         raise HTTPException(501, "audio decoder disabled")
     try:
@@ -724,6 +909,11 @@ app.mount("/geometry", StaticFiles(directory=str(Path(__file__).resolve().parent
 
 @app.websocket("/ws/signaling/{room}")
 async def ws_signaling(ws: WebSocket, room: str):
+    ip = ws.client.host if ws.client else "127.0.0.1"
+    if not _tailscale_ip_allowed(ip, admin_only=False):
+        logger.warning("Rejecting websocket connection from non-Tailnet IP %s", ip)
+        await ws.close(code=1008, reason=_tailscale_violation_detail(admin_only=False))
+        return
     await ws.accept()
     await _room_add(room, ws)
     try:
@@ -756,7 +946,7 @@ async def ws_signaling(ws: WebSocket, room: str):
 
 
 @app.post("/mesh/handshake")
-def mesh_handshake(body: Dict[str, Any]):
+def mesh_handshake(body: Dict[str, Any], _=Depends(require_admin_tailscale)):
     """Publish a shape-capsule to NATS mesh subject (mesh.shape.handshake.v1).
     Body: { capsule: {...} }
     """
@@ -777,7 +967,7 @@ def mesh_handshake(body: Dict[str, Any]):
 
 
 @app.post("/geometry/import_db")
-def import_db(body: Dict[str, Any]):
+def import_db(body: Dict[str, Any], _=Depends(require_admin_tailscale)):
     """Persist a CGP directly into Postgres (forces persistence), update ShapeStore, and broadcast.
     Accepts either { data: <CGP> } or { capsule: { kind:'cgp', data: <CGP> } }.
     """
@@ -822,7 +1012,7 @@ class UpsertReq(BaseModel):
     index_lexical: bool = False
 
 @app.post("/hirag/upsert-batch")
-def hirag_upsert_batch(req: UpsertReq = Body(...)):
+def hirag_upsert_batch(req: UpsertReq = Body(...), _=Depends(require_admin_tailscale)):
     # Parse items from jsonl if provided
     items: List[Dict[str, Any]] = []
     if req.items:
