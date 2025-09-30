@@ -26,9 +26,42 @@ This working session establishes the concrete implementation tasks needed to clo
 ## 3. Broader Roadmap Prep (M3–M5)
 
 ### 3.1 Graph & Retrieval (Milestone M3)
-- **Alias seeding**: Draft Cypher scripts for DARKXSIDE/POWERFULMOVES alias ingestion; source lists from community submissions and Jellyfin metadata exports.
-- **Relation extraction passes**: Outline caption/note parsing strategy and scoring metrics; identify candidate tooling (spaCy, OpenAI function-calling fallback).
-- **Reranker parameter sweeps**: Enumerate datasets (agent transcripts, Jellyfin descriptions) and define CI artifact storage structure; align toggle flags with `HI_RAG_RERANKER` docs.
+
+#### 3.1.1 Alias dataset & loader drafting
+- **Dataset location**: `pmoves/neo4j/datasets/person_aliases_seed.csv` now tracks canonical persona slugs, preferred display names, alias strings, provenance, and seed confidence. Initial rows cover POWERFULMOVES/DARKXSIDE handles gathered from community submissions and Jellyfin exports.
+- **Cypher loader**: `pmoves/neo4j/cypher/002_load_person_aliases.cypher` ingests the CSV, creating/refreshing `Persona` and `Alias` nodes plus `HAS_ALIAS` edges with optional confidence metadata and timestamps.
+- **Execution steps**:
+  1. Copy `person_aliases_seed.csv` into the Neo4j import directory (Docker default: `./neo4j/import` relative to the compose project root).
+  2. Launch Neo4j (`make up data` or `docker compose --profile data up neo4j`).
+  3. Run the loader via cypher-shell: `cat pmoves/neo4j/cypher/002_load_person_aliases.cypher | docker exec -i pmoves-neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD"` (adjust container name/credentials for local setups).
+  4. Capture the returned `persona_slug`, `alias`, and `confidence` rows in the session log for validation.
+- **Next iteration hooks**: Extend the CSV with Jellyfin export columns (`jellyfin_item_id`, `season`, etc.) once data exports are scheduled, and wire automated validation into `services/graph-linker` migrations.
+
+#### 3.1.2 Relation extraction requirements (feeds `services/hi-rag-gateway`, `services/retrieval-eval`)
+- **Inputs**:
+  - Jellyfin enriched metadata (title, summary, tags, people credits).
+  - Agent Zero conversation transcripts with turn-level timestamps.
+  - Discord promotion copy archived via `hi-rag-gateway` fetchers.
+- **Expected edges**:
+  - `(:Persona)-[:FEATURES_IN]->(:Media)` from caption/name co-occurrence with ≥0.75 confidence.
+  - `(:Persona)-[:COLLABORATES_WITH]->(:Persona)` derived from multi-speaker transcripts within a 5-minute window.
+  - `(:Media)-[:MENTIONS_TOPIC]->(:Topic)` seeded by tag extraction.
+- **Metrics & gating** (owned jointly by `services/hi-rag-gateway` fetch orchestration and `services/retrieval-eval` scoring pipeline):
+  - Precision @ top-10 extracted relations ≥0.8 on labeled snippets.
+  - Coverage: ≥70% of seeded personas must have at least one HAS_ALIAS + FEATURES_IN pairing after pipeline run.
+  - Latency budget: extraction job completes within 15 minutes per 1k transcript segments to stay inside hi-rag nightly refresh window.
+- **Tooling**: evaluate spaCy dependency parser for baseline relation candidates, with OpenAI function-calling fallback when spaCy confidence <0.6. Results flow into `services/retrieval-eval` notebooks for scoring before backfilling Neo4j.
+
+#### 3.1.3 Reranker parameter sweep & persona publish gate
+- **Datasets**: combine Agent Zero Q&A transcripts, Jellyfin synopsis embeddings, and retrieval-eval hard negatives (see `pmoves/datasets/retrieval_eval/...`).
+- **Toggles under test**: `HIRAG_RERANKER__MODEL` (qwen2 vs jina v2), `HIRAG_RERANKER__USE_CHATML`, `HIRAG_RERANKER__MAX_CONTEXT`, and prompt temperature overrides surfaced in `services/hi-rag-gateway` feature flags.
+- **Execution loop**:
+  1. Materialize dataset shards to MinIO (`reranker-sweeps/<timestamp>/<dataset>.jsonl`).
+  2. Trigger sweeps via `make reranker-sweep MODEL=qwen2`, capturing config + commit hash in `services/retrieval-eval/artifacts/<timestamp>/manifest.yaml`.
+  3. Ingest score outputs (MRR, Recall@5, win-rate vs baseline) back into the eval service for diffable comparisons.
+- **Artifact storage**: All sweep outputs mirror to MinIO `retrieval-eval-artifacts` bucket and are summarized in `pmoves/docs/HI_RAG_RERANKER.md` release notes.
+- **Publishing gate**: Persona publishing jobs remain blocked until reranker sweeps show ≥5% improvement in Recall@5 or maintain baseline while reducing latency by ≥10%. Document pass/fail in this plan before flipping the `ALLOW_PERSONA_PUBLISH=true` flag.
+- **Tooling updates**: add CLI helper (`scripts/reranker_sweep.py`) to orchestrate MinIO uploads + manifest stamping, and extend `services/hi-rag-gateway` configs to surface new toggle values.
 
 ### 3.2 Formats & Scale (Milestone M4)
 - Document prerequisites for DOCX/PPTX ingestion (LibreOffice container image, conversion queue) and assign research spikes.
@@ -51,9 +84,14 @@ This working session establishes the concrete implementation tasks needed to clo
 
 - [ ] Review evidence captured during automation loop dry runs and update `SUPABASE_DISCORD_AUTOMATION.md` with timestamps.
 - [ ] Queue Jellyfin metadata backfill job and document parameters (collections targeted, run duration).
-- [ ] Draft Neo4j alias seeding scripts and store them under `pmoves/neo4j/` (placeholder if scripts not yet committed).
+- [x] Draft Neo4j alias seeding scripts and store them under `pmoves/neo4j/` (placeholder if scripts not yet committed).
 - [ ] Prepare GPU smoke expectations for faster-whisper path and add them to `pmoves/docs/SMOKETESTS.md` if gaps remain.
 - [ ] Confirm Supabase RLS hardening research tasks have owners and deadlines noted in the project tracker.
+
+### Follow-up issues for scheduling
+- **Data exports**: Schedule Jellyfin metadata and MinIO transcript dumps needed for expanded alias coverage and relation extraction labeling (owner: Data Ops).
+- **Labeling sprint**: Book 1-day annotation block with community reviewers to generate 50 gold relations for retrieval-eval metrics (owner: Community manager).
+- **Tooling uplift**: Ticket `scripts/reranker_sweep.py` implementation and hi-rag-gateway config surfacing; link to reranker sweep milestone.
 
 ---
 
