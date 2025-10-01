@@ -83,6 +83,20 @@ Perform the following steps in order to validate the pipeline:
 7. **Deactivate workflows (optional)**
    - If running in staging, deactivate after validation. For continuous operation, confirm schedule intervals and leave active.
 
+### 2025-10-23 Session Status (Codex Sandbox)
+
+| Step | Status | Notes |
+| --- | --- | --- |
+| Dry-run webhook ping | Blocked | Discord webhook credentials unavailable inside Codex; cannot reach external Discord API from sandbox. |
+| Supabase approval trigger | Blocked | Supabase stack not running in the hosted environment; `make` targets require services that are not provisioned. |
+| Verify Agent Zero controller health | Blocked | Agent Zero service is not accessible; health check would require running docker-compose profiles that are disabled in this session. |
+| Enable `approval_poller` workflow | Blocked | n8n instance is not available in Codex; workflow import depends on external UI access. |
+| Enable `echo_publisher` workflow | Blocked | Depends on previous steps; Discord credential binding cannot be validated. |
+| Supabase audit verification | Blocked | Requires Supabase DB access and workflow execution. |
+| Deactivate workflows | Blocked | Workflows never activated due to environment constraints. |
+
+> **Follow-up**: Re-run the checklist on a workstation with docker-compose profiles (`data`, `orchestration`) and authenticated Discord/Supabase credentials available. Capture screenshots and log excerpts as originally requested once services are reachable.
+
 ## Troubleshooting Tips
 - **403 from Agent Zero** — check `AGENT_ZERO_EVENTS_TOKEN` and ensure the shared secret matches the server configuration.
 - **Discord rate limits** — limit embed updates to <5/minute per webhook. n8n logs include X-RateLimit headers for inspection.
