@@ -179,6 +179,62 @@ def _flatten_thresholds(thresholds: Mapping[str, Mapping[str, Any]] | None) -> D
     return flat
 
 
+async def _publish_event(
+    nc,
+    env: Mapping[str, Any],
+    persona: Mapping[str, Any],
+    persona_id: str,
+    dataset_id: str,
+    thresholds_cfg: Mapping[str, Mapping[str, Any]] | None,
+    *,
+    metrics: Optional[Mapping[str, Any]] = None,
+    evaluations: Optional[Mapping[str, Any]] = None,
+    generated_at: Optional[str] = None,
+    passed: bool,
+    correlation_id: Optional[str],
+    log_extra: Optional[Mapping[str, Any]] = None,
+) -> None:
+    event_payload = {
+        "persona_id": persona_id,
+        "name": persona.get("name"),
+        "version": persona.get("version"),
+        "dataset_id": dataset_id,
+        "metrics": {k: float(v) for k, v in (metrics or {}).items()},
+        "thresholds": _flatten_thresholds(thresholds_cfg),
+        "generated_at": generated_at,
+        "evaluations": dict(evaluations or {}),
+        "passed": passed,
+        "correlation_id": correlation_id,
+    }
+    topic = "persona.published.v1" if passed else "persona.publish.failed.v1"
+    if not passed:
+        logger.warning(
+            "Persona publish gate failed",
+            extra={
+                "persona": persona,
+                "dataset_id": dataset_id,
+                "evaluations": event_payload.get("evaluations"),
+                **(log_extra or {}),
+            },
+        )
+    evt = envelope(
+        topic,
+        event_payload,
+        correlation_id=env.get("correlation_id"),
+        parent_id=env.get("id"),
+        source="retrieval-eval",
+    )
+    await nc.publish(topic, json.dumps(evt).encode())
+    logger.info(
+        "Persona publish evaluation complete",
+        extra={
+            "persona": persona,
+            "dataset_id": dataset_id,
+            "passed": passed,
+        },
+    )
+
+
 def _build_persona_key(persona: Mapping[str, Any]) -> str:
     return f"{persona.get('name')}@{persona.get('version')}"
 
@@ -213,37 +269,51 @@ async def main() -> None:
         label = f"{_build_persona_key(persona)}:{dataset_id}"
 
         loop = asyncio.get_running_loop()
+        thresholds_cfg = dataset_cfg.get("thresholds", {})
+        correlation_id = payload.get("correlation_id") or env.get("correlation_id")
         try:
             output, metrics = await loop.run_in_executor(None, _evaluate, dataset_cfg, label)
         except Exception:
-            logger.exception("Retrieval evaluation failed", extra={"persona": persona, "dataset_id": dataset_id})
+            logger.exception(
+                "Retrieval evaluation failed",
+                extra={"persona": persona, "dataset_id": dataset_id},
+            )
+            await _publish_event(
+                nc,
+                env,
+                persona,
+                persona_id,
+                dataset_id,
+                thresholds_cfg,
+                metrics={},
+                evaluations={},
+                generated_at=None,
+                passed=False,
+                correlation_id=correlation_id,
+                log_extra={"error": "evaluation_exception"},
+            )
             return
 
-        thresholds = dataset_cfg.get("thresholds", {})
-        passed, evaluations = evaluate_thresholds(metrics, thresholds)
-        _persist_thresholds(persona_id, dataset_id, output.get("generated_at"), evaluations, thresholds)
-
-        event_payload = {
-            "persona_id": persona_id,
-            "name": persona.get("name"),
-            "version": persona.get("version"),
-            "dataset_id": dataset_id,
-            "metrics": {k: float(v) for k, v in metrics.items()},
-            "thresholds": _flatten_thresholds(thresholds),
-            "generated_at": output.get("generated_at"),
-            "evaluations": evaluations,
-            "passed": passed,
-            "correlation_id": payload.get("correlation_id") or env.get("correlation_id"),
-        }
-        topic = "persona.published.v1" if passed else "persona.publish.failed.v1"
-        if not passed:
-            logger.warning(
-                "Persona publish gate failed", extra={"persona": persona, "dataset_id": dataset_id, "evaluations": evaluations}
-            )
-        evt = envelope(topic, event_payload, correlation_id=env.get("correlation_id"), parent_id=env.get("id"), source="retrieval-eval")
-        await nc.publish(topic, json.dumps(evt).encode())
-        logger.info(
-            "Persona publish evaluation complete", extra={"persona": persona, "dataset_id": dataset_id, "passed": passed}
+        passed, evaluations = evaluate_thresholds(metrics, thresholds_cfg)
+        _persist_thresholds(
+            persona_id,
+            dataset_id,
+            output.get("generated_at"),
+            evaluations,
+            thresholds_cfg,
+        )
+        await _publish_event(
+            nc,
+            env,
+            persona,
+            persona_id,
+            dataset_id,
+            thresholds_cfg,
+            metrics=metrics,
+            evaluations=evaluations,
+            generated_at=output.get("generated_at"),
+            passed=passed,
+            correlation_id=correlation_id,
         )
 
     await nc.subscribe("persona.publish.request.v1", cb=handler)
