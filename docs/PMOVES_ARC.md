@@ -47,10 +47,25 @@ graph TD
     E -- Stores Data --> H
     F -- Utilizes Models --> I
     G -- Stores Data --> H
-    H -- Serves Data to --> A, B, D, E, F
-    I -- Powers --> A, B, D, E, F
+    H -- Serves Data to --> A
+    H -- Serves Data to --> B
+    H -- Serves Data to --> D
+    H -- Serves Data to --> E
+    H -- Serves Data to --> F
+    I -- Powers --> A
+    I -- Powers --> B
+    I -- Powers --> D
+    I -- Powers --> E
+    I -- Powers --> F
     J -- Hosts All Components --> K
-    K -- Enables Deployment of --> A, B, C, D, E, F, G, I
+    K -- Enables Deployment of --> A
+    K -- Enables Deployment of --> B
+    K -- Enables Deployment of --> C
+    K -- Enables Deployment of --> D
+    K -- Enables Deployment of --> E
+    K -- Enables Deployment of --> F
+    K -- Enables Deployment of --> G
+    K -- Enables Deployment of --> I
 ```
 
 **Explanation:**

@@ -10,28 +10,28 @@ This diagram provides a top-level view of the PMOVES system, categorizing its ma
 
 ```mermaid
 graph TD
-    subgraph "Central Brain (Primary Orchestration)"
+    subgraph central_brain["Central Brain (Primary Orchestration)"]
         A["Agent Zero: Core Decision-Maker & Orchestrator"]
     end
 
-    subgraph "Support Systems (Agent Building, Knowledge & Workflow)"
+    subgraph support_systems["Support Systems (Agent Building, Knowledge & Workflow)"]
         B["Archon: Specialized Agent Builder & Knowledge/Task Mgmt"]
         C["n8n: Workflow Orchestration & MCP Hub"]
     end
 
-    subgraph "Specialized AI Muscles (Deep Processing & Generation)"
+    subgraph specialized_ai["Specialized AI Muscles (Deep Processing & Generation)"]
         D["HiRAG: Hierarchical RAG for Deep Reasoning"]
         E["LangExtract: Structured Information Extraction"]
         F["ComfyUI: Sophisticated Content Creation"]
     end
 
-    subgraph "Data & Operational Backbones"
+    subgraph data_backbones["Data & Operational Backbones"]
         G["Firefly III: Personal Finance Manager"]
         H["Supabase: Unified Database with Vector Capabilities"]
         I["Local Models: Ollama, NVIDIA NIM, Nemo"]
     end
 
-    subgraph "Underlying Infrastructure"
+    subgraph infra["Underlying Infrastructure"]
         J["Distributed Computing: Workstations & Edge Devices"]
         K["Docker: Component Isolation & Deployment"]
     end
@@ -88,31 +88,31 @@ This diagram illustrates the interactions and data flow across different functio
 
 ```mermaid
 graph TD
-    subgraph "Layer 1: User Interaction & Interfaces"
+    subgraph layer1["Layer 1: User Interaction & Interfaces"]
         UI_AZ["Agent Zero UI: Interactive Terminal"]
         UI_ARCHON["Archon UI: Web Interface (Knowledge/Tasks)"]
         UI_FIREFLY["Firefly III UI: Web Interface (Finance)"]
     end
 
-    subgraph "Layer 2: Primary Orchestration & Adaptive Learning"
+    subgraph layer2["Layer 2: Primary Orchestration & Adaptive Learning"]
         L2_AZ["Agent Zero: Primary Orchestrator"]
         L2_N8N["n8n: Workflow Orchestrator & MCP Hub"]
     end
 
-    subgraph "Layer 3: Specialized Knowledge & Agent Services"
+    subgraph layer3["Layer 3: Specialized Knowledge & Agent Services"]
         L3_ARCHON["Archon: Agent Builder & Knowledge Mgmt"]
         L3_LE["LangExtract: Structured Info Extraction"]
         L3_HRAG["HiRAG: Hierarchical RAG"]
     end
 
-    subgraph "Layer 4: External Services & Data Storage"
+    subgraph layer4["Layer 4: External Services & Data Storage"]
         L4_FIII["Firefly III: Personal Finance Manager"]
         L4_CUI["ComfyUI: Content Creation Workflows"]
         L4_SB["Supabase: Unified DB w/ Vector Capabilities"]
         L4_LM["Local Models (Ollama, NVIDIA NIM, Nemo)"]
     end
 
-    subgraph "Layer 5: Hardware & Infrastructure"
+    subgraph layer5["Layer 5: Hardware & Infrastructure"]
         L5_DOCKER["Docker Runtime"]
         L5_HARDWARE["Distributed Hardware Network"]
     end
@@ -179,21 +179,21 @@ This diagram illustrates the workflow for integrating the Jellyfin AI Media Stac
 
 ```mermaid
 graph TD
-    subgraph "Media Ingestion & Processing"
+    subgraph media_ingestion["Media Ingestion & Processing"]
         A["YouTube Downloader (yt-dlp)"]
         B["Local Media Files"]
         C["FFmpeg Video Processing"]
         D["Jellyfin Media Server"]
     end
 
-    subgraph "AI Analysis & Extraction"
+    subgraph ai_analysis["AI Analysis & Extraction"]
         E["Audio AI Service (Whisper, Pyannote, Sortformer)"]
         F["Video AI Service (YOLO, ViT, CLIP, Flamingo)"]
         G["Google LangExtract (Gemini-powered)"]
         H["Neo4j Graph Database"]
     end
 
-    subgraph "PMOVES Knowledge & Orchestration"
+    subgraph knowledge_orchestration["PMOVES Knowledge & Orchestration"]
         I["Archon Knowledge Management"]
         J["HiRAG (Hierarchical RAG)"]
         K["Supabase (Unified PMOVES Database)"]
@@ -348,14 +348,14 @@ This diagram details how HiRAG (Hierarchical Retrieval-Augmented Generation) is 
 
 ```mermaid
 graph TD
-    subgraph "Data Ingestion & Structuring"
+    subgraph ingest_struct["Data Ingestion & Structuring"]
         A["Raw Data (Web Crawls, Docs, Transcripts)"]
         B["Archon Smart Web Crawling & Document Processing"]
         C["LangExtract Structured Information Extraction (Gemini-powered)"]
         D["Structured Entities & Relationships"]
     end
 
-    subgraph "Hierarchical Index Building (HiRAG)"
+    subgraph h_index["Hierarchical Index Building (HiRAG)"]
         E["HiRAG: Hierarchical Indexing"]
         F["Layer Zero Entities"]
         G["Layer One Entities"]
@@ -364,11 +364,11 @@ graph TD
         J["Bridges"]
     end
 
-    subgraph "Knowledge Storage & Retrieval"
+    subgraph storage["Knowledge Storage & Retrieval"]
         K["Supabase: Unified Database with Vector Capabilities"]
     end
 
-    subgraph "Advanced RAG Strategy (HiRAG in Action)"
+    subgraph rag_action["Advanced RAG Strategy (HiRAG in Action)"]
         L["User Query (Agent Zero)"]
         M["HiRAG Query Processing"]
         N["LLM (Local Models)"]
@@ -440,23 +440,23 @@ This diagram focuses on the Crush interactive CLI agent for software engineering
 
 ```mermaid
 flowchart TD
-    subgraph "User Interaction"
+    subgraph user_interaction["User Interaction"]
         U["User"]
         CCLI["Crush CLI Interface"]
     end
 
-    subgraph "Crush CLI Agent (Software Engineering Bestie)"
+    subgraph crush_cli["Crush CLI Agent (Software Engineering Bestie)"]
         CP["Crush Core Processing & LLM Integration"]
         LLM_AGENTS["Various LLMs"]
     end
 
-    subgraph "Crush Internal Memory & Prompts"
+    subgraph crush_memory["Crush Internal Memory & Prompts"]
         CMM["CRUSH.md: Stored Commands, Code Style, Codebase Structure"]
         PP["Internal Prompts (e.g., anthropic.md, gemini.md): Define Tone, Style, Workflows, Mandates"]
         MNG["Core Mandates & Guidelines: Rigorous Conventions, No Comments, No Emojis, No Auto-Commit"]
     end
 
-    subgraph "Tooling & External Integrations"
+    subgraph tooling_integrations["Tooling & External Integrations"]
         T["Crush Tool Executor"]
         FS["File System"]
         SHELL["Operating System Shell"]
