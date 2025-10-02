@@ -22,15 +22,20 @@ from services.common.telemetry import PublisherMetrics, PublishTelemetry, comput
 app = FastAPI(title="Publisher-Discord", version="0.1.0")
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
-DISCORD_USERNAME = os.environ.get("DISCORD_USERNAME", "PMOVES")
+# Prefer the n8n-style username if provided, fallback to legacy var
+DISCORD_USERNAME = os.environ.get("DISCORD_USERNAME", os.environ.get("DISCORD_WEBHOOK_USERNAME", "PMOVES"))
 DISCORD_AVATAR_URL = os.environ.get("DISCORD_AVATAR_URL", "")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SUBJECTS = os.environ.get(
     "DISCORD_SUBJECTS",
     "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1",
 ).split(",")
+
+JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "")
+
 DISCORD_METRICS_TABLE = os.environ.get("DISCORD_METRICS_TABLE", "publisher_discord_metrics")
 DISCORD_METRICS_CONFLICT = os.environ.get("DISCORD_METRICS_CONFLICT", "published_event_id")
+
 
 _nc: Optional[NATS] = None
 _webhook_counters = Counter()
@@ -290,9 +295,33 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     elif name == "content.published.v1":
         title = payload.get("title") or payload.get("slug") or payload.get("published_path")
         emb["title"] = f"Published: {title or 'content'}"
-        public_url = payload.get("public_url")
+        public_url = payload.get("public_url") or payload.get("jellyfin_public_url")
         published_path = payload.get("published_path")
         namespace = payload.get("namespace") or payload.get("workspace")
+        artifact_uri = payload.get("artifact_uri")
+        meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+        jellyfin_item_id = payload.get("jellyfin_item_id") or meta.get("jellyfin_item_id")
+        jellyfin_public_url = (
+            payload.get("jellyfin_public_url")
+            or (meta.get("jellyfin_public_url") if isinstance(meta, dict) else None)
+        )
+        duration_s = None
+        for k in ("duration",):
+            try:
+                v = payload.get(k)
+                if v is None and meta:
+                    v = meta.get(k)
+                if v is not None:
+                    duration_s = float(v)
+            except (TypeError, ValueError):
+                pass
+        def _fmt_dur(sec: float) -> str:
+            try:
+                sec = int(sec)
+                h = sec // 3600; m = (sec % 3600) // 60; s = sec % 60
+                return f"{h:d}:{m:02d}:{s:02d}" if h > 0 else f"{m:d}:{s:02d}"
+            except Exception:
+                return str(sec)
         description_lines = []
         if isinstance(public_url, str) and public_url:
             emb["url"] = public_url
@@ -308,28 +337,55 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
                 description_lines.append(f"Namespace: `{namespace}`")
         if published_path:
             emb["fields"].append({"name": "Published Path", "value": f"`{published_path}`", "inline": False})
-        tags = list(_coerce_tags(payload.get("tags")))
+        if artifact_uri:
+            emb["fields"].append({"name": "Artifact URI", "value": str(artifact_uri), "inline": False})
+        if duration_s is not None:
+            emb["fields"].append({"name": "Duration", "value": _fmt_dur(duration_s), "inline": True})
+        if jellyfin_item_id:
+            emb["fields"].append({"name": "Jellyfin Item", "value": f"`{jellyfin_item_id}`", "inline": True})
+            if jellyfin_public_url:
+                emb["fields"].append({"name": "Jellyfin", "value": jellyfin_public_url, "inline": False})
+            else:
+                # Build deep link when a base URL is available (payload/meta or env JELLYFIN_URL)
+                jf_base = (
+                    payload.get("jellyfin_base_url")
+                    or (meta.get("jellyfin_base_url") if isinstance(meta, dict) else None)
+                    or JELLYFIN_URL
+                )
+                if isinstance(jf_base, str) and jf_base:
+                    jf_base = jf_base.rstrip("/")
+                    try:
+                        tval = payload.get("t") or payload.get("start") or payload.get("start_time")
+                        tparam = f"&startTime={int(float(tval))}" if tval is not None else ""
+                    except Exception:
+                        tparam = ""
+                    jf_link = f"{jf_base}/web/index.html#!/details?id={jellyfin_item_id}{tparam}"
+                    emb["fields"].append({"name": "Jellyfin", "value": jf_link, "inline": False})
+        tags = list(_coerce_tags(payload.get("tags") or meta.get("tags") if isinstance(meta, dict) else []))
         if tags:
             formatted_tags = ", ".join(f"`{tag}`" for tag in tags[:12])
             emb["fields"].append({"name": "Tags", "value": formatted_tags, "inline": False})
         if description_lines:
             emb["description"] = "\n".join(description_lines)
-        summary = payload.get("summary") or payload.get("description")
+        summary = payload.get("summary") or payload.get("description") or meta.get("summary") if isinstance(meta, dict) else None
         if summary:
             if "description" not in emb:
                 emb["description"] = str(summary)[:1800]
             else:
-                emb["fields"].append(
-                    {
-                        "name": "Summary",
-                        "value": str(summary)[:1024],
-                        "inline": False,
-                    }
-                )
+                emb["fields"].append({"name": "Summary", "value": str(summary)[:1024], "inline": False})
     else:
         desc = json.dumps(payload)[:1800]
         emb["description"] = f"```json\n{desc}\n```"
-    if thumb:
+    # Prefer explicit thumbnail_url in payload/meta, then fall back to auto-pick
+    explicit_thumb = None
+    if isinstance(payload.get("thumbnail_url"), str) and payload.get("thumbnail_url"):
+        explicit_thumb = payload.get("thumbnail_url")
+    elif isinstance(payload.get("meta"), dict) and isinstance(payload["meta"].get("thumbnail_url"), str) and payload["meta"]["thumbnail_url"]:
+        explicit_thumb = payload["meta"]["thumbnail_url"]
+
+    if explicit_thumb:
+        emb["thumbnail"] = {"url": explicit_thumb}
+    elif thumb:
         emb["thumbnail"] = {"url": thumb}
     return {"content": None, "embeds": [emb]}
 

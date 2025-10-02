@@ -138,6 +138,15 @@ def _coerce_text(value: Any) -> Optional[str]:
     return str(value)
 
 
+def _coerce_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _extract_reviewer(payload: Dict[str, Any]) -> Optional[str]:
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
     candidates = [
@@ -305,6 +314,7 @@ def merge_metadata(
     namespace_slug: str,
     filename: str,
     extension: str,
+    additional_meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     meta: Dict[str, Any] = dict(incoming_meta or {})
     meta.setdefault("title", title)
@@ -316,6 +326,10 @@ def merge_metadata(
     meta.setdefault("namespace_slug", namespace_slug)
     meta["filename"] = filename
     meta["extension"] = extension.lstrip(".") if extension else ""
+    if isinstance(additional_meta, dict):
+        for key, value in additional_meta.items():
+            if value is not None:
+                meta[key] = value
     return meta
 
 
@@ -330,6 +344,10 @@ def build_published_payload(
     incoming_meta: Optional[Dict[str, Any]],
     public_url: Optional[str],
     jellyfin_item_id: Optional[str],
+    jellyfin_public_url: Optional[str],
+    thumbnail_url: Optional[str],
+    duration: Optional[float],
+    jellyfin_meta: Optional[Dict[str, Any]],
     slug: str,
     namespace_slug: str,
     filename: str,
@@ -339,6 +357,19 @@ def build_published_payload(
         "artifact_uri": artifact_uri,
         "published_path": published_path,
         "namespace": namespace,
+    }
+    if title:
+        payload["title"] = title
+    if description:
+        payload["description"] = description
+    if tags:
+        payload["tags"] = list(tags)
+    if thumbnail_url:
+        payload["thumbnail_url"] = thumbnail_url
+    if duration is not None:
+        payload["duration"] = duration
+    payload: Dict[str, Any] = {
+        **payload,
         "meta": merge_metadata(
             title,
             description,
@@ -348,15 +379,118 @@ def build_published_payload(
             namespace_slug=namespace_slug,
             filename=filename,
             extension=extension,
+            additional_meta=_combine_meta(
+                jellyfin_meta,
+                {
+                    "thumbnail_url": thumbnail_url,
+                    "duration": duration,
+                    "jellyfin_public_url": jellyfin_public_url,
+                    "jellyfin_item_id": jellyfin_item_id,
+                },
+            ),
         ),
     }
     if public_url:
         payload["public_url"] = public_url
     if jellyfin_item_id:
         payload["jellyfin_item_id"] = jellyfin_item_id
+    if jellyfin_public_url:
+        payload["jellyfin_public_url"] = jellyfin_public_url
     return payload
 
 
+def build_failure_payload(
+    *,
+    stage: str,
+    reason: str,
+    retryable: bool,
+    outcome: str,
+    artifact_uri: Optional[str],
+    namespace: Optional[str],
+    publish_event_id: Optional[str],
+    public_url: Optional[str],
+    jellyfin_public_url: Optional[str],
+    jellyfin_item_id: Optional[str],
+    details: Optional[Dict[str, Any]],
+    meta: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "stage": stage,
+        "reason": reason,
+        "retryable": bool(retryable),
+        "outcome": outcome,
+    }
+    if artifact_uri:
+        payload["artifact_uri"] = artifact_uri
+    if namespace:
+        payload["namespace"] = namespace
+    if publish_event_id:
+        payload["publish_event_id"] = publish_event_id
+    if public_url:
+        payload["public_url"] = public_url
+    if jellyfin_public_url:
+        payload["jellyfin_public_url"] = jellyfin_public_url
+    if jellyfin_item_id:
+        payload["jellyfin_item_id"] = jellyfin_item_id
+    if details:
+        payload["details"] = {k: v for k, v in details.items() if v is not None}
+    if meta:
+        payload["meta"] = meta
+    return payload
+
+
+async def emit_publish_failure(
+    nc: NATSClientType,
+    parent_env: Dict[str, Any],
+    *,
+    stage: str,
+    reason: str,
+    retryable: bool,
+    outcome: str = "fatal",
+    artifact_uri: Optional[str],
+    namespace: Optional[str],
+    public_url: Optional[str],
+    jellyfin_public_url: Optional[str],
+    jellyfin_item_id: Optional[str],
+    details: Optional[Dict[str, Any]],
+    meta: Optional[Dict[str, Any]],
+) -> None:
+    publish_event_id = _coerce_text(parent_env.get("id"))
+    correlation_id = _coerce_text(parent_env.get("correlation_id"))
+    payload = build_failure_payload(
+        stage=stage,
+        reason=reason,
+        retryable=retryable,
+        outcome=outcome,
+        artifact_uri=artifact_uri,
+        namespace=namespace,
+        publish_event_id=publish_event_id,
+        public_url=public_url,
+        jellyfin_public_url=jellyfin_public_url,
+        jellyfin_item_id=jellyfin_item_id,
+        details=details,
+        meta=meta,
+    )
+
+    try:
+        evt = envelope(
+            "content.publish.failed.v1",
+            payload,
+            parent_id=publish_event_id,
+            correlation_id=correlation_id,
+            source="publisher",
+        )
+        await nc.publish("content.publish.failed.v1", json.dumps(evt).encode())
+    except Exception as exc:  # pragma: no cover - NATS failures
+        logger.warning(
+            "Failed to emit publish failure envelope",
+            exc_info=exc,
+            extra={
+                "stage": stage,
+                "reason": reason,
+                "publish_event_id": publish_event_id,
+            },
+        )
 async def download_with_retries(minio: MinioClientType, bucket: str, key: str, dest: str) -> None:
     last_error: Optional[Exception] = None
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
@@ -394,12 +528,12 @@ async def persist_publish_rollup(row: Dict[str, Any]) -> None:
         )
 
 
-def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str]]:
+def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str], Dict[str, Any]]:
     if requests is None:
         logger.debug("requests dependency missing; skipping Jellyfin lookup")
-        return None, None
+        return None, None, {}
     if not (JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID):
-        return None, None
+        return None, None, {}
     try:
         response = requests.get(
             f"{JELLYFIN_URL}/Users/{JELLYFIN_USER_ID}/Items",
@@ -413,11 +547,29 @@ def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str]]:
         response.raise_for_status()
         items = (response.json() or {}).get("Items") or []
     except Exception as exc:  # pragma: no cover - external dependency
-        logger.debug("Failed to query Jellyfin items", exc_info=exc)
-        return None, None
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        body = None
+        if getattr(exc, "response", None) is not None:
+            with contextlib.suppress(Exception):
+                body = exc.response.text[:256]
+        logger.warning(
+            "Failed to query Jellyfin items",
+            exc_info=exc,
+            extra={
+                "title": title,
+                "status_code": status_code,
+                "body": body,
+                "url": f"{JELLYFIN_URL}/Users/{JELLYFIN_USER_ID}/Items",
+            },
+        )
+        return None, None, {}
 
     if not items:
-        return None, None
+        logger.info(
+            "Jellyfin item lookup returned no results",
+            extra={"title": title, "user": JELLYFIN_USER_ID},
+        )
+        return None, None, {}
 
     title_norm = (title or "").lower()
     best = None
@@ -430,17 +582,38 @@ def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str]]:
         best = items[0]
     item_id = best.get("Id")
     if not item_id:
-        return None, None
+        return None, None, {}
     public_base = JELLYFIN_PUBLIC_BASE_URL or JELLYFIN_URL
     public_url = None
     if public_base:
         public_url = urljoin(public_base, f"/web/index.html#!/details?id={item_id}&serverId=local")
-    return public_url, item_id
+
+    jellyfin_meta: Dict[str, Any] = {}
+    runtime = best.get("RunTimeTicks") or best.get("RuntimeTicks")
+    duration_seconds = None
+    with contextlib.suppress(TypeError, ValueError):
+        if runtime is not None:
+            duration_seconds = float(runtime) / 10_000_000
+    if duration_seconds:
+        jellyfin_meta["duration"] = duration_seconds
+    if isinstance(best.get("ImageTags"), dict):
+        image_tags = best["ImageTags"]
+        primary_tag = image_tags.get("Primary")
+        if primary_tag and public_base:
+            image_url = urljoin(public_base, f"/Items/{item_id}/Images/Primary?tag={primary_tag}")
+            jellyfin_meta["thumbnail_url"] = image_url
+    if isinstance(best.get("UserData"), dict):
+        user_data = best["UserData"]
+        if user_data.get("Played"):
+            jellyfin_meta["jellyfin_played"] = bool(user_data.get("Played"))
+    jellyfin_meta["jellyfin_item_type"] = best.get("Type")
+    jellyfin_meta["jellyfin_base_url"] = public_base
+    return public_url, item_id, jellyfin_meta
 
 
-def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optional[str]]:
+def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optional[str], Dict[str, Any]]:
     if not (JELLYFIN_URL and JELLYFIN_API_KEY):
-        return None, None
+        return None, None, {}
     if requests is None:
         METRICS.record_refresh_failure()
         logger.warning(
@@ -458,13 +631,29 @@ def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optiona
         METRICS.record_refresh_success()
     except Exception as exc:  # pragma: no cover - external dependency
         METRICS.record_refresh_failure()
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        body = None
+        if getattr(exc, "response", None) is not None:
+            with contextlib.suppress(Exception):
+                body = exc.response.text[:256]
+        logger.error(
+            "Jellyfin refresh HTTP error",
+            exc_info=exc,
+            extra={
+                "namespace": namespace,
+                "title": title,
+                "status_code": status_code,
+                "body": body,
+                "url": url,
+            },
+        )
         raise JellyfinRefreshError(f"Refresh failed for namespace {namespace}") from exc
 
-    public_url, item_id = _lookup_jellyfin_item(title)
-    return public_url, item_id
+    public_url, item_id, meta = _lookup_jellyfin_item(title)
+    return public_url, item_id, meta
 
 
-async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optional[str]]:
+async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optional[str], Dict[str, Any]]:
     if JELLYFIN_REFRESH_DELAY_SEC > 0:
         await asyncio.sleep(JELLYFIN_REFRESH_DELAY_SEC)
 
@@ -490,10 +679,21 @@ async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional
             METRICS.record_refresh_success()
         except Exception as exc:  # pragma: no cover - network failures
             METRICS.record_refresh_failure()
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            body = None
+            if getattr(exc, "response", None) is not None:
+                with contextlib.suppress(Exception):
+                    body = exc.response.text[:256]
             logger.warning(
                 "Jellyfin refresh webhook failed",
                 exc_info=exc,
-                extra={"namespace": namespace, "title": title, "webhook": JELLYFIN_REFRESH_WEBHOOK_URL},
+                extra={
+                    "namespace": namespace,
+                    "title": title,
+                    "webhook": JELLYFIN_REFRESH_WEBHOOK_URL,
+                    "status_code": status_code,
+                    "body": body,
+                },
             )
             raise JellyfinRefreshError("Webhook refresh failed") from exc
 
@@ -537,6 +737,50 @@ async def main() -> None:
         if isinstance(payload.get("meta"), dict):
             base_meta["source_meta"] = payload["meta"]
 
+        async def record_failure(
+            *,
+            stage: str,
+            reason: str,
+            retryable: bool,
+            outcome: str = "fatal",
+            meta_base: Optional[Dict[str, Any]] = None,
+            details: Optional[Dict[str, Any]] = None,
+            artifact_path_value: Optional[str] = None,
+            public_url_value: Optional[str] = None,
+            jellyfin_public_url_value: Optional[str] = None,
+            jellyfin_item_id_value: Optional[str] = None,
+        ) -> None:
+            failure_details = _combine_meta(details, {"stage": stage})
+            combined_meta = _combine_meta(meta_base, failure_details)
+            await emit_publish_failure(
+                nc,
+                env,
+                stage=stage,
+                reason=reason,
+                retryable=retryable,
+                outcome=outcome,
+                artifact_uri=artifact_uri,
+                namespace=namespace,
+                public_url=public_url_value,
+                jellyfin_public_url=jellyfin_public_url_value,
+                jellyfin_item_id=jellyfin_item_id_value,
+                details=failure_details,
+                meta=combined_meta,
+            )
+            _record_audit(
+                publish_event_id=publish_event_id,
+                approval_event_ts=approval_event_ts,
+                correlation_id=correlation_id,
+                artifact_uri=artifact_uri,
+                artifact_path=artifact_path_value,
+                namespace=namespace,
+                reviewer=reviewer,
+                reviewed_at=reviewed_at,
+                status="failed",
+                failure_reason=reason,
+                meta=combined_meta,
+            )
+
         if not artifact_uri:
             logger.error(
                 "Missing artifact URI",
@@ -545,18 +789,11 @@ async def main() -> None:
                     "payload_keys": list(payload.keys()),
                 },
             )
-            _record_audit(
-                publish_event_id=publish_event_id,
-                approval_event_ts=approval_event_ts,
-                correlation_id=correlation_id,
-                artifact_uri=artifact_uri,
-                artifact_path=None,
-                namespace=namespace,
-                reviewer=reviewer,
-                reviewed_at=reviewed_at,
-                status="failed",
-                failure_reason="missing artifact_uri",
-                meta=_combine_meta(base_meta, {"stage": "validate"}),
+            await record_failure(
+                stage="validate",
+                reason="missing artifact_uri",
+                retryable=False,
+                meta_base=base_meta,
             )
             return
 
@@ -568,18 +805,12 @@ async def main() -> None:
                 exc_info=exc,
                 extra={"artifact_uri": artifact_uri, "publish_event_id": publish_event_id},
             )
-            _record_audit(
-                publish_event_id=publish_event_id,
-                approval_event_ts=approval_event_ts,
-                correlation_id=correlation_id,
-                artifact_uri=artifact_uri,
-                artifact_path=None,
-                namespace=namespace,
-                reviewer=reviewer,
-                reviewed_at=reviewed_at,
-                status="failed",
-                failure_reason=str(exc),
-                meta=_combine_meta(base_meta, {"stage": "parse_uri"}),
+            await record_failure(
+                stage="parse_uri",
+                reason=_describe_exception(exc),
+                retryable=False,
+                meta_base=base_meta,
+                details={"exception": exc.__class__.__name__},
             )
             return
 
@@ -614,29 +845,21 @@ async def main() -> None:
                     "publish_event_id": publish_event_id,
                 },
             )
-            _record_audit(
-                publish_event_id=publish_event_id,
-                approval_event_ts=approval_event_ts,
-                correlation_id=correlation_id,
-                artifact_uri=artifact_uri,
-                artifact_path=out_path,
-                namespace=namespace,
-                reviewer=reviewer,
-                reviewed_at=reviewed_at,
-                status="failed",
-                failure_reason=str(exc),
-                meta=_combine_meta(
-                    path_meta_base,
-                    {"stage": "download", "attempts": DOWNLOAD_RETRIES},
-                ),
+            await record_failure(
+                stage="download",
+                reason=_describe_exception(exc),
+                retryable=True,
+                meta_base=path_meta_base,
+                details={"attempts": DOWNLOAD_RETRIES, "bucket": bucket, "key": key},
+                artifact_path_value=out_path,
             )
             return
 
-        public_url: Optional[str] = None
+        jellyfin_public_url: Optional[str] = None
         jellyfin_item_id: Optional[str] = None
         jellyfin_meta: Dict[str, Any] = {}
         try:
-            public_url, jellyfin_item_id = await request_jellyfin_refresh(title, namespace)
+            jellyfin_public_url, jellyfin_item_id, jellyfin_meta = await request_jellyfin_refresh(title, namespace)
         except JellyfinRefreshError as exc:
             logger.warning(
                 "Jellyfin refresh error",
@@ -644,12 +867,52 @@ async def main() -> None:
                 extra={"namespace": namespace, "title": title, "publish_event_id": publish_event_id},
             )
             jellyfin_meta = {"jellyfin_refresh_error": str(exc)}
+            await record_failure(
+                stage="jellyfin_refresh",
+                reason=_describe_exception(exc),
+                retryable=True,
+                outcome="partial",
+                meta_base=path_meta_base,
+                details=_combine_meta(
+                    jellyfin_meta,
+                    {"webhook": JELLYFIN_REFRESH_WEBHOOK_URL, "delay": JELLYFIN_REFRESH_DELAY_SEC},
+                ),
+                artifact_path_value=out_path,
+            )
+            jellyfin_public_url = None
 
 
         published_at = datetime.datetime.now(datetime.timezone.utc)
 
-        derived_public_url = public_url or _derive_public_url(out_path)
-        path_meta_with_url = _combine_meta(path_meta_base, {"public_url": derived_public_url})
+        derived_public_url = jellyfin_public_url or _derive_public_url(out_path)
+        path_meta_with_url = _combine_meta(
+            path_meta_base,
+            {
+                "public_url": derived_public_url,
+                "jellyfin_public_url": jellyfin_public_url,
+            },
+        )
+
+        payload_meta_dict = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+        thumbnail_url: Optional[str] = None
+        for candidate in (
+            _coerce_text(payload.get("thumbnail_url")),
+            _coerce_text(payload_meta_dict.get("thumbnail_url")) if isinstance(payload_meta_dict, dict) else None,
+            _coerce_text(jellyfin_meta.get("thumbnail_url")),
+        ):
+            if candidate:
+                thumbnail_url = candidate
+                break
+
+        duration_value: Optional[float] = None
+        for candidate in (
+            _coerce_float(payload.get("duration")),
+            _coerce_float(payload_meta_dict.get("duration")) if isinstance(payload_meta_dict, dict) else None,
+            _coerce_float(jellyfin_meta.get("duration")),
+        ):
+            if candidate is not None:
+                duration_value = candidate
+                break
 
         published_payload: Dict[str, Any] = {}
         evt: Optional[Dict[str, Any]] = None
@@ -666,6 +929,10 @@ async def main() -> None:
                 incoming_meta=payload.get("meta"),
                 public_url=derived_public_url,
                 jellyfin_item_id=jellyfin_item_id,
+                jellyfin_public_url=jellyfin_public_url,
+                thumbnail_url=thumbnail_url,
+                duration=duration_value,
+                jellyfin_meta=jellyfin_meta,
                 slug=slug,
                 namespace_slug=namespace_slug,
                 filename=filename,
@@ -710,24 +977,25 @@ async def main() -> None:
                     "namespace": namespace,
                 },
             )
-
-            failure_context = {"stage": failure_stage, "public_url": derived_public_url}
-            if jellyfin_item_id:
-                failure_context["jellyfin_item_id"] = jellyfin_item_id
-            failure_context.update(jellyfin_meta)
-
-            _record_audit(
-                publish_event_id=publish_event_id,
-                approval_event_ts=approval_event_ts,
-                correlation_id=correlation_id,
-                artifact_uri=artifact_uri,
-                artifact_path=out_path,
-                namespace=namespace,
-                reviewer=reviewer,
-                reviewed_at=reviewed_at,
-                status="failed",
-                failure_reason=_describe_exception(exc),
-                meta=_combine_meta(path_meta_with_url, failure_context),
+            failure_retryable = failure_stage not in {"build_payload"}
+            failure_details = _combine_meta(
+                jellyfin_meta,
+                {
+                    "public_url": derived_public_url,
+                    "jellyfin_item_id": jellyfin_item_id,
+                    "exception": exc.__class__.__name__,
+                },
+            )
+            await record_failure(
+                stage=failure_stage,
+                reason=_describe_exception(exc),
+                retryable=failure_retryable,
+                meta_base=path_meta_with_url,
+                details=failure_details,
+                artifact_path_value=out_path,
+                public_url_value=derived_public_url,
+                jellyfin_public_url_value=jellyfin_public_url,
+                jellyfin_item_id_value=jellyfin_item_id,
             )
             return
 
@@ -735,7 +1003,13 @@ async def main() -> None:
         if jellyfin_item_id:
             success_context["jellyfin_item_id"] = jellyfin_item_id
         success_context.update(jellyfin_meta)
-        success_meta = _combine_meta(path_meta_with_url, success_context)
+        success_meta = _combine_meta(
+            path_meta_with_url,
+            _combine_meta(
+                success_context,
+                {"thumbnail_url": thumbnail_url, "duration": duration_value},
+            ),
+        )
 
         _record_audit(
             publish_event_id=publish_event_id,
@@ -765,6 +1039,9 @@ async def main() -> None:
                 "event_id": env.get("id"),
                 "correlation_id": env.get("correlation_id"),
                 "public_url": published_payload.get("public_url"),
+                "jellyfin_public_url": published_payload.get("jellyfin_public_url"),
+                "thumbnail_url": published_payload.get("thumbnail_url"),
+                "duration": published_payload.get("duration"),
                 "metrics_summary": METRICS.summary(),
                 "publish_event_id": publish_event_id,
                 "reviewer": reviewer,

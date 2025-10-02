@@ -1,8 +1,7 @@
+
 nats-py==2.7.2
 minio==7.2.7
-
 requests==2.32.3
-
-
 jsonschema==4.22.0
 supabase==2.3.1
+

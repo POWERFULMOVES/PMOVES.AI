@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+apt update && apt -y upgrade
+apt -y install ca-certificates curl gnupg lsb-release build-essential git unzip jq
+
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BUNDLE_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
 REPO_URL=${PMOVES_REPO_URL:-https://github.com/CataclysmStudiosInc/PMOVES.AI.git}
@@ -30,6 +34,7 @@ log "Refreshing base system packages."
 apt update && apt -y upgrade
 apt -y install ca-certificates curl gnupg lsb-release build-essential git unzip jq python3 python3-pip python3-venv
 
+
 # Docker & NVIDIA container toolkit
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -45,6 +50,12 @@ apt update && apt -y install nvidia-container-toolkit
 nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
 usermod -aG docker "${SUDO_USER:-$USER}"
+
+
+# Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+systemctl enable --now tailscaled
+echo 'Run: sudo tailscale up --ssh --accept-routes'
 
 log "Configuring RustDesk repository."
 curl -fsSL https://apt.rustdesk.com/key.pub | gpg --dearmor -o /etc/apt/keyrings/rustdesk.gpg
@@ -107,3 +118,4 @@ if [[ -f "${BUNDLE_ROOT}/docker-stacks/portainer.yml" ]]; then
 fi
 
 log "PMOVES.AI provisioning complete."
+

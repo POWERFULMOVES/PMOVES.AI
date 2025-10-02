@@ -1,3 +1,4 @@
+
 #cloud-config
 autoinstall:
   version: 1
@@ -20,11 +21,41 @@ autoinstall:
     - python3-pip
     - tmux
     - htop
+
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: ubuntu-auto
+    username: russell
+    password: "$6$rounds=4096$changeme$2b4k1WakxO3S6mHRCJz6nX1rX8oQe8o7x7Xv8LxjZtKJv2Qn9i7cZ.0"  # placeholder hash
+  locale: en_US
+  keyboard:
+    layout: us
+  timezone: America/New_York
+  packages:
+    - ca-certificates
+    - curl
+    - gnupg
+    - lsb-release
+    - git
+    - unzip
+    - jq
+    - python3-pip
+    - tmux
+    - htop
+
   late-commands:
     - curtin in-target --target=/target -- bash -c 'curl -fsSL https://get.docker.com | sh'
     - curtin in-target --target=/target -- bash -c 'usermod -aG docker russell'
     - curtin in-target --target=/target -- bash -c 'curl -fsSL https://tailscale.com/install.sh | sh'
     - curtin in-target --target=/target -- systemctl enable tailscaled
+
+    - curtin in-target --target=/target -- bash -c 'mkdir -p /srv/stacks && chown russell:russell /srv/stacks'
+  user-data:
+    runcmd:
+      - 'echo "Ubuntu autoinstall complete"'
+
     - curtin in-target --target=/target -- systemctl start tailscaled
     - bash -c 'install -Dm755 /cdrom/PMOVES-PROVISIONS/tailscale/tailscale_up.sh /target/usr/local/bin/tailscale-up.sh'
     - |
@@ -38,3 +69,4 @@ autoinstall:
   user-data:
     runcmd:
       - 'echo "Ubuntu autoinstall complete"'
+

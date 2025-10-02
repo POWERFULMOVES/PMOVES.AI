@@ -12,8 +12,10 @@ library, and publishes a `content.published.v1` envelope to NATS.
    slugged filename.
 4. Trigger a Jellyfin library refresh so the asset surfaces in user facing
    clients.
-5. Publish `content.published.v1` with metadata, optional Jellyfin item id, and
-   public download URL.
+5. Publish `content.published.v1` with metadata, enriched Jellyfin links,
+   thumbnail URL, duration, optional Jellyfin item id, and public download URL.
+6. Emit `content.publish.failed.v1` whenever a dependency error prevents
+   completion (download failures, Jellyfin errors, rollup persistence issues).
 
 ## Configuration
 
@@ -76,6 +78,16 @@ drivers surfaced in approval metadata. The running summary is exposed via
 `Published content` log line. Every publish emits a rollup row to Supabase
 (`publisher_metrics_rollup` by default) so ROI dashboards can chart trends
 without scraping logs.
+
+When a dependency fails, the service emits structured failure envelopes:
+
+- **`content.publish.failed.v1`** – includes the failing stage, retryable flag,
+  captured context (`details`), and normalized metadata. Fatal errors surface
+  when validation/downloading/rollup emit unrecoverable faults; partial errors
+  (e.g. Jellyfin refresh warnings) are emitted with `outcome: "partial"` so
+  downstream automation can alert without stopping the pipeline.
+- Actionable log lines now include HTTP status codes, response bodies (truncated
+  to 256 bytes), and the affected namespace/artifact identifiers.
 
 ### ROI Dashboards
 

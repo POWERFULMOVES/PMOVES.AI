@@ -1,0 +1,3 @@
+{"query": "What packs ship with Archon 1.0?", "namespace": "pmoves", "relevant": ["archon_pack_overview_chunk"], "metadata": {"suite": "baseline", "persona": "Archon@1.0"}}
+{"query": "Which tone should Archon emphasize during research?", "namespace": "pmoves", "relevant": ["archon_tone_chunk"], "metadata": {"suite": "baseline", "persona": "Archon@1.0"}}
+{"query": "Name one boost configured for Archon", "namespace": "pmoves", "relevant": ["archon_boosts_chunk"], "metadata": {"suite": "baseline", "persona": "Archon@1.0"}}

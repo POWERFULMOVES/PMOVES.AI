@@ -8,6 +8,7 @@
   - Point pmoves to CLI endpoints:
     - `make supa-use-local` → writes `.env.local` from `.env.supa.local.example`
     - Edit `.env.local` and paste keys from `make supa-status`
+    - Ensure PostgREST uses the full path: `SUPA_REST_URL=http://localhost:54321/rest/v1` (and set `SUPABASE_REST_URL` to the same for tools/n8n)
   - Run pmoves: `make up` (default `SUPA_PROVIDER=cli` avoids Compose Postgres/PostgREST)
   - Stop CLI: `make supa-stop`
 

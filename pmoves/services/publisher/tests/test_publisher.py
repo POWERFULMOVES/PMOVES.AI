@@ -35,6 +35,10 @@ def test_build_published_payload_merges_metadata():
         incoming_meta={"title": "Custom Title", "camera": "FX3"},
         public_url="http://media.local/creative-works/summer-gala-2024.png",
         jellyfin_item_id="abc123",
+        jellyfin_public_url="http://jf.local/web/index.html#!/details?id=abc123",
+        thumbnail_url="http://jf.local/Items/abc123/Images/Primary",
+        duration=123.45,
+        jellyfin_meta={"jellyfin_item_type": "Movie", "jellyfin_played": False},
         slug="summer-gala-2024",
         namespace_slug="creative-works",
         filename="creative-works--summer-gala-2024.png",
@@ -46,6 +50,12 @@ def test_build_published_payload_merges_metadata():
     assert payload["namespace"] == "Creative Works"
     assert payload["public_url"].endswith("summer-gala-2024.png")
     assert payload["jellyfin_item_id"] == "abc123"
+    assert payload["jellyfin_public_url"].endswith("id=abc123")
+    assert payload["thumbnail_url"].endswith("Images/Primary")
+    assert payload["duration"] == 123.45
+    assert payload["title"] == "Summer Gala 2024"
+    assert payload["description"] == "A highlight reel"
+    assert payload["tags"] == ["events", "summer"]
 
     meta = payload["meta"]
     assert meta["title"] == "Custom Title"
@@ -56,6 +66,11 @@ def test_build_published_payload_merges_metadata():
     assert meta["namespace_slug"] == "creative-works"
     assert meta["filename"] == "creative-works--summer-gala-2024.png"
     assert meta["extension"] == "png"
+    assert meta["thumbnail_url"].endswith("Images/Primary")
+    assert meta["duration"] == 123.45
+    assert meta["jellyfin_public_url"].endswith("id=abc123")
+    assert meta["jellyfin_item_id"] == "abc123"
+    assert meta["jellyfin_item_type"] == "Movie"
 
 
 def test_merge_metadata_preserves_existing_slug_and_namespace():
@@ -74,6 +89,31 @@ def test_merge_metadata_preserves_existing_slug_and_namespace():
     assert meta["namespace_slug"] == "custom-ns"
     assert meta["filename"] == "generated-ns--generated.png"
     assert meta["extension"] == "png"
+
+
+def test_build_failure_payload_includes_details():
+    payload = publisher.build_failure_payload(
+        stage="download",
+        reason="timeout",
+        retryable=True,
+        outcome="fatal",
+        artifact_uri="s3://bucket/key",
+        namespace="demo",
+        publish_event_id="evt-1",
+        public_url="http://public",
+        jellyfin_public_url=None,
+        jellyfin_item_id="jf-1",
+        details={"attempts": 3, "exception": "Timeout"},
+        meta={"slug": "demo"},
+    )
+
+    assert payload["stage"] == "download"
+    assert payload["retryable"] is True
+    assert payload["outcome"] == "fatal"
+    assert payload["artifact_uri"] == "s3://bucket/key"
+    assert payload["details"]["attempts"] == 3
+    assert payload["details"]["exception"] == "Timeout"
+    assert payload["meta"]["slug"] == "demo"
 
 
 def test_request_jellyfin_refresh_webhook(monkeypatch):

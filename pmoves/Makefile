@@ -1,4 +1,5 @@
 .PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote
+ .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 
 # Pin a stable Docker Compose project name so make targets
 # always operate on the same stack regardless of cwd/path.
@@ -47,6 +48,15 @@ up-media:
 # Jellyfin bridge only
 up-jellyfin:
 	docker compose -p $(PROJECT) up -d jellyfin-bridge
+
+# Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
+.PHONY: up-agents
+up-agents:
+	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
+
+.PHONY: up-n8n
+up-n8n:
+	docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
 
 # Status helper
 ps:
@@ -112,6 +122,17 @@ supa-extract-remote:
 up-legacy:
 	docker compose -p $(PROJECT) --profile data up -d qdrant neo4j minio meilisearch presign
 	docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway retrieval-eval render-webhook
+
+.PHONY: discord-ping
+discord-ping:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for discord-ping" && exit 1)
+	@if [ -z "$$DISCORD_WEBHOOK_URL" ]; then echo "Set DISCORD_WEBHOOK_URL in env or .env/.env.local" && exit 1; fi
+	@MSG="$${MSG:-PMOVES Discord wiring check}"; \
+	sh -c './pmoves/scripts/discord_ping.sh "'"$${MSG}"'"'
+
+.PHONY: discord-ping-ps
+discord-ping-ps:
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/discord_ping.ps1 -Message "$(MSG)"
 
 .PHONY: smoke
 smoke:
@@ -264,6 +285,8 @@ help:
 	@echo "  env-dedupe       Remove duplicate keys from .env (keeps last, writes .bak)"
 	@echo "  logs-core        Tail core services (docker compose logs -f ...)"
 	@echo "  setup            Run Codex/bootstrap env setup (make, conda deps)"
+	@echo "  venv             Create a local Python virtualenv (.venv) and install deps"
+	@echo "  venv-min         Create a minimal .venv and install tools/requirements-minimal.txt"
 	@echo "  supabase-migrate Apply supabase/migrations/*.sql via docker compose"
 	@echo "  smoke-geometry   Post a CGP, jump a point, decode text, and run calibration"
 	@echo "  codebook-gen     Generate structured_dataset.jsonl from a source JSONL"
@@ -394,3 +417,101 @@ jellyfin-smoke:
 	@echo "[Jellyfin] Playback URL for latest video" && VID=$$(curl -s 'http://localhost:3000/videos?order=id.desc&select=video_id&limit=1' | jq -r '.[0].video_id // empty'); \
 	if [ -z "$$VID" ]; then echo "No videos found in Supabase; run yt-emit-smoke first"; exit 0; fi; \
 	curl -sS -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"t\":5}" | jq -e '.ok==true and (.url|length)>0' >/dev/null && echo OK || (echo FAIL && exit 1)
+.PHONY: demo-content-published
+demo-content-published:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for demo-content-published" && exit 1)
+	@URL=$${AGENT_ZERO_BASE_URL:-http://localhost:8080}; \
+	FILE=$${FILE:-pmoves/contracts/samples/content.published.v1.sample.json}; \
+	[ -f "$$FILE" ] || (echo "Sample file not found: $$FILE" && exit 1); \
+	jq -c '{topic:"content.published.v1", payload:.}' "$$FILE" | \
+	curl -s -X POST "$$URL/events/publish" -H 'content-type: application/json' --data-binary @- | jq .
+
+.PHONY: health-publisher-discord
+health-publisher-discord:
+	@echo "Checking publisher-discord on http://localhost:8094/healthz" && \
+	curl -sf http://localhost:8094/healthz | jq .
+
+.PHONY: health-agent-zero
+health-agent-zero:
+	@echo "Checking Agent Zero on http://localhost:8080/healthz" && \
+	curl -sf http://localhost:8080/healthz | jq .
+
+.PHONY: health-jellyfin-bridge
+health-jellyfin-bridge:
+	@echo "Checking Jellyfin Bridge on http://localhost:8093/healthz" && \
+	curl -sf http://localhost:8093/healthz | jq .
+
+.PHONY: m2-preflight
+m2-preflight:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for m2-preflight" && exit 1)
+	@echo "[1/3] Agent Zero health" && curl -sf http://localhost:8080/healthz | jq .
+	@echo "[2/3] Publisher-Discord health" && curl -sf http://localhost:8094/healthz | jq .
+	@echo "[3/3] Discord webhook ping (if configured)" && \
+	if [ -n "$$DISCORD_WEBHOOK_URL" ]; then \
+	  MSG="PMOVES Preflight: $(shell date +%F-%T)" ./pmoves/scripts/discord_ping.sh "PMOVES M2 preflight ping" >/dev/null || true; \
+	  echo "Ping attempted (check Discord)"; \
+	else \
+	  echo "DISCORD_WEBHOOK_URL not set; skipping ping"; \
+	fi
+
+.PHONY: venv
+venv:
+	@if [ "$(OS)" = "Windows_NT" ]; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/create_venv.ps1 ; \
+	else \
+		bash pmoves/scripts/create_venv.sh ; \
+	fi
+
+.PHONY: venv-min
+venv-min:
+	@if [ "$(OS)" = "Windows_NT" ]; then \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/create_venv_min.ps1 ; \
+	else \
+		bash pmoves/scripts/create_venv_min.sh ; \
+	fi
+
+.PHONY: win-bootstrap
+win-bootstrap:
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/windows_bootstrap.ps1
+
+.PHONY: evidence-stamp
+evidence-stamp:
+	@./pmoves/tools/evidence_stamp.sh "$${LABEL:-evidence}" "$${EXT:-png}"
+
+.PHONY: evidence-stamp-ps
+evidence-stamp-ps:
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/evidence_stamp.ps1 -Label "$(LABEL)" -Ext "$(EXT)"
+
+.PHONY: evidence-log
+evidence-log:
+	@./pmoves/tools/evidence_log.sh "$(LABEL)" "$(PATH)" "$(NOTE)"
+
+.PHONY: evidence-log-ps
+evidence-log-ps:
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/evidence_log.ps1 -Label "$(LABEL)" -Path "$(PATH)" -Note "$(NOTE)"
+
+.PHONY: m2-seed-demo
+m2-seed-demo:
+	@echo "[M2] Running preflight + seeding demo row..."
+	$(MAKE) m2-preflight || true
+	$(MAKE) seed-approval TITLE="$(TITLE)" URL="$(URL)" NAMESPACE="$(NAMESPACE)"
+	@echo "Next: Activate n8n workflows (poller then echo publisher) and verify Discord."
+
+.PHONY: n8n-webhook-demo
+n8n-webhook-demo:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for n8n-webhook-demo" && exit 1)
+	@URL=$${URL:-http://localhost:5678/webhook/pmoves/content-published}; \
+	FILE=$${FILE:-pmoves/contracts/samples/content.published.v1.sample.json}; \
+	[ -f "$$FILE" ] || (echo "Sample file not found: $$FILE" && exit 1); \
+	jq -c '{topic:"content.published.v1", payload:.}' "$$FILE" | \
+	curl -s -X POST "$$URL" -H 'content-type: application/json' --data-binary @- | jq .
+
+.PHONY: seed-approval
+seed-approval:
+	@TITLE="$${TITLE:-Demo}"; URL="$${URL:-s3://outputs/demo/example.png}"; NS="$${NAMESPACE:-$${INDEXER_NAMESPACE:-pmoves}}"; \
+	echo "Seeding studio_board: title='$${TITLE}', url='$${URL}', namespace='$${NS}'"; \
+	./pmoves/tools/seed_studio_board.sh "$${TITLE}" "$${URL}" "$${NS}"
+
+.PHONY: seed-approval-ps
+seed-approval-ps:
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/seed_studio_board.ps1 -Title "$(TITLE)" -Url "$(URL)" -Namespace "$(NAMESPACE)"

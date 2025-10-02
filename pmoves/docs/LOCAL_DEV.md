@@ -11,6 +11,8 @@
 - hi-rag-gateway-v2: 8087 -> 8086 (internal name `hi-rag-gateway-v2`)
 - retrieval-eval: 8090 (internal name `retrieval-eval`)
 - render-webhook: 8085 (internal name `render-webhook`)
+- pdf-ingest: 8092 (internal name `pdf-ingest`)
+- publisher-discord: 8094 -> 8092 (internal name `publisher-discord`)
 
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
@@ -44,6 +46,9 @@ OpenAI-compatible presets:
 - `make up` (v2 gateway by default)
 - Legacy gateway: `make up-legacy`
 - Seed demo data (Qdrant/Meili): `make seed-data`
+- Agents stack (NATS, Agent Zero, Archon, Mesh Agent, publisher-discord): `make up-agents`
+- n8n (Docker): `make up-n8n` (listens on http://localhost:5678)
+- Windows prerequisites: `make win-bootstrap` (installs Python, Git, Make, jq via Chocolatey)
 
 ### Events (NATS)
 
@@ -115,6 +120,60 @@ OpenAI-compatible presets:
 - Retrieval‑Eval UI: `http://localhost:8090`
 - PostgREST: `http://localhost:3000`
   - After seeding: try a query with `namespace=pmoves` in `/hirag/query`
+- Publisher-Discord: `curl http://localhost:8094/healthz`
+  - Make helper: `make health-publisher-discord`
+ - Agent Zero: `curl http://localhost:8080/healthz`
+   - Make helper: `make health-agent-zero`
+ - Jellyfin Bridge: `curl http://localhost:8093/healthz`
+   - Make helper: `make health-jellyfin-bridge`
+
+## n8n Flows (Quick Import)
+
+- Import: open n8n → Workflows → Import from File → load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
+- Credentials/env:
+  - `SUPABASE_REST_URL` and `SUPABASE_SERVICE_ROLE_KEY` (poller GET/PATCH)
+  - `AGENT_ZERO_BASE_URL` and optional `AGENT_ZERO_EVENTS_TOKEN` (poller POST `/events/publish`)
+  - `DISCORD_WEBHOOK_URL` and `DISCORD_WEBHOOK_USERNAME` (echo publisher webhook)
+- Keep flows inactive until Discord webhook ping succeeds.
+- Manual ping:
+  - Make: `make discord-ping MSG="PMOVES Discord wiring check"`
+  - PowerShell: `pwsh -File pmoves/scripts/discord_ping.ps1 -Message "PMOVES Discord wiring check"`
+
+### Preview a `content.published.v1` embed
+- Ensure Agent Zero (`agents` profile) and publisher-discord (`orchestration` profile) are running and NATS is up.
+- Make: `make demo-content-published` (uses `pmoves/contracts/samples/content.published.v1.sample.json`)
+- Bash script: `./pmoves/tools/publish_content_published.sh`
+- PowerShell: `pwsh -File pmoves/tools/publish_content_published.ps1`
+
+### Seed an approved studio_board row (Supabase CLI)
+- Make (Bash): `make seed-approval TITLE="Demo" URL="s3://outputs/demo/example.png"`
+- PowerShell: `make seed-approval-ps TITLE="Demo" URL="s3://outputs/demo/example.png"`
+
+## n8n (Docker) Quick Start
+
+- Bring up n8n: `make up-n8n` → UI at `http://localhost:5678`
+- Env inside n8n (prewired in compose override):
+  - `SUPABASE_REST_URL=http://host.docker.internal:54321/rest/v1` (Supabase CLI)
+  - `SUPABASE_SERVICE_ROLE_KEY=<paste service role key>`
+  - `AGENT_ZERO_BASE_URL=http://agent-zero:8080`
+  - `DISCORD_WEBHOOK_URL` + `DISCORD_WEBHOOK_USERNAME`
+- Import flows from `pmoves/n8n/flows/*.json` and keep inactive until secrets are set.
+- Activate poller then echo publisher; verify Discord receives an embed.
+
+### Alternative: one‑liner docker run (Windows/Linux)
+
+```sh
+docker run --name n8n --rm -it \
+  -p 5678:5678 \
+  --network pmoves-net \
+  -e N8N_PORT=5678 -e N8N_PROTOCOL=http -e N8N_HOST=localhost -e WEBHOOK_URL=http://localhost:5678 \
+  -e SUPABASE_REST_URL=http://host.docker.internal:54321/rest/v1 \
+  -e SUPABASE_SERVICE_ROLE_KEY="<service_role_key>" \
+  -e AGENT_ZERO_BASE_URL=http://agent-zero:8080 \
+  -e DISCORD_WEBHOOK_URL="<discord_webhook_url>" \
+  -e DISCORD_WEBHOOK_USERNAME="PMOVES Publisher" \
+  n8nio/n8n:latest
+```
 
 ## Avatars & Realtime (full Supabase)
 
@@ -128,3 +187,19 @@ OpenAI-compatible presets:
 - A local Postgres + PostgREST are included. `render-webhook` points to `http://postgrest:3000` by default; override `SUPA_REST_URL` in `.env` to target your self‑hosted instance.
 - For Cataclysm Provisioning, the stable network name `pmoves-net` allows cross‑stack service discovery.
 - Clean up duplicate .env keys: `make env-dedupe` (keeps last occurrence, writes `.env.bak`).
+
+## Python Virtual Environment (optional)
+
+- Windows (PowerShell 7+):
+  - `pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/create_venv.ps1`
+  - Activate: `.\\.venv\\Scripts\\Activate.ps1`
+- Linux/macOS:
+  - `bash pmoves/scripts/create_venv.sh`
+  - Activate: `source .venv/bin/activate`
+- Or use Make: `make venv` (auto-selects the right script)
+
+Minimal venv (only tools helpers):
+- Windows: `make venv-min`
+- Linux/macOS: `make venv-min`
+
+Tip (Windows): If `make` is missing, `make setup` installs GNU Make via Chocolatey when available and then installs Python requirements across services using the preferred package manager.

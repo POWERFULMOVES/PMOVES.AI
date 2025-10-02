@@ -1,0 +1,4 @@
+{"event": "kb.ingest.asset.created.v1", "id": "evt-asset-20251007", "notes": "Presign upload smoke run"}
+{"event": "kb.pack.published.v1", "id": "evt-pack-20251007", "notes": "Pack manifest validated via make lint-packs"}
+{"event": "persona.published.v1", "id": "evt-persona-20251007", "notes": "Retrieval-eval gate pass for Archon@1.0"}
+{"event": "content.published.v1", "id": "evt-content-20251007", "notes": "Publisher emitted Jellyfin refresh + Discord embed"}
