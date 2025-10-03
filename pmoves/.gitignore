@@ -1,6 +1,7 @@
 # Core
 .env
 .env.*
+.env *
 .env.local
 .env.supa.remote
 supa.md
