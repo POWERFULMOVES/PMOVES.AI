@@ -3,6 +3,7 @@
 ## Quickstart
 
 ### 1. Prepare environment files
+- Recommended: `make env-setup` to interactively generate `.env` from `.env.example` and `make env-check` to verify.
 - Copy `.env.example` → `.env`. This is the base configuration shared across every compose service.
 - Layer in secrets and provider credentials from the `*.additions` helpers (copy/paste the values into your `.env`). Common entries:
   - `env.presign.additions`

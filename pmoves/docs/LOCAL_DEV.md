@@ -17,7 +17,15 @@
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
 ## Environment
-Create `.env` (or start with `.env.example`) and include keys from:
+
+Quick start:
+- `make env-setup` to interactively fill `.env` from `.env.example` (PowerShell/bash).
+- `make env-check` to run the preflight and confirm nothing is missing.
+- Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
+
+See also: `docs/SECRETS.md` for optional secret provider integrations.
+
+Manual notes: Create `.env` (or start with `.env.example`) and include keys from:
 - `env.presign.additions` (MINIO creds and shared secret)
 - `env.render_webhook.additions` (webhook shared secret)
 - `env.hirag.reranker.additions`, `env.hirag.reranker.providers.additions` (optional reranker config)
