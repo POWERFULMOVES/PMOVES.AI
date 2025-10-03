@@ -19,8 +19,8 @@ All services are attached to the `pmoves-net` Docker network. Internal URLs shou
 ## Environment
 
 Quick start:
-- `make env-setup` to interactively fill `.env` from `.env.example` (PowerShell/bash).
-- `make env-check` to run the preflight and confirm nothing is missing.
+- Windows without Make: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1`
+- With Make: `make env-setup` to interactively fill `.env` from `.env.example`, then `make env-check` to confirm nothing is missing.
 - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
 
 See also: `docs/SECRETS.md` for optional secret provider integrations.
