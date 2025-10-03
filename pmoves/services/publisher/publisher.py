@@ -81,6 +81,31 @@ from services.common.telemetry import (
     compute_publish_telemetry,
 )
 
+# Optional Prometheus metrics
+PROM_ENABLED = False
+try:  # pragma: no cover - optional in many environments
+    from prometheus_client import (
+        Counter as _PromCounter,
+        Summary as _PromSummary,
+        CollectorRegistry as _PromRegistry,
+        generate_latest as _prom_generate,
+        CONTENT_TYPE_LATEST as _PROM_CONTENT_TYPE,
+    )
+    _PROM_REG = _PromRegistry()
+    _PROM = {
+        "download_success": _PromCounter("publisher_download_success_total", "Successful artifact downloads", registry=_PROM_REG),
+        "download_failure": _PromCounter("publisher_download_failure_total", "Failed artifact downloads", registry=_PROM_REG),
+        "refresh_attempt": _PromCounter("publisher_refresh_attempts_total", "Jellyfin refresh attempts", registry=_PROM_REG),
+        "refresh_success": _PromCounter("publisher_refresh_success_total", "Jellyfin refresh successes", registry=_PROM_REG),
+        "refresh_failure": _PromCounter("publisher_refresh_failures_total", "Jellyfin refresh failures", registry=_PROM_REG),
+        "turnaround": _PromSummary("publisher_turnaround_seconds", "Publish turnaround seconds", registry=_PROM_REG),
+        "approval_latency": _PromSummary("publisher_approval_latency_seconds", "Approval-to-publish latency seconds", registry=_PROM_REG),
+    }
+    PROM_ENABLED = True
+except Exception:
+    _PROM = None  # type: ignore[assignment]
+    _PROM_REG = None  # type: ignore[assignment]
+
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
@@ -497,9 +522,13 @@ async def download_with_retries(minio: MinioClientType, bucket: str, key: str, d
         try:
             minio.fget_object(bucket, key, dest)
             METRICS.record_download_success()
+            if PROM_ENABLED:
+                _PROM["download_success"].inc()
             return
         except Exception as exc:  # pragma: no cover - error path
             METRICS.record_download_failure()
+            if PROM_ENABLED:
+                _PROM["download_failure"].inc()
             last_error = exc
             logger.warning(
                 "Download attempt failed",
@@ -623,14 +652,20 @@ def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optiona
         raise JellyfinRefreshError("requests dependency is not installed")
 
     METRICS.record_refresh_attempt()
+    if PROM_ENABLED:
+        _PROM["refresh_attempt"].inc()
     headers = {"X-Emby-Token": JELLYFIN_API_KEY}
     url = urljoin(JELLYFIN_URL, "/Library/Refresh")
     try:
         response = requests.post(url, headers=headers, timeout=10)
         response.raise_for_status()
         METRICS.record_refresh_success()
+        if PROM_ENABLED:
+            _PROM["refresh_success"].inc()
     except Exception as exc:  # pragma: no cover - external dependency
         METRICS.record_refresh_failure()
+        if PROM_ENABLED:
+            _PROM["refresh_failure"].inc()
         status_code = getattr(getattr(exc, "response", None), "status_code", None)
         body = None
         if getattr(exc, "response", None) is not None:
@@ -667,6 +702,8 @@ async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional
             raise JellyfinRefreshError("requests dependency is not installed")
 
         METRICS.record_refresh_attempt()
+        if PROM_ENABLED:
+            _PROM["refresh_attempt"].inc()
         headers = {"Authorization": f"Bearer {JELLYFIN_REFRESH_WEBHOOK_TOKEN}"} if JELLYFIN_REFRESH_WEBHOOK_TOKEN else None
         try:
             response = requests.post(
@@ -677,8 +714,12 @@ async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional
             )
             response.raise_for_status()
             METRICS.record_refresh_success()
+            if PROM_ENABLED:
+                _PROM["refresh_success"].inc()
         except Exception as exc:  # pragma: no cover - network failures
             METRICS.record_refresh_failure()
+            if PROM_ENABLED:
+                _PROM["refresh_failure"].inc()
             status_code = getattr(getattr(exc, "response", None), "status_code", None)
             body = None
             if getattr(exc, "response", None) is not None:
@@ -947,6 +988,11 @@ async def main() -> None:
             METRICS.record_approval_latency(telemetry.approval_latency_seconds)
             METRICS.record_engagement(telemetry.engagement)
             METRICS.record_cost(telemetry.cost)
+            if PROM_ENABLED:
+                if telemetry.turnaround_seconds is not None:
+                    _PROM["turnaround"].observe(telemetry.turnaround_seconds)
+                if telemetry.approval_latency_seconds is not None:
+                    _PROM["approval_latency"].observe(telemetry.approval_latency_seconds)
 
             failure_stage = "persist_rollup"
             await persist_publish_rollup(
@@ -1059,7 +1105,28 @@ async def _handle_metrics_request(reader: asyncio.StreamReader, writer: asyncio.
     try:
         request = await reader.read(4096)
         request_line = request.split(b"\r\n", 1)[0].decode(errors="ignore")
-        if request_line.startswith("GET /metrics"):
+        if request_line.startswith("GET /metrics ") or request_line.startswith("GET /metrics\r") or request_line.startswith("GET /metrics\n") or request_line.startswith("GET /metrics"):
+            if PROM_ENABLED:
+                payload = _prom_generate(_PROM_REG)
+                headers = (
+                    "HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: {_PROM_CONTENT_TYPE}\r\n"
+                    f"Content-Length: {len(payload)}\r\n"
+                    "Cache-Control: no-store\r\n"
+                    "Connection: close\r\n\r\n"
+                ).encode()
+                writer.write(headers + payload)
+            else:
+                payload = json.dumps(METRICS.summary()).encode()
+                headers = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: application/json\r\n"
+                    f"Content-Length: {len(payload)}\r\n"
+                    "Cache-Control: no-store\r\n"
+                    "Connection: close\r\n\r\n"
+                ).encode()
+                writer.write(headers + payload)
+        elif request_line.startswith("GET /metrics.json"):
             payload = json.dumps(METRICS.summary()).encode()
             headers = (
                 "HTTP/1.1 200 OK\r\n"

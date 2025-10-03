@@ -159,6 +159,54 @@ def test_request_jellyfin_refresh_webhook(monkeypatch):
         publisher.METRICS.refresh_failures = failures_before
 
 
+def test_request_jellyfin_refresh_webhook_http_error(monkeypatch):
+    attempts_before = publisher.METRICS.refresh_attempts
+    failures_before = publisher.METRICS.refresh_failures
+
+    class DummyResponse:
+        status_code = 401
+        text = "Unauthorized"
+
+        def raise_for_status(self):
+            from requests import HTTPError
+            raise HTTPError("401 Unauthorized", response=self)  # type: ignore[name-defined]
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return DummyResponse()
+
+    monkeypatch.setattr(publisher, "requests", SimpleNamespace(post=fake_post))
+    monkeypatch.setattr(publisher, "JELLYFIN_REFRESH_WEBHOOK_URL", "http://hook.local/refresh")
+    monkeypatch.setattr(publisher, "JELLYFIN_REFRESH_WEBHOOK_TOKEN", "secret-token")
+    monkeypatch.setattr(publisher, "JELLYFIN_REFRESH_DELAY_SEC", 0)
+
+    with pytest.raises(publisher.JellyfinRefreshError):
+        asyncio.run(publisher.request_jellyfin_refresh("Sample", "pmoves"))
+
+    assert publisher.METRICS.refresh_attempts == attempts_before + 1
+    assert publisher.METRICS.refresh_failures == failures_before + 1
+
+
+def test_lookup_jellyfin_item_handles_http_error(monkeypatch):
+    class DummyResponse:
+        status_code = 404
+        text = "Not Found"
+
+        def raise_for_status(self):
+            from requests import HTTPError
+            raise HTTPError("404 Not Found", response=self)  # type: ignore[name-defined]
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        return DummyResponse()
+
+    monkeypatch.setattr(publisher, "requests", SimpleNamespace(get=fake_get))
+    monkeypatch.setattr(publisher, "JELLYFIN_URL", "http://jf")
+    monkeypatch.setattr(publisher, "JELLYFIN_API_KEY", "k")
+    monkeypatch.setattr(publisher, "JELLYFIN_USER_ID", "u")
+
+    url, item_id, meta = publisher._lookup_jellyfin_item("Title")
+    assert url is None and item_id is None and meta == {}
+
+
 def test_compute_publish_telemetry_and_metrics_summary():
     published_at = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
     incoming_meta = {

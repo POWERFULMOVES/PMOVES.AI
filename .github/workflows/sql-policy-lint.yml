@@ -1,0 +1,32 @@
+name: SQL Policy Lint (Draft)
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Grep for unsafe policy patterns
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(pmoves/supabase/sql/*.sql pmoves/supabase/migrations/*.sql || true)
+          echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
+          # Fail on blanket USING true or explicit anon grants outside dev
+          bad=0
+          for f in "${files[@]}"; do
+            if grep -Eqi '\bUSING\s*\(?\s*true\s*\)?' "$f"; then
+              echo "Unsafe blanket policy in: $f"; bad=1
+            fi
+            if grep -Eqi 'to\s+anon\b' "$f"; then
+              echo "Policy grants to anon found in: $f"; bad=1
+            fi
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "Found unsafe policy patterns. See pmoves/docs/SUPABASE_RLS_CHECKLIST.md"; exit 1
+          fi
+          echo "No unsafe patterns found."
