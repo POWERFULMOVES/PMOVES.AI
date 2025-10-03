@@ -163,13 +163,18 @@ def test_request_jellyfin_refresh_webhook_http_error(monkeypatch):
     attempts_before = publisher.METRICS.refresh_attempts
     failures_before = publisher.METRICS.refresh_failures
 
+    # Local stand-in for requests.HTTPError to avoid external dependency
+    class HTTPError(Exception):
+        def __init__(self, msg, response=None):
+            super().__init__(msg)
+            self.response = response
+
     class DummyResponse:
         status_code = 401
         text = "Unauthorized"
 
         def raise_for_status(self):
-            from requests import HTTPError
-            raise HTTPError("401 Unauthorized", response=self)  # type: ignore[name-defined]
+            raise HTTPError("401 Unauthorized", response=self)
 
     def fake_post(url, json=None, headers=None, timeout=None):
         return DummyResponse()
@@ -187,13 +192,17 @@ def test_request_jellyfin_refresh_webhook_http_error(monkeypatch):
 
 
 def test_lookup_jellyfin_item_handles_http_error(monkeypatch):
+    class HTTPError(Exception):
+        def __init__(self, msg, response=None):
+            super().__init__(msg)
+            self.response = response
+
     class DummyResponse:
         status_code = 404
         text = "Not Found"
 
         def raise_for_status(self):
-            from requests import HTTPError
-            raise HTTPError("404 Not Found", response=self)  # type: ignore[name-defined]
+            raise HTTPError("404 Not Found", response=self)
 
     def fake_get(url, params=None, headers=None, timeout=None):
         return DummyResponse()
