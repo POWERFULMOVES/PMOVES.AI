@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[4]
 PMOVES_ROOT = Path(__file__).resolve().parents[3]
 for candidate in (ROOT, PMOVES_ROOT):

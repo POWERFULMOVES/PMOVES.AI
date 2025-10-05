@@ -14,7 +14,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          files=(pmoves/supabase/sql/*.sql pmoves/supabase/migrations/*.sql || true)
+          files=(pmoves/supabase/sql/*.sql pmoves/supabase/migrations/*.sql)
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev
           bad=0
