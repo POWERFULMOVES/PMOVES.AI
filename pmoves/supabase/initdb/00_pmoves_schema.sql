@@ -1,6 +1,13 @@
 create extension if not exists "uuid-ossp";
 create extension if not exists "pgcrypto";
-create extension if not exists "vector";
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_available_extensions WHERE name = 'vector') THEN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS "vector"';
+  ELSE
+    RAISE NOTICE 'pgvector extension not available; skipping CREATE EXTENSION vector';
+  END IF;
+END $$;
 
 create schema if not exists pmoves_core;
 
@@ -36,11 +43,11 @@ create table if not exists pmoves_core.memory (
   kind text not null,
   key text not null,
   value jsonb not null,
-  embedding vector(3584),
+  embedding float4[],
   created_at timestamptz default now()
 );
 create index if not exists memory_agent_kind_key_idx on pmoves_core.memory(agent_id, kind, key);
-create index if not exists memory_embedding_idx on pmoves_core.memory using ivfflat (embedding);
+create index if not exists memory_embedding_idx on pmoves_core.memory using gin (embedding);
 
 create table if not exists pmoves_core.event_log (
   id bigserial primary key,
