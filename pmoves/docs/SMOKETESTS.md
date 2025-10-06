@@ -101,6 +101,12 @@ What the smoke covers:
 8) Verify a `studio_board` row exists via PostgREST
 9) Run a Hi-RAG v2 query (8087)
 
+### Mindmap Graph (Neo4j)
+1. Seed demo nodes for `/mindmap`: `make mindmap-seed` (requires the `neo4j` service running).
+2. Fetch the seeded constellation: `make mindmap-smoke`.
+   - Expected: JSON payload with `items` containing the `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111` constellation points/media.
+   - If you see `Neo4j unavailable`, confirm the container is healthy and `NEO4J_PASSWORD` matches the password you supplied when first starting the container.
+
 ## 6) Geometry Bus (CHIT) — End-to-end
 
 1. Create minimal CGP payload `cgp.json`:
@@ -184,7 +190,10 @@ Expected: 200s; locator shows `{ "modality":"video","ref_id":"yt123","t":12.5,"f
 5. Click “Send Current CGP” to share the last geometry over the DataChannel; add a passphrase to sign the CGP capsule.
 6. Toggle “Encrypt anchors” and set a passphrase to AES‑GCM encrypt constellation anchors client‑side before sending; the receiving gateway can decrypt if `CHIT_DECRYPT_ANCHORS=true`.
 
-## 8) Mesh Handshake (NATS)
+### Quick DB smoke (Supabase)
+ - `make smoke-geometry-db` — verifies the seeded demo constellation is reachable via PostgREST (`constellations`, `shape_points`, and `shape_index`). Ensure `SUPABASE_REST_URL` or `SUPA_REST_URL` is exported; defaults to `http://localhost:3000`.
+ 
+ ## 8) Mesh Handshake (NATS)
 
 1. Start mesh: `make mesh-up` (starts NATS + mesh-agent).
 2. In the UI, click “Send Signed CGP → Mesh”. This calls the gateway, which publishes to `mesh.shape.handshake.v1`.

@@ -40,6 +40,7 @@ This working session establishes the concrete implementation tasks needed to clo
   3. Run the loader via cypher-shell: `cat pmoves/neo4j/cypher/002_load_person_aliases.cypher | docker exec -i pmoves-neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD"` (adjust container name/credentials for local setups).
   4. Capture the returned `persona_slug`, `alias`, and `confidence` rows in the session log for validation.
 - **Next iteration hooks**: Extend the CSV with Jellyfin export columns (`jellyfin_item_id`, `season`, etc.) once data exports are scheduled, and wire automated validation into `services/graph-linker` migrations.
+- **Mindmap smoke wiring**: `pmoves/neo4j/cypher/003_seed_chit_mindmap.cypher` seeds the basketball demo constellation powering `/mindmap/{constellation_id}`. With the stack running, execute `make mindmap-seed` then `make mindmap-smoke` to verify Neo4j connectivity; the workflow is documented in `pmoves/docs/SMOKETESTS.md`.
 
 #### 3.1.2 Relation extraction requirements (feeds `services/hi-rag-gateway`, `services/retrieval-eval`)
 - **Inputs**:
@@ -160,6 +161,7 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 | gateway emitted `geometry.cgp.v1` | _2025-10-07T00:06:48Z_ | Tail `services/gateway/logs/*.log` – observed envelope with `constellation_id` + `shape_id`. |
 | ShapeStore warm (gateway) | _2025-10-07T00:06:53Z_ | `ShapeStore.warm_from_db` log confirms cache hydrate from PostgREST (`limit=64`). |
 | PostgREST verification | _2025-10-07T00:07:05Z_ | `GET /pmoves_core.shape_index?select=shape_id,updated_at&order=updated_at.desc&limit=5` returns cached CGP IDs matching log entries. |
+| Seed smoke | _todo_ | `make smoke-geometry-db` confirms seeded anchors/constellations/shape points via PostgREST. |
 
 ## 2025-09-30 – Rollout Attempt Notes (Codex environment)
 
