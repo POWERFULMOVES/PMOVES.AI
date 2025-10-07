@@ -23,6 +23,38 @@ This bundle lets you mass-deploy your homelab and workstations **in parallel** w
 - Replace placeholders like `YOUR_TUNNEL_TOKEN_HERE` and fill `tailscale/tailscale_up.sh` with your Tailnet preferences.
 - For NVIDIA NGC, run `jetson/ngc_login.sh` (or do `docker login nvcr.io`) with your API key.
 
+## RustDesk Relay Deployment
+
+Two automation paths now exist for standing up a self-hosted RustDesk rendezvous (`hbbs`) and relay (`hbbr`):
+
+### Managed services (Pop!_OS/Ubuntu + Proxmox hosts)
+- `linux/scripts/pop-postinstall.sh` and `proxmox/pve9_postinstall.sh` install Docker (if missing), pull `rustdesk/rustdesk-server`, and register `rustdesk-hbbs.service` + `rustdesk-hbbr.service` with `systemd`.
+- Runtime configuration lives in `/etc/default/rustdesk-server`. Adjust `HBBS_ARGS` / `HBBR_ARGS` to pass flags such as `--relay my.public.hostname` or `--key /root/id_ed25519`, and edit the `RUSTDESK_PORT_*` values if you need to remap ports.
+- Persistent data and generated keys default to `${RUSTDESK_DATA_DIR:-/var/lib/rustdesk}`. The first boot writes `hbbs/id_ed25519` (private) and `hbbs/id_ed25519.pub` (public). Distribute the public key to clients so they trust your relay.
+- After provisioning, confirm status with `sudo systemctl status rustdesk-hbbs` (or `hbbr`) and tail logs via `sudo journalctl -u rustdesk-hbbs -f` during the first connection tests.
+
+### Docker Compose (stand-alone relay VM/container host)
+1. Copy `docker-stacks/rustdesk.yml` to the machine that will host RustDesk and `cd` into the directory.
+2. (Optional) Create a `.env` file beside the compose file to set overrides:
+   ```env
+   # Example overrides for docker-stacks/rustdesk.yml
+   TZ=America/New_York
+   RUSTDESK_SERVER_IMAGE=rustdesk/rustdesk-server:latest
+   RUSTDESK_DATA_ROOT=/srv/rustdesk
+   HBBS_ARGS=--relay relay.example.com
+   HBBR_ARGS=--relay relay.example.com
+   RUSTDESK_PORT_HBBS_TCP=21115
+   RUSTDESK_PORT_HBBS_RELAY_TCP=21116
+   RUSTDESK_PORT_HBBS_RELAY_UDP=21116
+   RUSTDESK_PORT_HBBS_API=21118
+   RUSTDESK_PORT_HBBR_TCP=21117
+   RUSTDESK_PORT_HBBR_REVERSE=21119
+   ```
+3. Launch the pair with `docker compose -f docker-stacks/rustdesk.yml up -d`. The stack exposes the upstream default ports (21115–21119 TCP plus 21116/UDP) and stores keys under `${RUSTDESK_DATA_ROOT:-./data/rustdesk}`.
+4. Grab the generated public key (`hbbs/id_ed25519.pub`) and distribute it to workstations via the provisioning scripts or other secure channels.
+
+The same `.env` variables are respected by both the compose file and the systemd helper (`RUSTDESK_SERVER_IMAGE` and `RUSTDESK_DATA_DIR`) so you can keep configuration consistent across environments.
+
 ## Notes
 - Ventoy mapping lives in `ventoy/ventoy.json`—edit the `"image"` paths to match your ISO filenames.
 - If Windows doesn't auto-run the post-install script, open the USB and run `windows/win-postinstall.ps1` as admin.
@@ -88,6 +120,8 @@ Run `linux/scripts/pop-postinstall.sh` on a fresh Pop!_OS/Ubuntu desktop to prov
    - Sources `tailscale/tailscale_up.sh`, using the colocated auth key (or `$TAILSCALE_AUTHKEY`) to join the Tailnet non-interactively.
    - Clones or refreshes the `PMOVES.AI` repo into `/opt/pmoves` (override with `PMOVES_INSTALL_DIR=/some/path` or change the repo URL via `PMOVES_REPO_URL=`).
    - Copies `.env` templates (`.env.example`, `.env.local.example`, `.env.supa.*.example`) into live `.env` files if they do not exist yet.
+   - Deploys the RustDesk relay/ID pair as `systemd` units (`rustdesk-hbbs.service`, `rustdesk-hbbr.service`) backed by Docker. Edit `/etc/default/rustdesk-server` to override ports or append `HBBS_ARGS`/`HBBR_ARGS` flags (for example, `--relay my.public.hostname`).
+   - Persists RustDesk keys under `${RUSTDESK_DATA_DIR:-/var/lib/rustdesk}/hbbs`; copy `id_ed25519.pub` to clients or reverse proxies that need to trust the relay.
    - Runs `pmoves/scripts/install_all_requirements.sh` so every service dependency is installed on first boot.
    - Symlinks the `docker-stacks/` bundle into the install directory for quick compose access.
 3. **Post-install secrets**: Replace the placeholder values in `/opt/pmoves/pmoves/.env`, `.env.local`, and Supabase `.env` files with real credentials/API keys. The defaults mirror the compose stack but should be rotated for production use.
