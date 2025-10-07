@@ -103,6 +103,7 @@ Run `linux/scripts/pop-postinstall.sh` on a fresh Pop!_OS/Ubuntu desktop to prov
   - Export `server.conf` from an existing RustDesk install **or** craft one manually, then place it beside this bundle at `windows/rustdesk/server.conf`.
   - During post-install the script copies it into `%AppData%\RustDesk\config\RustDesk2\RustDesk\config\server.conf` for the signed-in user.
   - Remove `server.conf` from the USB after imaging so the secrets do not persist on portable media.
+  - See [docs/rustdesk-self-hosted.md](docs/rustdesk-self-hosted.md) for self-hosted server setup, key rotation, and exporting `server.conf` for provisioning.
 - For unattended runs, leave the auth key file on the Ventoy USB only as long as needed. The Ubuntu autoinstall reads the first line, exports it for the one-time `tailscale up`, and does not persist the secret on disk. Remove the key from the USB (or rotate it) once provisioning is complete.
 
 - For NVIDIA NGC, run `jetson/ngc_login.sh` (or do `docker login nvcr.io`) with your API key.
