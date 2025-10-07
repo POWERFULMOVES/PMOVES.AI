@@ -12,6 +12,25 @@ This doc shows the end‑to‑end creative flow from **ComfyUI** render to **Dis
 6. **n8n** notifies reviewers; on approval, **Indexer** ingests → Qdrant/Meili/Neo4j.
 7. **Publisher** emits `content.published.v1`, posts **Discord embed**, and refreshes **Jellyfin** (optional).
 
+## Prerequisites & Quick Validation
+Before running ComfyUI graphs that upload into this pipeline, confirm the local workstation has the GPU bundle, helper tools, and multimedia codecs expected by the automation scripts that ship with this repo.
+
+| Dependency | Install Script | Key Notes | Validate |
+| --- | --- | --- | --- |
+| **RVC Voice Conversion bundle** | [`PMOVES ART STUFF/RVC_INSTALLER.bat`](./PMOVES%20ART%20STUFF/RVC_INSTALLER.bat) | Script prompts for GPU target (`[1] NVIDIA` vs `[2] AMD/Intel`) and pulls the matching `RVC1006*.7z` from Hugging Face. Falls back to the NVIDIA archive if the prompt is skipped. Uses the system 7-Zip install to extract and launches `go-web.bat` on completion. | `nvidia-smi` (NVIDIA) or `wmic path win32_VideoController get name` (AMD/Intel) to confirm the GPU; `python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.version.cuda)"` inside the RVC env to verify CUDA alignment. |
+| **7-Zip** | [`PMOVES ART STUFF/VIBEVOICE-RVC-COMFYUI-MANAGER_AUTO_INSTALL.bat`](./PMOVES%20ART%20STUFF/VIBEVOICE-RVC-COMFYUI-MANAGER_AUTO_INSTALL.bat) | `:ensure_7zip` checks `%PATH%`, `Program Files`, then silently installs `7z%SEVEN_VER%-x64.exe` if absent so other bundles (RVC, ComfyUI portable) can extract archives. | `"%ProgramFiles%\7-Zip\7z.exe" -h` or `7z --help` to verify CLI availability. |
+| **Git for Windows** | [`PMOVES ART STUFF/VIBEVOICE-RVC-COMFYUI-MANAGER_AUTO_INSTALL.bat`](./PMOVES%20ART%20STUFF/VIBEVOICE-RVC-COMFYUI-MANAGER_AUTO_INSTALL.bat) | `:ensure_git` installs `Git-%GIT_VER%-64-bit.exe` silently when `git --version` fails, ensuring ComfyUI custom nodes can be cloned. | `git --version` should return `2.45.0.windows.1` (or later). |
+| **Python 3.10 + uv** | [`PMOVES ART STUFF/VIBEVOICE-WEBUI_INSTALLER.bat`](./PMOVES%20ART%20STUFF/VIBEVOICE-WEBUI_INSTALLER.bat) | Requires a system Python 3.10 to create `.venv`, then installs `uv` before pinning `torch==2.7.0` (CUDA 12.8 wheels), `triton-windows`, and FlashAttention. Make sure PATH points at Python 3.10 (not 3.11+) before running. | `python --version` → `3.10.x`; `uv --version`; `python -m pip show torch` to confirm `2.7.0+cu128`. |
+| **FFmpeg (system-wide)** | [`PMOVES ART STUFF/FFMPEG-INSTALL AS ADMIN.bat`](./PMOVES%20ART%20STUFF/FFMPEG-INSTALL%20AS%20ADMIN.bat) | Must be launched from an **elevated** Windows shell—script checks `net session` and aborts without admin rights. Downloads the Gyan.dev essentials ZIP to `%USERPROFILE%\Documents\ffmpeg`, expands it, and appends `...\bin` to the machine PATH via PowerShell. | `ffmpeg -hide_banner` should print version info. If it fails, re-run the installer as admin or confirm `%PATH%` contains the FFmpeg `bin`. |
+
+> ⚠️ If you rerun these scripts after a GPU driver upgrade or Python reinstall, delete any previously extracted portable folders so the silent installers can rehydrate cleanly.
+
+### Dependency sanity check before ComfyUI uploads
+- Verify ComfyUI can launch the portable bundle (`run_nvidia_gpu.bat`) without module errors.
+- In the ComfyUI Python prompt, confirm CUDA visibility: `python_embeded\python.exe -c "import torch; print(torch.cuda.is_available())"`.
+- Run `ffmpeg -encoders | findstr h264` (Windows) to ensure encoding support for video workflows.
+- Run `uv pip list` inside the VibeVoice virtual environment to ensure uv-installed packages are resolvable before rendering or voice conversion nodes execute.
+
 ## Services
 - Presign: `pmoves-v5/services/presign` (port 8088)
 - Render Webhook: `pmoves-v5/services/render-webhook` (port 8085)
