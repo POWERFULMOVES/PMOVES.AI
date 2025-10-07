@@ -1,100 +1,51 @@
-
-# windows/win-postinstall.ps1
-# Run as Admin (FirstLogonCommands tries to auto-run this)
-Write-Host "Starting Windows Post-Install..." -ForegroundColor Cyan
-
-# Enable long paths & show file extensions
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f | Out-Null
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f | Out-Null
-
-# Install via winget
-$apps = @(
-  "Microsoft.VisualStudioCode",
-  "Git.Git",
-  "Python.Python.3.12",
-  "OpenJS.NodeJS.LTS",
-  "Docker.DockerDesktop",
-  "Tailscale.Tailscale",
-  "RustDesk.RustDesk",
-  "7zip.7zip"
+param(
+  [string]$Mode
 )
-foreach ($app in $apps) {
-  try { winget install -e --id $app --silent --accept-package-agreements --accept-source-agreements } catch {}
+
+if (-not $Mode -or [string]::IsNullOrWhiteSpace($Mode)) {
+  $Mode = $env:MODE
+}
+if (-not $Mode -or [string]::IsNullOrWhiteSpace($Mode)) {
+  $Mode = 'full'
+}
+$Mode = $Mode.Trim().ToLowerInvariant()
+
+$validModes = @('standalone', 'web', 'full')
+if ($validModes -notcontains $Mode) {
+  Write-Error "Invalid mode '$Mode'. Valid options: standalone, web, full."
+  exit 1
 }
 
-# Docker Desktop first-run tweaks
-$settings = "$env:APPDATA\Docker\settings.json"
-if (Test-Path $settings) {
-  $json = Get-Content $settings | ConvertFrom-Json
-  $json.autoStart = $true
-  $json.wslEngineEnabled = $true
-  $json | ConvertTo-Json -Depth 10 | Set-Content $settings -Encoding UTF8
-}
-
-Write-Host "Windows Post-Install complete. Reboot recommended." -ForegroundColor Green
-
-# windows/win-postinstall.ps1
-# Run as Admin (FirstLogonCommands tries to auto-run this)
-Write-Host "Starting Windows Post-Install..." -ForegroundColor Cyan
-
-
-$bundleRoot = Split-Path -Parent $PSScriptRoot
-
-# Enable long paths & show file extensions
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f | Out-Null
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f | Out-Null
-
-# Install via winget
-$apps = @(
-  "Microsoft.VisualStudioCode",
-  "Git.Git",
-  "Python.Python.3.12",
-  "OpenJS.NodeJS.LTS",
-  "Docker.DockerDesktop",
-  "Tailscale.Tailscale",
-  "RustDesk.RustDesk",
-  "7zip.7zip"
-)
-foreach ($app in $apps) {
-  try { winget install -e --id $app --silent --accept-package-agreements --accept-source-agreements } catch {}
-}
-
-# Docker Desktop first-run tweaks
-$settings = "$env:APPDATA\Docker\settings.json"
-if (Test-Path $settings) {
-  $json = Get-Content $settings | ConvertFrom-Json
-  $json.autoStart = $true
-  $json.wslEngineEnabled = $true
-  $json | ConvertTo-Json -Depth 10 | Set-Content $settings -Encoding UTF8
-}
-
+Write-Host "Starting Windows Post-Install ($Mode mode)..." -ForegroundColor Cyan
 
 $scriptPath = $MyInvocation.MyCommand.Path
 $scriptDir = Split-Path -Parent $scriptPath
 $bundleRoot = Split-Path -Parent $scriptDir
-$repoUrl = "https://github.com/Cataclysm-Industries/PMOVES.AI.git"
+$repoUrl = "https://github.com/CataclysmStudiosInc/PMOVES.AI.git"
+
+function Set-SystemDefaults {
+  Write-Host "Configuring Explorer defaults..." -ForegroundColor Cyan
+  reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f | Out-Null
+  reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f | Out-Null
+}
 
 function Invoke-WingetInstall {
   param([string]$Id)
   try {
     winget install -e --id $Id --silent --accept-package-agreements --accept-source-agreements
-  } catch {
+  }
+  catch {
     Write-Warning "winget install failed for $Id: $($_.Exception.Message)"
   }
 }
 
-function Prompt-YesNo {
-  param(
-    [string]$Message,
-    [switch]$DefaultYes
-  )
-
-  $suffix = if ($DefaultYes) { "[Y/n]" } else { "[y/N]" }
-  $answer = Read-Host "$Message $suffix"
-  if ([string]::IsNullOrWhiteSpace($answer)) {
-    return [bool]$DefaultYes
+function Get-WingetAppsForMode {
+  param([string]$CurrentMode)
+  switch ($CurrentMode) {
+    'standalone' { return @('Tailscale.Tailscale', 'RustDesk.RustDesk') }
+    'web' { return @('Microsoft.VisualStudioCode', 'Git.Git', 'OpenJS.NodeJS.LTS', 'Docker.DockerDesktop', 'Tailscale.Tailscale', 'RustDesk.RustDesk', '7zip.7zip') }
+    default { return @('Microsoft.VisualStudioCode', 'Git.Git', 'Python.Python.3.12', 'OpenJS.NodeJS.LTS', 'Docker.DockerDesktop', 'Tailscale.Tailscale', 'RustDesk.RustDesk', '7zip.7zip') }
   }
-  return $answer.Trim().ToLowerInvariant().StartsWith('y')
 }
 
 function Ensure-Directory {
@@ -107,7 +58,6 @@ function Ensure-Directory {
 
 function Add-ToPath {
   param([string]$Path)
-
   if ([string]::IsNullOrWhiteSpace($Path)) { return }
   if (-not (Test-Path $Path)) { return }
 
@@ -188,6 +138,48 @@ function Seed-PmovesEnvFiles {
   }
 }
 
+function Install-PmovesDependencies {
+  param([string]$RepoPath)
+
+  $installScript = Join-Path $RepoPath 'pmoves/scripts/install_all_requirements.ps1'
+  if (-not (Test-Path $installScript)) {
+    Write-Warning "Could not locate pmoves/scripts/install_all_requirements.ps1"
+    return
+  }
+
+  Write-Host "Installing PMOVES dependencies..." -ForegroundColor Cyan
+  try {
+    $currentPolicy = Get-ExecutionPolicy -Scope Process
+    if ($currentPolicy -ne 'Bypass') {
+      try { Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force } catch {}
+    }
+    Push-Location $RepoPath
+    try {
+      & $installScript
+    }
+    finally {
+      Pop-Location
+    }
+  }
+  catch {
+    Write-Warning "Dependency installation failed: $($_.Exception.Message)"
+  }
+}
+
+function Prompt-YesNo {
+  param(
+    [string]$Message,
+    [switch]$DefaultYes
+  )
+
+  $suffix = if ($DefaultYes) { '[Y/n]' } else { '[y/N]' }
+  $answer = Read-Host "$Message $suffix"
+  if ([string]::IsNullOrWhiteSpace($answer)) {
+    return [bool]$DefaultYes
+  }
+  return $answer.Trim().ToLowerInvariant().StartsWith('y')
+}
+
 function Install-WslUbuntu {
   Write-Host "Checking for existing WSL distributions..." -ForegroundColor Cyan
   $hasUbuntu = $false
@@ -212,87 +204,28 @@ function Install-WslUbuntu {
   }
 }
 
-# Enable long paths & show file extensions
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f | Out-Null
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f | Out-Null
-
-# Install via winget
-$apps = @(
-  "Microsoft.VisualStudioCode",
-  "Git.Git",
-  "Python.Python.3.12",
-  "OpenJS.NodeJS.LTS",
-  "Docker.DockerDesktop",
-  "Tailscale.Tailscale",
-  "RustDesk.RustDesk",
-  "7zip.7zip"
-)
-foreach ($app in $apps) {
-  Invoke-WingetInstall -Id $app
-}
-
-Refresh-PathForWingetInstalls
-
-# Docker Desktop first-run tweaks
-$settings = "$env:APPDATA\Docker\settings.json"
-if (Test-Path $settings) {
-  $json = Get-Content $settings | ConvertFrom-Json
-  $json.autoStart = $true
-  $json.wslEngineEnabled = $true
-  $json | ConvertTo-Json -Depth 10 | Set-Content $settings -Encoding UTF8
-}
-
-# Clone/refresh PMOVES repo
-$defaultWorkspace = Join-Path $env:USERPROFILE 'workspace'
-if (-not (Test-Path $defaultWorkspace)) { $defaultWorkspace = $env:USERPROFILE }
-$chosen = Read-Host "Directory to store PMOVES.AI repo`n(leave blank for $defaultWorkspace)"
-$workspace = if ([string]::IsNullOrWhiteSpace($chosen)) { $defaultWorkspace } else { $chosen.Trim() }
-Ensure-Directory -Path $workspace
-$repoPath = Join-Path $workspace 'PMOVES.AI'
-Update-PmovesRepository -RepoPath $repoPath -Url $repoUrl
-
-# Install PMOVES runtime requirements
-$installScript = Join-Path $repoPath 'pmoves/scripts/install_all_requirements.ps1'
-if (Test-Path $installScript) {
-  Write-Host "Installing PMOVES dependencies..." -ForegroundColor Cyan
-  try {
-    $currentPolicy = Get-ExecutionPolicy -Scope Process
-    if ($currentPolicy -ne 'Bypass') {
-      try { Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force } catch {}
-    }
-    Push-Location $repoPath
-    try {
-      & $installScript
-    }
-    finally {
-      Pop-Location
-    }
+function Configure-DockerDesktopSettings {
+  $settings = "$env:APPDATA\Docker\settings.json"
+  if (Test-Path $settings) {
+    $json = Get-Content $settings | ConvertFrom-Json
+    $json.autoStart = $true
+    $json.wslEngineEnabled = $true
+    $json | ConvertTo-Json -Depth 10 | Set-Content $settings -Encoding UTF8
   }
-  catch {
-    Write-Warning "Dependency installation failed: $($_.Exception.Message)"
+}
+
+function Apply-RustDeskBundle {
+  $rustdeskConfig = Join-Path $bundleRoot 'windows/rustdesk/server.conf'
+  if (Test-Path $rustdeskConfig) {
+    $rustdeskTarget = Join-Path $env:APPDATA 'RustDesk/config/RustDesk2/RustDesk/config'
+    Ensure-Directory -Path $rustdeskTarget
+    Copy-Item $rustdeskConfig (Join-Path $rustdeskTarget 'server.conf') -Force
+    Write-Host "RustDesk server.conf copied into AppData." -ForegroundColor Green
   }
-} else {
-  Write-Warning "Could not locate pmoves/scripts/install_all_requirements.ps1"
 }
 
-Seed-PmovesEnvFiles -RepoPath $repoPath
-
-# Offer to enable WSL
-if (Prompt-YesNo -Message "Enable WSL and install Ubuntu" -DefaultYes) {
-  Install-WslUbuntu
-}
-
-# Apply RustDesk bundle config if present
-$rustdeskConfig = Join-Path $bundleRoot 'windows/rustdesk/server.conf'
-if (Test-Path $rustdeskConfig) {
-  $rustdeskTarget = Join-Path $env:APPDATA 'RustDesk/config/RustDesk2/RustDesk/config'
-  Ensure-Directory -Path $rustdeskTarget
-  Copy-Item $rustdeskConfig (Join-Path $rustdeskTarget 'server.conf') -Force
-  Write-Host "RustDesk server.conf copied into AppData." -ForegroundColor Green
-}
-
-# Offer to start Docker Desktop (ensures it initializes on first boot)
-if (Prompt-YesNo -Message "Launch Docker Desktop now" -DefaultYes) {
+function Launch-DockerDesktopPrompt {
+  if (-not (Prompt-YesNo -Message "Launch Docker Desktop now" -DefaultYes)) { return }
   $dockerExe = "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"
   if (Test-Path $dockerExe) {
     Start-Process -FilePath $dockerExe
@@ -301,39 +234,95 @@ if (Prompt-YesNo -Message "Launch Docker Desktop now" -DefaultYes) {
   }
 }
 
+function Join-Tailnet {
+  $tailscaleScript = Join-Path $bundleRoot 'tailscale/tailscale_up.ps1'
+  $tailscaleAuthFile = Join-Path $bundleRoot 'tailscale/tailscale_authkey.txt'
 
-$tailscaleScript = Join-Path $bundleRoot 'tailscale/tailscale_up.ps1'
-$tailscaleAuthFile = Join-Path $bundleRoot 'tailscale/tailscale_authkey.txt'
+  if (Test-Path $tailscaleScript) {
+    Write-Host "Running Tailnet bootstrap script..." -ForegroundColor Cyan
+    try {
+      & $tailscaleScript
+    }
+    catch {
+      Write-Warning "Tailnet bootstrap failed: $($_.Exception.Message)"
+    }
+    return
+  }
 
-if (Test-Path $tailscaleScript) {
-  Write-Host "Running Tailnet bootstrap script..." -ForegroundColor Cyan
-  try {
-    & $tailscaleScript
+  if (-not (Test-Path $tailscaleAuthFile)) {
+    Write-Host "Tailnet helper not found; skipping automatic join." -ForegroundColor Yellow
+    return
   }
-  catch {
-    Write-Warning "Tailnet bootstrap failed: $($_.Exception.Message)"
-  }
-}
-elseif (Test-Path $tailscaleAuthFile) {
-  Write-Host "Tailnet helper missing but auth key found. Joining Tailnet with default flags..." -ForegroundColor Cyan
+
+  Write-Host "Joining Tailnet with default flags..." -ForegroundColor Cyan
   try {
     $authKey = (Get-Content $tailscaleAuthFile -ErrorAction Stop | Select-Object -First 1).Trim()
-    if (-not [string]::IsNullOrWhiteSpace($authKey)) {
-      $tailscaleArgs = @('--ssh', '--accept-routes', '--advertise-tags=tag:lab', "--authkey=$authKey")
-      tailscale.exe up @tailscaleArgs
-      if ($LASTEXITCODE -ne 0) {
-        throw "tailscale.exe exited with code $LASTEXITCODE"
-      }
-      Write-Host 'Tailnet join command completed.' -ForegroundColor Green
-    }
-    else {
+    if ([string]::IsNullOrWhiteSpace($authKey)) {
       Write-Warning 'tailscale_authkey.txt is present but empty. Skipping Tailnet join.'
+      return
     }
+    $tailscaleArgs = @('--ssh', '--accept-routes', '--advertise-tags=tag:lab', "--authkey=$authKey")
+    tailscale.exe up @tailscaleArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw "tailscale.exe exited with code $LASTEXITCODE"
+    }
+    Write-Host 'Tailnet join command completed.' -ForegroundColor Green
   }
   catch {
     Write-Warning "Tailnet bootstrap failed: $($_.Exception.Message)"
   }
 }
 
-Write-Host "Windows Post-Install complete. Reboot recommended." -ForegroundColor Green
+Set-SystemDefaults
 
+$apps = Get-WingetAppsForMode -CurrentMode $Mode
+foreach ($app in $apps) {
+  Invoke-WingetInstall -Id $app
+}
+if ($Mode -ne 'standalone') {
+  Refresh-PathForWingetInstalls
+}
+
+if ($Mode -ne 'standalone') {
+  Configure-DockerDesktopSettings
+}
+
+$repoPath = $null
+if ($Mode -eq 'full' -or $Mode -eq 'web') {
+  $defaultWorkspace = Join-Path $env:USERPROFILE 'workspace'
+  if (-not (Test-Path $defaultWorkspace)) { $defaultWorkspace = $env:USERPROFILE }
+
+  if ($Mode -eq 'full') {
+    $chosen = Read-Host "Directory to store PMOVES.AI repo`n(leave blank for $defaultWorkspace)"
+    $workspace = if ([string]::IsNullOrWhiteSpace($chosen)) { $defaultWorkspace } else { $chosen.Trim() }
+  }
+  else {
+    $workspace = $defaultWorkspace
+    Write-Host "Using default workspace path: $workspace" -ForegroundColor Cyan
+  }
+
+  Ensure-Directory -Path $workspace
+  $repoPath = Join-Path $workspace 'PMOVES.AI'
+  Update-PmovesRepository -RepoPath $repoPath -Url $repoUrl
+  Seed-PmovesEnvFiles -RepoPath $repoPath
+
+  if ($Mode -eq 'full') {
+    Install-PmovesDependencies -RepoPath $repoPath
+  }
+}
+
+if ($Mode -eq 'full') {
+  if (Prompt-YesNo -Message "Enable WSL and install Ubuntu" -DefaultYes) {
+    Install-WslUbuntu
+  }
+}
+
+Apply-RustDeskBundle
+
+if ($Mode -ne 'standalone') {
+  Launch-DockerDesktopPrompt
+}
+
+Join-Tailnet
+
+Write-Host "Windows Post-Install complete. Reboot recommended." -ForegroundColor Green

@@ -82,7 +82,7 @@ This bundle lets you mass-deploy your homelab and workstations **in parallel** w
 Run `linux/scripts/pop-postinstall.sh` on a fresh Pop!_OS/Ubuntu desktop to provision a ready-to-develop workstation:
 
 1. **Prepare the bundle**: Copy this provisioning folder to your media (Ventoy USB, external disk, etc.). Drop a Tailnet auth key in `tailscale/tailscale_authkey.txt` (first line only) so the helper can run `tailscale up` without prompts.
-2. **Execute the script**: From the copied bundle, run `sudo bash linux/scripts/pop-postinstall.sh`. The script:
+2. **Execute the script**: From the copied bundle, run `sudo bash linux/scripts/pop-postinstall.sh` (defaults to `--mode full`). The script:
    - Upgrades the OS, installs Docker + NVIDIA container toolkit, and adds RustDesk via the upstream apt repository.
    - Installs Python tooling (`python3`, `pip`, `venv`) required for the PMOVES stack.
    - Sources `tailscale/tailscale_up.sh`, using the colocated auth key (or `$TAILSCALE_AUTHKEY`) to join the Tailnet non-interactively.
@@ -92,6 +92,23 @@ Run `linux/scripts/pop-postinstall.sh` on a fresh Pop!_OS/Ubuntu desktop to prov
    - Symlinks the `docker-stacks/` bundle into the install directory for quick compose access.
 3. **Post-install secrets**: Replace the placeholder values in `/opt/pmoves/pmoves/.env`, `.env.local`, and Supabase `.env` files with real credentials/API keys. The defaults mirror the compose stack but should be rotated for production use.
 4. **RustDesk pairing**: Once the script completes, RustDesk is installed and ready to be paired using your preferred relay/ID server.
+
+
+Use the `--mode` flag (or export `MODE=<standalone|web|full>` before running the script) to tailor what gets installed. The list above describes the default `full` mode.
+
+### Mode matrix
+
+| Platform | Mode | Command | Key installs/actions | Tailnet join behavior |
+| --- | --- | --- | --- | --- |
+| Pop!_OS / Ubuntu | `standalone` | `MODE=standalone sudo bash linux/scripts/pop-postinstall.sh` | System updates, Git/cURL basics, Tailscale CLI, RustDesk desktop client | Sources `tailscale/tailscale_up.sh` when present (or logs instructions) |
+| Pop!_OS / Ubuntu | `web` | `sudo bash linux/scripts/pop-postinstall.sh --mode web` | Adds Docker Engine + NVIDIA toolkit, clones PMOVES repo, seeds `.env` templates, links `docker-stacks/` (no Python dependency install) | Same helper-driven `tailscale up` flow |
+| Pop!_OS / Ubuntu | `full` | `sudo bash linux/scripts/pop-postinstall.sh --mode full` | Everything in web mode plus RustDesk install and `pmoves/scripts/install_all_requirements.sh` for Python services | Same helper-driven `tailscale up` flow |
+| Windows 11 | `standalone` | `powershell -ExecutionPolicy Bypass -File windows\win-postinstall.ps1 -Mode standalone` | Winget installs Tailscale + RustDesk, explorer defaults | Runs `tailscale/tailscale_up.ps1` when available or uses the bundled auth key fallback |
+| Windows 11 | `web` | `powershell -ExecutionPolicy Bypass -File windows\win-postinstall.ps1 -Mode web` | Installs VS Code, Git, Node.js LTS, Docker Desktop, Tailscale, RustDesk; clones PMOVES into `%USERPROFILE%\workspace\PMOVES.AI` and seeds `.env` files | Same helper script / auth key flow |
+| Windows 11 | `full` | `powershell -ExecutionPolicy Bypass -File windows\win-postinstall.ps1 -Mode full` | Web mode installs plus Python 3.12, prompts for workspace, runs `pmoves/scripts/install_all_requirements.ps1`, optional WSL Ubuntu enablement | Same helper script / auth key flow |
+| Jetson (JetPack) | `standalone` | `MODE=standalone sudo bash jetson/jetson-postinstall.sh` | System updates, Git/cURL basics, Tailscale CLI, RustDesk | Uses `tailscale/tailscale_up.sh` helper when present |
+| Jetson (JetPack) | `web` | `sudo bash jetson/jetson-postinstall.sh --mode web` | Installs Docker + NVIDIA runtime config, clones PMOVES repo, seeds `.env`, links `docker-stacks/` | Same helper-driven `tailscale up` flow |
+| Jetson (JetPack) | `full` | `sudo bash jetson/jetson-postinstall.sh --mode full` | Web mode tasks plus RustDesk install, Python dependency bootstrap, and `jetson-containers` checkout/install | Same helper-driven `tailscale up` flow |
 
 
 ## Secrets
