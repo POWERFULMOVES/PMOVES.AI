@@ -8,9 +8,54 @@ TARGET_DIR=${PMOVES_INSTALL_DIR:-/opt/pmoves}
 PMOVES_ROOT="${TARGET_DIR}/pmoves"
 TAILSCALE_HELPER="${BUNDLE_ROOT}/tailscale/tailscale_up.sh"
 JETSON_CONTAINERS_DIR=${JETSON_CONTAINERS_DIR:-/opt/jetson-containers}
+MODE_INPUT=${MODE:-full}
 
 log() {
   echo -e "\n[jetson-postinstall] $*"
+}
+
+usage() {
+  cat <<USAGE
+Usage: $(basename "$0") [--mode <standalone|web|full>]
+
+Modes:
+  standalone  Minimal networking bootstrap (Tailscale + RustDesk)
+  web         Mesh + Docker runtime + repo clone for container entrypoints
+  full        Complete Jetson bootstrap (default)
+
+You can also set MODE=<mode> in the environment.
+USAGE
+}
+
+parse_args() {
+  local arg
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    case "$arg" in
+      --mode|-m)
+        if [[ $# -lt 2 ]]; then
+          log "Missing value for $arg"
+          usage
+          exit 1
+        fi
+        MODE_INPUT="$2"
+        shift 2
+        ;;
+      standalone|web|full)
+        MODE_INPUT="$arg"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        log "Unknown argument: $arg"
+        usage
+        exit 1
+        ;;
+    esac
+  done
 }
 
 ensure_env_file() {
@@ -27,12 +72,20 @@ ensure_env_file() {
   fi
 }
 
-log "Refreshing base system packages."
-apt update && apt -y upgrade
-apt -y install ca-certificates curl gnupg lsb-release build-essential git unzip jq python3 python3-pip python3-venv docker.io docker-compose-plugin
+install_base_packages() {
+  local packages=("$@")
+  log "Refreshing base system packages."
+  apt update
+  apt -y upgrade
+  if ((${#packages[@]} > 0)); then
+    apt -y install "${packages[@]}"
+  fi
+}
 
-log "Configuring Docker for NVIDIA runtime."
-cat >/etc/docker/daemon.json <<'JSON'
+configure_docker_for_nvidia() {
+  log "Configuring Docker for NVIDIA runtime."
+  apt -y install docker.io docker-compose-plugin
+  cat >/etc/docker/daemon.json <<'JSON'
 {
   "default-runtime": "nvidia",
   "runtimes": {
@@ -40,50 +93,81 @@ cat >/etc/docker/daemon.json <<'JSON'
   }
 }
 JSON
-systemctl enable --now docker
-usermod -aG docker "${SUDO_USER:-$USER}"
-systemctl restart docker
+  systemctl enable --now docker
+  usermod -aG docker "${SUDO_USER:-$USER}"
+  systemctl restart docker
+}
 
-log "Installing Tailscale and attempting Tailnet join."
-curl -fsSL https://tailscale.com/install.sh | sh
-systemctl enable --now tailscaled
-if [[ -x "${TAILSCALE_HELPER}" ]]; then
-  if source "${TAILSCALE_HELPER}"; then
-    log "Tailnet helper ${TAILSCALE_HELPER} completed successfully."
+install_tailscale() {
+  log "Installing Tailscale."
+  curl -fsSL https://tailscale.com/install.sh | sh
+  systemctl enable --now tailscaled
+  if [[ -x "${TAILSCALE_HELPER}" ]]; then
+    # shellcheck disable=SC1090
+    if source "${TAILSCALE_HELPER}"; then
+      log "Tailnet helper ${TAILSCALE_HELPER} completed successfully."
+    else
+      log "Tailnet helper ${TAILSCALE_HELPER} reported an error."
+    fi
   else
-    log "Tailnet helper ${TAILSCALE_HELPER} reported an error."
+    log "Tailnet helper not found at ${TAILSCALE_HELPER}; skipping automatic tailscale up."
   fi
-else
-  log "Tailnet helper not found at ${TAILSCALE_HELPER}; skipping automatic tailscale up."
-fi
+}
 
-log "Syncing PMOVES.AI repository to ${TARGET_DIR}."
-mkdir -p "${TARGET_DIR}"
-if [[ -d "${TARGET_DIR}/.git" ]]; then
-  current_branch=$(git -C "${TARGET_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
-  git -C "${TARGET_DIR}" fetch --all --prune
-  git -C "${TARGET_DIR}" reset --hard "origin/${current_branch}"
-elif [[ -d "${TARGET_DIR}" && -n $(ls -A "${TARGET_DIR}" 2>/dev/null) ]]; then
-  timestamp=$(date +%Y%m%d%H%M%S)
-  backup_dir="${TARGET_DIR}.bak-${timestamp}"
-  mv "${TARGET_DIR}" "${backup_dir}"
-  log "Existing non-git directory moved to ${backup_dir}."
-  git clone "${REPO_URL}" "${TARGET_DIR}"
-else
-  git clone "${REPO_URL}" "${TARGET_DIR}"
-fi
+install_rustdesk() {
+  log "Installing RustDesk."
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://apt.rustdesk.com/key.pub | gpg --dearmor -o /etc/apt/keyrings/rustdesk.gpg
+  chmod a+r /etc/apt/keyrings/rustdesk.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/rustdesk.gpg] https://apt.rustdesk.com/ stable main" \
+    | tee /etc/apt/sources.list.d/rustdesk.list > /dev/null
+  apt update
+  apt -y install rustdesk
+}
 
-if [[ ! -d "${TARGET_DIR}/.git" ]]; then
-  log "Failed to sync PMOVES.AI repository to ${TARGET_DIR}."
-  exit 1
-fi
+sync_pmoves_repo() {
+  log "Syncing PMOVES.AI repository to ${TARGET_DIR}."
+  mkdir -p "${TARGET_DIR}"
+  if [[ -d "${TARGET_DIR}/.git" ]]; then
+    local current_branch
+    current_branch=$(git -C "${TARGET_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+    git -C "${TARGET_DIR}" fetch --all --prune
+    git -C "${TARGET_DIR}" reset --hard "origin/${current_branch}"
+  elif [[ -d "${TARGET_DIR}" && -n $(ls -A "${TARGET_DIR}" 2>/dev/null) ]]; then
+    local timestamp backup_dir
+    timestamp=$(date +%Y%m%d%H%M%S)
+    backup_dir="${TARGET_DIR}.bak-${timestamp}"
+    mv "${TARGET_DIR}" "${backup_dir}"
+    log "Existing non-git directory moved to ${backup_dir}."
+    git clone "${REPO_URL}" "${TARGET_DIR}"
+  else
+    git clone "${REPO_URL}" "${TARGET_DIR}"
+  fi
 
-if [[ -d "${PMOVES_ROOT}" ]]; then
+  if [[ ! -d "${TARGET_DIR}/.git" ]]; then
+    log "Failed to sync PMOVES.AI repository to ${TARGET_DIR}."
+    exit 1
+  fi
+}
+
+ensure_pmoves_env() {
+  if [[ ! -d "${PMOVES_ROOT}" ]]; then
+    log "PMOVES project directory not found under ${TARGET_DIR}; skipping env bootstrap."
+    return 1
+  fi
+
   log "Ensuring environment files exist."
   ensure_env_file ".env" ".env.example"
   ensure_env_file ".env.local" ".env.local.example"
   ensure_env_file ".env.supa.local" ".env.supa.local.example"
   ensure_env_file ".env.supa.remote" ".env.supa.remote.example"
+}
+
+install_pmoves_python_dependencies() {
+  if [[ ! -d "${PMOVES_ROOT}" ]]; then
+    log "PMOVES project directory not found under ${TARGET_DIR}; skipping dependency install."
+    return
+  fi
 
   if [[ -f "${PMOVES_ROOT}/scripts/install_all_requirements.sh" ]]; then
     log "Installing Python requirements for PMOVES services."
@@ -91,33 +175,94 @@ if [[ -d "${PMOVES_ROOT}" ]]; then
   else
     log "install_all_requirements.sh not found at ${PMOVES_ROOT}/scripts; skipping dependency install."
   fi
-else
-  log "PMOVES project directory not found under ${TARGET_DIR}; skipping env bootstrap and dependency install."
-fi
+}
 
-if [[ -d "${BUNDLE_ROOT}/docker-stacks" ]]; then
-  ln -sfn "${BUNDLE_ROOT}/docker-stacks" "${TARGET_DIR}/docker-stacks"
-  log "Linked docker-stacks bundle into ${TARGET_DIR}."
-fi
+link_docker_stacks() {
+  if [[ -d "${BUNDLE_ROOT}/docker-stacks" ]]; then
+    ln -sfn "${BUNDLE_ROOT}/docker-stacks" "${TARGET_DIR}/docker-stacks"
+    log "Linked docker-stacks bundle into ${TARGET_DIR}."
+  fi
+}
 
-log "Installing jetson-containers and dependencies."
-if [[ -d "${JETSON_CONTAINERS_DIR}/.git" ]]; then
-  git -C "${JETSON_CONTAINERS_DIR}" fetch --all --prune
-  git -C "${JETSON_CONTAINERS_DIR}" reset --hard origin/main
-elif [[ -d "${JETSON_CONTAINERS_DIR}" && -n $(ls -A "${JETSON_CONTAINERS_DIR}" 2>/dev/null) ]]; then
-  timestamp=$(date +%Y%m%d%H%M%S)
-  backup_dir="${JETSON_CONTAINERS_DIR}.bak-${timestamp}"
-  mv "${JETSON_CONTAINERS_DIR}" "${backup_dir}"
-  log "Existing non-git jetson-containers directory moved to ${backup_dir}."
-  git clone https://github.com/dusty-nv/jetson-containers.git "${JETSON_CONTAINERS_DIR}"
-else
-  git clone https://github.com/dusty-nv/jetson-containers.git "${JETSON_CONTAINERS_DIR}"
-fi
+install_jetson_containers() {
+  log "Installing jetson-containers and dependencies."
+  mkdir -p "${JETSON_CONTAINERS_DIR}"
+  if [[ -d "${JETSON_CONTAINERS_DIR}/.git" ]]; then
+    git -C "${JETSON_CONTAINERS_DIR}" fetch --all --prune
+    git -C "${JETSON_CONTAINERS_DIR}" reset --hard origin/main
+  elif [[ -d "${JETSON_CONTAINERS_DIR}" && -n $(ls -A "${JETSON_CONTAINERS_DIR}" 2>/dev/null) ]]; then
+    local timestamp backup_dir
+    timestamp=$(date +%Y%m%d%H%M%S)
+    backup_dir="${JETSON_CONTAINERS_DIR}.bak-${timestamp}"
+    mv "${JETSON_CONTAINERS_DIR}" "${backup_dir}"
+    log "Existing non-git jetson-containers directory moved to ${backup_dir}."
+    git clone https://github.com/dusty-nv/jetson-containers.git "${JETSON_CONTAINERS_DIR}"
+  else
+    git clone https://github.com/dusty-nv/jetson-containers.git "${JETSON_CONTAINERS_DIR}"
+  fi
 
-if [[ -f "${JETSON_CONTAINERS_DIR}/install.sh" ]]; then
-  bash "${JETSON_CONTAINERS_DIR}/install.sh"
-else
-  log "install.sh not found under ${JETSON_CONTAINERS_DIR}; skipping jetson-containers installer."
-fi
+  if [[ -f "${JETSON_CONTAINERS_DIR}/install.sh" ]]; then
+    bash "${JETSON_CONTAINERS_DIR}/install.sh"
+  else
+    log "install.sh not found under ${JETSON_CONTAINERS_DIR}; skipping jetson-containers installer."
+  fi
+}
 
-log "Jetson bootstrap complete."
+run_standalone_mode() {
+  install_base_packages ca-certificates curl gnupg lsb-release git unzip jq
+  install_tailscale
+  install_rustdesk
+}
+
+run_web_mode() {
+  install_base_packages ca-certificates curl gnupg lsb-release build-essential git unzip jq python3 python3-pip python3-venv
+  configure_docker_for_nvidia
+  install_tailscale
+  sync_pmoves_repo
+  ensure_pmoves_env || true
+  link_docker_stacks
+}
+
+run_full_mode() {
+  install_base_packages ca-certificates curl gnupg lsb-release build-essential git unzip jq python3 python3-pip python3-venv
+  configure_docker_for_nvidia
+  install_tailscale
+  install_rustdesk
+  sync_pmoves_repo
+  ensure_pmoves_env || true
+  install_pmoves_python_dependencies
+  link_docker_stacks
+  install_jetson_containers
+}
+
+main() {
+  parse_args "$@"
+  local mode
+  mode=$(echo "${MODE_INPUT}" | tr '[:upper:]' '[:lower:]')
+  case "${mode}" in
+    standalone|web|full)
+      ;;
+    *)
+      log "Invalid mode '${MODE_INPUT}'."
+      usage
+      exit 1
+      ;;
+  esac
+
+  log "Running Jetson post-install in '${mode}' mode."
+  case "${mode}" in
+    standalone)
+      run_standalone_mode
+      ;;
+    web)
+      run_web_mode
+      ;;
+    full)
+      run_full_mode
+      ;;
+  esac
+
+  log "Jetson bootstrap complete."
+}
+
+main "$@"
