@@ -39,10 +39,10 @@ This runbook walks through launching PMOVES services on a Tailscale-connected ho
 3. **Expose MCP agents over Tailscale:** Ensure the `AGENT_ZERO_HOST` or similar bindings in `.env` use the Tailscale IP/hostname so Discord-triggered automations can resolve them when originating from another node.
 4. **Publisher health check:** Use the built-in Make targets to validate Discord connectivity:
    ```bash
-   make discord-health
+   make health-publisher-discord
    make discord-ping MSG="Tailnet wiring check"
    ```
-   Both commands should return `OK` and a message in your Discord channel.【F:pmoves/Makefile†L438-L480】
+   Both commands should return `OK` and a message in your Discord channel. Run `make discord-smoke` if you want a full health + publish exercise.【F:pmoves/Makefile†L154-L163】【F:pmoves/Makefile†L435-L460】
 5. **Run local Discord bot flows:** If you rely on n8n, import `pmoves/n8n/flows/echo_publisher.json`, update the Discord webhook credential, and trigger the workflow to confirm the embed formatting.【F:pmoves/docs/N8N_SETUP.md†L1-L63】
 
 ## 4. Hybrid Local + VPS Operation
@@ -69,7 +69,7 @@ This runbook walks through launching PMOVES services on a Tailscale-connected ho
 | Step | Workstation | VPS |
 | --- | --- | --- |
 | `tailscale status` shows both nodes | ☐ | ☐ |
-| `make discord-health` reports OK | ☐ | ☐ |
+| `make health-publisher-discord` reports OK | ☐ | ☐ |
 | Discord channel receives echo publisher embed | ☐ | ☐ |
 | n8n workflow posts to Discord | ☐ | ☐ |
 | RustDesk device reachable | ☐ | ☐ |
