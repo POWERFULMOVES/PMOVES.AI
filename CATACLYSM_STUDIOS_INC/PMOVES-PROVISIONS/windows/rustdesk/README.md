@@ -14,3 +14,6 @@ key=YOUR_PUBLIC_KEY
 ```
 
 Do **not** commit secrets to the repository—keep `server.conf` on the provisioning media only.
+
+
+See [../../docs/rustdesk-self-hosted.md](../../docs/rustdesk-self-hosted.md) for generating server keys, exporting the latest `server.conf`, and rotating credentials before imaging new machines.
