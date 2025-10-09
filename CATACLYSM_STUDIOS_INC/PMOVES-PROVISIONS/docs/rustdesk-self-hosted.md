@@ -65,7 +65,7 @@ sudo install -m 0755 rustdesk-server/hbbr /opt/rustdesk-server/
 
 ## Running with Docker Compose
 
-RustDesk publishes `docker-compose.yml` snippets, but the minimal Compose stack below is tailored for this bundle. Drop it in `/opt/rustdesk-server/docker-compose.yml`:
+RustDesk publishes `docker-compose.yml` snippets, but the minimal Compose stack below is tailored for this bundle. Drop it in `/opt/rustdesk-server/docker-compose.yml`, replacing `rustdesk-relay.example.com` with the DNS name or public IP address your clients use to reach the relay:
 
 ```yaml
 version: "3.9"
@@ -73,7 +73,7 @@ services:
   hbbs:
     image: rustdesk/rustdesk-server:latest
     container_name: hbbs
-    command: hbbs -r 0.0.0.0
+    command: hbbs -r rustdesk-relay.example.com
     restart: unless-stopped
     volumes:
       - ./data:/data
@@ -86,7 +86,7 @@ services:
   hbbr:
     image: rustdesk/rustdesk-server:latest
     container_name: hbbr
-    command: hbbr -r 0.0.0.0
+    command: hbbr -r rustdesk-relay.example.com
     restart: unless-stopped
     volumes:
       - ./data:/data
@@ -130,7 +130,7 @@ If you prefer native services:
    sudo install -m 0755 /opt/rustdesk-server/hbbr /usr/local/bin/hbbr
    ```
 
-2. Create `/etc/systemd/system/hbbs.service`:
+2. Create `/etc/systemd/system/hbbs.service` (swap in the same relay hostname or IP used above):
 
    ```ini
    [Unit]
@@ -141,7 +141,7 @@ If you prefer native services:
    User=rustdesk
    Group=rustdesk
    WorkingDirectory=/var/lib/rustdesk
-   ExecStart=/usr/local/bin/hbbs -r 0.0.0.0
+   ExecStart=/usr/local/bin/hbbs -r rustdesk-relay.example.com
    Restart=on-failure
    RestartSec=5s
 
@@ -160,7 +160,7 @@ If you prefer native services:
    User=rustdesk
    Group=rustdesk
    WorkingDirectory=/var/lib/rustdesk
-   ExecStart=/usr/local/bin/hbbr -r 0.0.0.0
+   ExecStart=/usr/local/bin/hbbr -r rustdesk-relay.example.com
    Restart=on-failure
    RestartSec=5s
 
