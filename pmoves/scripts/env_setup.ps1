@@ -1,6 +1,3 @@
-param()
-Write-Host "PMOVES .env Setup (initializing)"
-
 # PMOVES Interactive .env Setup (PowerShell 7+)
 # See usage by running: pwsh -File scripts/env_setup.ps1 -?
 
@@ -15,6 +12,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+Write-Host "PMOVES .env Setup (initializing)"
 
 function Read-DotenvKeys {
   param([string]$Path)

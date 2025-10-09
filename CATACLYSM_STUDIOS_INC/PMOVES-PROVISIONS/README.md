@@ -23,6 +23,38 @@ This bundle lets you mass-deploy your homelab and workstations **in parallel** w
 - Replace placeholders like `YOUR_TUNNEL_TOKEN_HERE` and fill `tailscale/tailscale_up.sh` with your Tailnet preferences.
 - For NVIDIA NGC, run `jetson/ngc_login.sh` (or do `docker login nvcr.io`) with your API key.
 
+## RustDesk Relay Deployment
+
+Two automation paths now exist for standing up a self-hosted RustDesk rendezvous (`hbbs`) and relay (`hbbr`):
+
+### Managed services (Pop!_OS/Ubuntu + Proxmox hosts)
+- `linux/scripts/pop-postinstall.sh` and `proxmox/pve9_postinstall.sh` install Docker (if missing), pull `rustdesk/rustdesk-server`, and register `rustdesk-hbbs.service` + `rustdesk-hbbr.service` with `systemd`.
+- Runtime configuration lives in `/etc/default/rustdesk-server`. Adjust `HBBS_ARGS` / `HBBR_ARGS` to pass flags such as `--relay my.public.hostname` or `--key /root/id_ed25519`, and edit the `RUSTDESK_PORT_*` values if you need to remap ports.
+- Persistent data and generated keys default to `${RUSTDESK_DATA_DIR:-/var/lib/rustdesk}`. The first boot writes `hbbs/id_ed25519` (private) and `hbbs/id_ed25519.pub` (public). Distribute the public key to clients so they trust your relay.
+- After provisioning, confirm status with `sudo systemctl status rustdesk-hbbs` (or `hbbr`) and tail logs via `sudo journalctl -u rustdesk-hbbs -f` during the first connection tests.
+
+### Docker Compose (stand-alone relay VM/container host)
+1. Copy `docker-stacks/rustdesk.yml` to the machine that will host RustDesk and `cd` into the directory.
+2. (Optional) Create a `.env` file beside the compose file to set overrides:
+   ```env
+   # Example overrides for docker-stacks/rustdesk.yml
+   TZ=America/New_York
+   RUSTDESK_SERVER_IMAGE=rustdesk/rustdesk-server:latest
+   RUSTDESK_DATA_ROOT=/srv/rustdesk
+   HBBS_ARGS=--relay relay.example.com
+   HBBR_ARGS=--relay relay.example.com
+   RUSTDESK_PORT_HBBS_TCP=21115
+   RUSTDESK_PORT_HBBS_RELAY_TCP=21116
+   RUSTDESK_PORT_HBBS_RELAY_UDP=21116
+   RUSTDESK_PORT_HBBS_API=21118
+   RUSTDESK_PORT_HBBR_TCP=21117
+   RUSTDESK_PORT_HBBR_REVERSE=21119
+   ```
+3. Launch the pair with `docker compose -f docker-stacks/rustdesk.yml up -d`. The stack exposes the upstream default ports (21115–21119 TCP plus 21116/UDP) and stores keys under `${RUSTDESK_DATA_ROOT:-./data/rustdesk}`.
+4. Grab the generated public key (`hbbs/id_ed25519.pub`) and distribute it to workstations via the provisioning scripts or other secure channels.
+
+The same `.env` variables are respected by both the compose file and the systemd helper (`RUSTDESK_SERVER_IMAGE` and `RUSTDESK_DATA_DIR`) so you can keep configuration consistent across environments.
+
 ## Notes
 - Ventoy mapping lives in `ventoy/ventoy.json`—edit the `"image"` paths to match your ISO filenames.
 - If Windows doesn't auto-run the post-install script, open the USB and run `windows/win-postinstall.ps1` as admin.
@@ -82,16 +114,35 @@ This bundle lets you mass-deploy your homelab and workstations **in parallel** w
 Run `linux/scripts/pop-postinstall.sh` on a fresh Pop!_OS/Ubuntu desktop to provision a ready-to-develop workstation:
 
 1. **Prepare the bundle**: Copy this provisioning folder to your media (Ventoy USB, external disk, etc.). Drop a Tailnet auth key in `tailscale/tailscale_authkey.txt` (first line only) so the helper can run `tailscale up` without prompts.
-2. **Execute the script**: From the copied bundle, run `sudo bash linux/scripts/pop-postinstall.sh`. The script:
+2. **Execute the script**: From the copied bundle, run `sudo bash linux/scripts/pop-postinstall.sh` (defaults to `--mode full`). The script:
    - Upgrades the OS, installs Docker + NVIDIA container toolkit, and adds RustDesk via the upstream apt repository.
    - Installs Python tooling (`python3`, `pip`, `venv`) required for the PMOVES stack.
    - Sources `tailscale/tailscale_up.sh`, using the colocated auth key (or `$TAILSCALE_AUTHKEY`) to join the Tailnet non-interactively.
    - Clones or refreshes the `PMOVES.AI` repo into `/opt/pmoves` (override with `PMOVES_INSTALL_DIR=/some/path` or change the repo URL via `PMOVES_REPO_URL=`).
    - Copies `.env` templates (`.env.example`, `.env.local.example`, `.env.supa.*.example`) into live `.env` files if they do not exist yet.
+   - Deploys the RustDesk relay/ID pair as `systemd` units (`rustdesk-hbbs.service`, `rustdesk-hbbr.service`) backed by Docker. Edit `/etc/default/rustdesk-server` to override ports or append `HBBS_ARGS`/`HBBR_ARGS` flags (for example, `--relay my.public.hostname`).
+   - Persists RustDesk keys under `${RUSTDESK_DATA_DIR:-/var/lib/rustdesk}/hbbs`; copy `id_ed25519.pub` to clients or reverse proxies that need to trust the relay.
    - Runs `pmoves/scripts/install_all_requirements.sh` so every service dependency is installed on first boot.
    - Symlinks the `docker-stacks/` bundle into the install directory for quick compose access.
 3. **Post-install secrets**: Replace the placeholder values in `/opt/pmoves/pmoves/.env`, `.env.local`, and Supabase `.env` files with real credentials/API keys. The defaults mirror the compose stack but should be rotated for production use.
 4. **RustDesk pairing**: Once the script completes, RustDesk is installed and ready to be paired using your preferred relay/ID server.
+
+
+Use the `--mode` flag (or export `MODE=<standalone|web|full>` before running the script) to tailor what gets installed. The list above describes the default `full` mode.
+
+### Mode matrix
+
+| Platform | Mode | Command | Key installs/actions | Tailnet join behavior |
+| --- | --- | --- | --- | --- |
+| Pop!_OS / Ubuntu | `standalone` | `MODE=standalone sudo bash linux/scripts/pop-postinstall.sh` | System updates, Git/cURL basics, Tailscale CLI, RustDesk desktop client | Sources `tailscale/tailscale_up.sh` when present (or logs instructions) |
+| Pop!_OS / Ubuntu | `web` | `sudo bash linux/scripts/pop-postinstall.sh --mode web` | Adds Docker Engine + NVIDIA toolkit, clones PMOVES repo, seeds `.env` templates, links `docker-stacks/` (no Python dependency install) | Same helper-driven `tailscale up` flow |
+| Pop!_OS / Ubuntu | `full` | `sudo bash linux/scripts/pop-postinstall.sh --mode full` | Everything in web mode plus RustDesk install and `pmoves/scripts/install_all_requirements.sh` for Python services | Same helper-driven `tailscale up` flow |
+| Windows 11 | `standalone` | `powershell -ExecutionPolicy Bypass -File windows\win-postinstall.ps1 -Mode standalone` | Winget installs Tailscale + RustDesk, explorer defaults | Runs `tailscale/tailscale_up.ps1` when available or uses the bundled auth key fallback |
+| Windows 11 | `web` | `powershell -ExecutionPolicy Bypass -File windows\win-postinstall.ps1 -Mode web` | Installs VS Code, Git, Node.js LTS, Docker Desktop, Tailscale, RustDesk; clones PMOVES into `%USERPROFILE%\workspace\PMOVES.AI` and seeds `.env` files | Same helper script / auth key flow |
+| Windows 11 | `full` | `powershell -ExecutionPolicy Bypass -File windows\win-postinstall.ps1 -Mode full` | Web mode installs plus Python 3.12, prompts for workspace, runs `pmoves/scripts/install_all_requirements.ps1`, optional WSL Ubuntu enablement | Same helper script / auth key flow |
+| Jetson (JetPack) | `standalone` | `MODE=standalone sudo bash jetson/jetson-postinstall.sh` | System updates, Git/cURL basics, Tailscale CLI, RustDesk | Uses `tailscale/tailscale_up.sh` helper when present |
+| Jetson (JetPack) | `web` | `sudo bash jetson/jetson-postinstall.sh --mode web` | Installs Docker + NVIDIA runtime config, clones PMOVES repo, seeds `.env`, links `docker-stacks/` | Same helper-driven `tailscale up` flow |
+| Jetson (JetPack) | `full` | `sudo bash jetson/jetson-postinstall.sh --mode full` | Web mode tasks plus RustDesk install, Python dependency bootstrap, and `jetson-containers` checkout/install | Same helper-driven `tailscale up` flow |
 
 
 ## Secrets
@@ -103,6 +154,7 @@ Run `linux/scripts/pop-postinstall.sh` on a fresh Pop!_OS/Ubuntu desktop to prov
   - Export `server.conf` from an existing RustDesk install **or** craft one manually, then place it beside this bundle at `windows/rustdesk/server.conf`.
   - During post-install the script copies it into `%AppData%\RustDesk\config\RustDesk2\RustDesk\config\server.conf` for the signed-in user.
   - Remove `server.conf` from the USB after imaging so the secrets do not persist on portable media.
+  - See [docs/rustdesk-self-hosted.md](docs/rustdesk-self-hosted.md) for self-hosted server setup, key rotation, and exporting `server.conf` for provisioning.
 - For unattended runs, leave the auth key file on the Ventoy USB only as long as needed. The Ubuntu autoinstall reads the first line, exports it for the one-time `tailscale up`, and does not persist the secret on disk. Remove the key from the USB (or rotate it) once provisioning is complete.
 
 - For NVIDIA NGC, run `jetson/ngc_login.sh` (or do `docker login nvcr.io`) with your API key.
