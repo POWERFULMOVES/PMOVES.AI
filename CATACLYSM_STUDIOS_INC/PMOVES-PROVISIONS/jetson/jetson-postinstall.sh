@@ -2,22 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-BUNDLE_ROOT=$(cd "${SCRIPT_DIR}" && pwd)
-TAILSCALE_HELPER="${BUNDLE_ROOT}/../tailscale/tailscale_up.sh"
-TAILSCALE_AUTH_FILE="${BUNDLE_ROOT}/../tailscale/tailscale_authkey.txt"
-
-log() {
-  echo "[jetson-postinstall] $*"
-}
-
-
-
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BUNDLE_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 REPO_URL=${PMOVES_REPO_URL:-https://github.com/CataclysmStudiosInc/PMOVES.AI.git}
 TARGET_DIR=${PMOVES_INSTALL_DIR:-/opt/pmoves}
 PMOVES_ROOT="${TARGET_DIR}/pmoves"
 TAILSCALE_HELPER="${BUNDLE_ROOT}/tailscale/tailscale_up.sh"
+TAILSCALE_AUTH_FILE="${BUNDLE_ROOT}/tailscale/tailscale_authkey.txt"
 JETSON_CONTAINERS_DIR=${JETSON_CONTAINERS_DIR:-/opt/jetson-containers}
 
 log() {
@@ -101,23 +91,6 @@ if [[ -f "${TAILSCALE_HELPER}" ]]; then
   else
     log "Tailnet helper found at ${TAILSCALE_HELPER} but is not executable; attempting to source anyway."
     join_tailnet "${TAILSCALE_HELPER}" "${TAILSCALE_AUTH_FILE}"
-  fi
-else
-  log "Tailnet helper not found at ${TAILSCALE_HELPER}; skipping automatic tailscale up."
-fi
-
-# jetson-containers install
-git clone https://github.com/dusty-nv/jetson-containers.git /opt/jetson-containers || true
-bash /opt/jetson-containers/install.sh || true
-
-log "Installing Tailscale and attempting Tailnet join."
-curl -fsSL https://tailscale.com/install.sh | sh
-systemctl enable --now tailscaled
-if [[ -x "${TAILSCALE_HELPER}" ]]; then
-  if source "${TAILSCALE_HELPER}"; then
-    log "Tailnet helper ${TAILSCALE_HELPER} completed successfully."
-  else
-    log "Tailnet helper ${TAILSCALE_HELPER} reported an error."
   fi
 else
   log "Tailnet helper not found at ${TAILSCALE_HELPER}; skipping automatic tailscale up."
