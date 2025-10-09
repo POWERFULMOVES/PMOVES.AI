@@ -32,9 +32,10 @@ Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Mak
 2. Import the core flows:
    - `pmoves/n8n/flows/approval_poller.json`
    - `pmoves/n8n/flows/echo_publisher.json`
-3. Import the audio extensions:
-   - `pmoves/n8n/flows/vibevoice_audio_ingest.json`
-   - `pmoves/n8n/flows/vibevoice_discord_preview.json`
+3. (Optional) Audio extensions
+   - The VibeVoice ingest/preview exports are still distributed via the operator bundle and are not yet checked into this repo.
+   - If you have `vibevoice_audio_ingest.json` / `vibevoice_discord_preview.json` from that bundle, import them via the same dialog.
+   - Otherwise skip this step for now—the remainder of the guide calls out the wiring so you can hook them up once the exports land.
 4. Keep everything inactive until env is confirmed.
 
 ## Validate Env Bindings
@@ -61,7 +62,9 @@ Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Mak
    - `make n8n-webhook-demo`
 
 ## VibeVoice / RVC Audio Capture
-These flows extend the core approval automations so we can surface RVC voice outputs produced by the VibeVoice toolchain.
+These flows extend the core approval automations so we can surface RVC voice outputs produced by the VibeVoice toolchain. The
+exports live in the operator bundle referenced in `pmoves/docs/PMOVES ART STUFF/README.md`; confirm you have the latest bundle
+before attempting to import them into n8n.
 
 ### Flow Overview
 - **`vibevoice_audio_ingest`** — Watches the Supabase `studio_board` table for rows containing `voice_job_id` metadata published by VibeVoice exports. The flow retrieves the render payload from Supabase storage, runs an `Execute Command` node with `ffmpeg` to normalize the audio (`.wav` → `.mp3`), and attaches duration/format metadata back onto the row so downstream services can consume it.
@@ -79,9 +82,33 @@ These flows extend the core approval automations so we can surface RVC voice out
 - If the binary is missing, install it (`apk add ffmpeg` for Alpine-based images) and set `N8N_FFMPEG_PATH=/usr/bin/ffmpeg`.
 
 ### Supabase Seeding Helpers
-- `make seed-audio-preview TITLE="Demo voice" AUDIO_URL="s3://outputs/demo/voice.wav" JOB_ID="vv-job-123"`
-  - Seeds `studio_board` with the audio metadata expected by the ingest flow.
-- `make seed-audio-preview-ps ...` (PowerShell variant) mirrors the same payload for Windows operators.
+Until dedicated Make helpers land, seed rows manually so the ingest flow has data to process:
+
+1. Open Supabase Studio → Table Editor → `studio_board`.
+2. Insert a new row (or duplicate an approved one) with the usual fields (`title`, `content_url`, `namespace`, `status='approved'`).
+3. In the `meta` JSON column add at least `voice_job_id` and `voice_storage_path` so the ingest flow can pull the render from
+   storage. Optionally include other diagnostics such as `voice_preview_seconds`.
+
+If you prefer PostgREST, run the existing seeding script and patch the row:
+
+```bash
+./pmoves/tools/seed_studio_board.sh "Demo voice" "s3://outputs/demo/voice.wav" pmoves
+
+curl -X PATCH "${SUPABASE_REST_URL:-http://localhost:54321/rest/v1}/studio_board?id=eq.<row_id>" \
+  -H "content-type: application/json" \
+  -H "prefer: return=representation" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -d '{
+        "meta": {
+          "voice_job_id": "vv-job-123",
+          "voice_storage_path": "audio/vv-job-123/raw.wav"
+        }
+      }'
+```
+
+Replace `<row_id>` with the identifier returned by the seeding script (or locate it in Supabase Studio) and adjust the metadata
+to match your storage layout.
 
 ### Discord Validation
 - Trigger `vibevoice_discord_preview` manually in n8n once a seeded row exists.
