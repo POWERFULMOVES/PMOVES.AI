@@ -19,6 +19,15 @@
 - `make ps`
   - Shortcut for `docker compose -p pmoves ps` to inspect service status.
 
+### New convenience targets
+- `make update` — pull repo + images, reconcile containers.
+- `make backup` — best-effort dumps (Postgres, Qdrant snapshot, MinIO mirror, Meili dump) into `backups/<timestamp>/`.
+- `make restore` — see **LOCAL_DEV.md** for step-by-step restore instructions.
+- `make up-gpu` — start with `docker-compose.gpu.yml` overrides (GPU/VAAPI). See **LOCAL_DEV.md** for driver/toolkit notes.
+
+### External-mode
+Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local infra services and point the stack at your existing instances.
+
 ### Optional stacks
 
 - `make up-workers`

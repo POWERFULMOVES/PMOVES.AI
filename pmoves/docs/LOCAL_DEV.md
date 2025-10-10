@@ -33,6 +33,37 @@ Manual notes: Create `.env` (or start with `.env.example`) and include keys from
   incoming media bucket when unset. Use `MEDIA_VIDEO_FRAMES_PREFIX` to customize the object key prefix (defaults to
   `media-video/frames`).
 
+## External-Mode (reuse existing infra)
+If you already run Neo4j, Meilisearch, Qdrant, or Supabase elsewhere, you can prevent PMOVES from starting local containers:
+
+1. Set flags in `.env.local`:
+   ```
+   EXTERNAL_NEO4J=true
+   EXTERNAL_MEILI=true
+   EXTERNAL_QDRANT=true
+   EXTERNAL_SUPABASE=true
+   ```
+2. Ensure the corresponding URLs/keys in `.env.local` point at your instances.
+3. Run `make up` (Compose profiles skip local services automatically).
+
+## GPU Enablement
+For media/AI components you can enable GPU or VAAPI:
+- Install NVIDIA Container Toolkit (or expose `/dev/dri` for Intel/VAAPI).
+- Start with: `make up-gpu`
+- The overrides in `docker-compose.gpu.yml` add device reservations to `media-video` and `jellyfin-bridge`.
+Notes:
+- Verify drivers on the host (`nvidia-smi` or `/dev/dri` presence).
+- Service logs will indicate whether acceleration was detected.
+
+## Backups & Restore
+- **Backup:** `make backup` → `backups/<timestamp>/`
+  - Postgres SQL dump, Qdrant snapshot request JSON, MinIO mirror (requires `mc` alias inside minio), Meili dump handle.
+- **Restore (outline):**
+  1. `docker compose down`
+  2. Restore Postgres via `psql < postgres.sql`
+  3. Restore Qdrant using the snapshot (import via API or replace snapshot dir)
+  4. Mirror MinIO folder back; re-seed Meili from dump file via Meili admin.
+
 Defaults baked into compose:
 - `MINIO_ENDPOINT` defaults to `minio:9000` for in-network access.
 - `FRAME_BUCKET` (optional) directs media-video frame uploads to a specific bucket; falls back to the source bucket when unset.

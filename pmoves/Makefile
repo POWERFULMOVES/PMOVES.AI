@@ -1,3 +1,63 @@
+# PMOVES top-level Makefile
+
+# -------- External-mode → Compose profiles ----------
+# If EXTERNAL_* is true, we skip the corresponding local service profile.
+# Profiles are defined on services in docker-compose.yml.
+compose_profiles = data,workers,gateway
+ifeq ($(EXTERNAL_NEO4J),true)
+  neo4j_profile :=
+else
+  neo4j_profile := ,neo4j-local
+endif
+ifeq ($(EXTERNAL_MEILI),true)
+  meili_profile :=
+else
+  meili_profile := ,meili-local
+endif
+ifeq ($(EXTERNAL_QDRANT),true)
+  qdrant_profile :=
+else
+  qdrant_profile := ,qdrant-local
+endif
+ifeq ($(EXTERNAL_SUPABASE),true)
+  supa_profile :=
+else
+  supa_profile := ,supabase-local
+endif
+COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_profile)$(supa_profile)
+export COMPOSE_PROFILES
+
+# -------- Updates ----------
+.PHONY: update
+update:  ## Pull repo + images, recreate stack
+	@git pull --rebase
+	@docker compose pull --quiet
+	@docker compose up -d
+	@echo "✔ Updated & reconciled containers."
+
+# -------- Backups / Restore helpers ----------
+.PHONY: backup restore
+BACKUP_DIR ?= backups/$$(date +%Y%m%d_%H%M%S)
+backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO bucket, Meili dump (best-effort)
+	@mkdir -p "$(BACKUP_DIR)"
+	@echo "→ Backing up Postgres…"
+	-@docker compose exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
+	@echo "→ Snapshotting Qdrant…"
+	-@curl -fsS "http://localhost:6333/collections/$$QDRANT_COLLECTION/snapshots" -X POST -H 'content-type: application/json' -d '{}' > "$(BACKUP_DIR)/qdrant_snapshot.json"
+	@echo "→ Mirroring MinIO bucket '$(MINIO_BUCKET)' (requires mc alias 'local')…"
+	-@docker compose exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
+	@echo "→ Dumping Meilisearch…"
+	-@curl -fsS "http://localhost:7700/dumps" -X POST -H "X-Meili-API-Key: $$MEILI_MASTER_KEY" -d '{}' > "$(BACKUP_DIR)/meili_dump.json"
+	@echo "✔ Backup written to: $(BACKUP_DIR)"
+
+restore: ## See docs/LOCAL_DEV.md for restore steps
+	@echo "See docs/LOCAL_DEV.md (Restore) for step-by-step instructions."
+
+# -------- GPU profile ----------
+.PHONY: up-gpu
+up-gpu: ## Start with optional GPU accelerations where supported
+	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
+	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 
@@ -12,23 +72,38 @@ PROJECT ?= pmoves
 SUPA_PROVIDER ?= cli
 
 # Data services differ by provider: with CLI we don't run Postgres/PostgREST here
-ifeq ($(SUPA_PROVIDER),cli)
-DATA_SERVICES := qdrant neo4j minio meilisearch presign
+DATA_SERVICES := minio presign
+
+ifeq ($(EXTERNAL_QDRANT),true)
 else
-DATA_SERVICES := qdrant neo4j minio meilisearch postgres postgrest presign
+DATA_SERVICES += qdrant
+endif
+
+ifeq ($(EXTERNAL_NEO4J),true)
+else
+DATA_SERVICES += neo4j
+endif
+
+ifeq ($(EXTERNAL_MEILI),true)
+else
+DATA_SERVICES += meilisearch
+endif
+
+ifeq ($(SUPA_PROVIDER),cli)
+else
+ifeq ($(EXTERNAL_SUPABASE),true)
+else
+DATA_SERVICES += postgres postgrest
+endif
 endif
 up:
-
-	docker compose -p $(PROJECT) --profile data up -d $(DATA_SERVICES)
+	@if [ -n "$(strip $(DATA_SERVICES))" ]; then docker compose -p $(PROJECT) --profile data up -d $(DATA_SERVICES); fi
 	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
 	$(MAKE) up-yt
 	$(MAKE) up-jellyfin
-ifneq ($(SUPA_PROVIDER),cli)
-	$(MAKE) supabase-up
-endif
-
-	docker compose --profile data up -d qdrant neo4j minio meilisearch postgres postgrest presign
-        docker compose --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest
+	@if [ "$(SUPA_PROVIDER)" != "cli" ] && [ "$(EXTERNAL_SUPABASE)" != "true" ]; then $(MAKE) supabase-up; fi
+	@if [ -n "$(strip $(DATA_SERVICES))" ]; then docker compose --profile data up -d $(DATA_SERVICES); fi
+	docker compose --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest
 
 
 down:

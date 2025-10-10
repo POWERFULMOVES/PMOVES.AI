@@ -40,6 +40,10 @@ Useful health checks:
 - Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
 - Discord Publisher: `curl http://localhost:8092/healthz`
 
+### Optional GPU smoke
+- Start with `make up-gpu`, then re-run health checks.
+- Media/video services should log detection of GPU/VAAPI where available.
+
 ### Discord Publisher (content.published.v1)
 
 Verify Discord wiring by emitting a `content.published.v1` event after the stack is up:
