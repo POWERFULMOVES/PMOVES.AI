@@ -4,12 +4,21 @@ import json
 import logging
 import os
 import re
+import sys
 from collections import Counter
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 import httpx
 from fastapi import Body, FastAPI, HTTPException
 from nats.aio.client import Client as NATS
+
+try:
+    _services_root = Path(__file__).resolve().parents[2]
+    if str(_services_root) not in sys.path:
+        sys.path.insert(0, str(_services_root))
+except Exception:
+    pass
 
 try:  # pragma: no cover - optional Supabase helper
     from services.common import supabase as supabase_common
