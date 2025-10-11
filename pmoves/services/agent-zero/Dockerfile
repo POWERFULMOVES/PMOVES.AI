@@ -28,7 +28,5 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY runtime ${AGENT_ZERO_HOME}/runtime
 
 # Copy service implementation
-COPY . .
-
-EXPOSE 8080
-CMD ["python", "main.py"]
+COPY services /app/services
+CMD ["python", "services/agent-zero/main.py"]
