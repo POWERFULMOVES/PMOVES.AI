@@ -122,7 +122,9 @@ class ControllerSettings:
     nats_url: str = os.environ.get("NATS_URL", "nats://nats:4222")
     stream_name: str = os.environ.get("AGENTZERO_STREAM", "AGENTZERO")
     durable_prefix: str = os.environ.get("AGENTZERO_DURABLE_PREFIX", "agentzero")
-    queue_name: Optional[str] = os.environ.get("AGENTZERO_QUEUE")
+    queue_name: Optional[str] = os.environ.get(
+        "AGENTZERO_QUEUE", "agentzero-workers"
+    )
     use_jetstream: bool = os.environ.get("AGENTZERO_JETSTREAM", "true").lower() in {
         "1",
         "true",
