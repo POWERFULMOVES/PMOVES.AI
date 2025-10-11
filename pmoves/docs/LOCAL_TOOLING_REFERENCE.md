@@ -22,6 +22,7 @@ This guide aggregates the entry points that keep local environments consistent a
   - `make supa-init` → initializes the Supabase CLI project.
   - `make supa-start` / `make supa-stop` / `make supa-status` → lifecycle management for the CLI stack.
   - `make supa-use-local` → copies `.env.supa.local.example` into `.env.local` so services reference the CLI hostnames/ports.
+  - TIP: to share networking with the compose services, run `supabase start --network-id pmoves-net` from `pmoves/`. Afterwards, update `.env.local` with the CLI-issued keys (`supabase status -o json`) and reapply `supabase/initdb/*.sql` so PostgREST, GoTrue, and Realtime expose the expected tables.
 - Compose alternative:
   - `SUPA_PROVIDER=compose make up` → start core stack with compose Postgres/PostgREST.
   - `make supabase-up` / `make supabase-stop` / `make supabase-clean` → manage GoTrue, Realtime, Storage, Studio sidecars.

@@ -51,7 +51,10 @@ SUPABASE_SERVICE_KEY = (
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
 SUPABASE_REALTIME_URL = os.environ.get("SUPABASE_REALTIME_URL") or os.environ.get("REALTIME_URL")
 SUPABASE_REALTIME_KEY = (
-    SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY or os.environ.get("REALTIME_ANON_KEY")
+    os.environ.get("SUPABASE_REALTIME_KEY")
+    or os.environ.get("REALTIME_ANON_KEY")
+    or SUPABASE_SERVICE_KEY
+    or SUPABASE_ANON_KEY
 )
 GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
 GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
@@ -338,11 +341,22 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
 
     while True:
         full_url = ws_url
+        if full_url.rstrip('/').endswith('/realtime/v1'):
+            full_url = full_url.rstrip('/') + '/websocket'
         if "apikey=" not in full_url:
             sep = "&" if "?" in full_url else "?"
-            full_url = f"{full_url}{sep}apikey={api_key}&vsn=2.0.0"
+            full_url = f"{full_url}{sep}apikey={api_key}&vsn=1.0.0"
+        headers = {}
+        if SUPABASE_REALTIME_KEY:
+            headers["Authorization"] = f"Bearer {SUPABASE_REALTIME_KEY}"
         try:
-            async with websockets.connect(full_url, ping_interval=20, ping_timeout=20, max_queue=None) as ws:
+            async with websockets.connect(
+                full_url,
+                ping_interval=20,
+                ping_timeout=20,
+                max_queue=None,
+                extra_headers=headers or None,
+            ) as ws:
                 join_payload = {
                     "topic": "realtime:geometry.cgp.v1",
                     "event": "phx_join",
