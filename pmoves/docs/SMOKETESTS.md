@@ -94,18 +94,23 @@ Choose one:
 - macOS/Linux: `make smoke` (requires `jq`)
 - Windows (no `jq` required): `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1`
 
-What the smoke covers:
+What the smoke covers now (12 checks):
 1) Qdrant ready (6333)
-2) Meilisearch health (7700, warned if missing)
-3) Neo4j UI reachable (7474, warned if not)
+2) Meilisearch health (7700, warning only)
+3) Neo4j UI reachable (7474, warning only)
 4) Presign health (8088)
 5) Render Webhook health (8085)
 6) PostgREST reachable (3000)
 7) Insert a demo row via Render Webhook
 8) Verify a `studio_board` row exists via PostgREST
 9) Run a Hi-RAG v2 query (8087)
+10) Agent Zero `/healthz` reports the JetStream controller running
+11) POST a generated `geometry.cgp.v1` packet to `/geometry/event`
+12) Confirm the ShapeStore locator + calibration report via `/shape/point/{id}/jump` and `/geometry/calibration/report`
 
-## 6) Geometry Bus (CHIT) — End-to-end
+## 6) Geometry Bus (CHIT) — Extended Deep Dive
+
+The smoke harness already exercises the ingest/jump/calibration flow with a synthetic CGP. Use the following manual walkthrough when you want to debug real packets, sign/encrypt payloads, or explore the decoders:
 
 1. Create minimal CGP payload `cgp.json`:
    ```json
