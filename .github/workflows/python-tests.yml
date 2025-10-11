@@ -47,6 +47,9 @@ jobs:
                           continue
                       packages.add(line)
 
+          # Re-add skipped packages without version pins so we still install them.
+          packages.update(skip)
+
           subprocess.check_call([sys.executable, "-m", "pip", "install", *sorted(packages)])
           PY
       - name: Run tests (publisher + yt + discord)
