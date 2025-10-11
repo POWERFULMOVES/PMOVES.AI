@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -22,6 +22,8 @@ RUN apt-get update \
     && corepack prepare yarn@stable --activate \
     && corepack prepare pnpm@latest --activate \
     && rm -rf /var/lib/apt/lists/*
+
+ARG ARCHON_GIT_REF=main
 
 # Default configuration values (override at runtime)
 ARG SUPABASE_URL_DEFAULT=https://your-project.supabase.co
@@ -52,9 +54,13 @@ ENV SUPABASE_URL=${SUPABASE_URL_DEFAULT} \
     MCP_CREDENTIALS_PATH=${MCP_CREDENTIALS_PATH_DEFAULT} \
     ARCHON_FORM=POWERFULMOVES \
     AGENT_FORMS_DIR=/app/configs/agents/forms \
-    ARCHON_UI_STATIC_DIR=/app/static/archon-ui
+    ARCHON_UI_STATIC_DIR=/app/static/archon-ui \
+    ARCHON_VENDOR_ROOT=/app/vendor/archon
 
-COPY requirements.txt ./
+# Pull the upstream Archon sources (vanilla build) to vendor path
+RUN git clone --depth 1 --branch "${ARCHON_GIT_REF}" https://github.com/coleam00/Archon.git /app/vendor/archon
+
+COPY services/archon/requirements.txt ./requirements.txt
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
@@ -79,4 +85,4 @@ RUN if [ -d "$ARCHON_UI_DIR" ]; then \
     fi
 
 EXPOSE 8090
-CMD ["python", "services/archon/main.py"]
+CMD ["python", "-m", "services.archon.main"]

@@ -216,22 +216,28 @@ LOGGER = logging.getLogger("pmoves.archon")
 
 
 def _resolve_vendor_paths() -> tuple[Path, Path]:
-    """Return the Archon vendor root and python ``src`` directory.
+    """Return the Archon vendor root and python ``src`` directory."""
 
-    Raises:
-        RuntimeError: If the expected vendor checkout is missing.
-    """
+    env_root = os.environ.get("ARCHON_VENDOR_ROOT")
+    if env_root:
+        vendor_root = Path(env_root).resolve()
+    else:
+        service_dir = Path(__file__).resolve().parent
+        try:
+            repo_root = service_dir.parents[3]
+        except IndexError as exc:  # pragma: no cover - build-time guard
+            raise RuntimeError(
+                "Unable to locate Archon vendor checkout. Set ARCHON_VENDOR_ROOT "
+                "to the upstream Archon repository path."
+            ) from exc
+        vendor_root = (repo_root / "vendor" / "archon").resolve()
 
-    service_dir = Path(__file__).resolve().parent
-    repo_root = service_dir.parents[3]
-    vendor_root = (repo_root / "vendor" / "archon").resolve()
     python_src = vendor_root / "python" / "src"
 
     if not python_src.exists():  # pragma: no cover - validation guard
         raise RuntimeError(
             "Archon vendor sources were not found. Expected to see "
-            f"{python_src}. Make sure the upstream Archon repository has "
-            "been cloned into vendor/archon."
+            f"{python_src}. Ensure the upstream Archon repository is available."
         )
 
     return vendor_root, python_src
@@ -517,4 +523,3 @@ if __name__ == "__main__":
         port=int(ENV_PORTS["server_port"]),
         log_level="info",
     )
-

@@ -377,6 +377,7 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
+    command: ["-js"]
     restart: unless-stopped
     ports: ["4222:4222"]
     profiles: ["agents"]
@@ -391,15 +392,19 @@ services:
     environment:
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
+      - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
+      - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80}
+      - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     depends_on: [nats]
     ports: ["8080:8080"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
-      - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/app/runtime/memory
-      - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/app/runtime/knowledge
-      - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/app/runtime/instruments
-      - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/app/logs
+      - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/a0/memory
+      - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
+      - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
+      - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     profiles: ["agents"]
     networks: [pmoves]
 
@@ -430,7 +435,9 @@ services:
     networks: [pmoves]
 
   publisher-discord:
-    build: ./services/publisher-discord
+    build:
+      context: .
+      dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     env_file: [.env, .env.local]
     environment:

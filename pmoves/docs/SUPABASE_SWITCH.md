@@ -1,5 +1,8 @@
 **Supabase: Local (CLI) vs Self‑Hosted**
 
+- **Upstream expectation**  
+  PMOVES wraps the vanilla Supabase install (the same bundle we publish for Tailscale/Rustdesk/“plain” VPS drops) so contributors can stay aligned with production. The Supabase CLI flow is the reference path because it matches what we ship when deploying the full stack on a VPS (see `pmoves/docs/coolify/pg-dump-coolify-1760101793.dmp` for the exported baseline). Docker Compose is offered as a lightweight fallback when you only need a subset of services locally.
+
 - Local parity via Supabase CLI (recommended for feature completeness)
   - Install: Windows `winget install supabase.supabase` (or `npm i -g supabase`)
   - Init once: `make supa-init`
@@ -21,12 +24,16 @@
   - Use if you don’t need every Supabase component locally
   - Start: `SUPA_PROVIDER=compose make up` then `make supabase-up`
   - Stop: `make supabase-stop` or `make down`
+  - Reset (if you had an older volume before the 2025‑10‑11 schema updates): `make supabase-clean` then rerun `make supabase-up`
 
 Environment variables to verify
 - `SUPA_REST_URL` (PostgREST)
 - `GOTRUE_SITE_URL` (Auth/GoTrue)
+- `GOTRUE_API_EXTERNAL_URL` (GoTrue external API base, defaults to `http://localhost:9999`)
 - `SUPABASE_STORAGE_URL`, `SUPABASE_PUBLIC_STORAGE_BASE`
 - `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`
+- `SUPABASE_RLIMIT_NOFILE` (Realtime ulimit override, defaults to `1048576`)
+- `SUPABASE_REALTIME_APP_NAME` (Realtime identifier, defaults to `realtime`)
 
 Makefile shortcuts
 - `up` — starts pmoves stack; in CLI mode, excludes Compose Postgres/PostgREST
@@ -39,4 +46,3 @@ Makefile shortcuts
 Notes
 - We never commit secrets. Only endpoints are checked in. Keys go into `.env.local` locally.
 - If ports collide, stop any older Supabase stacks (e.g., previous compose project names) before starting a new one.
-
