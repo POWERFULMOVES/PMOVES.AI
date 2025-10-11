@@ -58,7 +58,7 @@ COPY requirements.txt ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
-COPY . .
+COPY services /app/services
 
 # Prepare directories used at runtime
 RUN mkdir -p /app/static/archon-ui /app/config/mcp
@@ -79,4 +79,4 @@ RUN if [ -d "$ARCHON_UI_DIR" ]; then \
     fi
 
 EXPOSE 8090
-CMD ["python", "main.py"]
+CMD ["python", "services/archon/main.py"]

@@ -97,13 +97,7 @@ DATA_SERVICES += postgres postgrest
 endif
 endif
 up:
-	@if [ -n "$(strip $(DATA_SERVICES))" ]; then docker compose -p $(PROJECT) --profile data up -d $(DATA_SERVICES); fi
-	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
-	$(MAKE) up-yt
-	$(MAKE) up-jellyfin
-	@if [ "$(SUPA_PROVIDER)" != "cli" ] && [ "$(EXTERNAL_SUPABASE)" != "true" ]; then $(MAKE) supabase-up; fi
-	@if [ -n "$(strip $(DATA_SERVICES))" ]; then docker compose --profile data up -d $(DATA_SERVICES); fi
-	docker compose --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest
+	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents up -d --scale postgres=0 --scale postgrest=0
 
 
 down:
@@ -346,11 +340,11 @@ smoke-langextract:
 
 .PHONY: flight-check
 flight-check:
-	@if [ "$(OS)" = "Windows_NT" ]; then \
-		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1 ; \
-	else \
-		bash scripts/env_check.sh ; \
-	fi
+ifeq ($(OS),Windows_NT)
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1
+else
+	@bash scripts/env_check.sh
+endif
 
 .PHONY: flight-check-retro
 flight-check-retro:
@@ -450,7 +444,7 @@ mcp-archon:
 
 .PHONY: mesh-up
 mesh-up:
-	docker compose --profile agents up -d nats mesh-agent
+	docker compose --profile agents --profile data up -d nats mesh-agent
 
 .PHONY: mesh-handshake
 mesh-handshake:
