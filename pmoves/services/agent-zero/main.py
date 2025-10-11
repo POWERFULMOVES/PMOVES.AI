@@ -15,6 +15,13 @@ import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query
 from pydantic import BaseModel, Field
 
+try:
+    _services_root = Path(__file__).resolve().parents[2]
+    if str(_services_root) not in sys.path:
+        sys.path.insert(0, str(_services_root))
+except Exception:
+    pass
+
 from services.agent_zero.controller import AgentZeroController, ControllerSettings
 
 import mcp_server

@@ -12,6 +12,11 @@ services:
       - ./supabase/initdb:/docker-entrypoint-initdb.d:ro
     profiles: ["data","orchestration","supabase-local"]
     networks: [pmoves]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgrest:
     image: postgrest/postgrest:latest
@@ -378,7 +383,9 @@ services:
     networks: [pmoves]
 
   agent-zero:
-    build: ./services/agent-zero
+    build:
+      context: .
+      dockerfile: ./services/agent-zero/Dockerfile
     restart: unless-stopped
     env_file: [.env, .env.local]
     environment:
@@ -397,7 +404,9 @@ services:
     networks: [pmoves]
 
   archon:
-    build: ./services/archon
+    build:
+      context: .
+      dockerfile: ./services/archon/Dockerfile
     restart: unless-stopped
     env_file: [.env, .env.local]
     environment:

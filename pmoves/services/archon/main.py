@@ -4,13 +4,22 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import Body, Depends, FastAPI, HTTPException
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel, Field, HttpUrl
+
+try:
+    _services_root = Path(__file__).resolve().parents[2]
+    if str(_services_root) not in sys.path:
+        sys.path.insert(0, str(_services_root))
+except Exception:
+    pass
 
 from services.common.events import envelope
 from .orchestrator import ArchonOrchestrator

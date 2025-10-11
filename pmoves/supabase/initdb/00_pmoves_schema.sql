@@ -40,7 +40,7 @@ create table if not exists pmoves_core.memory (
   created_at timestamptz default now()
 );
 create index if not exists memory_agent_kind_key_idx on pmoves_core.memory(agent_id, kind, key);
-create index if not exists memory_embedding_idx on pmoves_core.memory using ivfflat (embedding);
+create index if not exists memory_embedding_idx on pmoves_core.memory using hnsw (embedding vector_l2_ops);
 
 create table if not exists pmoves_core.event_log (
   id bigserial primary key,
