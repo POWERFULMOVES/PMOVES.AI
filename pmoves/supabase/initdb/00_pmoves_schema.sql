@@ -2,6 +2,20 @@ create extension if not exists "uuid-ossp";
 create extension if not exists "pgcrypto";
 create extension if not exists "vector";
 
+create schema if not exists auth;
+create schema if not exists storage;
+create schema if not exists realtime;
+
+alter table if exists schema_migrations
+  add column if not exists inserted_at timestamp without time zone default timezone('utc', now());
+
+alter table if exists schema_migrations
+  alter column version type bigint using version::bigint;
+
+alter table if exists schema_migrations
+  alter column inserted_at type timestamp without time zone using timezone('utc', inserted_at),
+  alter column inserted_at set default timezone('utc', now());
+
 create schema if not exists pmoves_core;
 
 create table if not exists pmoves_core.agent (

@@ -215,32 +215,127 @@ import uvicorn
 LOGGER = logging.getLogger("pmoves.archon")
 
 
-def _resolve_vendor_paths() -> tuple[Path, Path]:
-    """Return the Archon vendor root and python ``src`` directory.
+def _resolve_vendor_paths() -> tuple[Path, Path, Path]:
+    """Return the Archon vendor, python root, and python ``src`` directory."""
 
-    Raises:
-        RuntimeError: If the expected vendor checkout is missing.
-    """
+    env_root = os.environ.get("ARCHON_VENDOR_ROOT")
+    if env_root:
+        vendor_root = Path(env_root).expanduser().resolve()
+    else:
+        service_dir = Path(__file__).resolve().parent
+        vendor_root = None
+        for parent in (service_dir, *service_dir.parents):
+            candidate = (parent / "vendor" / "archon").resolve()
+            if candidate.exists():
+                vendor_root = candidate
+                break
+        if vendor_root is None:  # pragma: no cover - build-time guard
+            raise RuntimeError(
+                "Unable to locate Archon vendor checkout. Set ARCHON_VENDOR_ROOT "
+                "to the upstream Archon repository path or ensure vendor/archon is present."
+            )
 
-    service_dir = Path(__file__).resolve().parent
-    repo_root = service_dir.parents[3]
-    vendor_root = (repo_root / "vendor" / "archon").resolve()
-    python_src = vendor_root / "python" / "src"
+    python_root = vendor_root / "python"
+    python_src = python_root / "src"
 
     if not python_src.exists():  # pragma: no cover - validation guard
         raise RuntimeError(
             "Archon vendor sources were not found. Expected to see "
-            f"{python_src}. Make sure the upstream Archon repository has "
-            "been cloned into vendor/archon."
+            f"{python_src}. Ensure the upstream Archon repository is available."
         )
 
-    return vendor_root, python_src
+    return vendor_root, python_root, python_src
 
 
-_, ARCHON_SRC = _resolve_vendor_paths()
+def _normalize_supabase_env() -> None:
+    """Record the base PostgREST URL for downstream patches."""
+
+    url = os.environ.get("SUPABASE_URL")
+    if url:
+        os.environ["ARCHON_SUPABASE_BASE_URL"] = url.rstrip("/")
+
+
+_normalize_supabase_env()
+
+_, ARCHON_PYTHON_ROOT, ARCHON_SRC = _resolve_vendor_paths()
+
+if str(ARCHON_PYTHON_ROOT) not in sys.path:
+    sys.path.insert(0, str(ARCHON_PYTHON_ROOT))
 
 if str(ARCHON_SRC) not in sys.path:
     sys.path.insert(0, str(ARCHON_SRC))
+
+
+def _patch_supabase_validation() -> None:
+    """Relax upstream Supabase URL checks for in-network HTTP hosts.
+
+    Archon insists on HTTPS for non-local hosts. Our compose stack exposes
+    PostgREST at `http://postgrest:3000`, which is safe on the private Docker
+    network. We patch the validator so that the hostname derived from
+    ``SUPABASE_URL`` (and any optional override via ARCHON_HTTP_ALLOW_HOSTS)
+    is treated as local.
+    """
+
+    allow_hosts = set(
+        h.strip() for h in os.environ.get("ARCHON_HTTP_ALLOW_HOSTS", "").split(",") if h.strip()
+    )
+    supabase_url = os.environ.get("SUPABASE_URL")
+    if supabase_url:
+        from urllib.parse import urlparse
+
+        host = urlparse(supabase_url).hostname
+        if host:
+            allow_hosts.add(host)
+
+    if not allow_hosts:
+        return
+
+    try:
+        from server.config import config as vendor_config  # type: ignore
+    except ImportError:
+        return
+
+    original_validate = vendor_config.validate_supabase_url
+
+    def patched_validate(url: str) -> bool:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if parsed.scheme == "http" and (parsed.hostname or "") in allow_hosts:
+            return True
+        return original_validate(url)
+
+    vendor_config.validate_supabase_url = patched_validate  # type: ignore[attr-defined]
+
+
+_patch_supabase_validation()
+
+
+def _patch_supabase_client() -> None:
+    """Ensure Supabase client uses raw PostgREST root inside compose."""
+
+    base_url = os.environ.get("ARCHON_SUPABASE_BASE_URL", "")
+    if not base_url or "supabase.co" in base_url:
+        return
+
+    try:
+        from server.services.credential_service import CredentialService  # type: ignore
+    except ImportError:
+        return
+
+    original_get_client = CredentialService._get_supabase_client  # type: ignore[attr-defined]
+
+    def wrapped(self):  # type: ignore[override]
+        client = original_get_client(self)
+        root = base_url.rstrip("/")
+        client.rest_url = root + "/rest/v1"
+        client._postgrest = None  # type: ignore[attr-defined]
+        return client
+
+    CredentialService._get_supabase_client = wrapped  # type: ignore[attr-defined]
+
+
+_patch_supabase_client()
 
 
 def _ensure_env_defaults() -> dict[str, str]:
@@ -266,7 +361,7 @@ ENV_PORTS = _ensure_env_defaults()
 def _build_pythonpath_env() -> str:
     """Return a PYTHONPATH string that ensures vendor modules are importable."""
 
-    python_paths = [str(ARCHON_SRC)]
+    python_paths = [str(ARCHON_PYTHON_ROOT), str(ARCHON_SRC)]
     existing = os.environ.get("PYTHONPATH")
     if existing:
         python_paths.append(existing)
@@ -287,6 +382,11 @@ def _import_archon_app():
 
 
 app = _import_archon_app()
+
+
+@app.get("/healthz")
+async def _pmoves_healthcheck():
+    return {"status": "ok", "service": "archon"}
 
 
 class ManagedSubprocess:
@@ -517,4 +617,3 @@ if __name__ == "__main__":
         port=int(ENV_PORTS["server_port"]),
         log_level="info",
     )
-

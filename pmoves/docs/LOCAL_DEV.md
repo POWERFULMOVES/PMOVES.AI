@@ -1,5 +1,7 @@
 # Local Development & Networking
 
+Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
+
 ## Services and Ports
 - qdrant: 6333 (internal name `qdrant`)
 - meilisearch: 7700 (internal name `meilisearch`)

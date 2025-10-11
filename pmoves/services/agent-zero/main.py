@@ -60,7 +60,7 @@ class AgentZeroRuntimeConfig:
     extra_args: List[str] = field(default_factory=list)
     api_base_url: str = field(
         default_factory=lambda: os.environ.get(
-            "AGENT_ZERO_API_BASE", "http://127.0.0.1:50001"
+            "AGENT_ZERO_API_BASE", "http://127.0.0.1:80"
         )
     )
     api_key: Optional[str] = field(
@@ -233,13 +233,21 @@ class AgentZeroClient:
         url = self._config.api_base_url.rstrip("/")
         request_path = path
         async with httpx.AsyncClient(base_url=url, timeout=timeout or 60.0) as client:
-            response = await client.request(
-                method,
-                request_path,
-                params=params,
-                json=json_body,
-                headers=self._headers,
-            )
+            try:
+                response = await client.request(
+                    method,
+                    request_path,
+                    params=params,
+                    json=json_body,
+                    headers=self._headers,
+                )
+            except httpx.HTTPError as exc:
+                message = str(exc)
+                status_code = getattr(getattr(exc, "response", None), "status_code", 503)
+                raise AgentZeroRequestError(
+                    status_code,
+                    f"Request to Agent Zero failed: {message}",
+                ) from exc
         if response.status_code >= 400:
             message = response.text
             try:
@@ -595,8 +603,11 @@ async def healthz() -> Dict[str, Any]:
         "url": service_config.nats_url,
         "connected": event_controller.is_connected,
         "controller_started": event_controller.is_started,
+        "use_jetstream": controller_settings.use_jetstream,
         "subjects": list(controller_settings.subjects),
-        "stream": controller_settings.stream_name,
+        "stream": controller_settings.stream_name
+        if controller_settings.use_jetstream
+        else None,
     }
     if event_controller.is_started:
         detail["nats"]["metrics"] = event_controller.metrics

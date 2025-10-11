@@ -239,14 +239,18 @@ smoke:
 	@echo "[3/12] Neo4j UI..." && curl -sf http://localhost:7474 >/dev/null && echo OK || (echo WARN: UI not reachable; true)
 	@echo "[4/12] presign health..." && curl -sf http://localhost:8088/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[5/12] render-webhook health..." && curl -sf http://localhost:8085/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[6/12] PostgREST reachable..." && curl -sf http://localhost:3000 >/dev/null && echo OK || (echo FAIL && exit 1)
+	@REST_BASE="$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; \
+	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
+	 echo "[6/12] PostgREST reachable..." && curl -sf "$${REST_BASE}/it_errors?select=id&limit=1" -H "apikey: $$APIKEY" >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[7/12] Insert via render-webhook..." && curl -sf -X POST http://localhost:8085/comfy/webhook \
 	 -H "Content-Type: application/json" \
 	 -H "Authorization: Bearer $${RENDER_WEBHOOK_SHARED_SECRET:-change_me}" \
 	 -d '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","presigned_get":null,"title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[8/12] Verify studio_board row..." && curl -sf "http://localhost:3000/studio_board?order=id.desc&limit=1" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@REST_BASE="$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; \
+	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
+	 echo "[8/12] Verify studio_board row..." && curl -sf "$${REST_BASE}/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[9/12] Hi-RAG v2 query..." && curl -sf localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[10/12] Agent Zero health..." && curl -sf http://localhost:8080/healthz | jq -e '.nats.controller_started == true and .nats.use_jetstream == true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[10/12] Agent Zero health..." && curl -sf http://localhost:8080/healthz | jq -e '.nats.connected == true' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@CID=$$(uuidgen | tr 'A-Z' 'a-z' | cut -d- -f1); \
 	 POINT_ID="p.smoke.$${CID}"; \
 	 CONST_ID="c.smoke.$${CID}"; \

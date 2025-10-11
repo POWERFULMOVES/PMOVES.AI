@@ -11,10 +11,10 @@ try:
     from nats.aio.msg import Msg
     from nats.js.api import (
         AckPolicy,
-        ConsumerConfig,
         DeliverPolicy,
         RetentionPolicy,
         StreamConfig,
+        ConsumerConfig,
     )
     from nats.js.errors import APIError, NotFoundError
 except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
@@ -29,9 +29,11 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
 
     class DeliverPolicy:  # type: ignore[no-redef]
         NEW = "new"
+        ALL = "all"
 
     class RetentionPolicy:  # type: ignore[no-redef]
         WORKQUEUE = "workqueue"
+        WORK_QUEUE = "workqueue"
 
     @dataclass
     class ConsumerConfig:  # type: ignore[no-redef]
@@ -40,7 +42,11 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
         ack_wait: float
         max_deliver: int
         deliver_policy: str
+        deliver_group: Optional[str] = None
+        deliver_subject: Optional[str] = None
+        filter_subject: Optional[str] = None
 
+    @dataclass
     @dataclass
     class StreamConfig:  # type: ignore[no-redef]
         name: str
@@ -87,6 +93,12 @@ except Exception:  # pragma: no cover - optional dependency for unit tests
 
 logger = logging.getLogger(__name__)
 
+WORK_QUEUE_POLICY = getattr(
+    RetentionPolicy,
+    "WORKQUEUE",
+    getattr(RetentionPolicy, "WORK_QUEUE", getattr(RetentionPolicy, "LIMITS", RetentionPolicy.INTEREST)),
+)
+
 
 class RetryableSessionError(Exception):
     """Raised when a session operation should be retried."""
@@ -110,7 +122,15 @@ class ControllerSettings:
     nats_url: str = os.environ.get("NATS_URL", "nats://nats:4222")
     stream_name: str = os.environ.get("AGENTZERO_STREAM", "AGENTZERO")
     durable_prefix: str = os.environ.get("AGENTZERO_DURABLE_PREFIX", "agentzero")
-    queue_name: Optional[str] = os.environ.get("AGENTZERO_QUEUE", "agentzero-workers")
+    queue_name: Optional[str] = os.environ.get(
+        "AGENTZERO_QUEUE", "agentzero-workers"
+    )
+    use_jetstream: bool = os.environ.get("AGENTZERO_JETSTREAM", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     ack_wait_seconds: float = float(os.environ.get("AGENTZERO_ACK_WAIT_SECONDS", "30"))
     max_deliver: int = int(os.environ.get("AGENTZERO_MAX_DELIVER", "5"))
     subjects: Tuple[str, ...] = field(
@@ -321,8 +341,11 @@ class AgentZeroController:
         logger.info("Connecting to NATS at %s", self.settings.nats_url)
         self._nc = NATS()
         await self._nc.connect(servers=[self.settings.nats_url])
-        self._js = self._nc.jetstream()
-        await self._ensure_stream()
+        if self.settings.use_jetstream:
+            self._js = self._nc.jetstream()
+            await self._ensure_stream()
+        else:
+            self._js = None
         await self._create_subscriptions()
         self._started = True
 
@@ -383,7 +406,7 @@ class AgentZeroController:
         stream_config = StreamConfig(
             name=self.settings.stream_name,
             subjects=list(self.settings.subjects),
-            retention=RetentionPolicy.WORKQUEUE,
+            retention=WORK_QUEUE_POLICY,
         )
         try:
             await self._js.add_stream(stream_config)
@@ -407,8 +430,32 @@ class AgentZeroController:
                     )
 
     async def _create_subscriptions(self) -> None:
+        subjects = tuple(self.settings.subjects)
+        if not subjects:
+            logger.warning("No Agent Zero subjects configured; controller idle")
+            return
+        if not self.settings.use_jetstream or self._js is None:
+            assert self._nc is not None
+            for subject in subjects:
+                durable = f"{self.settings.durable_prefix}-{subject.replace('.', '-')}"
+                config = SubscriptionConfig(
+                    subject=subject,
+                    durable=durable,
+                    queue=self.settings.queue_name,
+                    max_deliver=self.settings.max_deliver,
+                    ack_wait=self.settings.ack_wait_seconds,
+                )
+                sub = await self._nc.subscribe(
+                    subject,
+                    queue=self.settings.queue_name,
+                    cb=self._wrap_handler(config),
+                )
+                self._subscriptions.append(sub)
+                logger.info("Subscribed to %s (core NATS)", subject)
+            return
+
         assert self._js is not None
-        for subject in self.settings.subjects:
+        for subject in subjects:
             durable = f"{self.settings.durable_prefix}-{subject.replace('.', '-')}"
             config = SubscriptionConfig(
                 subject=subject,
@@ -417,32 +464,69 @@ class AgentZeroController:
                 max_deliver=self.settings.max_deliver,
                 ack_wait=self.settings.ack_wait_seconds,
             )
-            await self._ensure_consumer(config)
+            deliver_subject = f"_agentzero.{durable}.deliver"
+            consumer_cfg = ConsumerConfig(
+                durable_name=durable,
+                ack_policy=AckPolicy.EXPLICIT,
+                ack_wait=self.settings.ack_wait_seconds,
+                max_deliver=self.settings.max_deliver,
+                deliver_policy=getattr(DeliverPolicy, "ALL", DeliverPolicy.NEW),
+                deliver_group=self.settings.queue_name,
+                deliver_subject=deliver_subject,
+                filter_subject=subject,
+            )
+            should_create = False
+            try:
+                info = await self._js.consumer_info(
+                    self.settings.stream_name, durable
+                )
+                existing_deliver = getattr(info.config, "deliver_subject", None)
+                existing_group = getattr(info.config, "deliver_group", None)
+                if (
+                    existing_deliver != deliver_subject
+                    or existing_group != self.settings.queue_name
+                ):
+                    logger.info(
+                        "Recreating JetStream consumer %s (configuration drift)",
+                        durable,
+                    )
+                    await self._js.delete_consumer(
+                        self.settings.stream_name, durable
+                    )
+                    should_create = True
+                else:
+                    await self._js.update_consumer(
+                        self.settings.stream_name, consumer_cfg
+                    )
+            except NotFoundError:
+                should_create = True
+
+            if should_create:
+                try:
+                    await self._js.add_consumer(
+                        self.settings.stream_name, consumer_cfg
+                    )
+                    logger.info(
+                        "Created JetStream consumer %s for %s",
+                        durable,
+                        subject,
+                    )
+                except APIError as exc:
+                    logger.warning(
+                        "JetStream consumer add failed (%s): %s",
+                        durable,
+                        exc,
+                    )
             sub = await self._js.subscribe(
                 subject,
-                durable=config.durable,
+                stream=self.settings.stream_name,
+                durable=durable,
                 queue=config.queue,
                 manual_ack=True,
                 cb=self._wrap_handler(config),
             )
             self._subscriptions.append(sub)
-            logger.info("Subscribed to %s with durable %s", subject, durable)
-
-    async def _ensure_consumer(self, config: SubscriptionConfig) -> None:
-        assert self._js is not None
-        try:
-            await self._js.consumer_info(self.settings.stream_name, config.durable)
-            return
-        except NotFoundError:
-            pass
-        consumer = ConsumerConfig(
-            durable_name=config.durable,
-            ack_policy=AckPolicy.EXPLICIT,
-            ack_wait=config.ack_wait,
-            max_deliver=config.max_deliver,
-            deliver_policy=DeliverPolicy.NEW,
-        )
-        await self._js.add_consumer(self.settings.stream_name, consumer)
+            logger.info("Subscribed to %s with JetStream durable %s", subject, durable)
 
     def _wrap_handler(
         self, config: SubscriptionConfig
@@ -455,27 +539,32 @@ class AgentZeroController:
             except json.JSONDecodeError as exc:
                 logger.exception("Invalid JSON on %s", subject, exc_info=exc)
                 self._metrics["errors"][subject] += 1
-                await msg.term()
+                if hasattr(msg, "term"):
+                    await msg.term()
                 return
 
             try:
                 await self._session_manager.enqueue(data)
             except RetryableSessionError:
                 self._metrics["nacked"][subject] += 1
-                await msg.nak()
+                if hasattr(msg, "nak"):
+                    await msg.nak()
                 return
             except TerminalSessionError as exc:
                 logger.warning("Terminal session error on %s: %s", subject, exc)
                 self._metrics["errors"][subject] += 1
-                await msg.term()
+                if hasattr(msg, "term"):
+                    await msg.term()
                 return
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Unhandled error for %s", subject, exc_info=exc)
                 self._metrics["errors"][subject] += 1
-                await msg.term()
+                if hasattr(msg, "term"):
+                    await msg.term()
                 return
 
-            await msg.ack()
+            if hasattr(msg, "ack"):
+                await msg.ack()
             self._metrics["acked"][subject] += 1
 
         return handler

@@ -63,6 +63,7 @@ Services
 Notes
 - Legacy `hi-rag-gateway` remains available. Use `make up-legacy` to start it with `retrieval-eval` targeting the legacy gateway.
 - Compose snippets for services are already merged in `docker-compose.yml` for ease-of-use.
+- Persistent bind mounts live under `pmoves/data/`; see `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for how Agent Zero knowledge/logs are pre-seeded there and tips on keeping them synced with upstream docs.
 
 ### Tests
 

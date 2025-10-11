@@ -43,6 +43,7 @@ The service reads configuration from environment variables and exposes the resol
 | `AGENT_FORMS_DIR` | `configs/agents/forms` | Directory for YAML form definitions. |
 | `AGENT_KNOWLEDGE_BASE_DIR` | `runtime/knowledge` | Knowledge base artifacts and caches. |
 | `AGENT_MCP_RUNTIME_DIR` | `runtime/mcp` | Working directory for MCP sockets/logs. |
+| `AGENTZERO_JETSTREAM` | `true` | Set to `false` to fall back to plain NATS fan-out (no JetStream stream/consumer management). |
 
 ## Runtime Notes
 
@@ -50,3 +51,4 @@ The service reads configuration from environment variables and exposes the resol
 2. `/healthz` reports controller status (`connected`, `controller_started`) plus the current JetStream metrics so automation checks can confirm subscriptions are alive.
 3. MCP executions are dispatched through the existing helper functions in `mcp_server.py`, so updates to those helpers automatically surface via HTTP.
 4. The configuration endpoints make it easy to surface runtime state inside OpenAPI clients, MCP hubs, or n8n workflows without shell access.
+5. The Docker image runs the upstream `/ins/copy_A0.sh` helper before booting the FastAPI wrapper, keeping `/a0` in sync with the vanilla Agent Zero runtime so volume mounts receive the latest assets.

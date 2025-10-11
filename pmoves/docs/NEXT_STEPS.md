@@ -32,6 +32,7 @@ _Last updated: 2025-10-11_
 
 ### 5. Platform Operations & Tooling
 - [x] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
+- [x] Publish consolidated local tooling reference covering env scripts, Make targets, Supabase modes, and smoke workflows (`pmoves/docs/LOCAL_TOOLING_REFERENCE.md`), and link it from the root README.
 - [ ] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits.
 - [ ] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (initial research threads logged in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
