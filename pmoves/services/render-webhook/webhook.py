@@ -8,6 +8,18 @@ SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
 DEFAULT_NAMESPACE = os.environ.get("DEFAULT_NAMESPACE","pmoves")
 SHARED = os.environ.get("RENDER_WEBHOOK_SHARED_SECRET","")
 AUTO_APPROVE = os.environ.get("RENDER_AUTO_APPROVE","false").lower()=="true"
+SUPA_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+SUPA_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+
+def inject_auth_headers(headers: Dict[str,str]):
+    token = None
+    if SUPA_SERVICE_KEY and "." in SUPA_SERVICE_KEY:
+        token = SUPA_SERVICE_KEY
+    elif SUPA_ANON_KEY and "." in SUPA_ANON_KEY:
+        token = SUPA_ANON_KEY
+    if token:
+        headers["apikey"] = token
+        headers["authorization"] = f"Bearer {token}"
 
 def ok_sig(auth: Optional[str]) -> bool:
     if not SHARED:
@@ -24,6 +36,7 @@ def supa_insert(table, row: Dict[str,Any]):
         # Ask PostgREST to return the inserted row so JSON is present
         "prefer": "return=representation"
     }
+    inject_auth_headers(headers)
     r = requests.post(f"{SUPA}/{table}", headers=headers, data=json.dumps(row), timeout=30)
     r.raise_for_status()
     # Some deployments may still return empty body; guard to avoid 500s
@@ -35,6 +48,7 @@ def supa_update(table, id, patch: Dict[str,Any]):
         "accept": "application/json",
         "prefer": "return=representation"
     }
+    inject_auth_headers(headers)
     r = requests.patch(f"{SUPA}/{table}?id=eq.{id}", headers=headers, data=json.dumps(patch), timeout=30)
     r.raise_for_status()
     return (r.json() if r.text and r.text.strip() else {"status": r.status_code})

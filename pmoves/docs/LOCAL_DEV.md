@@ -149,6 +149,9 @@ OpenAI-compatible presets:
   7. Authenticated render-webhook insert (uses `RENDER_WEBHOOK_SHARED_SECRET` or `change_me`).
   8. `studio_board` latest row returned via PostgREST.
   9. Hi-RAG v2 query returns hits.
+  10. Agent Zero `/healthz` reports the JetStream controller running.
+  11. Generated `geometry.cgp.v1` packet posts successfully to `/geometry/event`.
+  12. ShapeStore jump + calibration report respond for that packet.
 - Successful runs exit with code `0` and print `Smoke tests passed.` Any failure stops the script and surfaces the failing check.
 
 ## Health Checks

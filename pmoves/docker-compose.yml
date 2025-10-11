@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15
+    image: ankane/pgvector
     restart: unless-stopped
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-pmoves}
@@ -57,7 +57,7 @@ services:
     profiles: ["data","neo4j-local"]
     networks: [pmoves]
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u $NEO4J_USER -p $NEO4J_PASSWORD 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "auth=\"$$NEO4J_AUTH\"; user=\"$${auth%%/*}\"; pass=\"$${auth#*/}\"; /var/lib/neo4j/bin/cypher-shell -a bolt://localhost:7687 -u \"$$user\" -p \"$$pass\" 'RETURN 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12

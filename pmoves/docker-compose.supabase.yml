@@ -51,7 +51,7 @@ services:
     networks: [pmoves]
 
   studio:
-    image: supabase/studio:20240806-7fae9fa
+    image: supabase/studio:latest
     restart: unless-stopped
     environment:
       STUDIO_PG_META_URL: http://postgrest:3000

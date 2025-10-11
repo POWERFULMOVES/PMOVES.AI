@@ -1,6 +1,6 @@
 
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-09-26_
+_Last updated: 2025-10-11_
 
 ## Immediate
 
@@ -43,6 +43,8 @@ _Last updated: 2025-09-26_
 - [ ] Wire the retrieval-eval harness as a persona publish gate; store dataset locations, metric thresholds, and last-run results in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] Exercise the creator pipeline end-to-end (presign → webhook → approval → index → publish) and document emitted events (`kb.ingest.asset.created.v1`, `kb.pack.published.v1`, `persona.published.v1`, `content.published.v1`).
 - [ ] Confirm geometry bus emissions (`geometry.cgp.v1`) populate the ShapeStore cache and note verification steps (API/CLI) in the runbook.
+  - ✅ Baseline guardrail: the local smoke tests now ingest a signed CGP, assert the `/shape/point/{id}/jump` locator, and hit `/geometry/calibration/report`; failures will block `make smoke`.
+  - Still needed: seed Supabase tables + Neo4j entities so ShapeStore warm-up stops warning about missing labels/keys, and capture the runbook evidence.
 - [ ] Draft a CI-oriented pack manifest linter (selectors, age, size limits) and reference the proposal in `pmoves/docs/ROADMAP.md` once scoped.
 
 ## n8n Flow Operations
@@ -237,4 +239,3 @@ _Last updated: 2025-10-05_
 ---
 
 > Archived snapshot (2025-09-08): [NEXT_STEPS_2025-09-08](archive/NEXT_STEPS_2025-09-08.md)
-
