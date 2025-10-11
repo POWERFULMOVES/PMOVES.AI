@@ -161,39 +161,41 @@ def apply_updates(row: AuditRow, updates: Dict[str, Any], *, dry_run: bool) -> N
     client.table("publisher_audit").update(updates).eq("publish_event_id", row.publish_event_id).execute()
 
 
--def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-     parser = argparse.ArgumentParser(description="Backfill publisher metadata in Supabase")
-     parser.add_argument("--limit", type=int, default=100, help="Maximum rows to scan (default: 100)")
-     parser.add_argument(
-         "--apply",
-         action="store_true",
-         help="Persist updates instead of printing dry-run diffs",
-     )
-     return parser.parse_args(list(argv) if argv is not None else None)
+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Backfill publisher metadata in Supabase")
+    parser.add_argument("--limit", type=int, default=100, help="Maximum rows to scan (default: 100)")
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Persist updates instead of printing dry-run diffs",
+    )
+    return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-+    if requests is None:
-+        print("requests is required for Jellyfin lookups; install it or run inside the publisher environment", file=sys.stderr)
-+        return 2
-     args = parse_args(argv)
-     rows = _fetch_rows(args.limit)
-     if not rows:
-         print("No publisher_audit rows returned; nothing to backfill")
-         return 0
+    if requests is None:
+        print(
+            "requests is required for Jellyfin lookups; install it or run inside the publisher environment",
+            file=sys.stderr,
+        )
+        return 2
+    args = parse_args(argv)
+    rows = _fetch_rows(args.limit)
+    if not rows:
+        print("No publisher_audit rows returned; nothing to backfill")
+        return 0
 
-     dry_run = not args.apply
-     for row in rows:
-         updates = enrich_row(row)
-         apply_updates(row, updates, dry_run=dry_run)
+    dry_run = not args.apply
+    for row in rows:
+        updates = enrich_row(row)
+        apply_updates(row, updates, dry_run=dry_run)
 
-     if dry_run:
-         print("Dry run complete. Re-run with --apply to persist changes.")
-     else:
-         print("Updates applied to Supabase publisher_audit")
-     return 0
+    if dry_run:
+        print("Dry run complete. Re-run with --apply to persist changes.")
+    else:
+        print("Updates applied to Supabase publisher_audit")
+    return 0
 
 
- if __name__ == "__main__":
-     raise SystemExit(main(sys.argv[1:]))
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
