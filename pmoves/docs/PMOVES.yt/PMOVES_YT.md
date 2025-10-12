@@ -47,6 +47,11 @@ Notes
 - `ffmpeg-whisper` auto-detects CUDA GPUs (`WHISPER_DEVICE` / `USE_CUDA` override) and defaults to `faster-whisper`, falling back to CPU INT8 inference when no GPU is available.
 - Set `provider` in `/yt/transcript` or `/yt/ingest` to choose `faster-whisper`, `whisper` (WhisperX + optional PyAnnote diarization), or `qwen2-audio` (requires Transformers + Qwen2 Audio weights; GPU strongly recommended for real-time throughput).
 - For Jetson, use L4T PyTorch bases and CUDA‑enabled models.
+- Downloader hardening:
+  - `YT_PLAYER_CLIENT` (default `android`) and `YT_USER_AGENT` (Android Chrome UA) are injected into yt-dlp so player signatures resolve without manual cookies. Override when YouTube blocks the default fingerprint.
+  - Set `YT_COOKIES=/path/to/cookies.txt` if you need authenticated fetches; the path is passed straight to yt-dlp.
+  - `YT_FORCE_IPV4=true|false` (default true) avoids IPv6-only CDN nodes that intermittently reject API calls; disable if your network only supports IPv6.
+  - `YT_EXTRACTOR_RETRIES` controls yt-dlp retry attempts (default `2`). Increase when scraping longer playlists or spotty connections.
 - Gemma providers:
   - `YT_SUMMARY_PROVIDER=ollama|hf`, `OLLAMA_URL`, `YT_GEMMA_MODEL` (default gemma2:9b-instruct)
   - `HF_GEMMA_MODEL`, `HF_USE_GPU`, `HF_TOKEN` (requires transformers+torch if using HF locally)

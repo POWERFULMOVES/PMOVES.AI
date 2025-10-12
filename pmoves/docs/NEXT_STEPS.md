@@ -88,7 +88,7 @@ _Last updated: 2025-10-11_
 - [ ] Robust downloads: resume support, retry with exponential backoff, per-domain rate limiting, playlist/channel ingestion, and concurrent worker pool with bounded memory.
 - [ ] Storage: multipart uploads to MinIO for large files; checksum verification; lifecycle and retention tags.
 - [ ] Metadata: enrich `videos` with duration, channel, tags; track ingest provenance and versioning in `meta`.
-- [ ] Transcripts: switch `ffmpeg-whisper` to `faster-whisper` GPU path; language auto-detect and diarization flags; partial updates for long videos.
+- [x] Transcripts: switch `ffmpeg-whisper` to `faster-whisper` GPU path; language auto-detect and diarization flags; partial updates for long videos.
 - [ ] Events/NATS: standardize `ingest.*` topics and dead-letter queue; idempotent handlers using `s3_base_prefix`.
 - [ ] Gemma integration (summaries) with Ollama/HF options and embedding fallbacks.
 - [ ] API hardening: request validation, structured errors, OpenAPI docs, health/readiness probes.
@@ -105,7 +105,7 @@ _Last updated: 2025-10-11_
 ## Next Session Focus
 - [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1` — reference activation notes in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] media-audio: insert `emotions` into Supabase and emit `analysis.audio.v1`.
-- [ ] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop); confirm GPU smoke path documented in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [x] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop); confirm GPU smoke path documented in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] CLIP embeddings on keyframes (optional; desktop on by default, Jetson off).
 - [ ] n8n flows: end-to-end ingest → transcribe → extract → index → notify.
 - [ ] Jellyfin refresh hook + Discord rich embeds (cover art, duration, link) with validation evidence logged in `SESSION_IMPLEMENTATION_PLAN.md`.
