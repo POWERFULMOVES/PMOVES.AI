@@ -486,7 +486,19 @@ class AgentZeroController:
                     self.settings.stream_name, durable
                 )
                 existing_filter = getattr(info.config, "filter_subject", None)
-                if existing_filter != subject:
+                deliver_subject = getattr(info.config, "deliver_subject", None)
+                deliver_group = getattr(info.config, "deliver_group", None)
+
+                if deliver_subject or deliver_group:
+                    logger.info(
+                        "Recreating JetStream consumer %s (legacy push delivery)",
+                        durable,
+                    )
+                    await self._js.delete_consumer(
+                        self.settings.stream_name, durable
+                    )
+                    should_create = True
+                elif existing_filter != subject:
                     logger.info(
                         "Recreating JetStream consumer %s (filter mismatch: %s -> %s)",
                         durable,
