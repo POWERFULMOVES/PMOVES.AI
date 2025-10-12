@@ -228,7 +228,8 @@ docker run --name n8n --rm -it \
 
 ## Notes
 
-- A local Postgres + PostgREST are included. `render-webhook` points to `http://postgrest:3000` by default; override `SUPA_REST_URL` in `.env` to target your self‑hosted instance.
+- A local Postgres + PostgREST are included. `render-webhook` and the other compose workers now honour `SUPA_REST_INTERNAL_URL` (defaults to the Supabase CLI network host `http://api.supabase.internal:8000/rest/v1`). Host-side scripts continue to use `SUPA_REST_URL` (`http://127.0.0.1:54321/rest/v1`). Override both if you point the stack at a remote Supabase instance. When the Supabase CLI stack is running, `make up` auto-runs the `supabase-bootstrap` helper so schema migrations and seeds are replayed before smoke tests.
+- Neo4j seeds: the bundled `neo4j/datasets/person_aliases_seed.csv` + `neo4j/cypher/*.cypher` scripts wire in the CHIT mind-map aliases. Run `make neo4j-bootstrap` (or rely on `make up` once the helper is hooked in; requires `python3` on the host) after launching `pmoves-neo4j-1` to populate the base graph.
 - For Cataclysm Provisioning, the stable network name `pmoves-net` allows cross‑stack service discovery.
 - Clean up duplicate .env keys: `make env-dedupe` (keeps last occurrence, writes `.env.bak`).
 

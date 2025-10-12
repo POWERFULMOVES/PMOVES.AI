@@ -360,7 +360,10 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                 join_payload = {
                     "topic": "realtime:geometry.cgp.v1",
                     "event": "phx_join",
-                    "payload": {"config": {"broadcast": {"ack": False, "self": True}}},
+                    "payload": {
+                        "config": {"broadcast": {"ack": False, "self": True}},
+                        "access_token": api_key,
+                    },
                     "ref": "1",
                 }
                 await ws.send(json.dumps(join_payload))

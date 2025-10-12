@@ -6,6 +6,7 @@
   - Brings up the core data profile (`qdrant`, `neo4j`, `minio`, `meilisearch`, `presign`, plus Postgres/PostgREST when `SUPA_PROVIDER=compose`) and all default workers (`hi-rag-gateway-v2`, `retrieval-eval`, `render-webhook`, `langextract`, `extract-worker`).
   - Also launches pmoves.yt (`ffmpeg-whisper`, `pmoves-yt`) and the Jellyfin bridge. When running with the compose Supabase provider the target automatically chains to `make supabase-up` so GoTrue/Realtime/Storage/Studio come online.
   - Defaults to `SUPA_PROVIDER=cli`, which skips the compose Postgres/PostgREST pair so that the Supabase CLI database can own those ports.
+  - If the Supabase CLI stack is detected (`supabase_db_pmoves`), the target also runs `supabase-bootstrap` to replay `supabase/initdb/*.sql`, `supabase/migrations/*.sql`, and the v5.12 schema/seed SQL under `db/`.
 
 - `make up-cli` / `make up-compose`
   - Convenience shims that force a single run of `make up` with `SUPA_PROVIDER=cli` or `SUPA_PROVIDER=compose` respectively.
@@ -72,9 +73,13 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 - `make supa-extract-remote`
   - Parses `supa.md` and produces `.env.supa.remote` (ignored by Git) with the endpoints/keys discovered upstream.
 
+- `make supabase-bootstrap`
+  - Idempotently applies all SQL under `supabase/initdb/`, `supabase/migrations/`, and the v5.12 schema/seed files in `db/` against the Supabase CLI database (expects the `supabase_db_pmoves` container to be running). This target runs automatically at the end of `make up`, but you can invoke it manually after rotating credentials or pulling new migrations.
+- `make neo4j-bootstrap`
+  - Copies `neo4j/datasets/person_aliases_seed.csv` into the running container and executes `neo4j/cypher/001_init.cypher` + `002_load_person_aliases.cypher` via `cypher-shell`. Useful after refreshing the aliases CSV or wiping the graph.
+
 ### Notes
 
 - `.env.local` overlays `.env` for services that declare `env_file: [.env, .env.local]`. Run one of the Supabase switch helpers above when Compose warns about a missing `.env.local`.
 - pmoves.yt ships without NATS by default. Run `make up-nats` to enable event publishing or to unlock the agents profile.
 - See `pmoves/README.md` for full startup decision trees and profile walkthroughs.
-

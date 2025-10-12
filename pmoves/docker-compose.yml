@@ -51,6 +51,7 @@ services:
     restart: unless-stopped
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+      - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     ports: ["7474:7474","7687:7687"]
     volumes:
       - neo4j-data:/data
@@ -143,7 +144,7 @@ services:
     restart: unless-stopped
     env_file: [.env, .env.local]
     environment:
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - RENDER_WEBHOOK_SHARED_SECRET=${RENDER_WEBHOOK_SHARED_SECRET}
       - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
@@ -163,7 +164,7 @@ services:
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
     ports: ["8083:8083"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -278,7 +279,7 @@ services:
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - YT_BUCKET=${YT_BUCKET:-assets}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
     depends_on: [minio]
     ports: ["8077:8077"]
@@ -461,7 +462,7 @@ services:
       - JELLYFIN_URL=${JELLYFIN_URL}
       - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
       - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
     ports: ["8093:8093"]
     profiles: ["orchestration"]
     networks: [pmoves]

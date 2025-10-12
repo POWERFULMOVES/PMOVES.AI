@@ -11,8 +11,11 @@
   - Point pmoves to CLI endpoints:
     - `make supa-use-local` → writes `.env.local` from `.env.supa.local.example`
     - Edit `.env.local` and paste keys from `make supa-status`
-    - Ensure PostgREST uses the full path: `SUPA_REST_URL=http://localhost:54321/rest/v1` (and set `SUPABASE_REST_URL` to the same for tools/n8n)
+    - Ensure PostgREST uses the full path for both host + containers:
+      - `SUPA_REST_URL=http://localhost:54321/rest/v1` (host-facing scripts, smoke harness)
+      - `SUPA_REST_INTERNAL_URL=http://api.supabase.internal:8000/rest/v1` (compose services talk to the CLI stack on the shared Docker network)
   - Run pmoves: `make up` (default `SUPA_PROVIDER=cli` avoids Compose Postgres/PostgREST)
+    - When the Supabase CLI stack is active you’ll see `supabase-bootstrap` replay the SQL under `supabase/initdb/`, `supabase/migrations/`, and `db/v5_12_*.sql` automatically so migrations/seeds stay current. The same run also triggers `neo4j-bootstrap` to load the CHIT mind-map aliases if the Neo4j container is up.
   - Stop CLI: `make supa-stop`
 
 - Self‑hosted Supabase (remote)
@@ -27,7 +30,8 @@
   - Reset (if you had an older volume before the 2025‑10‑11 schema updates): `make supabase-clean` then rerun `make supabase-up`
 
 Environment variables to verify
-- `SUPA_REST_URL` (PostgREST)
+- `SUPA_REST_URL` (PostgREST host endpoint)
+- `SUPA_REST_INTERNAL_URL` (PostgREST inside Docker, defaults to `http://api.supabase.internal:8000/rest/v1`)
 - `GOTRUE_SITE_URL` (Auth/GoTrue)
 - `GOTRUE_API_EXTERNAL_URL` (GoTrue external API base, defaults to `http://localhost:9999`)
 - `SUPABASE_STORAGE_URL`, `SUPABASE_PUBLIC_STORAGE_BASE`

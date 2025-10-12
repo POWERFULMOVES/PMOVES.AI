@@ -20,9 +20,12 @@ This guide aggregates the entry points that keep local environments consistent a
 ## Supabase Workflows
 - CLI parity (default):
   - `make supa-init` → initializes the Supabase CLI project.
-  - `make supa-start` / `make supa-stop` / `make supa-status` → lifecycle management for the CLI stack.
-  - `make supa-use-local` → copies `.env.supa.local.example` into `.env.local` so services reference the CLI hostnames/ports.
-  - TIP: to share networking with the compose services, run `supabase start --network-id pmoves-net` from `pmoves/`. Afterwards, update `.env.local` with the CLI-issued keys (`supabase status -o json`) and reapply `supabase/initdb/*.sql` so PostgREST, GoTrue, and Realtime expose the expected tables.
+- `make supa-start` / `make supa-stop` / `make supa-status` → lifecycle management for the CLI stack.
+- `make supa-use-local` → copies `.env.supa.local.example` into `.env.local` so services reference the CLI hostnames/ports.
+- TIP: to share networking with the compose services, run `supabase start --network-id pmoves-net` from `pmoves/`. Afterwards, update `.env.local` with the CLI-issued keys (`supabase status -o json`) and reapply `supabase/initdb/*.sql` so PostgREST, GoTrue, and Realtime expose the expected tables.
+- When the CLI stack is running (`supabase_db_pmoves` container), `make up` automatically invokes `supabase-bootstrap` which replays `supabase/initdb/*.sql`, `supabase/migrations/*.sql`, and the v5.12 schema/seed files under `db/` so your database stays current without manual psql loops.
+- `make neo4j-bootstrap` copies the seed CSV (`neo4j/datasets/person_aliases_seed.csv`) into the live container and runs the Cypher scripts under `neo4j/cypher/` so the CHIT/mindmap graph always has baseline data. `make up` runs this helper after the Supabase bootstrap when `pmoves-neo4j-1` is online.
+- New in October 2025: containers now honour `SUPA_REST_INTERNAL_URL` (defaults to `http://api.supabase.internal:8000/rest/v1`) so compose services call the Supabase CLI stack directly. Host-side scripts continue to rely on `SUPA_REST_URL` (`http://127.0.0.1:54321/rest/v1`), so keep both values in sync when rotating credentials.
 - Compose alternative:
   - `SUPA_PROVIDER=compose make up` → start core stack with compose Postgres/PostgREST.
   - `make supabase-up` / `make supabase-stop` / `make supabase-clean` → manage GoTrue, Realtime, Storage, Studio sidecars.

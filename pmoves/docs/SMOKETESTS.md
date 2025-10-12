@@ -20,6 +20,11 @@ This guide covers preflight wiring, starting the core stack, and running the loc
 2. Set shared secrets (change these):
    - `PRESIGN_SHARED_SECRET`
    - `RENDER_WEBHOOK_SHARED_SECRET`
+   - Supabase REST endpoints:
+     - `SUPA_REST_URL=http://127.0.0.1:54321/rest/v1` (host-side smoke harness + curl snippets)
+     - `SUPA_REST_INTERNAL_URL=http://api.supabase.internal:8000/rest/v1` (compose services targeting the Supabase CLI stack)
+   - With the Supabase CLI stack running, `make up` will replay all schema + seed SQL before the smoke harness executes. You can re-run it manually via `make supabase-bootstrap`.
+   - If Neo4j is running (`pmoves-neo4j-1`), seed the CHIT mind-map aliases via `make neo4j-bootstrap` so `/mindmap/{id}` resolves during geometry checks.
 3. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.
 
 ## 2) Preflight (Recommended)
@@ -181,7 +186,15 @@ The smoke harness already exercises the ingest/jump/calibration flow with a synt
      -d @cgp.json
    ```
 
-Expected: 200s; locator shows `{ "modality":"video","ref_id":"yt123","t":12.5,"frame":300 }`.
+   Expected: 200s; locator shows `{ "modality":"video","ref_id":"yt123","t":12.5,"frame":300 }`.
+
+7. Mind-map query (requires `make neo4j-bootstrap`):
+   ```bash
+   python docs/pmoves_chit_all_in_one/pmoves_all_in_one/pmoves_chit_graph_plus_mindmap/scripts/mindmap_query.py \
+     --base http://localhost:8087 \
+     --cid <constellation_id>
+   ```
+   Substitute `<constellation_id>` with one of the seeded IDs (e.g., from the CSV). A JSON payload with `items` confirms Neo4j has the CHIT alias graph available.
 
 ## 7) Live Geometry UI + WebRTC
 
