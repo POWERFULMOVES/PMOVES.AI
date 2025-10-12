@@ -17,9 +17,11 @@ try:
         ConsumerConfig,
     )
     from nats.js.errors import APIError, NotFoundError
+    from nats.errors import TimeoutError as NATSTimeoutError
 except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
     NATS = None  # type: ignore[assignment]
     Msg = Any  # type: ignore[assignment]
+    NATSTimeoutError = TimeoutError  # type: ignore[assignment]
 
     class _StubError(Exception):
         pass
@@ -320,6 +322,7 @@ class AgentZeroController:
             "errors": defaultdict(int),
         }
         self._started = False
+        self._pull_tasks: List[asyncio.Task] = []
 
     @property
     def metrics(self) -> Dict[str, Dict[str, int]]:
@@ -354,6 +357,11 @@ class AgentZeroController:
             return
         logger.info("Shutting down Agent Zero controller")
         await self._session_manager.shutdown()
+        for task in self._pull_tasks:
+            task.cancel()
+        if self._pull_tasks:
+            await asyncio.gather(*self._pull_tasks, return_exceptions=True)
+        self._pull_tasks.clear()
         for sub in self._subscriptions:
             await sub.unsubscribe()
         self._subscriptions.clear()
@@ -460,19 +468,16 @@ class AgentZeroController:
             config = SubscriptionConfig(
                 subject=subject,
                 durable=durable,
-                queue=self.settings.queue_name,
+                queue=None,
                 max_deliver=self.settings.max_deliver,
                 ack_wait=self.settings.ack_wait_seconds,
             )
-            deliver_subject = f"_agentzero.{durable}.deliver"
             consumer_cfg = ConsumerConfig(
                 durable_name=durable,
                 ack_policy=AckPolicy.EXPLICIT,
                 ack_wait=self.settings.ack_wait_seconds,
                 max_deliver=self.settings.max_deliver,
                 deliver_policy=getattr(DeliverPolicy, "ALL", DeliverPolicy.NEW),
-                deliver_group=self.settings.queue_name,
-                deliver_subject=deliver_subject,
                 filter_subject=subject,
             )
             should_create = False
@@ -480,24 +485,18 @@ class AgentZeroController:
                 info = await self._js.consumer_info(
                     self.settings.stream_name, durable
                 )
-                existing_deliver = getattr(info.config, "deliver_subject", None)
-                existing_group = getattr(info.config, "deliver_group", None)
-                if (
-                    existing_deliver != deliver_subject
-                    or existing_group != self.settings.queue_name
-                ):
+                existing_filter = getattr(info.config, "filter_subject", None)
+                if existing_filter != subject:
                     logger.info(
-                        "Recreating JetStream consumer %s (configuration drift)",
+                        "Recreating JetStream consumer %s (filter mismatch: %s -> %s)",
                         durable,
+                        existing_filter,
+                        subject,
                     )
                     await self._js.delete_consumer(
                         self.settings.stream_name, durable
                     )
                     should_create = True
-                else:
-                    await self._js.update_consumer(
-                        self.settings.stream_name, consumer_cfg
-                    )
             except NotFoundError:
                 should_create = True
 
@@ -517,16 +516,56 @@ class AgentZeroController:
                         durable,
                         exc,
                     )
-            sub = await self._js.subscribe(
+            sub = await self._js.pull_subscribe(
                 subject,
                 stream=self.settings.stream_name,
                 durable=durable,
-                queue=config.queue,
-                manual_ack=True,
-                cb=self._wrap_handler(config),
             )
+            handler = self._wrap_handler(config)
+            task = asyncio.create_task(
+                self._pull_worker(sub, handler, subject, durable)
+            )
+            self._pull_tasks.append(task)
             self._subscriptions.append(sub)
-            logger.info("Subscribed to %s with JetStream durable %s", subject, durable)
+            logger.info(
+                "Subscribed to %s with JetStream durable %s (pull mode)", subject, durable
+            )
+
+    async def _pull_worker(
+        self,
+        sub: Any,
+        handler: Callable[[Msg], Awaitable[None]],
+        subject: str,
+        durable: str,
+    ) -> None:
+        """Continuously fetch batches from a JetStream pull subscription."""
+        batch_size = 10
+        while True:
+            try:
+                messages = await sub.fetch(batch=batch_size, timeout=1)
+            except NATSTimeoutError:
+                continue
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "JetStream pull loop error for %s (%s): %s",
+                    subject,
+                    durable,
+                    exc,
+                )
+                await asyncio.sleep(1)
+                continue
+
+            for msg in messages:
+                try:
+                    await handler(msg)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # pragma: no cover - handler logs errors
+                    logger.exception(
+                        "Handler error for %s (%s)", subject, durable, exc_info=True
+                    )
 
     def _wrap_handler(
         self, config: SubscriptionConfig
