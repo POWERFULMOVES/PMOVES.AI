@@ -497,6 +497,24 @@ class AgentZeroController:
                         self.settings.stream_name, durable
                     )
                     should_create = True
+                else:
+                    deliver_subject = getattr(info.config, "deliver_subject", None)
+                    deliver_group = getattr(info.config, "deliver_group", None)
+                    push_fields = []
+                    if deliver_subject:
+                        push_fields.append(f"deliver_subject={deliver_subject}")
+                    if deliver_group:
+                        push_fields.append(f"deliver_group={deliver_group}")
+                    if push_fields:
+                        logger.info(
+                            "Recreating JetStream consumer %s to drop push delivery (%s)",
+                            durable,
+                            ", ".join(push_fields),
+                        )
+                        await self._js.delete_consumer(
+                            self.settings.stream_name, durable
+                        )
+                        should_create = True
             except NotFoundError:
                 should_create = True
 
