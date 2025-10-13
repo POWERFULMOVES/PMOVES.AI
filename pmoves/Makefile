@@ -393,6 +393,20 @@ smoke-langextract:
 	@make load-jsonl FILE=$(PWD)/.tmp_extracted.jsonl NAMESPACE=pmoves
 	@rm -f .tmp_extracted.jsonl
 
+.PHONY: smoke-archon
+smoke-archon:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-archon" && exit 1)
+	@set -euo pipefail; \
+	ARCHON_URL=$${ARCHON_HEALTH_URL:-http://localhost:8091/healthz}; \
+	printf "[Archon] GET %s\n" "$$ARCHON_URL"; \
+	resp=$$(curl -fsS "$$ARCHON_URL"); \
+	status=$$(printf "%s" "$$resp" | jq -r '.status // empty'); \
+	if [ "$$status" != "ok" ]; then \
+	  echo "Archon health degraded or unavailable (status=$$status)"; \
+	  exit 1; \
+	fi; \
+	printf "%s\n" "$$resp"
+
 .PHONY: flight-check
 flight-check:
 ifeq ($(OS),Windows_NT)
@@ -432,6 +446,7 @@ help:
 	@echo "  smoke-presign-put Test presign PUT and upload"
 	@echo "  smoke-pdf        Upload and index a sample PDF via pdf-ingest"
 	@echo "  smoke-langextract Extract chunks via langextract and load"
+	@echo "  smoke-archon     Check Archon healthz endpoint (requires NATS + Supabase)"
 	@echo "  flight-check     Run environment preflight (deps, ports, .env)"
 	@echo "  flight-check-retro Retro-styled Rich CLI preflight"
 	@echo "  env-dedupe       Remove duplicate keys from .env (keeps last, writes .bak)"

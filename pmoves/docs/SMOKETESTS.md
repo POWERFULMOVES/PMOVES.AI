@@ -227,6 +227,7 @@ Optional smoke targets:
 - `make smoke-presign-put` — end‑to‑end presign PUT and upload
 - `make smoke-rerank` — query with `use_rerank=true` (provider optional)
 - `make smoke-langextract` — extract chunks from XML via `langextract` and load
+- `make smoke-archon` — hit `http://localhost:8091/healthz` and ensure Archon reports `status: "ok"` (requires NATS + Supabase CLI stack)
 
 ## Troubleshooting
 - Port in use: change the host port in `docker-compose.yml` or stop the conflicting process.

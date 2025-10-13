@@ -67,6 +67,7 @@ PY
 ├── SECURITY.md
 ├── docs/
 │   ├── COPILOT_REVIEW_WORKFLOW.md
+│   ├── LOCAL_CI_CHECKS.md
 │   ├── PMOVES.md
 │   ├── PMOVES_ARC.md
 │   ├── PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md
@@ -161,6 +162,7 @@ PY
 │   │   ├── SUPABASE_SWITCH.md
 │   │   ├── TAILSCALE_DISCORD_RUNBOOK.md
 │   │   ├── TELEMETRY_ROI.md
+│   │   ├── archonupdateforpmoves.md
 │   │   ├── agent_zero_cuda docs/
 │   │   ├── archive/
 │   │   ├── cipher_pmoves_bundle/
@@ -235,6 +237,7 @@ PY
 │   │   ├── agents/
 │   │   ├── analysis-echo/
 │   │   ├── archon/
+│   │   │   ├── README.md
 │   │   ├── comfy-watcher/
 │   │   ├── comfyui/
 │   │   ├── common/
