@@ -396,16 +396,16 @@ smoke-langextract:
 .PHONY: smoke-archon
 smoke-archon:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-archon" && exit 1)
-	@set -euo pipefail; \
-	ARCHON_URL=$${ARCHON_HEALTH_URL:-http://localhost:8091/healthz}; \
+	@bash -c 'set -euo pipefail; \
+	ARCHON_URL="$${ARCHON_HEALTH_URL:-http://localhost:8091/healthz}"; \
 	printf "[Archon] GET %s\n" "$$ARCHON_URL"; \
 	resp=$$(curl -fsS "$$ARCHON_URL"); \
-	status=$$(printf "%s" "$$resp" | jq -r '.status // empty'); \
+	status=$$(printf "%s" "$$resp" | jq -r ".status // empty"); \
 	if [ "$$status" != "ok" ]; then \
 	  echo "Archon health degraded or unavailable (status=$$status)"; \
 	  exit 1; \
 	fi; \
-	printf "%s\n" "$$resp"
+	printf "%s\n" "$$resp"'
 
 .PHONY: flight-check
 flight-check:
