@@ -83,6 +83,8 @@ _Last updated: 2025-10-11_
 - [x] ComfyUI ↔ MinIO presign endpoint — implemented; example notebook pending.
 - [ ] Windows/WSL polish: smoke script + helper commands.
 - [ ] (Optional) Draft ComfyUI ↔ MinIO presign notebook walk-through for inclusion in `docs/`.
+- [x] Local CI checklist published (`docs/LOCAL_CI_CHECKS.md`) with pytest/CHIT/SQL/env preflight expectations before every PR.
+- [x] Publish local CI checklist (`docs/LOCAL_CI_CHECKS.md`) and gate PRs on the pytest/grep/env preflight routine.
 
 ### PMOVES.YT Enhancements (Detailed)
 - [ ] Robust downloads: resume support, retry with exponential backoff, per-domain rate limiting, playlist/channel ingestion, and concurrent worker pool with bounded memory.

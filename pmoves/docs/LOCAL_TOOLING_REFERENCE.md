@@ -61,3 +61,4 @@ When provisioning remote hosts, ensure these directories map to persistent stora
 - Supabase deep dives: `docs/SUPABASE_FULL.md`, `docs/SUPABASE_SWITCH.md`
 - Agent Zero & Archon integration: `pmoves/services/agent-zero/README.md`, `pmoves/services/archon/README.md`
 - Roadmap alignment & evidence logging: `pmoves/docs/NEXT_STEPS.md`, `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`
+- Local CI workflow mirror (pytest, CHIT grep, SQL policy lint, env preflight): `docs/LOCAL_CI_CHECKS.md`
