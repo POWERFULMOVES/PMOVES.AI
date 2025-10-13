@@ -36,6 +36,7 @@ This working session establishes the concrete implementation tasks needed to clo
 - Recorded smoke expectations: rerun `make yt-emit-smoke URL=...` after stack restart to confirm the new curl locator assertion runs with jq string comparison (Makefile tweak).
 - 2025-10-12T21:56:33Z — `make -C pmoves yt-emit-smoke URL=https://www.youtube.com/watch?v=dQw4w9WgXcQ` (lyrics profile) completed cleanly; geometry jump assertion passed with the new jq string comparison.
 - 2025-10-13T01:04:09Z — `make -C pmoves smoke-archon` succeeded after pointing `SUPABASE_URL` to `http://postgrest:3000` and restarting the Supabase CLI stack; Archon healthz reports `{"status":"ok","service":"archon"}`.
+- 2025-10-13T01:55:00Z — Rebuilt `pmoves-archon` image with `playwright` Chromium preinstalled and switched `SUPABASE_URL` to the Supabase CLI gateway (`http://host.docker.internal:54321`) so the vendor Archon backend initializes successfully.
 
 ## 3. Broader Roadmap Prep (M3–M5)
 
