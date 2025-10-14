@@ -8,14 +8,14 @@ _Last updated: 2025-10-13_
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
 - [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
 - [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
-- [ ] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; note any dependency gaps that require new guardrails.
+- [x] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; use `make jellyfin-verify` before publisher smokes (2025-10-13).
 - [ ] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
 - [ ] Record step-by-step evidence in `SESSION_IMPLEMENTATION_PLAN.md` while executing the operational reminders list.
 
 ### 2. Jellyfin Publisher Reliability
 - [x] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
 - [ ] Expand error/reporting hooks so failures surface with actionable messages (Jellyfin HTTP errors, dependency mismatches, asset gaps).
-- [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields.
+- [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields. Use `make demo-content-published` to emit a sample `content.published.v1` envelope and inspect the Discord embed plus Agent Zero `tools/realtime_listener.py` output for `thumbnail_url`, `duration`, and Jellyfin deep links.
 
 ### 3. Graph & Retrieval Enhancements (Kickoff M3)
 - [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
@@ -161,7 +161,7 @@ _Last updated: 2025-10-05_
 - [x] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
 - [ ] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits.
 - [x] Normalize Supabase CLI endpoints for containers (`SUPA_REST_INTERNAL_URL`) so render-webhook, extract-worker, and geometry bus stay online after stack restarts; smoke harness verified on 2025-10-12. `make up` now auto-runs Supabase + Neo4j bootstraps so DB and mind-map seeds refresh each time.
-- [x] Seeded `public.archon_prompts` via `supabase/initdb/09_archon_prompts.sql` + `10_archon_prompts_seed.sql` to eliminate PostgREST 205 warnings during Archon startup and ship minimal default prompts (2025-10-13).
+- [x] Seeded `public.archon_prompts` via `supabase/initdb/09_archon_prompts.sql` + `10_archon_prompts_seed.sql` and mirrored CHIT geometry tables in `11_chit_geometry.sql` so Archon local stacks stay aligned with migrations (2025-10-13).
 - [ ] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (initial research threads logged in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
 

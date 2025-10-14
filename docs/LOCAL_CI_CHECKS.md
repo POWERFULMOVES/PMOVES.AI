@@ -23,20 +23,34 @@ Keep the virtualenv around so re-runs before each push are quick (`pytest …`).
 
 ## 2. CHIT Contract Check
 
-This grep-based smoke ensures the geometry schema, endpoints, events, and env flags stay present. From the repository root:
+This grep-based smoke ensures the geometry schema, endpoints, events, and env flags stay present. We ship a helper script and Makefile target so the workflow logic is easy to mirror:
 
 ```bash
 sudo apt-get install ripgrep   # once per machine (Linux) – macOS: brew install ripgrep
-bash -c "set -euo pipefail; \
-  rg -ni --iglob '*.sql' 'create table .*(anchors|constellations|shape_points|shape_index)' \
-  && rg -n 'POST /geometry/event|GET /shape/point/.*/jump|/geometry/decode/(text|image|audio)|/geometry/calibration/report' pmoves/services \
-  && rg -n 'geometry.cgp.v1' -S \
-  && rg -n 'CHIT_REQUIRE_SIGNATURE|CHIT_PASSPHRASE|CHIT_DECRYPT_ANCHORS|CHIT_CODEBOOK_PATH|CHIT_T5_MODEL' -S"
+cd pmoves
+make chit-contract-check       # wraps ../scripts/check_chit_contract.sh
 ```
 
-If any command exits non-zero, inspect the missing asset and update the offending file or the workflow allowlist.
+If the command exits non-zero, inspect the missing asset and update the offending file or adjust the workflow allowlist before pushing.
 
-## 3. SQL Policy Lint
+## 3. Jellyfin Credential Check (self-hosted stacks)
+
+Confirm that the local Jellyfin instance is reachable, branded, and exposes the
+expected libraries:
+
+```bash
+cd pmoves
+JELLYFIN_URL=http://localhost:8096 \           # override as needed
+JELLYFIN_API_KEY=your-token \                 # required
+JELLYFIN_USER_ID=<optional-user-id> \         # validates enumeration when set
+make jellyfin-verify
+```
+
+The command calls `scripts/check_jellyfin_credentials.py` and raises actionable
+errors when the API key is invalid, the user cannot enumerate libraries, or the
+server name does not match the default PMOVES branding.
+
+## 4. SQL Policy Lint
 
 Prevents accidental `USING true` policies or `GRANT … TO anon` statements outside the approved files.
 
@@ -71,7 +85,7 @@ fi
 echo \"No unsafe patterns found.\""
 ```
 
-## 4. Env Preflight (Windows parity)
+## 5. Env Preflight (Windows parity)
 
 The workflow runs on `windows-latest` with PowerShell 7. On Windows or WSL:
 
@@ -88,7 +102,9 @@ Copy these bullets into PR descriptions (or tick the template boxes) after each 
 
 - [ ] `pytest` suites (publisher, pmoves-yt, publisher-discord)
 - [ ] CHIT contract grep
+- [ ] Jellyfin credential check (when the publisher is in play)
 - [ ] SQL policy lint
 - [ ] Env preflight (`scripts/env_check.ps1 -Quick` or `env_check.sh -q`)
+- [ ] Discord embed smoke (`make demo-content-published`) when validating multimedia metadata
 
 If any check is intentionally skipped (e.g., doc-only change), note the reason in the PR “Testing” section.

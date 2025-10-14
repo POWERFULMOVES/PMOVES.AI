@@ -151,6 +151,10 @@ class DownloadError(Exception):
 class JellyfinRefreshError(Exception):
     """Raised when Jellyfin fails to refresh or respond."""
 
+    def __init__(self, message: str, *, details: Optional[Dict[str, Any]] = None) -> None:
+        super().__init__(message)
+        self.details = details or {}
+
 def _utc_now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -562,6 +566,19 @@ def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str], Dic
         logger.debug("requests dependency missing; skipping Jellyfin lookup")
         return None, None, {}
     if not (JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID):
+        missing = [
+            name
+            for name, value in {
+                "JELLYFIN_URL": JELLYFIN_URL,
+                "JELLYFIN_API_KEY": JELLYFIN_API_KEY,
+                "JELLYFIN_USER_ID": JELLYFIN_USER_ID,
+            }.items()
+            if not value
+        ]
+        logger.debug(
+            "Skipping Jellyfin lookup; configuration incomplete",
+            extra={"title": title, "missing": missing},
+        )
         return None, None, {}
     try:
         response = requests.get(
@@ -642,14 +659,25 @@ def _lookup_jellyfin_item(title: str) -> Tuple[Optional[str], Optional[str], Dic
 
 def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optional[str], Dict[str, Any]]:
     if not (JELLYFIN_URL and JELLYFIN_API_KEY):
-        return None, None, {}
+        missing = [name for name, value in {"JELLYFIN_URL": JELLYFIN_URL, "JELLYFIN_API_KEY": JELLYFIN_API_KEY}.items() if not value]
+        logger.warning(
+            "Jellyfin refresh skipped due to missing configuration",
+            extra={"namespace": namespace, "title": title, "missing": missing},
+        )
+        raise JellyfinRefreshError(
+            "Jellyfin refresh skipped; credentials not configured",
+            details={"missing": missing, "namespace": namespace, "title": title},
+        )
     if requests is None:
         METRICS.record_refresh_failure()
         logger.warning(
             "Requests dependency missing; cannot refresh Jellyfin",
             extra={"namespace": namespace, "title": title},
         )
-        raise JellyfinRefreshError("requests dependency is not installed")
+        raise JellyfinRefreshError(
+            "requests dependency is not installed",
+            details={"namespace": namespace, "title": title},
+        )
 
     METRICS.record_refresh_attempt()
     if PROM_ENABLED:
@@ -682,7 +710,16 @@ def jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional[str], Optiona
                 "url": url,
             },
         )
-        raise JellyfinRefreshError(f"Refresh failed for namespace {namespace}") from exc
+        raise JellyfinRefreshError(
+            f"Refresh failed for namespace {namespace}",
+            details={
+                "status_code": status_code,
+                "body": body,
+                "url": url,
+                "namespace": namespace,
+                "title": title,
+            },
+        ) from exc
 
     public_url, item_id, meta = _lookup_jellyfin_item(title)
     return public_url, item_id, meta
@@ -699,7 +736,10 @@ async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional
                 "Requests dependency missing; cannot invoke Jellyfin refresh webhook",
                 extra={"namespace": namespace, "title": title},
             )
-            raise JellyfinRefreshError("requests dependency is not installed")
+            raise JellyfinRefreshError(
+                "requests dependency is not installed",
+                details={"namespace": namespace, "title": title, "webhook": JELLYFIN_REFRESH_WEBHOOK_URL},
+            )
 
         METRICS.record_refresh_attempt()
         if PROM_ENABLED:
@@ -736,7 +776,16 @@ async def request_jellyfin_refresh(title: str, namespace: str) -> Tuple[Optional
                     "body": body,
                 },
             )
-            raise JellyfinRefreshError("Webhook refresh failed") from exc
+            raise JellyfinRefreshError(
+                "Webhook refresh failed",
+                details={
+                    "namespace": namespace,
+                    "title": title,
+                    "webhook": JELLYFIN_REFRESH_WEBHOOK_URL,
+                    "status_code": status_code,
+                    "body": body,
+                },
+            ) from exc
 
         return _lookup_jellyfin_item(title)
 
@@ -907,7 +956,8 @@ async def main() -> None:
                 exc_info=exc,
                 extra={"namespace": namespace, "title": title, "publish_event_id": publish_event_id},
             )
-            jellyfin_meta = {"jellyfin_refresh_error": str(exc)}
+            error_details = getattr(exc, "details", {})
+            jellyfin_meta = _combine_meta({"jellyfin_refresh_error": str(exc)}, error_details) or {"jellyfin_refresh_error": str(exc)}
             await record_failure(
                 stage="jellyfin_refresh",
                 reason=_describe_exception(exc),

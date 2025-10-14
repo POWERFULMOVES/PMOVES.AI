@@ -68,6 +68,10 @@ up-gpu: ## Start with optional GPU accelerations where supported
 # Pin a stable Docker Compose project name so make targets
 # always operate on the same stack regardless of cwd/path.
 PROJECT ?= pmoves
+export PROJECT
+
+JELLYFIN_AI_BASE ?= jellyfin-ai
+export JELLYFIN_AI_BASE
 # Supabase provider: 'cli' for Supabase CLI stack, 'compose' for docker-compose stack
 SUPA_PROVIDER ?= cli
 
@@ -407,6 +411,37 @@ smoke-archon:
 	fi; \
 	printf "%s\n" "$$resp"'
 
+.PHONY: chit-contract-check
+chit-contract-check:
+	@bash "$(CURDIR)/../scripts/check_chit_contract.sh"
+
+.PHONY: jellyfin-verify
+jellyfin-verify:
+	@bash -c 'set -euo pipefail; \
+	 if [ -f env.jellyfin-ai ]; then set -a; . env.jellyfin-ai; set +a; fi; \
+	 python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
+
+.PHONY: up-jellyfin-ai
+up-jellyfin-ai:
+	@test -f env.jellyfin-ai || cp env.jellyfin-ai.example env.jellyfin-ai
+	@mkdir -p $(JELLYFIN_AI_BASE)/config $(JELLYFIN_AI_BASE)/cache $(JELLYFIN_AI_BASE)/media $(JELLYFIN_AI_BASE)/output
+	@mkdir -p $(JELLYFIN_AI_BASE)/neo4j/data $(JELLYFIN_AI_BASE)/neo4j/logs $(JELLYFIN_AI_BASE)/neo4j/import $(JELLYFIN_AI_BASE)/neo4j/plugins
+	@mkdir -p $(JELLYFIN_AI_BASE)/qwen/models $(JELLYFIN_AI_BASE)/qwen/cache
+	@mkdir -p $(JELLYFIN_AI_BASE)/logs $(JELLYFIN_AI_BASE)/redis
+	@echo "Starting Jellyfin AI stack..."
+	@JELLYFIN_AI_BASE=$(JELLYFIN_AI_BASE) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.jellyfin-ai.yml up -d --force-recreate \
+		jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-redis jellyfin-audio-processor jellyfin-api-gateway jellyfin-dashboard
+	@echo "✓ Jellyfin AI stack started successfully!"
+	@echo ""
+	@echo "Services:"
+	@echo "  - Jellyfin Media Server:  http://localhost:8096"
+	@echo "  - Dashboard:              http://localhost:8400"
+	@echo "  - API Gateway:            http://localhost:8300"
+	@echo "  - Ollama (Qwen2-Audio):   http://localhost:11434"
+	@echo "  - Neo4j Browser:          bolt://localhost:7687"
+	@echo ""
+	@echo "Note: Qwen2-Audio model is already pulled and ready to use!"
+
 
 .PHONY: flight-check
 flight-check:
@@ -448,6 +483,9 @@ help:
 	@echo "  smoke-pdf        Upload and index a sample PDF via pdf-ingest"
 	@echo "  smoke-langextract Extract chunks via langextract and load"
 	@echo "  smoke-archon     Check Archon healthz endpoint (requires NATS + Supabase)"
+	@echo "  jellyfin-verify  Validate Jellyfin credentials and branding"
+	@echo "  up-jellyfin-ai   Launch the optional Jellyfin AI media stack overlay"
+	@echo "  chit-contract-check Run local CHIT contract grep (mirrors CI)"
 	@echo "  flight-check     Run environment preflight (deps, ports, .env)"
 	@echo "  flight-check-retro Retro-styled Rich CLI preflight"
 	@echo "  env-dedupe       Remove duplicate keys from .env (keeps last, writes .bak)"

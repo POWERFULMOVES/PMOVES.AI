@@ -46,6 +46,7 @@ This backlog turns the integration plan for PMOVES v5.12 into actionable work it
 ## 7. Operational Readiness & QA
 - (★) [ ] Execute rollout checklist covering migrations, env reloads, reranker toggles, pack/persona publish, creator pipeline verification, geometry bus validation, and CI lint rollout; capture evidence in runbook.
 - [ ] Record smoke-test transcripts (REST client, n8n flow, geometry CLI) and archive in `pmoves/docs/evidence/`.
+- [x] Introduce local mirrors for CI guardrails (DONE: `make chit-contract-check`, `make jellyfin-verify`).
 - [ ] Monitor metrics/telemetry dashboards to align with M2 automation goals and capture anomalies.
 
 ---

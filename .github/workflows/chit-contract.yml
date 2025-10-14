@@ -1,8 +1,11 @@
+---
 name: CHIT Contract Check
 
+# yamllint disable rule:truthy
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'pmoves/supabase/**/*.sql'
       - 'pmoves/supabase/initdb/**'
@@ -22,6 +25,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          sparse-checkout: |
+            pmoves
+            docs
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       # Install ripgrep
       - name: Install ripgrep
@@ -33,7 +43,50 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rg -ni --iglob '*.sql' "create table .*(anchors|constellations|shape_points|shape_index)" || (echo "Missing CHIT tables" && exit 1)
-          rg -n "POST /geometry/event|GET /shape/point/.*/jump|/geometry/decode/(text|image|audio)|/geometry/calibration/report" pmoves/services || (echo "Missing CHIT endpoints" && exit 1)
-          rg -n "geometry.cgp.v1" -S || (echo "Missing event publish 'geometry.cgp.v1'" && exit 1)
-          rg -n "CHIT_REQUIRE_SIGNATURE|CHIT_PASSPHRASE|CHIT_DECRYPT_ANCHORS|CHIT_CODEBOOK_PATH|CHIT_T5_MODEL" -S || (echo "Missing CHIT security/env flags" && exit 1)
+          PATTERN_TABLES_BASE='create table .*('
+          PATTERN_TABLES_SUFFIX='anchors|constellations|shape_points|shape_index)'
+          PATTERN_TABLES="${PATTERN_TABLES_BASE}${PATTERN_TABLES_SUFFIX}"
+          if ! rg -ni --iglob '*.sql' "$PATTERN_TABLES"; then
+            echo "Missing CHIT tables"
+            exit 1
+          fi
+          if ! rg -n 'POST /geometry/event' pmoves/services; then
+            echo "Missing CHIT endpoint POST /geometry/event"
+            exit 1
+          fi
+          if ! rg -n 'GET /shape/point/.*/jump' pmoves/services; then
+            echo "Missing CHIT endpoint GET /shape/point/.*/jump"
+            exit 1
+          fi
+          if ! rg -n '/geometry/decode/(text|image|audio)' pmoves/services; then
+            echo "Missing CHIT endpoint /geometry/decode/*"
+            exit 1
+          fi
+          if ! rg -n '/geometry/calibration/report' pmoves/services; then
+            echo "Missing CHIT endpoint /geometry/calibration/report"
+            exit 1
+          fi
+          if ! rg -n 'geometry.cgp.v1' -S; then
+            echo "Missing event publish geometry.cgp.v1"
+            exit 1
+          fi
+          if ! rg -n 'CHIT_REQUIRE_SIGNATURE' -S; then
+            echo "Missing CHIT_REQUIRE_SIGNATURE flag"
+            exit 1
+          fi
+          if ! rg -n 'CHIT_PASSPHRASE' -S; then
+            echo "Missing CHIT_PASSPHRASE flag"
+            exit 1
+          fi
+          if ! rg -n 'CHIT_DECRYPT_ANCHORS' -S; then
+            echo "Missing CHIT_DECRYPT_ANCHORS flag"
+            exit 1
+          fi
+          if ! rg -n 'CHIT_CODEBOOK_PATH' -S; then
+            echo "Missing CHIT_CODEBOOK_PATH flag"
+            exit 1
+          fi
+          if ! rg -n 'CHIT_T5_MODEL' -S; then
+            echo "Missing CHIT_T5_MODEL flag"
+            exit 1
+          fi

@@ -9,13 +9,14 @@ Archon can now run entirely inside the PMOVES local stack alongside Supabase CLI
 - The wrapper sets `ARCHON_SUPABASE_BASE_URL` automatically; downstream MCP clients reuse the adjusted endpoint.
 - Docker builds now run `python -m playwright install --with-deps chromium` so the Crawl4AI workflows have a Chromium binary available. If you build the service manually, rerun that command inside the container.
 - Supabase bootstrap now seeds the empty `public.archon_prompts` table (via `09_archon_prompts.sql` + `10_archon_prompts_seed.sql`) so the backend no longer throws `PGRST205` warnings and ships with basic default prompts.
+- Added `11_chit_geometry.sql` to mirror the CHIT anchor/constellation tables from the migrations so local Supabase stacks always expose the geometry schema Archon expects.
 
 ## 2. Local CI Expectations
 
 Before pushing Archon changes:
 
 - Run the Python service tests (`pytest services/pmoves-yt/tests services/publisher/tests services/publisher-discord/tests`).
-- Execute the CHIT contract grep and SQL policy lint (`docs/LOCAL_CI_CHECKS.md`).
+- Run `make chit-contract-check` (mirrors the CHIT workflow) and the SQL policy lint (`docs/LOCAL_CI_CHECKS.md`).
 - Run the PowerShell env preflight (`scripts/env_check.ps1 -Quick`) or Bash variant.
 - Record command outputs in the PR template.
 

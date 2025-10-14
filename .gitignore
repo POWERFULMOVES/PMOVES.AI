@@ -28,3 +28,5 @@ Thumbs.db
 # Tracked examples like pmoves/.env.example should remain in the repo
 /pmoves/.env
 /pmoves/.env.local
+/pmoves/env.jellyfin-ai
+/pmoves/jellyfin-ai/

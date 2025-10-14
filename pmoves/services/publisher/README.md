@@ -28,10 +28,10 @@ library, and publishes a `content.published.v1` envelope to NATS.
 | `MINIO_SECRET_KEY` | `password` | MinIO secret key. |
 | `MEDIA_LIBRARY_PATH` | `/library/images` | Root directory for downloaded media. |
 | `MEDIA_LIBRARY_PUBLIC_BASE_URL` | unset | Optional HTTP base used to produce public URLs in publish events. |
-| `JELLYFIN_URL` | `http://jellyfin:8096` | Jellyfin base URL for direct refreshes. |
+| `JELLYFIN_URL` | `http://jellyfin:8096` | Jellyfin base URL for direct refreshes (use your Tailscale URL if you want refresh calls to hit that endpoint). |
 | `JELLYFIN_API_KEY` | unset | API token for Jellyfin REST calls. |
 | `JELLYFIN_USER_ID` | unset | Optional user for item lookups. |
-| `JELLYFIN_PUBLIC_BASE_URL` | `JELLYFIN_URL` | Alternate public Jellyfin base for share links. |
+| `JELLYFIN_PUBLIC_BASE_URL` | `JELLYFIN_URL` | Alternate public Jellyfin base for share links (set to `http://localhost:8096` or your Tailscale HTTPS URL for deep links). |
 | `JELLYFIN_REFRESH_WEBHOOK_URL` | unset | When set, triggers a POST instead of calling Jellyfin directly. |
 | `JELLYFIN_REFRESH_WEBHOOK_TOKEN` | unset | Optional bearer token included with webhook POSTs. |
 | `JELLYFIN_REFRESH_DELAY_SEC` | `0` | Optional delay before refresh/webhook execution (seconds). |
@@ -105,6 +105,48 @@ queues or manual approval load.
 
 See `pmoves/docs/TELEMETRY_ROI.md` for step-by-step guidance on charting the
 rollup tables and pairing them with Discord delivery telemetry.
+
+## Jellyfin Credential Smoke
+
+Before relying on the publisher, validate that the Jellyfin URL, API key, and
+optional user ID are correct:
+
+```bash
+cd pmoves
+# Internal compose network (default)
+JELLYFIN_URL=http://jellyfin:8096 \
+JELLYFIN_API_KEY=<your-token> \
+JELLYFIN_USER_ID=<optional-user> \
+make jellyfin-verify
+
+# Example: verify the Tailscale-exposed endpoint instead
+JELLYFIN_URL=https://media.yourtailname.ts.net \
+JELLYFIN_API_KEY=<same-token> \
+JELLYFIN_USER_ID=<optional-user> \
+make jellyfin-verify
+```
+
+The helper script hits `/System/Info`, checks the server branding (defaults to
+`PMOVES Jellyfin`), and, when `JELLYFIN_USER_ID` is provided, enumerates user
+libraries. Fix any reported errors before running end-to-end publisher smokes.
+
+## Optional Jellyfin AI Stack
+
+The repository ships an overlay compose file (`docker-compose.jellyfin-ai.yml`)
+that brings up a Jellyfin media server together with the audio analysis stack
+from `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS`. To launch it alongside the
+core PMOVES services:
+
+```bash
+cd pmoves
+make up-jellyfin-ai
+```
+
+The make target wires the services onto the shared `pmoves-net` network and
+creates data directories under `jellyfin-ai/` by default (override with
+`JELLYFIN_AI_BASE=...` if you prefer a different location). Adjust the published ports
+with `JELLYFIN_HTTP_PORT`, `JELLYFIN_API_PORT`, and `JELLYFIN_DASHBOARD_PORT` if
+the defaults collide with existing services.
 
 ## Local Smoke Test
 
