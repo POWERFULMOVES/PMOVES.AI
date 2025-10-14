@@ -14,9 +14,10 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/cache:/cache
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/media:/media
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/output
-      - ../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/install_plugins.sh:/usr/local/bin/install_plugins.sh:ro
-    entrypoint: >
-      bash -c "chmod +x /usr/local/bin/install_plugins.sh && /usr/local/bin/install_plugins.sh && /init"
+      - ../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/install_plugins.sh:/tmp/install_plugins.sh:ro
+    # Uncomment to auto-install plugins on startup (may slow first boot):
+    # entrypoint: >
+    #   bash -c "apt-get update && apt-get install -y wget unzip && cp /tmp/install_plugins.sh /usr/local/bin/install_plugins.sh && chmod +x /usr/local/bin/install_plugins.sh && /usr/local/bin/install_plugins.sh && /init"
     ports:
       - "${JELLYFIN_HTTP_PORT:-8096}:8096"
     networks:
@@ -43,21 +44,28 @@ services:
     restart: unless-stopped
 
   jellyfin-qwen-audio:
-    image: qwen/qwen-audio:latest
+    # Using Ollama with quantized Qwen2-Audio-7B-Instruct GGUF model
+    # Download model: ollama pull hf.co/second-state/Qwen2-Audio-7B-Instruct-GGUF:Q4_K_M
+    image: ollama/ollama:latest
     container_name: pmoves-jellyfin-qwen
     environment:
-      - MODEL_NAME=${QWEN_AUDIO_MODEL:-Qwen/Qwen-Audio-Chat}
-      - DEVICE=${QWEN_AUDIO_DEVICE:-cpu}
-      - MAX_LENGTH=${QWEN_AUDIO_MAX_LENGTH:-2048}
-      - TEMPERATURE=${QWEN_AUDIO_TEMPERATURE:-0.7}
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_MODELS=/root/.ollama/models
     volumes:
-      - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/qwen/models:/app/models
-      - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/qwen/cache:/app/cache
-      - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/media:/app/input
-      - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/app/output
+      - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/qwen/models:/root/.ollama/models
+    ports:
+      - "11434:11434"
     networks:
       - pmoves
     restart: unless-stopped
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   jellyfin-audio-processor:
     build:
@@ -102,7 +110,7 @@ services:
     env_file:
       - ./env.jellyfin-ai
     environment:
-      - PORT=${JELLYFIN_API_PORT:-8300}
+      - PORT=3000
       - JELLYFIN_URL=${JELLYFIN_URL:-http://jellyfin:8096}
       - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
