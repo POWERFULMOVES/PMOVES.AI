@@ -1,0 +1,375 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "description": "Primary database stack configuration used by most PMOVES services.",
+      "variables": [
+        {
+          "key": "SUPA_REST_URL",
+          "file": "pmoves/.env.local",
+          "prompt": "Supabase REST endpoint (host)",
+          "default": "http://localhost:54321/rest/v1",
+          "help": "Host-facing PostgREST endpoint exposed by `supabase start` or your remote deployment.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "SUPA_REST_INTERNAL_URL",
+          "file": "pmoves/.env.local",
+          "prompt": "Supabase REST endpoint (in-docker)",
+          "default": "http://api.supabase.internal:8000/rest/v1",
+          "help": "Internal PostgREST URL reachable from Docker services when using Supabase CLI.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "GOTRUE_SITE_URL",
+          "file": "pmoves/.env.local",
+          "prompt": "GoTrue site URL",
+          "default": "http://localhost:54323",
+          "help": "GoTrue site URL used for auth callbacks.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "GOTRUE_API_EXTERNAL_URL",
+          "file": "pmoves/.env.local",
+          "prompt": "GoTrue external API URL",
+          "default": "http://localhost:9999",
+          "help": "External GoTrue API endpoint (defaults to Supabase CLI port).",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "SUPABASE_STORAGE_URL",
+          "file": "pmoves/.env.local",
+          "prompt": "Supabase storage URL",
+          "default": "http://localhost:5000",
+          "help": "Storage service base URL exposed by Supabase CLI.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "SUPABASE_PUBLIC_STORAGE_BASE",
+          "file": "pmoves/.env.local",
+          "prompt": "Public storage base URL",
+          "default": "http://localhost:5000",
+          "help": "Public storage base used to build asset links.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "SUPABASE_ANON_KEY",
+          "file": "pmoves/.env.local",
+          "prompt": "Supabase anon key",
+          "help": "Copy from `make supa-status` or your remote Supabase settings.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "SUPABASE_SERVICE_ROLE_KEY",
+          "file": "pmoves/.env.local",
+          "prompt": "Supabase service role key",
+          "help": "Copy from `make supa-status` or your remote Supabase settings.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "SUPABASE_JWT_SECRET",
+          "file": "pmoves/.env.local",
+          "prompt": "Supabase JWT secret",
+          "help": "JWT secret used by Supabase auth. Use the value reported by `make supa-status`.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "DISCORD_WEBHOOK_URL",
+          "file": "pmoves/.env.local",
+          "prompt": "Discord webhook URL (optional)",
+          "help": "Webhook endpoint for publisher notifications. Leave blank to skip.",
+          "required": false,
+          "type": "url_optional"
+        },
+        {
+          "key": "DISCORD_WEBHOOK_USERNAME",
+          "file": "pmoves/.env.local",
+          "prompt": "Discord webhook username",
+          "default": "PMOVES Publisher",
+          "help": "Display name used when posting to the webhook.",
+          "required": false,
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "jellyfin-ai",
+      "name": "Jellyfin AI Overlay",
+      "description": "Media stack overlay powering PMOVES Jellyfin integrations.",
+      "variables": [
+        {
+          "key": "SUPABASE_URL",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Supabase internal REST URL for Jellyfin stack",
+          "default": "http://host.docker.internal:54321",
+          "help": "Supabase REST endpoint reachable from the Jellyfin containers (use host.docker.internal with Supabase CLI).",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "SUPABASE_ANON_KEY",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Supabase anon key (Jellyfin)",
+          "help": "Same anon key used by the core stack.",
+          "required": true,
+          "sensitive": true,
+          "inherit": {
+            "file": "pmoves/.env.local",
+            "key": "SUPABASE_ANON_KEY"
+          }
+        },
+        {
+          "key": "SUPABASE_SERVICE_ROLE_KEY",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Supabase service role key (Jellyfin)",
+          "help": "Same service role key used by the core stack.",
+          "required": true,
+          "sensitive": true,
+          "inherit": {
+            "file": "pmoves/.env.local",
+            "key": "SUPABASE_SERVICE_ROLE_KEY"
+          }
+        },
+        {
+          "key": "JELLYFIN_URL",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Jellyfin base URL",
+          "default": "http://localhost:8096",
+          "help": "Public URL where the Jellyfin server will be exposed.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "JELLYFIN_PUBLIC_BASE_URL",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Jellyfin public base URL",
+          "default": "http://localhost:8096",
+          "help": "Public sharing URL used in embeds.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "JELLYFIN_USERNAME",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Jellyfin admin username",
+          "default": "PMOVES",
+          "help": "Administrator account used for automation.",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "JELLYFIN_PASSWORD",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Jellyfin admin password",
+          "help": "Initial password for the Jellyfin admin account.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 24
+          }
+        },
+        {
+          "key": "JELLYFIN_API_KEY",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Jellyfin API key",
+          "help": "Once the server is running, generate an API key under Dashboard → API Keys.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "JELLYFIN_USER_ID",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Jellyfin user ID (optional)",
+          "help": "UUID of the automation user (fetch via Jellyfin API once the account exists).",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "key": "PROCESSING_INTERVAL",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Audio processor polling interval (seconds)",
+          "default": "300",
+          "help": "How often the audio processor polls for new media.",
+          "required": true,
+          "type": "int"
+        },
+        {
+          "key": "QWEN_AUDIO_URL",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Qwen audio service URL",
+          "default": "http://jellyfin-qwen-audio:11434",
+          "help": "Internal URL for the Ollama Qwen audio service.",
+          "required": true,
+          "type": "url"
+        },
+        {
+          "key": "QWEN_MODEL_NAME",
+          "file": "pmoves/env.jellyfin-ai",
+          "prompt": "Qwen audio model name",
+          "default": "hf.co/second-state/Qwen2-Audio-7B-Instruct-GGUF:Q4_K_M",
+          "help": "Ollama model reference pulled on first boot.",
+          "required": true,
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "presign",
+      "name": "MinIO Presign Service",
+      "description": "Settings for the presign microservice that fronts MinIO/S3 uploads.",
+      "variables": [
+        {
+          "key": "MINIO_ENDPOINT",
+          "file": "pmoves/env.presign.additions",
+          "prompt": "MinIO endpoint",
+          "default": "localhost:9000",
+          "help": "Hostname:port for MinIO or S3-compatible storage.",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "MINIO_ACCESS_KEY",
+          "file": "pmoves/env.presign.additions",
+          "prompt": "MinIO access key",
+          "default": "minioadmin",
+          "help": "Access key for MinIO.",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "MINIO_SECRET_KEY",
+          "file": "pmoves/env.presign.additions",
+          "prompt": "MinIO secret key",
+          "default": "minioadmin",
+          "help": "Secret key for MinIO.",
+          "required": true,
+          "sensitive": true
+        },
+        {
+          "key": "MINIO_SECURE",
+          "file": "pmoves/env.presign.additions",
+          "prompt": "MinIO uses HTTPS?",
+          "default": "false",
+          "help": "Set to true if the endpoint requires HTTPS.",
+          "required": true,
+          "type": "bool"
+        },
+        {
+          "key": "AWS_DEFAULT_REGION",
+          "file": "pmoves/env.presign.additions",
+          "prompt": "AWS/S3 region",
+          "default": "us-east-1",
+          "help": "Region identifier used when signing URLs.",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "ALLOWED_BUCKETS",
+          "file": "pmoves/env.presign.additions",
+          "prompt": "Allowed buckets (comma separated)",
+          "default": "assets,outputs",
+          "help": "Buckets that the presign service will allow.",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "PRESIGN_SHARED_SECRET",
+          "file": "pmoves/env.presign.additions",
+          "prompt": "Presign shared secret",
+          "help": "Used to authenticate webhook callbacks from ComfyUI.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        }
+      ]
+    },
+    {
+      "id": "render-webhook",
+      "name": "Render Webhook",
+      "description": "Secrets for the render webhook that records ComfyUI job completions.",
+      "variables": [
+        {
+          "key": "RENDER_WEBHOOK_SHARED_SECRET",
+          "file": "pmoves/env.render_webhook.additions",
+          "prompt": "Render webhook shared secret",
+          "help": "Shared secret used to authenticate incoming webhook requests.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        },
+        {
+          "key": "RENDER_AUTO_APPROVE",
+          "file": "pmoves/env.render_webhook.additions",
+          "prompt": "Auto-approve renders?",
+          "default": "false",
+          "help": "Set to true to automatically approve render completions.",
+          "required": true,
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "id": "publisher",
+      "name": "Publisher Enrichment",
+      "description": "Discord notification and enrichment settings for the publisher.",
+      "variables": [
+        {
+          "key": "PUBLISHER_NOTIFY_DISCORD_WEBHOOK",
+          "file": "pmoves/env.publisher.enrich.additions",
+          "prompt": "Discord webhook for publisher notifications (optional)",
+          "help": "Webhook URL used by enrichment flows. Leave blank if you only rely on core publisher-discord service.",
+          "required": false,
+          "type": "url_optional"
+        },
+        {
+          "key": "PUBLISHER_REFRESH_ON_PUBLISH",
+          "file": "pmoves/env.publisher.enrich.additions",
+          "prompt": "Refresh Jellyfin metadata on publish?",
+          "default": "true",
+          "help": "Controls whether the enrichment step refreshes Jellyfin metadata.",
+          "required": true,
+          "type": "bool"
+        },
+        {
+          "key": "PUBLISHER_EMBED_COVER",
+          "file": "pmoves/env.publisher.enrich.additions",
+          "prompt": "Embed cover images in notifications?",
+          "default": "true",
+          "help": "Enable or disable thumbnail embedding in Discord notifications.",
+          "required": true,
+          "type": "bool"
+        }
+      ]
+    }
+  ]
+}

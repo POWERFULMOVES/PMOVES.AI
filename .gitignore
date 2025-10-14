@@ -30,3 +30,6 @@ Thumbs.db
 /pmoves/.env.local
 /pmoves/env.jellyfin-ai
 /pmoves/jellyfin-ai/
+
+# Local exports: keep operator-only dumps out of the repo
+/pmoves/docs/coolify/

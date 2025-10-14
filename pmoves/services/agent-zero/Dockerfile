@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir -r /git/agent-zero/requirements.txt \
 
 RUN chmod +x /ins/copy_A0.sh
 
+# Include PMOVES contract schemas so Agent Zero can validate envelopes.
+COPY contracts /app/contracts
+
 # Copy PMOVES service implementation on top of the upstream runtime
 COPY services /app/services
 

@@ -3,16 +3,12 @@
 ## Quickstart
 
 ### 1. Prepare environment files
-- Windows (no Make): `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1`
-- Or use Make targets: `make env-setup` then `make env-check` to interactively generate and verify `.env`.
-- Copy `.env.example` → `.env`. This is the base configuration shared across every compose service.
-- Layer in secrets and provider credentials from the `*.additions` helpers (copy/paste the values into your `.env`). Common entries:
-  - `env.presign.additions`
-  - `env.render_webhook.additions`
-  - `env.hirag.reranker.additions` and `env.hirag.reranker.providers.additions`
-  - `env.publisher.enrich.additions` (if using the Discord publisher or enrichment flows)
-- Optional overlay: copy `.env.local.example` → `.env.local` for per-machine overrides. Supabase helper targets keep this file fresh when you toggle between providers (see below).
-- Additional Supabase templates live at `.env.supa.local.example` and `.env.supa.remote.example`. They are swapped into `.env.local` via `make supa-use-local` / `make supa-use-remote`.
+- Copy `.env.example` → `.env` once; it holds the base compose settings shared by every service.
+- Run the interactive bootstrapper to populate machine-specific secrets and overlays:
+  - `make bootstrap` (uses `python -m pmoves.scripts.bootstrap_env` under the hood)
+  - Pass `BOOTSTRAP_FLAGS="--service supabase"` to scope the prompts, or `--accept-defaults` to reuse existing values without prompting.
+- The bootstrap writes `.env.local`, `env.jellyfin-ai`, and the `env.*.additions` helpers with branded PMOVES defaults, Supabase pointers, and generated secrets. Re-run the command any time you change Supabase endpoints or want to regenerate credentials.
+- Manual edits are still supported; re-run `make bootstrap` afterwards to validate and persist updates.
 
 ### 2. Choose your Supabase backend
 - **Supabase CLI (full feature parity, default path)**
@@ -28,6 +24,7 @@
 
 ### 3. Start the PMOVES stack
 - `make up` — default entry point. Brings up the data profile (`qdrant`, `neo4j`, `minio`, `meilisearch`, `presign`), all default workers (`hi-rag-gateway-v2`, `retrieval-eval`, `render-webhook`, `langextract`, `extract-worker`), plus pmoves.yt (`ffmpeg-whisper`, `pmoves-yt`) and the Jellyfin bridge. When `SUPA_PROVIDER=compose` it automatically chains to `make supabase-up`.
+- `make preflight` — run the bootstrap validator without starting containers. `make up` runs this check automatically and exits early if required secrets are missing.
 - `make up-cli` / `make up-compose` — one-shot shims that force CLI vs. compose Supabase for a single `make up` run.
 - `make up-workers` — only the worker layer (assumes data profile is already running).
 - `make up-media` — opt-in GPU analyzers (`media-video`, `media-audio`).
