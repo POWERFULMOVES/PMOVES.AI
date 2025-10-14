@@ -87,15 +87,15 @@ Perform the following steps in order to validate the pipeline:
 
 | Step | Status | Notes |
 | --- | --- | --- |
-| Dry-run webhook ping | Blocked | Discord webhook credentials unavailable inside Codex; cannot reach external Discord API from sandbox. |
-| Supabase approval trigger | Blocked | Supabase stack not running in the hosted environment; `make` targets require services that are not provisioned. |
-| Verify Agent Zero controller health | Blocked | Agent Zero service is not accessible; health check would require running docker-compose profiles that are disabled in this session. |
-| Enable `approval_poller` workflow | Blocked | n8n instance is not available in Codex; workflow import depends on external UI access. |
-| Enable `echo_publisher` workflow | Blocked | Depends on previous steps; Discord credential binding cannot be validated. |
-| Supabase audit verification | Blocked | Requires Supabase DB access and workflow execution. |
-| Deactivate workflows | Blocked | Workflows never activated due to environment constraints. |
+| Dry-run webhook ping | ✅ (2025-10-14) | Validated end-to-end using the `mock-discord` container and the live `publisher-discord` service; webhook received enriched embed payload. |
+| Supabase approval trigger | ⚙️ In progress | Use `make seed-approval` helper; a dedicated automation run with real n8n polling remains to be scheduled. |
+| Verify Agent Zero controller health | ✅ (2025-10-14) | `GET /healthz` confirms JetStream-connected controller; publish requests succeed (`make demo-content-published`). |
+| Enable `approval_poller` workflow | ⏳ Pending | Requires n8n credentials import; plan captured in this document, activation deferred until secrets available. |
+| Enable `echo_publisher` workflow | ⏳ Pending | Blocked on prior step; Discord embed already verified via manual publish. |
+| Supabase audit verification | ⏳ Pending | To be rerun alongside the n8n activation so `studio_board.meta.publish_event_sent_at` updates can be recorded. |
+| Deactivate workflows | ⏳ Pending | Execute after the live activation run is recorded. |
 
-> **Follow-up**: Re-run the checklist on a workstation with docker-compose profiles (`data`, `orchestration`) and authenticated Discord/Supabase credentials available. Capture screenshots and log excerpts as originally requested once services are reachable.
+> **Follow-up**: Next session should import the n8n flows, wire credentials, and run a full poller → publisher cycle against Supabase so `studio_board` audit fields update with real timestamps/screenshots.
 
 ## Troubleshooting Tips
 - **403 from Agent Zero** — check `AGENT_ZERO_EVENTS_TOKEN` and ensure the shared secret matches the server configuration.

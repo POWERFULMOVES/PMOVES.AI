@@ -27,6 +27,9 @@ endif
 COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_profile)$(supa_profile)
 export COMPOSE_PROFILES
 
+PYTHON ?= python3
+BOOTSTRAP_FLAGS ?=
+
 # -------- Updates ----------
 .PHONY: update
 update:  ## Pull repo + images, recreate stack
@@ -108,6 +111,7 @@ ifeq ($(EXTERNAL_SUPABASE),true)
   endif
 endif
 up:
+	@$(MAKE) preflight
 	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents up -d --scale postgres=0 --scale postgrest=0
 	@$(MAKE) supabase-bootstrap
 	@$(MAKE) neo4j-bootstrap
@@ -454,14 +458,15 @@ endif
 .PHONY: flight-check-retro
 flight-check-retro:
 	@echo "Installing retro flightcheck deps (uv preferred, fallback to pip)" && \
-	( command -v uv >/dev/null 2>&1 && uv pip install -q -r tools/flightcheck/requirements.txt || python -m pip install -q -r tools/flightcheck/requirements.txt ) && \
-	python tools/flightcheck/retro_flightcheck.py
+	( command -v uv >/dev/null 2>&1 && uv pip install -q -r tools/flightcheck/requirements.txt || $(PYTHON) -m pip install -q -r tools/flightcheck/requirements.txt ) && \
+	$(PYTHON) tools/flightcheck/retro_flightcheck.py
 
 .PHONY: preflight
 preflight:
 	@echo "Running PMOVES preflight checks..."
-	@python tools/flightcheck/retro_flightcheck.py --quick || true
-	@python tools/flightcheck/retro_flightcheck.py --theme neon --beep
+	@$(PYTHON) scripts/bootstrap_env.py --check
+	@$(PYTHON) tools/flightcheck/retro_flightcheck.py --quick || true
+	@$(PYTHON) tools/flightcheck/retro_flightcheck.py --theme neon --beep || true
 
 .PHONY: env-dedupe
 env-dedupe:
@@ -518,6 +523,10 @@ setup:
 	else \
 		bash scripts/codex_bootstrap.sh $${CONDA_ENV:-pmoves-ai} ; \
 	fi
+
+.PHONY: bootstrap
+bootstrap:
+	@$(PYTHON) scripts/bootstrap_env.py $(BOOTSTRAP_FLAGS)
 
 .PHONY: supabase-migrate
 supabase-migrate:
