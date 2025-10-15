@@ -21,9 +21,9 @@ services:
     environment:
       - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
-      - PGRST_DB_ANON_ROLE=service_role
-      - PGRST_SERVER_PORT=3000
-      - PGRST_JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.c3VwYWJhc2Utc2VjcmV0LXNob3VsZC1iZS1sb25nLWVub3VnaC1mb3ItcG9zdGdyZXN0
+      - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
+      - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
+      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
     ports: ["3000:3000"]
     profiles: ["orchestration","workers"]
     networks: [pmoves]
