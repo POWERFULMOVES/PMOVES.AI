@@ -21,8 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir uv
+RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 # Copy vendored Agent Zero runtime assets
 COPY runtime ${AGENT_ZERO_HOME}/runtime
