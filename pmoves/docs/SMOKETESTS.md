@@ -312,6 +312,8 @@ HTTP endpoints checked:
 - Outgoing `content.published.v1` envelopes now include the source `description`, `tags`, and merged `meta` fields, plus optional
   `public_url`/`jellyfin_item_id` whenever Jellyfin confirms a library refresh.
 - Configure `MEDIA_LIBRARY_PUBLIC_BASE_URL` to advertise HTTP paths for the downloaded artifacts.
+- Regression coverage now includes a unit test that simulates a MinIO download failure and asserts the publisher emits the
+  `content.publish.failed.v1` envelope with merged metadata and audit context (`test_handle_download_failed_emits_failure_envelope`).
 
 ## Playlist/Channel Ingestion
 
