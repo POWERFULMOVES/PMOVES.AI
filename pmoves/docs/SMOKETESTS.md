@@ -88,7 +88,15 @@ asyncio.run(main())
 PY
 ```
 
-Expected: the Discord channel receives a rich embed with the Smoke Story title, namespace, published path, thumbnail, and tags. Remove `public_url` from the payload if you want to confirm the local-path fallback formatting.
+Expected: the Discord channel receives a rich embed with the Smoke Story title, namespace, published path, thumbnail, and tags.
+
+- If the payload includes `duration`, the embed shows it as `H:MM:SS` (e.g., `0:05:32`).
+- A `thumbnail_url` on the payload or its `meta` block overrides auto-selected cover art thumbnails.
+- Jellyfin items emit deep links that append `&startTime=<seconds>` when timestamps (`start_time`, `start`, `t`) are present.
+- Tags are quoted ( `` `tag` `` ) and capped at the first twelve entries so Discord renders them cleanly.
+- When a summary is present alongside other description content, the remainder appears in a `Summary` field (truncated to Discord's limits) so operators can confirm spillover handling.
+
+Remove `public_url` from the payload if you want to confirm the local-path fallback formatting.
 
 ## 4) Seed Demo Data (Optional but helpful)
 - `make seed-data` (loads small sample docs into Qdrant/Meilisearch)

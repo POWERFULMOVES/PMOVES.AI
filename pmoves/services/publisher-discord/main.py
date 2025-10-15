@@ -326,9 +326,10 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
                 pass
         def _fmt_dur(sec: float) -> str:
             try:
-                sec = int(sec)
-                h = sec // 3600; m = (sec % 3600) // 60; s = sec % 60
-                return f"{h:d}:{m:02d}:{s:02d}" if h > 0 else f"{m:d}:{s:02d}"
+                total = int(round(float(sec)))
+                hours, remainder = divmod(total, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                return f"{hours:d}:{minutes:02d}:{seconds:02d}"
             except Exception:
                 return str(sec)
         description_lines = []
@@ -363,25 +364,54 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 if isinstance(jf_base, str) and jf_base:
                     jf_base = jf_base.rstrip("/")
-                    try:
-                        tval = payload.get("t") or payload.get("start") or payload.get("start_time")
-                        tparam = f"&startTime={int(float(tval))}" if tval is not None else ""
-                    except Exception:
-                        tparam = ""
+                    timestamp_candidates = [
+                        payload.get("t"),
+                        payload.get("start"),
+                        payload.get("start_time"),
+                        payload.get("position"),
+                    ]
+                    if isinstance(meta, dict):
+                        timestamp_candidates.extend(
+                            meta.get(key)
+                            for key in ("t", "start", "start_time", "timestamp", "position")
+                        )
+                    tparam = ""
+                    for candidate in timestamp_candidates:
+                        if candidate is None or candidate == "":
+                            continue
+                        try:
+                            seconds = int(round(float(candidate)))
+                            if seconds < 0:
+                                continue
+                            tparam = f"&startTime={seconds}"
+                            break
+                        except (TypeError, ValueError):
+                            continue
                     jf_link = f"{jf_base}/web/index.html#!/details?id={jellyfin_item_id}{tparam}"
                     emb["fields"].append({"name": "Jellyfin", "value": jf_link, "inline": False})
-        tags = list(_coerce_tags(payload.get("tags") or meta.get("tags") if isinstance(meta, dict) else []))
+        tags_source = payload.get("tags")
+        if not tags_source and isinstance(meta, dict):
+            tags_source = meta.get("tags")
+        tags = list(_coerce_tags(tags_source))
         if tags:
             formatted_tags = ", ".join(f"`{tag}`" for tag in tags[:12])
             emb["fields"].append({"name": "Tags", "value": formatted_tags, "inline": False})
         if description_lines:
             emb["description"] = "\n".join(description_lines)
-        summary = payload.get("summary") or payload.get("description") or meta.get("summary") if isinstance(meta, dict) else None
-        if summary:
+        summary_source = payload.get("summary") or payload.get("description")
+        if not summary_source and isinstance(meta, dict):
+            summary_source = meta.get("summary")
+        if summary_source:
+            summary_text = str(summary_source)
             if "description" not in emb:
-                emb["description"] = str(summary)[:1800]
+                emb["description"] = summary_text[:1800]
+                overflow = summary_text[1800:]
+                if overflow:
+                    emb["fields"].append(
+                        {"name": "Summary (cont.)", "value": overflow[:1024], "inline": False}
+                    )
             else:
-                emb["fields"].append({"name": "Summary", "value": str(summary)[:1024], "inline": False})
+                emb["fields"].append({"name": "Summary", "value": summary_text[:1024], "inline": False})
     else:
         desc = json.dumps(payload)[:1800]
         emb["description"] = f"```json\n{desc}\n```"
