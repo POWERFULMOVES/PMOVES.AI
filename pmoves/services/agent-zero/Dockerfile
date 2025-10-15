@@ -8,11 +8,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY services/agent-zero/requirements.txt ./pmoves-requirements.txt
+# System dependencies required by Agent Zero upstream runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        ffmpeg \
+        git \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        poppler-utils \
+        tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY services/agent-zero/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir uv
+RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 # Copy vendored Agent Zero runtime assets
 COPY services/agent-zero/runtime ${AGENT_ZERO_HOME}/runtime

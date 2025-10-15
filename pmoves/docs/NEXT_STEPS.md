@@ -19,6 +19,7 @@ _Last updated: 2025-10-14_
 - [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields. Use `make demo-content-published` to emit a sample `content.published.v1` envelope and inspect the Discord embed plus Agent Zero realtime listener output (`python pmoves/tools/realtime_listener.py`) for `thumbnail_url`, `duration`, and Jellyfin deep links.
 
 ### 3. Graph & Retrieval Enhancements (Kickoff M3)
+- [x] Wire the gateway `/mindmap/{constellation_id}` endpoint to Neo4j with seed + smoke coverage (2025-10-06).
 - [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
 - [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI, aligning with the prep checklist captured in `SESSION_IMPLEMENTATION_PLAN.md` and ensuring persona publish gating thresholds stay versioned.
@@ -146,6 +147,7 @@ _Last updated: 2025-10-05_
 - [ ] Plot baseline ROI visuals (turnaround vs engagement vs cost) using the Supabase rollup tables and incorporate the guidance captured in `TELEMETRY_ROI.md` into the dashboard notes.
 
 ### 3. Graph & Retrieval Enhancements (Kickoff M3)
+- [x] Wire the gateway `/mindmap/{constellation_id}` endpoint to Neo4j with seed + smoke coverage (2025-10-06).
 - [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
 - [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI, aligning with the prep checklist captured in `SESSION_IMPLEMENTATION_PLAN.md` and ensuring persona publish gating thresholds stay versioned.
@@ -175,7 +177,7 @@ _Last updated: 2025-10-05_
 - [ ] Exercise the creator pipeline end-to-end (presign → webhook → approval → index → publish) and document emitted events (`kb.ingest.asset.created.v1`, `kb.pack.published.v1`, `persona.published.v1`, `content.published.v1`).
 - [ ] Confirm geometry bus emissions (`geometry.cgp.v1`) populate the ShapeStore cache.
   - Watch the `hi-rag-gateway-v2` startup logs for `ShapeStore warmed with … Supabase constellations` once the Supabase tables are seeded.
-  - Hit `$SUPA_REST_URL/geometry_cgp_packets?select=created_at&order=created_at.desc&limit=5` (or the fallback `constellations` query if the packets view is absent) to verify PostgREST is returning the rows used for cache warm-up.
+  - Hit `$SUPA_REST_URL/geometry_cgp_packets?select=created_at&order=created_at.desc&limit=5` (or the fallback `constellations` query if the packets view is absent) to verify PostgREST is returning the rows used for cache warm-up. `make smoke-geometry-db` now automates the baseline check against `constellations`, `shape_points`, and `shape_index`.
   - Use `python pmoves/tools/realtime_listener.py` (or the `/geometry/` UI) to confirm realtime `geometry.cgp.v1` broadcasts continue to refresh the cache after boot.
 - [ ] Draft a CI-oriented pack manifest linter (selectors, age, size limits) and reference the proposal in `pmoves/docs/ROADMAP.md` once scoped.
 
@@ -246,3 +248,6 @@ _Last updated: 2025-10-05_
 ---
 
 > Archived snapshot (2025-09-08): [NEXT_STEPS_2025-09-08](archive/NEXT_STEPS_2025-09-08.md)
+
+
+

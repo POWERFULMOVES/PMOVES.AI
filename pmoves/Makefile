@@ -63,10 +63,7 @@ up-gpu: ## Start with optional GPU accelerations where supported
 	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
-
-.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote
- .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
-
+.PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 
 # Pin a stable Docker Compose project name so make targets
 # always operate on the same stack regardless of cwd/path.
@@ -103,20 +100,6 @@ else
 DATA_SERVICES += postgres postgrest
 endif
 endif
-
-POSTGRES_SCALE_FLAGS :=
-ifeq ($(EXTERNAL_SUPABASE),true)
-  ifneq ($(SUPA_PROVIDER),compose)
-    POSTGRES_SCALE_FLAGS := --scale postgres=0 --scale postgrest=0
-  endif
-endif
-up:
-	@$(MAKE) preflight
-	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents up -d --scale postgres=0 --scale postgrest=0
-	@$(MAKE) supabase-bootstrap
-	@$(MAKE) neo4j-bootstrap
-	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents up -d $(strip $(POSTGRES_SCALE_FLAGS))
-
 
 down:
 	docker compose -p $(PROJECT) down
@@ -355,6 +338,16 @@ smoke-pdf:
 	  | jq -e '.ingest.chunks >= 1' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "PDF ingest smoke passed."
 
+.PHONY: mindmap-seed
+mindmap-seed:
+	@echo "Seeding Neo4j with CHIT mindmap demo data..."
+	docker compose -p $(PROJECT) exec neo4j cypher-shell -a bolt://localhost:7687 -u $${NEO4J_USER:-neo4j} -p $${NEO4J_PASSWORD:-neo4j} -f /cypher/003_seed_chit_mindmap.cypher
+
+.PHONY: mindmap-smoke
+mindmap-smoke:
+	@echo "Querying /mindmap demo constellation..."
+	python scripts/mindmap_query.py --base $${MINDMAP_BASE:-http://localhost:8000} --cid $${MINDMAP_CONSTELLATION_ID:-8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111} --limit $${MINDMAP_LIMIT:-5}
+
 .PHONY: seed-data
 seed-data:
 	@echo "Building hi-rag-gateway-v2 (to include seed scripts) if needed..."
@@ -486,6 +479,8 @@ help:
 	@echo "  export-jsonl     Export namespace to JSONL (OUT=/abs/path)"
 	@echo "  smoke-presign-put Test presign PUT and upload"
 	@echo "  smoke-pdf        Upload and index a sample PDF via pdf-ingest"
+	@echo "  mindmap-seed     Load CHIT demo constellation into Neo4j"
+	@echo "  mindmap-smoke    Query /mindmap using the seeded constellation"
 	@echo "  smoke-langextract Extract chunks via langextract and load"
 	@echo "  smoke-archon     Check Archon healthz endpoint (requires NATS + Supabase)"
 	@echo "  jellyfin-verify  Validate Jellyfin credentials and branding"
@@ -500,6 +495,7 @@ help:
 	@echo "  venv-min         Create a minimal .venv and install tools/requirements-minimal.txt"
 	@echo "  supabase-migrate Apply supabase/migrations/*.sql via docker compose"
 	@echo "  smoke-geometry   Post a CGP, jump a point, decode text, and run calibration"
+	@echo "  smoke-geometry-db Validate seeded geometry rows via PostgREST"
 	@echo "  codebook-gen     Generate structured_dataset.jsonl from a source JSONL"
 	@echo "  mcp-agent-zero   Run Agent Zero MCP stdio shim (FORM=CREATOR|RESEARCHER|POWERFULMOVES)"
 	@echo "  mcp-archon       Run Archon MCP stdio shim (FORM=...)"
@@ -546,6 +542,19 @@ smoke-geometry:
 	@echo "[4/4] POST /geometry/calibration/report" && curl -sf http://localhost:8087/geometry/calibration/report -H 'content-type: application/json' -d @.tmp_cgp.json | jq -e '.constellations|length>=1' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
 	@rm -f .tmp_cgp.json
 	@echo "Geometry smoke passed."
+
+.PHONY: smoke-geometry-db
+smoke-geometry-db:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-geometry-db" && exit 1)
+	@SUPA_URL=${SUPABASE_REST_URL:-${SUPA_REST_URL:-http://localhost:3000}} ; \
+	 CONST_ID=8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111 ; \
+	 echo "[1/3] GET $SUPA_URL/constellations?id=eq.$CONST_ID" ; \
+	 curl -sf "$SUPA_URL/constellations" --get --data-urlencode "id=eq.$CONST_ID" --data-urlencode "select=id,summary,meta" | jq -e 'length==1' >/dev/null && echo OK || (echo FAIL && exit 1) ; \
+	 echo "[2/3] GET $SUPA_URL/shape_points?constellation_id=eq.$CONST_ID" ; \
+	 curl -sf "$SUPA_URL/shape_points" --get --data-urlencode "constellation_id=eq.$CONST_ID" --data-urlencode "select=id,modality,ref_id,t_start,t_end,proj,conf" | jq -e 'map(select(.modality=="video"))|length>=1' >/dev/null && echo OK || (echo FAIL && exit 1) ; \
+	 echo "[3/3] GET $SUPA_URL/shape_index?shape_id=eq.$CONST_ID" ; \
+	 curl -sf "$SUPA_URL/shape_index" --get --data-urlencode "shape_id=eq.$CONST_ID" --data-urlencode "select=loc_hash,meta" | jq -e 'length>=2' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "Geometry DB smoke passed."
 
 .PHONY: codebook-gen
 codebook-gen:

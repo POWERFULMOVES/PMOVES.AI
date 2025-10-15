@@ -1,128 +1,67 @@
-# Gemini Smoke Test Plan for PMOVES.AI
+# Gemini Workspace & Project Next Steps
 
-This document outlines the plan for running the smoke tests for the PMOVES.AI project. The plan is based on the information provided in the `pmoves/docs/SMOKETESTS.md` and `pmoves/README.md` files.
+This document outlines the immediate priorities and next steps for the PMOVES.AI project, as understood from the project's own documentation (`AGENTS.md`, `pmoves/docs/NEXT_STEPS.md`, `pmoves/docs/ROADMAP.md`).
 
-## 1. Environment Setup
+## Current Milestone: M2 - Creator & Publishing
 
-1.  Create the `.env` file from the `.env.example` file.
-2.  Append the contents of `env.presign.additions` and `env.render_webhook.additions` to the `.env` file.
-3.  Optionally, for rerank configuration, append the contents of `env.hirag.reranker.additions` and `env.hirag.reranker.providers.additions` to the `.env` file.
-4.  Set the `PRESIGN_SHARED_SECRET` and `RENDER_WEBHOOK_SHARED_SECRET` in the `.env` file.
-5.  Ensure the MinIO buckets (`assets`, `outputs`) exist. They can be created via the MinIO Console at `http://localhost:9001`.
+The project is currently focused on completing the **M2 (Creator & Publishing)** milestone.
 
-## 2. Preflight Check
+### Immediate Priorities (from `NEXT_STEPS.md`)
 
-Run the preflight check to ensure the environment is set up correctly:
+1.  **Finish the M2 Automation Loop**:
+    *   Execute the Supabase -> Agent Zero -> Discord activation checklist.
+    *   Populate `.env` with Discord webhook credentials and test.
+    *   Activate n8n workflows for approval polling and publishing.
+    *   Validate Jellyfin integration and metadata propagation.
+    *   Log all steps and evidence in `SESSION_IMPLEMENTATION_PLAN.md`.
 
-```bash
-make flight-check
-```
+2.  **Jellyfin Publisher Reliability**:
+    *   Expand error handling and reporting.
+    *   Backfill historical Jellyfin entries with enriched metadata.
 
-or for Windows:
+3.  **Graph & Retrieval Enhancements (Kickoff M3)**:
+    *   Seed Neo4j with the brand alias dictionary.
+    *   Outline relation-extraction passes from captions/notes.
+    *   Prepare a parameter sweep plan for the reranker.
 
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1
-```
+4.  **PMOVES.YT High-Priority Lane**:
+    *   Design and document a resilient download module.
+    *   Specify multipart upload and checksum verification for MinIO.
+    *   Define metadata enrichment requirements and schema updates.
+    *   Draft the `faster-whisper` GPU migration plan.
+    *   Document Gemma integration paths.
+    *   Define API hardening, observability, and security tasks.
 
-## 3. Start Core Stack
+5.  **Platform Operations & Tooling**:
+    *   Draft a Supabase RLS hardening checklist.
+    *   Plan optional CLIP + Qwen2-Audio integrations.
+    *   Outline a presign notebook walkthrough.
 
-Start the core services:
+6.  **Grounded Personas & Packs Launch**:
+    *   Apply database migrations for grounded personas and geometry support.
+    *   Update `.env` with new feature toggles.
+    *   Seed baseline YAML manifests for personas and packs.
+    *   Wire the retrieval-eval harness as a persona publish gate.
+    *   Exercise the creator pipeline end-to-end and document events.
+    *   Confirm geometry bus emissions populate the ShapeStore cache.
+    *   Draft a CI-oriented pack manifest linter.
 
-```bash
-make up
-```
+### Next Session Focus
 
-Wait for ~15–30s for services to become ready.
+*   Implement `media-video` and `media-audio` analysis pipelines.
+*   Switch to `faster-whisper` with GPU auto-detect.
+*   Enable CLIP embeddings on keyframes.
+*   Implement end-to-end n8n flows.
+*   Finalize Jellyfin refresh hook and Discord rich embeds.
+*   Perform Supabase RLS hardening.
+*   Integrate Qwen2-Audio provider.
+*   Add Gemma summaries and new endpoints to PMOVES.YT.
 
-## 4. Health Checks
+## General Guidance (from `AGENTS.md`)
 
-Perform health checks on the running services:
+*   **Documentation**: All changes must be accompanied by clear and up-to-date documentation.
+*   **Commits & PRs**: Commits should be focused and descriptive. PRs must have context-rich descriptions.
+*   **Scope Alignment**: All work should align with the `ROADMAP.md` and `NEXT_STEPS.md`.
+*   **Repository Structure**: Core application code is in `pmoves/`. General documentation is in `docs/`.
 
-```bash
-curl http://localhost:8088/healthz
-curl http://localhost:8085/healthz
-curl http://localhost:3000
-curl http://localhost:8087/hirag/admin/stats
-curl http://localhost:8092/healthz
-```
-
-## 5. Seed Data
-
-Seed the database with test data:
-
-```bash
-make seed-data
-```
-
-## 6. Run Smoke Tests
-
-Run the smoke tests:
-
--   **macOS/Linux:**
-    ```bash
-    make smoke
-    ```
--   **Windows:**
-    ```powershell
-    pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1
-    ```
-
-## 7. Geometry Bus (CHIT) - End-to-end
-
-Run the end-to-end tests for the Geometry Bus.
-
-1.  Create `cgp.json` file.
-2.  POST the event to the geometry event endpoint.
-3.  Perform a jump test.
-4.  Perform optional decoder tests.
-5.  Get the calibration report.
-
-## 8. Live Geometry UI + WebRTC
-
-Test the Live Geometry UI and WebRTC functionality by opening `http://localhost:8087/geometry/` in a browser and following the instructions in `SMOKETESTS.md`.
-
-## 9. Mesh Handshake (NATS)
-
-Test the Mesh Handshake:
-
-```bash
-make mesh-up
-```
-
-Then follow the instructions in `SMOKETESTS.md`.
-
-## 10. Import Capsule → DB (Offline Ingest)
-
-Test the offline ingest functionality using the `datasets/example_capsule.json` file and the UI or `make mesh-handshake`.
-
-## 11. YouTube → Index + Shapes
-
-Test the YouTube ingestion and processing pipeline:
-
-```bash
-make yt-emit-smoke URL=https://www.youtube.com/watch?v=2Vv-BfVoq4g
-```
-
-## 12. Optional Smoke Tests
-
-Run the optional smoke tests:
-
-```bash
-make smoke-presign-put
-make smoke-rerank
-make smoke-langextract
-```
-
-## 13. Cleanup
-
-Stop the services and clean up the environment:
-
-```bash
-make down
-```
-
-For a destructive cleanup (removes volumes):
-
-```bash
-make clean
-```
+This file will be used to guide my actions and ensure alignment with the project's goals.
