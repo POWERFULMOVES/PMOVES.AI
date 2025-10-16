@@ -33,6 +33,8 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/.../...
 DISCORD_WEBHOOK_USERNAME=PMOVES Publisher
 ```
 
+> **Token enforcement (optional)**: Agent Zero accepts `/events/publish` without a token by default. To require authentication, generate a shared secret (for example `openssl rand -hex 16`), set `AGENT_ZERO_EVENTS_TOKEN=<secret>` in `.env`, and ensure the same value is passed by clients via the `x-agent-token` header. Update the Agent Zero compose profile to pick up the new env value before restarting the service.
+
 ### Env alignment notes
 - Both `SUPA_REST_URL` and `SUPABASE_REST_URL` are now supported for local development. Compose services use `SUPA_REST_URL`; n8n flows reference `SUPABASE_REST_URL`. The example `.env` defines both and points them at `http://postgrest:3000`.
 - Prefer `DISCORD_WEBHOOK_USERNAME` for webhook display name. `services/publisher-discord` also supports `DISCORD_USERNAME` for backward compatibility.
@@ -45,7 +47,7 @@ DISCORD_WEBHOOK_USERNAME=PMOVES Publisher
 1. In the n8n UI, import `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json` (see also `N8N_SETUP.md`).
 2. Open **Credentials** and create the following entries:
    - `Supabase Service Role` — HTTP Basic auth with the service role key (username blank, password set to the key).
-   - `Agent Zero Events` — HTTP Header Auth with `Authorization: Bearer <AGENT_ZERO_EVENTS_TOKEN>`.
+   - `Agent Zero Events` — HTTP Header Auth with `Authorization: Bearer <AGENT_ZERO_EVENTS_TOKEN>`; add a custom header `x-agent-token: <AGENT_ZERO_EVENTS_TOKEN>` if token enforcement is enabled.
    - `Discord Webhook` — HTTP Request node credential with the webhook URL.
 3. Edit the imported workflows:
    - Set the Supabase node base URL to `${SUPABASE_REST_URL}`.
