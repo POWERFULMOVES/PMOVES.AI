@@ -124,19 +124,21 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 | Step | Timestamp (UTC) | Evidence Link/Note |
 | --- | --- | --- |
 
-| agent-zero health OK | 2025-10-16T22:14:12Z | `make m2-preflight` → Agent Zero `/healthz` reports `nats.connected=true`. |
+| agent-zero health OK | 2025-10-17T15:29:23Z | `curl -sv http://localhost:8080/healthz` → `nats.connected=true`, JetStream active. |
 | jellyfin-bridge health OK | — | Not exercised during this session. |
-| publisher-discord health OK | 2025-10-16T22:18:05Z | `make health-publisher-discord` shows `webhook_success=1` against `mock-discord`. |
-| Discord webhook ping successful | 2025-10-16T22:18:12Z | POST `/publish` test delivered to `mock-discord`; logged via publisher container. |
-| n8n approval_poller imported + creds set | 2025-10-16T22:30:36Z | `docker exec pmoves-n8n-1 n8n import:workflow --input=/tmp/approval_poller.json --activate`. |
+| publisher-discord health OK | 2025-10-17T16:27:10Z | `curl http://localhost:8094/healthz | jq` confirms live webhook loaded (no sends yet). |
+| Discord webhook ping successful | 2025-10-17T15:21:05Z | `bash ./pmoves/scripts/discord_ping.sh` (HTTP 204) hit PMOVES-HooK channel. |
+| n8n approval_poller imported + creds set | 2025-10-17T15:23:02Z | `n8n import:workflow --input=/tmp/approval_poller.json --activate` after JSON normalization. |
+| n8n owner + API key rotated | 2025-10-17T16:34:47Z | Created owner user, generated `PMOVES-N8N` API key, updated `.env`/`.env.local`, and force-recreated n8n containers. |
 | Preflight checks pass (Env/SQL/Tests) | 2025-10-16T22:13:40Z | `make m2-preflight` completed without errors. |
 | Webhook smoke (dry) reviewed | — | Outstanding. |
 | Webhook smoke (live) returns 200 | 2025-10-16T22:18:18Z | Manual `/publish` call returned HTTP 200 with embed payload. |
 | Publisher metrics visible (/metrics.json) | — | Not captured this run. |
 | Discord embed formatter tests pass | — | Deferred; depends on poller completion. |
-| n8n echo_publisher imported + creds set | 2025-10-16T22:31:41Z | `n8n list:workflow` confirms `PMOVES • Content Published → Discord v1` active. |
-| n8n activated (poller → echo publisher) | 2025-10-16T22:20:00Z | Activation logs present; no executions recorded (cron scheduler idle—even `Debug Cron` workflow `CCtEGP3jHXZEUu3P` never fires). |
-| Supabase row seeded (status=approved) | 2025-10-16T22:11:47Z | `studio_board` row id 38 seeded via Supabase REST with `status='approved'`. |
+| n8n echo_publisher imported + creds set | 2025-10-17T15:23:19Z | `n8n import:workflow --input=/tmp/echo_publisher.json --activate` (webhook ready). |
+| n8n activated (poller → echo publisher) | 2025-10-17T15:25:46Z | Container restart logged activation for both workflows; scheduler still idle (0 executions). |
+| Supabase REST URL correction | 2025-10-17T16:45:30Z | Set `SUPABASE_REST_URL=http://host.docker.internal:54321/rest/v1` in `.env.local` so n8n container can reach Supabase CLI (was `localhost`, causing connection refused). |
+| Supabase row seeded (status=approved) | 2025-10-17T15:20:52Z | `bash tools/seed_studio_board.sh "Automation Live Demo" s3://outputs/demo/live.png` created row id 39. |
 | Agent Zero received content.publish.approved.v1 | — | Blocked by inactive poller. |
 | Supabase row patched (status=published, publish_event_sent_at) | — | Blocked by inactive poller. |
 | Discord embed received for content.published.v1 | — | Blocked by inactive poller. |

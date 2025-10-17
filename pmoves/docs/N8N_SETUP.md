@@ -1,5 +1,5 @@
 # n8n Setup Checklist (Supabase → Agent Zero → Discord)
-_Last updated: 2025-09-30_
+_Last updated: 2025-10-17_
 
 ## Overview
 This guide streamlines importing and running the PMOVES approval and publish workflows in n8n. It targets Supabase CLI on the host, Agent Zero + NATS in Docker, and Discord webhooks.
@@ -26,9 +26,10 @@ Set these in n8n (Settings → Variables) or via container env:
 - `DISCORD_WEBHOOK_USERNAME` = `PMOVES Publisher`
 - `N8N_RUNNERS_AUTH_TOKEN` = `<shared secret – must match the sidecar>`
 - `N8N_DEFAULT_TIMEZONE` = `America/New_York` (aligns cron schedules with project TZ)
-- `N8N_EXECUTIONS_PROCESS` = `main` (keeps cron execution in the core process while runners handle jobs)
 
 Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Make target `make up-n8n`, populate `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, and `N8N_RUNNERS_AUTH_TOKEN` in `.env.local`. Rotate the runner token any time the sidecar logs authentication failures.
+
+Note: n8n 1.115.3 already executes cron triggers in the main process. Avoid re-adding the deprecated `EXECUTIONS_PROCESS` flag—the service emits a warning and ignores it.
 
 ## Container Tooling
 - The custom image defined in `compose/n8n/Dockerfile` bakes in the `sqlite3` CLI so DB inspections persist across restarts.
@@ -104,7 +105,7 @@ These flows extend the core approval automations so we can surface RVC voice out
 - 503 from Agent Zero: confirm NATS + Agent Zero are running (`make up-agents`).
 - Discord no messages: verify `DISCORD_WEBHOOK_URL` and check rate limits in n8n logs.
 - n8n cannot reach host services on Linux: replace `host.docker.internal` with the host IP or Docker gateway (`172.17.0.1`).
-- Cron schedule idle: confirm `workflow_entity.staticData` populates after activation. If it stays `null`, the scheduler is not persisting its next run; double-check `N8N_DEFAULT_TIMEZONE`, `N8N_EXECUTIONS_PROCESS`, and inspect `wait-tracker` logs for scheduler errors.
+- Cron schedule idle: confirm `workflow_entity.staticData` populates after activation. If it stays `null`, the scheduler is not persisting its next run; double-check `N8N_DEFAULT_TIMEZONE` and inspect `wait-tracker` logs for scheduler errors.
 
 ## Related
 - Playbook: `SUPABASE_DISCORD_AUTOMATION.md`

@@ -1,4 +1,5 @@
 {
+  "workflowId": "iduu9yTMifft1p47",
   "meta": {
     "instanceId": "pmoves-demo"
   },
@@ -24,40 +25,38 @@
     },
     {
       "parameters": {
-        "authentication": "none",
-        "requestMethod": "GET",
         "url": "={{ $env.SUPABASE_REST_URL }}/studio_board",
-        "jsonParameters": false,
-        "options": {
-          "queryParametersUi": {
-            "parameter": [
-              {
-                "name": "status",
-                "value": "eq.approved"
-              },
-              {
-                "name": "meta->>publish_event_sent_at",
-                "value": "is.null"
-              },
-              {
-                "name": "order",
-                "value": "created_at.asc"
-              }
-            ]
-          },
-          "headerParametersUi": {
-            "parameter": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
-              }
-            ]
-          }
-        }
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "eq.approved"
+            },
+            {
+              "name": "meta->>publish_event_sent_at",
+              "value": "is.null"
+            },
+            {
+              "name": "order",
+              "value": "created_at.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "fetch_supabase",
       "name": "Fetch Pending Approvals",
@@ -96,26 +95,27 @@
     },
     {
       "parameters": {
-        "authentication": "none",
-        "requestMethod": "POST",
+        "method": "POST",
         "url": "={{ $env.AGENT_ZERO_BASE_URL }}/events/publish",
-        "jsonParameters": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-agent-token",
+              "value": "={{ $env.AGENT_ZERO_EVENTS_TOKEN || '' }}"
+            }
+          ]
+        },
         "sendBody": true,
-        "bodyParametersJson": "={{ JSON.stringify($json.envelope) }}",
-        "options": {
-          "headerParametersUi": {
-            "parameter": [
-              {
-                "name": "content-type",
-                "value": "application/json"
-              },
-              {
-                "name": "x-agent-token",
-                "value": "={{ $env.AGENT_ZERO_EVENTS_TOKEN }}"
-              }
-            ]
-          }
-        }
+        "bodyParameters": {
+          "parameters": []
+        },
+        "body": "={{ JSON.stringify($json.envelope) }}",
+        "options": {}
       },
       "id": "publish_event",
       "name": "Publish Approval Event",
@@ -128,34 +128,35 @@
     },
     {
       "parameters": {
-        "authentication": "none",
-        "requestMethod": "PATCH",
+        "method": "PATCH",
         "url": "={{ $env.SUPABASE_REST_URL }}/studio_board?id=eq.{{$json.rowId}}",
-        "jsonParameters": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "prefer",
+              "value": "return=minimal"
+            },
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            }
+          ]
+        },
         "sendBody": true,
-        "bodyParametersJson": "={{ JSON.stringify($json.patch) }}",
-        "options": {
-          "headerParametersUi": {
-            "parameter": [
-              {
-                "name": "content-type",
-                "value": "application/json"
-              },
-              {
-                "name": "prefer",
-                "value": "return=minimal"
-              },
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
-              }
-            ]
-          }
-        }
+        "bodyParameters": {
+          "parameters": []
+        },
+        "body": "={{ JSON.stringify($json.patch) }}",
+        "options": {}
       },
       "id": "mark_processed",
       "name": "Mark Approval Row",

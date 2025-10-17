@@ -16,6 +16,8 @@ _Copy-paste friendly for internal wiki_
     - `AGENT_ZERO_EVENTS_TOKEN` (optional)
     - `DISCORD_WEBHOOK_URL=<webhook>`
     - `DISCORD_WEBHOOK_USERNAME=PMOVES Publisher`
+  - `N8N_DEFAULT_TIMEZONE=America/New_York`
+  - `N8N_RUNNERS_AUTH_TOKEN=<shared secret>`
 
 - Seed approval row
   - `make seed-approval TITLE="Demo" URL="s3://outputs/demo/example.png"`
