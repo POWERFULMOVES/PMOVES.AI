@@ -1,4 +1,5 @@
 # PMOVES top-level Makefile
+SHELL := /bin/bash
 
 # -------- External-mode → Compose profiles ----------
 # If EXTERNAL_* is true, we skip the corresponding local service profile.
@@ -29,6 +30,8 @@ export COMPOSE_PROFILES
 
 PYTHON ?= python3
 BOOTSTRAP_FLAGS ?=
+PROJECT ?= pmoves
+SMOKE_LOG_DIR ?= docs/logs
 
 # -------- Updates ----------
 .PHONY: update
@@ -57,28 +60,6 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 	@echo "See docs/LOCAL_DEV.md (Restore) for step-by-step instructions."
 
 # -------- GPU profile ----------
-.PHONY: up-gpu
-up-gpu: ## Start with optional GPU accelerations where supported
-	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
-	@echo "✔ Stack started with GPU profile."
-
-.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
-
-.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote
- .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
-
-
-# Pin a stable Docker Compose project name so make targets
-# always operate on the same stack regardless of cwd/path.
-PROJECT ?= pmoves
-export PROJECT
-
-JELLYFIN_AI_BASE ?= jellyfin-ai
-export JELLYFIN_AI_BASE
-# Supabase provider: 'cli' for Supabase CLI stack, 'compose' for docker-compose stack
-SUPA_PROVIDER ?= cli
-
-# Data services differ by provider: with CLI we don't run Postgres/PostgREST here
 DATA_SERVICES := minio presign
 
 ifeq ($(EXTERNAL_QDRANT),true)
@@ -87,6 +68,7 @@ DATA_SERVICES += qdrant
 endif
 
 ifeq ($(EXTERNAL_NEO4J),true)
+preflight: flightcheck-install-deps
 else
 DATA_SERVICES += neo4j
 endif
@@ -112,10 +94,10 @@ ifeq ($(EXTERNAL_SUPABASE),true)
 endif
 up:
 	@$(MAKE) preflight
-	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents up -d --scale postgres=0 --scale postgrest=0
+	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents --profile orchestration up -d --scale postgres=0 --scale postgrest=0
 	@$(MAKE) supabase-bootstrap
 	@$(MAKE) neo4j-bootstrap
-	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents up -d $(strip $(POSTGRES_SCALE_FLAGS))
+	@docker compose -p $(PROJECT) --profile data --profile workers --profile agents --profile orchestration up -d $(strip $(POSTGRES_SCALE_FLAGS))
 
 
 down:
@@ -209,6 +191,10 @@ supa-status:
 	where supabase > NUL 2>&1 || (echo Supabase CLI not found. Install via 'winget install supabase.supabase' or 'npm i -g supabase' && exit 1)
 	supabase status
 
+.PHONY: supa-cli-update
+supa-cli-update:
+	@bash "$(CURDIR)/../scripts/update_supabase_cli.sh"
+
 supa-extract-remote:
 	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/extract_supa_md.ps1 -Source supa.md -Out .env.supa.remote
 
@@ -274,54 +260,87 @@ up-legacy:
 .PHONY: discord-ping
 discord-ping:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for discord-ping" && exit 1)
-	@if [ -z "$$DISCORD_WEBHOOK_URL" ]; then echo "Set DISCORD_WEBHOOK_URL in env or .env/.env.local" && exit 1; fi
-	@MSG="$${MSG:-PMOVES Discord wiring check}"; \
-	sh -c './pmoves/scripts/discord_ping.sh "'"$${MSG}"'"'
+	@bash -c 'set -euo pipefail; \
+	 if [ -f .env ]; then set -a; . .env; set +a; fi; \
+	 if [ -f .env.local ]; then set -a; . .env.local; set +a; fi; \
+	 if [ -z "$${DISCORD_WEBHOOK_URL:-}" ]; then echo "Set DISCORD_WEBHOOK_URL in .env or .env.local" >&2; exit 1; fi; \
+	 MSG="$${MSG:-PMOVES Discord wiring check}"; \
+	 bash "$(CURDIR)/scripts/discord_ping.sh" "$${MSG}"'
 
 .PHONY: discord-ping-ps
 discord-ping-ps:
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/discord_ping.ps1 -Message "$(MSG)"
 
+.ONESHELL: smoke
 .PHONY: smoke
 smoke:
-	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke tests" && exit 1)
-	@echo "[1/13] Qdrant ready..." && curl -sf http://localhost:6333/readyz >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[2/13] Meilisearch ready..." && curl -sf http://localhost:7700/health >/dev/null && echo OK || (echo WARN: skipping; true)
-	@echo "[3/13] Neo4j UI..." && curl -sf http://localhost:7474 >/dev/null && echo OK || (echo WARN: UI not reachable; true)
-	@echo "[4/13] presign health..." && curl -sf http://localhost:8088/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[5/13] render-webhook health..." && curl -sf http://localhost:8085/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
-	@REST_BASE="$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; \
-	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
-	 echo "[6/13] PostgREST reachable..." && curl -sf "$${REST_BASE}/it_errors?select=id&limit=1" -H "apikey: $$APIKEY" >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[7/13] Insert via render-webhook..." && curl -sf -X POST http://localhost:8085/comfy/webhook \
-	 -H "Content-Type: application/json" \
-	 -H "Authorization: Bearer $${RENDER_WEBHOOK_SHARED_SECRET:-change_me}" \
-	 -d '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","presigned_get":null,"title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@REST_BASE="$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; \
-	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
-	 echo "[8/13] Verify studio_board row..." && curl -sf "$${REST_BASE}/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[9/13] Hi-RAG v2 query..." && curl -sf localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[10/13] Agent Zero health..." && curl -sf http://localhost:8080/healthz | jq -e '.nats.connected == true' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[11/13] Seed geometry builder pack..." && curl -sf http://localhost:8077/yt/smoke/seed-pack -H 'content-type: application/json' -d '{"namespace":"pmoves"}' | jq -e '.pack.id != null' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[12/13] CGP builder pack check..." && curl -sf http://localhost:8077/yt/cgp-build -H 'content-type: application/json' -d '{"video_id":"yt-smoke-pack","namespace":"pmoves","title":"Smoke CGP","chunks":[{"text":"alpha beta gamma","payload":{"t_start":0,"t_end":3.0}},{"text":"delta epsilon","payload":{"t_start":3.0,"t_end":6.0}}]}' | jq -e '.cgp.meta.pack_id != null' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@CID=$$(uuidgen | tr 'A-Z' 'a-z' | cut -d- -f1); \
-	 POINT_ID="p.smoke.$${CID}"; \
-	 CONST_ID="c.smoke.$${CID}"; \
-	 TMP=$$(mktemp); \
-	 REF_ID="yt:smoke-$${CID}"; \
-	 export RUN_ID="$${CID}" POINT_ID="$${POINT_ID}" CONST_ID="$${CONST_ID}" REF_ID="$$REF_ID"; \
-	 python3 -c 'import json, os, sys; obj={"type":"geometry.cgp.v1","data":{"spec":"chit.cgp.v0.1","meta":{"source":"smoke-test","namespace":"pmoves","run_id":os.environ["RUN_ID"]},"super_nodes":[{"id":"sn.smoke","constellations":[{"id":os.environ["CONST_ID"],"summary":"smoke geometry validation","radial_minmax":[0.05,0.85],"spectrum":[0.08,0.12,0.18,0.22,0.18,0.12,0.07,0.03],"anchor":[0.52,-0.41,0.23,0.11],"points":[{"id":os.environ["POINT_ID"],"modality":"video","ref_id":os.environ["REF_ID"],"t_start":12.5,"frame_idx":300,"proj":0.82,"conf":0.93,"text":"geometry smoke anchor"}]}]}]}}; json.dump(obj, sys.stdout)' > $$TMP; \
-	 echo "[13/13] Geometry ingest + calibration..." && curl -sf http://localhost:8086/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && \
-	 curl -sf "http://localhost:8086/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && \
-	 curl -sf http://localhost:8086/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
-	 rm -f $$TMP
-	@echo "Smoke tests passed."
+	@set -euo pipefail
+	log_dir="$(CURDIR)/$(SMOKE_LOG_DIR)"
+	mkdir -p "$$log_dir"
+	timestamp="$$(date -u +"%Y-%m-%dT%H-%M-%SZ")"
+	log_file="$$log_dir/$$timestamp-smoke.log"
+	exec > >(tee -a "$$log_file")
+	exec 2>&1
+	echo "# $$timestamp — make smoke"
+	if ! command -v jq >/dev/null 2>&1; then
+		echo "jq is required for smoke tests"
+		exit 1
+	fi
+	echo "[1/13] Qdrant ready..."
+	if curl -sf http://localhost:6333/readyz >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[2/13] Meilisearch ready..."
+	if curl -sf http://localhost:7700/health >/dev/null; then echo OK; else echo "WARN: skipping"; fi
+	echo "[3/13] Neo4j UI..."
+	if curl -sf http://localhost:7474 >/dev/null; then echo OK; else echo "WARN: UI not reachable"; fi
+	echo "[4/13] presign health..."
+	if curl -sf http://localhost:8088/healthz >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[5/13] render-webhook health..."
+	if curl -sf http://localhost:8085/healthz >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	REST_BASE="$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"
+	APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"
+	echo "[6/13] PostgREST reachable..."
+	if curl -sf "$$REST_BASE/it_errors?select=id&limit=1" -H "apikey: $$APIKEY" >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[7/13] Insert via render-webhook..."
+	if curl -sf -X POST http://localhost:8085/comfy/webhook \
+		-H "Content-Type: application/json" \
+		-H "Authorization: Bearer $${RENDER_WEBHOOK_SHARED_SECRET:-change_me}" \
+		-d '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","presigned_get":null,"title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}' >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[8/13] Verify studio_board row..."
+	if curl -sf "$$REST_BASE/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[9/13] Hi-RAG v2 query..."
+	if curl -sf localhost:8086/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null' >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[10/13] Agent Zero health..."
+	if curl -sf http://localhost:8080/healthz | jq -e '.nats.connected == true' >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[11/13] Seed geometry builder pack..."
+	if curl -sf http://localhost:8077/yt/smoke/seed-pack -H 'content-type: application/json' -d '{"namespace":"pmoves"}' | jq -e '.pack.id != null' >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	echo "[12/13] CGP builder pack check..."
+	if curl -sf http://localhost:8077/yt/cgp-build -H 'content-type: application/json' -d '{"video_id":"yt-smoke-pack","namespace":"pmoves","title":"Smoke CGP","chunks":[{"text":"alpha beta gamma","payload":{"t_start":0,"t_end":3.0}},{"text":"delta epsilon","payload":{"t_start":3.0,"t_end":6.0}}]}' | jq -e '.cgp.meta.pack_id != null' >/dev/null; then echo OK; else echo FAIL; exit 1; fi
+	CID=$$(uuidgen | tr 'A-Z' 'a-z' | cut -d- -f1)
+	POINT_ID="p.smoke.$${CID}"
+	CONST_ID="c.smoke.$${CID}"
+	TMP=$$(mktemp)
+	REF_ID="yt:smoke-$${CID}"
+	export RUN_ID="$$CID" POINT_ID="$$POINT_ID" CONST_ID="$$CONST_ID" REF_ID="$$REF_ID"
+	python3 -c 'import json, os, sys; obj={"type":"geometry.cgp.v1","data":{"spec":"chit.cgp.v0.1","meta":{"source":"smoke-test","namespace":"pmoves","run_id":os.environ["RUN_ID"]},"super_nodes":[{"id":"sn.smoke","constellations":[{"id":os.environ["CONST_ID"],"summary":"smoke geometry validation","radial_minmax":[0.05,0.85],"spectrum":[0.08,0.12,0.18,0.22,0.18,0.12,0.07,0.03],"anchor":[0.52,-0.41,0.23,0.11],"points":[{"id":os.environ["POINT_ID"],"modality":"video","ref_id":os.environ["REF_ID"],"t_start":12.5,"frame_idx":300,"proj":0.82,"conf":0.93,"text":"geometry smoke anchor"}]}]}]}}; json.dump(obj, sys.stdout)' > "$$TMP"
+	echo "[13/13] Geometry ingest + calibration..."
+	if curl -sf http://localhost:8086/geometry/event -H 'content-type: application/json' -d @"$$TMP" >/dev/null && \
+	   curl -sf "http://localhost:8086/shape/point/$$POINT_ID/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && \
+	curl -sf http://localhost:8086/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null; then
+		echo OK
+	else
+		echo FAIL
+		rm -f "$$TMP"
+		exit 1
+	fi
+	rm -f "$$TMP"
+	echo "Smoke tests passed."
+	echo "Log captured at $(SMOKE_LOG_DIR)/$${timestamp}-smoke.log"
 
 .PHONY: smoke-rerank
 smoke-rerank:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
 	@echo "Request with rerank=true (may be disabled if model not available)"
-	curl -s localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7, "use_rerank": true}' | jq .
+	curl -s localhost:8086/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7, "use_rerank": true}' | jq .
 	@echo "If used_rerank=false, ensure internet/model access, or set RERANK_ENABLE=false."
 
 .PHONY: eval-jsonl
@@ -429,7 +448,14 @@ chit-contract-check:
 jellyfin-verify:
 	@bash -c 'set -euo pipefail; \
 	 if [ -f .env ]; then set -a; . .env; set +a; fi; \
+	 if [ -f .env.local ]; then set -a; . .env.local; set +a; fi; \
 	 if [ -f env.jellyfin-ai ]; then set -a; . env.jellyfin-ai; set +a; fi; \
+	 JELLYFIN_VERIFY_URL="$${JELLYFIN_PUBLIC_BASE_URL:-$${JELLYFIN_URL:-}}"; \
+	 if [ -z "$$JELLYFIN_VERIFY_URL" ]; then \
+	   echo "JELLYFIN_URL or JELLYFIN_PUBLIC_BASE_URL must be set" >&2; \
+	   exit 1; \
+	 fi; \
+	 export JELLYFIN_URL="$$JELLYFIN_VERIFY_URL"; \
 	 python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
 
 .PHONY: up-jellyfin-ai
@@ -454,6 +480,15 @@ up-jellyfin-ai:
 	@echo "Note: Qwen2-Audio model is already pulled and ready to use!"
 
 
+.PHONY: flightcheck-install-deps
+flightcheck-install-deps:
+	@echo "Ensuring flightcheck dependencies are installed..."
+	@if command -v uv >/dev/null 2>&1; then \
+		uv pip install -q -r tools/flightcheck/requirements.txt; \
+	else \
+		$(PYTHON) -m pip install -q -r tools/flightcheck/requirements.txt; \
+	fi
+
 .PHONY: flight-check
 flight-check:
 ifeq ($(OS),Windows_NT)
@@ -463,13 +498,11 @@ else
 endif
 
 .PHONY: flight-check-retro
-flight-check-retro:
-	@echo "Installing retro flightcheck deps (uv preferred, fallback to pip)" && \
-	( command -v uv >/dev/null 2>&1 && uv pip install -q -r tools/flightcheck/requirements.txt || $(PYTHON) -m pip install -q -r tools/flightcheck/requirements.txt ) && \
-	$(PYTHON) tools/flightcheck/retro_flightcheck.py
+flight-check-retro: flightcheck-install-deps
+	@$(PYTHON) tools/flightcheck/retro_flightcheck.py
 
 .PHONY: preflight
-preflight:
+preflight: flightcheck-install-deps
 	@echo "Running PMOVES preflight checks..."
 	@$(PYTHON) scripts/bootstrap_env.py --check
 	@$(PYTHON) tools/flightcheck/retro_flightcheck.py --quick || true

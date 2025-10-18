@@ -73,7 +73,7 @@ services:
     ports: ["9000:9000","9001:9001"]
     volumes:
       - minio-data:/data
-    profiles: ["data"]
+    profiles: ["data","orchestration","workers","agents"]
     networks: [pmoves]
   hi-rag-gateway:
     build:
@@ -287,6 +287,7 @@ services:
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_URL=http://hi-rag-gateway:8086
     depends_on: [minio]
     ports: ["8077:8077"]
     profiles: ["orchestration","workers","agents"]
@@ -325,7 +326,7 @@ services:
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
-    ports: ["8087:8086"]
+    ports: ["8086:8086"]
     profiles: ["workers","gateway"]
     depends_on:
       qdrant:
@@ -467,7 +468,7 @@ services:
     restart: unless-stopped
     env_file: [.env, .env.local]
     environment:
-      - JELLYFIN_URL=${JELLYFIN_URL}
+      - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://jellyfin:8096}
       - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
       - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}

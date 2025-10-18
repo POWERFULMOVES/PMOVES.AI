@@ -383,6 +383,15 @@ NEO4J_dbms_memory_pagecache_size=2G
 docker exec -it redis redis-cli info stats
 ```
 
+## 🎮 Recommended Clients
+
+**Kodi Jellyfin Add-on:**
+- Install Kodi on desktops or TV devices and add the [official Jellyfin plug-in](https://kodi.wiki/view/Add-on:Jellyfin) for a resilient UI that avoids browser-specific regressions such as the `scrollBehavior` crash seen in Chromium.
+- Configure the plug-in with the API gateway endpoint or direct Jellyfin URL (`http://localhost:8096` inside the LAN) and supply the standard credentials or API key defined in `.env` so playback works without extra prompts.
+- Enable sync for watched status and artwork within the add-on to keep Kodi in step with Supabase metadata updates flowing through the PMOVES automation loop.
+- Document the installation outcome in `pmoves/jellyfin-ai/FINAL_STATUS.md` when rolling out to new environments so the roadmap stays aligned with supported clients.
+- Follow the rebuild + provisioning checklist in `pmoves/jellyfin-ai/KODI_CLIENT.md` when replacing the Jellyfin stack or imaging new Kodi devices; the guide covers backups, container teardown, and the pre-seeded `settings.xml` used by our provisioning scripts.
+
 ## 📚 Additional Resources
 
 ### Documentation Links

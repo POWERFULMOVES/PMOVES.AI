@@ -24,6 +24,21 @@ class JellyfinAuthError(Exception):
     """Raised when Jellyfin authentication fails."""
 
 
+def _build_auth_payload(username: str, password: str) -> Dict[str, str]:
+    """Construct the Jellyfin authentication payload with client metadata."""
+    device_name = os.getenv("JELLYFIN_CLIENT_DEVICE", "pmoves-jellyfin-audio-processor")
+    device_id = os.getenv("JELLYFIN_CLIENT_DEVICE_ID", device_name)
+    return {
+        "Username": username,
+        "Pw": password,
+        "App": os.getenv("JELLYFIN_CLIENT_APP", "PMOVES Audio Processor"),
+        "Device": device_name,
+        "DeviceId": device_id,
+        "DeviceName": device_name,
+        "Version": os.getenv("JELLYFIN_CLIENT_VERSION", "0.0.0"),
+    }
+
+
 class MediaProcessor:
     def __init__(self):
         self.jellyfin_url = os.getenv("JELLYFIN_URL", "http://jellyfin:8096")
@@ -44,6 +59,11 @@ class MediaProcessor:
 
         self.neo4j_driver = GraphDatabase.driver(
             self.neo4j_uri,
+            auth=(self.neo4j_user, self.neo4j_password)
+        )
+
+        self.redis_client = redis.Redis(host='redis', port=6379, db=0)
+
 
 class MediaProcessor:
     def __init__(self):
@@ -104,7 +124,7 @@ class MediaProcessor:
         try:
             auth_response = await client.post(
                 f"{self.jellyfin_url}/Users/AuthenticateByName",
-                json={"Username": self.jellyfin_username, "Pw": self.jellyfin_password}
+                json=_build_auth_payload(self.jellyfin_username, self.jellyfin_password)
             )
         except httpx.HTTPError as exc:
             raise JellyfinAuthError(f"Failed to reach Jellyfin for authentication: {exc}") from exc
@@ -181,7 +201,7 @@ class MediaProcessor:
         try:
             auth_response = await client.post(
                 f"{self.jellyfin_url}/Users/AuthenticateByName",
-                json={"Username": self.jellyfin_username, "Pw": self.jellyfin_password}
+                json=_build_auth_payload(self.jellyfin_username, self.jellyfin_password)
             )
 
             if auth_response.status_code == 200:

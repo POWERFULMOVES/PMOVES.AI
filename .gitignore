@@ -17,8 +17,12 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Windows alternate stream metadata
+*:[Zz]one.Identifier
+
 # Logs
 *.log
+/pmoves/data/agent-zero/logs/log_*.html
 
 # Local data caches (safety)
 *.tmp
@@ -33,3 +37,11 @@ Thumbs.db
 
 # Local exports: keep operator-only dumps out of the repo
 /pmoves/docs/coolify/
+.clinerules/byterover-rules.md
+.kilocode/rules/byterover-rules.md
+.roo/rules/byterover-rules.md
+.windsurf/rules/byterover-rules.md
+.cursor/rules/byterover-rules.mdc
+.kiro/steering/byterover-rules.md
+.qoder/rules/byterover-rules.md
+.augment/rules/byterover-rules.md
