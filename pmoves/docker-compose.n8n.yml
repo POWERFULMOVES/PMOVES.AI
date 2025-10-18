@@ -1,14 +1,26 @@
 services:
   n8n:
-    image: n8nio/n8n:latest
+    build:
+      context: .
+      dockerfile: compose/n8n/Dockerfile
+    image: pmoves/n8n:1.115.3-sqlite
     restart: unless-stopped
     environment:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - N8N_HOST=localhost
+      - N8N_DEFAULT_TIMEZONE=${TZ:-America/New_York}
+      - N8N_EXECUTIONS_PROCESS=main
       - WEBHOOK_URL=http://localhost:5678
       - GENERIC_TIMEZONE=${TZ:-America/New_York}
       - TZ=${TZ:-America/New_York}
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_RUNNERS_MODE=external
+      - N8N_RUNNERS_PAYLOAD_MODE=filesystem
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+      - N8N_API_KEY=${N8N_API_KEY}
+      - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
+      - N8N_NATIVE_PYTHON_RUNNER=true
       # Supabase CLI (host) — n8n reaches host via host.docker.internal
       - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://host.docker.internal:54321/rest/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
@@ -18,8 +30,23 @@ services:
       # Discord webhook for echo publisher
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
+      - N8N_LOG_LEVEL=debug
     ports: ["5678:5678"]
     networks: [pmoves]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n-data:/home/node/.n8n
+  n8n-runners:
+    image: n8nio/runners:1.115.3
+    restart: unless-stopped
+    environment:
+      - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+      - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
+    networks: [pmoves]
+    depends_on:
+      - n8n
     volumes:
       - n8n-data:/home/node/.n8n
 networks:

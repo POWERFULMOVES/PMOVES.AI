@@ -13,8 +13,8 @@ This guide streamlines importing and running the PMOVES approval and publish wor
 ## Prerequisites
 - Supabase CLI running locally: `supabase start` or `make supa-start`
 - PMOVES stack up: `make up && make up-agents`
-- n8n running: `make up-n8n` (UI at `http://localhost:5678`)
-- Secrets at hand: `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`
+- n8n running: `make up-n8n` (UI at `http://localhost:5678`, launches the `n8n` broker + `n8n-runners` sidecar for scheduled tasks)
+- Secrets at hand: `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, `N8N_RUNNERS_AUTH_TOKEN`
 
 ## Environment (n8n)
 Set these in n8n (Settings → Variables) or via container env:
@@ -24,8 +24,15 @@ Set these in n8n (Settings → Variables) or via container env:
 - `AGENT_ZERO_EVENTS_TOKEN` = `<optional>`
 - `DISCORD_WEBHOOK_URL` = `<your Discord webhook URL>`
 - `DISCORD_WEBHOOK_USERNAME` = `PMOVES Publisher`
+- `N8N_RUNNERS_AUTH_TOKEN` = `<shared secret – must match the sidecar>`
+- `N8N_DEFAULT_TIMEZONE` = `America/New_York` (aligns cron schedules with project TZ)
+- `N8N_EXECUTIONS_PROCESS` = `main` (keeps cron execution in the core process while runners handle jobs)
 
-Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Make target `make up-n8n`, only the two secrets are required.
+Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Make target `make up-n8n`, populate `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, and `N8N_RUNNERS_AUTH_TOKEN` in `.env.local`. Rotate the runner token any time the sidecar logs authentication failures.
+
+## Container Tooling
+- The custom image defined in `compose/n8n/Dockerfile` bakes in the `sqlite3` CLI so DB inspections persist across restarts.
+- Run `make up-n8n` after pulling updates to rebuild the service when the Dockerfile changes.
 
 ## Import Workflows
 1. Open n8n → Workflows → Import from File
@@ -97,6 +104,7 @@ These flows extend the core approval automations so we can surface RVC voice out
 - 503 from Agent Zero: confirm NATS + Agent Zero are running (`make up-agents`).
 - Discord no messages: verify `DISCORD_WEBHOOK_URL` and check rate limits in n8n logs.
 - n8n cannot reach host services on Linux: replace `host.docker.internal` with the host IP or Docker gateway (`172.17.0.1`).
+- Cron schedule idle: confirm `workflow_entity.staticData` populates after activation. If it stays `null`, the scheduler is not persisting its next run; double-check `N8N_DEFAULT_TIMEZONE`, `N8N_EXECUTIONS_PROCESS`, and inspect `wait-tracker` logs for scheduler errors.
 
 ## Related
 - Playbook: `SUPABASE_DISCORD_AUTOMATION.md`
