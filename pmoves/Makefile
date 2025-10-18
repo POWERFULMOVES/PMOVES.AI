@@ -64,11 +64,15 @@ up-gpu: ## Start with optional GPU accelerations where supported
 
 .PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
+.PHONY: notebook-up notebook-down notebook-logs
 
 # Pin a stable Docker Compose project name so make targets
 # always operate on the same stack regardless of cwd/path.
 PROJECT ?= pmoves
 export PROJECT
+
+NOTEBOOK_COMPOSE ?= docker-compose.open-notebook.yml
+NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
 
 JELLYFIN_AI_BASE ?= jellyfin-ai
 export JELLYFIN_AI_BASE
@@ -106,6 +110,15 @@ down:
 
 clean:
 	docker compose -p $(PROJECT) down -v --remove-orphans
+
+notebook-up: ## Launch the Open Notebook stack alongside pmoves-net
+	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
+
+notebook-down: ## Stop the Open Notebook container and remove its resources
+	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) down
+
+notebook-logs: ## Follow logs for the Open Notebook service
+	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) logs -f open-notebook
 
 # Bring only worker services (ensures data deps are active)
 up-workers:

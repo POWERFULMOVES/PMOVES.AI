@@ -1,0 +1,22 @@
+services:
+  open-notebook:
+    image: lfnovo/open_notebook:latest-single
+    restart: unless-stopped
+    env_file:
+      - .env
+      - .env.local
+    environment:
+      API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
+      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
+    ports:
+      - "8502:8502"
+      - "5055:5055"
+    volumes:
+      - ./data/open-notebook/notebook_data:/app/data
+      - ./data/open-notebook/surreal_data:/mydata
+    networks:
+      - pmoves
+networks:
+  pmoves:
+    name: pmoves-net

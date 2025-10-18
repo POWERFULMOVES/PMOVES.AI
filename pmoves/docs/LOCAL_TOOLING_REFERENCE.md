@@ -1,5 +1,5 @@
 # Local Tooling & Automation Reference
-_Last updated: 2025-10-11_
+_Last updated: 2025-10-18_
 
 This guide aggregates the entry points that keep local environments consistent across Windows, WSL, and Linux hosts. Use it alongside `pmoves/docs/LOCAL_DEV.md` (service ports, networking) and `pmoves/docs/SMOKETESTS.md` (verification flows) when onboarding new contributors or refreshing a workstation.
 
@@ -13,6 +13,7 @@ This guide aggregates the entry points that keep local environments consistent a
 
 ## Stack Orchestration (Make Targets)
 - `make up` → main compose profile (data + workers). Overrides: `make up-cli`, `make up-compose`, `make up-workers`, `make up-media`, `make up-jellyfin`, `make up-yt`.
+- `make notebook-up` → launches the optional Open Notebook research workspace (Streamlit UI on 8502, REST API on 5055). Pair with `make notebook-logs` for tailing output and `make notebook-down` to stop it without removing data under `pmoves/data/open-notebook/`.
 - `make up-agents` → launches NATS, Agent Zero, Archon, Mesh Agent, and the Discord publisher. Run `make up-nats` first if `NATS_URL` is not configured.
 - `make ps`, `make down`, `make clean` → quick status, stop, and tear-down helpers pinned to the `pmoves` compose project.
 - `make flight-check` / `make flight-check-retro` → fast readiness sweep (Docker, env vars, contracts) via `tools/flightcheck/retro_flightcheck.py`.
@@ -52,6 +53,8 @@ The repository keeps opinionated `gitkeep` stubs so local volumes land in predic
 - `pmoves/data/agent-zero/instruments/` → placeholder for runtime tool manifests; expect JetStream/NATS watchers to drop JSON instrumentation here after smoke runs.
 - `pmoves/data/agent-zero/memory/` → conversation and task memory snapshots captured by the PMOVES controller. Clean this directory if you need a cold start (the `gitkeep` preserves the folder).
 - `pmoves/data/agent-zero/logs/` → HTML logs from local Agent Zero sessions. Rotate or prune after debugging; the stack writes timestamped files automatically.
+- `pmoves/data/open-notebook/notebook_data/` → bind mount backing the Open Notebook UI exports and uploaded research assets.
+- `pmoves/data/open-notebook/surreal_data/` → SurrealDB state used by Open Notebook. Keep this directory on fast storage so embeddings and indexes remain responsive between restarts.
 
 When provisioning remote hosts, ensure these directories map to persistent storage (bind mounts or volume mounts). For WSL/Windows users, keep the repo inside the Linux filesystem (`\\wsl$`) to avoid Docker latency when Agent Zero streams logs and knowledge documents.
 
