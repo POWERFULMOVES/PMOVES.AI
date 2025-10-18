@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public.finance_budgets (
   raw           jsonb NOT NULL DEFAULT '{}'::jsonb,
   geometry_anchor_id uuid NULL REFERENCES public.anchors(id) ON DELETE SET NULL,
   geometry_constellation_id uuid NULL REFERENCES public.constellations(id) ON DELETE SET NULL,
-  created_at    timestamzt NOT NULL DEFAULT now()
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
 
 -- fix typo for timestamzt if exists then alter (idempotent safety handled later)
@@ -168,4 +168,3 @@ BEGIN
     ALTER TABLE public.finance_budgets ALTER COLUMN created_at TYPE timestamptz USING created_at::timestamptz;
   END IF;
 END $$;
-
