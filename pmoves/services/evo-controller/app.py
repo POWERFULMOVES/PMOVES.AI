@@ -79,15 +79,35 @@ class EvoSwarmController:
                 continue
 
     async def _tick(self) -> None:
-        """Single polling iteration (placeholder logic)."""
+        """Single polling iteration: fetch recent CGPs and publish a heartbeat pack.
+
+        This is a minimal implementation that demonstrates end-to-end wiring by
+        upserting a draft cg_builder parameter pack and publishing a
+        geometry.swarm.meta.v1 event via Agent Zero. Real fitness logic will
+        replace this placeholder.
+        """
 
         if not self.config.rest_url:
             logger.warning("Supabase REST URL not configured; skipping tick")
             return
-        # Placeholder: fetch recent CGPs for analysis.
+        # Fetch recent CGPs (for future fitness computation)
         payload = await self._fetch_recent_cgps()
         logger.debug("fetched %s CGPs for evaluation", len(payload))
-        # TODO: insert fitness computation and parameter pack publishing here.
+
+        # Upsert a minimal parameter pack (namespace inferred from first CGP)
+        namespace = self.config.namespace or (payload[0].get("namespace") if payload and isinstance(payload[0], dict) else "pmoves")
+        pack = {
+            "namespace": namespace,
+            "modality": "video",
+            "version": time.strftime("v%Y%m%d-%H%M%S"),
+            "status": "draft",
+            "pack_type": "cg_builder",
+            "params": {"K": 8, "bins": 32, "tau": 0.2, "beta": 0.7},
+            "energy": {"note": "placeholder"},
+        }
+        ok = await self._upsert_pack(pack)
+        if ok:
+            await self._publish_swarm_meta(pack)
 
     async def _fetch_recent_cgps(self) -> list[Dict[str, Any]]:
         """Stub for pulling recent CGPs from Supabase/PostgREST."""
@@ -117,6 +137,50 @@ class EvoSwarmController:
             logger.exception("unexpected error pulling CGPs")
             return []
         return [row.get("payload") for row in rows if isinstance(row, dict)]
+
+    async def _upsert_pack(self, pack: Dict[str, Any]) -> bool:
+        if not self._client or not self.config.rest_url:
+            return False
+        base_url = self.config.rest_url.rstrip("/")
+        url = f"{base_url}/geometry_parameter_packs"
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"}
+        if self.config.service_key:
+            headers.update({"apikey": self.config.service_key, "Authorization": f"Bearer {self.config.service_key}"})
+        try:
+            resp = await self._client.post(url, headers=headers, json=[pack])
+            resp.raise_for_status()
+            return True
+        except httpx.HTTPStatusError as exc:  # pragma: no cover
+            logger.error("pack upsert failed: %s", exc)
+            return False
+        except Exception:
+            logger.exception("unexpected error upserting pack")
+            return False
+
+    async def _publish_swarm_meta(self, pack: Dict[str, Any]) -> None:
+        base = os.getenv("AGENT_ZERO_BASE_URL") or os.getenv("AGENTZERO_BASE_URL") or "http://agent-zero:8080"
+        url = base.rstrip("/") + "/events/publish"
+        body = {
+            "topic": "geometry.swarm.meta.v1",
+            "source": "evo-controller",
+            "payload": {
+                "namespace": pack.get("namespace"),
+                "modality": pack.get("modality"),
+                "pack_id": pack.get("id") or "",
+                "status": pack.get("status"),
+                "version": pack.get("version"),
+                "population_id": pack.get("population_id"),
+                "best_fitness": pack.get("fitness"),
+                "metrics": pack.get("energy"),
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+        }
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+                r = await client.post(url, json=body)
+                r.raise_for_status()
+        except Exception:  # pragma: no cover
+            logger.warning("failed to publish geometry.swarm.meta.v1 (agent-zero not reachable?)")
 
 
 _controller = EvoSwarmController(EvoConfig())
