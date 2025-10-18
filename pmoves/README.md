@@ -56,6 +56,8 @@ Services
 - `render-webhook` (8085): ComfyUI completion → Supabase Studio. See `docs/RENDER_COMPLETION_WEBHOOK.md`.
 - `langextract` (8084): Core extraction service (text/XML → chunks, errors). See `docs/LANGEXTRACT.md`.
 - `extract-worker` (8083): Ingests LangExtract output to Qdrant/Meili and Supabase.
+- `notebook-sync` (8095): Polls the Open Notebook REST API, normalizes payloads, and pushes them through LangExtract + extrac
+t-worker to keep Qdrant/Meili/Supabase aligned.
 - Agents (profile `agents`): `nats`, `agent-zero` (8080), `archon` (8091) — opt-in.
 
 Notes

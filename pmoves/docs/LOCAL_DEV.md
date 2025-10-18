@@ -15,6 +15,8 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - render-webhook: 8085 (internal name `render-webhook`)
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
 - publisher-discord: 8094 -> 8092 (internal name `publisher-discord`)
+- notebook-sync: 8095 (internal name `notebook-sync`) – polls Open Notebook and ships normalized content into LangExtract + ext
+ract-worker.
 
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
@@ -34,6 +36,8 @@ Manual notes: Create `.env` (or start with `.env.example`) and include keys from
 - `MEDIA_VIDEO_FRAMES_BUCKET` (optional) to store extracted video frames separately from the source bucket; defaults to the
   incoming media bucket when unset. Use `MEDIA_VIDEO_FRAMES_PREFIX` to customize the object key prefix (defaults to
   `media-video/frames`).
+- `OPEN_NOTEBOOK_API_URL` (+ optional `OPEN_NOTEBOOK_API_TOKEN`) to enable the notebook-sync worker. Adjust `NOTEBOOK_SYNC_INTE
+RVAL_SECONDS`, `NOTEBOOK_SYNC_DB_PATH`, or override `LANGEXTRACT_URL` / `EXTRACT_WORKER_URL` when targeting external services.
 
 ## External-Mode (reuse existing infra)
 If you already run Neo4j, Meilisearch, Qdrant, or Supabase elsewhere, you can prevent PMOVES from starting local containers:
@@ -90,6 +94,15 @@ OpenAI-compatible presets:
 - Agents stack (NATS, Agent Zero, Archon, Mesh Agent, publisher-discord): `make up-agents`
 - n8n (Docker): `make up-n8n` (listens on http://localhost:5678)
 - Windows prerequisites: `make win-bootstrap` (installs Python, Git, Make, jq via Chocolatey)
+
+### Notebook Sync Worker
+
+- Included with the default `make up` stack once `OPEN_NOTEBOOK_API_URL` is configured.
+- Start individually: `docker compose up notebook-sync` (requires the data + workers profile services).
+- Health check: `curl http://localhost:8095/healthz`.
+- Manual poll: `curl -X POST http://localhost:8095/sync` (returns HTTP 409 while a run is in-flight).
+- Interval tuning: `NOTEBOOK_SYNC_INTERVAL_SECONDS` (seconds, defaults to 300).
+- Cursor storage: `NOTEBOOK_SYNC_DB_PATH` (default `/data/notebook_sync.db` mounted via the `notebook-sync-data` volume).
 
 ### Events (NATS)
 
