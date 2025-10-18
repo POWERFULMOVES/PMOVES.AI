@@ -42,6 +42,9 @@ This guide aggregates the entry points that keep local environments consistent a
 - `make seed-data` → loads demo vectors into Qdrant/Meilisearch.
 - `scripts/discord_ping.{sh,ps1}` → manual Discord webhook validation before enabling automation loops.
 - `scripts/buildx-agent-zero.{sh,ps1}` → bake custom Agent Zero images that include PMOVES wrappers.
+- `curl -X POST http://localhost:8080/mcp/execute \\
+    -H 'Content-Type: application/json' \\
+    -d '{"cmd":"notebook.search","arguments":{"query":"<keywords>","limit":5}}'` → invoke the Open Notebook search MCP command once `OPEN_NOTEBOOK_API_URL` and `OPEN_NOTEBOOK_API_TOKEN` are configured. Use `notebook_id`, `tags`, or `source_ids` filters to scope the results surfaced back to Agent Zero operators.
 - `scripts/proxmox/pmoves-bootstrap.sh` & `CATACLYSM_STUDIOS_INC/**` → unattended provisioning bundles (refer to the Proxmox or Coolify docs before running on remote hosts).
 - `scripts/install/wizard.{sh,ps1}` → interactive bootstrap that chains env setup, dependency installs, and smoke prompts for greenfield machines.
 - `make smoke` (Bash) / `scripts/smoke.ps1` (PowerShell) → end-to-end health check of data services, render webhook, Agent Zero, and geometry bus. See `docs/SMOKETESTS.md` for expected output.
