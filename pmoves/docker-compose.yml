@@ -101,7 +101,7 @@ services:
       - TAILSCALE_ONLY=${TAILSCALE_ONLY}
       - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
-    ports: ["8086:8086"]
+    ports: ["8089:8086"]
     profiles: ["legacy"]
     depends_on:
       qdrant:
@@ -357,6 +357,56 @@ services:
         condition: service_started
       neo4j:
         condition: service_healthy
+    networks: [pmoves]
+
+  # GPU-enabled variant of legacy v1 gateway (optional)
+  hi-rag-gateway-gpu:
+    build:
+      context: ./services
+      dockerfile: hi-rag-gateway/Dockerfile
+      args:
+        - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu121}
+        - TORCH_SKIP_CUDA=0
+    restart: unless-stopped
+    env_file: [.env, .env.local]
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION}
+      - SENTENCE_MODEL=all-MiniLM-L6-v2
+      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
+      - NEO4J_URL=${NEO4J_URL}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - GRAPH_BOOST=${GRAPH_BOOST}
+      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
+      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
+      - USE_MEILI=${USE_MEILI}
+      - MEILI_URL=http://meilisearch:7700
+      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC}
+      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT}
+      - TAILSCALE_ONLY=${TAILSCALE_ONLY}
+      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
+      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
+      - RERANK_ENABLE=${RERANK_ENABLE:-true}
+      - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
+      - RERANK_TOPN=${RERANK_TOPN:-50}
+      - RERANK_K=${RERANK_K:-10}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              count: ${GPU_COUNT:-all}
+    ports: ["8090:8086"]
+    profiles: ["gpu","legacy"]
+    depends_on:
+      qdrant:
+        condition: service_started
+        required: false
+      neo4j:
+        condition: service_healthy
+        required: false
     networks: [pmoves]
 
   # GPU-enabled variant of v2 gateway with CLAP/torch installed

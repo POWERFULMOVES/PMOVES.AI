@@ -12,7 +12,10 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - postgres: 5432 (internal name `postgres`)
 - postgrest: 3000 (internal name `postgrest`)
 - presign: 8088 -> 8080 (internal name `presign`)
-- hi-rag-gateway-v2: 8087 -> 8086 (internal name `hi-rag-gateway-v2`)
+- hi-rag-gateway (v1, CPU): 8089 -> 8086 (internal name `hi-rag-gateway`)
+- hi-rag-gateway-gpu (v1, GPU): 8090 -> 8086 (internal name `hi-rag-gateway-gpu`)
+- hi-rag-gateway-v2 (CPU): 8086 (internal name `hi-rag-gateway-v2`)
+- hi-rag-gateway-v2-gpu (GPU): 8087 -> 8086 (internal name `hi-rag-gateway-v2-gpu`)
 - retrieval-eval: 8090 (internal name `retrieval-eval`)
 - render-webhook: 8085 (internal name `render-webhook`)
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
@@ -90,7 +93,8 @@ OpenAI-compatible presets:
 - LM Studio: set `OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1` and leave API key blank.
 
 ## Start
-- `make up` (v2 gateway by default)
+- `make up` (data + workers, v2 CPU on :8086, v2 GPU on :8087 when available)
+- `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090 when available)
 - Legacy gateway: `make up-legacy`
 - Seed demo data (Qdrant/Meili): `make seed-data`
 - Agents stack (NATS, Agent Zero, Archon, Mesh Agent, publisher-discord): `make up-agents`

@@ -57,10 +57,28 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 	@echo "See docs/LOCAL_DEV.md (Restore) for step-by-step instructions."
 
 # -------- GPU profile ----------
-.PHONY: up-gpu
+.PHONY: up up-gpu up-both-gateways
+up: ## Start core data + workers and both Hi-RAG gateways
+	@echo "Starting core data + workers (Supabase via CLI if running)..."
+	@docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
+	@echo "Starting GPU gateway variant (if GPU available)..."
+	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@echo "✔ Stack started (v2 on :8086, v2-gpu on :8087 when available)."
+
 up-gpu: ## Start with optional GPU accelerations where supported
 	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
 	@echo "✔ Stack started with GPU profile."
+
+up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
+	@docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway-v2
+	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@echo "✔ hi-rag-gateway-v2(:8086) and hi-rag-gateway-v2-gpu(:8087) ready."
+
+.PHONY: up-legacy-both
+up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
+	@docker compose -p $(PROJECT) --profile legacy up -d hi-rag-gateway
+	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
@@ -147,7 +165,7 @@ up-n8n:
 
 # Status helper
 ps:
-	docker compose -p $(PROJECT) ps
+	 docker compose -p $(PROJECT) ps
 
 # Switch between local (CLI) and self-hosted Supabase by swapping .env.local
 .PHONY: supa-use-local supa-use-remote up-cli up-compose
@@ -293,7 +311,13 @@ smoke:
 	@REST_BASE="$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; \
 	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
 	 echo "[8/12] Verify studio_board row..." && curl -sf "$${REST_BASE}/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[9/12] Hi-RAG v2 query..." && curl -sf localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[9/12] Hi-RAG v2 query..." && \
+	HPORT=""; for p in 8087 8086; do \
+	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then HPORT=$$p; break; fi; \
+	done; \
+	if [ -z "$$HPORT" ]; then echo "FAIL: hi-rag-gateway-v2 not reachable on 8087 or 8086"; exit 1; fi; \
+	echo "→ using :$$HPORT"; \
+	curl -sf localhost:$$HPORT/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[10/12] Agent Zero health..." && curl -sf http://localhost:8080/healthz | jq -e '.nats.connected == true' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@CID=$$(uuidgen | tr 'A-Z' 'a-z' | cut -d- -f1); \
 	 POINT_ID="p.smoke.$${CID}"; \
@@ -531,11 +555,22 @@ help:
 .PHONY: logs-core
 logs-core:
 	@echo "Tailing core services (Ctrl-C to stop)..."
-	@docker compose logs -f qdrant meilisearch neo4j postgres postgrest minio presign render-webhook hi-rag-gateway-v2 retrieval-eval
+	@docker compose logs -f qdrant meilisearch neo4j postgres postgrest minio presign render-webhook hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu retrieval-eval
 
 .PHONY: logs-core-15m
 logs-core-15m:
-	@docker compose logs --since 15m qdrant meilisearch neo4j postgres postgrest minio presign render-webhook hi-rag-gateway-v2 retrieval-eval
+	@docker compose logs --since 15m qdrant meilisearch neo4j postgres postgrest minio presign render-webhook hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu retrieval-eval
+
+.PHONY: smoke-hirag-v1
+smoke-hirag-v1:
+	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
+	@echo "[v1] Detecting port (GPU 8090, CPU 8089)..." && \
+	HPORT=""; for p in 8090 8089; do \
+	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then HPORT=$$p; break; fi; \
+	done; \
+	if [ -z "$$HPORT" ]; then echo "FAIL: hi-rag-gateway (v1) not reachable on 8090 or 8089"; exit 1; fi; \
+	echo "→ using :$$HPORT"; \
+	curl -sf localhost:$$HPORT/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null or .[0] != null or .results != null' >/dev/null && echo OK || (echo FAIL && exit 1)
 
 .PHONY: setup
 setup:
@@ -561,10 +596,15 @@ supabase-migrate:
 smoke-geometry:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-geometry" && exit 1)
 	@echo '{"type":"geometry.cgp.v1","data":{"spec":"chit.cgp.v0.1","super_nodes":[{"constellations":[{"id":"c.test.1","summary":"beat-aligned hook","spectrum":[0.05,0.1,0.2,0.3,0.2,0.1,0.03,0.02],"points":[{"id":"p.test.1","modality":"video","ref_id":"yt123","t_start":12.5,"frame_idx":300,"proj":0.8,"conf":0.9,"text":"chorus line"}]}]}]}}' > .tmp_cgp.json
-	@echo "[1/4] POST /geometry/event" && curl -sf http://localhost:8087/geometry/event -H 'content-type: application/json' -d @.tmp_cgp.json >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
-	@echo "[2/4] GET /shape/point/p.test.1/jump" && curl -sf http://localhost:8087/shape/point/p.test.1/jump | jq -e '.locator.modality=="video" and .locator.ref_id=="yt123"' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
-	@echo "[3/4] POST /geometry/decode/text (geometry mode)" && curl -sf http://localhost:8087/geometry/decode/text -H 'content-type: application/json' -d '{"mode":"geometry","constellation_id":"c.test.1","k":3}' | jq -e '.points|length>=1' >/dev/null && echo OK || (echo WARN: decoder disabled; true)
-	@echo "[4/4] POST /geometry/calibration/report" && curl -sf http://localhost:8087/geometry/calibration/report -H 'content-type: application/json' -d @.tmp_cgp.json | jq -e '.constellations|length>=1' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
+	@HPORT=""; for p in 8087 8086; do \
+	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then HPORT=$$p; break; fi; \
+	done; \
+	if [ -z "$$HPORT" ]; then echo "FAIL: hi-rag-gateway-v2 not reachable on 8087 or 8086"; rm -f .tmp_cgp.json; exit 1; fi; \
+	echo "→ using :$$HPORT"; \
+	echo "[1/4] POST /geometry/event" && curl -sf http://localhost:$$HPORT/geometry/event -H 'content-type: application/json' -d @.tmp_cgp.json >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
+	@echo "[2/4] GET /shape/point/p.test.1/jump" && curl -sf http://localhost:$$HPORT/shape/point/p.test.1/jump | jq -e '.locator.modality=="video" and .locator.ref_id=="yt123"' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
+	@echo "[3/4] POST /geometry/decode/text (geometry mode)" && curl -sf http://localhost:$$HPORT/geometry/decode/text -H 'content-type: application/json' -d '{"mode":"geometry","constellation_id":"c.test.1","k":3}' | jq -e '.points|length>=1' >/dev/null && echo OK || (echo WARN: decoder disabled; true)
+	@echo "[4/4] POST /geometry/calibration/report" && curl -sf http://localhost:$$HPORT/geometry/calibration/report -H 'content-type: application/json' -d @.tmp_cgp.json | jq -e '.constellations|length>=1' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
 	@rm -f .tmp_cgp.json
 	@echo "Geometry smoke passed."
 
