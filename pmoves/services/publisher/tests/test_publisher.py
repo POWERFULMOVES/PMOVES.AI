@@ -1,8 +1,11 @@
 import asyncio
+import contextlib
 import datetime
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Dict
 
 import pytest
 
@@ -13,6 +16,7 @@ for candidate in (ROOT, PMOVES_ROOT):
     if candidate_str not in sys.path:
         sys.path.insert(0, candidate_str)
 
+from pmoves.services.common.telemetry import PublisherMetrics
 from pmoves.services.publisher import publisher
 
 
@@ -193,6 +197,77 @@ def test_request_jellyfin_refresh_webhook_http_error(monkeypatch):
     assert publisher.METRICS.refresh_failures == failures_before + 1
 
 
+def test_metrics_server_serves_json_payloads():
+    original_metrics = publisher.METRICS
+    original_host = publisher.METRICS_HOST
+    original_port = publisher.METRICS_PORT
+
+    async def _exercise() -> None:
+        server: asyncio.AbstractServer | None = None
+        try:
+            publisher.METRICS = PublisherMetrics()
+            publisher.METRICS.record_download_success()
+            publisher.METRICS.record_refresh_attempt()
+            publisher.METRICS.record_refresh_success()
+            publisher.METRICS.record_turnaround(12.5)
+            publisher.METRICS.record_approval_latency(5.0)
+            publisher.METRICS.record_engagement({"views": 10})
+            publisher.METRICS.record_cost({"usd": 1.5})
+
+            publisher.METRICS_HOST = "127.0.0.1"
+            publisher.METRICS_PORT = 0
+
+            server = await publisher.start_metrics_server()
+            sockets = server.sockets or []
+            assert sockets, "metrics server did not expose any sockets"
+            sockname = sockets[0].getsockname()
+            if isinstance(sockname, tuple):
+                port = sockname[1]
+            else:
+                port = sockname
+            host = "127.0.0.1"
+
+            async def _fetch(path: str) -> bytes:
+                reader, writer = await asyncio.open_connection(host, port)
+                request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+                writer.write(request.encode())
+                await writer.drain()
+                data = await reader.read()
+                writer.close()
+                with contextlib.suppress(Exception):
+                    await writer.wait_closed()
+                return data
+
+            async def _assert_json_response(path: str) -> dict:
+                raw_response = await _fetch(path)
+                header, body = raw_response.split(b"\r\n\r\n", 1)
+                status_line = header.split(b"\r\n", 1)[0].decode()
+                assert "200 OK" in status_line
+                payload = json.loads(body.decode())
+                assert isinstance(payload, dict)
+                return payload
+
+            metrics_payload = await _assert_json_response("/metrics")
+            metrics_json_payload = await _assert_json_response("/metrics.json")
+
+            for payload in (metrics_payload, metrics_json_payload):
+                assert payload["downloads"] == 1
+                assert payload["refresh_attempts"] == 1
+                assert payload["refresh_success"] == 1
+                assert payload["engagement_totals"]["views"] == 10.0
+                assert payload["cost_totals"]["usd"] == 1.5
+        finally:
+            if server is not None:
+                server.close()
+                await server.wait_closed()
+            publisher._METRICS_SERVER = None
+            publisher.METRICS_HOST = original_host
+            publisher.METRICS_PORT = original_port
+            publisher.METRICS = original_metrics
+
+    asyncio.run(_exercise())
+
+
 def test_lookup_jellyfin_item_handles_http_error(monkeypatch):
     class HTTPError(Exception):
         def __init__(self, msg, response=None):
@@ -244,3 +319,100 @@ def test_compute_publish_telemetry_and_metrics_summary():
     assert summary["avg_approval_latency_seconds"] == 1800.0
     assert summary["engagement_totals"]["views"] == 10.0
     assert summary["cost_totals"]["storage_gb"] == 0.5
+
+
+def test_handle_download_failed_emits_failure_envelope(monkeypatch, tmp_path):
+    published_messages: list[tuple[str, bytes]] = []
+    audit_calls: Dict[str, Any] = {}
+
+    async def exercise() -> None:
+        subscription_ready: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        class StubNATS:
+            def __init__(self) -> None:
+                self.published = published_messages
+
+            async def connect(self, servers=None):
+                return None
+
+            async def publish(self, subject, data):
+                self.published.append((subject, data))
+
+            async def subscribe(self, subject, cb):
+                if not subscription_ready.done():
+                    subscription_ready.set_result(cb)
+
+        class StubMinio:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+            def fget_object(self, bucket, key, dest):
+                raise publisher.DownloadError("simulated download failure")
+
+        async def fake_start_metrics_server():
+            return SimpleNamespace()
+
+        def fake_record_audit(**kwargs):
+            audit_calls["kwargs"] = kwargs
+
+        monkeypatch.setattr(publisher, "MEDIA_LIBRARY_PATH", str(tmp_path))
+        monkeypatch.setattr(publisher, "DOWNLOAD_RETRIES", 1)
+        monkeypatch.setattr(publisher, "_NATSClient", lambda: StubNATS())
+        monkeypatch.setattr(publisher, "_MinioClient", lambda *args, **kwargs: StubMinio())
+        monkeypatch.setattr(publisher, "start_metrics_server", fake_start_metrics_server)
+        monkeypatch.setattr(publisher, "_record_audit", fake_record_audit)
+        monkeypatch.setattr(
+            publisher,
+            "supabase_client",
+            SimpleNamespace(upsert_publisher_audit=lambda row: None),
+        )
+
+        main_task = asyncio.create_task(publisher.main())
+        handle = await asyncio.wait_for(subscription_ready, timeout=1)
+        main_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await main_task
+
+        env = {
+            "id": "evt-123",
+            "ts": "2024-01-01T12:00:00Z",
+            "correlation_id": "corr-789",
+            "payload": {
+                "artifact_uri": "s3://assets/demo/video.mp4",
+                "namespace": "Creative Works",
+                "title": "Demo Video",
+                "meta": {"camera": "FX3", "ingest_started_at": "2024-01-01T10:00:00Z"},
+            },
+        }
+
+        msg = SimpleNamespace(data=json.dumps(env).encode("utf-8"))
+        await handle(msg)
+
+    asyncio.run(exercise())
+
+    assert published_messages, "expected failure envelope to be published"
+    subject, data = published_messages[0]
+    assert subject == "content.publish.failed.v1"
+    evt = json.loads(data.decode("utf-8"))
+    payload = evt["payload"]
+
+    assert payload["stage"] == "download"
+    assert payload["outcome"] == "fatal"
+    assert payload["namespace"] == "Creative Works"
+    assert payload["artifact_uri"] == "s3://assets/demo/video.mp4"
+    details = payload.get("details")
+    assert details["attempts"] == 1
+    assert details["stage"] == "download"
+
+    meta = payload["meta"]
+    assert meta["stage"] == "download"
+    assert meta["bucket"] == "assets"
+    assert meta["key"] == "demo/video.mp4"
+    assert meta["output_path"].endswith("creative-works/creative-works--demo-video.mp4")
+    assert meta["source_meta"]["camera"] == "FX3"
+
+    audit_kwargs = audit_calls["kwargs"]
+    assert audit_kwargs["status"] == "failed"
+    assert audit_kwargs["publish_event_id"] == "evt-123"
+    assert audit_kwargs["failure_reason"].startswith("Failed to download")
+    assert audit_kwargs["meta"] == meta

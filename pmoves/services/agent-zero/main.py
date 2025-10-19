@@ -161,6 +161,18 @@ class AgentZeroServiceConfig(BaseModel):
         default="http://localhost:8085",
         description="Webhook endpoint for ComfyUI renders",
     )
+    open_notebook_api_url: Optional[str] = Field(
+        default=None,
+        description="Base URL for the Open Notebook API searched by Agent Zero",
+    )
+    open_notebook_workspace: Optional[str] = Field(
+        default=None,
+        description="Default Open Notebook workspace applied to MCP searches",
+    )
+    open_notebook_token_present: bool = Field(
+        default=False,
+        description="Indicates whether an Open Notebook API token is configured",
+    )
     agent_form: str = Field(
         default="POWERFULMOVES", description="Default MCP form name"
     )
@@ -188,6 +200,16 @@ def load_service_config() -> AgentZeroServiceConfig:
         youtube_ingest_url=os.environ.get("YT_URL", "http://localhost:8077"),
         render_webhook_url=os.environ.get(
             "RENDER_WEBHOOK_URL", "http://localhost:8085"
+        ),
+        open_notebook_api_url=os.environ.get(
+            "OPEN_NOTEBOOK_API_URL", os.environ.get("NOTEBOOK_API_URL")
+        ),
+        open_notebook_workspace=os.environ.get(
+            "OPEN_NOTEBOOK_WORKSPACE", os.environ.get("NOTEBOOK_WORKSPACE")
+        ),
+        open_notebook_token_present=bool(
+            os.environ.get("OPEN_NOTEBOOK_API_TOKEN")
+            or os.environ.get("NOTEBOOK_API_TOKEN")
         ),
         agent_form=os.environ.get("AGENT_FORM", "POWERFULMOVES"),
         agent_forms_dir=os.environ.get("AGENT_FORMS_DIR", "configs/agents/forms"),

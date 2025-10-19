@@ -23,6 +23,7 @@ The `/mcp/commands` endpoint enumerates the available helpers. The following com
 - `ingest.youtube`
 - `media.transcribe`
 - `comfy.render`
+- `notebook.search`
 - `form.get`
 - `form.switch`
 
@@ -39,6 +40,9 @@ The service reads configuration from environment variables and exposes the resol
 | `HIRAG_URL` / `GATEWAY_URL` | `http://localhost:8086` | Geometry gateway base URL. |
 | `YT_URL` | `http://localhost:8077` | YouTube ingest + transcript gateway. |
 | `RENDER_WEBHOOK_URL` | `http://localhost:8085` | ComfyUI render webhook. |
+| `OPEN_NOTEBOOK_API_URL` / `NOTEBOOK_API_URL` | — | Base URL for the Open Notebook API queried by `notebook.search`. |
+| `OPEN_NOTEBOOK_API_TOKEN` / `NOTEBOOK_API_TOKEN` | — | Bearer token used to authenticate notebook search requests. |
+| `OPEN_NOTEBOOK_WORKSPACE` / `NOTEBOOK_WORKSPACE` | — | Optional workspace identifier automatically applied to notebook searches. |
 | `AGENT_FORM` | `POWERFULMOVES` | Default MCP form. |
 | `AGENT_FORMS_DIR` | `configs/agents/forms` | Directory for YAML form definitions. |
 | `AGENT_KNOWLEDGE_BASE_DIR` | `runtime/knowledge` | Knowledge base artifacts and caches. |

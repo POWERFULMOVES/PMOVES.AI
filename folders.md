@@ -1,16 +1,8 @@
 # Repository Directory Map
 
-<<<<<<< HEAD
-_Last updated: 2025-10-18_
-=======
 _Last updated: 2025-10-21_
->>>>>>> origin/main
 
 This document captures the current layout of the `PMOVES.AI` repository to help new contributors find key resources quickly. The tree below is trimmed to a maximum depth of two levels (root → child → grandchild) to balance detail and readability.
-
-Docs consolidation notes (2025-10-18)
-- Planning/runbook docs are consolidated under `pmoves/docs/PMOVES.AI PLANS/` (stubs remain at `pmoves/docs/*.md` for backward compatibility).
-- New per‑service guides live under `pmoves/docs/services/` with one README per service.
 
 ## Regenerating this map
 

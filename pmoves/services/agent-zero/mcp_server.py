@@ -14,6 +14,15 @@ FORM_NAME = os.environ.get("AGENT_FORM", "POWERFULMOVES")
 FORMS_DIR = Path(os.environ.get("AGENT_FORMS_DIR", "configs/agents/forms"))
 KNOWLEDGE_BASE_DIR = Path(os.environ.get("AGENT_KNOWLEDGE_BASE_DIR", "runtime/knowledge"))
 MCP_RUNTIME_DIR = Path(os.environ.get("AGENT_MCP_RUNTIME_DIR", "runtime/mcp"))
+NOTEBOOK_API_URL = os.environ.get(
+    "OPEN_NOTEBOOK_API_URL", os.environ.get("NOTEBOOK_API_URL")
+)
+NOTEBOOK_API_TOKEN = os.environ.get(
+    "OPEN_NOTEBOOK_API_TOKEN", os.environ.get("NOTEBOOK_API_TOKEN")
+)
+NOTEBOOK_WORKSPACE = os.environ.get(
+    "OPEN_NOTEBOOK_WORKSPACE", os.environ.get("NOTEBOOK_WORKSPACE")
+)
 
 
 def load_form(name: str) -> Dict[str, Any]:
@@ -66,6 +75,121 @@ def comfy_render(flow_id: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
     return r.json()
 
 
+def _ensure_notebook_credentials() -> None:
+    if not NOTEBOOK_API_URL:
+        raise RuntimeError(
+            "Open Notebook API URL not configured (set OPEN_NOTEBOOK_API_URL or NOTEBOOK_API_URL)"
+        )
+    if not NOTEBOOK_API_TOKEN:
+        raise RuntimeError(
+            "Open Notebook API token not configured (set OPEN_NOTEBOOK_API_TOKEN or NOTEBOOK_API_TOKEN)"
+        )
+
+
+def _summarize_note(note: Dict[str, Any]) -> Optional[str]:
+    summary = note.get("summary") or note.get("excerpt")
+    if summary:
+        return summary
+    content = note.get("content") or note.get("body")
+    if not content:
+        return None
+    content = str(content).strip()
+    if len(content) <= 280:
+        return content
+    return content[:277].rstrip() + "..."
+
+
+def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
+    _ensure_notebook_credentials()
+
+    query = (payload.get("query") or payload.get("text") or "").strip()
+    notebook_id = payload.get("notebook_id") or payload.get("notebookId")
+    source_ids = payload.get("source_ids") or payload.get("sourceIds")
+    tags = payload.get("tags")
+    workspace = (
+        payload.get("workspace")
+        or payload.get("workspace_id")
+        or payload.get("workspaceId")
+    )
+    limit = int(payload.get("limit", 10))
+    if limit <= 0:
+        raise ValueError("'limit' must be greater than zero")
+
+    filters: Dict[str, Any] = {}
+    if notebook_id:
+        filters["notebook_id"] = notebook_id
+    if workspace:
+        filters["workspace"] = workspace
+    elif NOTEBOOK_WORKSPACE:
+        filters.setdefault("workspace", NOTEBOOK_WORKSPACE)
+    if source_ids:
+        if isinstance(source_ids, str):
+            source_ids = [source_ids]
+        filters["source_ids"] = source_ids
+    if tags:
+        if isinstance(tags, str):
+            tags = [tags]
+        filters["tags"] = tags
+
+    if not query and not filters:
+        raise ValueError("Provide at least a 'query' or filter (e.g. 'notebook_id')")
+
+    request_body: Dict[str, Any] = {"limit": limit}
+    if query:
+        request_body["query"] = query
+    if filters:
+        request_body["filters"] = filters
+
+    headers = {
+        "Authorization": f"Bearer {NOTEBOOK_API_TOKEN}",
+        "Accept": "application/json",
+    }
+
+    response = requests.post(
+        f"{NOTEBOOK_API_URL.rstrip('/')}/api/v1/notebooks/search",
+        json=request_body,
+        headers=headers,
+        timeout=20,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    results = data.get("results") or data.get("items") or []
+    curated: List[Dict[str, Any]] = []
+    for item in results:
+        note: Dict[str, Any]
+        note = item.get("note") or item
+        source = item.get("source") or {}
+        summary = item.get("summary") or _summarize_note(note)
+        curated.append(
+            {
+                "id": note.get("id") or item.get("id"),
+                "title": note.get("title") or note.get("name"),
+                "summary": summary,
+                "score": item.get("score"),
+                "notebook_id": note.get("notebook_id") or filters.get("notebook_id"),
+                "source": {
+                    "id": source.get("id") or item.get("source_id") or note.get("source_id"),
+                    "type": source.get("type") or item.get("source_type"),
+                    "url": source.get("url") or note.get("url") or item.get("url"),
+                },
+            }
+        )
+
+    total = data.get("total")
+    if total is None:
+        total = len(results)
+
+    return {
+        "ok": True,
+        "query": query or None,
+        "filters": filters,
+        "total": total,
+        "notes": curated,
+        "next_cursor": data.get("next_cursor") or data.get("next"),
+    }
+
+
 def _stdout(msg: Dict[str, Any]):
     sys.stdout.write(json.dumps(msg) + "\n"); sys.stdout.flush()
 
@@ -78,6 +202,7 @@ COMMAND_REGISTRY: Dict[str, str] = {
     "ingest.youtube": "Ingest a YouTube URL via the ingest pipeline",
     "media.transcribe": "Generate or fetch transcript for a video",
     "comfy.render": "Trigger a ComfyUI render via render webhook",
+    "notebook.search": "Search Open Notebook for curated notes",
     "form.get": "Return the currently configured MCP form",
     "form.switch": "Switch the active MCP form",
 }
@@ -121,6 +246,8 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
             raise ValueError("'flow_id' is required")
         inputs = payload.get("inputs") or {}
         return comfy_render(flow_id, inputs)
+    if cmd == "notebook.search":
+        return notebook_search(payload)
     if cmd == "form.get":
         current_form = payload.get("name", FORM_NAME)
         return {"form": load_form(current_form)}
