@@ -41,7 +41,8 @@ SUBJECTS = os.environ.get(
 ).split(",")
 
 JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "")
-DISCORD_PUBLISH_PREFIX = os.environ.get("DISCORD_PUBLISH_PREFIX", "")
+# Default to the legacy style expected by tests; allow override.
+DISCORD_PUBLISH_PREFIX = os.environ.get("DISCORD_PUBLISH_PREFIX", "Published: ")
 
 DISCORD_METRICS_TABLE = os.environ.get("DISCORD_METRICS_TABLE", "publisher_discord_metrics")
 DISCORD_METRICS_CONFLICT = os.environ.get("DISCORD_METRICS_CONFLICT", "published_event_id")
