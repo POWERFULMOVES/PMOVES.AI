@@ -336,7 +336,7 @@ services:
       - RERANK_TOPN=${RERANK_TOPN:-50}
       - RERANK_K=${RERANK_K:-10}
       - RERANK_FUSION=${RERANK_FUSION:-mul}
-      - USE_MEILI=${USE_MEILI:-false}
+      - USE_MEILI=${USE_MEILI:-true}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
@@ -430,11 +430,11 @@ services:
       - ALPHA=${ALPHA:-0.7}
       # Reranker: default to Qwen on GPU build
       - RERANK_ENABLE=${RERANK_ENABLE:-true}
-      - RERANK_MODEL=${RERANK_MODEL:-Qwen/Qwen3-Reranker-4B}
+      - RERANK_MODEL=Qwen/Qwen3-Reranker-4B
       - RERANK_TOPN=${RERANK_TOPN:-50}
       - RERANK_K=${RERANK_K:-10}
       - RERANK_FUSION=${RERANK_FUSION:-mul}
-      - USE_MEILI=${USE_MEILI:-false}
+      - USE_MEILI=${USE_MEILI:-true}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -468,8 +468,10 @@ services:
     depends_on:
       qdrant:
         condition: service_started
+        required: false
       neo4j:
         condition: service_healthy
+        required: false
     networks: [pmoves]
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -573,4 +575,5 @@ volumes:
   notebook-sync-data: {}
 networks:
   pmoves:
-    name: pmoves-stack
+    external: true
+    name: pmoves-net

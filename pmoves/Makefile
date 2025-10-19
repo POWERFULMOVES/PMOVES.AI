@@ -71,9 +71,31 @@ up-gpu: ## Start with optional GPU accelerations where supported
 
 .PHONY: up-gpu-gateways
 up-gpu-gateways: ## Bring up GPU gateways (v2 @ :8087, v1 @ :8090)
+	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
+	@docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ GPU gateways requested (v2-gpu :8087, v1-gpu :8090)."
+
+.PHONY: recreate-v2-gpu
+recreate-v2-gpu: ## Force-recreate v2-gpu container (no deps)
+	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
+	@echo "✔ Recreated hi-rag-gateway-v2-gpu"
+
+.PHONY: recreate-v2
+recreate-v2: ## Force-recreate v2 CPU container (no deps)
+	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2
+	@echo "✔ Recreated hi-rag-gateway-v2"
+
+.PHONY: up-open-notebook
+up-open-notebook: ## Bring up Open Notebook on pmoves-net (UI :8503, API :5056)
+	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
+	@echo "✔ Open Notebook up (http://localhost:8503, API :5056)"
+
+.PHONY: down-open-notebook
+down-open-notebook: ## Stop Open Notebook
+	@docker compose -f docker-compose.open-notebook.yml down
+	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
 	@docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway-v2

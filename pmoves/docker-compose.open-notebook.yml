@@ -10,8 +10,8 @@ services:
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
     ports:
-      - "8502:8502"
-      - "5055:5055"
+      - "8503:8502"
+      - "5056:5055"
     volumes:
       - ./data/open-notebook/notebook_data:/app/data
       - ./data/open-notebook/surreal_data:/mydata
@@ -19,4 +19,5 @@ services:
       - pmoves
 networks:
   pmoves:
+    external: true
     name: pmoves-net
