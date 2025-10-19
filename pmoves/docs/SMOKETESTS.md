@@ -213,9 +213,8 @@ What the smoke covers now (12 checks):
 
 ## 7) Live Geometry UI + WebRTC
 
-1. Start v2 GPU gateway or v2 gateway (serves UI):
-   - `docker compose --profile gpu up -d hi-rag-gateway-v2-gpu` (GPU) or `docker compose --profile workers up -d hi-rag-gateway-v2`
-2. Open http://localhost:8087/geometry/
+1. Start v2 gateways: `make up` (v2 CPU on :8086, v2 GPU on :8087 when available). Open http://localhost:8087/geometry/ (GPU) or http://localhost:8086/geometry/ (CPU)
+2. Start v1 gateways if needed: `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090)
 3. Click Connect (room `public`). Post a CGP (make smoke-geometry) and watch points animate.
 4. Open the page in a second browser window; both connect to `public` room. Use Share Shape to send a `shape-hello` on the DataChannel.
 5. Click “Send Current CGP” to share the last geometry over the DataChannel; add a passphrase to sign the CGP capsule.
@@ -246,6 +245,7 @@ Optional smoke targets:
 - `make smoke-rerank` — query with `use_rerank=true` (provider optional)
 - `make smoke-langextract` — extract chunks from XML via `langextract` and load
 - `make smoke-archon` — hit `http://localhost:8091/healthz` and ensure Archon reports `status: "ok"` (requires NATS + Supabase CLI stack)
+- `make smoke-hirag-v1` — query v1 gateway (auto-detects 8090→8089)
 
 ## Troubleshooting
 - Port in use: change the host port in `docker-compose.yml` or stop the conflicting process.
@@ -257,7 +257,7 @@ Optional smoke targets:
 ## Log Triage
 - List services and status: `docker compose ps`
 - Tail recent logs for core services:
-  - `docker compose logs --since 15m presign render-webhook postgrest hi-rag-gateway-v2`
+  - `docker compose logs --since 15m presign render-webhook postgrest hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu`
   - `docker compose logs -f render-webhook` (follow live)
   - Shortcut: `make logs-core` (follow) or `make logs-core-15m`
 - Common signals:

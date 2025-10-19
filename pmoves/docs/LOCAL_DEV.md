@@ -12,7 +12,10 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - postgres: 5432 (internal name `postgres`)
 - postgrest: 3000 (internal name `postgrest`)
 - presign: 8088 -> 8080 (internal name `presign`)
-- hi-rag-gateway-v2: 8087 -> 8086 (internal name `hi-rag-gateway-v2`)
+- hi-rag-gateway (v1, CPU): 8089 -> 8086 (internal name `hi-rag-gateway`)
+- hi-rag-gateway-gpu (v1, GPU): 8090 -> 8086 (internal name `hi-rag-gateway-gpu`)
+- hi-rag-gateway-v2 (CPU): 8086 (internal name `hi-rag-gateway-v2`)
+- hi-rag-gateway-v2-gpu (GPU): 8087 -> 8086 (internal name `hi-rag-gateway-v2-gpu`)
 - retrieval-eval: 8090 (internal name `retrieval-eval`)
 - render-webhook: 8085 (internal name `render-webhook`)
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
@@ -90,7 +93,8 @@ OpenAI-compatible presets:
 - LM Studio: set `OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1` and leave API key blank.
 
 ## Start
-- `make up` (v2 gateway by default)
+- `make up` (data + workers, v2 CPU on :8086, v2 GPU on :8087 when available)
+- `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090 when available)
 - Legacy gateway: `make up-legacy`
 - Seed demo data (Qdrant/Meili): `make seed-data`
 - Agents stack (NATS, Agent Zero, Archon, Mesh Agent, publisher-discord): `make up-agents`
@@ -244,6 +248,7 @@ docker run --name n8n --rm -it \
 ## Notes
 
 - A local Postgres + PostgREST are included. `render-webhook` and the other compose workers now honour `SUPA_REST_INTERNAL_URL` (defaults to the Supabase CLI network host `http://api.supabase.internal:8000/rest/v1`). Host-side scripts continue to use `SUPA_REST_URL` (`http://127.0.0.1:54321/rest/v1`). Override both if you point the stack at a remote Supabase instance. When the Supabase CLI stack is running, `make up` auto-runs the `supabase-bootstrap` helper so schema migrations and seeds are replayed before smoke tests.
+- Realtime DNS fallback: if `hi-rag-gateway-v2` finds `SUPABASE_REALTIME_URL` is set but its hostname doesn’t resolve inside the container (e.g., `api.supabase.internal` not shared on the compose network), it now auto-derives a working websocket endpoint from `SUPA_REST_INTERNAL_URL`/`SUPA_REST_URL` (host‑gateway safe). To force an explicit target, set `SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1/websocket` in `.env.local`.
 - Neo4j seeds: the bundled `neo4j/datasets/person_aliases_seed.csv` + `neo4j/cypher/*.cypher` scripts wire in the CHIT mind-map aliases. Run `make neo4j-bootstrap` (or rely on `make up` once the helper is hooked in; requires `python3` on the host) after launching `pmoves-neo4j-1` to populate the base graph.
 - For Cataclysm Provisioning, the stable network name `pmoves-net` allows cross‑stack service discovery.
 - Clean up duplicate .env keys: `make env-dedupe` (keeps last occurrence, writes `.env.bak`).

@@ -101,7 +101,7 @@ services:
       - TAILSCALE_ONLY=${TAILSCALE_ONLY}
       - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
-    ports: ["8086:8086"]
+    ports: ["8089:8086"]
     profiles: ["legacy"]
     depends_on:
       qdrant:
@@ -149,7 +149,7 @@ services:
     restart: unless-stopped
     env_file: [.env, .env.local]
     environment:
-      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - RENDER_WEBHOOK_SHARED_SECRET=${RENDER_WEBHOOK_SHARED_SECRET}
       - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
@@ -157,6 +157,7 @@ services:
     profiles: ["orchestration","workers"]
     networks: [pmoves]
     extra_hosts:
+      - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
 
   extract-worker:
@@ -335,7 +336,7 @@ services:
       - RERANK_TOPN=${RERANK_TOPN:-50}
       - RERANK_K=${RERANK_K:-10}
       - RERANK_FUSION=${RERANK_FUSION:-mul}
-      - USE_MEILI=${USE_MEILI:-false}
+      - USE_MEILI=true
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
@@ -350,6 +351,11 @@ services:
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1/websocket}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports: ["8086:8086"]
     profiles: ["workers","gateway"]
     depends_on:
@@ -357,6 +363,56 @@ services:
         condition: service_started
       neo4j:
         condition: service_healthy
+    networks: [pmoves]
+
+  # GPU-enabled variant of legacy v1 gateway (optional)
+  hi-rag-gateway-gpu:
+    build:
+      context: ./services
+      dockerfile: hi-rag-gateway/Dockerfile
+      args:
+        - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu121}
+        - TORCH_SKIP_CUDA=0
+    restart: unless-stopped
+    env_file: [.env, .env.local]
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION}
+      - SENTENCE_MODEL=all-MiniLM-L6-v2
+      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
+      - NEO4J_URL=${NEO4J_URL}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - GRAPH_BOOST=${GRAPH_BOOST}
+      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
+      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
+      - USE_MEILI=${USE_MEILI}
+      - MEILI_URL=http://meilisearch:7700
+      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC}
+      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT}
+      - TAILSCALE_ONLY=${TAILSCALE_ONLY}
+      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
+      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
+      - RERANK_ENABLE=${RERANK_ENABLE:-true}
+      - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
+      - RERANK_TOPN=${RERANK_TOPN:-50}
+      - RERANK_K=${RERANK_K:-10}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              count: ${GPU_COUNT:-all}
+    ports: ["8090:8086"]
+    profiles: ["gpu","legacy"]
+    depends_on:
+      qdrant:
+        condition: service_started
+        required: false
+      neo4j:
+        condition: service_healthy
+        required: false
     networks: [pmoves]
 
   # GPU-enabled variant of v2 gateway with CLAP/torch installed
@@ -372,7 +428,13 @@ services:
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - ALPHA=${ALPHA:-0.7}
-      - USE_MEILI=${USE_MEILI:-false}
+      # Reranker: default to Qwen on GPU build
+      - RERANK_ENABLE=${RERANK_ENABLE:-true}
+      - RERANK_MODEL=Qwen/Qwen3-Reranker-4B
+      - RERANK_TOPN=${RERANK_TOPN:-50}
+      - RERANK_K=${RERANK_K:-10}
+      - RERANK_FUSION=${RERANK_FUSION:-mul}
+      - USE_MEILI=${USE_MEILI:-true}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -392,6 +454,9 @@ services:
       - PGUSER=${POSTGRES_USER:-pmoves}
       - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
       - PGDATABASE=${POSTGRES_DB:-pmoves}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1/websocket}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     deploy:
       resources:
         reservations:
@@ -403,9 +468,13 @@ services:
     depends_on:
       qdrant:
         condition: service_started
+        required: false
       neo4j:
         condition: service_healthy
+        required: false
     networks: [pmoves]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
@@ -450,10 +519,10 @@ services:
     environment:
       - PORT=8091
       - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     depends_on:
       - nats
-      - postgrest
-      - postgres
     ports: ["8091:8091"]
     profiles: ["agents"]
     networks: [pmoves]
@@ -506,4 +575,5 @@ volumes:
   notebook-sync-data: {}
 networks:
   pmoves:
+    external: true
     name: pmoves-net

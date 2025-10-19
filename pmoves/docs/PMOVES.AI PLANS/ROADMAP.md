@@ -38,6 +38,9 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - CHIT EvoSwarm loop: enable controller, confirm `geometry.swarm.meta.v1` events; ensure pack selection by producers and pack_id persisted in constellation meta (gateway v2)
 - [ ] CI TODO — surface `make lint-packs` as the pack manifest linter prior to publish, blocking `kb.pack.published.v1` unless manifests validate.
 - [ ] CI TODO — retrieval-eval persona gate must succeed (`persona.publish.request.v1` → `persona.published.v1`) with thresholds persisted to `pmoves_core.persona_eval_gates`.
+- [x] v2 realtime DNS fallback (host‑gateway derivation) — 2025‑10‑19
+- [x] v2‑GPU default Qwen reranker + env overrides — 2025‑10‑19
+- [x] Meili lexical enabled by default via pmoves/.env.local — 2025‑10‑19
 
 ### M3 — Retrieval Quality & Graph Enrichment
 

@@ -1,0 +1,18 @@
+--- pmoves/.env.local (head) ---
+SUPA_REST_URL=http://host.docker.internal:54321/rest/v1
+SUPA_REST_INTERNAL_URL=http://host.docker.internal:54321/rest/v1
+SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1/websocket
+
+# v2-gpu reranker default: Qwen
+RERANK_ENABLE=true
+RERANK_MODEL=Qwen/Qwen3-Reranker-4B
+RERANK_TOPN=50
+RERANK_K=10
+RERANK_FUSION=mul
+
+# Allow local smoke to read /hirag/admin/stats without Tailscale admin guard
+SMOKE_ALLOW_ADMIN_STATS=true
+
+USE_MEILI=true
+\n--- compose up data + workers ---
+\nSummary:

@@ -58,7 +58,7 @@ DECLARE
   );
 BEGIN
   IF has_vector THEN
-    EXECUTE $$
+    EXECUTE $SQL$
       create table if not exists pmoves_core.memory (
         id uuid primary key default gen_random_uuid(),
         agent_id uuid references pmoves_core.agent(id) on delete cascade,
@@ -68,7 +68,7 @@ BEGIN
         embedding vector(1536),
         created_at timestamptz default now()
       )
-    $$;
+    $SQL$;
 
     -- Upgrade legacy float4[] columns to vector when the extension becomes available.
     IF EXISTS (
@@ -87,9 +87,20 @@ BEGIN
       END;
     END IF;
 
-    EXECUTE 'create index if not exists memory_embedding_idx on pmoves_core.memory using ivfflat (embedding vector_cosine_ops)';
+    -- Attempt ivfflat; fall back to hnsw if unsupported
+    BEGIN
+      EXECUTE 'create index if not exists memory_embedding_idx on pmoves_core.memory using ivfflat (embedding vector_cosine_ops)';
+    EXCEPTION
+      WHEN OTHERS THEN
+        BEGIN
+          EXECUTE 'create index if not exists memory_embedding_idx on pmoves_core.memory using hnsw (embedding vector_cosine_ops)';
+        EXCEPTION
+          WHEN OTHERS THEN
+            RAISE NOTICE 'Skipping vector index on pmoves_core.memory.embedding: %', SQLERRM;
+        END;
+    END;
   ELSE
-    EXECUTE $$
+    EXECUTE $SQL$
       create table if not exists pmoves_core.memory (
         id uuid primary key default gen_random_uuid(),
         agent_id uuid references pmoves_core.agent(id) on delete cascade,
@@ -99,7 +110,7 @@ BEGIN
         embedding float4[],
         created_at timestamptz default now()
       )
-    $$;
+    $SQL$;
 
     RAISE NOTICE 'pgvector extension not available; skipping vector index on pmoves_core.memory.embedding';
   END IF;

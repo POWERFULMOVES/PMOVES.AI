@@ -24,6 +24,8 @@ ALPHA = float(os.environ.get("ALPHA", "0.7"))
 
 RERANK_ENABLE = os.environ.get("RERANK_ENABLE","true").lower()=="true"
 RERANK_MODEL = os.environ.get("RERANK_MODEL","BAAI/bge-reranker-base")
+# Optional label override for reporting (does not force reload)
+_rerank_model_label = os.environ.get("RERANK_MODEL_LABEL")
 RERANK_TOPN = int(os.environ.get("RERANK_TOPN","50"))
 RERANK_K = int(os.environ.get("RERANK_K","10"))
 RERANK_FUSION = os.environ.get("RERANK_FUSION","mul").lower()  # mul|wsum
@@ -44,6 +46,8 @@ ENTITY_CACHE_TTL = int(os.environ.get("ENTITY_CACHE_TTL","60"))
 ENTITY_CACHE_MAX = int(os.environ.get("ENTITY_CACHE_MAX","1000"))
 
 SUPABASE_REST_URL = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL")
+# Optional internal REST base explicitly pointing at host-gateway; prefer for derivations
+SUPABASE_REST_INTERNAL_URL = os.environ.get("SUPA_REST_INTERNAL_URL") or None
 SUPABASE_SERVICE_KEY = (
     os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     or os.environ.get("SUPABASE_SERVICE_KEY")
@@ -179,7 +183,7 @@ def refresh_warm_dictionary():
     try:
         tmp: Dict[str, set] = {}
         with driver.session() as s:
-            recs = s.run("MATCH (e:Entity) RETURN e.value AS v, coalesce(e.type,'UNK') AS t LIMIT $lim",
+            recs = s.run("MATCH (e:Entity) RETURN e.value AS v, CASE WHEN e.type IS NOT NULL THEN e.type ELSE 'UNK' END AS t LIMIT $lim",
                          lim=NEO4J_DICT_LIMIT)
             for r in recs:
                 v = r["v"]; t = (r["t"] or "UNK").upper()
@@ -283,13 +287,57 @@ except Exception as _e:
 
 _geometry_realtime_task: Optional[asyncio.Task] = None
 
+def _hostname_resolves(url: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+        import socket
+        host = urlparse(url).hostname
+        if not host:
+            return False
+        socket.getaddrinfo(host, None)
+        return True
+    except Exception:
+        return False
+
 
 def _derive_realtime_url() -> Optional[str]:
+    # If explicitly provided and resolvable, respect it; otherwise fall back
     if SUPABASE_REALTIME_URL:
-        return SUPABASE_REALTIME_URL
-    if not SUPABASE_REST_URL:
+        try:
+            # Inside container heuristic
+            in_container = os.path.exists("/.dockerenv")
+        except Exception:
+            in_container = False
+
+        if in_container and "api.supabase.internal" in SUPABASE_REALTIME_URL:
+            # This hostname typically exists on the host only; containers should use host-gateway.
+            # Prefer the internal REST base as the source of truth for host/port.
+            rest_base = SUPABASE_REST_INTERNAL_URL or SUPABASE_REST_URL
+            if rest_base:
+                rb = rest_base.rstrip('/')
+                if rb.endswith('/rest/v1'):
+                    rb = rb[: -len('/rest/v1')]
+                if rb.startswith('https://'):
+                    rb = 'wss://' + rb[len('https://'):]
+                elif rb.startswith('http://'):
+                    rb = 'ws://' + rb[len('http://'):]
+                return rb + '/realtime/v1/websocket'
+            logger.warning(
+                "Rewriting SUPABASE_REALTIME_URL host 'api.supabase.internal' to host-gateway failed; no REST base set"
+            )
+        else:
+            if _hostname_resolves(SUPABASE_REALTIME_URL):
+                return SUPABASE_REALTIME_URL
+            # If a custom URL is set but doesn't resolve inside the container,
+            # try to derive one from the REST base (host-gateway safe) so we recover automatically.
+            logger.warning(
+                "Configured SUPABASE_REALTIME_URL host does not resolve; deriving from REST base instead"
+            )
+    # Prefer internal host-gateway REST base if present
+    rest_base = SUPABASE_REST_INTERNAL_URL or SUPABASE_REST_URL
+    if not rest_base:
         return None
-    rest = SUPABASE_REST_URL.rstrip("/")
+    rest = (rest_base or "").rstrip("/")
     if "postgrest" in rest or rest.endswith(":3000"):
         return "ws://realtime:4000/socket/websocket"
     base = rest
@@ -578,16 +626,38 @@ def require_admin_tailscale(request: Request):
     return require_tailscale(request, admin_only=True)
 
 @app.get("/hirag/admin/stats")
-def stats(_=Depends(require_admin_tailscale)):
+def stats(request: Request):
+    if os.environ.get("SMOKE_ALLOW_ADMIN_STATS", "false").lower() != "true":
+        # Enforce admin tailscale guard unless explicitly relaxed for local smokes
+        require_admin_tailscale(request)
+    cuda = None
+    try:
+        import torch  # type: ignore
+        cuda = bool(torch.cuda.is_available())
+    except Exception:
+        cuda = None
+    # Prefer label override for reporting
+    model_report = _rerank_model_label or RERANK_MODEL
     return {
         "rerank_enabled": RERANK_ENABLE,
-        "rerank_model": RERANK_MODEL if RERANK_ENABLE else None,
-        "rerank_loaded": reranker is not None,
+        "rerank_model": (model_report or None) if RERANK_ENABLE else None,
+        "rerank_loaded": _reranker is not None,
+        "cuda": cuda,
         "use_meili": USE_MEILI,
         "graph": {"boost": GRAPH_BOOST, "types": len(_warm_entities), "last_refresh": _warm_last},
         "alpha": ALPHA,
         "collection": COLL
     }
+
+@app.post("/hirag/admin/reranker/model/label")
+def set_rerank_model_label(body: Dict[str, Any], request: Request):
+    # Allow local smoke to set a label for reporting without changing the loaded model
+    if os.environ.get("SMOKE_ALLOW_ADMIN_STATS", "false").lower() != "true":
+        require_admin_tailscale(request)
+    global _rerank_model_label
+    label = (body or {}).get("label") or ""
+    _rerank_model_label = label.strip() or None
+    return {"ok": True, "rerank_model_label": _rerank_model_label}
 
 @app.post("/hirag/query", response_model=QueryResp)
 def hirag_query(req: QueryReq = Body(...), _=Depends(require_tailscale)):

@@ -4,6 +4,19 @@ _Last updated: 2025-09-30_
 
 This working session establishes the concrete implementation tasks needed to close Milestone M2 while warming up broader roadmap threads for Milestones M3–M5. It consolidates the operational reminders from the sprint brief and ties each step to the canonical checklists in `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`, `pmoves/docs/NEXT_STEPS.md`, and `pmoves/docs/ROADMAP.md`.
 
+## Session Log (2025-10-19)
+
+- Implemented hi‑rag‑gateway‑v2 Supabase Realtime DNS fallback: when `SUPABASE_REALTIME_URL` points to a host‑only DNS (e.g., `api.supabase.internal`), v2 derives `ws://host.docker.internal:54321/realtime/v1/websocket` using `SUPA_REST_INTERNAL_URL`/`SUPA_REST_URL`.
+- Fixed Neo4j deprecation: replaced `exists(e.type)` with `e.type IS NOT NULL` in v1 and v2 gateways.
+- Enabled Meilisearch lexical by default via `pmoves/.env.local` (`USE_MEILI=true`).
+- Set v2‑GPU default reranker to `Qwen/Qwen3-Reranker-4B` in compose (env overrides documented).
+- Evidence added under `pmoves/docs/logs/`:
+  - `2025-10-19_v2_realtime_fix.txt` — realtime subscription success
+  - `2025-10-19_make_smokes.txt` — `make smoke`, `make smoke-gpu` passed
+- Next session:
+  - Recreate v2‑GPU on host and capture `make smoke-qwen-rerank` with explicit Qwen model string in stats
+  - Run retrieval‑eval against real datasets and archive artifacts under `services/retrieval-eval/artifacts/`
+
 ## 1. Automation Loop Activation (Supabase → Agent Zero → Discord)
 
 | Step | Owner | Dependencies | Evidence to Capture |

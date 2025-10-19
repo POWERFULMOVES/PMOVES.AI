@@ -5,6 +5,12 @@ _Last updated: 2025-10-14_
 
 ## Immediate
 
+### Completed on 2025-10-19
+- v2 Supabase Realtime DNS fallback (host‑gateway derivation from SUPA_REST_URL/SUPA_REST_INTERNAL_URL)
+- v2‑GPU default Qwen reranker with env overrides; `make smoke-gpu` validated
+- Meilisearch lexical enabled by default via `pmoves/.env.local` (USE_MEILI=true)
+- Neo4j deprecation fix: replace `exists(e.type)` with `e.type IS NOT NULL` in v1 and v2 gateways
+
 ### 1. Finish the M2 Automation Loop
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
 - [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
@@ -24,6 +30,7 @@ _Last updated: 2025-10-14_
 - [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
 - [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI, aligning with the prep checklist captured in `SESSION_IMPLEMENTATION_PLAN.md` and ensuring persona publish gating thresholds stay versioned.
+  - Notes: Qwen default on GPU path is in place; sweeps should compare Qwen vs BGE vs Cohere/Azure on the real datasets under `services/retrieval-eval/datasets/` and publish artifacts.
 
 ### 4. PMOVES.YT High-Priority Lane
 - [ ] Design and document the resilient download module (resume, retries, rate limiting, playlist/channel ingestion, bounded worker pool).
@@ -39,6 +46,14 @@ _Last updated: 2025-10-14_
 - [x] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits (see `pmoves/docs/SUPABASE_RLS_HARDENING_CHECKLIST.md`, 2025-10-14).
 - [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
+
+### 6. Realtime & Reranker Operational Notes (new)
+- Realtime fallback is automatic; explicit override lives in `pmoves/.env.local`:
+  - `SUPA_REST_URL=http://host.docker.internal:54321/rest/v1`
+  - `SUPA_REST_INTERNAL_URL=http://host.docker.internal:54321/rest/v1`
+  - `SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1/websocket`
+- Qwen reranker default (v2‑GPU) via compose env; override with `RERANK_MODEL` in `.env.local` if needed.
+- Meili lexical is enabled via `USE_MEILI=true` in `.env.local`.
 
 ### 6. Grounded Personas & Packs Launch
 - [ ] Apply `db/v5_12_grounded_personas.sql` plus geometry support migrations (`db/v5_12_geometry_rls.sql`, `db/v5_12_geometry_realtime.sql`); log analyze/vacuum runs and chosen embedding dimension in `SESSION_IMPLEMENTATION_PLAN.md`.
@@ -249,5 +264,4 @@ _Last updated: 2025-10-05_
 ---
 
 > Archived snapshot (2025-09-08): [NEXT_STEPS_2025-09-08](archive/NEXT_STEPS_2025-09-08.md)
-
 

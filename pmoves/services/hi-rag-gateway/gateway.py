@@ -14,6 +14,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import CrossEncoder  # for optional rerank
+except Exception:
+    CrossEncoder = None  # lazy error if rerank requested
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 
@@ -38,6 +42,12 @@ TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","true").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","true").lower()=="true"
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
 TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIES", "").split(",") if c.strip()]
+
+# --- Optional Reranking (GPU preferred, CPU fallback) ---
+RERANK_ENABLE = os.environ.get("RERANK_ENABLE", "false").lower() == "true"
+RERANK_MODEL = os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base")
+RERANK_TOPN = int(os.environ.get("RERANK_TOPN", "50"))
+RERANK_K = int(os.environ.get("RERANK_K", "10"))
 
 app = FastAPI(title="PMOVES Hi-RAG Gateway")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -82,6 +92,8 @@ _clip_model = None
 _clip_lock = threading.Lock()
 _clap_model = None
 _clap_lock = threading.Lock()
+_cross_encoder = None
+_cross_lock = threading.Lock()
 
 def _load_codebook(path: str):
     import os
@@ -169,6 +181,30 @@ def _get_clap_model():
                     raise HTTPException(500, f"CLAP model load error: {e}")
     return _clap_model
 
+
+def _get_cross_encoder():
+    global _cross_encoder
+    if not RERANK_ENABLE:
+        return None
+    if CrossEncoder is None:
+        raise HTTPException(500, "Rerank requested but CrossEncoder not available; check sentence-transformers install")
+    if _cross_encoder is None:
+        with _cross_lock:
+            if _cross_encoder is None:
+                try:
+                    # Auto-select CUDA if available
+                    device = "cuda"
+                    try:
+                        import torch  # type: ignore
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                    except Exception:
+                        device = "cpu"
+                    _cross_encoder = CrossEncoder(RERANK_MODEL, device=device)
+                except Exception as e:
+                    logger.exception("Failed to load CrossEncoder %s", RERANK_MODEL)
+                    raise HTTPException(500, f"Reranker load error: {e}")
+    return _cross_encoder
+
 def hybrid_score(vec_score: float, lex_score: float, alpha: float=0.7) -> float:
     return alpha*vec_score + (1.0-alpha)*lex_score
 
@@ -202,7 +238,7 @@ def refresh_warm_dictionary():
     try:
         tmp = {}
         with driver.session() as s:
-            recs = s.run("MATCH (e:Entity) RETURN e.value AS v, coalesce(e.type,'UNK') AS t LIMIT $lim",
+            recs = s.run("MATCH (e:Entity) RETURN e.value AS v, CASE WHEN e.type IS NOT NULL THEN e.type ELSE 'UNK' END AS t LIMIT $lim",
                          lim=NEO4J_DICT_LIMIT)
             for r in recs:
                 v = r["v"]; t = (r["t"] or "UNK").upper()
@@ -354,31 +390,52 @@ def require_admin_tailscale(request: Request):
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
     emb = embed_query(query)
     cond = Filter(must=[FieldCondition(key="namespace", match=MatchValue(value=namespace))])
+    topn = max(16, k)
+    if RERANK_ENABLE:
+        topn = max(RERANK_TOPN, k)
     try:
-        sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=max(16,k), query_filter=cond, with_payload=True, with_vectors=False)
+        sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=topn, query_filter=cond, with_payload=True, with_vectors=False)
     except Exception as e:
         logger.exception("Qdrant search error")
         raise HTTPException(503, f"Qdrant search error: {e}")
+
     gterms = set([t.lower() for t in graph_terms(query, entity_types=entity_types)]) if driver is not None and GRAPH_BOOST > 0 else set()
     meili_scores = meili_lexical(query, namespace, k) if USE_MEILI else {}
-    results = []
+    prelim = []
     for p in sr:
-        txt = p.payload.get("text","")
+        txt = p.payload.get("text", "")
         lex = float(meili_scores.get(p.payload.get('chunk_id'), 0.0)) if USE_MEILI else (fuzz.token_set_ratio(query, txt)/100.0)
-        vec = float(p.score) if isinstance(p.score, (int,float)) else 0.0
+        vec = float(p.score) if isinstance(p.score, (int, float)) else 0.0
         g_hit = any(term in txt.lower() for term in gterms)
         score = hybrid_score(vec, lex, alpha) + (graph_boost if g_hit else 0.0)
-        results.append({
+        prelim.append({
             "doc_id": p.payload.get("doc_id"),
             "section_id": p.payload.get("section_id"),
             "chunk_id": p.payload.get("chunk_id"),
             "text": txt,
-            "score": score,
+            "score": float(score),
             "namespace": p.payload.get("namespace"),
             "graph_match": bool(g_hit)
         })
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:k]
+
+    # Optional rerank using cross-encoder
+    if RERANK_ENABLE and prelim:
+        ce = _get_cross_encoder()
+        try:
+            pairs = [(query, r["text"] or "") for r in prelim]
+            rr = ce.predict(pairs)
+            for r, s in zip(prelim, rr):
+                r["rerank_score"] = float(s)
+            prelim.sort(key=lambda x: x.get("rerank_score", x.get("score", 0.0)), reverse=True)
+            return prelim[:max(k, RERANK_K)]
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Rerank error; falling back to preliminary scores")
+            # fall through to sort by prelim score
+
+    prelim.sort(key=lambda x: x["score"], reverse=True)
+    return prelim[:k]
 
 @app.post("/hirag/query")
 def http_query(body: dict, _=Depends(require_tailscale)):

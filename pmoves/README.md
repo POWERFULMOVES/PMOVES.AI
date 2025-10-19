@@ -51,6 +51,12 @@ Activate your env before running local services (example):
 
 Services
 - `hi-rag-gateway-v2` (8087→8086 in-container): Hybrid RAG with reranker providers (Flag/Qwen/Cohere/Azure). See `docs/HI_RAG_RERANKER.md` and `docs/HI_RAG_RERANK_PROVIDERS.md`.
+  - Realtime: v2 now auto-derives a websocket URL from `SUPA_REST_URL`/`SUPA_REST_INTERNAL_URL` when a host-only DNS is detected. Prefer `pmoves/.env.local`:
+    - `SUPA_REST_URL=http://host.docker.internal:54321/rest/v1`
+    - `SUPA_REST_INTERNAL_URL=http://host.docker.internal:54321/rest/v1`
+    - `SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1/websocket`
+  - Lexical: set `USE_MEILI=true` in `pmoves/.env.local` to enable Meilisearch (enabled by default in this repo’s `.env.local`).
+  - GPU variant default reranker: Qwen/Qwen3-Reranker-4B (overridable via `RERANK_MODEL`).
 - `retrieval-eval` (8090): Dashboard/tests; points to `hi-rag-gateway-v2`.
 - `presign` (8088): MinIO presign API for ComfyUI uploads. See `docs/COMFYUI_MINIO_PRESIGN.md`.
 - `render-webhook` (8085): ComfyUI completion → Supabase Studio. See `docs/RENDER_COMPLETION_WEBHOOK.md`.
