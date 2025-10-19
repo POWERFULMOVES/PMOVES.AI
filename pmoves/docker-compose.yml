@@ -351,6 +351,9 @@ services:
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1/websocket}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     ports: ["8086:8086"]
     profiles: ["workers","gateway"]
     depends_on:
@@ -501,10 +504,10 @@ services:
     environment:
       - PORT=8091
       - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     depends_on:
       - nats
-      - postgrest
-      - postgres
     ports: ["8091:8091"]
     profiles: ["agents"]
     networks: [pmoves]

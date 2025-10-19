@@ -69,6 +69,12 @@ up-gpu: ## Start with optional GPU accelerations where supported
 	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
 	@echo "✔ Stack started with GPU profile."
 
+.PHONY: up-gpu-gateways
+up-gpu-gateways: ## Bring up GPU gateways (v2 @ :8087, v1 @ :8090)
+	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@echo "✔ GPU gateways requested (v2-gpu :8087, v1-gpu :8090)."
+
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
 	@docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway-v2
 	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
@@ -326,8 +332,12 @@ smoke:
 	 REF_ID="yt:smoke-$${CID}"; \
 	 export RUN_ID="$${CID}" POINT_ID="$${POINT_ID}" CONST_ID="$${CONST_ID}" REF_ID="$$REF_ID"; \
 	 python3 -c 'import json, os, sys; obj={"type":"geometry.cgp.v1","data":{"spec":"chit.cgp.v0.1","meta":{"source":"smoke-test","namespace":"pmoves","run_id":os.environ["RUN_ID"]},"super_nodes":[{"id":"sn.smoke","constellations":[{"id":os.environ["CONST_ID"],"summary":"smoke geometry validation","radial_minmax":[0.05,0.85],"spectrum":[0.08,0.12,0.18,0.22,0.18,0.12,0.07,0.03],"anchor":[0.52,-0.41,0.23,0.11],"points":[{"id":os.environ["POINT_ID"],"modality":"video","ref_id":os.environ["REF_ID"],"t_start":12.5,"frame_idx":300,"proj":0.82,"conf":0.93,"text":"geometry smoke anchor"}]}]}]}}; json.dump(obj, sys.stdout)' > $$TMP; \
-	 echo "[11/12] Geometry event ingest..." && curl -sf http://localhost:8087/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
-	 echo "[12/12] Geometry jump & calibration..." && curl -sf "http://localhost:8087/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && curl -sf http://localhost:8087/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
+	 GHPORT=""; for p in 8087 8086; do \
+	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then GHPORT=$$p; break; fi; \
+	done; \
+	if [ -z "$$GHPORT" ]; then echo "FAIL: geometry gateway not reachable on 8087 or 8086"; rm -f $$TMP; exit 1; fi; \
+	 echo "[11/12] Geometry event ingest..." && curl -sf http://localhost:$$GHPORT/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
+	 echo "[12/12] Geometry jump & calibration..." && curl -sf "http://localhost:$$GHPORT/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && curl -sf http://localhost:$$GHPORT/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 	 rm -f $$TMP
 	@echo "Smoke tests passed."
 
@@ -337,6 +347,28 @@ smoke-rerank:
 	@echo "Request with rerank=true (may be disabled if model not available)"
 	curl -s localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7, "use_rerank": true}' | jq .
 	@echo "If used_rerank=false, ensure internet/model access, or set RERANK_ENABLE=false."
+
+.PHONY: smoke-gpu
+smoke-gpu:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-gpu" && exit 1)
+	@echo "[GPU] Check v2-gpu (:8087) up..." && curl -sf http://localhost:8087/ | jq -e '.ok==true' >/dev/null && echo OK || (echo WARN: v2-gpu not up; exit 1)
+	@echo "[GPU] v2-gpu stats..." && curl -sf http://localhost:8087/hirag/admin/stats | jq . && \
+	  curl -sf http://localhost:8087/hirag/admin/stats | jq -e '.rerank_enabled==true and (.rerank_model|length)>0' >/dev/null && echo OK || (echo WARN: rerank not enabled or model missing; exit 1)
+	@echo "[GPU] v2-gpu rerank query..." && curl -sf localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[GPU] v1-gpu (:8090) (optional)..." && (curl -sf http://localhost:8090/ | jq -e '.ok==true' >/dev/null && echo OK) || (echo SKIP: v1-gpu not up; true)
+
+.PHONY: smoke-qwen-rerank
+smoke-qwen-rerank:
+	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
+	@echo "[Qwen] Inspect v2 stats..." && STATS=$$(curl -sf http://localhost:8087/hirag/admin/stats || true); \
+	MODEL=$$(printf "%s" "$$STATS" | jq -r '.rerank_model // empty'); \
+	if printf "%s" "$$MODEL" | grep -qi "qwen"; then \
+	  echo "Rerank model is Qwen ($$MODEL)"; \
+	  curl -sf localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"qwen rerank test","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1); \
+	else \
+	  echo "Model ($$MODEL) is not Qwen; set RERANK_MODEL=Qwen/Qwen3-Reranker-4B on v2-gpu and retry."; \
+	  exit 0; \
+	fi
 
 .PHONY: retrieval-eval-smoke
 retrieval-eval-smoke:

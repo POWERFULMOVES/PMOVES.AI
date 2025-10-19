@@ -579,10 +579,17 @@ def require_admin_tailscale(request: Request):
 
 @app.get("/hirag/admin/stats")
 def stats(_=Depends(require_admin_tailscale)):
+    cuda = None
+    try:
+        import torch  # type: ignore
+        cuda = bool(torch.cuda.is_available())
+    except Exception:
+        cuda = None
     return {
         "rerank_enabled": RERANK_ENABLE,
         "rerank_model": RERANK_MODEL if RERANK_ENABLE else None,
         "rerank_loaded": reranker is not None,
+        "cuda": cuda,
         "use_meili": USE_MEILI,
         "graph": {"boost": GRAPH_BOOST, "types": len(_warm_entities), "last_refresh": _warm_last},
         "alpha": ALPHA,
