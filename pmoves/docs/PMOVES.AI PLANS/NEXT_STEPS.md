@@ -7,6 +7,9 @@ _Last updated: 2025-10-18_
 ### 1. Finish the M2 Automation Loop
 
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
+- [ ] Health/Finance integrations — set Wger/Firefly secrets, import n8n flows, run smokes; confirm `health_*` and `finance_*` tables receive upserts and events (`health.metrics.updated.v1`, `finance.transactions.ingested.v1`).
+- [ ] CHIT EvoSwarm — enable controller and confirm `geometry.swarm.meta.v1` events; ensure producers prefer latest active packs and `pack_id` is visible in CGP meta and persisted in gateway v2 constellation meta.
+- [ ] n8n Public API — set `N8N_API_KEY` (compose env) to allow workflow auto-import; otherwise import `pmoves/n8n/flows/*.json` via UI.
 - [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
 - [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
 - [x] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; use `make jellyfin-verify` before publisher smokes (2025-10-13). Re-ran on 2025-10-14 after populating `JELLYFIN_USER_ID=c26d57363bad4318a37c0bf8673c389c`.

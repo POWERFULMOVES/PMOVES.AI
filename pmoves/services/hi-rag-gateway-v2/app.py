@@ -928,14 +928,29 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
                     spectrum = const.get("spectrum") if isinstance(const.get("spectrum"), list) else None
                     radial = const.get("radial_minmax") if isinstance(const.get("radial_minmax"), list) else [None, None]
                     summary = const.get("summary")
-                    # insert constellation
+                    # insert constellation (preserve CGP/meta provenance if present)
+                    const_meta = {}
+                    try:
+                        if isinstance(const.get("meta"), dict):
+                            const_meta.update(const.get("meta") or {})
+                    except Exception:
+                        pass
+                    try:
+                        if isinstance(cgp.get("meta"), dict):
+                            # Only carry selected keys to avoid bloat
+                            for k in ("namespace", "pack_id", "pack_version", "population_id", "builder_pack"):
+                                v = cgp["meta"].get(k)
+                                if v is not None:
+                                    const_meta[k] = v
+                    except Exception:
+                        pass
                     cur.execute(
                         """
                         INSERT INTO public.constellations(anchor_id, summary, radial_min, radial_max, spectrum, meta)
                         VALUES (%s, %s, %s, %s, %s, %s)
                         RETURNING id
                         """,
-                        (anchor_id, summary, radial[0] if radial else None, radial[1] if radial else None, spectrum, json.dumps({}))
+                        (anchor_id, summary, radial[0] if radial else None, radial[1] if radial else None, spectrum, json.dumps(const_meta))
                     )
                     constellation_id = cur.fetchone()[0]
                     # insert points
