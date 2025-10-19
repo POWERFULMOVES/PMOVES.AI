@@ -41,6 +41,8 @@ SUBJECTS = os.environ.get(
 ).split(",")
 
 JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "")
+# Default to the legacy style expected by tests; allow override.
+DISCORD_PUBLISH_PREFIX = os.environ.get("DISCORD_PUBLISH_PREFIX", "Published: ")
 
 DISCORD_METRICS_TABLE = os.environ.get("DISCORD_METRICS_TABLE", "publisher_discord_metrics")
 DISCORD_METRICS_CONFLICT = os.environ.get("DISCORD_METRICS_CONFLICT", "published_event_id")
@@ -303,7 +305,10 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             emb["description"] = sample
     elif name == "content.published.v1":
         title = payload.get("title") or payload.get("slug") or payload.get("published_path")
-        emb["title"] = f"Published: {title or 'content'}"
+        if DISCORD_PUBLISH_PREFIX:
+            emb["title"] = f"{DISCORD_PUBLISH_PREFIX}{title or 'content'}"
+        else:
+            emb["title"] = f"{title or 'content'}"
         public_url = payload.get("public_url") or payload.get("jellyfin_public_url")
         published_path = payload.get("published_path")
         namespace = payload.get("namespace") or payload.get("workspace")

@@ -4,7 +4,7 @@ These repository-level instructions tell GitHub Copilot how to assist on pull re
 
 ## Review Focus
 - Start with a concise bullet summary of the change and reference any roadmap or checklist items mentioned by the author.
-- Verify that smoke evidence is present when code paths touch the automation loop. Expect 12/12 smoke harness completion as documented in `pmoves/docs/SMOKETESTS.md`.
+- Verify that smoke evidence is present when code paths touch the automation loop. Expect 13/13 smoke harness completion as documented in `pmoves/docs/SMOKETESTS.md`.
 - Call out mismatches between code changes and the runbooks (`pmoves/docs/NEXT_STEPS.md`, `pmoves/docs/ROADMAP.md`, `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`) and suggest updates if missing.
 - Flag missing documentation updates whenever behavior, configuration, or provisioning steps change.
 

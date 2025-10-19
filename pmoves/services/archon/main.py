@@ -4,11 +4,13 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import sys
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from fastapi import Body, Depends, FastAPI, HTTPException
 from nats.aio.client import Client as NATS
@@ -28,6 +30,70 @@ logger = logging.getLogger("archon.main")
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 PORT = int(os.environ.get("PORT", 8090))
+
+
+def _strip_rest_suffix(url: str) -> str:
+    trimmed = url.rstrip("/")
+    suffix = "/rest/v1"
+    if trimmed.endswith(suffix):
+        return trimmed[: -len(suffix)]
+    return trimmed
+
+
+def _ensure_supabase_env() -> None:
+    """Populate SUPABASE_* defaults so the vendored stack can boot."""
+
+    current = os.environ.get("SUPABASE_URL")
+    prefers_internal = False
+    if current:
+        lowered = current.lower()
+        if lowered.startswith("http://host.docker.internal") or lowered.startswith("http://127.0.0.1"):
+            prefers_internal = True
+        placeholder_host = "your-project.supabase.co"
+        if urlparse(current).netloc == placeholder_host:
+            current = ""
+    if not current or prefers_internal:
+        internal = os.environ.get("SUPA_REST_INTERNAL_URL")
+        rest = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL")
+
+        def _host_reachable(base: str) -> bool:
+            try:
+                parsed = urlparse(base)
+                host = parsed.hostname
+                if not host:
+                    return False
+                port = parsed.port or (443 if parsed.scheme == "https" else 80)
+                with socket.create_connection((host, port), timeout=1.5):
+                    return True
+            except OSError:
+                return False
+
+        candidates: list[str] = []
+        seen: set[str] = set()
+        for candidate in (internal, rest, current, "http://postgrest:3000"):
+            if not candidate:
+                continue
+            base = _strip_rest_suffix(candidate)
+            if base in seen:
+                continue
+            seen.add(base)
+            candidates.append(base)
+
+        for base in candidates:
+            if _host_reachable(base):
+                os.environ["SUPABASE_URL"] = base
+                break
+        else:
+            os.environ.setdefault("SUPABASE_URL", "http://postgrest:3000")
+
+    # Ensure downstream clients find the service role key under the expected alias.
+    if os.environ.get("SUPABASE_SERVICE_ROLE_KEY") and not os.environ.get("SUPABASE_KEY"):
+        os.environ["SUPABASE_KEY"] = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+
+    os.environ["POSTGRES_HOST"] = os.environ.get("PGHOST", "postgres")
+
+
+_ensure_supabase_env()
 
 
 class CrawlJob(BaseModel):
@@ -250,9 +316,12 @@ def _resolve_vendor_paths() -> tuple[Path, Path, Path]:
 def _normalize_supabase_env() -> None:
     """Record the base PostgREST URL for downstream patches."""
 
-    url = os.environ.get("SUPABASE_URL")
-    if url:
-        os.environ["ARCHON_SUPABASE_BASE_URL"] = url.rstrip("/")
+    for key in ("SUPA_REST_URL", "SUPA_REST_INTERNAL_URL", "SUPABASE_URL"):
+        url = os.environ.get(key)
+        if not url:
+            continue
+        os.environ["ARCHON_SUPABASE_BASE_URL"] = _strip_rest_suffix(url)
+        break
 
 
 _normalize_supabase_env()
@@ -318,6 +387,25 @@ def _patch_supabase_client() -> None:
     if not base_url or "supabase.co" in base_url:
         return
 
+    def _configure_client(client):
+        root = base_url.rstrip("/")
+        if root.endswith("/rest/v1"):
+            rest_url = root
+        elif root.endswith("/rest"):
+            rest_url = f"{root}/v1"
+        else:
+            parsed = urlparse(root)
+            hostname = (parsed.hostname or "").lower()
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            if "postgrest" in hostname or (hostname in {"localhost", "127.0.0.1"} and port == 3000):
+                rest_url = root
+            else:
+                rest_url = f"{root}/rest/v1"
+
+        client.rest_url = rest_url
+        client._postgrest = None  # type: ignore[attr-defined]
+        return client
+
     try:
         from server.services.credential_service import CredentialService  # type: ignore
     except ImportError:
@@ -327,12 +415,22 @@ def _patch_supabase_client() -> None:
 
     def wrapped(self):  # type: ignore[override]
         client = original_get_client(self)
-        root = base_url.rstrip("/")
-        client.rest_url = root + "/rest/v1"
-        client._postgrest = None  # type: ignore[attr-defined]
-        return client
+        return _configure_client(client)
 
     CredentialService._get_supabase_client = wrapped  # type: ignore[attr-defined]
+
+    try:
+        import server.services.client_manager as client_manager  # type: ignore
+    except ImportError:
+        return
+
+    original_manager_get = client_manager.get_supabase_client
+
+    def manager_wrapper():
+        client = original_manager_get()
+        return _configure_client(client)
+
+    client_manager.get_supabase_client = manager_wrapper  # type: ignore[assignment]
 
 
 _patch_supabase_client()
@@ -346,6 +444,9 @@ def _ensure_env_defaults() -> dict[str, str]:
     env.setdefault("ARCHON_SERVER_PORT", str(port))
     env.setdefault("ARCHON_MCP_PORT", "8051")
     env.setdefault("ARCHON_AGENTS_PORT", "8052")
+    env.setdefault("ARCHON_SERVER_HOST", "localhost")
+    env.setdefault("ARCHON_MCP_HOST", "localhost")
+    env.setdefault("ARCHON_AGENTS_HOST", "localhost")
     env.setdefault("MCP_SERVICE_URL", f"http://localhost:{env['ARCHON_MCP_PORT']}")
 
     return {

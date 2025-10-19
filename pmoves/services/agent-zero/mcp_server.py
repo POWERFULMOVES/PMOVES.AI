@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 import requests
 import yaml
 
-GATEWAY_URL = os.environ.get("HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8087"))
+GATEWAY_URL = os.environ.get("HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8086"))
 FORM_NAME = os.environ.get("AGENT_FORM", "POWERFULMOVES")
 FORMS_DIR = Path(os.environ.get("AGENT_FORMS_DIR", "configs/agents/forms"))
 KNOWLEDGE_BASE_DIR = Path(os.environ.get("AGENT_KNOWLEDGE_BASE_DIR", "runtime/knowledge"))

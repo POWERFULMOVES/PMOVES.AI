@@ -14,6 +14,7 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/cache:/cache
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/media:/media
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/output
+      - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/config/www:/config/www:ro
       - ../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/install_plugins.sh:/tmp/install_plugins.sh:ro
     # Uncomment to auto-install plugins on startup (may slow first boot):
     # entrypoint: >

@@ -129,7 +129,7 @@ try {
   # 9. Hi-RAG v2 query
   Write-Step "[9/12] Hi-RAG v2 query..."
   $hiragPayload = '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}'
-  $resp = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8087/hirag/query' -BodyJson $hiragPayload }
+  $resp = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8086/hirag/query' -BodyJson $hiragPayload }
   if ($null -eq $resp -or $null -eq $resp.hits) { throw 'Response missing .hits' }
   Write-OK
 
@@ -183,17 +183,17 @@ try {
     )
   }
   $eventBody = @{ type = "geometry.cgp.v1"; data = $cgp } | ConvertTo-Json -Depth 10
-  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8087/geometry/event' -BodyJson $eventBody } | Out-Null
+  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8086/geometry/event' -BodyJson $eventBody } | Out-Null
   Write-OK
 
   # 12. Geometry jump + calibration
   Write-Step "[12/12] Geometry jump & calibration..."
-  $jump = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJson -Url ("http://localhost:8087/shape/point/{0}/jump" -f $pointId) }
+  $jump = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJson -Url ("http://localhost:8086/shape/point/{0}/jump" -f $pointId) }
   if ($null -eq $jump -or $jump.locator.ref_id -ne $refId) {
     throw "Jump endpoint mismatch (expected $refId)"
   }
   $cgpJson = $cgp | ConvertTo-Json -Depth 10
-  $calib = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8087/geometry/calibration/report' -BodyJson $cgpJson }
+  $calib = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8086/geometry/calibration/report' -BodyJson $cgpJson }
   if ($null -eq $calib -or $null -eq $calib.constellations) {
     throw 'Calibration report missing constellations array'
   }

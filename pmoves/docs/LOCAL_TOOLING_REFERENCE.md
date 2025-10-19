@@ -1,4 +1,5 @@
 # Local Tooling & Automation Reference
+Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md for cross-links.
 _Last updated: 2025-10-18_
 
 This guide aggregates the entry points that keep local environments consistent across Windows, WSL, and Linux hosts. Use it alongside `pmoves/docs/LOCAL_DEV.md` (service ports, networking) and `pmoves/docs/SMOKETESTS.md` (verification flows) when onboarding new contributors or refreshing a workstation.

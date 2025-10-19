@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Geometry Swarm Meta v1",
+  "type": "object",
+  "required": ["namespace", "modality", "pack_id", "status", "ts"],
+  "additionalProperties": true,
+  "properties": {
+    "namespace": { "type": "string" },
+    "modality": { "type": "string" },
+    "pack_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["active", "draft", "archived"] },
+    "version": { "type": ["string", "null"] },
+    "population_id": { "type": ["string", "null"] },
+    "best_fitness": { "type": ["number", "null"] },
+    "metrics": { "type": ["object", "null"], "additionalProperties": true },
+    "ts": { "type": "string", "format": "date-time" }
+  }
+}
+

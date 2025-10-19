@@ -1,4 +1,5 @@
 # Smoke Tests
+Note: Related cross-links in pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
 
 This guide covers preflight wiring, starting the core stack, and running the local smoke tests. Use it as a quick readiness checklist before deeper testing.
 

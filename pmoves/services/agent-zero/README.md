@@ -37,7 +37,7 @@ The service reads configuration from environment variables and exposes the resol
 | --- | --- | --- |
 | `PORT` | `8080` | FastAPI listen port. |
 | `NATS_URL` | `nats://nats:4222` | Event bus connection string. |
-| `HIRAG_URL` / `GATEWAY_URL` | `http://localhost:8087` | Geometry gateway base URL. |
+| `HIRAG_URL` / `GATEWAY_URL` | `http://localhost:8086` | Geometry gateway base URL. |
 | `YT_URL` | `http://localhost:8077` | YouTube ingest + transcript gateway. |
 | `RENDER_WEBHOOK_URL` | `http://localhost:8085` | ComfyUI render webhook. |
 | `OPEN_NOTEBOOK_API_URL` / `NOTEBOOK_API_URL` | — | Base URL for the Open Notebook API queried by `notebook.search`. |

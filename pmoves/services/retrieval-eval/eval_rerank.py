@@ -23,7 +23,7 @@ from eval_utils import (
     utc_now,
 )
 
-DEFAULT_GATEWAY = os.environ.get("HIRAG_URL", "http://localhost:8087")
+DEFAULT_GATEWAY = os.environ.get("HIRAG_URL", "http://localhost:8086")
 DEFAULT_DATA = os.environ.get("EVAL_DATA", "./datasets/queries.jsonl")
 DEFAULT_K = int(os.environ.get("EVAL_K", "10"))
 

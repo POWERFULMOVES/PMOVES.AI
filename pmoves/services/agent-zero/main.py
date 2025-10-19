@@ -150,7 +150,7 @@ class AgentZeroServiceConfig(BaseModel):
         default="nats://nats:4222", description="NATS connection string"
     )
     geometry_gateway_url: str = Field(
-        default="http://localhost:8087",
+        default="http://localhost:8086",
         description="Base URL for the geometry gateway runtime",
     )
     youtube_ingest_url: str = Field(
@@ -195,7 +195,7 @@ def load_service_config() -> AgentZeroServiceConfig:
         port=int(os.environ.get("PORT", 8080)),
         nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
         geometry_gateway_url=os.environ.get(
-            "HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8087")
+            "HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8086")
         ),
         youtube_ingest_url=os.environ.get("YT_URL", "http://localhost:8077"),
         render_webhook_url=os.environ.get(

@@ -102,4 +102,16 @@ RETURN count(row) AS aliases_seeded;
 """
 )
 PY
+
+CHIT_SEED="$ROOT/neo4j/cypher/010_chit_geometry_fixture.cypher"
+if [ -f "$CHIT_SEED" ]; then
+    echo "→ Applying CHIT geometry fixture"
+    docker exec -i "$CONTAINER" cypher-shell -u "$USER" -p "$PASS" < "$CHIT_SEED" >/dev/null
+fi
+
+CHIT_SMOKE="$ROOT/neo4j/cypher/011_chit_geometry_smoke.cypher"
+if [ -f "$CHIT_SMOKE" ]; then
+    echo "   • CHIT geometry smoke check"
+    docker exec -i "$CONTAINER" cypher-shell -u "$USER" -p "$PASS" --format plain < "$CHIT_SMOKE"
+fi
 echo "✔ Neo4j bootstrap complete."

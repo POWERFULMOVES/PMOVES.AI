@@ -1,4 +1,4 @@
-import os, json, tempfile, shutil, asyncio, time, re
+import os, json, tempfile, shutil, asyncio, time, re, math, uuid
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, Body, HTTPException
 import yt_dlp
@@ -24,6 +24,15 @@ except Exception:
         if parent_id: env["parent_id"] = parent_id
         return env
 
+try:
+    from services.common.geometry_params import get_builder_pack, clear_cache  # type: ignore
+except Exception:  # pragma: no cover - fallback when module unavailable
+    def get_builder_pack(namespace: str, modality: str):
+        return None
+
+    def clear_cache() -> None:
+        return None
+
 app = FastAPI(title="PMOVES.YT", version="1.0.0")
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
@@ -33,6 +42,12 @@ MINIO_SECURE = (os.environ.get("MINIO_SECURE","false").lower() == "true")
 DEFAULT_BUCKET = os.environ.get("YT_BUCKET","assets")
 DEFAULT_NAMESPACE = os.environ.get("INDEXER_NAMESPACE","pmoves")
 SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
+SUPA_SERVICE_KEY = (
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_KEY")
+    or os.environ.get("SUPABASE_KEY")
+    or os.environ.get("SUPABASE_ANON_KEY")
+)
 NATS_URL = (os.environ.get("NATS_URL") or "").strip()
 YT_NATS_ENABLE = os.environ.get("YT_NATS_ENABLE", "false").lower() == "true"
 FFW_URL = os.environ.get("FFW_URL","http://ffmpeg-whisper:8078")
@@ -150,7 +165,10 @@ def base_prefix(video_id: str):
 
 def supa_insert(table: str, row: Dict[str,Any]):
     try:
-        r = requests.post(f"{SUPA}/{table}", headers={'content-type':'application/json'}, data=json.dumps(row), timeout=20)
+        headers = {'content-type': 'application/json'}
+        if SUPA_SERVICE_KEY:
+            headers.update({'apikey': SUPA_SERVICE_KEY, 'Authorization': f"Bearer {SUPA_SERVICE_KEY}"})
+        r = requests.post(f"{SUPA}/{table}", headers=headers, data=json.dumps(row), timeout=20)
         r.raise_for_status(); return r.json()
     except Exception:
         return None
@@ -160,7 +178,10 @@ def supa_upsert(table: str, row: Dict[str,Any], on_conflict: Optional[str]=None)
         url = f"{SUPA}/{table}"
         if on_conflict:
             url += f"?on_conflict={on_conflict}"
-        r = requests.post(url, headers={'content-type':'application/json','prefer':'resolution=merge-duplicates'}, data=json.dumps(row), timeout=20)
+        headers = {'content-type': 'application/json', 'prefer': 'resolution=merge-duplicates'}
+        if SUPA_SERVICE_KEY:
+            headers.update({'apikey': SUPA_SERVICE_KEY, 'Authorization': f"Bearer {SUPA_SERVICE_KEY}"})
+        r = requests.post(url, headers=headers, data=json.dumps(row), timeout=20)
         r.raise_for_status(); return r.json()
     except Exception:
         return None
@@ -175,7 +196,10 @@ def supa_update(table: str, match: Dict[str,Any], patch: Dict[str,Any]):
             else:
                 qs.append(f"{k}=eq.{json.dumps(v)}")
         url = f"{SUPA}/{table}?" + "&".join(qs)
-        r = requests.patch(url, headers={'content-type':'application/json'}, data=json.dumps(patch), timeout=20)
+        headers = {'content-type': 'application/json'}
+        if SUPA_SERVICE_KEY:
+            headers.update({'apikey': SUPA_SERVICE_KEY, 'Authorization': f"Bearer {SUPA_SERVICE_KEY}"})
+        r = requests.patch(url, headers=headers, data=json.dumps(patch), timeout=20)
         r.raise_for_status(); return r.json()
     except Exception:
         return None
@@ -189,7 +213,10 @@ def supa_get(table: str, match: Dict[str,Any]) -> Optional[List[Dict[str,Any]]]:
             else:
                 qs.append(f"{k}=eq.{json.dumps(v)}")
         url = f"{SUPA}/{table}?" + "&".join(qs)
-        r = requests.get(url, timeout=20)
+        headers: Dict[str, str] = {}
+        if SUPA_SERVICE_KEY:
+            headers.update({'apikey': SUPA_SERVICE_KEY, 'Authorization': f"Bearer {SUPA_SERVICE_KEY}"})
+        r = requests.get(url, headers=headers, timeout=20)
         r.raise_for_status(); return r.json()
     except Exception:
         return None
@@ -379,14 +406,19 @@ def yt_playlist(body: Dict[str,Any] = Body(...)):
     job_id = _job_create('playlist', {'url': url, 'namespace': ns, 'bucket': bucket, 'count': len(entries)})
     if job_id: _job_update(job_id, 'running')
     results = []
+    # Resolve rate limit per-call to respect runtime env overrides in tests
+    try:
+        rate_limit = float(os.environ.get('YT_RATE_LIMIT', str(YT_RATE_LIMIT)))
+    except Exception:
+        rate_limit = YT_RATE_LIMIT
     for i, e in enumerate(entries):
         vid_url = f"https://www.youtube.com/watch?v={e['id']}" if len(e['id']) == 11 else e['id']
         if job_id: _item_upsert(job_id, e['id'], 'running', None, {'title': e.get('title')})
         r = _ingest_one(vid_url, ns, bucket)
         results.append({'id': e['id'], **r})
         if job_id: _item_upsert(job_id, e['id'], 'completed' if r.get('ok') else 'failed', r.get('error'))
-        if YT_RATE_LIMIT > 0:
-            time.sleep(YT_RATE_LIMIT)
+        if rate_limit > 0:
+            time.sleep(rate_limit)
     if job_id: _job_update(job_id, 'completed')
     return {'ok': True, 'job_id': job_id, 'count': len(results), 'results': results}
 
@@ -661,13 +693,71 @@ def _auto_tune_segment_params(segments: List[Dict[str,Any]], text: str) -> Dict[
         return params
     return params
 
-def _build_cgp(video_id: str, chunks: List[Dict[str,Any]], title: Optional[str]) -> Dict[str,Any]:
-    nbins = 32
-    spectrum = [0.0]*nbins
+def _normalise(values: List[float]) -> List[float]:
+    total = sum(values)
+    if total <= 0:
+        length = len(values) or 1
+        uniform = 1.0 / length
+        return [uniform] * length
+    return [v / total for v in values]
+
+
+def _build_cgp(video_id: str, chunks: List[Dict[str,Any]], title: Optional[str], namespace: str) -> Dict[str,Any]:
+    pack = get_builder_pack(namespace, 'video')
+    if not pack:
+        # Fallback to direct Supabase lookup when the shared helper is unavailable in-container.
+        packs = supa_get(
+            'geometry_parameter_packs',
+            {
+                'namespace': namespace,
+                'modality': 'video',
+                'pack_type': 'cg_builder',
+                'status': 'active',
+            },
+        ) or []
+        if isinstance(packs, list) and packs:
+            packs.sort(key=lambda row: row.get('created_at') or '', reverse=True)
+            pack = packs[0]
+    params = (pack or {}).get('params') or {}
+
+    nbins = int(params.get('bins') or 32)
+    nbins = max(4, min(128, nbins))
+    kernel = int(params.get('K') or 1)
+    kernel = max(1, min(nbins, kernel))
+    tau = float(params.get('tau') or 1.0)
+    tau = max(0.1, tau)
+    beta = float(params.get('beta') or 1.0)
+    beta = max(0.1, beta)
+
+    spectrum_mode = (params.get('spectrum_mode') or 'histogram').lower()
+    mf_rank = params.get('mf_rank') if isinstance(params.get('mf_rank'), list) else None
+
     n = max(1, len(chunks))
-    for i in range(n):
-        b = min(nbins-1, int(i * nbins / n))
-        spectrum[b] += 1.0/n
+    spectrum = [0.0] * nbins
+
+    if mf_rank and spectrum_mode == 'mf':
+        mf_vals = [float(v) for v in mf_rank[:nbins]]
+        if len(mf_vals) < nbins:
+            mf_vals.extend([0.0] * (nbins - len(mf_vals)))
+        spectrum = _normalise(mf_vals)
+    else:
+        decay_cache: Dict[int, float] = {}
+        for idx in range(n):
+            frac = (idx + 0.5) / n
+            center = min(nbins - 1, int(frac * nbins))
+            spectrum[center] += 1.0
+            if kernel == 1:
+                continue
+            for offset in range(1, kernel):
+                if offset not in decay_cache:
+                    decay_cache[offset] = math.exp(-((offset / tau) ** beta))
+                weight = decay_cache[offset]
+                if center - offset >= 0:
+                    spectrum[center - offset] += weight
+                if center + offset < nbins:
+                    spectrum[center + offset] += weight
+        spectrum = _normalise(spectrum)
+
     points = []
     for i, ch in enumerate(chunks):
         points.append({
@@ -683,10 +773,87 @@ def _build_cgp(video_id: str, chunks: List[Dict[str,Any]], title: Optional[str])
     c = {
         'id': f"c:yt:{video_id}",
         'summary': title or f"YouTube {video_id}",
-        'spectrum': spectrum,
+        'spectrum': [float(round(val, 6)) for val in spectrum],
         'points': points
     }
-    return {'spec': 'chit.cgp.v0.1', 'super_nodes': [{'constellations': [c]}]}
+    meta: Dict[str, Any] = {'source': 'pmoves-yt', 'video_id': video_id, 'namespace': namespace, 'bins': nbins}
+    if pack:
+        meta['pack_id'] = pack.get('id')
+        meta['builder_pack'] = {
+            'id': pack.get('id'),
+            'status': pack.get('status'),
+            'generation': pack.get('generation'),
+            'population_id': pack.get('population_id'),
+            'fitness': pack.get('fitness'),
+            'params': {
+                'K': kernel,
+                'bins': nbins,
+                'tau': tau,
+                'beta': beta,
+                'spectrum_mode': spectrum_mode,
+            },
+            'raw': params,
+        }
+    return {'spec': 'chit.cgp.v0.1', 'meta': meta, 'super_nodes': [{'constellations': [c]}]}
+
+
+@app.post('/yt/smoke/seed-pack')
+def yt_smoke_seed_pack(body: Dict[str, Any] = Body({})):
+    namespace = body.get('namespace') or DEFAULT_NAMESPACE
+    modality = body.get('modality') or 'video'
+    pack_id = body.get('pack_id') or str(uuid.uuid4())
+    params = body.get('params') or {
+        'bins': 24,
+        'K': 2,
+        'tau': 0.9,
+        'beta': 1.15,
+        'spectrum_mode': 'histogram'
+    }
+    payload = {
+        'id': pack_id,
+        'namespace': namespace,
+        'modality': modality,
+        'pack_type': 'cg_builder',
+        'status': 'active',
+        'params': params,
+        'generation': body.get('generation') or 1,
+        'population_id': body.get('population_id') or 'smoke',
+        'fitness': body.get('fitness') or 0.9,
+    }
+    try:
+        headers = {'content-type': 'application/json', 'prefer': 'return=representation'}
+        if SUPA_SERVICE_KEY:
+            headers.update({'apikey': SUPA_SERVICE_KEY, 'Authorization': f"Bearer {SUPA_SERVICE_KEY}"})
+        resp = requests.post(
+            f"{SUPA}/geometry_parameter_packs",
+            headers=headers,
+            data=json.dumps(payload),
+            timeout=20,
+        )
+        resp.raise_for_status()
+        rows = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else []
+    except Exception as exc:
+        raise HTTPException(502, f"geometry_parameter_packs insert failed: {exc}")
+    clear_cache()
+    if isinstance(rows, list) and rows:
+        pack = rows[0]
+    else:
+        pack = payload
+    return {'ok': True, 'pack': pack}
+
+
+@app.post('/yt/cgp-build')
+def yt_cgp_build(body: Dict[str, Any] = Body(...)):
+    video_id = body.get('video_id')
+    if not video_id:
+        raise HTTPException(400, 'video_id required')
+    namespace = body.get('namespace') or DEFAULT_NAMESPACE
+    chunks = body.get('chunks') or []
+    if not isinstance(chunks, list) or not chunks:
+        raise HTTPException(400, 'chunks required')
+    title = body.get('title')
+    cgp = _build_cgp(video_id, chunks, title, namespace)
+    return {'ok': True, 'cgp': cgp}
 
 @app.post('/yt/emit')
 def yt_emit(body: Dict[str,Any] = Body(...)):
@@ -727,7 +894,7 @@ def yt_emit(body: Dict[str,Any] = Body(...)):
         raise HTTPException(502, f"upsert-batch failed: {e}")
     # emit CGP
     try:
-        cgp = _build_cgp(vid, chunks, title)
+        cgp = _build_cgp(vid, chunks, title, ns)
         r2 = requests.post(f"{HIRAG_URL}/geometry/event", headers={'content-type':'application/json'}, data=json.dumps({'type':'geometry.cgp.v1','data':cgp}), timeout=60)
         r2.raise_for_status()
     except Exception as e:
@@ -739,4 +906,79 @@ def yt_emit(body: Dict[str,Any] = Body(...)):
         'upserted': (up or {}).get('upserted'),
         'lexical_indexed': (up or {}).get('lexical_indexed'),
         'profile': (tuned or {}).get('profile') if tuned else None
+    }
+
+@app.post('/yt/search')
+def yt_search(body: Dict[str,Any] = Body(...)):
+    """Semantic search across YouTube transcript corpus via Hi-RAG v2.
+    
+    Args:
+        query: Search query string
+        limit: Maximum number of videos to return (default 10)
+        threshold: Minimum similarity score 0-1 (default 0.70)
+        namespace: Indexer namespace (default from env)
+    
+    Returns:
+        {ok, query, results: [{video_id, title, url, similarity, excerpt, timestamp}], total}
+    """
+    query = body.get('query')
+    if not query:
+        raise HTTPException(400, 'query required')
+    
+    limit = int(body.get('limit', 10))
+    threshold = float(body.get('threshold', 0.70))
+    namespace = body.get('namespace', DEFAULT_NAMESPACE)
+    
+    # Query hi-rag for YouTube chunks (ask for more to account for filtering)
+    try:
+        payload = {'query': query, 'k': limit * 3, 'namespace': namespace}
+        r = requests.post(f"{HIRAG_URL}/hirag/query", json=payload, timeout=30)
+        r.raise_for_status()
+        chunks = r.json().get('results', [])
+    except Exception as e:
+        raise HTTPException(502, f"hi-rag query failed: {e}")
+    
+    # Filter for YouTube content and deduplicate by video_id
+    yt_results = []
+    seen_videos = set()
+    
+    for chunk in chunks:
+        doc_id = chunk.get('doc_id', '')
+        if not doc_id.startswith('yt:'):
+            continue
+        
+        video_id = doc_id.split(':')[1] if ':' in doc_id else doc_id
+        if video_id in seen_videos:
+            continue
+        
+        score = chunk.get('score', 0.0)
+        if score < threshold:
+            continue
+        
+        seen_videos.add(video_id)
+        
+        # Fetch video metadata from Supabase
+        try:
+            vid_rows = supa_get('videos', {'video_id': video_id}) or []
+            title = vid_rows[0].get('title') if vid_rows else video_id
+        except Exception:
+            title = video_id
+        
+        yt_results.append({
+            'video_id': video_id,
+            'title': title,
+            'url': f"https://youtube.com/watch?v={video_id}",
+            'similarity': round(score, 4),
+            'excerpt': chunk.get('text', '')[:300],
+            'timestamp': chunk.get('payload', {}).get('t_start')
+        })
+        
+        if len(yt_results) >= limit:
+            break
+    
+    return {
+        'ok': True,
+        'query': query,
+        'results': yt_results,
+        'total': len(yt_results)
     }

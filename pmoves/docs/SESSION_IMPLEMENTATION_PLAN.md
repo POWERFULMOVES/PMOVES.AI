@@ -1,4 +1,5 @@
 # M2 Automation Kickoff & Roadmap Prep Plan
+Note: For cross-references, see pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
 _Last updated: 2025-09-30_
 
 This working session establishes the concrete implementation tasks needed to close Milestone M2 while warming up broader roadmap threads for Milestones M3–M5. It consolidates the operational reminders from the sprint brief and ties each step to the canonical checklists in `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`, `pmoves/docs/NEXT_STEPS.md`, and `pmoves/docs/ROADMAP.md`.

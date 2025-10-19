@@ -2,9 +2,12 @@
 """
 Backfill Jellyfin metadata and republish `content.published.v1` events.
 
+Integrates with PMOVES.yt YouTube transcript corpus for semantic content linking.
+
 Usage examples:
   python pmoves/scripts/backfill_jellyfin_metadata.py --limit 5 --dry-run
-  python pmoves/scripts/backfill_jellyfin_metadata.py --limit 10 --sleep 1.5
+  python pmoves/scripts/backfill_jellyfin_metadata.py --limit 10 --sleep 1.5 --link-youtube
+  python pmoves/scripts/backfill_jellyfin_metadata.py --limit 25 --youtube-threshold 0.75
 """
 from __future__ import annotations
 
@@ -34,9 +37,11 @@ except Exception as exc:  # pragma: no cover
 from services.publisher.publisher import build_published_payload, slugify
 
 
-BACKFILL_VERSION = "2025-10-14"
+BACKFILL_VERSION = "2025-10-17"
 DEFAULT_LIMIT = 10
 JELLYFIN_IMAGE_ROUTE = "/Items/{item_id}/Images/Primary?tag={tag}"
+YOUTUBE_SIMILARITY_THRESHOLD = 0.70
+PMOVES_YT_BASE_URL = "http://localhost:8077"
 
 
 def load_env() -> Dict[str, str]:
@@ -44,9 +49,11 @@ def load_env() -> Dict[str, str]:
         "SUPA_REST_URL": os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL"),
         "SUPABASE_SERVICE_ROLE_KEY": os.environ.get("SUPABASE_SERVICE_ROLE_KEY"),
         "AGENT_ZERO_BASE_URL": os.environ.get("AGENT_ZERO_BASE_URL", "http://localhost:8080").rstrip("/"),
+        "PMOVES_YT_URL": os.environ.get("PMOVES_YT_URL", "http://localhost:8077").rstrip("/"),
         "JELLYFIN_URL": os.environ.get("JELLYFIN_URL"),
         "JELLYFIN_PUBLIC_BASE_URL": os.environ.get("JELLYFIN_PUBLIC_BASE_URL"),
         "JELLYFIN_API_KEY": os.environ.get("JELLYFIN_API_KEY"),
+        "MCP_DOCKER_URL": os.environ.get("MCP_DOCKER_URL", MCP_DOCKER_BASE_URL).rstrip("/"),
     }
     missing = [key for key, value in env.items() if value in (None, "", [])]
     if missing:
@@ -171,7 +178,22 @@ async def update_supabase(client: httpx.AsyncClient, row_id: str, meta: Dict[str
     resp.raise_for_status()
 
 
-def build_payload(row: Dict[str, Any], meta: Dict[str, Any], jellyfin_item: Dict[str, Any], env: Dict[str, str]) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+async def search_youtube_transcripts(client: httpx.AsyncClient, query: str, limit: int = 5, threshold: float = YOUTUBE_SIMILARITY_THRESHOLD) -> List[Dict[str, Any]]:
+    """Search YouTube transcript corpus for semantically similar content via pmoves-yt."""
+    try:
+        resp = await client.post(
+            "/yt/search",
+            json={"query": query, "limit": limit, "threshold": threshold},
+            timeout=30.0
+        )
+        resp.raise_for_status()
+        return resp.json().get("results", [])
+    except (httpx.HTTPStatusError, httpx.TimeoutException) as exc:
+        print(f"⚠️  YouTube search failed: {exc}")
+        return []
+
+
+def build_payload(row: Dict[str, Any], meta: Dict[str, Any], jellyfin_item: Dict[str, Any], env: Dict[str, str], youtube_links: Optional[List[Dict[str, Any]]] = None) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     jellyfin_id = (
         meta.get("jellyfin_item_id")
         or row.get("jellyfin_item_id")
@@ -184,7 +206,7 @@ def build_payload(row: Dict[str, Any], meta: Dict[str, Any], jellyfin_item: Dict
     namespace = _derive_namespace(row, meta)
     title = _derive_title(row, meta)
     description = meta.get("description") or row.get("description")
-    tags = _extract_tags(meta)
+    tags = _extract_tags(meta) or []
     slug = slugify(meta.get("slug") or title)
     namespace_slug = slugify(meta.get("namespace_slug") or namespace)
     filename = meta.get("filename") or _filename_from_path(published_path)
@@ -202,6 +224,20 @@ def build_payload(row: Dict[str, Any], meta: Dict[str, Any], jellyfin_item: Dict
         "production_year": jellyfin_item.get("ProductionYear"),
         "name": jellyfin_item.get("Name"),
     }
+
+    # Add YouTube transcript links if available
+    if youtube_links:
+        jellyfin_meta["related_youtube"] = [
+            {
+                "video_id": link.get("video_id"),
+                "title": link.get("title"),
+                "url": link.get("url"),
+                "similarity": link.get("similarity"),
+                "transcript_excerpt": link.get("excerpt", "")[:200]
+            }
+            for link in youtube_links[:3]  # Top 3 results
+        ]
+        tags = list(set(tags + ["youtube-linked"]))
 
     payload = build_published_payload(
         artifact_uri=artifact_uri,
@@ -222,15 +258,22 @@ def build_payload(row: Dict[str, Any], meta: Dict[str, Any], jellyfin_item: Dict
         filename=filename,
         extension=extension.lstrip("."),
     )
-    return payload, jellyfin_meta, {
+    
+    summary = {
         "jellyfin_public_url": jellyfin_public_url,
         "jellyfin_item_id": jellyfin_id,
         "thumbnail_url": thumbnail_url,
         "duration": duration,
     }
+    
+    if youtube_links:
+        summary["youtube_linked_count"] = len(youtube_links)
+        summary["youtube_top_match"] = youtube_links[0].get("video_id") if youtube_links else None
+    
+    return payload, jellyfin_meta, summary
 
 
-async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optional[str]) -> None:
+async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optional[str], link_youtube: bool, youtube_threshold: float) -> None:
     env = load_env()
     supabase_headers = {
         "apikey": env["SUPABASE_SERVICE_ROLE_KEY"],
@@ -238,7 +281,8 @@ async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optiona
     }
     async with httpx.AsyncClient(base_url=env["SUPA_REST_URL"], headers=supabase_headers, timeout=15.0) as supa_client, \
         httpx.AsyncClient(base_url=env["JELLYFIN_URL"], headers={"X-Emby-Token": env["JELLYFIN_API_KEY"]}, timeout=10.0) as jellyfin_client, \
-        httpx.AsyncClient(base_url=env["AGENT_ZERO_BASE_URL"], timeout=10.0) as agent_client:
+        httpx.AsyncClient(base_url=env["AGENT_ZERO_BASE_URL"], timeout=10.0) as agent_client, \
+        httpx.AsyncClient(base_url=env["PMOVES_YT_URL"], timeout=30.0) as yt_client:
 
         rows = await fetch_candidates(supa_client, limit=limit, start_after=start_after)
         if not rows:
@@ -246,6 +290,9 @@ async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optiona
             return
 
         print(f"Found {len(rows)} candidate(s) for Jellyfin backfill.")
+        if link_youtube:
+            print(f"🔗 YouTube transcript linking enabled (threshold: {youtube_threshold})")
+        
         for row in rows:
             row_id = row.get("id")
             meta = _safe_meta(row)
@@ -259,14 +306,27 @@ async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optiona
                 print(f"❌ Jellyfin lookup failed for {row_id}: {exc.response.status_code}")
                 continue
 
+            # Perform YouTube transcript search if enabled
+            youtube_links = None
+            if link_youtube:
+                title = _derive_title(row, meta)
+                description = meta.get("description") or row.get("description") or ""
+                search_query = f"{title} {description}".strip()
+                
+                if search_query:
+                    youtube_links = await search_youtube_transcripts(yt_client, search_query, limit=5, threshold=youtube_threshold)
+                    if youtube_links:
+                        print(f"  🎥 Found {len(youtube_links)} YouTube matches for '{title[:50]}...'")
+
             try:
-                payload, jellyfin_meta, summary = build_payload(row, meta, jellyfin_item, env)
+                payload, jellyfin_meta, summary = build_payload(row, meta, jellyfin_item, env, youtube_links)
             except Exception as exc:  # pragma: no cover - defensive
                 print(f"❌ Failed to build payload for {row_id}: {exc}")
                 continue
 
             if dry_run:
-                print(f"📝 Dry-run row {row_id}: would publish Jellyfin {summary['jellyfin_item_id']} with duration={summary['duration']}")
+                yt_info = f", youtube_links={summary.get('youtube_linked_count', 0)}" if link_youtube else ""
+                print(f"📝 Dry-run row {row_id}: would publish Jellyfin {summary['jellyfin_item_id']} with duration={summary['duration']}{yt_info}")
                 continue
 
             try:
@@ -297,13 +357,22 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Do not publish or update Supabase; log planned actions.")
     parser.add_argument("--sleep", type=float, default=0.0, help="Delay between publishes (seconds).")
     parser.add_argument("--start-after", help="Resume after the specified studio_board id.")
+    parser.add_argument("--link-youtube", action="store_true", help="Enable YouTube transcript linking via PMOVES.yt corpus.")
+    parser.add_argument("--youtube-threshold", type=float, default=YOUTUBE_SIMILARITY_THRESHOLD, help=f"Semantic similarity threshold for YouTube matches (default: {YOUTUBE_SIMILARITY_THRESHOLD}).")
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     try:
-        asyncio.run(backfill(limit=args.limit, dry_run=args.dry_run, sleep=args.sleep, start_after=args.start_after))
+        asyncio.run(backfill(
+            limit=args.limit,
+            dry_run=args.dry_run,
+            sleep=args.sleep,
+            start_after=args.start_after,
+            link_youtube=args.link_youtube,
+            youtube_threshold=args.youtube_threshold
+        ))
         return 0
     except KeyboardInterrupt:
         print("Interrupted.")

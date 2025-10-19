@@ -53,25 +53,51 @@ class JellyfinConfig:
         return cls(url=url.rstrip("/"), api_key=api_key, user_id=user_id, expected_name=expected)
 
 
-def request_json(config: JellyfinConfig, path: str) -> Dict[str, Any]:
+def _request(
+    config: JellyfinConfig,
+    path: str,
+    *,
+    method: str = "GET",
+    timeout: int = 10,
+    body: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Perform an authenticated GET request and return the parsed JSON body."""
 
     url = urllib.parse.urljoin(f"{config.url}/", path.lstrip("/"))
-    req = urllib.request.Request(url)
+    data: Optional[bytes] = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method=method)
     req.add_header("X-Emby-Token", config.api_key)
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read()
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore")
         raise JellyfinCheckError(f"{path} returned HTTP {exc.code}: {body}") from exc
+    except TimeoutError as exc:  # pragma: no cover - socket timeout
+        raise JellyfinCheckError(f"Request to {url} timed out: {exc}") from exc
     except urllib.error.URLError as exc:  # pragma: no cover - network failure
         raise JellyfinCheckError(f"Unable to reach {url}: {exc}") from exc
 
     try:
+        if not data:
+            return {}
         return json.loads(data.decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise JellyfinCheckError(f"Invalid JSON response from {path}: {exc}") from exc
+
+
+def request_json(config: JellyfinConfig, path: str, timeout: int = 10) -> Dict[str, Any]:
+    return _request(config, path, timeout=timeout)
+
+
+def post_json(
+    config: JellyfinConfig, path: str, payload: Dict[str, Any], timeout: int = 10
+) -> Dict[str, Any]:
+    return _request(config, path, method="POST", timeout=timeout, body=payload)
 
 
 def validate_server_info(config: JellyfinConfig) -> Dict[str, Any]:
@@ -93,15 +119,63 @@ def validate_user(config: JellyfinConfig) -> Optional[Dict[str, Any]]:
         raise JellyfinCheckError(f"User lookup succeeded but returned unexpected Id: {user.get('Id')}")
 
     # Confirm we can see at least one library/folder for this user.
-    items = request_json(config, f"/Users/{config.user_id}/Items?IncludeItemTypes=Folder")
-    total = items.get("TotalRecordCount", 0)
-    if total == 0:
+    query = urllib.parse.urlencode(
+        {
+            "IncludeExternalContent": "false",
+            "StartIndex": 0,
+            "Limit": 1,
+        }
+    )
+    try:
+        views = request_json(config, f"/Users/{config.user_id}/Views?{query}", timeout=30)
+    except JellyfinCheckError as exc:
+        print(
+            f"⚠️  Warning: unable to list libraries for user {config.user_id}: {exc}",
+            file=sys.stderr,
+        )
+        return user
+
+    items = views.get("Items", [])
+    if not items:
         print(
             "⚠️  Warning: user enumeration succeeded but no libraries were returned. "
             "Check JELLYFIN_LIBRARY_ID or ensure the user has access.",
             file=sys.stderr,
         )
     return user
+
+
+def ensure_safe_display_preferences(config: JellyfinConfig) -> None:
+    """Ensure all relevant display preference buckets have a valid scroll behavior."""
+
+    if not config.user_id:
+        return
+
+    clients = ["emby", "web", "kodiexport"]
+    for client in clients:
+        query = urllib.parse.urlencode({"userId": config.user_id, "client": client})
+        try:
+            prefs = request_json(config, f"/DisplayPreferences/usersettings?{query}")
+        except JellyfinCheckError as exc:
+            print(
+                f"⚠️  Warning: unable to load display preferences for client '{client}': {exc}",
+                file=sys.stderr,
+            )
+            continue
+
+        custom_prefs = prefs.get("CustomPrefs") or {}
+        scroll_behavior = custom_prefs.get("scrollBehavior") or prefs.get("ScrollBehavior")
+        if scroll_behavior in (None, "", "null"):
+            custom_prefs["scrollBehavior"] = "auto"
+            prefs["CustomPrefs"] = custom_prefs
+            post_json(config, f"/DisplayPreferences/usersettings?{query}", prefs, timeout=15)
+            print(
+                f"✅ Display preferences patched with scrollBehavior=auto for client '{client}'"
+            )
+        else:
+            print(
+                f"✅ Display preferences already set scrollBehavior='{scroll_behavior}' for client '{client}'"
+            )
 
 
 def main() -> int:
@@ -114,6 +188,7 @@ def main() -> int:
             user = validate_user(config)
             if user:
                 print(f"✅ User {config.user_id} ({user.get('Name', 'unknown')}) can enumerate libraries")
+                ensure_safe_display_preferences(config)
         else:
             print("ℹ️  JELLYFIN_USER_ID not set; skipped user enumeration check.")
         print("All Jellyfin credential checks passed.")

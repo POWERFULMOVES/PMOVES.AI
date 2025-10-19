@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  wger-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: wger
+      POSTGRES_USER: wger
+      POSTGRES_PASSWORD: ${WGER_DB_PASSWORD:-wgerpass}
+    volumes:
+      - wger-db:/var/lib/postgresql/data
+    networks: [pmoves]
+    profiles: ["wger"]
+
+  wger:
+    image: wger/wger:latest
+    depends_on: [wger-db]
+    environment:
+      - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-wgerpass}@wger-db:5432/wger
+      - DJANGO_ALLOWED_HOSTS=*
+      - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
+      - WGER_ENABLE_REGISTRATION=true
+    ports:
+      - "8000:8000"
+    networks: [pmoves]
+    profiles: ["wger"]
+
+volumes:
+  wger-db:

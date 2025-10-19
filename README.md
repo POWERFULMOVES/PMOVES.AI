@@ -11,6 +11,7 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - [PMOVES Stack README](pmoves/README.md) – Quickstart environment setup, service inventory, and Codex bootstrap steps for running the orchestration mesh locally.
 - [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) – One-stop index for environment scripts, Make targets, Supabase workflows, smoke tests, and provisioning helpers.
 - [PMOVES Docs Index](pmoves/docs/README_DOCS_INDEX.md) – Curated entry points into the pmoves-specific runbooks covering Creator Pipeline, ComfyUI flows, reranker configurations, and smoke tests.
+- [Service Docs Index](pmoves/docs/services/README.md) – Per‑service guides (overview, compose/ports, runbooks, smoke tests, and roadmap alignment).
 - [Architecture Primer](docs/PMOVES_ARC.md) – Deep dive into mesh topology, service responsibilities, and evolution of the orchestration layers.
 - [Multi-Agent Integration Guidelines](docs/PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md) – Operational patterns for coordinating Agent Zero, Archon, and automation hubs across environments.
 - [Codex + Copilot Review Workflow](docs/COPILOT_REVIEW_WORKFLOW.md) – How to combine the Codex CLI reviewer with GitHub Copilot’s PR assistant, including token setup and evidence logging expectations.

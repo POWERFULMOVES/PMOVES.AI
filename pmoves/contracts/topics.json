@@ -85,6 +85,15 @@
     "geometry.cgp.v1": {
       "schema": "schemas/geometry/cgp.v1.schema.json"
     },
+    "geometry.swarm.meta.v1": {
+      "schema": "schemas/geometry/swarm.meta.v1.schema.json"
+    },
+    "health.metrics.updated.v1": {
+      "schema": "schemas/health/metrics.updated.v1.schema.json"
+    },
+    "finance.transactions.ingested.v1": {
+      "schema": "schemas/finance/transactions.ingested.v1.schema.json"
+    },
     "persona.publish.request.v1": {
       "schema": "schemas/persona/publish.request.v1.schema.json"
     },

@@ -17,6 +17,8 @@ python -m pip install -r services/publisher/requirements.txt \
 pytest -q services/publisher/tests \
         services/pmoves-yt/tests \
         services/publisher-discord/tests
+
+Tip: run per-service in separate virtualenvs if resolver conflicts occur. The repo includes underscore import shims so tests can import `pmoves.services.pmoves_yt` and `pmoves.services.publisher_discord` reliably.
 ```
 
 Keep the virtualenv around so re-runs before each push are quick (`pytest …`).
@@ -63,6 +65,8 @@ allowlist=(
   'pmoves/supabase/migrations/2025-09-08_geometry_bus_rls.sql'
   'pmoves/supabase/migrations/2025-09-09_pmoves_yt_jobs.sql'
   'pmoves/supabase/migrations/2025-09-10_media_analysis_rls.sql'
+  'pmoves/supabase/migrations/2025-10-18_geometry_swarm.sql'
+  'pmoves/supabase/migrations/2025-10-18_health_finance.sql'
 )
 echo \"Scanning \${#files[@]} SQL files for 'USING true' or 'to anon'...\"
 bad=0

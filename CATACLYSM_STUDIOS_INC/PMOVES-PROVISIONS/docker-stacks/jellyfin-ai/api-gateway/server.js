@@ -14,6 +14,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Honor reverse proxy headers so rate limiting sees real client IPs.
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
