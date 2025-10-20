@@ -22,6 +22,7 @@ Environment
 
 Notes
 - When `DISCORD_PUBLISH_PREFIX` is unset, content.published embeds use the raw title (e.g., `Sample`). Set a prefix like `Published: ` to restore the previous style.
+- Secrets live in `env.shared` (preferred) or `.env.local`. The base `.env` file keeps these keys commented so a blank value does not override your secrets when Compose loads env files in order.
 
 Smoke
 ```

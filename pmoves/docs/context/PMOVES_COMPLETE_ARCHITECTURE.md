@@ -78,7 +78,7 @@ PMOVES is a **distributed multi-agent orchestration mesh** for autonomous self-i
 |---------|------|---------|---------------|
 | **n8n** | 5678 | Workflow automation & **MCP Hub**. Hosts approval poller, echo publisher, and future YouTube RAG workflows. | REST webhooks, Supabase PostgREST, Agent Zero HTTP, Discord webhooks |
 | **gateway/** | 8086 (v2 default & legacy) / 8087 (v2 GPU) | Entry point for external requests (if used as API gateway) | REST |
-| **publisher** | 8092 | Publishes approved content to Jellyfin, emits `content.published.v1` events | REST, NATS pub, Jellyfin API |
+| **publisher** | 8094 → 8092 | Publishes approved content to Jellyfin, emits `content.published.v1` events | REST, NATS pub, Jellyfin API |
 | **publisher-discord** | 8094 | Consumes `content.published.v1` events, posts rich embeds to Discord | NATS sub, Discord webhooks |
 | **jellyfin-bridge** | 8093 | Links Supabase assets to Jellyfin library items. Exposes `/map-by-title`, `/link`, `/search`, `/playback-url` | REST, Jellyfin API |
 
@@ -591,7 +591,7 @@ Crush CLI → MCP client
    - Subscribes to `content.publish.approved.v1` (via JetStream controller)
    - Forwards to `publisher` service (or directly to NATS for fanout)
 
-4. **Publisher Service** (port 8092)
+4. **Publisher Service** (host 8094 → container 8092)
    - Subscribes to `content.publish.approved.v1`
    - Uploads asset to Jellyfin library
    - Enriches with metadata: `jellyfin_item_id`, `jellyfin_public_url`, `thumbnail_url`, `duration`, tags

@@ -57,7 +57,7 @@ Useful health checks:
 - Render Webhook: `curl http://localhost:8085/healthz`
 - PostgREST: `curl http://localhost:3000`
 - Hi‑RAG v2 stats: `curl http://localhost:8086/hirag/admin/stats`
-- Discord Publisher: `curl http://localhost:8092/healthz`
+- Discord Publisher: `curl http://localhost:8094/healthz`
 
 ### Optional GPU smoke
 
@@ -67,6 +67,8 @@ Useful health checks:
 ### Discord Publisher (content.published.v1)
 
 Verify Discord wiring by emitting a `content.published.v1` event after the stack is up:
+
+> **Prereq:** Populate `DISCORD_WEBHOOK_URL` (and optional username/avatar overrides) in `env.shared` or `.env.local`. The shared `.env` file keeps these keys commented so a blank assignment does not override your secrets.
 
 ```bash
 python - <<'PY'
@@ -364,7 +366,7 @@ HTTP endpoints checked:
 
 - Set `DISCORD_WEBHOOK_URL` in `.env` to your channel webhook.
 - Start service: `docker compose --profile orchestration up -d publisher-discord nats`.
-- Smoke: `curl -X POST http://localhost:8092/publish -H 'content-type: application/json' -d '{"content":"PMOVES test ping"}'`
+- Smoke: `curl -X POST http://localhost:8094/publish -H 'content-type: application/json' -d '{"content":"PMOVES test ping"}'`
   - Expect 200/204 from Discord webhook (message in channel).
 
 ## Jellyfin Bridge
