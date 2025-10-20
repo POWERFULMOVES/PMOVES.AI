@@ -13,6 +13,8 @@ from FlagEmbedding import FlagReranker
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
+from services.common.geometry_params import get_decoder_pack
+from services.common.hrm_sidecar import HrmDecoderController
 import asyncio
 import nats
 import psycopg
@@ -305,6 +307,9 @@ except Exception as _e:
     shape_store = None
 
 _geometry_realtime_task: Optional[asyncio.Task] = None
+
+# Optional HRM decoder controller (lazily loads packs per-namespace)
+_hrm_controller = HrmDecoderController(get_decoder_pack)
 
 def _hostname_resolves(url: str) -> bool:
     try:
@@ -851,6 +856,10 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     const_id = body.get("constellation_id")
     k = int(body.get("k", 5))
     const = shape_store.get_constellation(const_id) if (shape_store and const_id) else None
+    namespace = str(
+        body.get("namespace")
+        or (const.get("namespace") if isinstance(const, dict) and const.get("namespace") else NAMESPACE_DEFAULT)
+    )
     if mode == "learned":
         try:
             from transformers import pipeline  # type: ignore
@@ -868,7 +877,9 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
             raise HTTPException(400, "no codebook or constellation text available")
         nlp = pipeline("summarization", model=CHIT_T5_MODEL)
         out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
-        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+        summary = out[0].get("summary_text", "")
+        summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
+        return {"mode": mode, "summary": summary, "used": len(texts), "hrm": hrm_info, "namespace": namespace}
     else:
         pts = []
         if const:
@@ -882,7 +893,8 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
                     "conf": p.get("conf")
                 })
         pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
-        return {"mode": mode, "points": pts[:k]}
+        hrm_info = _hrm_controller.status(namespace)
+        return {"mode": mode, "points": pts[:k], "hrm": hrm_info, "namespace": namespace}
 
 @app.post("/geometry/calibration/report")
 def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):

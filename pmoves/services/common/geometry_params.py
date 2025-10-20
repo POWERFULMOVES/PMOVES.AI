@@ -24,25 +24,34 @@ def _rest_config() -> tuple[Optional[str], Optional[str]]:
     return rest_url, service_key
 
 
-def get_builder_pack(namespace: str, modality: str) -> Optional[Dict[str, Any]]:
-    """Fetch the latest active builder parameter pack for the namespace/modality."""
+def _cache_key(namespace: str, modality: str, pack_type: str) -> str:
+    return f"{namespace}:{modality}:{pack_type}"
 
-    key = f"{namespace}:{modality}:cg_builder"
+
+def _cached_pack(key: str) -> Optional[Dict[str, Any]]:
     now = time.time()
     with _LOCK:
         cached = _CACHE.get(key)
         if cached and now - cached[0] < _DEFAULT_TTL:
             return cached[1]
+    return None
 
+
+def _store_pack(key: str, pack: Dict[str, Any]) -> None:
+    with _LOCK:
+        _CACHE[key] = (time.time(), pack)
+
+
+def _fetch_pack(namespace: str, modality: str, pack_type: str) -> Optional[Dict[str, Any]]:
     rest_url, service_key = _rest_config()
     if not rest_url:
         return None
 
     params = {
-        "select": "id,params,status,population_id,generation,fitness,energy",
+        "select": "id,params,status,population_id,generation,fitness,energy,version",
         "namespace": f"eq.{namespace}",
         "modality": f"eq.{modality}",
-        "pack_type": "eq.cg_builder",
+        "pack_type": f"eq.{pack_type}",
         "status": "eq.active",
         "order": "created_at.desc",
         "limit": "1",
@@ -65,8 +74,37 @@ def get_builder_pack(namespace: str, modality: str) -> Optional[Dict[str, Any]]:
 
     pack = rows[0]
     if isinstance(pack, dict):
-        with _LOCK:
-            _CACHE[key] = (now, pack)
+        return pack
+    return None
+
+
+def get_builder_pack(namespace: str, modality: str) -> Optional[Dict[str, Any]]:
+    """Fetch the latest active builder parameter pack for the namespace/modality."""
+
+    key = _cache_key(namespace, modality, "cg_builder")
+    cached = _cached_pack(key)
+    if cached is not None:
+        return cached
+
+    pack = _fetch_pack(namespace, modality, "cg_builder")
+    if pack is None:
+        return None
+    _store_pack(key, pack)
+    return pack
+
+
+def get_decoder_pack(namespace: str, modality: str) -> Optional[Dict[str, Any]]:
+    """Fetch the latest active decoder parameter pack, when present."""
+
+    key = _cache_key(namespace, modality, "decoder")
+    cached = _cached_pack(key)
+    if cached is not None:
+        return cached
+
+    pack = _fetch_pack(namespace, modality, "decoder")
+    if pack is None:
+        return None
+    _store_pack(key, pack)
     return pack
 
 

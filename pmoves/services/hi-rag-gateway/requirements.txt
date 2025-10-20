@@ -6,3 +6,5 @@ rapidfuzz==3.9.4
 requests==2.32.3
 neo4j==5.23.1
 cryptography==43.0.1
+# Optional HRM refinement sidecar (decoder packs)
+# torch==2.4.0

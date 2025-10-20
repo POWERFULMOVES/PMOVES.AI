@@ -19,4 +19,6 @@ Legacy gateway exposing CHIT geometry endpoints and basic retrieval.
 - Environment:
   - `CHIT_REQUIRE_SIGNATURE`, `CHIT_PASSPHRASE`, `CHIT_DECRYPT_ANCHORS`
   - `CHIT_DECODE_TEXT|IMAGE|AUDIO`, `CHIT_T5_MODEL`, `CHIT_CLIP_MODEL`, `CHIT_CODEBOOK_PATH`
+  - EvoSwarm decoder packs may provide `hrm_halt_thresh` / `hrm_mmax` to enable the HRM refinement sidecar. Include
+    `"namespace"` in the decode request body to target a specific pack.
 

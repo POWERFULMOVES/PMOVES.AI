@@ -18,7 +18,9 @@ FastAPI service providing retrieval and CHIT geometry endpoints.
 - Endpoints:
   - `POST /geometry/event` — accept `geometry.cgp.v1` (CGP) and cache/broadcast
   - `GET /shape/point/{point_id}/jump` — return locator for a point
-  - `POST /geometry/decode/text` — summarize/label from constellation geometry
+- `POST /geometry/decode/text` — summarize/label from constellation geometry. When EvoSwarm decoder packs supply
+  `hrm_halt_thresh`/`hrm_mmax`, the gateway attaches the HRM sidecar and reports halting metadata alongside the
+  response. Include an optional `namespace` field in the request body to override the default pack lookup.
   - `POST /geometry/calibration/report` — produce constellation calibration
   - Optional: `POST /geometry/decode/{image|audio}` when enabled
 - Realtime warm/capture (optional): subscribes to Supabase Realtime `geometry.cgp.v1` and warms from PostgREST when `SUPA_*` is set.
@@ -40,7 +42,7 @@ curl -s http://localhost:8086/shape/point/p.demo.1/jump
 # Decode text from constellation
 curl -s http://localhost:8086/geometry/decode/text \
   -H 'content-type: application/json' \
-  -d '{"mode":"learned","constellation_id":"c.demo.1","k":5}'
+  -d '{"mode":"learned","constellation_id":"c.demo.1","k":5,"namespace":"pmoves"}'
 ```
 
 ## Related Docs
