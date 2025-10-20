@@ -56,9 +56,9 @@ _Last updated: 2025-10-14_
 
 ### 6. Realtime & Reranker Operational Notes (new)
 - Realtime fallback is automatic; explicit override lives in `pmoves/.env.local`:
-  - `SUPA_REST_URL=http://host.docker.internal:54321/rest/v1`
-  - `SUPA_REST_INTERNAL_URL=http://host.docker.internal:54321/rest/v1`
-  - `SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1/websocket`
+  - `SUPA_REST_URL=http://host.docker.internal:65421/rest/v1`
+  - `SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1`
+  - `SUPABASE_REALTIME_URL=ws://host.docker.internal:65421/realtime/v1`
 - Qwen reranker default (v2‑GPU) via compose env; override with `RERANK_MODEL` in `.env.local` if needed.
 - Meili lexical is enabled via `USE_MEILI=true` in `.env.local`.
 

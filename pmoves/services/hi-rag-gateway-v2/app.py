@@ -59,7 +59,8 @@ SUPABASE_REALTIME_URL = (
     or os.environ.get("REALTIME_URL")
     or ""
 ).strip()
-if SUPABASE_REALTIME_URL.lower() in {"", "disabled", "none"}:
+SUPABASE_REALTIME_DISABLED = SUPABASE_REALTIME_URL.lower() in {"", "disabled", "none"}
+if SUPABASE_REALTIME_DISABLED:
     SUPABASE_REALTIME_URL = ""
 SUPABASE_REALTIME_KEY = (
     os.environ.get("SUPABASE_REALTIME_KEY")
@@ -194,8 +195,15 @@ def refresh_warm_dictionary():
                 _warm_entities = {}
                 _warm_last = time.time()
                 return
-            recs = s.run("MATCH (e:Entity) RETURN e.value AS v, CASE WHEN e.type IS NOT NULL THEN e.type ELSE 'UNK' END AS t LIMIT $lim",
-                         lim=NEO4J_DICT_LIMIT)
+            recs = s.run(
+                (
+                    "MATCH (e:Entity) "
+                    "WITH e, CASE WHEN 'type' IN keys(e) THEN e.type ELSE 'UNK' END AS typ "
+                    "RETURN e.value AS v, typ AS t "
+                    "LIMIT $lim"
+                ),
+                lim=NEO4J_DICT_LIMIT,
+            )
             for r in recs:
                 v = r["v"]; t = (r["t"] or "UNK").upper()
                 if not v: continue
@@ -312,6 +320,9 @@ def _hostname_resolves(url: str) -> bool:
 
 
 def _derive_realtime_url() -> Optional[str]:
+    if SUPABASE_REALTIME_DISABLED:
+        logger.info("Supabase realtime disabled via env; skipping subscription")
+        return None
     # If explicitly provided and resolvable, respect it; otherwise fall back
     if SUPABASE_REALTIME_URL:
         try:
@@ -992,10 +1003,20 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
         with conn.cursor() as cur:
             for sn in cgp.get("super_nodes", []) or []:
                 for const in sn.get("constellations", []) or []:
-                    anchor = const.get("anchor")
+                    raw_anchor = const.get("anchor")
                     anchor_enc = const.get("anchor_enc")
-                    dim = (len(anchor) if isinstance(anchor, (list, tuple)) else (0))
-                    # insert anchor
+                    anchor: Optional[List[float]] = None
+                    if isinstance(raw_anchor, (list, tuple)) and len(raw_anchor) > 0:
+                        anchor = [float(x) for x in raw_anchor]
+                    else:
+                        spectrum = const.get("spectrum")
+                        if isinstance(spectrum, list) and spectrum:
+                            anchor = [float(x) for x in spectrum[:3]]
+                            while len(anchor) < 3:
+                                anchor.append(0.0)
+                        else:
+                            anchor = [0.0, 0.0, 0.0]
+                    dim = len(anchor)
                     cur.execute(
                         """
                         INSERT INTO public.anchors(kind, dim, anchor, anchor_enc, meta)
@@ -1003,8 +1024,9 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
                         RETURNING id
                         """,
                         (
-                            'multi', int(dim) if dim else 0,
-                            anchor if isinstance(anchor, list) else None,
+                            'multi',
+                            int(dim),
+                            anchor,
                             json.dumps(anchor_enc) if anchor_enc else None,
                             json.dumps({})
                         )

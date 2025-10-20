@@ -31,10 +31,24 @@ export COMPOSE_PROFILES
 
 PYTHON ?= python3
 BOOTSTRAP_FLAGS ?=
+ENV_SHARED_FILE ?= env.shared
+ENV_SHARED_TEMPLATE ?= env.shared.example
+
+.PHONY: ensure-env-shared
+ensure-env-shared:
+	@if [ ! -f "$(ENV_SHARED_FILE)" ]; then \
+	  if [ -f "$(ENV_SHARED_TEMPLATE)" ]; then \
+	    echo "→ Seeding $(ENV_SHARED_FILE) from $(ENV_SHARED_TEMPLATE)"; \
+	    cp "$(ENV_SHARED_TEMPLATE)" "$(ENV_SHARED_FILE)"; \
+	  else \
+	    echo "→ Creating empty $(ENV_SHARED_FILE) (no template found)"; \
+	    touch "$(ENV_SHARED_FILE)"; \
+	  fi; \
+	fi
 
 # -------- Updates ----------
 .PHONY: update
-update:  ## Pull repo + images, recreate stack
+update: ensure-env-shared  ## Pull repo + images, recreate stack
 	@git pull --rebase
 	@docker compose pull --quiet
 	@docker compose up -d
@@ -60,7 +74,7 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 
 # -------- GPU profile ----------
 .PHONY: up up-gpu up-both-gateways
-up: ## Start core data + workers and both Hi-RAG gateways
+up: ensure-env-shared ## Start core data + workers and both Hi-RAG gateways
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
 	@docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
@@ -90,7 +104,7 @@ recreate-v2: ## Force-recreate v2 CPU container (no deps)
 	@echo "✔ Recreated hi-rag-gateway-v2"
 
 .PHONY: up-open-notebook
-up-open-notebook: ## Bring up Open Notebook on pmoves-net (defaults UI :8503, API :5055)
+up-open-notebook: ensure-env-shared ## Bring up Open Notebook on pmoves-net (defaults UI :8503, API :5055)
 	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
 	@echo "✔ Open Notebook up (http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})"
 
@@ -112,7 +126,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 
 .PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
-.PHONY: notebook-up notebook-down notebook-logs
+.PHONY: notebook-up notebook-down notebook-logs notebook-seed-models
 
 # Pin a stable Docker Compose project name so make targets
 # always operate on the same stack regardless of cwd/path.
@@ -169,6 +183,10 @@ notebook-down: ## Stop the Open Notebook container and remove its resources
 notebook-logs: ## Follow logs for the Open Notebook service
 	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) logs -f open-notebook
 
+notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
+	@echo "Seeding Open Notebook providers..."
+	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; exec $(PYTHON) scripts/open_notebook_seed.py'
+
 # Bring only worker services (ensures data deps are active)
 up-workers:
 	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
@@ -191,7 +209,7 @@ up-agents:
 	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
 
 .PHONY: up-n8n
-up-n8n:
+up-n8n: ensure-env-shared
 	docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
 
 # Status helper
@@ -204,9 +222,9 @@ up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfi
 	@docker network create pmoves-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d
 
-up-external-wger: ## Start Wger on pmoves-net
+up-external-wger: ## Start Wger (Django + nginx proxy) on pmoves-net
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger
+	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx
 
 up-external-firefly: ## Start Firefly III on pmoves-net
 	@docker network create pmoves-net >/dev/null 2>&1 || true
@@ -604,6 +622,18 @@ smoke-langextract:
 	@make load-jsonl FILE=$(PWD)/.tmp_extracted.jsonl NAMESPACE=pmoves
 	@rm -f .tmp_extracted.jsonl
 
+.PHONY: smoke-wger
+smoke-wger:
+	@which curl >/dev/null 2>&1 || (echo "curl is required for smoke-wger" && exit 1)
+	@bash -c 'set -euo pipefail; \
+	 ROOT_URL="$${WGER_ROOT_URL:-http://localhost:8000}"; \
+	 STATIC_URL="$${ROOT_URL%/}/static/images/logos/logo-font.svg"; \
+	 printf "[Wger] GET %s\n" "$$ROOT_URL"; \
+	 curl -fsS "$$ROOT_URL" >/dev/null; \
+	 printf "[Wger] GET %s\n" "$$STATIC_URL"; \
+	 curl -fsS "$$STATIC_URL" >/dev/null; \
+	 echo "Wger smoke passed."'
+
 .PHONY: smoke-archon
 smoke-archon:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-archon" && exit 1)
@@ -627,6 +657,16 @@ jellyfin-verify:
 	@bash -c 'set -euo pipefail; \
 	 if [ -f env.jellyfin-ai ]; then set -a; . env.jellyfin-ai; set +a; fi; \
 	 python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
+
+.PHONY: jellyfin-folders
+jellyfin-folders:
+	@bash -c 'set -euo pipefail; \
+	  base="$(CURDIR)/data/jellyfin"; \
+	  mkdir -p "$$base"/config "$$base"/cache "$$base"/transcode; \
+	  for dir in Movies TV Music Audiobooks Podcasts Photos HomeVideos; do \
+	    mkdir -p "$$base/media/$$dir"; \
+	  done; \
+	  printf "Jellyfin library roots created under %s/media (Movies, TV, Music, Audiobooks, Podcasts, Photos, HomeVideos)\n" "$$base"'
 
 .PHONY: up-jellyfin-ai
 up-jellyfin-ai:
@@ -689,11 +729,13 @@ help:
 	@echo "  export-jsonl     Export namespace to JSONL (OUT=/abs/path)"
 	@echo "  smoke-presign-put Test presign PUT and upload"
 	@echo "  smoke-pdf        Upload and index a sample PDF via pdf-ingest"
+	@echo "  smoke-wger       Verify Wger UI and static assets"
 	@echo "  mindmap-seed     Load CHIT demo constellation into Neo4j"
 	@echo "  mindmap-smoke    Query /mindmap using the seeded constellation"
 	@echo "  smoke-langextract Extract chunks via langextract and load"
 	@echo "  smoke-archon     Check Archon healthz endpoint (requires NATS + Supabase)"
 	@echo "  jellyfin-verify  Validate Jellyfin credentials and branding"
+	@echo "  jellyfin-folders Create default Jellyfin media directories (Movies/TV/Music/etc.)"
 	@echo "  up-jellyfin-ai   Launch the optional Jellyfin AI media stack overlay"
 	@echo "  chit-contract-check Run local CHIT contract grep (mirrors CI)"
 	@echo "  flight-check     Run environment preflight (deps, ports, .env)"

@@ -5,16 +5,35 @@ services:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:main}
     container_name: pmoves-wger
     restart: unless-stopped
+    env_file: [env.shared, .env, .env.local]
     networks: [pmoves]
     environment:
-      - DEBUG=false
+      - DJANGO_DEBUG=False
+      - WGER_USE_GUNICORN=True
+      - DJANGO_CLEAR_STATIC_FIRST=True
+    volumes:
+      - wger-static:/home/wger/static
+      - wger-media:/home/wger/media
+
+  wger-nginx:
+    image: ${WGER_NGINX_IMAGE:-nginx:1.27-alpine}
+    container_name: pmoves-wger-nginx
+    restart: unless-stopped
+    depends_on:
+      - wger
+    networks: [pmoves]
     ports:
-      - "8000:8000"
+      - "8000:80"
+    volumes:
+      - wger-static:/wger/static:ro
+      - wger-media:/wger/media:ro
+      - ./integrations/pr-kits/wger/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   firefly:
     image: ${FIREFLY_IMAGE:-fireflyiii/core:latest}
     container_name: pmoves-firefly
     restart: unless-stopped
+    env_file: [env.shared, .env, .env.local]
     networks: [pmoves]
     environment:
       APP_KEY: ${FIREFLY_APP_KEY:-SomeRandomStringOf32CharsExactly}
@@ -43,11 +62,13 @@ services:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:main}
     container_name: pmoves-open-notebook
     restart: unless-stopped
+    env_file: [env.shared, .env, .env.local]
     depends_on:
       - open-notebook-surrealdb-ext
     networks: [pmoves]
     environment:
-      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-pmoves-open-notebook-surrealdb}
+      SURREAL_URL: ${SURREAL_URL:-ws://open-notebook-surrealdb-ext:8000/rpc}
+      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
       SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
       SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:-root}
       SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-root}
@@ -55,6 +76,32 @@ services:
       SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
+      OPEN_NOTEBOOK_API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OLLAMA_API_BASE: ${OLLAMA_API_BASE:-}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
+      OPENAI_COMPATIBLE_BASE_URL_LLM: ${OPENAI_COMPATIBLE_BASE_URL_LLM:-}
+      OPENAI_COMPATIBLE_BASE_URL_EMBEDDING: ${OPENAI_COMPATIBLE_BASE_URL_EMBEDDING:-}
+      OPENAI_COMPATIBLE_BASE_URL_STT: ${OPENAI_COMPATIBLE_BASE_URL_STT:-}
+      OPENAI_COMPATIBLE_BASE_URL_TTS: ${OPENAI_COMPATIBLE_BASE_URL_TTS:-}
+      VERTEX_PROJECT: ${VERTEX_PROJECT:-}
+      VERTEX_LOCATION: ${VERTEX_LOCATION:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
     ports:
       - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"    # UI
       - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"  # API
@@ -65,9 +112,18 @@ services:
     image: ${JELLYFIN_IMAGE:-jellyfin/jellyfin:latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
+    env_file: [env.shared, .env, .env.local]
     networks: [pmoves]
+    environment:
+      JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
+      JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
     ports:
       - "8096:8096"
+    volumes:
+      - ./data/jellyfin/config:/config
+      - ./data/jellyfin/cache:/cache
+      - ./data/jellyfin/transcode:/transcodes
+      - ./data/jellyfin/media:/media
 
 networks:
   pmoves:
@@ -76,3 +132,5 @@ networks:
 
 volumes:
   firefly-storage:
+  wger-static:
+  wger-media:

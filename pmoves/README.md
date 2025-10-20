@@ -6,8 +6,9 @@
 - Copy `.env.example` → `.env` once; it holds the base compose settings shared by every service.
 - Run the interactive bootstrapper to populate machine-specific secrets and overlays:
   - `make bootstrap` (uses `python -m pmoves.scripts.bootstrap_env` under the hood)
+  - Copy `env.shared.example` → `env.shared` (or let `make` auto-seed it) before adding secrets.
   - Pass `BOOTSTRAP_FLAGS="--service supabase"` to scope the prompts, or `--accept-defaults` to reuse existing values without prompting.
-- The bootstrap writes `.env.local`, `env.jellyfin-ai`, and the `env.*.additions` helpers with branded PMOVES defaults, Supabase pointers, and generated secrets. Re-run the command any time you change Supabase endpoints or want to regenerate credentials.
+- The bootstrap writes `env.shared`, `.env.local`, `env.jellyfin-ai`, and the `env.*.additions` helpers with branded PMOVES defaults, Supabase pointers, and generated secrets. Re-run the command any time you change Supabase endpoints or want to regenerate credentials.
 - Manual edits are still supported; re-run `make bootstrap` afterwards to validate and persist updates.
 
 ### 2. Choose your Supabase backend
@@ -23,16 +24,17 @@
   - Apply the remote profile with `make supa-use-remote` before running the main stack.
 
 ### 3. Start the PMOVES stack
-- `make up` — default entry point. Brings up the data profile (`qdrant`, `neo4j`, `minio`, `meilisearch`, `presign`), all default workers (`hi-rag-gateway-v2`, `retrieval-eval`, `render-webhook`, `langextract`, `extract-worker`), plus pmoves.yt (`ffmpeg-whisper`, `pmoves-yt`) and the Jellyfin bridge. When `SUPA_PROVIDER=compose` it automatically chains to `make supabase-up`.
+- `make up` — default entry point. Brings up the data profile (`qdrant`, `neo4j`, `minio`, `meilisearch`, `presign`), all default workers (`hi-rag-gateway-v2`, `retrieval-eval`, `render-webhook`, `langextract`, `extract-worker`), plus pmoves.yt (`ffmpeg-whisper`, `pmoves-yt`) and the Jellyfin bridge. When `SUPABASE_RUNTIME=compose` it automatically chains to `make supabase-up`.
 - `make preflight` — run the bootstrap validator without starting containers. `make up` runs this check automatically and exits early if required secrets are missing.
 - `make up-cli` / `make up-compose` — one-shot shims that force CLI vs. compose Supabase for a single `make up` run.
 - `make up-workers` — only the worker layer (assumes data profile is already running).
 - `make up-media` — opt-in GPU analyzers (`media-video`, `media-audio`).
 - `make up-jellyfin` — Jellyfin bridge in isolation.
+- `make jellyfin-folders` — provision `pmoves/data/jellyfin/{config,cache,transcode,media/...}` so the external Jellyfin service launches with Movies/TV/Music folders ready to scan.
 - `make up-yt` — YouTube ingest stack if you want to start it separately.
 - `make up-nats` — spins up the NATS broker and updates `.env.local` with `YT_NATS_ENABLE=true` and the default connection URL. Required before enabling the agents profile.
 - Additional helpers: `make ps`, `make down`, `make clean`. See `docs/MAKE_TARGETS.md` for the full catalogue.
-- Open Notebook workspace: `make notebook-up` starts the Streamlit UI (8502) and REST API (5055) defined in `docker-compose.open-notebook.yml`. Populate `.env.local` with `OPEN_NOTEBOOK_API_URL` (defaults to `http://localhost:5055`) plus either `OPEN_NOTEBOOK_PASSWORD` or `OPEN_NOTEBOOK_API_TOKEN` before launching. Use `make notebook-logs` for live output and `make notebook-down` to stop the container while preserving data in `pmoves/data/open-notebook/`.
+- Open Notebook workspace: `make notebook-up` starts the Streamlit UI (8502) and REST API (5055) defined in `docker-compose.open-notebook.yml`. Populate `env.shared` with `OPEN_NOTEBOOK_API_URL` (defaults to `http://open-notebook:5055`) plus either `OPEN_NOTEBOOK_PASSWORD` or `OPEN_NOTEBOOK_API_TOKEN` before launching. Once your provider keys (`OPENAI_API_KEY`, `GROQ_API_KEY`, etc.) live in `env.shared`, run `make notebook-seed-models` to register models/defaults in SurrealDB so the UI drop-downs are pre-populated. Use `make notebook-logs` for live output and `make notebook-down` to stop the container while preserving data in `pmoves/data/open-notebook/`.
 
 ### Dev Environment (Conda + Windows/macOS/Linux)
 
@@ -52,9 +54,9 @@ Activate your env before running local services (example):
 Services
 - `hi-rag-gateway-v2` (8087→8086 in-container): Hybrid RAG with reranker providers (Flag/Qwen/Cohere/Azure). See `docs/HI_RAG_RERANKER.md` and `docs/HI_RAG_RERANK_PROVIDERS.md`.
   - Realtime: v2 now auto-derives a websocket URL from `SUPA_REST_URL`/`SUPA_REST_INTERNAL_URL` when a host-only DNS is detected. Prefer `pmoves/.env.local`:
-    - `SUPA_REST_URL=http://host.docker.internal:54321/rest/v1`
-    - `SUPA_REST_INTERNAL_URL=http://host.docker.internal:54321/rest/v1`
-    - `SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1/websocket`
+    - `SUPA_REST_URL=http://host.docker.internal:65421/rest/v1`
+    - `SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1`
+    - `SUPABASE_REALTIME_URL=ws://host.docker.internal:65421/realtime/v1`
   - Lexical: set `USE_MEILI=true` in `pmoves/.env.local` to enable Meilisearch (enabled by default in this repo’s `.env.local`).
   - GPU variant default reranker: Qwen/Qwen3-Reranker-4B (overridable via `RERANK_MODEL`).
 - `retrieval-eval` (8090): Dashboard/tests; points to `hi-rag-gateway-v2`.
@@ -74,6 +76,7 @@ Notes
 ### Tests
 
 - Smoke tests stub external dependencies and can run offline: `pytest pmoves/tests`.
+- Verify the external Wger stack after `make up-external`: `make smoke-wger` checks the nginx proxy plus static bundle.citeturn0search0
 
 Agents Profile
 - Run `make up-nats` first to ensure the broker and `.env.local` flags are ready.

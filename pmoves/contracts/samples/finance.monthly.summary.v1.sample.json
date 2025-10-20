@@ -1,0 +1,19 @@
+{
+  "topic": "finance.monthly.summary.v1",
+  "payload": {
+    "namespace": "pmoves",
+    "month": "2025-09",
+    "currency": "USD",
+    "totals": {"income": 8200.00, "spend": 6150.00, "savings": 2050.00},
+    "by_category": [
+      {"category": "Housing", "spend": 2400.00, "budget": 2400.00, "variance": 0.00},
+      {"category": "Food", "spend": 780.50, "budget": 700.00, "variance": 80.50},
+      {"category": "Transport", "spend": 320.00, "budget": 350.00, "variance": -30.00},
+      {"category": "Health", "spend": 210.00, "budget": 200.00, "variance": 10.00},
+      {"category": "Leisure", "spend": 410.00, "budget": 300.00, "variance": 110.00}
+    ],
+    "notes": "Food & Leisure over budget; transport under.",
+    "tags": ["firefly", "finance"]
+  }
+}
+

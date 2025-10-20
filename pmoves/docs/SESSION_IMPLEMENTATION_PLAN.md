@@ -14,7 +14,7 @@ This working session establishes the concrete implementation tasks needed to clo
 
 ## Session Log (2025-10-19)
 
-- Implemented hi‑rag‑gateway‑v2 Supabase Realtime DNS fallback: when `SUPABASE_REALTIME_URL` points to a host‑only DNS (e.g., `api.supabase.internal`), v2 derives `ws://host.docker.internal:54321/realtime/v1/websocket` using `SUPA_REST_INTERNAL_URL`/`SUPA_REST_URL`.
+- Implemented hi‑rag‑gateway‑v2 Supabase Realtime DNS fallback: when `SUPABASE_REALTIME_URL` points to a host‑only DNS (e.g., `api.supabase.internal`), v2 derives `ws://host.docker.internal:65421/realtime/v1` using `SUPA_REST_INTERNAL_URL`/`SUPA_REST_URL`.
 - Fixed Neo4j deprecation: replaced `exists(e.type)` with `e.type IS NOT NULL` in v1 and v2 gateways.
 - Enabled Meilisearch lexical by default via `pmoves/.env.local` (`USE_MEILI=true`).
 - Set v2‑GPU default reranker to `Qwen/Qwen3-Reranker-4B` in compose (env overrides documented).
@@ -58,7 +58,7 @@ This working session establishes the concrete implementation tasks needed to clo
 - Recorded smoke expectations: rerun `make yt-emit-smoke URL=...` after stack restart to confirm the new curl locator assertion runs with jq string comparison (Makefile tweak).
 - 2025-10-12T21:56:33Z — `make -C pmoves yt-emit-smoke URL=https://www.youtube.com/watch?v=dQw4w9WgXcQ` (lyrics profile) completed cleanly; geometry jump assertion passed with the new jq string comparison.
 - 2025-10-13T01:04:09Z — `make -C pmoves smoke-archon` succeeded after pointing `SUPABASE_URL` to `http://postgrest:3000` and restarting the Supabase CLI stack; Archon healthz reports `{"status":"ok","service":"archon"}`.
-- 2025-10-13T01:55:00Z — Rebuilt `pmoves-archon` image with `playwright` Chromium preinstalled and switched `SUPABASE_URL` to the Supabase CLI gateway (`http://host.docker.internal:54321`) so the vendor Archon backend initializes successfully.
+- 2025-10-13T01:55:00Z — Rebuilt `pmoves-archon` image with `playwright` Chromium preinstalled and switched `SUPABASE_URL` to the Supabase CLI gateway (`http://host.docker.internal:65421`) so the vendor Archon backend initializes successfully.
 
 ## 3. Broader Roadmap Prep (M3–M5)
 

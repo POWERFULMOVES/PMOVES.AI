@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Seed an approved studio_board row via Supabase PostgREST.
-# Defaults target Supabase CLI on host (http://localhost:54321/rest/v1).
+# Defaults target Supabase CLI on host (http://localhost:65421/rest/v1).
 # Usage:
 #   export SUPABASE_SERVICE_ROLE_KEY=...
 #   ./pmoves/tools/seed_studio_board.sh "Demo" "s3://outputs/demo/example.png" pmoves
@@ -10,7 +10,7 @@ set -euo pipefail
 
 which jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
-BASE=${SUPABASE_REST_URL:-${SUPA_REST_URL:-http://localhost:54321/rest/v1}}
+BASE=${SUPABASE_REST_URL:-${SUPA_REST_URL:-http://localhost:65421/rest/v1}}
 KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
 if [[ -z "${KEY}" ]]; then
   echo "ERROR: SUPABASE_SERVICE_ROLE_KEY is not set" >&2
@@ -34,4 +34,3 @@ curl -s -X POST "$BASE/studio_board" \
   -H "apikey: $KEY" \
   -H "Authorization: Bearer $KEY" \
   -d "$body" | jq .
-

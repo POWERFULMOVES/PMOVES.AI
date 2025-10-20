@@ -18,11 +18,12 @@ Make targets
 - `make up-open-notebook` — bring up ON on `pmoves-net` (UI http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})
 - `make down-open-notebook` — stop ON
 - `make -C pmoves up-external` — starts the packaged image alongside Wger/Firefly/Jellyfin (ensure `docker network create pmoves-net` first)
+- `make notebook-seed-models` — auto-register provider models/default selections via `scripts/open_notebook_seed.py` after `env.shared` contains your API keys
 
 Troubleshooting
 - If port conflicts occur, set `OPEN_NOTEBOOK_UI_PORT` / `OPEN_NOTEBOOK_API_PORT` in `.env.local` (or export inline) before running Make/Compose.
 - Ensure the shared network exists: `docker network create pmoves-net` (Make and Compose create/attach automatically when needed).
-- Set credentials in `pmoves/.env.local` before starting:
+- Set credentials in `pmoves/env.shared` before starting:
   ```
   OPEN_NOTEBOOK_API_URL=http://open-notebook:5055
   OPEN_NOTEBOOK_API_TOKEN=<generated-token>
@@ -36,3 +37,4 @@ Notes
 - ON is optional and does not participate in core smokes.
 - Data stores live under `pmoves/data/open-notebook/`; remove the SQLite or SurrealDB files there if you want a clean reset.
 - The bundled image runs the frontend with `next start`, which logs a warning for `output: standalone`. Upstream mirrors this behaviour; if you need a silent boot, replace the command with `node .next/standalone/server.js` in a custom supervisor override.
+- After seeding models, the `/api/models/providers` endpoint should list your enabled providers (curl `http://localhost:${OPEN_NOTEBOOK_API_PORT:-5055}/api/models/providers | jq`). The UI surfaces these under **Settings → Models**.

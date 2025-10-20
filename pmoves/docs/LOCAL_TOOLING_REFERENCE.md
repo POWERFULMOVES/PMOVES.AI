@@ -6,7 +6,7 @@ This guide aggregates the entry points that keep local environments consistent a
 
 ## Environment & Secrets
 - `make env-setup` → runs `scripts/env_setup.sh` (Bash) or `scripts/env_setup.ps1` (PowerShell) to merge `.env.example` with the secret snippets under `env.*.additions`. Use `make env-setup -- --yes` to accept defaults non-interactively.
-- `make bootstrap` → interactive secret capture (Supabase CLI endpoints/keys, Realtime websocket, Wger/Firefly/Open Notebook tokens, Discord/Jellyfin secrets). Re-run after `supabase start --network-id pmoves-net` or whenever external credentials change. Supports `BOOTSTRAP_FLAGS="--service supabase"` and `--accept-defaults` for targeted updates.
+- `make bootstrap` → interactive secret capture (writes to `env.shared` for Supabase keys, provider tokens, Wger/Firefly/Open Notebook, Discord/Jellyfin secrets). Re-run after `supabase start --network-id pmoves-net` or whenever external credentials change. Supports `BOOTSTRAP_FLAGS="--service supabase"` and `--accept-defaults` for targeted updates.
 - `make env-check` → calls `scripts/env_check.{sh,ps1}` for dependency checks, port collisions, and `.env` completeness.
   - CI runs the PowerShell preflight on Windows runners only; Linux contributors should run `scripts/env_check.sh` locally if they bypass Make.
 - `scripts/create_venv*.{sh,ps1}` → optional helpers to create/activate Python virtualenvs outside of Conda. Pass the environment name as the first argument on Bash, or `-Name` in PowerShell.
@@ -15,7 +15,7 @@ This guide aggregates the entry points that keep local environments consistent a
 
 ## Stack Orchestration (Make Targets)
 - `make up` → main compose profile (data + workers). Overrides: `make up-cli`, `make up-compose`, `make up-workers`, `make up-media`, `make up-jellyfin`, `make up-yt`.
-- `make notebook-up` → launches the optional Open Notebook research workspace (Streamlit UI on 8502, REST API on 5055). Pair with `make notebook-logs` for tailing output and `make notebook-down` to stop it without removing data under `pmoves/data/open-notebook/`.
+- `make notebook-up` → launches the optional Open Notebook research workspace (Streamlit UI on 8502, REST API on 5055). Pair with `make notebook-logs` for tailing output and `make notebook-down` to stop it without removing data under `pmoves/data/open-notebook/`. Once `env.shared` has your API token/password and provider keys, run `make notebook-seed-models` to auto-register the default model catalogue upstream so the UI can save settings without manual SurrealDB edits.
 - `make up-agents` → launches NATS, Agent Zero, Archon, Mesh Agent, and the Discord publisher. Run `make up-nats` first if `NATS_URL` is not configured.
 - `make ps`, `make down`, `make clean` → quick status, stop, and tear-down helpers pinned to the `pmoves` compose project.
 - `make flight-check` / `make flight-check-retro` → fast readiness sweep (Docker, env vars, contracts) via `tools/flightcheck/retro_flightcheck.py`. The checklist now verifies:
@@ -24,6 +24,8 @@ This guide aggregates the entry points that keep local environments consistent a
   - Geometry assets (`supabase/migrations/2025-10-20_geometry_cgp_views.sql` applied) and hi-rag gateway ports
   - Optional bundles (Open Notebook bind mounts, Jellyfin bridge) with actionable warnings
 - Windows without GNU Make: `scripts/pmoves.ps1` replicates the same targets (`./scripts/pmoves.ps1 up`, `./scripts/pmoves.ps1 smoke`, etc.).
+- `make jellyfin-folders` → prepares `pmoves/data/jellyfin/{config,cache,transcode,media/...}` so Jellyfin launches with a categorized library tree (Movies/TV/Music/Audiobooks/Podcasts/Photos/HomeVideos) owned by the host user.
+- `FIREFLY_PORT` in `env.shared` defaults to `8082` to avoid colliding with the Agent Zero API on 8080; adjust before running `make up-external` if that port is taken on your host.
 
 ## Supabase Workflows
 - CLI parity (default):
@@ -77,3 +79,6 @@ When provisioning remote hosts, ensure these directories map to persistent stora
 - Agent Zero & Archon integration: `pmoves/services/agent-zero/README.md`, `pmoves/services/archon/README.md`
 - Roadmap alignment & evidence logging: `pmoves/docs/NEXT_STEPS.md`, `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`
 - Local CI workflow mirror (pytest, CHIT grep, SQL policy lint, env preflight): `docs/LOCAL_CI_CHECKS.md`
+
+## Verification & Smokes
+- `make smoke-wger` → runs HTTP checks against `http://localhost:8000` and `/static/images/logos/logo-font.svg` through the nginx sidecar so Wger matches the upstream static-serving deployment guidance.citeturn0search0

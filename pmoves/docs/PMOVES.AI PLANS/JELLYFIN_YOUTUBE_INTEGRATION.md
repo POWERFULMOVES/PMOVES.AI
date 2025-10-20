@@ -122,7 +122,7 @@ pip install fastapi uvicorn sentence-transformers pydantic httpx numpy
 3. **Start MCP YouTube Adapter**:
 ```bash
 # Set environment variables
-export SUPA_REST_URL="http://localhost:54321"
+export SUPA_REST_URL="http://localhost:65421"
 export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 export YOUTUBE_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
 

@@ -27,6 +27,11 @@ Thumbs.db
 # Local data caches (safety)
 *.tmp
 *.temp
+.docker-nocreds/
+integrations-workspace/
+testkeys.md
+.tmp_*
+/.cache/
 
 # dotenv: keep local env files out of the repo
 # Tracked examples like pmoves/.env.example should remain in the repo

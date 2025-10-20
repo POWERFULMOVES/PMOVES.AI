@@ -33,7 +33,7 @@ This guide covers preflight wiring, starting the core stack, and running the loc
    - `FIREFLY_ACCESS_TOKEN`, `FIREFLY_BASE_URL=http://firefly:8080`
    - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_API_URL=http://open-notebook:5055`
    - `JELLYFIN_API_KEY`, `JELLYFIN_URL=http://jellyfin:8096`
-   - Override ports before `make -C pmoves up-external` if your host is already using `8000`, `8080`, `8096`, or `8503` (for example, `export FIREFLY_PORT=8081` to free 8080). See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for per-service bring-up notes.
+- Override ports before `make -C pmoves up-external` if your host is already using `8000`, `8080`, `8096`, or `8503` (for example, `export FIREFLY_PORT=8082` keeps Firefly off Agent Zero’s 8080 binding). See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for per-service bring-up notes.
 5. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.
 
 ## 2) Preflight (Recommended)
@@ -151,9 +151,21 @@ Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), 
    - `make -C pmoves demo-health-cgp` (requires `WGER_API_TOKEN`)
    - `make -C pmoves demo-finance-cgp` (requires `FIREFLY_ACCESS_TOKEN`)
    Watch Supabase tables (`health_workouts`, `health_weekly_summaries`, `finance_transactions`, `finance_monthly_summaries`) and MinIO asset paths for inserts.
-4. Notebook sync smoke: `make -C pmoves up-open-notebook` (if using the local add-on) and ensure `OPEN_NOTEBOOK_API_*` envs resolve. `docker logs pmoves-notebook-sync-1` should show successful Supabase writes.
+4. Notebook sync smoke: `make -C pmoves up-open-notebook` (if using the local add-on) and ensure `OPEN_NOTEBOOK_API_*` envs resolve. Run `make -C pmoves notebook-seed-models` once `env.shared` includes your token + provider keys so `/api/models/providers` reports the enabled backends. `docker logs pmoves-notebook-sync-1` should show successful Supabase writes.
 
-### 5c) Creative Automations
+### 5c) Wger Static Proxy Smoke
+- Ensure `make up-external-wger` (or `make up-external`) is running so both `pmoves-wger` and `pmoves-wger-nginx`
+  containers are online. The nginx sidecar mirrors the upstream production guidance where Django writes the static
+  bundle and nginx serves `/static` and `/media` from shared volumes.citeturn0search0
+- Run `make smoke-wger` (defaults `WGER_ROOT_URL=http://localhost:8000`). The target:
+  1. Performs an HTTP GET to confirm the proxy forwards requests to Gunicorn.
+  2. Fetches `/static/images/logos/logo-font.svg` to ensure collectstatic artifacts are mounted correctly.
+- If the static check fails, recreate the containers with
+  `docker compose -p pmoves -f docker-compose.external.yml up -d --force-recreate wger` to rerun `collectstatic`. Volume
+  permission errors are the next suspect—verify `/home/wger/static` is owned by UID 1000 inside the Django container,
+  matching the upstream deployment reference.citeturn0search0
+
+### 5d) Creative Automations
 Prereqs: tutorials installed (`pmoves/creator/tutorials/`), Supabase CLI stack running, `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
 1. Import/activate the creative webhook flows:
    - `pmoves/n8n/flows/wan_to_cgp.webhook.json`
@@ -181,7 +193,7 @@ Prereqs: tutorials installed (`pmoves/creator/tutorials/`), Supabase CLI stack r
 3. Trigger Qwen Image Edit+ and VibeVoice runs with analogous payloads (`/webhook/qwen-to-cgp`, `/webhook/vibevoice-to-cgp`). Include `asset_url`, `prompt`/`script`, persona tags, and any reference assets. Confirm MinIO/Supabase paths match the tutorial outputs and that geometry constellations land with `workflow:qwen-image-edit-plus` / `workflow:vibevoice-tts` tags.
 4. Geometry UI (`make -C pmoves web-geometry`): filter constellations by namespace/persona to verify the render, edit, and audio clips appear with the correct metadata and jump links.
 
-### 5d) Persona Film End-to-End (next milestone)
+### 5e) Persona Film End-to-End (next milestone)
 Persona film automation combines the creative flows above with Supabase tables (`persona_avatar`, `geometry_cgp_packets`) seeded with WAN outputs and audio narration. With the `persona_avatar` table now available (migration `2025-10-20_persona_avatar.sql`), the remaining work is wiring the UI + automation glue:
 1. Chain WAN + VibeVoice requests (steps above) with matching `persona` and `namespace`.
 2. Confirm n8n emits the geometry packets and that Supabase audit tables capture the creative assets.

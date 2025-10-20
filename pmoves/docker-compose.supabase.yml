@@ -60,7 +60,7 @@ services:
       STUDIO_PG_META_URL: http://postgrest:3000
       SUPABASE_URL: http://localhost:9999
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-dev_anon_key}
-    ports: ["54323:3000"]
+    ports: ["${SUPABASE_STUDIO_PORT:-54323}:3000"]
     # Avoid cross-file depends_on to prevent invalid compose project errors.
     networks: [pmoves]
 

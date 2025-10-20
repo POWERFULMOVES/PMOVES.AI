@@ -10,7 +10,7 @@
           "key": "SUPA_REST_URL",
           "file": "pmoves/.env.local",
           "prompt": "Supabase REST endpoint (host)",
-          "default": "http://localhost:54321/rest/v1",
+          "default": "http://localhost:65421/rest/v1",
           "help": "Host-facing PostgREST endpoint exposed by `supabase start` or your remote deployment.",
           "required": true,
           "type": "url"
@@ -62,7 +62,7 @@
         },
         {
           "key": "SUPABASE_ANON_KEY",
-          "file": "pmoves/.env.local",
+          "file": "pmoves/env.shared",
           "prompt": "Supabase anon key",
           "help": "Copy from `make supa-status` or your remote Supabase settings.",
           "required": true,
@@ -74,7 +74,7 @@
         },
         {
           "key": "SUPABASE_SERVICE_ROLE_KEY",
-          "file": "pmoves/.env.local",
+          "file": "pmoves/env.shared",
           "prompt": "Supabase service role key",
           "help": "Copy from `make supa-status` or your remote Supabase settings.",
           "required": true,
@@ -86,7 +86,7 @@
         },
         {
           "key": "SUPABASE_JWT_SECRET",
-          "file": "pmoves/.env.local",
+          "file": "pmoves/env.shared",
           "prompt": "Supabase JWT secret",
           "help": "JWT secret used by Supabase auth. Use the value reported by `make supa-status`.",
           "required": true,
@@ -95,23 +95,322 @@
             "type": "random_urlsafe",
             "length": 64
           }
-        },
+        }
+      ]
+    },
+    {
+      "id": "shared",
+      "name": "Shared Credentials",
+      "description": "Secrets reused across PMOVES services (Supabase, providers, integrations).",
+      "variables": [
         {
-          "key": "DISCORD_WEBHOOK_URL",
-          "file": "pmoves/.env.local",
-          "prompt": "Discord webhook URL (optional)",
-          "help": "Webhook endpoint for publisher notifications. Leave blank to skip.",
+          "key": "SUPABASE_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Remote Supabase base URL",
+          "default": "https://supabasepmoves.example.com",
+          "help": "Only required for hybrid mode; leave blank for local CLI.",
           "required": false,
           "type": "url_optional"
         },
         {
-          "key": "DISCORD_WEBHOOK_USERNAME",
-          "file": "pmoves/.env.local",
+          "key": "SUPABASE_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Supabase service key (remote)",
+          "help": "Needed when pointing at a remote Supabase instance.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "OPENAI_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "OpenAI API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "OPENAI_API_BASE",
+          "file": "pmoves/env.shared",
+          "prompt": "OpenAI API base override",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "GROQ_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Groq API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "ANTHROPIC_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Anthropic API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "GEMINI_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Gemini API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "GOOGLE_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Google API key (alias for Gemini)",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "MISTRAL_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Mistral API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "DEEPSEEK_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "DeepSeek API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "OPENROUTER_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "OpenRouter API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "XAI_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "xAI API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "ELEVENLABS_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "ElevenLabs API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "VOYAGE_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Voyage AI key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "COHERE_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Cohere API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "FIREWORKS_AI_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Fireworks AI key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "PERPLEXITYAI_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Perplexity API key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "TOGETHER_AI_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Together AI key",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "OLLAMA_BASE_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Ollama base URL",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "OPENAI_COMPATIBLE_BASE_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "OpenAI-compatible base URL",
+          "help": "Populate if you want this provider available across PMOVES.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "OPEN_NOTEBOOK_API_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Open Notebook API URL",
+          "default": "http://open-notebook:5055",
+          "help": "Base URL consumed by notebook-sync & MCP tooling.",
+          "required": false,
+          "type": "url_optional"
+        },
+        {
+          "key": "OPEN_NOTEBOOK_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Open Notebook API token",
+          "help": "Token from Open Notebook Settings \u2192 API Access.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "OPEN_NOTEBOOK_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Open Notebook password (optional)",
+          "help": "Alternative auth mechanism for Open Notebook.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "WGER_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger API token",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "FIREFLY_ACCESS_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Firefly access token",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "FIREFLY_CMD_LN_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Firefly CLI token",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "FIREFLY_PA_TOKEN_NAME",
+          "file": "pmoves/env.shared",
+          "prompt": "Firefly token label",
+          "required": false
+        },
+        {
+          "key": "DISCORD_WEBHOOK_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Discord webhook URL",
+          "required": false,
+          "type": "url_optional"
+        },
+        {
+          "key": "DISCORD_USERNAME",
+          "file": "pmoves/env.shared",
           "prompt": "Discord webhook username",
           "default": "PMOVES Publisher",
-          "help": "Display name used when posting to the webhook.",
+          "required": false
+        },
+        {
+          "key": "DISCORD_AVATAR_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Discord avatar URL",
           "required": false,
-          "type": "string"
+          "type": "url_optional"
+        },
+        {
+          "key": "MINIO_USER",
+          "file": "pmoves/env.shared",
+          "prompt": "MinIO user",
+          "default": "pmoves",
+          "required": false
+        },
+        {
+          "key": "MINIO_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "MinIO password",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "VALID_API_KEYS",
+          "file": "pmoves/env.shared",
+          "prompt": "Valid API keys (legacy tools)",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "NEXT_PUBLIC_BACKEND_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Frontend backend API key (optional)",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "N8N_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "n8n API key",
+          "required": false,
+          "help": "Required for CLI + Agent flows that call the n8n REST API.",
+          "sensitive": true
+        },
+        {
+          "key": "N8N_RUNNERS_AUTH_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "n8n runners auth token",
+          "required": false,
+          "help": "Shared secret for the n8n runners container.",
+          "sensitive": true
+        },
+        {
+          "key": "JELLYFIN_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Jellyfin base URL",
+          "required": false,
+          "default": "http://jellyfin:8096",
+          "help": "Internal URL used by integrations.",
+          "type": "url_optional"
+        },
+        {
+          "key": "JELLYFIN_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Jellyfin API key",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "JELLYFIN_USER_ID",
+          "file": "pmoves/env.shared",
+          "prompt": "Jellyfin user ID",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "JELLYFIN_PUBLISHED_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Jellyfin public URL",
+          "required": false,
+          "help": "External URL used in notifications.",
+          "type": "url_optional"
         }
       ]
     },
@@ -196,7 +495,7 @@
           "key": "JELLYFIN_API_KEY",
           "file": "pmoves/env.jellyfin-ai",
           "prompt": "Jellyfin API key",
-          "help": "Once the server is running, generate an API key under Dashboard → API Keys.",
+          "help": "Once the server is running, generate an API key under Dashboard \u2192 API Keys.",
           "required": false,
           "sensitive": true
         },
@@ -368,6 +667,38 @@
           "help": "Enable or disable thumbnail embedding in Discord notifications.",
           "required": true,
           "type": "bool"
+        }
+      ]
+    },
+    {
+      "id": "open-notebook",
+      "name": "Open Notebook",
+      "description": "Streamlit + FastAPI research workspace wired to SurrealDB.",
+      "variables": [
+        {
+          "key": "OPEN_NOTEBOOK_API_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "Open Notebook API URL",
+          "default": "http://open-notebook:5055",
+          "help": "Base URL consumed by notebook-sync & MCP tooling.",
+          "required": false,
+          "type": "url_optional"
+        },
+        {
+          "key": "OPEN_NOTEBOOK_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Open Notebook API token",
+          "help": "Token from Open Notebook Settings \u2192 API Access.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "OPEN_NOTEBOOK_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Open Notebook password (optional)",
+          "help": "Alternative auth mechanism for Open Notebook.",
+          "required": false,
+          "sensitive": true
         }
       ]
     }

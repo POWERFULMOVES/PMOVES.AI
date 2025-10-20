@@ -9,7 +9,7 @@ if (-not $Env:SUPABASE_SERVICE_ROLE_KEY -or [string]::IsNullOrWhiteSpace($Env:SU
   exit 1
 }
 
-$base = if ($Env:SUPABASE_REST_URL) { $Env:SUPABASE_REST_URL } elseif ($Env:SUPA_REST_URL) { $Env:SUPA_REST_URL } else { 'http://localhost:54321/rest/v1' }
+$base = if ($Env:SUPABASE_REST_URL) { $Env:SUPABASE_REST_URL } elseif ($Env:SUPA_REST_URL) { $Env:SUPA_REST_URL } else { 'http://localhost:65421/rest/v1' }
 $key = $Env:SUPABASE_SERVICE_ROLE_KEY
 
 $payload = @{ status = 'approved'; content_url = $Url; title = $Title; namespace = $Namespace; meta = @{} } | ConvertTo-Json -Depth 4

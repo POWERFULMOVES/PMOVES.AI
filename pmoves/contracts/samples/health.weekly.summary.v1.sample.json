@@ -1,0 +1,27 @@
+{
+  "topic": "health.weekly.summary.v1",
+  "payload": {
+    "namespace": "pmoves",
+    "period_start": "2025-10-06",
+    "period_end": "2025-10-12",
+    "metrics": {
+      "total_workouts": 5,
+      "adherence_pct": 83.3,
+      "avg_load": 62.5,
+      "recovery_score": 71.0,
+      "avg_duration_min": 48
+    },
+    "daily": [
+      {"date": "2025-10-06", "workouts": 1, "load": 60, "duration_min": 45},
+      {"date": "2025-10-07", "workouts": 1, "load": 70, "duration_min": 55},
+      {"date": "2025-10-08", "workouts": 0},
+      {"date": "2025-10-09", "workouts": 1, "load": 65, "duration_min": 50},
+      {"date": "2025-10-10", "workouts": 0},
+      {"date": "2025-10-11", "workouts": 1, "load": 55, "duration_min": 40},
+      {"date": "2025-10-12", "workouts": 1, "load": 62, "duration_min": 50}
+    ],
+    "notes": "Solid adherence; slight dip mid-week.",
+    "tags": ["wger", "health"]
+  }
+}
+

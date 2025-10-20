@@ -238,8 +238,15 @@ def refresh_warm_dictionary():
     try:
         tmp = {}
         with driver.session() as s:
-            recs = s.run("MATCH (e:Entity) RETURN e.value AS v, CASE WHEN e.type IS NOT NULL THEN e.type ELSE 'UNK' END AS t LIMIT $lim",
-                         lim=NEO4J_DICT_LIMIT)
+            recs = s.run(
+                (
+                    "MATCH (e:Entity) "
+                    "WITH e, CASE WHEN 'type' IN keys(e) THEN e.type ELSE 'UNK' END AS typ "
+                    "RETURN e.value AS v, typ AS t "
+                    "LIMIT $lim"
+                ),
+                lim=NEO4J_DICT_LIMIT,
+            )
             for r in recs:
                 v = r["v"]; t = (r["t"] or "UNK").upper()
                 if not v: continue

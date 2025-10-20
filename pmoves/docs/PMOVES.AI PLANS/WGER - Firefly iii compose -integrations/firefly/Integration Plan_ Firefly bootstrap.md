@@ -5,7 +5,7 @@ _Last updated: 2025-10-20_
 This note captures the fast path to get the Firefly III finance stack online inside the `pmoves` external integrations workspace, align it with Geometry Bus (CHIT) consumers, and surface an API token for downstream automation.
 
 ## 1. Compose + environment requirements
-- The shared external compose (`pmoves/docker-compose.external.yml`) now pins Firefly III to the published `fireflyiii/core:latest` image, binds to `FIREFLY_PORT` (default `8080`), and mounts a named volume `firefly-storage` so the SQLite database persists across restarts.
+- The shared external compose (`pmoves/docker-compose.external.yml`) now pins Firefly III to the published `fireflyiii/core:latest` image, binds to `FIREFLY_PORT` (compose default `8080`, but we set `FIREFLY_PORT=8082` in `env.shared` to avoid Agent Zero on 8080), and mounts a named volume `firefly-storage` so the SQLite database persists across restarts.
 - New environment knobs:
   - `FIREFLY_APP_KEY` → Laravel encryption key. Defaults to `SomeRandomStringOf32CharsExactly` for local smoke tests; override with a generated key before pushing to shared stacks.
   - `FIREFLY_APP_ENV`, `FIREFLY_SITE_OWNER`, `FIREFLY_TZ`, `FIREFLY_TRUSTED_PROXIES` → quality-of-life defaults that keep HTTP + logging sane behind pmoves’ reverse proxies.
@@ -15,7 +15,7 @@ This note captures the fast path to get the Firefly III finance stack online ins
 ## 2. Bring the container up (or recycle it)
 ```bash
 # optional: avoid 8080 conflicts, pick an open host port
-export FIREFLY_PORT=8081
+export FIREFLY_PORT=8082
 
 # start or recreate just Firefly
 make -C pmoves up-external-firefly
@@ -36,7 +36,7 @@ make -C pmoves up-external-firefly
     ```
 
 ## 4. Create the first admin + login
-- Visit `http://localhost:${FIREFLY_PORT}` and walk through the onboarding wizard to register the initial admin (email + password).
+- Visit `http://localhost:${FIREFLY_PORT:-8082}` and walk through the onboarding wizard to register the initial admin (email + password).
 - Use a temporary password during setup, then rotate it immediately from the Profile menu to keep the shell history clean.
 
 ## 5. Produce API tokens for Geometry Bus + n8n flows

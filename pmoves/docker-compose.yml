@@ -22,7 +22,7 @@ services:
     image: postgrest/postgrest:latest
     restart: unless-stopped
     depends_on: [postgres]
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
@@ -81,7 +81,7 @@ services:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
@@ -114,7 +114,7 @@ services:
   retrieval-eval:
     build: ./services/retrieval-eval
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
       - EVAL_HTTP_PORT=${EVAL_HTTP_PORT}
@@ -131,7 +131,7 @@ services:
   presign:
     build: ./services/presign
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -147,9 +147,9 @@ services:
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - RENDER_WEBHOOK_SHARED_SECRET=${RENDER_WEBHOOK_SHARED_SECRET}
       - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
@@ -163,7 +163,7 @@ services:
   extract-worker:
     build: ./services/extract-worker
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -205,7 +205,7 @@ services:
       context: .
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     ports: ["8084:8084"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -213,7 +213,7 @@ services:
   notebook-sync:
     build: ./services/notebook-sync
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
       - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
@@ -238,7 +238,7 @@ services:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -259,7 +259,7 @@ services:
   media-video:
     build: ./services/media-video
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -282,7 +282,7 @@ services:
   media-audio:
     build: ./services/media-audio
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -302,7 +302,7 @@ services:
   pmoves-yt:
     build: ./services/pmoves-yt
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -324,7 +324,7 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -351,8 +351,8 @@ services:
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
-      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1/websocket}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -374,7 +374,7 @@ services:
         - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu121}
         - TORCH_SKIP_CUDA=0
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
@@ -422,7 +422,7 @@ services:
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
     restart: unless-stopped
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -455,8 +455,8 @@ services:
       - PGUSER=${POSTGRES_USER:-pmoves}
       - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
       - PGDATABASE=${POSTGRES_DB:-pmoves}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
-      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1/websocket}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     deploy:
       resources:
@@ -491,7 +491,7 @@ services:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -516,11 +516,11 @@ services:
       context: .
       dockerfile: ./services/archon/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - PORT=8091
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     depends_on:
       - nats
@@ -533,7 +533,7 @@ services:
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
@@ -547,7 +547,7 @@ services:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -560,7 +560,7 @@ services:
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared, .env, .env.local]
     environment:
       - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://jellyfin:8096}
       - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}

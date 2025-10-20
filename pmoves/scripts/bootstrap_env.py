@@ -97,7 +97,7 @@ def validate_value(value: str, meta: Dict) -> Tuple[bool, Optional[str]]:
         parsed = urlparse(value)
         if parsed.scheme and parsed.netloc:
             return True, None
-        return False, "Provide a full URL (e.g. http://localhost:54321/rest/v1)."
+        return False, "Provide a full URL (e.g. http://localhost:65421/rest/v1)."
     if val_type == "int":
         try:
             int(value)

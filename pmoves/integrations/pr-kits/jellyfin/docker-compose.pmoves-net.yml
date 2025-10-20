@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  jellyfin:
+    image: ghcr.io/POWERFULMOVES/PMOVES-jellyfin:main
+    restart: unless-stopped
+    networks: [pmoves-net]
+    ports: ["8096:8096"]
+networks:
+  pmoves-net:
+    external: true
+

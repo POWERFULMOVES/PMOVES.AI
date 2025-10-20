@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.SUPA_REST_URL }}/finance_transactions",
+        "url": "http://postgrest:3000/finance_transactions",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -94,8 +94,16 @@
         "sendBody": true,
         "body": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 30
-        }
+          "timeout": 30,
+          "bodyContentType": "json"
+        },
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ]
       },
       "id": "post_fin",
       "name": "POST CGP",

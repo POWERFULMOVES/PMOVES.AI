@@ -20,8 +20,13 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - render-webhook: 8085 (internal name `render-webhook`)
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
 - publisher-discord: 8094 -> 8092 (internal name `publisher-discord`)
-- notebook-sync: 8095 (internal name `notebook-sync`) – polls Open Notebook and ships normalized content into LangExtract + ext
-ract-worker.
+- notebook-sync: 8095 (internal name `notebook-sync`) – polls Open Notebook and ships normalized content into LangExtract + extract-worker.
+
+External bundles (via `make up-external`):
+- wger: 8000 (nginx proxy to Django; override host mapping with `WGER_ROOT_URL` when reverse-proxying)
+- Firefly III: ${FIREFLY_PORT:-8082} (set `FIREFLY_PORT` in `env.shared`; 8082 avoids the Agent Zero API on 8080)
+- Open Notebook UI/API: 8503 / 5055 (override with `OPEN_NOTEBOOK_UI_PORT` / `OPEN_NOTEBOOK_API_PORT`)
+- Jellyfin: 8096 (media server; run `make jellyfin-folders` to create `pmoves/data/jellyfin/` before first launch)
 
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
@@ -29,19 +34,19 @@ All services are attached to the `pmoves-net` Docker network. Internal URLs shou
 
 Quick start:
 - Windows without Make: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1`
-- With Make: `make env-setup` to interactively fill `.env` from `.env.example`, then run `make bootstrap` to capture Supabase CLI endpoints (including Realtime), Wger/Firefly/Open Notebook tokens, and regenerate secrets before `make env-check`.
+- With Make: `make env-setup` to sync `.env` defaults, then run `make bootstrap` to capture Supabase CLI endpoints (including Realtime) and write shared secrets into `env.shared` before `make env-check`.
 - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
 
 See also: `docs/SECRETS.md` for optional secret provider integrations.
 
-Manual notes: Create `.env` (or start with `.env.example`) and include keys from:
+Manual notes: Create `env.shared` (copy `env.shared.example`) and include keys from:
 - `env.presign.additions` (MINIO creds and shared secret)
 - `env.render_webhook.additions` (webhook shared secret)
 - `env.hirag.reranker.additions`, `env.hirag.reranker.providers.additions` (optional reranker config)
 - `MEDIA_VIDEO_FRAMES_BUCKET` (optional) to store extracted video frames separately from the source bucket; defaults to the
   incoming media bucket when unset. Use `MEDIA_VIDEO_FRAMES_PREFIX` to customize the object key prefix (defaults to
   `media-video/frames`).
-- `OPEN_NOTEBOOK_API_URL` (+ optional `OPEN_NOTEBOOK_API_TOKEN`) to enable the notebook-sync worker. Adjust `NOTEBOOK_SYNC_INTE
+- `OPEN_NOTEBOOK_API_URL` (+ optional `OPEN_NOTEBOOK_API_TOKEN`) to enable the notebook-sync worker (read from `env.shared`). Adjust `NOTEBOOK_SYNC_INTE
 RVAL_SECONDS`, `NOTEBOOK_SYNC_DB_PATH`, or override `LANGEXTRACT_URL` / `EXTRACT_WORKER_URL` when targeting external services.
 
 ## External-Mode (reuse existing infra)
@@ -187,8 +192,19 @@ OpenAI-compatible presets:
   - Make helper: `make health-publisher-discord`
  - Agent Zero: `curl http://localhost:8080/healthz`
    - Make helper: `make health-agent-zero`
- - Jellyfin Bridge: `curl http://localhost:8093/healthz`
-   - Make helper: `make health-jellyfin-bridge`
+- Jellyfin Bridge: `curl http://localhost:8093/healthz`
+  - Make helper: `make health-jellyfin-bridge`
+- Jellyfin UI: `http://localhost:8096`
+  - Run `make jellyfin-folders` before first boot to create the default `Movies/TV/Music/...` directories under `pmoves/data/jellyfin/media`.
+  - Set `JELLYFIN_PUBLISHED_URL` in `env.shared` when exposing the server beyond localhost so deep links render correctly.
+
+### Jellyfin Library & Kodi Integration
+
+1. Prepare library folders: `make jellyfin-folders`. Copy media into the resulting structure or mount additional host paths by editing `docker-compose.external.yml` (`./data/jellyfin/media` is bound to `/media` in the container).
+2. First-run wizard: add the Movies/TV/Music folders created above and configure metadata providers/time zone.
+3. Install the official Kodi Sync Queue plugin from Dashboard → Plugins → Catalog → "Kodi Sync Queue" (stable repo).citeturn1search1 This enables instant library updates for Jellyfin for Kodi clients.
+4. On Kodi devices, install the "Jellyfin for Kodi" add-on (Download → Video add-ons → Jellyfin), sign in with the same server URL/API key, and enable automatic sync.citeturn1search1
+5. Optional: add Jellyfin's stable plugin repository manually (`https://repo.jellyfin.org/releases/plugin/manifest-stable.json`) if the catalog isn't pre-populated.citeturn1search1
 
 ## n8n Flows (Quick Import)
 
