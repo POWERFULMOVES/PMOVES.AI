@@ -29,7 +29,7 @@ All services are attached to the `pmoves-net` Docker network. Internal URLs shou
 
 Quick start:
 - Windows without Make: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1`
-- With Make: `make env-setup` to interactively fill `.env` from `.env.example`, then `make env-check` to confirm nothing is missing.
+- With Make: `make env-setup` to interactively fill `.env` from `.env.example`, then run `make bootstrap` to capture Supabase CLI endpoints (including Realtime), Wger/Firefly/Open Notebook tokens, and regenerate secrets before `make env-check`.
 - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
 
 See also: `docs/SECRETS.md` for optional secret provider integrations.

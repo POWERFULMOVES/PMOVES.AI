@@ -12,6 +12,7 @@ _Last updated: 2025-10-18_
 - **Smoke Tests** — `SMOKETESTS.md`
 - **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
+- **Supabase Service Guide** — `../services/supabase/README.md`
 - **Archon Service README** — `../services/archon/README.md`
 - **n8n Setup (Supabase→Agent Zero→Discord)** — `N8N_SETUP.md`
 - **Supabase→Discord Playbook** — `SUPABASE_DISCORD_AUTOMATION.md`
@@ -19,6 +20,14 @@ _Last updated: 2025-10-18_
 - **M2 Validation Guide** — `M2_VALIDATION_GUIDE.md`
 - **n8n Quick Checklist (wiki)** — `N8N_CHECKLIST.md`
 - **PMOVES v5.12 Task Backlog** — `context/pmoves_v_5.12_tasks.md`
+
+## Creative Tutorials (Automation Inputs)
+- Qwen Image Edit Plus — `PMOVES ART STUFF/qwen_image_edit_plus_tutorial.md`
+- WAN Animate 2.2 — `PMOVES ART STUFF/wan_animate_2.2_tutorial.md`
+- VibeVoice TTS — `PMOVES ART STUFF/vibevoice_tts_tutorial.md`
+These pair with UI frameworks in:
+- `docs/Unified and Modular PMOVES UI Design.md`
+- `docs/PMOVES Multimodal Communication Layer (“Flute”) – Architecture & Roadmap.md`
 
 ## Codex + MCP
 - Full bundle and profiles: `codex_full_config_bundle/README-Codex-MCP-Full.md`

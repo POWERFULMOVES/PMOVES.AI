@@ -27,8 +27,8 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - [WAN Animate Installation Scripts](pmoves/docs/PMOVES.AI%20PLANS/PMOVES%20ART%20STUFF/waninstall%20guide.md) – Reference for the animated installer bundle referenced in creative smokes.
 
 ### Initial Setup & Tooling Flow
-1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, copy `.env`, and populate secrets. The `make bootstrap` helper orchestrates Supabase CLI keys, Discord/Jellyfin API tokens, and local storage buckets.
-2. **Supabase realtime alignment** – Follow the [Supabase Service Guide](pmoves/docs/services/supabase/README.md) to start the CLI stack with `supabase start --network-id pmoves-net` and mirror the websocket endpoint (`SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1`). This matches our self-hosted Supabase deployments.
+1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, copy `.env`, and populate secrets. Run `make bootstrap` (wrapping `python -m pmoves.scripts.bootstrap_env`) to capture Supabase CLI endpoints/keys (including Realtime), Wger and Firefly tokens, Open Notebook credentials, Discord/Jellyfin secrets, and regenerated shared passphrases.
+2. **Supabase realtime alignment** – Follow the [Supabase Service Guide](pmoves/docs/services/supabase/README.md) to start the CLI stack with `supabase start --network-id pmoves-net` (run this before accepting Supabase prompts in `make bootstrap`) and mirror the websocket endpoint (`SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1`). This matches our self-hosted Supabase deployments.
 3. **Tooling cheatsheet** – Keep [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) handy for Make targets, smoke tests, and environment scripts (`env_setup`, `flight-check`, `smoke`).
 4. **Provisioning & hardware targets** – Browse `CATACLYSM_STUDIOS_INC/` for automated OS images, Jetson bootstrap bundles, and pmoves-net Docker stacks ready for edge hardware.
 
