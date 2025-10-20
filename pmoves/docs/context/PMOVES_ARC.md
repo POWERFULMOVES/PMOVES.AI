@@ -17,17 +17,21 @@ graph TD
     subgraph support_systems["Support Systems (Agent Building, Knowledge & Workflow)"]
         B["Archon: Specialized Agent Builder & Knowledge/Task Mgmt"]
         C["n8n: Workflow Orchestration & MCP Hub"]
+        ONB["Open Notebook: Research Workspace"]
     end
 
     subgraph specialized_ai["Specialized AI Muscles (Deep Processing & Generation)"]
         D["HiRAG: Hierarchical RAG for Deep Reasoning"]
         E["LangExtract: Structured Information Extraction"]
         F["ComfyUI: Sophisticated Content Creation"]
+        YT["PMOVES.YT: Multimodal Ingest"]
     end
 
     subgraph data_backbones["Data & Operational Backbones"]
-        G["Firefly III: Personal Finance Manager"]
-        H["Supabase: Unified Database with Vector Capabilities"]
+        H["Supabase (+Realtime): Unified Database & Event Bridge"]
+        WGER["Wger Fitness Manager"]
+        FIII["Firefly III: Finance Data"]
+        JELLY["Jellyfin Bridge"]
         I["Local Models: Ollama, NVIDIA NIM, Nemo"]
     end
 
@@ -38,20 +42,29 @@ graph TD
 
     A -->|"Manages & Delegates Tasks"| C
     A -->|"Utilizes Capabilities"| B
+    A -->|"Research Capture"| ONB
     B -->|"Manages Knowledge & Builds Agents"| D
     B -->|"Ingests Data"| E
     E -->|"Feeds Structured Data"| D
     C -->|"Orchestrates Workflows"| F
-    C -->|"Integrates with"| G
+    C -->|"Syncs Health"| WGER
+    C -->|"Syncs Finance"| FIII
+    C -->|"Syncs Media"| JELLY
     D -->|"Enhances RAG"| H
     E -->|"Stores Data"| H
     F -->|"Utilizes Models"| I
-    G -->|"Stores Data"| H
+    ONB -->|"Publishes Research"| H
+    WGER -->|"Health Metrics"| H
+    FIII -->|"Transactions"| H
+    JELLY -->|"Media Metadata"| H
+    YT -->|"Uploads CGP"| D
+    H -->|"Realtime Events"| C
     H -->|"Serves Data to"| A
     H -->|"Serves Data to"| B
     H -->|"Serves Data to"| D
     H -->|"Serves Data to"| E
     H -->|"Serves Data to"| F
+    H -->|"Serves Data to"| YT
     I -->|"Powers"| A
     I -->|"Powers"| B
     I -->|"Powers"| D
@@ -72,13 +85,13 @@ graph TD
 
 The PMOVES system is envisioned with a Central Brain managed by Agent Zero, acting as the primary orchestrator across the network, making decisions, and managing the overall system. This "brain" is dynamic, learning, and can create subordinate agents.
 
-Supporting Agent Zero are the Support Systems. Archon serves as the knowledge and task management backbone, an integrated environment for all context engineering, and a specialized agent builder. It offers robust knowledge management, including smart web crawling, document processing, and code example extraction, with advanced RAG strategies like vector search. n8n acts as the automation and workflow orchestration layer, facilitating multi-agent task delegation and seamless communication between components via the Model Context Protocol (MCP).
+Supporting Agent Zero are the Support Systems. Archon remains the knowledge and task management backbone, while n8n brokers workflow automations and MCP tasks. Open Notebook, now joined to pmoves-net alongside the core stack, gives researchers a UI to capture insights that immediately round-trip into Supabase and downstream geometry tooling.
 
-Specialized AI "Muscles" provide deep processing and generation capabilities. HiRAG offers hierarchical retrieval-augmented generation for deeper, fact-based reasoning on complex, multi-layered knowledge structures, overcoming traditional RAG limitations. LangExtract is a Python library for extracting structured information from unstructured text documents with precise source grounding, often powered by LLMs like Gemini. ComfyUI handles sophisticated content creation workflows, such as text-to-image and video generation.
+Specialized AI "muscles" provide domain-specific processing. HiRAG (and its geometry gateway) offer hierarchical retrieval-augmented generation, LangExtract structures raw text, ComfyUI runs advanced visual pipelines, and PMOVES.YT handles multimodal ingest. Together they enrich the Geometry Bus with Constellation Geometry Protocol payloads that flow through the gateways and back into Supabase.
 
-The Data & Operational Backbones include Firefly III, a self-hosted personal finance manager. Supabase is the unified database with vector capabilities for the entire PMOVES system, serving as the backend for Archon and storing vector embeddings for semantic search. Local Models (Ollama, NVIDIA NIM, Nemo) are a suite of LLMs distributed across the hardware network, providing the underlying language model capabilities for various agents, ensuring data privacy and efficient local processing.
+The Data & Operational Backbones now include Supabase with its Realtime websocket bridge, the Wger and Firefly III integrations feeding health and finance metrics, and the Jellyfin bridge for media metadata. Supabase serves as the unified store for constellations, finance/health domains, and live CGP events, while local model runtimes (Ollama, NVIDIA NIM, NeMo) supply the inference layer needed by Agent Zero, Archon, the gateways, and creator pipelines.
 
-All these components are deployed and run on Underlying Infrastructure comprising a Distributed Computing network of workstations and edge devices, with Docker used for isolating and deploying components across this infrastructure.
+All components run across distributed workstations, Jetson deployments, and edge servers. Docker (and compose profiles) provide isolation, enabling the same topology to span homogeneous developer machines and heterogeneous self-hosted clusters.
 
 --------------------------------------------------------------------------------
 
@@ -91,7 +104,10 @@ graph TD
     subgraph layer1["Layer 1: User Interaction & Interfaces"]
         UI_AZ["Agent Zero UI: Interactive Terminal"]
         UI_ARCHON["Archon UI: Web Interface (Knowledge/Tasks)"]
-        UI_FIREFLY["Firefly III UI: Web Interface (Finance)"]
+        UI_OPENNOTE["Open Notebook UI"]
+        UI_FIREFLY["Firefly III UI"]
+        UI_WGER["Wger UI"]
+        UI_JELLY["Jellyfin UI"]
     end
 
     subgraph layer2["Layer 2: Primary Orchestration & Adaptive Learning"]
@@ -103,13 +119,17 @@ graph TD
         L3_ARCHON["Archon: Agent Builder & Knowledge Mgmt"]
         L3_LE["LangExtract: Structured Info Extraction"]
         L3_HRAG["HiRAG: Hierarchical RAG"]
+        L3_GATEWAY["HiRAG Gateway v2 (CHIT)"]
     end
 
     subgraph layer4["Layer 4: External Services & Data Storage"]
-        L4_FIII["Firefly III: Personal Finance Manager"]
-        L4_CUI["ComfyUI: Content Creation Workflows"]
-        L4_SB["Supabase: Unified DB w/ Vector Capabilities"]
+        L4_SB["Supabase + Realtime"]
+        L4_FIII["Firefly III"]
+        L4_WGER["Wger"]
+        L4_JELLY["Jellyfin Bridge"]
+        L4_CUI["ComfyUI"]
         L4_LM["Local Models (Ollama, NVIDIA NIM, Nemo)"]
+        L4_ONTABLE["Open Notebook API"]
     end
 
     subgraph layer5["Layer 5: Hardware & Infrastructure"]
@@ -119,31 +139,45 @@ graph TD
 
     UI_AZ --> L2_AZ
     UI_ARCHON --> L3_ARCHON
+    UI_OPENNOTE --> L4_ONTABLE
     UI_FIREFLY --> L4_FIII
+    UI_WGER --> L4_WGER
+    UI_JELLY --> L4_JELLY
 
     L2_AZ -->|"Receives User Tasks"| L2_N8N
     L2_AZ -->|"Decision-Making & Task Delegation"| L2_N8N
+    L2_AZ -->|"Research Capture"| L4_ONTABLE
     L2_AZ -->|"Online Search (YouTube, GitHub)"| L3_LE
-    L2_AZ -->|"Online Search (YouTube, GitHub)"| L3_ARCHON
+    L2_AZ -->|"Task State"| L3_ARCHON
     L2_AZ -->|"Persistent Memory & Learning"| L4_SB
     L2_AZ -->|"Self-Learning (UR2 Principles)"| L4_LM
 
     L3_ARCHON -->|"Designs Sub-agents"| L2_AZ
     L3_ARCHON -->|"Ingests Knowledge (Web Crawling, Docs)"| L3_LE
     L3_ARCHON -->|"Advanced RAG Strategies"| L3_HRAG
+    L3_LE -->|"Publishes CGP"| L3_GATEWAY
+    L3_HRAG -->|"Geometry Bus"| L3_GATEWAY
     L3_LE -->|"Extracts Entities/Relationships"| L3_HRAG
-    L3_HRAG -->|"Builds Hierarchical Indices"| L4_SB
+    L3_GATEWAY -->|"Builds Hierarchical Indices"| L4_SB
+    L3_GATEWAY -->|"Realtime Events"| L4_SB
 
-    L2_N8N -->|"Automates Workflows"| L4_FIII
+    L2_N8N -->|"Sync Finance"| L4_FIII
+    L2_N8N -->|"Sync Health"| L4_WGER
     L2_N8N -->|"Automates Workflows"| L4_CUI
+    L2_N8N -->|"Dispatch Media"| L4_JELLY
     L3_ARCHON -->|"Manages Data"| L4_SB
     L3_LE -->|"Stores Extracted Data"| L4_SB
+    L4_ONTABLE -->|"Surreal Records"| L4_SB
     L4_SB -->|"Provides Vector Embeddings"| L3_ARCHON
     L4_SB -->|"Provides Vector Embeddings"| L3_HRAG
+    L4_SB -->|"Publishes CGP"| L3_GATEWAY
+    L4_FIII -->|"Transactions"| L4_SB
+    L4_WGER -->|"Health Metrics"| L4_SB
+    L4_JELLY -->|"Library Metadata"| L4_SB
     L4_LM -->|"LLM Inference"| L2_AZ
     L4_LM -->|"LLM Inference"| L3_ARCHON
     L4_LM -->|"LLM Inference"| L3_LE
-    L4_LM -->|"LLM Inference"| L3_HRAG
+    L4_LM -->|"LLM Inference"| L3_GATEWAY
     L4_LM -->|"LLM Inference"| L4_CUI
 
     L5_DOCKER -->|"Isolates & Deploys"| L2_AZ
@@ -161,15 +195,15 @@ graph TD
 
 This detailed view shows the PMOVES system operating across five distinct layers.
 
-Layer 1: User Interaction & Interfaces represents the direct points of contact for users. This includes the interactive terminal interface for Agent Zero, the web interface for Archon for managing knowledge and tasks, and the web interface for Firefly III for personal finance management.
+Layer 1: User Interaction & Interfaces represents the direct points of contact for humans. In addition to Agent Zero’s CLI and the Archon knowledge UI, operators now have Open Notebook for research capture plus the Firefly III, Wger, and Jellyfin dashboards feeding live domain data into the mesh.
 
-Layer 2: Primary Orchestration & Adaptive Learning is where Agent Zero reigns as the primary orchestrator. It receives user tasks, makes decisions, and delegates them. Its persistent memory allows it to learn from past experiences, and it uses online search for external information. n8n is the workflow orchestrator, automating connections and facilitating multi-agent task delegation using the MCP (Model Context Protocol) as a central hub.
+Layer 2: Primary Orchestration & Adaptive Learning is where Agent Zero reigns as the orchestrator. It receives user tasks, makes decisions, and delegates them while writing research conclusions back into Supabase. n8n remains the workflow hub, automating financial, health, and media syncs, and wiring MCP tools between Agent Zero, Archon, and downstream services.
 
-Layer 3: Specialized Knowledge & Agent Services details the core AI services. Archon is crucial for building specialized sub-agents and managing knowledge. It ingests data from web crawling and documents, which is then processed by LangExtract to extract structured information. This structured data, combined with Archon's knowledge base, is fed into HiRAG for hierarchical retrieval-augmented generation, enabling deeper reasoning.
+Layer 3: Specialized Knowledge & Agent Services details the core AI surfaces. Archon builds subordinate agents and curates knowledge, LangExtract structures raw ingest, the HiRAG gateway publishes Geometry Bus updates to Supabase Realtime, and ComfyUI/PMOVES.YT continue to enrich the creative and ingest pipelines.
 
-Layer 4: External Services & Data Storage includes specific applications and the central data repository. Firefly III offers a REST JSON API for programmatic access to financial data, automated via n8n. ComfyUI executes AI-driven content generation workflows, also automated by n8n. Supabase acts as the unified database, storing vector embeddings and serving as Archon's backend. Local Models provide the underlying LLM capabilities for all other AI components, running on the distributed hardware.
+Layer 4: External Services & Data Storage now encompasses Supabase with realtime enabled, Firefly III for finance transactions, Wger for fitness metrics, Jellyfin Bridge for media metadata, and the Open Notebook SurrealDB API. Supabase remains the canonical store for constellations, embeddings, and event payloads while local model runtimes deliver the inference tier.
 
-Finally, Layer 5: Hardware & Infrastructure underpins the entire system. Docker Runtime ensures isolated and portable environments for all services, while the Distributed Hardware Network comprises various workstations and edge computing devices, optimizing for different workloads. This layered approach enables autonomous upgrading and self-improvement, with Agent Zero orchestrating research, Archon managing knowledge, LangExtract and HiRAG refining information, and Supabase centralizing learned data.
+Finally, Layer 5: Hardware & Infrastructure underpins the entire system. Docker Runtime ensures isolated and portable environments for all services, while the distributed hardware network spans workstations, homelab nodes, and Jetson edge devices. This layered approach keeps the architecture aligned with the self-hosted deployments powering PMOVES production.
 
 --------------------------------------------------------------------------------
 

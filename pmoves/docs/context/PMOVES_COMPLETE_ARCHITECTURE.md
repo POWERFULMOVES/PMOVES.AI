@@ -1,10 +1,10 @@
 # PMOVES Complete Architecture Map
 
-_Last Updated: 2025-01-XX (Generated from comprehensive codebase + planning docs review)_
+_Last Updated: 2025-10-20 (Generated from comprehensive codebase + planning docs review)_
 
 ## Executive Summary
 
-PMOVES is a **distributed multi-agent orchestration mesh** for autonomous self-improvement, research, and complex software engineering. The system features 31+ microservices across 6 deployment profiles, coordinated by **Agent Zero** as the primary orchestrator. Services communicate via **REST APIs**, **NATS pub/sub messaging**, **MCP (Model Context Protocol)**, and **webhooks**.
+PMOVES is a **distributed multi-agent orchestration mesh** for autonomous self-improvement, research, and complex software engineering. The system features 35+ microservices across 6 deployment profiles, coordinated by **Agent Zero** as the primary orchestrator. Services communicate via **REST APIs**, **NATS JetStream**, **Supabase Realtime websockets**, **MCP (Model Context Protocol)**, and **webhooks**. Recent integrations add Open Notebook for research capture, Wger and Firefly III for health/finance telemetry, and Jellyfin bridge services for media enrichment.
 
 **Current Milestone**: **M2 - Creator & Publishing** (Supabase → Agent Zero → Discord automation loop)
 
@@ -32,7 +32,7 @@ PMOVES is a **distributed multi-agent orchestration mesh** for autonomous self-i
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Layer 1: User Interface & Interaction                       │
-│  - Crush CLI, Codex VM, n8n UI, Retrieval-Eval Dashboard     │
+│  - Crush CLI, Codex VM, Open Notebook UI, domain apps (Firefly, Wger, Jellyfin) │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -42,12 +42,12 @@ PMOVES is a **distributed multi-agent orchestration mesh** for autonomous self-i
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  Layer 3: Processing & Analysis Workers                      │
-│  - Extract, LangExtract, Media Video/Audio, PMOVES.yt        │
+│  - Hi-RAG gateways, LangExtract, Media Video/Audio, PMOVES.yt│
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  Layer 4: Data & Persistence                                 │
-│  - Supabase, Qdrant, Neo4j, MinIO, MeiliSearch              │
+│  - Supabase + Realtime, Qdrant, Neo4j, MinIO, MeiliSearch    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -112,12 +112,23 @@ PMOVES is a **distributed multi-agent orchestration mesh** for autonomous self-i
 | **graph-linker** | - | Neo4j relationship management. Subscribes to `gen.image.result.v1`, `analysis.extract_topics.result.v1`, `kb.upsert.request.v1` | NATS sub, Neo4j Cypher |
 | **analysis-echo/** | - | Analysis service (purpose TBD - likely echoes analysis events for debugging) | NATS |
 | **pdf-ingest/** | - | PDF processing pipeline (extracts text → LangExtract) | Internal |
+| **notebook-sync** | 8095 | Polls Open Notebook SurrealDB API, normalises entries via LangExtract → Supabase, emits CGPs when research entries are ready. | REST, Supabase PostgREST |
+
+### External Integrations (Profile: `external`, pmoves-net add-ons)
+
+| Service | Port | Purpose | Communication |
+|---------|------|---------|---------------|
+| **open-notebook-ext** | 8503 (UI)<br>5056 (API) | Research workspace (Streamlit UI + SurrealDB API). Operators capture notes/assets that sync back into Supabase via notebook-sync. | HTTP (UI), REST API |
+| **pmoves-health-wger** | 8000 | Self-hosted Wger instance for workout metrics. n8n flows pull workouts → Supabase (`health_workouts`) → hi-rag geometry summaries. | REST, n8n webhooks |
+| **pmoves-firefly-iii** | 8081 (mapped to container 8080) | Finance host (Firefly III). n8n flows ingest transactions → Supabase (`finance_transactions`) → geometry summaries. | REST, Supabase service tokens |
+| **pmoves-open-notebook (internal)** | - | (See notebook-sync service) Connects pmoves stack to the external Open Notebook API for SurrealDB sync. | REST |
+| **jellyfin** (external media server) | 8096 | Upstream Jellyfin server powering media enrichment. `jellyfin-bridge` links library metadata into Supabase. | REST, WebSocket |
 
 ### Data Layer (Profile: `data`)
 
 | Service | Port | Purpose | Communication |
 |---------|------|---------|---------------|
-| **supabase** (CLI or compose) | 3000 (PostgREST)<br>5432 (Postgres)<br>54321 (Studio)<br>54323 (Inbucket)<br>8000 (Kong/API) | Unified database (Postgres + pgvector). GoTrue (auth), Realtime (WebSocket subscriptions), Storage (S3-compatible), Studio (UI) | PostgREST, Realtime WebSocket, S3 API |
+| **supabase** (CLI or compose) | 5432 (Postgres)<br>3000 (PostgREST)<br>54321 (REST/WS host)<br>54323 (GoTrue)<br>54324 (Storage)<br>8000 (Kong/API) | Unified database (Postgres + pgvector). Includes GoTrue auth, Storage, Studio, and **Realtime** websocket endpoints consumed by hi-rag gateways and n8n flows. Preferred local path: Supabase CLI `start --network-id pmoves-net`. | PostgREST, Realtime WebSocket, S3 API |
 | **qdrant** | 6333 | Vector database for embeddings (primary vector store for RAG) | gRPC, REST |
 | **neo4j** | 7474 (HTTP)<br>7687 (Bolt) | Knowledge graph (entities, relationships) | Cypher queries |
 | **minio** | 9000 (API)<br>9001 (Console) | S3-compatible object storage (videos, audio, images, ComfyUI artifacts) | S3 API |
@@ -138,6 +149,7 @@ Services are organized into **6 deployment profiles** (defined in `docker-compos
 | **agents** | nats, agent-zero, archon, mesh-agent | Agent coordination layer |
 | **gateway** | hi-rag-gateway-v2 (overlaps with `workers`) | Public-facing RAG endpoints |
 | **gpu** | media-video, media-audio, (optional: faster-whisper GPU) | GPU-accelerated analysis |
+| **external** | open-notebook-ext, pmoves-health-wger, pmoves-firefly-iii, pmoves-jellyfin | Domain integrations running on `pmoves-net` |
 
 ### Common Deployment Commands
 
@@ -156,10 +168,13 @@ make up-media
 make up-n8n
 
 # Full Supabase (CLI method - recommended)
-make supa-init && make supa-start && make supa-use-local
+make supa-init && make supa-start && make supa-use-local   # supa-start wraps `supabase start --network-id pmoves-net`
 
 # Compose-based Supabase (lightweight alternative)
 make up-compose && make supabase-up
+
+# External integrations (Firefly, Wger, Open Notebook, Jellyfin)
+make up-external     # starts pmoves-net integrations published to GHCR or local clones
 ```
 
 ---
@@ -409,7 +424,7 @@ n8n is labeled as the **"MCP Hub"** in `docs/PMOVES_Multi-Agent_System_Crush_CLI
 
 ### Supabase (Unified Database)
 
-**Deployment**: CLI (recommended) or Compose
+**Deployment**: Supabase CLI (recommended) or compose fallback. For CLI parity use `supabase start --network-id pmoves-net` so PostgREST and Realtime share the Docker network with PMOVES.
 
 **Services**:
 - **Postgres** (5432) - Primary database with pgvector extension
@@ -419,7 +434,7 @@ n8n is labeled as the **"MCP Hub"** in `docs/PMOVES_Multi-Agent_System_Crush_CLI
 - **Storage** - S3-compatible file storage (alternative to MinIO)
 - **Studio** (54321) - Web UI for data management
 
-**Key Tables** (from `db/v5_12_*.sql`):
+**Key Tables** (from `db/v5_12_*.sql` and `supabase/migrations/`):
 - `videos` - YouTube videos metadata (duration, channel, tags, s3_base_prefix)
 - `transcripts` - Whisper transcriptions (text, timestamps, language)
 - `studio_board` - Creator approval queue (status, content_url, meta.publish_event_sent_at)
@@ -428,6 +443,9 @@ n8n is labeled as the **"MCP Hub"** in `docs/PMOVES_Multi-Agent_System_Crush_CLI
 - `packs` - Knowledge packs (manifests, selectors, age/size limits)
 - `archon_prompts` - Archon system prompts
 - `geometry_cgp_packets` / `constellations` - Constellation Geometry Protocol data
+- `health_workouts` / `health_nutrition` - Wger ingests
+- `finance_transactions` / `finance_accounts` - Firefly III ingests
+- `notebook_entries` (Surreal sync staging) - Open Notebook snapshots forwarded by notebook-sync
 - `publisher_metrics_rollup` / `publisher_discord_metrics` - Publishing telemetry
 
 **RLS (Row-Level Security)**:
@@ -504,6 +522,12 @@ Event-driven coordination:
 
 - **Publishers**: comfy-watcher, publisher, media-video, media-audio, graph-linker
 - **Subscribers**: Agent Zero, Archon, graph-linker, publisher-discord
+
+### 3. Supabase Realtime (WebSocket)
+
+- **Hi-RAG Gateway v2 / v2-gpu**: Subscribes to `realtime:geometry.cgp.v1` for constellation updates and warms ShapeStore caches on startup.
+- **n8n**: Uses service-role keys to push finance/health payloads, triggering realtime events for downstream analytics.
+- **Archon** (planned): listens for knowledge pack changes to refresh MCP prompts.
 
 **Example Flow** (M2 Publishing):
 ```
