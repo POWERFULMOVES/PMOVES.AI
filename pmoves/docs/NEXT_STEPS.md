@@ -19,6 +19,9 @@ _Last updated: 2025-10-14_
 - [x] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
   - 2025-10-14: Agent Zero realtime listener (`python pmoves/tools/realtime_listener.py --topics content.published.v1 --max 1`) captured enriched payload, and `publisher-discord` delivered the Jellyfin-enriched embed to the mock webhook (see `docker logs mock-discord`).
 - [ ] Record step-by-step evidence in `SESSION_IMPLEMENTATION_PLAN.md` while executing the operational reminders list.
+- [ ] Health/Finance integrations (Wger + Firefly)
+  - Compose profiles, watcher sidecar, and helper scripts now live directly in `pmoves/compose/` and `pmoves/scripts/`. Use the
+    new `make integrations-*` targets and drop flow exports into `pmoves/integrations/**/n8n/flows/` to keep local n8n in sync.
 
 ### Using CHIT in Persona Prompts (New)
 - Reference constellations by ID in prompts and call Agent Zero MCP `geometry.jump` to fetch locators for deep links.

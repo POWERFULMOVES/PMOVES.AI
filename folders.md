@@ -37,6 +37,7 @@ PY
 ├── .gitattributes
 ├── .github/
 │   ├── CODEOWNERS
+│   ├── README-badge-snippet.md
 │   ├── copilot-instructions.md
 │   ├── pull_request_template.md
 │   └── workflows/
@@ -100,7 +101,11 @@ PY
 │   │   ├── custom_nodes/
 │   │   └── minio_loader.py
 │   ├── compose/
-│   │   └── agent-zero/
+│   │   ├── agent-zero/
+│   │   ├── docker-compose.core.yml
+│   │   ├── docker-compose.firefly.yml
+│   │   ├── docker-compose.flows-watcher.yml
+│   │   └── docker-compose.wger.yml
 │   ├── configs/
 │   │   └── agents/
 │   ├── contracts/
@@ -188,6 +193,12 @@ PY
 │   ├── libs/
 │   │   ├── langextract/
 │   │   └── providers/
+│   ├── integrations/
+│   │   ├── firefly-iii/
+│   │   │   └── n8n/
+│   │   ├── health-wger/
+│   │   │   └── n8n/
+│   │   └── pr-kits
 │   ├── n8n/
 │   │   └── flows/
 │   ├── neo4j/
@@ -217,6 +228,8 @@ PY
 │   │   ├── create_venv_min.sh
 │   │   ├── discord_ping.ps1
 │   │   ├── discord_ping.sh
+│   │   ├── n8n-flows-watcher.sh
+│   │   ├── n8n-import-flows.sh
 │   │   ├── env_check.ps1
 │   │   ├── env_check.sh
 │   │   ├── env_setup.ps1

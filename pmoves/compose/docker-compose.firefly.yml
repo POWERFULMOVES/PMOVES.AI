@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  firefly-db:
+    image: mariadb:10.11
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: firefly
+      MYSQL_USER: firefly
+      MYSQL_PASSWORD: ${FIREFLY_DB_PASSWORD:-fireflypass}
+    volumes:
+      - firefly-db:/var/lib/mysql
+    networks: [pmoves]
+    profiles: ["firefly"]
+
+  firefly:
+    image: fireflyiii/core:latest
+    depends_on: [firefly-db]
+    environment:
+      APP_KEY: ${FIREFLY_APP_KEY:-base64:CHANGE_ME}
+      TZ: ${TZ:-UTC}
+      DB_CONNECTION: mysql
+      DB_HOST: firefly-db
+      DB_PORT: 3306
+      DB_DATABASE: firefly
+      DB_USERNAME: firefly
+      DB_PASSWORD: ${FIREFLY_DB_PASSWORD:-fireflypass}
+      TRUSTED_PROXIES: "*"
+    ports:
+      - "8080:8080"
+    networks: [pmoves]
+    profiles: ["firefly"]
+
+volumes:
+  firefly-db:
