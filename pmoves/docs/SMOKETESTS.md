@@ -29,7 +29,7 @@ This guide covers preflight wiring, starting the core stack, and running the loc
 3. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.
 
 ## 2) Preflight (Recommended)
-- Cross‑platform: `make flight-check`
+- Cross‑platform: `make flight-check` (checks Docker, Supabase CLI + Realtime websocket, external integration env, and geometry migrations)
 - Windows direct script: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1`
 
 This checks tool availability, common ports, `.env` keys vs `.env.example`, and validates `contracts/topics.json`.
@@ -219,6 +219,53 @@ What the smoke covers now (12 checks):
 4. Open the page in a second browser window; both connect to `public` room. Use Share Shape to send a `shape-hello` on the DataChannel.
 5. Click “Send Current CGP” to share the last geometry over the DataChannel; add a passphrase to sign the CGP capsule.
 6. Toggle “Encrypt anchors” and set a passphrase to AES‑GCM encrypt constellation anchors client‑side before sending; the receiving gateway can decrypt if `CHIT_DECRYPT_ANCHORS=true`.
+
+## 8) Health/Finance → CGP Demo (New)
+
+Use the mapper helper to turn summary events into CGPs and post them to the gateway.
+
+1. Ensure the v2 gateway is running on `:8086` or set `HIRAG_URL` to `http://localhost:8087` for GPU.
+2. Health weekly summary:
+   ```bash
+   make -C pmoves demo-health-cgp
+   ```
+   Expected: HTTP 200 from `/geometry/event`. Open the geometry UI and look for constellations `health.adh.*` and `health.load.*`.
+3. Finance monthly summary:
+   ```bash
+   make -C pmoves demo-finance-cgp
+   ```
+   Expected: HTTP 200 and constellations per category (e.g., `fin.Housing.<YYYY-MM>`). Use jump/labels to inspect spectra.
+
+### 8.1) n8n Webhook Variant (real data)
+
+1. Start n8n: `make -C pmoves up-n8n`
+2. Import flows (already in repo):
+   - `pmoves/n8n/flows/health_weekly_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/finance_monthly_to_cgp.webhook.json`
+   Use the n8n UI or Public API (`/api/v1/workflows`) with `X-N8N-API-KEY`.
+3. Activate both flows in the UI (toggle Active). Production webhooks register only when the workflow is active.
+4. Trigger:
+   - Health: `curl -X POST http://localhost:5678/webhook/health-cgp -H 'content-type: application/json' -d '{}'`
+   - Finance: `curl -X POST http://localhost:5678/webhook/finance-cgp -H 'content-type: application/json' -d '{}'`
+5. Expect: `{"ok":true}` from the flow and `{"ok":true}` from `/geometry/event`. Verify persistence via PostgREST as above.
+
+### Optional: Persist CGPs to Postgres
+
+Enable gateway persistence and verify rows via PostgREST:
+
+1. Set env for `hi-rag-gateway-v2` and recreate:
+   ```bash
+   export CHIT_PERSIST_DB=true \
+     PGHOST=postgrest PGUSER=postgres PGPASSWORD=postgres PGDATABASE=postgres
+   make -C pmoves recreate-v2
+   ```
+2. Re-run the demo mappers (steps above).
+3. Verify tables via PostgREST:
+   ```bash
+   curl -s "http://localhost:3000/constellations?order=created_at.desc&limit=5" | jq '.[].summary'
+   curl -s "http://localhost:3000/shape_points?order=created_at.desc&limit=5" | jq '.[].id'
+   ```
+### Quick DB smoke (Supabase)
 
 ### Quick DB smoke (Supabase)
  - `make smoke-geometry-db` — verifies the seeded demo constellation is reachable via PostgREST (`constellations`, `shape_points`, and `shape_index`). Ensure `SUPABASE_REST_URL` or `SUPA_REST_URL` is exported; defaults to `http://localhost:3000`.

@@ -20,6 +20,12 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - [Archon Updates for PMOVES](pmoves/docs/archonupdateforpmoves.md) – What changed in the October 2025 Archon bundle, how to wire the Supabase CLI stack, and the MCP/NATS expectations.
 - [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) – Command catalog for starting, stopping, and tailoring compose profiles (core data plane, media analyzers, Supabase modes, and agent bundles).
 
+**Creator pipeline references**
+- [WAN Animate 2.2 Tutorial](pmoves/docs/PMOVES.AI%20PLANS/PMOVES%20ART%20STUFF/wan_animate_2.2_tutorial.md) – Animated install/workflow guide for the WAN image-to-video stack (one-click installer, manual setup, RunPod notes).
+- [Qwen Image Edit+ Tutorial](pmoves/docs/PMOVES.AI%20PLANS/PMOVES%20ART%20STUFF/qwen_image_edit_plus_tutorial.md) – Step-by-step ComfyUI workflow for advanced image edits.
+- [VibeVoice TTS Tutorial](pmoves/docs/PMOVES.AI%20PLANS/PMOVES%20ART%20STUFF/vibevoice_tts_tutorial.md) – Voice cloning / TTS configuration for media outputs.
+- [WAN Animate Installation Scripts](pmoves/docs/PMOVES.AI%20PLANS/PMOVES%20ART%20STUFF/waninstall%20guide.md) – Reference for the animated installer bundle referenced in creative smokes.
+
 ### Initial Setup & Tooling Flow
 1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, copy `.env`, and populate secrets. The `make bootstrap` helper orchestrates Supabase CLI keys, Discord/Jellyfin API tokens, and local storage buckets.
 2. **Supabase realtime alignment** – Follow the [Supabase Service Guide](pmoves/docs/services/supabase/README.md) to start the CLI stack with `supabase start --network-id pmoves-net` and mirror the websocket endpoint (`SUPABASE_REALTIME_URL=ws://host.docker.internal:54321/realtime/v1`). This matches our self-hosted Supabase deployments.

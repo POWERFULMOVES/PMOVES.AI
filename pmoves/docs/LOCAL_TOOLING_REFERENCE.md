@@ -17,7 +17,11 @@ This guide aggregates the entry points that keep local environments consistent a
 - `make notebook-up` → launches the optional Open Notebook research workspace (Streamlit UI on 8502, REST API on 5055). Pair with `make notebook-logs` for tailing output and `make notebook-down` to stop it without removing data under `pmoves/data/open-notebook/`.
 - `make up-agents` → launches NATS, Agent Zero, Archon, Mesh Agent, and the Discord publisher. Run `make up-nats` first if `NATS_URL` is not configured.
 - `make ps`, `make down`, `make clean` → quick status, stop, and tear-down helpers pinned to the `pmoves` compose project.
-- `make flight-check` / `make flight-check-retro` → fast readiness sweep (Docker, env vars, contracts) via `tools/flightcheck/retro_flightcheck.py`.
+- `make flight-check` / `make flight-check-retro` → fast readiness sweep (Docker, env vars, contracts) via `tools/flightcheck/retro_flightcheck.py`. The checklist now verifies:
+  - Supabase CLI stack (PostgREST + **Realtime**) reachable on `pmoves-net`
+  - External integration env (`WGER_API_TOKEN`, `FIREFLY_ACCESS_TOKEN`, Open Notebook tokens)
+  - Geometry assets (`supabase/migrations/2025-10-20_geometry_cgp_views.sql` applied) and hi-rag gateway ports
+  - Optional bundles (Open Notebook bind mounts, Jellyfin bridge) with actionable warnings
 - Windows without GNU Make: `scripts/pmoves.ps1` replicates the same targets (`./scripts/pmoves.ps1 up`, `./scripts/pmoves.ps1 smoke`, etc.).
 
 ## Supabase Workflows
