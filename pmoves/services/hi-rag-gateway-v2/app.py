@@ -54,7 +54,13 @@ SUPABASE_SERVICE_KEY = (
     or os.environ.get("SUPABASE_KEY")
 )
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
-SUPABASE_REALTIME_URL = os.environ.get("SUPABASE_REALTIME_URL") or os.environ.get("REALTIME_URL")
+SUPABASE_REALTIME_URL = (
+    os.environ.get("SUPABASE_REALTIME_URL")
+    or os.environ.get("REALTIME_URL")
+    or ""
+).strip()
+if SUPABASE_REALTIME_URL.lower() in {"", "disabled", "none"}:
+    SUPABASE_REALTIME_URL = ""
 SUPABASE_REALTIME_KEY = (
     os.environ.get("SUPABASE_REALTIME_KEY")
     or os.environ.get("REALTIME_ANON_KEY")
@@ -183,6 +189,11 @@ def refresh_warm_dictionary():
     try:
         tmp: Dict[str, set] = {}
         with driver.session() as s:
+            count_result = s.run("MATCH (e:Entity) RETURN count(e) AS cnt").single()
+            if not count_result or not count_result["cnt"]:
+                _warm_entities = {}
+                _warm_last = time.time()
+                return
             recs = s.run("MATCH (e:Entity) RETURN e.value AS v, CASE WHEN e.type IS NOT NULL THEN e.type ELSE 'UNK' END AS t LIMIT $lim",
                          lim=NEO4J_DICT_LIMIT)
             for r in recs:
@@ -339,7 +350,11 @@ def _derive_realtime_url() -> Optional[str]:
         return None
     rest = (rest_base or "").rstrip("/")
     if "postgrest" in rest or rest.endswith(":3000"):
-        return "ws://realtime:4000/socket/websocket"
+        candidate = "ws://realtime:4000/socket/websocket"
+        if _hostname_resolves(candidate):
+            return candidate
+        logger.info("Supabase realtime service not available on docker network; skipping subscription")
+        return None
     base = rest
     if base.endswith("/rest/v1"):
         base = base[: -len("/rest/v1")]

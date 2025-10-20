@@ -10,6 +10,7 @@ This working session establishes the concrete implementation tasks needed to clo
 - Exported `.env` / `.env.local` into the shell before `make -C pmoves up-n8n` so n8n receives `FIREFLY_ACCESS_TOKEN`; corrected `SUPA_REST_URL`/`SUPA_REST_INTERNAL_URL` to `http://postgrest:3000` for container-side PostgREST access.
 - Smoked both CGP webhooks with live services (`curl .../finance-cgp`, `curl .../health-cgp`), each returning HTTP 200/`{"ok":true}`; n8n logs show workflows `WGv0I8DCToM57RiM` and `uGO4nwVLZ4A8m4um` finishing successfully.
 - Evidence: `pmoves/docs/logs/2025-10-20_external_integrations.txt`.
+- Added PostgREST helper views (`geometry_cgp_packets`, `geometry_cgp_v1`) plus realtime skip guard so hi-rag v2 warmups run cleanly without Realtime in the stack; Neo4j dictionary refresh now short-circuits when the graph is empty.
 
 ## Session Log (2025-10-19)
 
