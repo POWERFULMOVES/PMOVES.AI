@@ -49,7 +49,7 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - `pmoves/services/n8n/` — Workflow orchestrator; health/finance webhooks emit CGPs via hi-rag v2.
 
 **External integrations (pmoves-net)**
-- `pmoves/services/open-notebook/` (doc lives in `pmoves/docs/services/open-notebook/`) — Streamlit UI + SurrealDB API (UI default `:8503`, API default `:5055`, override with `OPEN_NOTEBOOK_*_PORT`) mounted via `make up-open-notebook` for research assets and MCP notebooks.
+- `pmoves/services/open-notebook/` (doc lives in `pmoves/docs/services/open-notebook/`) — Streamlit UI + SurrealDB API (container ports 8502/5055 per upstream; host defaults map to `:8503` UI and `:5055` API, override with `OPEN_NOTEBOOK_*_PORT`) mounted via `make up-open-notebook` for research assets and MCP notebooks.
 - `pmoves/services/wger/` — Health metrics ingest (paired with Supabase tables + `health.weekly.summary.v1` CGPs).
 - `pmoves/services/firefly-iii/` — Personal finance ingest; finance flows create `finance.monthly.summary.v1` CGPs.
 - `pmoves/services/jellyfin-bridge/` + `pmoves/docs/services/jellyfin-ai/` — Media sync bridging Jellyfin metadata into Supabase + Discord publisher.

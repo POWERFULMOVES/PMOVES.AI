@@ -12,6 +12,7 @@ Compose
   - UI `${OPEN_NOTEBOOK_UI_PORT:-8503}:8502`
   - API `${OPEN_NOTEBOOK_API_PORT:-5055}:5055`
 - Network: external `pmoves-net` (shared with the main stack)
+- Upstream defaults (per the Open Notebook README, Oct 20 2025) expose the Streamlit/Next.js UI on container port **8502** and the FastAPI backend on **5055**. We map the host UI port to **8503** by default to avoid clashes with other PMOVES services; override the host binding via `.env.local` if you prefer the upstream 8502.
 
 Make targets
 - `make up-open-notebook` — bring up ON on `pmoves-net` (UI http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})
@@ -34,3 +35,4 @@ Troubleshooting
 Notes
 - ON is optional and does not participate in core smokes.
 - Data stores live under `pmoves/data/open-notebook/`; remove the SQLite or SurrealDB files there if you want a clean reset.
+- The bundled image runs the frontend with `next start`, which logs a warning for `output: standalone`. Upstream mirrors this behaviour; if you need a silent boot, replace the command with `node .next/standalone/server.js` in a custom supervisor override.
