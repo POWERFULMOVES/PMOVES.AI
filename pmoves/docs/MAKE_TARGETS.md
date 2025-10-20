@@ -82,3 +82,10 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
 - Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE`, `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.
+
+## Integrations Compose (local dev)
+- `make integrations-up-core` – start the n8n automation stack with integrations-ready configuration.
+- `make integrations-up-wger` / `make integrations-up-firefly` – layer Wger or Firefly profiles on top of the core stack.
+- `make integrations-up-all` – bring up n8n, both integrations, and the flows watcher sidecar for live JSON imports.
+- `make integrations-import-flows` – run the REST helper once to import all JSON from `pmoves/integrations/**/n8n/flows`.
+- `make integrations-logs` / `make integrations-down` – tail logs or tear the stack down (volumes removed on down).

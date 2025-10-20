@@ -2,25 +2,25 @@
 _Last updated: 2025-10-14_
 
 ## Overview
-- The `pmoves-integrations-pr-pack` contributes Compose profiles for Firefly III and Wger along with helper scripts, but the pack is not yet wired into the main PMOVES stack (`docker-compose.core.yml` referenced by the pack is absent in-repo).
-- Both integrations depend on placeholder secrets and local-only defaults, so additional configuration is required before they can be promoted beyond exploratory use.
-- Automation helpers expect n8n flow exports under `integrations/health-wger` and `integrations/firefly-iii`, yet those directories are not bundled in the repository, leaving the watcher and import scripts with no payloads to process.
+- Compose profiles for Firefly III, Wger, and the flows watcher are now checked into `pmoves/compose/` alongside the n8n core stack (`docker-compose.core.yml`). Helper scripts live under `pmoves/scripts/` and the Makefile exposes `integrations-*` targets.
+- Local secrets still ship with placeholder defaults—operators must override database passwords and app keys before enabling the stacks outside a dev environment.
+- Automation helpers mount `pmoves/integrations/health-wger/n8n/flows/` and `pmoves/integrations/firefly-iii/n8n/flows/`; the repository includes README stubs and `.gitkeep` files so the watcher starts with empty directories instead of missing mounts.【F:pmoves/integrations/health-wger/n8n/flows/.gitkeep†L1-L1】【F:pmoves/integrations/firefly-iii/n8n/flows/.gitkeep†L1-L1】
 
 ## Firefly III profile
-- `docker-compose.firefly.yml` defines a MariaDB-backed Firefly III stack exposed on `8080/tcp` with a dedicated volume for the database and a `firefly` compose profile for opt-in startup.【F:pmoves/pmoves-integrations-pr-pack/compose/docker-compose.firefly.yml†L1-L35】
-- Secrets require operator action: `FIREFLY_APP_KEY` ships with a placeholder (`base64:CHANGE_ME`), and database credentials fall back to weak defaults unless overridden.【F:pmoves/pmoves-integrations-pr-pack/compose/docker-compose.firefly.yml†L16-L28】
-- No PMOVES services currently reference the Firefly endpoints, so once the container is running it remains an isolated personal finance instance pending API or event-bridge work.
+- `pmoves/compose/docker-compose.firefly.yml` defines a MariaDB-backed Firefly III stack exposed on `8080/tcp` with a dedicated volume for the database and a `firefly` compose profile for opt-in startup.【F:pmoves/compose/docker-compose.firefly.yml†L1-L32】
+- Secrets require operator action: `FIREFLY_APP_KEY` ships with a placeholder (`base64:CHANGE_ME`), and database credentials fall back to weak defaults unless overridden.【F:pmoves/compose/docker-compose.firefly.yml†L16-L28】
+- The integrations Make targets do not yet wire Firefly into downstream services; use the n8n flows to sync data into Supabase.
 
 ## Wger profile
-- `docker-compose.wger.yml` provisions a Postgres 15 database plus the upstream `wger/wger` image behind the `wger` compose profile and binds the UI to `8000/tcp`.【F:pmoves/pmoves-integrations-pr-pack/compose/docker-compose.wger.yml†L1-L29】
-- Similar to Firefly, it defaults to development-grade credentials (`wgerpass`, `changeme`) that must be replaced, and there is no linkage into PMOVES event streams or Supabase sync jobs yet.【F:pmoves/pmoves-integrations-pr-pack/compose/docker-compose.wger.yml†L15-L23】
+- `pmoves/compose/docker-compose.wger.yml` provisions a Postgres 15 database plus the upstream `wger/wger` image behind the `wger` compose profile and binds the UI to `8000/tcp`.【F:pmoves/compose/docker-compose.wger.yml†L1-L27】
+- Similar to Firefly, it defaults to development-grade credentials (`wgerpass`, `changeme`) that must be replaced, and there is no linkage into PMOVES event streams or Supabase sync jobs yet.
 
 ## n8n automation helpers
-- The optional flows watcher sidecar mounts helper scripts plus two integration-specific flow directories, assumes a healthy `n8n` service, and runs `n8n-flows-watcher.sh` to auto-import JSON updates.【F:pmoves/pmoves-integrations-pr-pack/compose/docker-compose.flows-watcher.yml†L4-L21】
-- The import and watcher scripts target `/opt/flows/health-wger` and `/opt/flows/firefly-iii`, but the repository tree only contains `compose/` and `scripts/` under the pack—no `integrations/**` payload directories—so the watcher would start empty and the import script would no-op until those assets are provided.【F:pmoves/pmoves-integrations-pr-pack/scripts/n8n-import-flows.sh†L8-L32】【F:pmoves/pmoves-integrations-pr-pack/scripts/n8n-flows-watcher.sh†L8-L43】【5d93c6†L1-L3】
+- The optional flows watcher sidecar mounts helper scripts plus two integration-specific flow directories, assumes a healthy `n8n` service, and runs `n8n-flows-watcher.sh` to auto-import JSON updates.【F:pmoves/compose/docker-compose.flows-watcher.yml†L4-L21】【F:pmoves/scripts/n8n-flows-watcher.sh†L1-L43】
+- The repository now ships empty flow directories (`pmoves/integrations/health-wger/n8n/flows/`, `pmoves/integrations/firefly-iii/n8n/flows/`) with README guidance so teams can drop JSON exports without scaffolding the paths first.【F:pmoves/integrations/health-wger/README.md†L1-L5】【F:pmoves/integrations/firefly-iii/README.md†L1-L5】
 
 ## Open gaps & next steps
-1. **Bundle the core Compose base** referenced by the pack or update the Makefile instructions so operators know which file to pair with the Firefly/Wger profiles.【F:pmoves/pmoves-integrations-pr-pack/Makefile†L1-L21】
-2. **Check in the n8n flow exports** (or document where to source them) so the watcher/import scripts have actionable content.
+1. **Document the watcher workflow** – add a short guide on enabling the watcher profile and verifying imports (partially covered here; expand in `pmoves/docs/N8N_CHECKLIST.md`).
+2. **Check in canonical n8n flow exports** or link to authoritative sources so the directories populate with working examples.
 3. **Harden credentials** by documenting required overrides for secrets and recommending non-default passwords before enabling either integration in shared environments.
 4. **Plan data synchronization** into PMOVES (webhooks, ETL jobs, or API bridges) so Firefly and Wger data becomes available to Agent Zero or downstream automations.

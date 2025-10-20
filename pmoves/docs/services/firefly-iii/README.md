@@ -14,11 +14,8 @@ Overview
   - CHIT decoder/specs: `../../PMOVESCHIT/PMOVESCHIT_DECODERv0.1.md`
 
 Deployment
-- Reference bundle: `pmoves/docs/PMOVES.AI PLANS/WGER - Firefly iii compose -integrations/`
-- Quick start (with Wger + Firefly):
-```
-make -C "pmoves/docs/PMOVES.AI PLANS/WGER - Firefly iii compose -integrations" up
-```
+- Local compose: use `make integrations-up-firefly` for Firefly only or `make integrations-up-all` for Firefly + Wger + watcher.
+- Flows live under `pmoves/integrations/firefly-iii/n8n/flows/`; drop exported JSON there for auto-imports when the watcher is running.
 
 Networking/Ports
 - Default Firefly web: `8080` (as defined in the compose bundle)
@@ -31,9 +28,8 @@ API/Contracts
 - Endpoints of interest: `/api/v1/transactions`, `/api/v1/accounts`, `/api/v1/budgets`.
 - Auth via `Authorization: Bearer <token>` header.
 
-Runbook
 - Store `FIREFLY_ACCESS_TOKEN` in PMOVES secrets.
-- n8n flow polls Firefly transactions, normalizes categories, writes to Supabase.
+- n8n flows in `pmoves/integrations/firefly-iii/n8n/flows/` poll Firefly transactions, normalize categories, and write to Supabase.
 
 Smoke
 ```
@@ -65,7 +61,7 @@ Integration Review (PMOVES)
 - Agents: Budget coach persona or dashboard generator consuming normalized tables.
 
 Related Plans/Docs
-- Compose bundle and scripts: `PMOVES.AI PLANS/WGER - Firefly iii compose -integrations/`
+- Compose profiles and automation scripts now live directly under `pmoves/compose/` and `pmoves/scripts/` (see `docker-compose.firefly.yml`, `docker-compose.flows-watcher.yml`, and `scripts/n8n-*.sh`).
 
 Next Steps — CHIT
 - Define `finance.monthly.summary.v1` events and a mapper to CGPs (anchors: categories; spectrum: budget variance; points: transactions or buckets). Render summaries in geometry UI and surface anomalies to agents.

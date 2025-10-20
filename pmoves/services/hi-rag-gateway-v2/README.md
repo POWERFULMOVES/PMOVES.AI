@@ -28,6 +28,30 @@ FastAPI service providing retrieval and CHIT geometry endpoints.
   - `CHIT_REQUIRE_SIGNATURE`, `CHIT_PASSPHRASE`, `CHIT_DECRYPT_ANCHORS`
   - `CHIT_DECODE_TEXT|IMAGE|AUDIO`, `CHIT_T5_MODEL`, `CHIT_CLIP_MODEL`, `CHIT_CODEBOOK_PATH`
   - `CHIT_PERSIST_DB` with `PG*` vars to persist CGP into Postgres
+  - `GAN_SIDECAR_ENABLED` to activate the geometry swarm checker
+
+## GAN Sidecar / Swarm Mode
+
+The GAN sidecar (defined in `sidecars/gan_checker.py`) re-ranks geometry
+decodes with a blend of rule-based checks and a lightweight logistic model.
+When enabled, callers can set `"mode": "swarm"` on the decode endpoints to
+route candidates through the checker.
+
+- `POST /geometry/decode/text` — returns `selected`, all `candidates`, and a
+  telemetry block summarising scores, edits, and decisions.
+- `POST /geometry/decode/image` / `audio` — when `mode="swarm"`, the ranked
+  outputs include a `swarm` object with the same telemetry contract. Provide
+  optional `captions` (map of URL/path → description) to improve critiques.
+
+Key request knobs:
+
+- `accept_threshold` (float, default `0.55`) — minimum combined score required
+  before the sidecar accepts a candidate.
+- `max_edits` (int, default `1` for text / `0` for media) — number of light
+  format/safety edits the sidecar can apply before escalating.
+
+When the feature flag is **disabled**, the API still returns the telemetry
+structure with `decision: "bypassed"` so clients can observe rollout status.
 
 ## Quick Examples
 ```bash

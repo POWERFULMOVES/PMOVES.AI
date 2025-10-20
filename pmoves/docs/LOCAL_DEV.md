@@ -28,6 +28,14 @@ External bundles (via `make up-external`):
 - Open Notebook UI/API: 8503 / 5055 (override with `OPEN_NOTEBOOK_UI_PORT` / `OPEN_NOTEBOOK_API_PORT`)
 - Jellyfin: 8096 (media server; run `make jellyfin-folders` to create `pmoves/data/jellyfin/` before first launch)
 
+Integrations compose profiles (local containers + n8n automation):
+- `make integrations-up-core` brings up n8n with the integrations-ready configuration.
+- `make integrations-up-wger` / `make integrations-up-firefly` add the corresponding Postgres/MariaDB stacks.
+- `make integrations-up-all` starts n8n, both integrations, and the optional flows watcher sidecar that auto-imports JSON under
+  `pmoves/integrations/**/n8n/flows`.
+- `make integrations-import-flows` runs the REST helper script once if you prefer manual imports.
+- Stop everything with `make integrations-down` (removes volumes) and tail n8n logs via `make integrations-logs`.
+
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
 ## Environment

@@ -143,12 +143,28 @@ class EvoSwarmController:
             return False
         base_url = self.config.rest_url.rstrip("/")
         url = f"{base_url}/geometry_parameter_packs"
-        headers = {"Accept": "application/json", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"}
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation,resolution=merge-duplicates",
+        }
         if self.config.service_key:
             headers.update({"apikey": self.config.service_key, "Authorization": f"Bearer {self.config.service_key}"})
         try:
             resp = await self._client.post(url, headers=headers, json=[pack])
             resp.raise_for_status()
+            record: Optional[Dict[str, Any]] = None
+            try:
+                payload = resp.json()
+            except ValueError:
+                payload = None
+            if isinstance(payload, list) and payload:
+                maybe_record = payload[0]
+                record = maybe_record if isinstance(maybe_record, dict) else None
+            elif isinstance(payload, dict):
+                record = payload
+            if record:
+                pack.update(record)
             return True
         except httpx.HTTPStatusError as exc:  # pragma: no cover
             logger.error("pack upsert failed: %s", exc)

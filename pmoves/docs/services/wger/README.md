@@ -19,19 +19,23 @@ working.
 
 ### Bring up Wger with static assets
 
-```bash
-DOCKER_CONFIG=$PWD/.docker-nocreds \
-  docker compose -p pmoves -f docker-compose.external.yml up -d wger wger-nginx
-```
+- Local compose (development): `make integrations-up-wger` starts Postgres + Wger in the new integrations stack. Use
+  `make integrations-up-all` if you also want Firefly and the n8n flows watcher online.
+- Legacy external bundle: keep `docker-compose.external.yml` around if you need the nginx proxy variant or published images. Run
+  `DOCKER_CONFIG=$PWD/.docker-nocreds docker compose -p pmoves -f docker-compose.external.yml up -d wger wger-nginx`.
 
 Collectstatic runs automatically during the Django bootstrap path. If you need to refresh the
 artefacts (for example, after an upstream theme update) recreate the containers or run
-`docker compose ... up -d --force-recreate wger`.
+`make integrations-down && make integrations-up-wger` (or rerun the external compose command).
 
-### Verifying the proxy
+### Verifying the proxy / API
 
-- `curl -I http://localhost:8000` should return a `302` redirect with `Server: nginx`.
-- `curl -I http://localhost:8000/static/images/logos/logo-font.svg` must respond `200`.
+- With the nginx bundle: `curl -I http://localhost:8000` should return a `302` redirect with `Server: nginx` and the static asset check should return `200`.
+- With the integrations stack: the Django service is exposed directly on `http://localhost:8000`; use `/api/v2/` to verify the REST API (`curl -s http://localhost:8000/api/v2/ | jq`).
 
 If either check fails, inspect the proxy logs with `docker logs pmoves-wger-nginx` and confirm that
 `pmoves-wger` finished its bootstrap (look for `static files copied` in the Django logs).
+
+### n8n automation assets
+
+- Workflow exports are stored under `pmoves/integrations/health-wger/n8n/flows/`. Drop JSON files there and start the watcher with `make integrations-up-all` (or run `make integrations-import-flows` once) to sync them into n8n.
