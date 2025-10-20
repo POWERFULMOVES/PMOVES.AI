@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  wger:
+    image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:main}
+    container_name: pmoves-wger
+    restart: unless-stopped
+    networks: [pmoves]
+    environment:
+      - DEBUG=false
+    ports:
+      - "8000:8000"
+
+  firefly:
+    image: ${FIREFLY_IMAGE:-fireflyiii/core:latest}
+    container_name: pmoves-firefly
+    restart: unless-stopped
+    networks: [pmoves]
+    environment:
+      APP_KEY: ${FIREFLY_APP_KEY:-SomeRandomStringOf32CharsExactly}
+      APP_ENV: ${FIREFLY_APP_ENV:-production}
+      SITE_OWNER: ${FIREFLY_SITE_OWNER:-ops@pmoves.ai}
+      DB_CONNECTION: ${FIREFLY_DB_CONNECTION:-sqlite}
+      DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
+      TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
+      TZ: ${FIREFLY_TZ:-America/New_York}
+    ports:
+      - "${FIREFLY_PORT:-8080}:8080"
+    volumes:
+      - firefly-storage:/var/www/html/storage
+
+  open-notebook-ext:
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:main}
+    container_name: pmoves-open-notebook
+    restart: unless-stopped
+    networks: [pmoves]
+    ports:
+      - "8503:8502"  # UI
+      - "5056:5055"  # API
+
+  jellyfin-ext:
+    image: ${JELLYFIN_IMAGE:-jellyfin/jellyfin:latest}
+    container_name: pmoves-jellyfin
+    restart: unless-stopped
+    networks: [pmoves]
+    ports:
+      - "8096:8096"
+
+networks:
+  pmoves:
+    external: true
+    name: pmoves-net
+
+volumes:
+  firefly-storage:

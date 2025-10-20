@@ -1,8 +1,15 @@
 # M2 Automation Kickoff & Roadmap Prep Plan
 Note: For cross-references, see pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-09-30_
+_Last updated: 2025-10-20_
 
 This working session establishes the concrete implementation tasks needed to close Milestone M2 while warming up broader roadmap threads for Milestones M3–M5. It consolidates the operational reminders from the sprint brief and ties each step to the canonical checklists in `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`, `pmoves/docs/NEXT_STEPS.md`, and `pmoves/docs/ROADMAP.md`.
+
+## Session Log (2025-10-20)
+
+- Regenerated Firefly Laravel key (`FIREFLY_APP_KEY`) and replayed `make -C pmoves up-external-firefly` to confirm SQLite migrations + 302 health redirect on port 8081.
+- Exported `.env` / `.env.local` into the shell before `make -C pmoves up-n8n` so n8n receives `FIREFLY_ACCESS_TOKEN`; corrected `SUPA_REST_URL`/`SUPA_REST_INTERNAL_URL` to `http://postgrest:3000` for container-side PostgREST access.
+- Smoked both CGP webhooks with live services (`curl .../finance-cgp`, `curl .../health-cgp`), each returning HTTP 200/`{"ok":true}`; n8n logs show workflows `WGv0I8DCToM57RiM` and `uGO4nwVLZ4A8m4um` finishing successfully.
+- Evidence: `pmoves/docs/logs/2025-10-20_external_integrations.txt`.
 
 ## Session Log (2025-10-19)
 
