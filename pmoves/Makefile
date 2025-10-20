@@ -899,8 +899,8 @@ web-geometry:
 .PHONY: discord-smoke
 discord-smoke:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
-	@echo "[Discord] Health" && curl -sf http://localhost:8092/healthz | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[Discord] Publish test" && curl -sS -X POST http://localhost:8092/publish -H 'content-type: application/json' -d '{"content":"PMOVES test ping"}' | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[Discord] Health" && curl -sf http://localhost:8094/healthz | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[Discord] Publish test" && curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' -d '{"content":"PMOVES test ping"}' | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
 
 .PHONY: jellyfin-smoke
 jellyfin-smoke:
