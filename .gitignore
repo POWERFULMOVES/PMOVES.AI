@@ -23,6 +23,7 @@ Thumbs.db
 # Logs
 *.log
 /pmoves/data/agent-zero/logs/log_*.html
+/pmoves/data/consciousness/
 
 # Local data caches (safety)
 *.tmp

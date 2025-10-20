@@ -19,9 +19,12 @@ All paths below are relative to the repository root.
 ## 1. Harvest Static Assets
 Generate the base directory structure and download static research artifacts.
 
-```powershell
-pwsh -File pmoves/docs/PMOVES.AI PLANS/consciousness_downloader.ps1
+```bash
+bash "pmoves/docs/PMOVES.AI PLANS/consciousness_downloader.sh"
 ```
+
+> Windows/PowerShell users can run the companion script:
+> `pwsh -File pmoves/docs/PMOVES.AI PLANS/consciousness_downloader.ps1`
 
 Outputs land under `pmoves/data/consciousness/Constellation-Harvest-Regularization/`:
 - `website-mirror/`, `theories/`, `categories/`, `subcategories/`

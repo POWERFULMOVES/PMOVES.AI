@@ -21,12 +21,18 @@ Optional services:
 ---
 
 ## 1. Harvest the Dataset
+```bash
+bash "pmoves/docs/PMOVES.AI PLANS/consciousness_downloader.sh"
+```
+
 ```powershell
-pwsh -File pmoves/docs/PMOVES.AI PLANS/consciousness_downloader.ps1
 pwsh -File pmoves/data/consciousness/Constellation-Harvest-Regularization/scripts/selenium-scraper.ps1
 ```
 
 Outputs live in `pmoves/data/consciousness/Constellation-Harvest-Regularization/` and include static HTML snapshots, research papers, discovery manifests, and helper scripts.
+
+> Windows-only alternative for step 1:  
+> `pwsh -File pmoves/docs/PMOVES.AI PLANS/consciousness_downloader.ps1`
 
 ---
 
