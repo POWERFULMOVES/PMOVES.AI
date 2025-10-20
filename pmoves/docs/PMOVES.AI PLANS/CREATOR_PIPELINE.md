@@ -13,7 +13,7 @@ This doc shows the end‑to‑end creative flow from **ComfyUI** render to **Dis
 7. **Publisher** emits `content.published.v1`, posts **Discord embed**, and refreshes **Jellyfin** (optional).
 
 ## Prerequisites & Quick Validation
-Before running ComfyUI graphs that upload into this pipeline, confirm the local workstation has the GPU bundle, helper tools, and multimedia codecs expected by the automation scripts that ship with this repo.
+Before running ComfyUI graphs that upload into this pipeline, confirm the local workstation has the GPU bundle, helper tools, and multimedia codecs expected by the automation scripts that ship with this repo. Follow the [one-click bring-up flow](../../creator/README.md#one-click-bring-up-flow) first, then verify the dependencies below.
 
 | Dependency | Install Script | Key Notes | Validate |
 | --- | --- | --- | --- |

@@ -18,7 +18,7 @@ This guide streamlines importing and running the PMOVES approval and publish wor
 
 ## Environment (n8n)
 Set these in n8n (Settings → Variables) or via container env:
-- `SUPABASE_REST_URL` = `http://host.docker.internal:54321/rest/v1`
+- `SUPABASE_REST_URL` = `http://host.docker.internal:65421/rest/v1`
 - `SUPABASE_SERVICE_ROLE_KEY` = `<your service role key>`
 - `AGENT_ZERO_BASE_URL` = `http://agent-zero:8080`
 - `AGENT_ZERO_EVENTS_TOKEN` = `<optional>`
@@ -26,6 +26,8 @@ Set these in n8n (Settings → Variables) or via container env:
 - `DISCORD_WEBHOOK_USERNAME` = `PMOVES Publisher`
 - `N8N_RUNNERS_AUTH_TOKEN` = `<shared secret – must match the sidecar>`
 - `N8N_DEFAULT_TIMEZONE` = `America/New_York` (aligns cron schedules with project TZ)
+
+> **Supabase runtime note:** The CLI runtime binds REST on port `65421` per `supabase/config.toml`. If you switch back to the docker-compose PostgREST service, update `SUPABASE_REST_URL` accordingly (typically `http://host.docker.internal:54321/rest/v1`).
 
 Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Make target `make up-n8n`, populate `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, and `N8N_RUNNERS_AUTH_TOKEN` in `.env.local`. Rotate the runner token any time the sidecar logs authentication failures.
 
@@ -36,14 +38,18 @@ Note: n8n 1.115.3 already executes cron triggers in the main process. Avoid re-a
 - Run `make up-n8n` after pulling updates to rebuild the service when the Dockerfile changes.
 
 ## Import Workflows
-1. Open n8n → Workflows → Import from File
-2. Import the core flows:
+1. Open n8n → Workflows → Import from File.
+2. Import the core approvals stack:
    - `pmoves/n8n/flows/approval_poller.json`
    - `pmoves/n8n/flows/echo_publisher.json`
-3. Import the audio extensions:
+3. Import the creative webhooks (requires ComfyUI hosts prepared via [`pmoves/creator/README.md`](../creator/README.md)):
+   - `pmoves/n8n/flows/wan_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/qwen_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/vibevoice_to_cgp.webhook.json`
+4. (Optional) Import the audio enrichment flows:
    - `pmoves/n8n/flows/vibevoice_audio_ingest.json`
    - `pmoves/n8n/flows/vibevoice_discord_preview.json`
-4. Keep everything inactive until env is confirmed.
+5. Keep everything inactive until env is confirmed (Supabase keys, MinIO buckets, Discord webhooks).
 
 ## Validate Env Bindings
 - Approval Poller
@@ -106,6 +112,7 @@ These flows extend the core approval automations so we can surface RVC voice out
 - Discord no messages: verify `DISCORD_WEBHOOK_URL` and check rate limits in n8n logs.
 - n8n cannot reach host services on Linux: replace `host.docker.internal` with the host IP or Docker gateway (`172.17.0.1`).
 - Cron schedule idle: confirm `workflow_entity.staticData` populates after activation. If it stays `null`, the scheduler is not persisting its next run; double-check `N8N_DEFAULT_TIMEZONE` and inspect `wait-tracker` logs for scheduler errors.
+- Creative webhooks return 401/404: confirm you are POSTing to `http://localhost:5678/webhook/<workflowId>/webhook/<slug>` and that the ComfyUI workstation followed the one-click installer steps in [`pmoves/creator/README.md`](../creator/README.md) (MinIO creds, model downloads, FFmpeg for audio).
 
 ## Related
 - Playbook: `SUPABASE_DISCORD_AUTOMATION.md`
