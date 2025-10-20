@@ -1,5 +1,5 @@
 
-import os, time, math, json, logging, re, sys, contextlib, ipaddress
+import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
@@ -298,6 +298,7 @@ except Exception:
 # Geometry Bus: ShapeStore and CHIT flags
 try:
     from services.common.shape_store import ShapeStore
+    from services.common import geometry_params
     shape_store = ShapeStore(capacity=10_000)
     logging.getLogger("hirag.gateway.v2").info("ShapeStore initialized (v2)")
 except Exception as _e:
@@ -305,6 +306,207 @@ except Exception as _e:
     shape_store = None
 
 _geometry_realtime_task: Optional[asyncio.Task] = None
+_geometry_swarm_task: Optional[asyncio.Task] = None
+_geometry_swarm_stop: Optional[asyncio.Event] = None
+_geometry_swarm_nc = None
+
+_builder_pack_lock = threading.RLock()
+_active_builder_packs: Dict[tuple[str, str], Dict[str, Any]] = {}
+
+
+def _pack_key(namespace: str, modality: Optional[str]) -> tuple[str, str]:
+    ns = (namespace or "").strip().lower()
+    mod = (modality or "*").strip().lower() or "*"
+    return ns, mod
+
+
+def _set_active_builder_pack(namespace: str, modality: Optional[str], pack: Optional[Dict[str, Any]]) -> None:
+    if not namespace:
+        return
+    key = _pack_key(namespace, modality)
+    with _builder_pack_lock:
+        if pack is None:
+            _active_builder_packs.pop(key, None)
+        else:
+            _active_builder_packs[key] = copy.deepcopy(pack)
+    if shape_store is not None:
+        try:
+            shape_store.update_builder_pack(namespace, modality, pack)
+        except Exception:
+            logger.exception("Failed to propagate builder pack metadata to ShapeStore")
+
+
+def _get_active_builder_pack(namespace: str, modality: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not namespace:
+        return None
+    key = _pack_key(namespace, modality)
+    with _builder_pack_lock:
+        pack = _active_builder_packs.get(key)
+        if pack is not None:
+            return copy.deepcopy(pack)
+        if modality:
+            fallback = _active_builder_packs.get(_pack_key(namespace, None))
+            if fallback is not None:
+                return copy.deepcopy(fallback)
+    return None
+
+
+def _geometry_context(body: Dict[str, Any], const: Optional[Dict[str, Any]]) -> tuple[str, str]:
+    namespace = (body.get("namespace") or "").strip()
+    modality = (body.get("modality") or "").strip()
+    if const and isinstance(const.get("meta"), dict):
+        meta = const.get("meta") or {}
+        if not namespace:
+            namespace = str(meta.get("namespace") or "").strip()
+        if not modality:
+            modality = str(
+                meta.get("modality")
+                or meta.get("mode")
+                or meta.get("mod")
+                or ""
+            ).strip()
+    namespace = namespace or NAMESPACE_DEFAULT
+    modality = modality or "geometry"
+    return namespace, modality
+
+
+async def _fetch_geometry_pack(
+    pack_id: str,
+    *,
+    rest_url: Optional[str] = None,
+    service_key: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    base_url = (rest_url or SUPABASE_REST_URL or "").strip()
+    if not base_url:
+        return None
+    base = base_url.rstrip("/")
+    if not base.endswith("/rest/v1"):
+        base = f"{base}/rest/v1"
+    url = f"{base}/geometry_parameter_packs"
+    params = {
+        "select": "id,namespace,modality,pack_type,status,params,population_id,generation,fitness,energy,version,meta",
+        "id": f"eq.{pack_id}",
+        "limit": "1",
+    }
+    key = (service_key or SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY or "").strip()
+    headers = {"Accept": "application/json"}
+    if key:
+        headers.update({"apikey": key, "Authorization": f"Bearer {key}"})
+
+    def _request() -> Optional[Dict[str, Any]]:
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.warning("Failed to fetch geometry parameter pack %s: %s", pack_id, exc)
+            return None
+        if isinstance(data, list) and data:
+            row = data[0]
+            if isinstance(row, dict):
+                return row
+        return None
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _request)
+
+
+async def _apply_swarm_meta(payload: Dict[str, Any]) -> None:
+    if not isinstance(payload, dict):
+        return
+    namespace = (payload.get("namespace") or NAMESPACE_DEFAULT).strip() or NAMESPACE_DEFAULT
+    modality = (payload.get("modality") or "geometry").strip() or "geometry"
+    status = (payload.get("status") or "").strip().lower()
+    pack_id = payload.get("pack_id")
+    if not pack_id:
+        logger.warning("geometry.swarm.meta payload missing pack_id: %s", payload)
+        return
+
+    try:
+        geometry_params.clear_cache()
+    except Exception:
+        logger.exception("Failed to clear geometry parameter cache after swarm meta event")
+
+    if status != "active":
+        _set_active_builder_pack(namespace, modality, None)
+        logger.info(
+            "geometry.swarm.meta.v1 -> deactivated pack %s for %s/%s (status=%s)",
+            pack_id,
+            namespace,
+            modality,
+            status or "unknown",
+        )
+        return
+
+    pack = await _fetch_geometry_pack(pack_id)
+    if pack is None or not isinstance(pack, dict):
+        pack = {}
+    snapshot = copy.deepcopy(pack)
+    snapshot.setdefault("id", pack_id)
+    snapshot.setdefault("pack_id", pack_id)
+    snapshot["status"] = payload.get("status") or pack.get("status")
+    snapshot["namespace"] = namespace
+    snapshot["modality"] = modality
+    for key in ("version", "population_id", "best_fitness", "metrics", "ts"):
+        if payload.get(key) is not None:
+            snapshot[key] = payload.get(key)
+        elif isinstance(pack, dict) and pack.get(key) is not None:
+            snapshot.setdefault(key, pack.get(key))
+
+    _set_active_builder_pack(namespace, modality, snapshot)
+    logger.info(
+        "geometry.swarm.meta.v1 -> activated pack %s for %s/%s", pack_id, namespace, modality
+    )
+
+
+async def _geometry_swarm_worker() -> None:
+    global _geometry_swarm_nc, _geometry_swarm_stop
+    backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
+    while True:
+        stop_event = asyncio.Event()
+        try:
+            nc = await nats.connect(servers=[NATS_URL])
+            _geometry_swarm_nc = nc
+            _geometry_swarm_stop = stop_event
+
+            async def _handler(msg):
+                data = msg.data
+                payload: Optional[Dict[str, Any]] = None
+                if isinstance(data, (bytes, bytearray)):
+                    try:
+                        payload = json.loads(data.decode())
+                    except Exception:
+                        logger.warning("Invalid geometry.swarm.meta payload received")
+                        return
+                elif isinstance(data, dict):
+                    payload = data
+                if payload is None:
+                    return
+                try:
+                    await _apply_swarm_meta(payload)
+                except Exception:
+                    logger.exception("Failed to apply geometry.swarm.meta payload")
+
+            await nc.subscribe("geometry.swarm.meta.v1", cb=_handler)
+            await stop_event.wait()
+            break
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception(
+                "NATS geometry.swarm.meta listener error; retrying in %.1fs", backoff
+            )
+            await asyncio.sleep(backoff)
+        finally:
+            _geometry_swarm_stop = None
+            if _geometry_swarm_nc is not None:
+                with contextlib.suppress(Exception):
+                    await _geometry_swarm_nc.drain()
+                with contextlib.suppress(Exception):
+                    await _geometry_swarm_nc.close()
+                _geometry_swarm_nc = None
+        if stop_event.is_set():
+            break
 
 def _hostname_resolves(url: str) -> bool:
     try:
@@ -502,6 +704,13 @@ async def _on_startup() -> None:
             logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
         else:
             logger.info("Supabase realtime subscription skipped; missing URL or API key")
+    global _geometry_swarm_task
+    if _geometry_swarm_task is None and NATS_URL:
+        if hasattr(nats, "connect"):
+            _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
+            logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+        else:
+            logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
 
 
 @app.on_event("shutdown")
@@ -512,6 +721,15 @@ async def _on_shutdown() -> None:
         with contextlib.suppress(Exception):
             await _geometry_realtime_task
         _geometry_realtime_task = None
+    global _geometry_swarm_task, _geometry_swarm_stop
+    if _geometry_swarm_stop is not None:
+        _geometry_swarm_stop.set()
+    if _geometry_swarm_task is not None:
+        _geometry_swarm_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_swarm_task
+        _geometry_swarm_task = None
+    _geometry_swarm_stop = None
 
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower()=="true"
 CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
@@ -851,6 +1069,10 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     const_id = body.get("constellation_id")
     k = int(body.get("k", 5))
     const = shape_store.get_constellation(const_id) if (shape_store and const_id) else None
+    context_body = dict(body)
+    context_body.setdefault("modality", "text")
+    namespace, modality = _geometry_context(context_body, const)
+    builder_pack = _get_active_builder_pack(namespace, modality)
     if mode == "learned":
         try:
             from transformers import pipeline  # type: ignore
@@ -868,7 +1090,14 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
             raise HTTPException(400, "no codebook or constellation text available")
         nlp = pipeline("summarization", model=CHIT_T5_MODEL)
         out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
-        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+        return {
+            "mode": mode,
+            "summary": out[0].get("summary_text", ""),
+            "used": len(texts),
+            "namespace": namespace,
+            "modality": modality,
+            "builder_pack": builder_pack,
+        }
     else:
         pts = []
         if const:
@@ -882,7 +1111,13 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
                     "conf": p.get("conf")
                 })
         pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
-        return {"mode": mode, "points": pts[:k]}
+        return {
+            "mode": mode,
+            "points": pts[:k],
+            "namespace": namespace,
+            "modality": modality,
+            "builder_pack": builder_pack,
+        }
 
 @app.post("/geometry/calibration/report")
 def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
@@ -940,6 +1175,10 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
     text = body.get("text") or (const.get("summary") if const else None)
     if not text:
         raise HTTPException(400, "text or constellation summary required for anchor")
+    context_body = dict(body)
+    context_body.setdefault("modality", "image")
+    namespace, modality = _geometry_context(context_body, const)
+    builder_pack = _get_active_builder_pack(namespace, modality)
     try:
         model = SentenceTransformer(CHIT_CLIP_MODEL)
         text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
@@ -952,7 +1191,12 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
         sims = (img_embs @ text_emb.T).squeeze()  # cosine if normalized
         ranked = sorted(zip(images, sims.tolist()), key=lambda x: x[1], reverse=True)
-        return {"ranked": [{"url": u, "score": float(s)} for u,s in ranked]}
+        return {
+            "ranked": [{"url": u, "score": float(s)} for u, s in ranked],
+            "namespace": namespace,
+            "modality": modality,
+            "builder_pack": builder_pack,
+        }
     except Exception as e:
         logger.exception("image decode error")
         raise HTTPException(500, f"image decode error: {e}")
@@ -973,6 +1217,10 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
     text = body.get("text") or (const.get("summary") if const else None)
     if not text:
         raise HTTPException(400, "text or constellation summary required for anchor")
+    context_body = dict(body)
+    context_body.setdefault("modality", "audio")
+    namespace, modality = _geometry_context(context_body, const)
+    builder_pack = _get_active_builder_pack(namespace, modality)
     try:
         model = CLAP_Module(enable_fusion=True)
         # Will download default ckpt if not provided; can be heavy
@@ -988,7 +1236,12 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
         t = t / (np.linalg.norm(t, axis=1, keepdims=True) + 1e-9)
         sims = (a @ t.T).squeeze()
         ranked = sorted(zip(audios, sims.tolist()), key=lambda x: x[1], reverse=True)
-        return {"ranked": [{"path": u, "score": float(s)} for u,s in ranked]}
+        return {
+            "ranked": [{"path": u, "score": float(s)} for u, s in ranked],
+            "namespace": namespace,
+            "modality": modality,
+            "builder_pack": builder_pack,
+        }
     except Exception as e:
         logger.exception("audio decode error")
         raise HTTPException(500, f"audio decode error: {e}")

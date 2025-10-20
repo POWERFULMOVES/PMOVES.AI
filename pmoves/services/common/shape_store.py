@@ -5,6 +5,7 @@ import inspect
 import logging
 import os
 import threading
+import copy
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Optional
@@ -46,6 +47,7 @@ class ShapeStore:
         self._constellations: Dict[str, Dict[str, Any]] = {}
         self._points: Dict[str, ShapePoint] = {}
         self._lru: "OrderedDict[str, None]" = OrderedDict()
+        self._pack_meta: Dict[tuple[str, str], Dict[str, Any]] = {}
 
     # ---- basic LRU bookkeeping ----
     def _touch(self, key: str) -> None:
@@ -63,6 +65,64 @@ class ShapeStore:
         self._points.pop(key, None)
 
     # ---- CGP ingest ----
+    def _pack_key(self, namespace: str, modality: Optional[str]) -> tuple[str, str]:
+        ns = (namespace or "").strip().lower()
+        mod = (modality or "*").strip().lower() or "*"
+        return ns, mod
+
+    def _resolve_pack_locked(self, namespace: Optional[str], modality: Optional[str]) -> Optional[Dict[str, Any]]:
+        if not namespace:
+            return None
+        key = self._pack_key(namespace, modality)
+        pack = self._pack_meta.get(key)
+        if pack is not None:
+            return copy.deepcopy(pack)
+        if modality:
+            fallback = self._pack_meta.get(self._pack_key(namespace, None))
+            if fallback is not None:
+                return copy.deepcopy(fallback)
+        return None
+
+    def update_builder_pack(self, namespace: str, modality: Optional[str], pack: Optional[Dict[str, Any]]) -> None:
+        if not namespace:
+            return
+        key = self._pack_key(namespace, modality)
+        with self._lock:
+            if pack is None:
+                self._pack_meta.pop(key, None)
+            else:
+                self._pack_meta[key] = copy.deepcopy(pack)
+            target_ns = namespace.strip().lower()
+            target_mod = (modality or "*").strip().lower() or "*"
+            for const in self._constellations.values():
+                meta = const.get("meta")
+                if not isinstance(meta, dict):
+                    continue
+                ns = (meta.get("namespace") or meta.get("ns") or "").strip().lower()
+                if ns != target_ns:
+                    continue
+                mod = (
+                    meta.get("modality")
+                    or meta.get("mode")
+                    or meta.get("mod")
+                    or "*"
+                )
+                mod = mod.strip().lower() if isinstance(mod, str) else "*"
+                if target_mod != "*" and mod and mod != target_mod:
+                    continue
+                if pack is None:
+                    meta.pop("builder_pack", None)
+                else:
+                    meta["builder_pack"] = copy.deepcopy(pack)
+
+    def get_builder_pack(self, namespace: str, modality: Optional[str]) -> Optional[Dict[str, Any]]:
+        key_ns = (namespace or "").strip()
+        if not key_ns:
+            return None
+        with self._lock:
+            pack = self._resolve_pack_locked(key_ns, modality)
+        return pack
+
     def put_cgp(self, cgp: Dict[str, Any]) -> None:
         """Ingest a CGP (chit.cgp.v0.1) blob into the store.
 
@@ -75,11 +135,40 @@ class ShapeStore:
         }
         """
         with self._lock:
+            cgp_meta = cgp.get("meta") if isinstance(cgp.get("meta"), dict) else {}
             for sn in cgp.get("super_nodes", []) or []:
                 for const in sn.get("constellations", []) or []:
                     cid = const.get("id")
                     if not cid:
                         continue
+                    meta = const.get("meta")
+                    if not isinstance(meta, dict):
+                        meta = {}
+                        const["meta"] = meta
+                    namespace = (
+                        meta.get("namespace")
+                        or cgp_meta.get("namespace")
+                        or const.get("namespace")
+                    )
+                    if namespace:
+                        meta.setdefault("namespace", namespace)
+                    modality = (
+                        meta.get("modality")
+                        or meta.get("mode")
+                        or meta.get("mod")
+                        or cgp_meta.get("modality")
+                    )
+                    if not modality:
+                        points = const.get("points") or []
+                        if points:
+                            candidate = points[0]
+                            if isinstance(candidate, dict):
+                                modality = candidate.get("modality") or candidate.get("mod")
+                    if modality:
+                        meta.setdefault("modality", modality)
+                    pack_meta = self._resolve_pack_locked(namespace, modality)
+                    if pack_meta is not None:
+                        meta["builder_pack"] = pack_meta
                     self._constellations[cid] = const
                     self._touch(cid)
                     for p in const.get("points", []) or []:
