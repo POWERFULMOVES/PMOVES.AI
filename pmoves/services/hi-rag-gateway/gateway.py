@@ -13,6 +13,8 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+from services.common.geometry_params import get_decoder_pack
+from services.common.hrm_sidecar import HrmDecoderController
 from sentence_transformers import SentenceTransformer
 try:
     from sentence_transformers import CrossEncoder  # for optional rerank
@@ -42,6 +44,7 @@ TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","true").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","true").lower()=="true"
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
 TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIES", "").split(",") if c.strip()]
+NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE", "pmoves")
 
 # --- Optional Reranking (GPU preferred, CPU fallback) ---
 RERANK_ENABLE = os.environ.get("RERANK_ENABLE", "false").lower() == "true"
@@ -75,6 +78,8 @@ try:
 except Exception as e:
     logger.exception("Failed to initialize ShapeStore: %s", e)
     shape_store = None
+
+_hrm_controller = HrmDecoderController(get_decoder_pack)
 
 # --- CHIT security and decode flags ---
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
@@ -549,6 +554,12 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
         const = shape_store.get_constellation(const_id) if shape_store else None
         if not const:
             raise HTTPException(404, f"constellation '{const_id}' not found")
+    else:
+        const = None
+    namespace = str(
+        body.get("namespace")
+        or (const.get("namespace") if isinstance(const, dict) and const.get("namespace") else NAMESPACE_DEFAULT)
+    )
     if mode == "learned":
         # lazy import transformers
         try:
@@ -568,7 +579,9 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
             raise HTTPException(400, "no codebook or constellation text available")
         nlp = pipeline("summarization", model=os.environ.get("CHIT_T5_MODEL","t5-small"))
         out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
-        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+        summary = out[0].get("summary_text", "")
+        summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
+        return {"mode": mode, "summary": summary, "used": len(texts), "hrm": hrm_info, "namespace": namespace}
     else:
         # geometry-only: return top-k point snippets ordered by confidence/proj
         pts = []
@@ -587,7 +600,8 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
             if sp:
                 pts.append({"id": sp.id, "proj": sp.proj, "conf": sp.conf})
         pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
-        return {"mode": mode, "points": pts[:k]}
+        hrm_info = _hrm_controller.status(namespace)
+        return {"mode": mode, "points": pts[:k], "hrm": hrm_info, "namespace": namespace}
 
 
 def _js_divergence(p: List[float], q: List[float]) -> float:

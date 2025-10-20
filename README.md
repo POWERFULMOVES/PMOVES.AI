@@ -1,4 +1,5 @@
 # PMOVES.AI Repository Overview
+[![PMOVES Integrations CI](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/pmoves-integrations-ci.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/pmoves-integrations-ci.yml)
 
 PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agent Zero, Archon, and a fleet of specialized "muscle" services for retrieval, generation, and enrichment workflows. The ecosystem focuses on local-first autonomy, reproducible provisioning, and self-improving research loops that integrate knowledge management, workflow automation, and rich media processing pipelines.
 

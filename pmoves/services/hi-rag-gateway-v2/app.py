@@ -1,5 +1,6 @@
 
 import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading
+import os, time, math, json, logging, re, sys, contextlib, ipaddress, importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
@@ -13,6 +14,8 @@ from FlagEmbedding import FlagReranker
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
+from services.common.geometry_params import get_decoder_pack
+from services.common.hrm_sidecar import HrmDecoderController
 import asyncio
 import nats
 import psycopg
@@ -508,6 +511,9 @@ async def _geometry_swarm_worker() -> None:
         if stop_event.is_set():
             break
 
+# Optional HRM decoder controller (lazily loads packs per-namespace)
+_hrm_controller = HrmDecoderController(get_decoder_pack)
+
 def _hostname_resolves(url: str) -> bool:
     try:
         from urllib.parse import urlparse
@@ -741,6 +747,7 @@ CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_d
 CHIT_T5_MODEL = os.environ.get("CHIT_T5_MODEL","t5-small")
 CHIT_CLIP_MODEL = os.environ.get("CHIT_CLIP_MODEL","clip-ViT-B-32")
 CHIT_PERSIST_DB = os.environ.get("CHIT_PERSIST_DB","false").lower()=="true"
+GAN_SIDECAR_ENABLED = os.environ.get("GAN_SIDECAR_ENABLED", "false").lower()=="true"
 
 PGHOST = os.environ.get("PGHOST")
 PGPORT = int(os.environ.get("PGPORT","5432"))
@@ -1013,6 +1020,41 @@ def _get_reranker():
         return None
 
 
+# --- GAN Sidecar loader -------------------------------------------------
+_gan_sidecar = None
+
+
+def _get_gan_sidecar():
+    global _gan_sidecar
+    if _gan_sidecar is not None:
+        return _gan_sidecar
+    module_name = "hirag_gateway_v2.sidecars.gan_checker"
+    module = sys.modules.get(module_name)
+    if module is None:
+        sidecar_path = Path(__file__).resolve().parent / "sidecars" / "gan_checker.py"
+        if not sidecar_path.exists():
+            logger.warning("GAN sidecar module missing at %s", sidecar_path)
+            _gan_sidecar = None
+            return None
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, sidecar_path)
+            if spec is None or spec.loader is None:
+                raise ImportError("unable to load gan_checker spec")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+        except Exception:
+            logger.exception("Failed to import GAN sidecar module")
+            _gan_sidecar = None
+            return None
+    try:
+        _gan_sidecar = module.GanSidecar()
+    except Exception:
+        logger.exception("GAN sidecar init failed")
+        _gan_sidecar = None
+    return _gan_sidecar
+
+
 # ---------------- Geometry Bus endpoints (v2) ----------------
 from fastapi import UploadFile
 import io
@@ -1073,6 +1115,27 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     context_body.setdefault("modality", "text")
     namespace, modality = _geometry_context(context_body, const)
     builder_pack = _get_active_builder_pack(namespace, modality)
+    namespace = str(
+        body.get("namespace")
+        or (const.get("namespace") if isinstance(const, dict) and const.get("namespace") else NAMESPACE_DEFAULT)
+    )
+    pts: List[Dict[str, Any]] = []
+    if const:
+        for p in const.get("points", []) or []:
+            cid = p.get("id")
+            if not cid:
+                continue
+            pts.append({
+                "id": cid,
+                "text": p.get("text"),
+                "proj": p.get("proj"),
+                "conf": p.get("conf"),
+                "meta": p.get("meta"),
+                "ref_id": p.get("ref_id") or p.get("doc_id") or p.get("video_id"),
+            })
+    pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
+    top_pts = pts[:k]
+
     if mode == "learned":
         try:
             from transformers import pipeline  # type: ignore
@@ -1098,6 +1161,9 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
             "modality": modality,
             "builder_pack": builder_pack,
         }
+        summary = out[0].get("summary_text", "")
+        summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
+        return {"mode": mode, "summary": summary, "used": len(texts), "hrm": hrm_info, "namespace": namespace}
     else:
         pts = []
         if const:
@@ -1118,6 +1184,35 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
             "modality": modality,
             "builder_pack": builder_pack,
         }
+        hrm_info = _hrm_controller.status(namespace)
+        return {"mode": mode, "points": pts[:k], "hrm": hrm_info, "namespace": namespace}
+        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+    if mode == "swarm":
+        sidecar = _get_gan_sidecar()
+        accept_threshold = float(body.get("accept_threshold", 0.55))
+        max_edits = int(body.get("max_edits", 1))
+        if sidecar is None:
+            return {
+                "mode": mode,
+                "raw_points": top_pts,
+                "selected": top_pts[0] if top_pts else None,
+                "candidates": [],
+                "telemetry": {
+                    "enabled": GAN_SIDECAR_ENABLED,
+                    "decision": "unavailable",
+                    "threshold": accept_threshold,
+                },
+            }
+        review = sidecar.review_text_candidates(
+            top_pts,
+            enabled=GAN_SIDECAR_ENABLED,
+            max_edits=max(0, max_edits),
+            accept_threshold=accept_threshold,
+        )
+        review["mode"] = mode
+        review["raw_points"] = top_pts
+        return review
+    return {"mode": mode, "points": top_pts}
 
 @app.post("/geometry/calibration/report")
 def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
@@ -1167,6 +1262,7 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         import numpy as np
     except Exception:
         raise HTTPException(500, "missing dependencies for image decode (sentence-transformers, Pillow)")
+    mode = (body.get("mode") or "geometry").lower()
     const_id = body.get("constellation_id")
     images = body.get("images") or []
     if not images:
@@ -1197,6 +1293,35 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
             "modality": modality,
             "builder_pack": builder_pack,
         }
+        payload = {"mode": mode, "ranked": [{"url": u, "score": float(s)} for u,s in ranked]}
+        if mode == "swarm":
+            sidecar = _get_gan_sidecar()
+            accept_threshold = float(body.get("accept_threshold", 0.55))
+            max_edits = int(body.get("max_edits", 0))
+            if sidecar is None:
+                payload["swarm"] = {
+                    "selected": None,
+                    "candidates": [],
+                    "telemetry": {
+                        "enabled": GAN_SIDECAR_ENABLED,
+                        "decision": "unavailable",
+                        "threshold": accept_threshold,
+                    },
+                }
+            else:
+                captions = body.get("captions") or {}
+                candidates = []
+                for item in payload["ranked"]:
+                    url = item["url"]
+                    caption = captions.get(url) or text or f"Image candidate {url}"
+                    candidates.append({"id": url, "text": caption})
+                payload["swarm"] = sidecar.review_text_candidates(
+                    candidates,
+                    enabled=GAN_SIDECAR_ENABLED,
+                    max_edits=max(0, max_edits),
+                    accept_threshold=accept_threshold,
+                )
+        return payload
     except Exception as e:
         logger.exception("image decode error")
         raise HTTPException(500, f"image decode error: {e}")
@@ -1209,6 +1334,7 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
         from laion_clap import CLAP_Module  # type: ignore
     except Exception:
         raise HTTPException(500, "missing laion-clap/torch; install extras and set CHIT_DECODE_AUDIO=true")
+    mode = (body.get("mode") or "geometry").lower()
     const_id = body.get("constellation_id")
     audios = body.get("audios") or []
     if not audios:
@@ -1242,6 +1368,35 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
             "modality": modality,
             "builder_pack": builder_pack,
         }
+        payload = {"mode": mode, "ranked": [{"path": u, "score": float(s)} for u,s in ranked]}
+        if mode == "swarm":
+            sidecar = _get_gan_sidecar()
+            accept_threshold = float(body.get("accept_threshold", 0.55))
+            max_edits = int(body.get("max_edits", 0))
+            if sidecar is None:
+                payload["swarm"] = {
+                    "selected": None,
+                    "candidates": [],
+                    "telemetry": {
+                        "enabled": GAN_SIDECAR_ENABLED,
+                        "decision": "unavailable",
+                        "threshold": accept_threshold,
+                    },
+                }
+            else:
+                captions = body.get("captions") or {}
+                candidates = []
+                for item in payload["ranked"]:
+                    path = item["path"]
+                    caption = captions.get(path) or text or f"Audio candidate {path}"
+                    candidates.append({"id": path, "text": caption})
+                payload["swarm"] = sidecar.review_text_candidates(
+                    candidates,
+                    enabled=GAN_SIDECAR_ENABLED,
+                    max_edits=max(0, max_edits),
+                    accept_threshold=accept_threshold,
+                )
+        return payload
     except Exception as e:
         logger.exception("audio decode error")
         raise HTTPException(500, f"audio decode error: {e}")

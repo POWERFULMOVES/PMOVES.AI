@@ -9,6 +9,9 @@ _Copy-paste friendly for internal wiki_
 - Import flows
   - Core → `pmoves/n8n/flows/approval_poller.json`, `pmoves/n8n/flows/echo_publisher.json`
   - Audio → `pmoves/n8n/flows/vibevoice_audio_ingest.json`, `pmoves/n8n/flows/vibevoice_discord_preview.json`
+  - Health/Finance → drop JSON exports into `pmoves/integrations/health-wger/n8n/flows/` and
+    `pmoves/integrations/firefly-iii/n8n/flows/`; run `make integrations-up-all` for the watcher auto-import or
+    `make integrations-import-flows` to sync once via REST.
   - Ensure Variables:
     - `SUPABASE_REST_URL=http://host.docker.internal:54321/rest/v1`
     - `SUPABASE_SERVICE_ROLE_KEY=<service_role_key>`

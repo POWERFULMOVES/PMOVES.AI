@@ -133,6 +133,13 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 PROJECT ?= pmoves
 export PROJECT
 
+INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
+INTEGRATIONS_COMPOSE_WGER := compose/docker-compose.wger.yml
+INTEGRATIONS_COMPOSE_FIREFLY := compose/docker-compose.firefly.yml
+INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
+INTEGRATIONS_PROJECT ?= $(PROJECT)-integrations
+export INTEGRATIONS_PROJECT
+
 NOTEBOOK_COMPOSE ?= docker-compose.open-notebook.yml
 NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
 
@@ -219,8 +226,8 @@ ps:
 # -------- External stacks (forks / published images) ----------
 .PHONY: up-external up-external-wger up-external-firefly up-external-on up-external-jellyfin down-external
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
-	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d
+        @docker network create pmoves-net >/dev/null 2>&1 || true
+        @docker compose -p $(PROJECT) -f docker-compose.external.yml up -d
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on pmoves-net
 	@docker network create pmoves-net >/dev/null 2>&1 || true
@@ -239,13 +246,51 @@ up-external-jellyfin: ## Start Jellyfin on pmoves-net (external image)
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext
 
 down-external: ## Stop all external stacks
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml down
+        @docker compose -p $(PROJECT) -f docker-compose.external.yml down
+
+.PHONY: integrations-up-core integrations-up-wger integrations-up-firefly integrations-up-all integrations-down integrations-logs integrations-import-flows
+
+integrations-up-core: ensure-env-shared ## Start n8n (integrations core stack)
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker compose -p $(INTEGRATIONS_PROJECT) -f $(INTEGRATIONS_COMPOSE_CORE) up -d
+
+integrations-up-wger: ensure-env-shared ## Start n8n + Wger profile
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker compose -p $(INTEGRATIONS_PROJECT) -f $(INTEGRATIONS_COMPOSE_CORE) -f $(INTEGRATIONS_COMPOSE_WGER) --profile wger up -d
+
+integrations-up-firefly: ensure-env-shared ## Start n8n + Firefly profile
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker compose -p $(INTEGRATIONS_PROJECT) -f $(INTEGRATIONS_COMPOSE_CORE) -f $(INTEGRATIONS_COMPOSE_FIREFLY) --profile firefly up -d
+
+integrations-up-all: ensure-env-shared ## Start n8n, Wger, Firefly, and flows watcher
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker compose -p $(INTEGRATIONS_PROJECT) \
+	  -f $(INTEGRATIONS_COMPOSE_CORE) \
+	  -f $(INTEGRATIONS_COMPOSE_WGER) \
+	  -f $(INTEGRATIONS_COMPOSE_FIREFLY) \
+	  -f $(INTEGRATIONS_COMPOSE_WATCHER) \
+	  --profile wger --profile firefly up -d
+
+integrations-down: ## Stop integrations stack and remove volumes
+	@docker compose -p $(INTEGRATIONS_PROJECT) \
+	  -f $(INTEGRATIONS_COMPOSE_CORE) \
+	  -f $(INTEGRATIONS_COMPOSE_WGER) \
+	  -f $(INTEGRATIONS_COMPOSE_FIREFLY) \
+	  -f $(INTEGRATIONS_COMPOSE_WATCHER) down -v
+
+integrations-logs: ## Tail n8n logs for the integrations stack
+	@docker compose -p $(INTEGRATIONS_PROJECT) -f $(INTEGRATIONS_COMPOSE_CORE) logs -f n8n
+
+integrations-import-flows: ## Import JSON flows from integrations/* into n8n via REST
+        @which jq >/dev/null 2>&1 || (echo "jq is required for integrations-import-flows" && exit 1)
+        @which curl >/dev/null 2>&1 || (echo "curl is required for integrations-import-flows" && exit 1)
+        @bash scripts/n8n-import-flows.sh
 
 .PHONY: package-pr-kits
 package-pr-kits: ## Package PR kits into dist/pr-kits/*.tar.gz
-	@mkdir -p dist/pr-kits
-	@for kit in wger firefly open-notebook jellyfin; do \
-	  tar -czf dist/pr-kits/$$kit.pr-kit.tgz -C pmoves/integrations/pr-kits/ $$kit; \
+        @mkdir -p dist/pr-kits
+        @for kit in wger firefly open-notebook jellyfin; do \
+          tar -czf dist/pr-kits/$$kit.pr-kit.tgz -C pmoves/integrations/pr-kits/ $$kit; \
 	  echo "→ dist/pr-kits/$$kit.pr-kit.tgz"; \
 	done
 
