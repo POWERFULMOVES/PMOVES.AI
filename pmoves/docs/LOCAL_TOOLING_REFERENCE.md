@@ -5,8 +5,10 @@ _Last updated: 2025-10-18_
 This guide aggregates the entry points that keep local environments consistent across Windows, WSL, and Linux hosts. Use it alongside `pmoves/docs/LOCAL_DEV.md` (service ports, networking) and `pmoves/docs/SMOKETESTS.md` (verification flows) when onboarding new contributors or refreshing a workstation.
 
 ## Environment & Secrets
-- `make env-setup` → runs `scripts/env_setup.sh` (Bash) or `scripts/env_setup.ps1` (PowerShell) to merge `.env.example` with the secret snippets under `env.*.additions`. Use `make env-setup -- --yes` to accept defaults non-interactively.
-- `make bootstrap` → interactive secret capture (writes to `env.shared` for Supabase keys, provider tokens, Wger/Firefly/Open Notebook, Discord/Jellyfin secrets). Re-run after `supabase start --network-id pmoves-net` or whenever external credentials change. Supports `BOOTSTRAP_FLAGS="--service supabase"` and `--accept-defaults` for targeted updates.
+- `make env-setup` → runs `python3 -m pmoves.tools.secrets_sync generate` to materialize `.env.generated` / `env.shared.generated` from `pmoves/chit/secrets_manifest.yaml`, then calls `scripts/env_setup.{sh,ps1}` to merge `.env.example` with the optional `env.*.additions`. Use `make env-setup -- --yes` to accept defaults non-interactively.
+- `make bootstrap` → interactive secret capture (still writes overrides to `env.shared`, which now layers on top of the generated secrets for Supabase, provider tokens, Wger/Firefly/Open Notebook, Discord/Jellyfin). Re-run after `supabase start --network-id pmoves-net` or whenever external credentials change. Supports `BOOTSTRAP_FLAGS="--service supabase"` and `--accept-defaults` for targeted updates.
+- `python3 -m pmoves.tools.onboarding_helper status` → summarize manifest coverage and highlight missing CGP labels before generating env files (`… generate` writes the files directly).
+- `python3 -m pmoves.tools.mini_cli crush setup` → write a PMOVES-aware `~/.config/crush/crush.json` (providers, MCP stubs, context paths). After running, launch `crush` from the repo root. See `CRUSH.md` for the day-to-day flow.
 - `make env-check` → calls `scripts/env_check.{sh,ps1}` for dependency checks, port collisions, and `.env` completeness.
   - CI runs the PowerShell preflight on Windows runners only; Linux contributors should run `scripts/env_check.sh` locally if they bypass Make.
 - `scripts/create_venv*.{sh,ps1}` → optional helpers to create/activate Python virtualenvs outside of Conda. Pass the environment name as the first argument on Bash, or `-Name` in PowerShell.

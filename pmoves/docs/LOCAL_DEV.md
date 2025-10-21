@@ -42,12 +42,28 @@ All services are attached to the `pmoves-net` Docker network. Internal URLs shou
 
 Quick start:
 - Windows without Make: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1`
-- With Make: `make env-setup` to sync `.env` defaults, then run `make bootstrap` to capture Supabase CLI endpoints (including Realtime) and write shared secrets into `env.shared` before `make env-check`.
+- With Make: `make env-setup` (runs `python3 -m pmoves.tools.secrets_sync generate` under the hood) to produce `.env.generated` / `env.shared.generated` from `pmoves/chit/secrets_manifest.yaml`, then run `make bootstrap` to capture Supabase CLI endpoints (including Realtime) before `make env-check`. When you populate Supabase values, use the live keys surfaced by `make supa-status` (`sb_publishable_…` / `sb_secret_…`) so Archon, Agent Zero, and other agents load the correct service role credentials.
+- No Make? `python3 -m pmoves.tools.onboarding_helper generate` produces the same env files and reports any missing CHIT labels before you bring up containers.
+- Configure Crush with `python3 -m pmoves.tools.mini_cli crush setup` so your local Crush CLI session understands PMOVES context paths, providers, and MCP stubs.
 - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
+
+### Crush CLI Integration
+
+Crush provides a terminal-native assistant with MCP support. To align it with
+PMOVES:
+
+1. Install Crush via your preferred package manager (brew, npm, winget, etc.).
+2. Install the Python dependencies needed by the mini CLI (`uv pip install typer[all] PyYAML`).
+3. Run `python3 -m pmoves.tools.mini_cli crush setup` to generate `~/.config/crush/crush.json`.
+4. Verify with `python3 -m pmoves.tools.mini_cli crush status` and review `CRUSH.md` for usage tips.
+
+The generated config auto-detects API keys from `.env.generated`/`env.shared`,
+registers MCP stubs (mini CLI, Docker, n8n), and seeds default context paths so
+Crush starts with PMOVES-aware prompts.
 
 See also: `docs/SECRETS.md` for optional secret provider integrations.
 
-Manual notes: Create `env.shared` (copy `env.shared.example`) and include keys from:
+Manual notes: `env.shared.generated` now carries the Supabase + Meili secrets consumed by Compose. Keep `env.shared` around for local overrides or non-secret feature flags and include any additions from:
 - `env.presign.additions` (MINIO creds and shared secret)
 - `env.render_webhook.additions` (webhook shared secret)
 - `env.hirag.reranker.additions`, `env.hirag.reranker.providers.additions` (optional reranker config)
