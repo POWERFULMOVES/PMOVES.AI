@@ -138,7 +138,15 @@ def test_multiagent_video_to_search_pipeline(load_service_module, monkeypatch):
     assert hirag_payload["results"][0]["doc_id"] == video_payload["video_id"]
 
     assert qdrant_calls, "qdrant.search should be invoked"
-    namespace_filter = qdrant_calls[0]["query_filter"].kwargs["must"][0].kwargs["match"]
-    assert namespace_filter.kwargs["value"] == "demo"
+    query_filter = qdrant_calls[0]["query_filter"]
+    namespace_condition = query_filter.must[0]
+    assert getattr(namespace_condition, "key", None) == "namespace"
+    match_obj = getattr(namespace_condition, "match", None)
+    match_value = None
+    if match_obj is not None:
+        match_value = getattr(match_obj, "value", None)
+        if match_value is None and hasattr(match_obj, "model_dump"):
+            match_value = match_obj.model_dump().get("value")
+    assert match_value == "demo"
 
     assert extracted and extracted[0]["chunks"][0]["doc_id"] == video_payload["video_id"]
