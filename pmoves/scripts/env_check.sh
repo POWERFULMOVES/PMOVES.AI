@@ -79,6 +79,71 @@ echo
 echo ".env status:"
 if [[ -f .env ]]; then echo ".env present:       true"; else echo ".env present:       false"; fi
 if [[ -f .env.example ]]; then echo ".env.example:       true"; else echo ".env.example:       false"; fi
+if [[ -f env.shared ]]; then
+  python3 <<'PY'
+from __future__ import annotations
+
+import pathlib
+
+keys = [
+    "SUPABASE_URL",
+    "SUPABASE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_REALTIME_KEY",
+]
+
+root = pathlib.Path(".")
+shared = root / "env.shared"
+
+def load_env(path: pathlib.Path) -> dict[str, str]:
+    data: dict[str, str] = {}
+    if not path.exists():
+        return data
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if not raw or raw.lstrip().startswith("#") or "=" not in raw:
+            continue
+        k, v = raw.split("=", 1)
+        data[k] = v
+    return data
+
+shared_map = load_env(shared)
+local_map = load_env(root / ".env")
+local_local_map = load_env(root / ".env.local")
+
+def fmt(key: str, value: str | None) -> str:
+    if value is None:
+        return "missing"
+    if not value:
+        return "blank"
+    if key.endswith("_URL"):
+        return "ok" if value.startswith("http") else "check"
+    if value.startswith("sb_secret_") or value.startswith("sb_publishable_"):
+        return "ok"
+    return "check"
+
+print("\nSupabase key sync:")
+if not shared_map:
+    print("  env.shared: missing keys")
+else:
+    for key in keys:
+        src = shared_map.get(key)
+        status = fmt(key, src)
+        print(f"  {key:<26} env.shared={status}", end="")
+        if status == "ok":
+            if key.endswith("_KEY") and "SECRET" in key and not src.startswith("sb_secret_"):
+                print(" (warn: expected sb_secret_)")
+            else:
+                print()
+        else:
+            print()
+        for label, data in ((".env", local_map), (".env.local", local_local_map)):
+            dst = data.get(key)
+            match = "match" if dst == src and src not in (None, "") else ("missing" if dst is None else "mismatch")
+            print(f"    ↳ {label:<11} {match}")
+PY
+fi
 
 echo
 echo "Mappers:"

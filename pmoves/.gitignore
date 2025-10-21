@@ -5,6 +5,7 @@
 .env.local
 .env.supa.remote
 env.shared
+env.shared.*
 supa.md
 # But keep templates checked in
 !.env.*.example
@@ -41,3 +42,4 @@ minio-data/
 supabase-data/
 data/jellyfin/
 data/open-notebook/
+data/chit/

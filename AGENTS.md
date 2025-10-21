@@ -75,6 +75,7 @@ Follow this flow before running smokes or automation. Commands run from repo roo
 - Integration workspace helpers live in `pmoves/tools/integrations/*.sh|ps1` (bootstrap, import flows, push PRs).
 - Consciousness harvest: `make harvest-consciousness` (scaffolds dataset + processed artifacts)
 - Consciousness YouTube ingestion: `make ingest-consciousness-yt ARGS="--max 5"` (requires pmoves-yt)
+- CHIT secret bundle: `make chit-encode-secrets ARGS="--env-file pmoves/env.shared"`; round-trip via `make chit-decode-secrets`.
 
 ## Creative Stack Notes
 - Installers / tutorials / workflows live under `pmoves/creator/`. Run the “One-Click Bring-Up Flow” before testing n8n creative webhooks (`wan_to_cgp`, `qwen_to_cgp`, `vibevoice_to_cgp`).

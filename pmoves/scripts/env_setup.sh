@@ -102,5 +102,73 @@ fi
 echo "Running preflight check..."
 pwsh -NoProfile -File scripts/env_check.ps1 -Quick 2>/dev/null || bash scripts/env_check.sh -q || true
 
-echo "Done."
+if [[ -f env.shared ]]; then
+python3 <<'PY'
+from __future__ import annotations
 
+import pathlib
+
+keys = [
+    "SUPABASE_URL",
+    "SUPABASE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_REALTIME_KEY",
+]
+
+root = pathlib.Path(".")
+shared_path = root / "env.shared"
+if not shared_path.exists():
+    raise SystemExit
+
+shared: dict[str, str] = {}
+for raw in shared_path.read_text(encoding="utf-8").splitlines():
+    if not raw or raw.lstrip().startswith("#") or "=" not in raw:
+        continue
+    k, v = raw.split("=", 1)
+    if k in keys and v:
+        shared[k] = v
+
+if not shared:
+    raise SystemExit
+
+comment = "# Synced from env.shared (Supabase CLI defaults)"
+
+def sync_file(path: pathlib.Path) -> None:
+    if not path.exists():
+        return
+    lines = path.read_text(encoding="utf-8").splitlines()
+    existing_keys = {}
+    updated = False
+    for idx, raw in enumerate(lines):
+        if not raw or raw.lstrip().startswith("#") or "=" not in raw:
+            continue
+        k, _ = raw.split("=", 1)
+        existing_keys[k] = idx
+        if k in shared:
+            desired = f"{k}={shared[k]}"
+            if lines[idx] != desired:
+                lines[idx] = desired
+                updated = True
+    missing = [k for k in keys if k in shared and k not in existing_keys]
+    if missing:
+        if lines and lines[-1].strip():
+            lines.append("")
+        if comment not in lines:
+            lines.append(comment)
+        for key in missing:
+            lines.append(f"{key}={shared[key]}")
+        updated = True
+    if updated:
+        text = "\n".join(lines)
+        if not text.endswith("\n"):
+            text += "\n"
+        path.write_text(text, encoding="utf-8")
+
+for target in (root / ".env", root / ".env.local"):
+    sync_file(target)
+PY
+fi
+
+echo "Done."

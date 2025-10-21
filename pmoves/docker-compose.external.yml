@@ -5,7 +5,7 @@ services:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:main}
     container_name: pmoves-wger
     restart: unless-stopped
-    env_file: [env.shared, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
     networks: [pmoves]
     environment:
       - DJANGO_DEBUG=False
@@ -33,7 +33,7 @@ services:
     image: ${FIREFLY_IMAGE:-fireflyiii/core:latest}
     container_name: pmoves-firefly
     restart: unless-stopped
-    env_file: [env.shared, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
     networks: [pmoves]
     environment:
       APP_KEY: ${FIREFLY_APP_KEY:-SomeRandomStringOf32CharsExactly}
@@ -62,7 +62,7 @@ services:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:main}
     container_name: pmoves-open-notebook
     restart: unless-stopped
-    env_file: [env.shared, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
     depends_on:
       - open-notebook-surrealdb-ext
     networks: [pmoves]
@@ -112,7 +112,7 @@ services:
     image: ${JELLYFIN_IMAGE:-jellyfin/jellyfin:latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
-    env_file: [env.shared, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
     networks: [pmoves]
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}

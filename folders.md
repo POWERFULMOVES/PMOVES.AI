@@ -108,6 +108,9 @@ PY
 │   │   └── docker-compose.wger.yml
 │   ├── configs/
 │   │   └── agents/
+│   ├── chit/
+│   │   ├── __init__.py
+│   │   └── codec.py
 │   ├── contracts/
 │   │   ├── samples/
 │   │   ├── schemas/
@@ -288,6 +291,8 @@ PY
 │   │   └── test_pmoves_yt.py
 │   └── tools/
 │       ├── chit_codebook_gen.py
+│       ├── chit_decode_secrets.py
+│       ├── chit_encode_secrets.py
 │       ├── chit_security.py
 │       ├── env_dedupe.py
 │       ├── evidence_log.ps1

@@ -385,6 +385,7 @@ supa-extract-remote:
 
 # Environment helpers
 env-setup:
+	PYTHONPATH=.. python3 -m pmoves.tools.secrets_sync generate
 	- pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_setup.ps1
 	- bash scripts/env_setup.sh || true
 
@@ -593,7 +594,15 @@ harvest-consciousness:
 	echo "[Harvest] Next steps:"; \
 	echo "  pwsh -File $$HARVEST_DIR/scripts/selenium-scraper.ps1    # dynamic content"; \
 	echo "  Import $$HARVEST_DIR/processed-for-rag/supabase-import/n8n-workflow.json"; \
-echo "  Publish geometry via $$HARVEST_DIR/processed-for-rag/supabase-import/consciousness-geometry-sample.json"'
+	echo "  Publish geometry via $$HARVEST_DIR/processed-for-rag/supabase-import/consciousness-geometry-sample.json"'
+
+.PHONY: chit-encode-secrets
+chit-encode-secrets:
+	@$(PYTHON) tools/chit_encode_secrets.py $(ARGS)
+
+.PHONY: chit-decode-secrets
+chit-decode-secrets:
+	@$(PYTHON) tools/chit_decode_secrets.py $(ARGS)
 
 .PHONY: ingest-consciousness-yt
 ingest-consciousness-yt:

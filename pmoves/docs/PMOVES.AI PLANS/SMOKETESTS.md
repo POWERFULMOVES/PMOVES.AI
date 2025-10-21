@@ -45,6 +45,9 @@ This guide covers preflight wiring, starting the core stack, and running the loc
 
 This checks tool availability, common ports, `.env` keys vs `.env.example`, and validates `contracts/topics.json`.
 
+Optional secret bundle:
+- `make chit-encode-secrets` — snapshot `env.shared` into `pmoves/data/chit/env.cgp.json` using the CHIT CGP v0.1 format. Confirm round-trip with `make chit-decode-secrets ARGS="--out /tmp/env.from.chit"` to ensure the encoder/decoder pair matches the docs in `pmoves/docs/PMOVESCHIT/`.
+
 ## 3) Start Core Stack
 
 - Start data + workers profile (v2 gateway):
