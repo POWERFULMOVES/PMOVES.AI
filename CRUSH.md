@@ -30,6 +30,16 @@ The generated configuration:
 - Adds PMOVES docs, roadmaps, and CHIT manifest as default context paths.
 - Enables common LSP servers (`gopls`, `pyright`, `typescript-language-server`).
 
+Running the preview command shows the current default context paths (the
+generator automatically skips any missing files):
+
+- `CRUSH.md`
+- `pmoves/docs/ROADMAP.md`
+- `pmoves/docs/NEXT_STEPS.md`
+- `pmoves/docs/SMOKETESTS.md`
+- `pmoves/chit/secrets_manifest.yaml`
+- `docs/PMOVES_MINI_CLI_SPEC.md`
+
 Run `python3 -m pmoves.tools.mini_cli crush status` to confirm the active config
 path and provider list.
 

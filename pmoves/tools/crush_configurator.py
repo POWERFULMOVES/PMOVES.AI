@@ -260,15 +260,22 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
             config["disabled"] = True
         mcp_config[spec.key] = config
 
+    repo_root = PROJECT_ROOT.parent
+    context_candidates = [
+        Path("CRUSH.md"),
+        Path("docs/LOCAL_DEV.md"),
+        Path("docs/LOCAL_TOOLING_REFERENCE.md"),
+        Path("pmoves/docs/ROADMAP.md"),
+        Path("pmoves/docs/NEXT_STEPS.md"),
+        Path("pmoves/docs/SMOKETESTS.md"),
+        Path("pmoves/chit/secrets_manifest.yaml"),
+        Path("docs/PMOVES_MINI_CLI_SPEC.md"),
+    ]
+
     context_paths = [
-        "CRUSH.md",
-        "docs/LOCAL_DEV.md",
-        "docs/LOCAL_TOOLING_REFERENCE.md",
-        "pmoves/docs/ROADMAP.md",
-        "pmoves/docs/NEXT_STEPS.md",
-        "pmoves/docs/SMOKETESTS.md",
-        "pmoves/chit/secrets_manifest.yaml",
-        "pmoves/docs/PMOVES_MINI_CLI_SPEC.md",
+        candidate.as_posix()
+        for candidate in context_candidates
+        if (repo_root / candidate).exists()
     ]
 
     config = {
