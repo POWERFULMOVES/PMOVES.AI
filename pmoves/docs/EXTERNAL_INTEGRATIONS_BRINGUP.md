@@ -1,6 +1,6 @@
 # External Integrations Bring‑Up (Wger, Firefly III, Open Notebook, Jellyfin)
 
-This guide links the official integration repos and explains how to run them alongside PMOVES on the shared `pmoves-net` so n8n flows and services can talk to them directly.
+This guide links the official integration repos and explains how to run them alongside PMOVES on the shared `cataclysm-net` so n8n flows and services can talk to them directly.
 
 ## Repos
 - Wger (Health): https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
@@ -11,7 +11,7 @@ This guide links the official integration repos and explains how to run them alo
 ## Network
 Ensure the shared network exists so external stacks can attach:
 ```bash
-docker network create pmoves-net || true
+docker network create cataclysm-net || true
 ```
 
 ## Wger (Health)
@@ -24,12 +24,12 @@ host the UI.citeturn0search0
 DOCKER_CONFIG=$PWD/.docker-nocreds \
   docker compose -p pmoves -f docker-compose.external.yml up -d wger wger-nginx
 ```
-   - This recreates the `pmoves-wger` Django service and the `pmoves-wger-nginx` proxy, sharing
+   - This recreates the `cataclysm-wger` Django service and the `cataclysm-wger-nginx` proxy, sharing
      volumes for `/static` and `/media`.
    - The UI remains available at `http://localhost:8000`, which the proxy forwards to Django.
 2) Configure PMOVES -> Wger integration secrets in `pmoves/env.shared`:
 ```
-WGER_BASE_URL=http://wger:8000
+WGER_BASE_URL=http://cataclysm-wger:8000
 WGER_API_TOKEN=<your-token>
 ```
 3) n8n flow: import `pmoves/n8n/flows/wger_sync_to_supabase.json`, activate, and trigger a test run
@@ -41,13 +41,13 @@ WGER_API_TOKEN=<your-token>
 cd ..
 git clone https://github.com/POWERFULMOVES/pmoves-firefly-iii.git
 cd pmoves-firefly-iii
-docker network create pmoves-net || true
+docker network create cataclysm-net || true
 docker compose up -d
 ```
 2) Base URL and token
 - In `pmoves/env.shared`:
 ```
-FIREFLY_BASE_URL=http://firefly:8080
+FIREFLY_BASE_URL=http://cataclysm-firefly:8080
 FIREFLY_ACCESS_TOKEN=<your-access-token>
 FIREFLY_PORT=8082
 ```
@@ -60,12 +60,12 @@ FIREFLY_PORT=8082
 cd ..
 git clone https://github.com/POWERFULMOVES/Pmoves-open-notebook.git
 cd Pmoves-open-notebook
-docker network create pmoves-net || true
+docker network create cataclysm-net || true
 docker compose up -d
 ```
 2) In `pmoves/env.shared`:
 ```
-OPEN_NOTEBOOK_API_URL=http://open-notebook:5055
+OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055
 OPEN_NOTEBOOK_API_TOKEN=<token>
 OPEN_NOTEBOOK_PASSWORD=<optional-password-if-used>
 # Provider keys (only add the ones you have)
@@ -94,7 +94,7 @@ curl -s http://localhost:5055/api/models/providers | jq '.available'
 cd ..
 git clone https://github.com/POWERFULMOVES/PMOVES-jellyfin.git
 cd PMOVES-jellyfin
-docker network create pmoves-net || true
+docker network create cataclysm-net || true
 docker compose up -d
 ```
 2) Back in the PMOVES workspace:
@@ -106,7 +106,7 @@ make -C pmoves jellyfin-folders
      additional host paths.
 3) In `pmoves/env.shared` configure the Jellyfin bridge + publisher:
 ```
-JELLYFIN_URL=http://jellyfin:8096
+JELLYFIN_URL=http://cataclysm-jellyfin:8096
 JELLYFIN_API_KEY=<key>
 JELLYFIN_USER_ID=<optional>
 JELLYFIN_PUBLISHED_URL=http://localhost:8096   # or your tailscale/base URL

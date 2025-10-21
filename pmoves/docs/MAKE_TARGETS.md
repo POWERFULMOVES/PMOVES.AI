@@ -22,7 +22,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 
 ## Open Notebook
 - `make up-open-notebook`
-  - Brings up Open Notebook attached to `pmoves-net`. UI http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055}.
+  - Brings up Open Notebook attached to `cataclysm-net`. UI http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055}.
 - `make down-open-notebook`
   - Stops Open Notebook.
 
@@ -75,10 +75,10 @@ This file summarizes the most-used targets and maps them to what they do under d
 - Optional: `POST /hirag/admin/reranker/model/label {"label":"Qwen/Qwen3-Reranker-4B"}` to override the reported model name without reloading.
 
 ## Networks
-- The stack uses external network `pmoves-net` to allow side stacks (e.g., Open Notebook) to attach.
+- Core services remain on external network `pmoves-net`; the branded integrations bundle publishes onto `cataclysm-net` for shared access across Cataclysm stacks.
 
 ## External Integrations
-- `make up-external` – start Wger, Firefly III, Open Notebook, and Jellyfin from published images on `pmoves-net`.
+- `make up-external` – start Wger, Firefly III, Open Notebook, and Jellyfin from published images on `cataclysm-net`.
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
 - Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE`, `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.

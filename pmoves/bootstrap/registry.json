@@ -268,7 +268,7 @@
           "key": "OPEN_NOTEBOOK_API_URL",
           "file": "pmoves/env.shared",
           "prompt": "Open Notebook API URL",
-          "default": "http://open-notebook:5055",
+          "default": "http://cataclysm-open-notebook:5055",
           "help": "Base URL consumed by notebook-sync & MCP tooling.",
           "required": false,
           "type": "url_optional"
@@ -679,7 +679,7 @@
           "key": "OPEN_NOTEBOOK_API_URL",
           "file": "pmoves/env.shared",
           "prompt": "Open Notebook API URL",
-          "default": "http://open-notebook:5055",
+          "default": "http://cataclysm-open-notebook:5055",
           "help": "Base URL consumed by notebook-sync & MCP tooling.",
           "required": false,
           "type": "url_optional"

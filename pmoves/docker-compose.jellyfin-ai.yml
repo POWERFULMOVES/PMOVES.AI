@@ -3,7 +3,7 @@ version: "3.9"
 services:
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
-    container_name: pmoves-jellyfin
+    container_name: cataclysm-jellyfin
     environment:
       - PUID=${JELLYFIN_PUID:-1000}
       - PGID=${JELLYFIN_PGID:-1000}
@@ -22,12 +22,14 @@ services:
     ports:
       - "${JELLYFIN_HTTP_PORT:-8096}:8096"
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin
     restart: unless-stopped
 
   jellyfin-neo4j:
     image: neo4j:5.15
-    container_name: pmoves-jellyfin-neo4j
+    container_name: cataclysm-jellyfin-neo4j
     environment:
       - NEO4J_AUTH=neo4j/${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
       - NEO4J_dbms_security_procedures_unrestricted=gds.*
@@ -41,14 +43,16 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/import:/var/lib/neo4j/import
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/plugins:/plugins
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin-neo4j
     restart: unless-stopped
 
   jellyfin-qwen-audio:
     # Using Ollama with quantized Qwen2-Audio-7B-Instruct GGUF model
     # Download model: ollama pull hf.co/second-state/Qwen2-Audio-7B-Instruct-GGUF:Q4_K_M
     image: ollama/ollama:latest
-    container_name: pmoves-jellyfin-qwen
+    container_name: cataclysm-jellyfin-qwen-audio
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_MODELS=/root/.ollama/models
@@ -57,7 +61,9 @@ services:
     ports:
       - "11434:11434"
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin-qwen-audio
     restart: unless-stopped
     # Uncomment for GPU support
     # deploy:
@@ -72,13 +78,13 @@ services:
     build:
       context: ../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/audio-processor
       dockerfile: Dockerfile
-    container_name: pmoves-jellyfin-audio-processor
+    container_name: cataclysm-jellyfin-audio-processor
     env_file:
       - ./env.jellyfin-ai
     environment:
-      - JELLYFIN_URL=${JELLYFIN_URL:-http://jellyfin:8096}
-      - QWEN_AUDIO_URL=${QWEN_AUDIO_URL:-http://jellyfin-qwen-audio:8000}
-      - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
+      - JELLYFIN_URL=${JELLYFIN_URL:-http://cataclysm-jellyfin:8096}
+      - QWEN_AUDIO_URL=${QWEN_AUDIO_URL:-http://cataclysm-jellyfin-qwen-audio:8000}
+      - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://cataclysm-jellyfin-neo4j:7687}
       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
     volumes:
@@ -86,7 +92,9 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/app/output
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/logs:/app/logs
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin-audio-processor
     restart: unless-stopped
     depends_on:
       - jellyfin
@@ -95,32 +103,36 @@ services:
 
   jellyfin-redis:
     image: redis:7-alpine
-    container_name: pmoves-jellyfin-redis
+    container_name: cataclysm-jellyfin-redis
     command: redis-server --appendonly yes
     volumes:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/redis:/data
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin-redis
     restart: unless-stopped
 
   jellyfin-api-gateway:
     build:
       context: ../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/api-gateway
       dockerfile: Dockerfile
-    container_name: pmoves-jellyfin-api
+    container_name: cataclysm-jellyfin-api-gateway
     env_file:
       - ./env.jellyfin-ai
     environment:
       - PORT=3000
-      - JELLYFIN_URL=${JELLYFIN_URL:-http://jellyfin:8096}
-      - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://jellyfin-neo4j:7687}
+      - JELLYFIN_URL=${JELLYFIN_URL:-http://cataclysm-jellyfin:8096}
+      - NEO4J_URI=${JELLYFIN_NEO4J_URI:-bolt://cataclysm-jellyfin-neo4j:7687}
       - NEO4J_USER=${JELLYFIN_NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${JELLYFIN_NEO4J_PASSWORD:-mediapassword123}
-      - REDIS_URL=${JELLYFIN_REDIS_URL:-redis://jellyfin-redis:6379}
+      - REDIS_URL=${JELLYFIN_REDIS_URL:-redis://cataclysm-jellyfin-redis:6379}
     ports:
       - "${JELLYFIN_API_PORT:-8300}:3000"
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin-api-gateway
     restart: unless-stopped
     depends_on:
       - jellyfin
@@ -131,19 +143,21 @@ services:
     build:
       context: ../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/dashboard
       dockerfile: Dockerfile
-    container_name: pmoves-jellyfin-dashboard
+    container_name: cataclysm-jellyfin-dashboard
     environment:
       - REACT_APP_API_URL=${JELLYFIN_DASHBOARD_API_URL:-http://localhost:${JELLYFIN_API_PORT:-8300}}
       - REACT_APP_JELLYFIN_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
     ports:
       - "${JELLYFIN_DASHBOARD_PORT:-8400}:80"
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin-dashboard
     restart: unless-stopped
     depends_on:
       - jellyfin-api-gateway
 
 networks:
-  pmoves:
+  cataclysm:
     external: true
-    name: pmoves-net
+    name: cataclysm-net

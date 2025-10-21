@@ -1,13 +1,14 @@
 services:
   open-notebook:
     image: lfnovo/open_notebook:latest-single
+    container_name: cataclysm-open-notebook
     restart: unless-stopped
     env_file:
       - env.shared
       - .env
       - .env.local
     environment:
-      SURREAL_URL: ${SURREAL_URL:-ws://open-notebook-surrealdb-ext:8000/rpc}
+      SURREAL_URL: ${SURREAL_URL:-ws://cataclysm-open-notebook-surrealdb:8000/rpc}
       API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
@@ -42,8 +43,10 @@ services:
     volumes:
       - ./data/open-notebook/notebook_data:/app/data
     networks:
-      - pmoves
+      cataclysm:
+        aliases:
+          - cataclysm-open-notebook
 networks:
-  pmoves:
+  cataclysm:
     external: true
-    name: pmoves-net
+    name: cataclysm-net

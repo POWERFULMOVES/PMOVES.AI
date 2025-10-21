@@ -2,11 +2,14 @@ version: "3.9"
 
 services:
   wger:
-    image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:main}
-    container_name: pmoves-wger
+    image: ${WGER_IMAGE:-ghcr.io/cataclysmstudios/pmoves-health-wger:main}
+    container_name: cataclysm-wger
     restart: unless-stopped
     env_file: [env.shared, .env, .env.local]
-    networks: [pmoves]
+    networks:
+      cataclysm:
+        aliases:
+          - cataclysm-wger
     environment:
       - DJANGO_DEBUG=False
       - WGER_USE_GUNICORN=True
@@ -17,11 +20,14 @@ services:
 
   wger-nginx:
     image: ${WGER_NGINX_IMAGE:-nginx:1.27-alpine}
-    container_name: pmoves-wger-nginx
+    container_name: cataclysm-wger-nginx
     restart: unless-stopped
     depends_on:
       - wger
-    networks: [pmoves]
+    networks:
+      cataclysm:
+        aliases:
+          - cataclysm-wger-nginx
     ports:
       - "8000:80"
     volumes:
@@ -31,14 +37,17 @@ services:
 
   firefly:
     image: ${FIREFLY_IMAGE:-fireflyiii/core:latest}
-    container_name: pmoves-firefly
+    container_name: cataclysm-firefly
     restart: unless-stopped
     env_file: [env.shared, .env, .env.local]
-    networks: [pmoves]
+    networks:
+      cataclysm:
+        aliases:
+          - cataclysm-firefly
     environment:
       APP_KEY: ${FIREFLY_APP_KEY:-SomeRandomStringOf32CharsExactly}
       APP_ENV: ${FIREFLY_APP_ENV:-production}
-      SITE_OWNER: ${FIREFLY_SITE_OWNER:-ops@pmoves.ai}
+      SITE_OWNER: ${FIREFLY_SITE_OWNER:-ops@cataclysmstudios.com}
       DB_CONNECTION: ${FIREFLY_DB_CONNECTION:-sqlite}
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
@@ -50,25 +59,31 @@ services:
 
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
-    container_name: pmoves-open-notebook-surrealdb
+    container_name: cataclysm-open-notebook-surrealdb
     command: start --log info --user ${OPEN_NOTEBOOK_SURREAL_USER:-root} --pass ${OPEN_NOTEBOOK_SURREAL_PASS:-root} rocksdb:/mydata/mydatabase.db
     restart: unless-stopped
     user: "0:0"
-    networks: [pmoves]
+    networks:
+      cataclysm:
+        aliases:
+          - cataclysm-open-notebook-surrealdb
     volumes:
       - ./data/open-notebook/surreal_data:/mydata
 
   open-notebook-ext:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:main}
-    container_name: pmoves-open-notebook
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/cataclysmstudios/pmoves-open-notebook:main}
+    container_name: cataclysm-open-notebook
     restart: unless-stopped
     env_file: [env.shared, .env, .env.local]
     depends_on:
       - open-notebook-surrealdb-ext
-    networks: [pmoves]
+    networks:
+      cataclysm:
+        aliases:
+          - cataclysm-open-notebook
     environment:
-      SURREAL_URL: ${SURREAL_URL:-ws://open-notebook-surrealdb-ext:8000/rpc}
-      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
+      SURREAL_URL: ${SURREAL_URL:-ws://cataclysm-open-notebook-surrealdb:8000/rpc}
+      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-cataclysm-open-notebook-surrealdb}
       SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
       SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:-root}
       SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-root}
@@ -110,10 +125,13 @@ services:
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-jellyfin/jellyfin:latest}
-    container_name: pmoves-jellyfin
+    container_name: cataclysm-jellyfin
     restart: unless-stopped
     env_file: [env.shared, .env, .env.local]
-    networks: [pmoves]
+    networks:
+      cataclysm:
+        aliases:
+          - cataclysm-jellyfin
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
@@ -126,9 +144,9 @@ services:
       - ./data/jellyfin/media:/media
 
 networks:
-  pmoves:
+  cataclysm:
     external: true
-    name: pmoves-net
+    name: cataclysm-net
 
 volumes:
   firefly-storage:
