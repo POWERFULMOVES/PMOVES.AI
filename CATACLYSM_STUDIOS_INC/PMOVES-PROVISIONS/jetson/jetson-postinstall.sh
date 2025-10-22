@@ -10,6 +10,11 @@ TAILSCALE_HELPER="${BUNDLE_ROOT}/tailscale/tailscale_up.sh"
 TAILSCALE_AUTH_FILE="${BUNDLE_ROOT}/tailscale/tailscale_authkey.txt"
 JETSON_CONTAINERS_DIR=${JETSON_CONTAINERS_DIR:-/opt/jetson-containers}
 MODE_INPUT=${MODE:-full}
+JELLYFIN_BACKUP_HELPER_DEFAULT="${BUNDLE_ROOT}/docker-stacks/jellyfin-ai/scripts/jellyfin_backup.sh"
+JELLYFIN_BACKUP_HELPER=${JELLYFIN_BACKUP_HELPER:-${JELLYFIN_BACKUP_HELPER_DEFAULT}}
+JELLYFIN_STACK_ROOT_DEFAULT="${TARGET_DIR}/docker-stacks/jellyfin-ai"
+JELLYFIN_STACK_ROOT=${JELLYFIN_STACK_ROOT:-${JELLYFIN_STACK_ROOT_DEFAULT}}
+JELLYFIN_ARCHIVE_DIR=${JELLYFIN_ARCHIVE_DIR:-${JELLYFIN_STACK_ROOT}/backups}
 
 log() {
   echo -e "\n[jetson-postinstall] $*"
@@ -59,6 +64,50 @@ parse_args() {
   done
 }
 
+load_env_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      local key="${line%%=*}"
+      local value="${line#*=}"
+      value="${value%$'\r'}"
+      value="${value#\"}"
+      value="${value%\"}"
+      value="${value#\'}"
+      value="${value%\'}"
+      export "$key=$value"
+    fi
+  done <"$file"
+}
+
+load_stack_env() {
+  local root="$1"
+  load_env_file "${root}/.env"
+  load_env_file "${root}/.env.local"
+}
+
+run_jellyfin_backup_if_available() {
+  local reason="$1"
+  if [[ ! -x "${JELLYFIN_BACKUP_HELPER}" ]]; then
+    log "Skipping Jellyfin backup for ${reason}; helper not found at ${JELLYFIN_BACKUP_HELPER}."
+    return 0
+  fi
+
+  load_stack_env "${JELLYFIN_STACK_ROOT}"
+
+  if "${JELLYFIN_BACKUP_HELPER}" backup \
+      --stack-root "${JELLYFIN_STACK_ROOT}" \
+      --bundle-dir "${JELLYFIN_ARCHIVE_DIR}" \
+      --upload; then
+    log "Captured Jellyfin backup before ${reason}."
+  else
+    log "Jellyfin backup helper reported an error during ${reason}; continuing with restart."
+  fi
+}
+
 ensure_env_file() {
   local target="$1"
   local template="$2"
@@ -104,6 +153,7 @@ JSON
 
 systemctl enable --now docker
 usermod -aG docker "${SUDO_USER:-$USER}"
+run_jellyfin_backup_if_available "docker service restart"
 systemctl restart docker
 
 
@@ -151,11 +201,13 @@ if [[ -f "${TAILSCALE_HELPER}" ]]; then
   else
     log "Tailnet helper found at ${TAILSCALE_HELPER} but is not executable; attempting to source anyway."
     join_tailnet "${TAILSCALE_HELPER}" "${TAILSCALE_AUTH_FILE}"
+  fi
 
   systemctl enable --now docker
   usermod -aG docker "${SUDO_USER:-$USER}"
+  run_jellyfin_backup_if_available "tailscale bootstrap docker restart"
   systemctl restart docker
-}
+fi
 
 install_tailscale() {
   log "Installing Tailscale."
@@ -235,10 +287,6 @@ install_pmoves_python_dependencies() {
   else
     log "install_all_requirements.sh not found at ${PMOVES_ROOT}/scripts; skipping dependency install."
   fi
-
-else
-  log "PMOVES project directory not found under ${TARGET_DIR}; skipping env bootstrap and dependency install."
-fi
 
 if [[ -d "${BUNDLE_ROOT}/docker-stacks" ]]; then
   ln -sfn "${BUNDLE_ROOT}/docker-stacks" "${TARGET_DIR}/docker-stacks"
