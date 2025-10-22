@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:latest
+    image: lscr.io/linuxserver/jellyfin:10.11.0
     container_name: pmoves-jellyfin
     environment:
       - PUID=${JELLYFIN_PUID:-1000}
