@@ -51,6 +51,7 @@ services:
       pmoves:
         aliases:
           - cataclysm-open-notebook
+          - open-notebook
 networks:
   cataclysm:
     external: true
