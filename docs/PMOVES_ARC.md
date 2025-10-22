@@ -256,6 +256,8 @@ The Jellyfin AI Media Stack is integrated as a specialized AI muscle within the 
 
 This integration creates a powerful synergy for research, data processing, and content generation, allowing PMOVES agents to query and retrieve deep insights from analyzed media [18, 19].
 
+The Jellyfin AI refresh now pins the audio processor container to FFmpeg 7.1 (BtbN GPL build) compiled with libplacebo tone mapping, SVT-AV1, libaom, libdav1d, VAAPI, and NVENC so HDR10/HLG catalog entries keep their metadata while still offloading transcodes to Intel or NVIDIA GPUs [18]. Dedicated compose profiles—`jellyfin-ai-vaapi` and `jellyfin-ai-nvenc`—mount the correct device nodes, request GPU resources, and push `JELLYFIN_HWACCEL_MODE` into the runtime so the media server, audio analyzer, and API gateway all point at the active hardware stack through the shared `JELLYFIN_STACK_SERVICE`/`JELLYFIN_SERVICE_HOST` variables. Supabase ingestion should persist the richer decoder output (`videos.meta -> hdr_format`, `color_primaries`, `transfer_characteristics`, `preferred_av1_variant`) and the analyzer service should map those fields into `media_analysis` rows so downstream geometry and persona agents can filter streams by HDR or AV1 readiness during recommendations [18, 19].
+
 --------------------------------------------------------------------------------
 
 ## 4. HiRAG Integration Workflow

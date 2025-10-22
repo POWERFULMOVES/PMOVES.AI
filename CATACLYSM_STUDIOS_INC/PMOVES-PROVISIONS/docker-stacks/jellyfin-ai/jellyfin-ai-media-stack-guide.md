@@ -109,6 +109,11 @@ JELLYFIN_USERNAME=your-jellyfin-username
 JELLYFIN_PASSWORD=your-jellyfin-password
 # Optionally set an API key instead of credentials
 JELLYFIN_API_KEY=
+# JELLYFIN_USER_ID=00000000000000000000000000000000
+
+# Supabase storage target for automated backups
+SUPABASE_JELLYFIN_BACKUP_BUCKET=jellyfin-backups
+SUPABASE_JELLYFIN_BACKUP_PREFIX=jellyfin
 
 # Security
 JWT_SECRET=your-jwt-secret-here
@@ -130,6 +135,36 @@ YOUTUBE_API_KEY=your-youtube-api-key
 `JELLYFIN_USERNAME` and `JELLYFIN_PASSWORD` (or the optional `JELLYFIN_API_KEY`) are consumed by the audio processor to securely
 authenticate against your Jellyfin server. Populate these secrets through your provisioning workflow so containers can access the
 media library without prompting for manual credentials.
+
+### 🔒 Backup & Restore Runbook
+
+The provisioning bundle ships with `scripts/jellyfin_backup.sh`, a helper that wraps Jellyfin 10.11's `/Backup/Create` and `/Backup/Restore` endpoints. It creates on-disk archives, mirrors them into `<stack-root>/backups/`, and (when Supabase credentials are present) uploads the artifact to Supabase Storage.
+
+**Manual backup**
+
+```bash
+cd CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai
+scripts/jellyfin_backup.sh backup \
+  --stack-root /path/to/docker-stacks/jellyfin-ai \
+  --bundle-dir /path/to/docker-stacks/jellyfin-ai/backups \
+  --upload
+```
+
+* Authenticates with `JELLYFIN_API_KEY` or the username/password pair defined in `.env`.
+* Persists the generated archive under `<stack-root>/backups/` alongside the provisioning bundle.
+* Uploads to Supabase when `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and the bucket/prefix variables are populated.
+
+**Restore workflow**
+
+```bash
+scripts/jellyfin_backup.sh restore \
+  --stack-root /path/to/docker-stacks/jellyfin-ai \
+  --archive backups/jellyfin-backup-<timestamp>.zip
+```
+
+The restore action copies the selected archive into Jellyfin's backup directory (usually `jellyfin/config/data/backups/`) and issues `/Backup/Restore`, which schedules a Jellyfin restart to apply the snapshot.
+
+> **Automation hooks** – The Ubuntu autoinstall bundle and Jetson post-install helper call `jellyfin_backup.sh` before restarting Docker, ensuring a fresh archive is captured whenever the stack is reprovisioned. Override `JELLYFIN_STACK_ROOT`, `JELLYFIN_ARCHIVE_DIR`, or the Supabase bucket variables if your deployment lives outside the default folder layout.
 
 ### Supabase Setup
 

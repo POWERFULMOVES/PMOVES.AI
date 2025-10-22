@@ -5,6 +5,12 @@ _Last updated: 2025-10-18_
 This guide aggregates the entry points that keep local environments consistent across Windows, WSL, and Linux hosts. Use it alongside `pmoves/docs/LOCAL_DEV.md` (service ports, networking) and `pmoves/docs/SMOKETESTS.md` (verification flows) when onboarding new contributors or refreshing a workstation.
 
 ## Environment & Secrets
+- `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` → wraps the
+  registry-driven env bootstrap and then stages
+  `pmoves/pmoves_provisioning_pr_pack/` into
+  `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/` (override with `--output`). Use
+  `--registry`/`--service` when you need to scope the env refresh to a subset of
+  services.
 - `make env-setup` → runs `python3 -m pmoves.tools.secrets_sync generate` to materialize `.env.generated` / `env.shared.generated` from `pmoves/chit/secrets_manifest.yaml`, then calls `scripts/env_setup.{sh,ps1}` to merge `.env.example` with the optional `env.*.additions`. Use `make env-setup -- --yes` to accept defaults non-interactively.
 - `make bootstrap` → interactive secret capture (still writes overrides to `env.shared`, which now layers on top of the generated secrets for Supabase, provider tokens, Wger/Firefly/Open Notebook, Discord/Jellyfin). Re-run after `supabase start --network-id pmoves-net` or whenever external credentials change. Supports `BOOTSTRAP_FLAGS="--service supabase"` and `--accept-defaults` for targeted updates.
 - `python3 -m pmoves.tools.onboarding_helper status` → summarize manifest coverage and highlight missing CGP labels before generating env files (`… generate` writes the files directly).

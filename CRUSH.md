@@ -11,11 +11,18 @@ as our interactive coding bestie alongside the PMOVES stack.
    ```bash
    uv pip install typer[all]
    ```
-3. Generate the PMOVES opinionated `crush.json`:
+3. Prime the environment and provisioning bundle in one shot:
+   ```bash
+   python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults
+   ```
+   Pass `--registry`/`--service` if you need to scope the bootstrap or `--output`
+   to drop the provisioning pack somewhere other than
+   `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/`.
+4. Generate the PMOVES opinionated `crush.json`:
    ```bash
    python3 -m pmoves.tools.mini_cli crush setup
    ```
-4. Launch Crush inside the repository root:
+5. Launch Crush inside the repository root:
    ```bash
    crush
    ```
