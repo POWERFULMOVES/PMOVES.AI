@@ -1,4 +1,4 @@
-import os, time
+import asyncio
 from pathlib import Path
 import sys
 
@@ -11,9 +11,14 @@ for p in (str(ROOT), str(PM)):
 from pmoves.services.pmoves_yt import yt as ytmod
 
 
-def test_playlist_rate_limit_sleep(monkeypatch):
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_playlist_rate_limit_sleep(monkeypatch):
     calls = []
     monkeypatch.setenv("YT_RATE_LIMIT", "0.2")
+    monkeypatch.setenv("YT_CONCURRENCY", "1")
 
     def fake_extract(url):
         return [{"id": "id1", "title": "t1"}, {"id": "id2", "title": "t2"}]
@@ -27,9 +32,12 @@ def test_playlist_rate_limit_sleep(monkeypatch):
     monkeypatch.setattr(ytmod, "_extract_entries", lambda url: fake_extract(url))
     monkeypatch.setattr(ytmod, "yt_download", fake_download)
     monkeypatch.setattr(ytmod, "yt_transcript", fake_transcript)
-    monkeypatch.setattr(time, "sleep", lambda s: calls.append(s))
+    async def fake_sleep(duration: float):
+        calls.append(duration)
 
-    out = ytmod.yt_playlist({"url": "https://www.youtube.com/playlist?list=PL1", "namespace": "pm", "bucket": "b"})
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    out = await ytmod.yt_playlist({"url": "https://www.youtube.com/playlist?list=PL1", "namespace": "pm", "bucket": "b"})
     assert out.get("ok") is True
     # Two entries → one inter-iteration sleep
     assert calls and abs(calls[0] - 0.2) < 1e-6

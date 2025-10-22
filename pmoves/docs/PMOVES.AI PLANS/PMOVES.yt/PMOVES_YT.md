@@ -14,7 +14,9 @@ Endpoints
 
 ### Concurrency & rate limiting
 
-Playlist and channel ingestion runs asynchronously: the service fans out individual video jobs to a worker pool so downloads and transcripts can progress in parallel. `YT_CONCURRENCY` sets the maximum number of videos processed at once and defaults to `2` when the variable is unset. To slow down launches—for example, to stay within YouTube quota limits—set `YT_RATE_LIMIT` to the number of seconds to wait between starting each video; the default is `0`, which disables the delay.
+Playlist and channel ingestion runs inside an async worker pool so downloads and transcripts can progress in parallel. `YT_CONCURRENCY` sets the maximum number of in-flight videos (default `2`); setting it to `1` falls back to the legacy sequential flow. Each worker updates its `yt_items` row as it starts and finishes so Supabase job tracking stays accurate even when tasks complete out of order.
+
+`YT_RATE_LIMIT` defines a shared delay (seconds) before new workers start downloading. When the limit is greater than zero, every worker waits on a global timer before beginning the download/transcription step. This means high values can effectively serialize start times even if the pool has multiple slots, but long-running jobs continue in parallel once started. Leave it at `0` to disable throttling.
 
 Example:
 

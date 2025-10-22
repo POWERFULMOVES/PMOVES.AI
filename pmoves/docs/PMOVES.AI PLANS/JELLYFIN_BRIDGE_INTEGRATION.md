@@ -51,6 +51,25 @@ jellyfin-bridge:
 | `JELLYFIN_AUTOLINK` | Enable automatic title-based mapping | No | `false` |
 | `AUTOLINK_INTERVAL_SEC` | Auto-map check interval (seconds) | No | `60` |
 
+## Jellyfin 10.11 Upgrade Runbook
+
+### Maintenance Window
+
+- **Duration:** Reserve a 10-minute window to pull the new Jellyfin container, restart `jellyfin-bridge`, and allow the publisher to reconnect.
+- **Expected downtime:** Jellyfin UI/API is unavailable for 3–5 minutes while the image re-pulls and migrations complete. The bridge and publisher report retry loops during this span but automatically recover once Jellyfin is serving requests again.
+
+### Required Overrides
+
+- Set `JELLYFIN_IMAGE=jellyfin/jellyfin:10.11.0` before invoking `make up-external` or `make up-jellyfin` so the core bridge runtime pulls the 10.11 series image.
+- For the optional AI stack, ensure `docker-compose.jellyfin-ai.yml` is picked up (via `make up-jellyfin-ai`) so the bundled LinuxServer build (`lscr.io/linuxserver/jellyfin:10.11.0`) is used.
+- Keep `JELLYFIN_EXPECTED_SERVER_NAME` aligned with production branding if you changed it from the default; the credential check enforces this string after restart.
+
+### Post-Upgrade Validation
+
+1. Wait for `jellyfin`, `jellyfin-bridge`, and `publisher` containers to report healthy in `docker compose ps`.
+2. Run `make jellyfin-verify` to confirm `/System/Info`, `/Library/Refresh`, and any configured refresh webhook all succeed against the 10.11 runtime.
+3. Inspect the publisher logs for the next publish event to ensure refresh attempts no longer surface warning or retry messages.
+
 ### Getting Jellyfin Credentials
 
 ```bash
@@ -65,6 +84,10 @@ curl -s "http://localhost:8096/Users" \
 echo "JELLYFIN_API_KEY=YOUR_API_KEY_HERE" >> pmoves/.env.local
 echo "JELLYFIN_USER_ID=YOUR_USER_ID_HERE" >> pmoves/.env.local
 ```
+
+## Backup & Restore
+
+- Automated provisioning flows call `scripts/jellyfin_backup.sh` before Docker restarts. Manual procedures (backup, Supabase upload, and restore) are documented in the [Jellyfin AI media stack guide](../../../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/jellyfin-ai-media-stack-guide.md#-backup--restore-runbook).
 
 ## API Endpoints
 
@@ -366,6 +389,18 @@ curl -X POST http://localhost:8093/jellyfin/playback-url \
 ```
 
 ---
+
+## Dashboard Gate for Post-Upgrade Agent Start-Up
+
+Leverage the Jellyfin AI dashboard (`http://localhost:3001`) as the last checkpoint before restarting the agent stack after a schema or package upgrade:
+
+1. **Refresh the view:** Click **Refresh** to pull the latest `/api/migrations/latest` snapshot and bridge/publisher log excerpts from the API gateway. A successful migration replay should populate the checklist with green indicators for Supabase, Neo4j, bridge, and publisher health.
+2. **Validate webhook latency:** The **Webhook Latency** card should report steady-state timings (sub-second averages in healthy environments). Investigate spikes before letting Agent Zero drain backlogs; latency telemetry comes directly from the migration payload so unexpected gaps usually indicate stalled publishers.
+3. **Inspect logs:** Review the **Log Viewer** panels. Jellyfin bridge logs should show `mapped` or `healthz` activity without repeated auth failures, and publisher logs should be free of Discord webhook errors. Use the dashboard for a quick skim, then fall back to `docker logs` if something looks off.
+4. **Gate agent bring-up:** Only run `make up-agents` (or restart Agent Zero/publisher individually) once the checklist and logs are clean. Capture the dashboard state in the runbook when promoting changes between environments.
+
+Treat the dashboard as the operational go/no-go signal—if any panel reports stale data, errors, or missing telemetry, pause the rollout and resolve the underlying issue before rejoining Jellyfin automations to the broader agent mesh.
+
 
 ## Troubleshooting
 
