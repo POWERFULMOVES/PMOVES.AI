@@ -15,6 +15,7 @@
 pmoves mini [GLOBAL OPTIONS] COMMAND [ARGS...]
 
 Core:
+  bootstrap          # env bootstrap + provisioning bundle staging
   init                # secrets sync + env generation + profile detection
   status              # aggregate readiness (env, MCP, compose, models)
   profile detect      # inspect hardware, suggest profile
@@ -31,6 +32,10 @@ Core:
 ```
 
 Global options include `--profile`, `--non-interactive`, and `--manifest PATH`.
+
+`bootstrap` wraps `pmoves.scripts.bootstrap_env` and stages the provisioning PR
+pack (defaulting to `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/`) so remote bring-up
+bundles are ready immediately after secrets populate.
 
 # 3. Architecture Overview
 

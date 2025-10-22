@@ -101,6 +101,16 @@ def stub_external_modules() -> None:
         yt_module.YoutubeDL = _PlaceholderYDL  # type: ignore[attr-defined]
         _install_module("yt_dlp", yt_module)
 
+    if "yaml" not in sys.modules:
+        yaml_module = ModuleType("yaml")
+
+        def _yaml_stub(*args, **kwargs):  # pragma: no cover - simple stub
+            raise RuntimeError("yaml stub used without dependency")
+
+        yaml_module.safe_load = _yaml_stub  # type: ignore[attr-defined]
+        yaml_module.safe_dump = _yaml_stub  # type: ignore[attr-defined]
+        _install_module("yaml", yaml_module)
+
     # boto3 client stub; upload_file is patched in tests
     if "boto3" not in sys.modules:
         boto3_module = ModuleType("boto3")
