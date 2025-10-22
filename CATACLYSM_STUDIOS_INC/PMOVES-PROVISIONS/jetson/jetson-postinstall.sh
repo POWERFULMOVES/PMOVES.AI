@@ -20,6 +20,20 @@ log() {
   echo -e "\n[jetson-postinstall] $*"
 }
 
+require_supported_arch() {
+  local arch="$1"
+  case "${arch}" in
+    aarch64)
+      return 0
+      ;;
+    *)
+      log "Unsupported architecture '${arch}'. Jetson provisioning requires a 64-bit ARM host (aarch64)."
+      log "Replace legacy 32-bit boards with Jetson Orin Nano or Raspberry Pi 5 class hardware before rerunning."
+      exit 1
+      ;;
+  esac
+}
+
 usage() {
   cat <<USAGE
 Usage: $(basename "$0") [--mode <standalone|web|full>]
@@ -28,6 +42,8 @@ Modes:
   standalone  Minimal networking bootstrap (Tailscale + RustDesk)
   web         Mesh + Docker runtime + repo clone for container entrypoints
   full        Complete Jetson bootstrap (default)
+
+This helper targets 64-bit Jetson hardware (aarch64 JetPack hosts).
 
 You can also set MODE=<mode> in the environment.
 USAGE
@@ -122,12 +138,6 @@ ensure_env_file() {
   fi
 }
 
-
-log "Refreshing base system packages."
-
-apt update && apt -y upgrade
-apt -y install ca-certificates curl gnupg lsb-release build-essential git unzip jq python3 python3-pip python3-venv docker.io docker-compose-plugin
-=======
 install_base_packages() {
   local packages=("$@")
   log "Refreshing base system packages."
@@ -378,6 +388,7 @@ run_full_mode() {
 
 main() {
   parse_args "$@"
+  require_supported_arch "$(uname -m)"
   local mode
   mode=$(echo "${MODE_INPUT}" | tr '[:upper:]' '[:lower:]')
   case "${mode}" in

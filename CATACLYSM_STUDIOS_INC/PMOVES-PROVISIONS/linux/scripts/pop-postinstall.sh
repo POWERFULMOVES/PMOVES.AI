@@ -14,6 +14,21 @@ log() {
 }
 
 
+require_supported_arch() {
+  local arch="$1"
+  case "${arch}" in
+    x86_64|aarch64)
+      return 0
+      ;;
+    *)
+      log "Unsupported architecture '${arch}'. This post-install only runs on 64-bit hosts (x86_64 or aarch64)."
+      log "Upgrade the node to a 64-bit workstation, Raspberry Pi 5, or Jetson Orin class device before rerunning."
+      exit 1
+      ;;
+  esac
+}
+
+
 configure_rustdesk_server() {
   local image="${RUSTDESK_SERVER_IMAGE:-rustdesk/rustdesk-server:latest}"
   local data_root="${RUSTDESK_DATA_DIR:-/var/lib/rustdesk}"
@@ -93,6 +108,8 @@ EOF
   systemctl enable --now rustdesk-hbbs.service rustdesk-hbbr.service
   log "RustDesk services enabled. Keys live under ${data_root}/hbbs (id_ed25519*)."
 
+}
+
 usage() {
   cat <<USAGE
 Usage: $(basename "$0") [--mode <standalone|web|full>]
@@ -101,6 +118,8 @@ Modes:
   standalone  Minimal setup: base packages + Tailscale + RustDesk
   web         Mesh + Docker + repo clone for web entrypoint
   full        Complete workstation bootstrap (default)
+
+This helper targets 64-bit Pop!_OS/Ubuntu hosts (x86_64, aarch64).
 
 You can also set MODE=<mode> in the environment.
 USAGE
@@ -152,76 +171,6 @@ ensure_env_file() {
     log "Skipping ${target}; template ${template} not found."
   fi
 }
-
-
-log "Refreshing base system packages."
-apt update && apt -y upgrade
-apt -y install ca-certificates curl gnupg lsb-release build-essential git unzip jq python3 python3-pip python3-venv
-
-
-# Docker & NVIDIA container toolkit
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-chmod a+r /etc/apt/keyrings/docker.gpg
-. /etc/os-release
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $UBUNTU_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt update
-apt -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -fsSL https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-apt update && apt -y install nvidia-container-toolkit
-nvidia-ctk runtime configure --runtime=docker
-systemctl restart docker
-usermod -aG docker "${SUDO_USER:-$USER}"
-
-
-# Tailscale
-curl -fsSL https://tailscale.com/install.sh | sh
-systemctl enable --now tailscaled
-echo 'Run: sudo tailscale up --ssh --accept-routes'
-
-log "Configuring RustDesk repository."
-curl -fsSL https://apt.rustdesk.com/key.pub | gpg --dearmor -o /etc/apt/keyrings/rustdesk.gpg
-chmod a+r /etc/apt/keyrings/rustdesk.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/rustdesk.gpg] https://apt.rustdesk.com/ stable main" | tee /etc/apt/sources.list.d/rustdesk.list > /dev/null
-apt update
-apt -y install rustdesk
-
-configure_rustdesk_server
-
-log "Installing Tailscale and bringing host onto Tailnet."
-curl -fsSL https://tailscale.com/install.sh | sh
-systemctl enable --now tailscaled
-if [[ -x "${TAILSCALE_HELPER}" ]]; then
-  # shellcheck disable=SC1090
-  source "${TAILSCALE_HELPER}"
-else
-  log "Tailnet helper not found at ${TAILSCALE_HELPER}; skipping automatic tailscale up."
-fi
-
-log "Syncing PMOVES.AI repository to ${TARGET_DIR}."
-mkdir -p "${TARGET_DIR}"
-if [[ -d "${TARGET_DIR}/.git" ]]; then
-  current_branch=$(git -C "${TARGET_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
-  git -C "${TARGET_DIR}" fetch --all --prune
-  git -C "${TARGET_DIR}" reset --hard "origin/${current_branch}"
-elif [[ -d "${TARGET_DIR}" && -n $(ls -A "${TARGET_DIR}" 2>/dev/null) ]]; then
-  timestamp=$(date +%Y%m%d%H%M%S)
-  backup_dir="${TARGET_DIR}.bak-${timestamp}"
-  mv "${TARGET_DIR}" "${backup_dir}"
-  log "Existing non-git directory moved to ${backup_dir}."
-  git clone "${REPO_URL}" "${TARGET_DIR}"
-else
-  git clone "${REPO_URL}" "${TARGET_DIR}"
-fi
-
-if [[ ! -d "${TARGET_DIR}/.git" ]]; then
-  log "Failed to sync PMOVES.AI repository to ${TARGET_DIR}."
-  exit 1
-fi
-
-if [[ -d "${PMOVES_ROOT}" ]]; then
 
 install_base_packages() {
   local packages=("$@")
@@ -372,6 +321,7 @@ run_full_mode() {
 
 main() {
   parse_args "$@"
+  require_supported_arch "$(uname -m)"
   local mode
   mode=$(echo "${MODE_INPUT}" | tr '[:upper:]' '[:lower:]')
   case "${mode}" in

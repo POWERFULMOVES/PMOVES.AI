@@ -50,6 +50,21 @@ jellyfin-bridge:
 | `SUPA_REST_URL` | PostgREST base URL | Yes | `http://postgrest:3000` |
 | `JELLYFIN_AUTOLINK` | Enable automatic title-based mapping | No | `false` |
 | `AUTOLINK_INTERVAL_SEC` | Auto-map check interval (seconds) | No | `60` |
+| `JELLYFIN_DEFAULT_LIBRARY_IDS` | Comma-separated library IDs applied to search when callers omit `library_ids` | No | - |
+| `JELLYFIN_DEFAULT_MEDIA_TYPES` | Comma-separated Jellyfin item types included in search requests | No | `Movie,Video` |
+| `JELLYFIN_SERVER_ID` | Default server identifier appended to playback URLs | No | `local` |
+| `JELLYFIN_DEVICE_ID` | Optional device identifier appended to playback URLs | No | - |
+| `JELLYFIN_BRAND_NAME` | Admin dashboard display name | No | `PMOVES Jellyfin` |
+| `JELLYFIN_BRAND_TAGLINE` | Subtitle rendered under the dashboard heading | No | `Curate, sync, and stream` |
+| `JELLYFIN_BRAND_PRIMARY_COLOR` | HEX code for navigation/header backgrounds | No | `#1F2937` |
+| `JELLYFIN_BRAND_ACCENT_COLOR` | HEX code used for buttons and highlights | No | `#38BDF8` |
+| `JELLYFIN_BRAND_LOGO_URL` | URL to square logo asset | No | - |
+| `JELLYFIN_BRAND_BACKGROUND_URL` | Hero/background image for admin login cards | No | - |
+| `JELLYFIN_BRAND_SUPPORT_LINK` | Support/help center link surfaced in footer | No | - |
+| `JELLYFIN_BRANDING_TABLE` | Optional Supabase table to persist branding JSON | No | - |
+| `JELLYFIN_BRANDING_KEY` | Row identifier used when persisting branding JSON | No | `default` |
+| `JELLYFIN_BRANDING_KEY_COLUMN` | Column storing the row identifier in the branding table | No | `key` |
+| `JELLYFIN_BRANDING_VALUE_COLUMN` | Column storing the branding JSON document | No | `value` |
 
 ## Jellyfin 10.11 Upgrade Runbook
 
@@ -85,9 +100,53 @@ echo "JELLYFIN_API_KEY=YOUR_API_KEY_HERE" >> pmoves/.env.local
 echo "JELLYFIN_USER_ID=YOUR_USER_ID_HERE" >> pmoves/.env.local
 ```
 
+
+### Branding Configuration (Jellyfin 10.11+)
+
+Jellyfin 10.11 introduces richer admin branding controls. The bridge exposes them through `/jellyfin/branding` so operators can adjust titles, colors, and hero imagery without redeploying the service.
+
+```bash
+# Inspect current branding (combines environment defaults + stored overrides)
+curl http://localhost:8093/jellyfin/branding | jq
+
+# Update branding values at runtime
+curl -X POST http://localhost:8093/jellyfin/branding \
+  -H "Content-Type: application/json" \
+  -d '{
+        "brand_name": "PMOVES Studio",
+        "brand_tagline": "Sync Jellyfin with PMOVES.ai",
+        "accent_color": "#6366F1",
+        "support_link": "https://pmoves.ai/support"
+      }'
+
+# Reset the admin styling back to environment defaults
+curl -X POST http://localhost:8093/jellyfin/branding \
+  -H "Content-Type: application/json" \
+  -d '{"reset": true}'
+
+# Optional: persist overrides to Supabase by providing JELLYFIN_BRANDING_* env vars
+```
+
+The `/jellyfin/config` endpoint aggregates the default search scopes and the currently effective branding document. Use it to prime UI forms when building an admin console:
+
+```bash
+curl http://localhost:8093/jellyfin/config | jq '.search_defaults'
+```
+
+### Dashboard Preview
+
+To capture the refreshed Jellyfin Bridge dashboard with advanced filters and the
+branding preview card, open the admin console at
+`http://localhost:8093/jellyfin/admin` after applying your configuration. Use
+your operating system's screenshot tooling to document the state for release
+notes or runbooks. Store the artifact in your knowledge base (e.g., Notion or
+Supabase storage) rather than this repository so the workflow remains text only
+for PR automation.
+
 ## Backup & Restore
 
 - Automated provisioning flows call `scripts/jellyfin_backup.sh` before Docker restarts. Manual procedures (backup, Supabase upload, and restore) are documented in the [Jellyfin AI media stack guide](../../../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/jellyfin-ai-media-stack-guide.md#-backup--restore-runbook).
+
 
 ## API Endpoints
 
@@ -155,17 +214,25 @@ Content-Type: application/json
 
 {
   "video_id": "dQw4w9WgXcQ",
-  "t": 120.5
+  "t": 120.5,
+  "media_source_id": "12345abc"
 }
 ```
 
-**Purpose:** Generate Jellyfin deep link for video playback at specific timestamp.
+**Purpose:** Generate Jellyfin deep link for video playback at specific timestamp. Optional keys (`media_source_id`, `server_id`, `device_id`, `audio_stream_index`, `subtitle_stream_index`) override the defaults returned from Supabase metadata or environment variables.
 
 **Response:**
 ```json
 {
   "ok": true,
-  "url": "http://jellyfin:8096/web/index.html#!/details?id=abc123&serverId=local&startTime=120"
+  "url": "http://jellyfin:8096/web/index.html#!/details?id=abc123&serverId=local&startTime=120&startTimeTicks=1200000000",
+  "params": {
+    "id": "abc123",
+    "serverId": "local",
+    "startTime": "120",
+    "startTimeTicks": "1200000000",
+    "mediaSourceId": "12345abc"
+  }
 }
 ```
 
@@ -176,10 +243,20 @@ Content-Type: application/json
 ### Search Jellyfin Library
 
 ```bash
-GET /jellyfin/search?query=Rick+Astley
+GET /jellyfin/search?query=Example&library_ids=Movies&library_ids=Clips&media_types=Movie&exclude_item_types=Episode&sort_by=ProductionYear&sort_order=Descending&year=2023
 ```
 
-**Purpose:** Query Jellyfin library for movies/videos matching search term.
+**Purpose:** Query Jellyfin library for media matching search terms with Jellyfin 10.11 filters. Supported query params include:
+
+- `library_ids` / `library_scope`: restrict search to one or more library IDs.
+- `media_types` or `include_item_types`: include explicit Jellyfin item types (e.g., `Movie,Series`).
+- `exclude_item_types`: omit specific types such as `Episode` or `Trailer`.
+- `fields`: request additional metadata (e.g., `Overview`, `Path`, `RunTimeTicks`).
+- `sort_by` / `sort_order`: control ordering (example: `ProductionYear` + `Descending`).
+- `parent_id`: limit search under a specific collection.
+- `year`: prefer results from a target production year.
+- `recursive`: `true` by default; set `false` to avoid traversing child libraries.
+- `limit`: cap results (1–200).
 
 **Response:**
 ```json
@@ -187,11 +264,24 @@ GET /jellyfin/search?query=Rick+Astley
   "ok": true,
   "items": [
     {
-      "Id": "abc123...",
-      "Name": "Rick Astley - Never Gonna Give You Up",
-      "ProductionYear": 1987
+      "Id": "item-a",
+      "Name": "Example Project Extended",
+      "ProductionYear": 2023,
+      "Type": "Movie",
+      "Path": "/movies/example-project-extended"
     }
-  ]
+  ],
+  "applied_filters": {
+    "searchTerm": "Example",
+    "LibraryIds": "Movies,Clips",
+    "IncludeItemTypes": "Movie",
+    "ExcludeItemTypes": "Episode",
+    "SortBy": "ProductionYear",
+    "SortOrder": "Descending",
+    "Years": "2023",
+    "Recursive": "true",
+    "Limit": "25"
+  }
 }
 ```
 
@@ -211,11 +301,12 @@ Content-Type: application/json
 
 **Purpose:** Automatically find and link best-matching Jellyfin item by title.
 
-**Matching Logic:**
-1. Searches Jellyfin library for title
-2. Picks item with closest case-insensitive substring match
-3. Falls back to first result if no exact match
-4. Updates `videos.meta.jellyfin_item_id`
+**Matching Logic (10.11-aware):**
+1. Builds search parameters from request body + defaults (`library_ids`, `media_types`, optional `year`).
+2. Invokes `/Users/{id}/Items` with those filters.
+3. Scores each candidate using case-insensitive token matching and fuzzy ratio (SequenceMatcher).
+4. Adds a year bonus when production year matches the target video.
+5. Chooses the highest-scoring item above the 0.25 threshold and patches Supabase metadata.
 
 **Response:**
 ```json
@@ -224,10 +315,66 @@ Content-Type: application/json
   "mapped": {
     "video_id": "dQw4w9WgXcQ",
     "jellyfin_item_id": "abc123...",
-    "name": "Rick Astley - Never Gonna Give You Up"
+    "name": "Rick Astley - Never Gonna Give You Up",
+    "score": 0.87
+  },
+  "applied_filters": {
+    "searchTerm": "Rick Astley",
+    "LibraryIds": "Movies",
+    "IncludeItemTypes": "Movie,Video"
   }
 }
 ```
+
+---
+
+### Inspect Bridge Configuration
+
+```bash
+GET /jellyfin/config
+```
+
+**Purpose:** Retrieve the effective default search filters (`library_ids`, `media_types`, `server_id`, `device_id`) alongside the current branding document.
+
+**Response (excerpt):**
+```json
+{
+  "ok": true,
+  "search_defaults": {
+    "library_ids": ["Movies", "Shows"],
+    "media_types": ["Movie", "Series"],
+    "server_id": "local",
+    "device_id": ""
+  },
+  "branding": {
+    "brand_name": "PMOVES Jellyfin",
+    "accent_color": "#38BDF8"
+  }
+}
+```
+
+### View Branding Metadata
+
+```bash
+GET /jellyfin/branding
+```
+
+**Purpose:** Return the currently active branding payload plus the editable field metadata (environment variable, default, description).
+
+### Update Branding Metadata
+
+```bash
+POST /jellyfin/branding
+Content-Type: application/json
+
+{
+  "brand_name": "PMOVES Studio",
+  "accent_color": "#6366F1",
+  "background_url": "https://cdn.pmoves.ai/jellyfin/background.png"
+}
+```
+
+**Purpose:** Override admin branding fields at runtime. Include `{ "reset": true }` to revert to environment defaults.
 
 ---
 

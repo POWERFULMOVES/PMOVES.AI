@@ -125,7 +125,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
-.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
+.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 .PHONY: notebook-up notebook-down notebook-logs notebook-seed-models
 
@@ -1088,3 +1088,7 @@ seed-approval:
 .PHONY: seed-approval-ps
 seed-approval-ps:
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/seed_studio_board.ps1 -Title "$(TITLE)" -Url "$(URL)" -Namespace "$(NAMESPACE)"
+.PHONY: manifest-audit
+manifest-audit: ## Audit provisioning inventory and Supabase exports for unsupported hardware
+	@PYTHONPATH=.. $(PYTHON) -m pmoves.tools.manifest_audit
+

@@ -13,7 +13,7 @@
       "template": "/windows/Autounattend.xml",
       "replace": [
         {
-          "iso_file": ".*Windows.*11.*\\.iso$"
+          "iso_file": ".*Windows.*11.*(x64|amd64|arm64).*\\.iso$"
         }
       ]
     },
@@ -22,7 +22,7 @@
       "template": "/linux/ubuntu-autoinstall/user-data",
       "replace": [
         {
-          "iso_file": ".*ubuntu-.*server-.*\\.iso$"
+          "iso_file": ".*ubuntu-.*server-.*(amd64|arm64).*\\.iso$"
         }
       ]
     }
