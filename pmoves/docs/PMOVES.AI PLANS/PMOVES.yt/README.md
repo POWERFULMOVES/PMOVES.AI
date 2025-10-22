@@ -64,9 +64,20 @@ curl -X POST http://localhost:5678/webhook/youtube-ingest \
 {
   "success": true,
   "video_id": "dQw4w9WgXcQ",
+  "namespace": "pmoves",
   "title": "Rick Astley - Never Gonna Give You Up",
+  "video": {
+    "video_id": "dQw4w9WgXcQ",
+    "title": "Rick Astley - Never Gonna Give You Up",
+    "namespace": "pmoves",
+    "s3_url": "s3://assets/dQw4w9WgXcQ/raw.mp4",
+    "thumb": "https://cdn.example.com/dQw4w9WgXcQ.jpg"
+  },
+  "transcript_ready": true,
   "chunks_indexed": 42,
   "summary_generated": true,
+  "jellyfin_mapped": false,
+  "jellyfin_item_id": null,
   "message": "YouTube video successfully ingested and indexed"
 }
 ```
@@ -83,12 +94,30 @@ curl -X POST http://localhost:5678/webhook/youtube-ingest \
 - **Endpoint**: `POST http://pmoves-yt:8077/yt/ingest`
 - **Timeout**: 300 seconds (5 min) for large transcripts
 - **Purpose**: Downloads YouTube transcript + metadata to MinIO
-- **Output**: `{"ok": true, "video_id": "...", "title": "...", "namespace": "..."}`
+- **Output**:
+  ```json
+  {
+    "ok": true,
+    "video": {
+      "video_id": "dQw4w9WgXcQ",
+      "title": "Rick Astley - Never Gonna Give You Up",
+      "namespace": "pmoves",
+      "s3_url": "s3://assets/dQw4w9WgXcQ/raw.mp4",
+      "thumb": "https://cdn.example.com/dQw4w9WgXcQ.jpg"
+    },
+    "transcript": {
+      "ok": true,
+      "language": "en",
+      "text": "...",
+      "s3_uri": "s3://assets/dQw4w9WgXcQ/transcripts/en.json"
+    }
+  }
+  ```
 
 ### 3. Extract Video ID
 - **Type**: JavaScript code node
 - **Purpose**: Parse response and prepare for next steps
-- **Output**: Clean JSON with video_id, title, namespace, timestamp
+- **Output**: Clean JSON with `video` metadata (video_id, namespace, title), plus top-level aliases, transcript readiness flag, and timestamp for downstream nodes
 
 ### 4. PMOVES.YT - Emit to Hi-RAG (Parallel)
 - **Endpoint**: `POST http://pmoves-yt:8077/yt/emit`
@@ -106,7 +135,7 @@ curl -X POST http://localhost:5678/webhook/youtube-ingest \
 ### 6. Webhook Response
 - **Type**: Respond to Webhook
 - **Purpose**: Return success JSON to original caller
-- **Includes**: video_id, title, chunks_indexed, summary_generated
+- **Includes**: video metadata (nested + top-level aliases), namespace, transcript readiness, chunks indexed, summary status, optional Jellyfin mapping details
 
 ### 7. Discord Notification (Optional)
 - **Type**: HTTP POST

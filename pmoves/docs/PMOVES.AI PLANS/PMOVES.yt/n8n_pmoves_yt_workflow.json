@@ -12,7 +12,10 @@
       "name": "Webhook - YouTube URL",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "pmoves-yt-ingest"
     },
     {
@@ -45,17 +48,23 @@
       "name": "PMOVES.YT - Full Ingest",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Extract video_id from response\nconst response = $input.all()[0].json;\nreturn {\n  video_id: response.video_id,\n  title: response.title,\n  namespace: response.namespace || 'pmoves',\n  transcript_ready: response.ok,\n  timestamp: new Date().toISOString()\n};"
+        "jsCode": "// Extract structured video metadata from ingest response\nconst response = ($input.all()[0] || {}).json || {};\nconst videoMeta = response.video || {};\nconst webhookPayload = ($item(0).$node['Webhook - YouTube URL'] || {}).json || {};\nconst body = webhookPayload.body || {};\nconst videoId = videoMeta.video_id || videoMeta.id || response.video_id || body.video_id || body.id || '';\nconst namespace = videoMeta.namespace || response.namespace || body.namespace || 'pmoves';\nconst title = videoMeta.title || response.title || body.title || videoId;\nconst video = { ...videoMeta };\nif (!video.video_id && videoId) video.video_id = videoId;\nif (!video.id && videoId) video.id = videoId;\nif (!video.namespace && namespace) video.namespace = namespace;\nif (!video.title && title) video.title = title;\nreturn {\n  video,\n  video_id: videoId,\n  title,\n  namespace,\n  transcript_ready: (response.transcript && response.transcript.ok) || response.ok || false,\n  timestamp: new Date().toISOString()\n};"
       },
       "id": "extract_video_id",
       "name": "Extract Video ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -67,11 +76,11 @@
           "parameters": [
             {
               "name": "video_id",
-              "value": "={{ $json.video_id }}"
+              "value": "={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}"
             },
             {
               "name": "namespace",
-              "value": "={{ $json.namespace }}"
+              "value": "={{ ($json.video && $json.video.namespace) || $json.namespace }}"
             }
           ]
         },
@@ -83,7 +92,10 @@
       "name": "PMOVES.YT - Emit to Hi-RAG",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -95,7 +107,7 @@
           "parameters": [
             {
               "name": "video_id",
-              "value": "={{ $json.video_id }}"
+              "value": "={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}"
             },
             {
               "name": "style",
@@ -115,7 +127,10 @@
       "name": "PMOVES.YT - Generate Summary",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [900, 480]
+      "position": [
+        900,
+        480
+      ]
     },
     {
       "parameters": {
@@ -127,7 +142,7 @@
           "parameters": [
             {
               "name": "video_id",
-              "value": "={{ $json.video_id }}"
+              "value": "={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}"
             }
           ]
         },
@@ -139,19 +154,25 @@
       "name": "Auto-Map to Jellyfin (Optional)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1120, 300],
+      "position": [
+        1120,
+        300
+      ],
       "continueOnFail": true
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({\n  success: true,\n  video_id: $json.video_id,\n  title: $json.title,\n  chunks_indexed: $('emit_to_hirag').item.json.chunks,\n  summary_generated: $('generate_summary').item.json.ok,\n  jellyfin_mapped: $('auto_map_jellyfin').item.json.ok || false,\n  jellyfin_item_id: $('auto_map_jellyfin').item.json.mapped?.jellyfin_item_id || null,\n  message: 'YouTube video successfully ingested and indexed'\n}) }}"
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  video_id: ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id,\n  namespace: ($json.video && $json.video.namespace) || $json.namespace,\n  title: ($json.video && $json.video.title) || $json.title,\n  video: $json.video || null,\n  transcript_ready: $json.transcript_ready || false,\n  chunks_indexed: $('emit_to_hirag').item.json.chunks,\n  summary_generated: $('generate_summary').item.json.ok,\n  jellyfin_mapped: $('auto_map_jellyfin').item.json.ok || false,\n  jellyfin_item_id: $('auto_map_jellyfin').item.json.mapped?.jellyfin_item_id || null,\n  message: 'YouTube video successfully ingested and indexed'\n}) }}"
       },
       "id": "webhook_response",
       "name": "Webhook Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     },
     {
       "parameters": {
@@ -163,7 +184,7 @@
           "parameters": [
             {
               "name": "content",
-              "value": "=🎥 **YouTube Video Indexed**\\n\\n**Title:** {{ $json.title }}\\n**Video ID:** `{{ $json.video_id }}`\\n**Chunks:** {{ $('emit_to_hirag').item.json.chunks }}\\n**Summary:** {{ $('generate_summary').item.json.ok ? '✅ Generated' : '❌ Failed' }}\\n**Jellyfin:** {{ $('auto_map_jellyfin').item.json.ok ? '✅ Mapped to ' + $('auto_map_jellyfin').item.json.mapped.name : '⚠️ Not mapped' }}\\n\\n[Watch on YouTube](https://youtube.com/watch?v={{ $json.video_id }})"
+              "value": "=\ud83c\udfa5 **YouTube Video Indexed**\\n\\n**Title:** {{ ($json.video && $json.video.title) || $json.title }}\\n**Namespace:** {{ ($json.video && $json.video.namespace) || $json.namespace }}\\n**Video ID:** `{{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}`\\n**Chunks:** {{ $('emit_to_hirag').item.json.chunks }}\\n**Summary:** {{ $('generate_summary').item.json.ok ? '\u2705 Generated' : '\u274c Failed' }}\\n**Jellyfin:** {{ $('auto_map_jellyfin').item.json.ok ? '\u2705 Mapped to ' + $('auto_map_jellyfin').item.json.mapped.name : '\u26a0\ufe0f Not mapped' }}\\n\\n[Watch on YouTube](https://youtube.com/watch?v={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }})"
             }
           ]
         }
@@ -172,7 +193,10 @@
       "name": "Discord Notification (Optional)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1340, 480],
+      "position": [
+        1340,
+        480
+      ],
       "continueOnFail": true
     }
   ],
