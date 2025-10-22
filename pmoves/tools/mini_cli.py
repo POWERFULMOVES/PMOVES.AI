@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
-
-import subprocess
+from typing import List, Optional
 
 import json
 try:
@@ -24,6 +24,11 @@ from pmoves.tools import (
     secrets_sync,
 )
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PROVISIONING_SOURCE = REPO_ROOT / "pmoves" / "pmoves_provisioning_pr_pack"
+DEFAULT_PROVISIONING_DEST = REPO_ROOT / "CATACLYSM_STUDIOS_INC" / "PMOVES-PROVISIONS"
+
+
 app = typer.Typer(help="PMOVES mini CLI (alpha)")
 secrets_app = typer.Typer(help="CHIT secret operations")
 profile_app = typer.Typer(help="Hardware profile management")
@@ -38,7 +43,14 @@ app.add_typer(crush_app, name="crush")
 
 
 def _default_manifest() -> Path:
-    return Path(__file__).resolve().parents[2] / "pmoves/chit/secrets_manifest.yaml"
+    return REPO_ROOT / "pmoves/chit/secrets_manifest.yaml"
+
+
+def _resolve_path(path: Path) -> Path:
+    expanded = path.expanduser()
+    if expanded.is_absolute():
+        return expanded
+    return Path.cwd() / expanded
 
 
 @app.command(help="Run onboarding helper (status or generate).")
@@ -61,10 +73,63 @@ def init(
     raise typer.Exit(exit_code)
 
 
+@app.command("bootstrap", help="Bootstrap env files and stage provisioning bundle.")
+def bootstrap(
+    registry: Optional[Path] = typer.Option(
+        None,
+        "--registry",
+        help="Custom bootstrap registry JSON (defaults to pmoves bootstrap registry).",
+    ),
+    service: Optional[List[str]] = typer.Option(
+        None,
+        "--service",
+        "-s",
+        help="Limit bootstrap to specific service id(s).",
+    ),
+    accept_defaults: bool = typer.Option(
+        False,
+        "--accept-defaults",
+        help="Use registry defaults and generated values without prompting.",
+    ),
+    output: Path = typer.Option(
+        DEFAULT_PROVISIONING_DEST,
+        "--output",
+        "-o",
+        help="Destination directory for the provisioning bundle.",
+    ),
+) -> None:
+    args: List[str] = []
+    if registry is not None:
+        args.extend(["--registry", str(registry)])
+    for svc in service or []:
+        args.extend(["--service", svc])
+    if accept_defaults:
+        args.append("--accept-defaults")
+
+    exit_code = _run_module("pmoves.scripts.bootstrap_env", args)
+    if exit_code != 0:
+        raise typer.Exit(exit_code)
+
+    destination = _resolve_path(output)
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(PROVISIONING_SOURCE, destination, dirs_exist_ok=True)
+    except OSError as exc:  # pragma: no cover - error path
+        typer.echo(f"Failed to stage provisioning bundle: {exc}")
+        raise typer.Exit(1)
+
+    typer.echo(f"Provisioning bundle staged to {destination}")
+
+
 @app.command(help="Summarize current secret outputs (report).")
 def status(
     manifest: Optional[Path] = typer.Option(
         None, "--manifest", "-m", help="Override secrets manifest path."
+    ),
+    provisioning_path: Path = typer.Option(
+        DEFAULT_PROVISIONING_DEST,
+        "--provisioning-path",
+        help="Expected provisioning bundle directory.",
     ),
 ) -> None:
     manifest_path = manifest or _default_manifest()
@@ -74,6 +139,12 @@ def status(
         typer.echo(f"Active profile: {active}")
     else:
         typer.echo("Active profile: (none)")
+    staging_root = _resolve_path(provisioning_path)
+    wizard = staging_root / "scripts/install/wizard.sh"
+    if wizard.exists():
+        typer.echo(f"Provisioning bundle: ready ({wizard})")
+    else:
+        typer.echo(f"Provisioning bundle: missing (expected {wizard})")
     raise typer.Exit(exit_code)
 
 
