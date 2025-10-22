@@ -110,7 +110,19 @@ JELLYFIN_URL=http://jellyfin:8096
 JELLYFIN_API_KEY=<key>
 JELLYFIN_USER_ID=<optional>
 JELLYFIN_PUBLISHED_URL=http://localhost:8096   # or your tailscale/base URL
+JELLYFIN_STACK_SERVICE=jellyfin                 # jellyfin|jellyfin-vaapi|jellyfin-nvenc
+JELLYFIN_SERVICE_HOST=jellyfin
+JELLYFIN_HWACCEL_MODE=software                 # software|vaapi|nvenc
+JELLYFIN_ENABLE_HDR=1
+JELLYFIN_PREFER_AV1=1
+JELLYFIN_DRM_RENDER_NODE=/dev/dri/renderD128   # override for multi-GPU hosts
+JELLYFIN_VAAPI_DEVICE=/dev/dri/renderD128
+JELLYFIN_NVIDIA_GPUS=all
+JELLYFIN_NVIDIA_VISIBLE_DEVICES=all
+JELLYFIN_NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 ```
+   - Enable Intel/AMD VAAPI by running `COMPOSE_PROFILES=jellyfin-ai,jellyfin-ai-vaapi docker compose -f pmoves/docker-compose.jellyfin-ai.yml up -d` and overriding `JELLYFIN_STACK_SERVICE=jellyfin-vaapi` plus any custom `/dev/dri` nodes. This mounts the render device into the Jellyfin container and forwards the same hardware mode to the audio processor/API gateway.
+   - Enable NVIDIA NVENC by running `COMPOSE_PROFILES=jellyfin-ai,jellyfin-ai-nvenc docker compose -f pmoves/docker-compose.jellyfin-ai.yml up -d` with `JELLYFIN_STACK_SERVICE=jellyfin-nvenc` and the appropriate `JELLYFIN_NVIDIA_VISIBLE_DEVICES` or `JELLYFIN_NVIDIA_GPUS` values. The FFmpeg 7.1 toolchain inside the audio processor already exposes HDR tone mapping, SVT-AV1, and NVENC so metadata-rich transcodes stay GPU accelerated.
 4) Plugins and clients:
    - Server dashboard → Plugins → Catalog → install **Kodi Sync Queue** (stable repo) so Jellyfin pushes updates to Kodi.citeturn1search1
    - If the catalog is empty, add `https://repo.jellyfin.org/releases/plugin/manifest-stable.json` under Repositories.citeturn1search1
