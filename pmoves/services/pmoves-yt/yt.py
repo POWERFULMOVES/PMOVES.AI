@@ -396,7 +396,7 @@ def _ingest_one(video_url: str, ns: str, bucket: str) -> Dict[str,Any]:
         return {'ok': False, 'error': str(e.detail)}
 
 @app.post('/yt/playlist')
-def yt_playlist(body: Dict[str,Any] = Body(...)):
+async def yt_playlist(body: Dict[str,Any] = Body(...)):
     url = body.get('url'); ns = body.get('namespace') or DEFAULT_NAMESPACE; bucket = body.get('bucket') or DEFAULT_BUCKET
     if not url: raise HTTPException(400, 'url required')
     limit = int(body.get('max_videos') or YT_PLAYLIST_MAX)
@@ -404,26 +404,79 @@ def yt_playlist(body: Dict[str,Any] = Body(...)):
     if not entries:
         raise HTTPException(400, 'no entries found')
     job_id = _job_create('playlist', {'url': url, 'namespace': ns, 'bucket': bucket, 'count': len(entries)})
-    if job_id: _job_update(job_id, 'running')
-    results = []
-    # Resolve rate limit per-call to respect runtime env overrides in tests
+    if job_id:
+        _job_update(job_id, 'running')
+    # Resolve limits per-call to respect runtime env overrides in tests
     try:
         rate_limit = float(os.environ.get('YT_RATE_LIMIT', str(YT_RATE_LIMIT)))
     except Exception:
         rate_limit = YT_RATE_LIMIT
-    for i, e in enumerate(entries):
-        vid_url = f"https://www.youtube.com/watch?v={e['id']}" if len(e['id']) == 11 else e['id']
-        if job_id: _item_upsert(job_id, e['id'], 'running', None, {'title': e.get('title')})
-        r = _ingest_one(vid_url, ns, bucket)
-        results.append({'id': e['id'], **r})
-        if job_id: _item_upsert(job_id, e['id'], 'completed' if r.get('ok') else 'failed', r.get('error'))
-        if rate_limit > 0:
-            time.sleep(rate_limit)
-    if job_id: _job_update(job_id, 'completed')
+    try:
+        concurrency = int(os.environ.get('YT_CONCURRENCY', str(YT_CONCURRENCY)))
+    except Exception:
+        concurrency = YT_CONCURRENCY
+    concurrency = max(1, concurrency)
+
+    async def _ingest_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+        vid = entry['id']
+        vid_url = f"https://www.youtube.com/watch?v={vid}" if len(vid) == 11 else vid
+        if job_id:
+            _item_upsert(job_id, vid, 'running', None, {'title': entry.get('title')})
+        result: Dict[str, Any]
+        status = 'failed'
+        error_msg: Optional[str] = None
+        try:
+            result = await asyncio.to_thread(_ingest_one, vid_url, ns, bucket)
+            status = 'completed' if result.get('ok') else 'failed'
+            error_msg = result.get('error')
+        except Exception as exc:
+            error_msg = str(exc)
+            result = {'ok': False, 'error': error_msg}
+        if job_id:
+            _item_upsert(job_id, vid, status, error_msg)
+        return {'id': vid, **result}
+
+    results: List[Dict[str, Any]] = []
+
+    if concurrency <= 1:
+        for entry in entries:
+            res = await _ingest_entry(entry)
+            results.append(res)
+            if rate_limit > 0:
+                await asyncio.sleep(rate_limit)
+    else:
+        semaphore = asyncio.Semaphore(concurrency)
+        rate_lock = asyncio.Lock()
+        next_available = 0.0
+        results_buffer: List[Optional[Dict[str, Any]]] = [None] * len(entries)
+
+        async def _wait_rate_limit() -> None:
+            nonlocal next_available
+            if rate_limit <= 0:
+                return
+            async with rate_lock:
+                now = time.monotonic()
+                if now < next_available:
+                    await asyncio.sleep(next_available - now)
+                    now = next_available
+                next_available = now + rate_limit
+
+        async def _worker(idx: int, entry: Dict[str, Any]) -> None:
+            async with semaphore:
+                await _wait_rate_limit()
+                res = await _ingest_entry(entry)
+                results_buffer[idx] = res
+
+        tasks = [asyncio.create_task(_worker(idx, entry)) for idx, entry in enumerate(entries)]
+        await asyncio.gather(*tasks)
+        results = [res for res in results_buffer if res is not None]
+
+    if job_id:
+        _job_update(job_id, 'completed')
     return {'ok': True, 'job_id': job_id, 'count': len(results), 'results': results}
 
 @app.post('/yt/channel')
-def yt_channel(body: Dict[str,Any] = Body(...)):
+async def yt_channel(body: Dict[str,Any] = Body(...)):
     # Accept channel URL or channel_id
     base = body.get('url') or body.get('channel_id')
     if not base:
@@ -431,7 +484,7 @@ def yt_channel(body: Dict[str,Any] = Body(...)):
     # yt-dlp accepts channel URLs; if only id provided, build URL
     if not base.startswith('http'):
         base = f"https://www.youtube.com/channel/{base}/videos"
-    return yt_playlist({'url': base, 'namespace': body.get('namespace'), 'bucket': body.get('bucket'), 'max_videos': body.get('max_videos')})
+    return await yt_playlist({'url': base, 'namespace': body.get('namespace'), 'bucket': body.get('bucket'), 'max_videos': body.get('max_videos')})
 
 # -------------------- Gemma Summarization --------------------
 
