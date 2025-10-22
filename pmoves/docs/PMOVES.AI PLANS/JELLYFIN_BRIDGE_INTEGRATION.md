@@ -85,6 +85,10 @@ echo "JELLYFIN_API_KEY=YOUR_API_KEY_HERE" >> pmoves/.env.local
 echo "JELLYFIN_USER_ID=YOUR_USER_ID_HERE" >> pmoves/.env.local
 ```
 
+## Backup & Restore
+
+- Automated provisioning flows call `scripts/jellyfin_backup.sh` before Docker restarts. Manual procedures (backup, Supabase upload, and restore) are documented in the [Jellyfin AI media stack guide](../../../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/jellyfin-ai-media-stack-guide.md#-backup--restore-runbook).
+
 ## API Endpoints
 
 ### Health Check
