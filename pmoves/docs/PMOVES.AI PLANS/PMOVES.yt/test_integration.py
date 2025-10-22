@@ -42,6 +42,30 @@ def print_result(step: str, success: bool, details: str = ""):
     if details:
         print(f"   {details}")
 
+def extract_video_metadata(data: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    """Extract standardized video metadata from API responses."""
+    video = data.get("video") if isinstance(data, dict) else None
+    if not isinstance(video, dict):
+        video = {}
+
+    video_id = (
+        video.get("video_id")
+        or video.get("id")
+        or (data.get("video_id") if isinstance(data, dict) else None)
+    )
+    title = video.get("title") if video else None
+    if not title and isinstance(data, dict):
+        title = data.get("title")
+    namespace = video.get("namespace") if video else None
+    if not namespace and isinstance(data, dict):
+        namespace = data.get("namespace")
+
+    return {
+        "video_id": video_id,
+        "title": title,
+        "namespace": namespace or "pmoves",
+    }
+
 def test_service_health() -> bool:
     """Test all service health endpoints"""
     print_section("1. Service Health Checks")
@@ -93,10 +117,10 @@ def test_youtube_info(video_url: str) -> Optional[Dict[str, Any]]:
         print_result("Video Info Retrieved", False, f"Error: {e}")
         return None
 
-def test_full_ingest(video_url: str) -> Optional[str]:
+def test_full_ingest(video_url: str) -> Optional[Dict[str, Optional[str]]]:
     """Test full YouTube ingestion pipeline"""
     print_section("3. Full Video Ingestion")
-    
+
     print("⏳ Starting ingestion (this may take 1-3 minutes)...")
     start_time = time.time()
     
@@ -108,53 +132,68 @@ def test_full_ingest(video_url: str) -> Optional[str]:
         )
         resp.raise_for_status()
         data = resp.json()
-        
+
         elapsed = time.time() - start_time
-        video_id = data.get("video_id")
-        title = data.get("title")
-        
+        metadata = extract_video_metadata(data)
+        video_id = metadata.get("video_id")
+        title = metadata.get("title")
+        namespace = metadata.get("namespace")
+
+        if not video_id:
+            print_result(
+                "Video Ingested",
+                False,
+                "Missing video_id in ingestion response",
+            )
+            return None
+
         print_result("Video Ingested", True, f"Completed in {elapsed:.2f}s")
         print(f"   Video ID: {video_id}")
-        print(f"   Title: {title}")
-        print(f"   Namespace: {data.get('namespace', 'pmoves')}")
-        
-        return video_id
-        
+        if title:
+            print(f"   Title: {title}")
+        print(f"   Namespace: {namespace}")
+
+        return metadata
+
     except Exception as e:
         print_result("Video Ingested", False, f"Error: {e}")
         return None
 
-def test_hirag_emit(video_id: str) -> bool:
+def test_hirag_emit(video_id: str, namespace: Optional[str]) -> bool:
     """Test Hi-RAG chunk emission"""
     print_section("4. Hi-RAG Indexing")
-    
+
     print("⏳ Emitting chunks to Hi-RAG (this may take 30-60 seconds)...")
     start_time = time.time()
-    
+
     try:
         resp = httpx.post(
             f"{PMOVES_YT_URL}/yt/emit",
-            json={"video_id": video_id, "namespace": "pmoves"},
+            json={"video_id": video_id, "namespace": namespace or "pmoves"},
             timeout=180.0  # 3 minutes max
         )
         resp.raise_for_status()
         data = resp.json()
-        
+
         elapsed = time.time() - start_time
         chunks = data.get("chunks", 0)
-        
-        print_result("Chunks Indexed", True, f"{chunks} chunks in {elapsed:.2f}s")
-        
+
+        print_result(
+            "Chunks Indexed",
+            True,
+            f"{chunks} chunks for {video_id} in namespace '{namespace or 'pmoves'}' in {elapsed:.2f}s",
+        )
+
         return True
-        
+
     except Exception as e:
         print_result("Chunks Indexed", False, f"Error: {e}")
         return False
 
-def test_summarization(video_id: str) -> bool:
+def test_summarization(video_id: str, title: Optional[str] = None) -> bool:
     """Test AI summarization"""
     print_section("5. AI Summarization")
-    
+
     print("⏳ Generating summary (this may take 30-60 seconds)...")
     start_time = time.time()
     
@@ -169,22 +208,32 @@ def test_summarization(video_id: str) -> bool:
         
         elapsed = time.time() - start_time
         summary = data.get("summary", "")
-        
+
         print_result("Summary Generated", True, f"Completed in {elapsed:.2f}s")
+        if title:
+            print(f"   Title: {title}")
         print(f"   Provider: {data.get('provider', 'ollama')}")
         print(f"   Summary length: {len(summary)} chars")
         print(f"   Preview: {summary[:100]}...")
-        
+
         return True
         
     except Exception as e:
-        print_result("Summary Generated", False, f"Error: {e}")
+        print_result(
+            "Summary Generated",
+            False,
+            f"Error for video {video_id}: {e}",
+        )
         return False
 
-def test_jellyfin_mapping(video_id: str) -> Optional[Dict[str, Any]]:
+def test_jellyfin_mapping(
+    video_id: str,
+    title: Optional[str] = None,
+    namespace: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """Test Jellyfin auto-mapping"""
     print_section("6. Jellyfin Auto-Mapping")
-    
+
     try:
         resp = httpx.post(
             f"{JELLYFIN_BRIDGE_URL}/jellyfin/map-by-title",
@@ -197,23 +246,40 @@ def test_jellyfin_mapping(video_id: str) -> Optional[Dict[str, Any]]:
         mapped = data.get("mapped", {})
         jellyfin_item_id = mapped.get("jellyfin_item_id")
         jellyfin_name = mapped.get("name")
-        
+
         print_result("Jellyfin Mapped", True)
+        print(f"   Video ID: {video_id}")
+        if title:
+            print(f"   Title: {title}")
+        if namespace:
+            print(f"   Namespace: {namespace}")
         print(f"   Jellyfin Item ID: {jellyfin_item_id}")
         print(f"   Jellyfin Name: {jellyfin_name}")
-        
+
         return mapped
-        
+
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
-            print_result("Jellyfin Mapped", False, "No matching Jellyfin item found")
+            print_result(
+                "Jellyfin Mapped",
+                False,
+                f"No matching Jellyfin item found for video {video_id}",
+            )
         elif e.response.status_code == 412:
             print_result("Jellyfin Mapped", False, "Jellyfin credentials not configured")
         else:
-            print_result("Jellyfin Mapped", False, f"Error: {e}")
+            print_result(
+                "Jellyfin Mapped",
+                False,
+                f"Error for video {video_id}: {e}",
+            )
         return None
     except Exception as e:
-        print_result("Jellyfin Mapped", False, f"Error: {e}")
+        print_result(
+            "Jellyfin Mapped",
+            False,
+            f"Error for video {video_id}: {e}",
+        )
         return None
 
 def test_semantic_search(video_id: str, query: str = "music") -> bool:
@@ -262,8 +328,12 @@ def test_n8n_workflow(video_url: str) -> bool:
         
         elapsed = time.time() - start_time
         
+        metadata = extract_video_metadata(data)
         print_result("n8n Workflow", data.get("success", False), f"Completed in {elapsed:.2f}s")
-        print(f"   Video ID: {data.get('video_id')}")
+        print(f"   Video ID: {metadata.get('video_id')}")
+        if metadata.get("title"):
+            print(f"   Title: {metadata.get('title')}")
+        print(f"   Namespace: {metadata.get('namespace')}")
         print(f"   Chunks Indexed: {data.get('chunks_indexed')}")
         print(f"   Summary Generated: {data.get('summary_generated')}")
         print(f"   Jellyfin Mapped: {data.get('jellyfin_mapped', False)}")
@@ -301,22 +371,25 @@ def run_manual_tests(video_url: str):
         return
     
     # Step 3: Full ingestion
-    video_id = test_full_ingest(video_url)
-    if not video_id:
+    metadata = test_full_ingest(video_url)
+    if not metadata:
         print("\n❌ Failed to ingest video. Check pmoves-yt logs:")
         print("   docker logs pmoves-pmoves-yt-1 --tail 50")
         return
-    
+    video_id = metadata.get("video_id")
+    namespace = metadata.get("namespace")
+    title = metadata.get("title")
+
     # Step 4: Hi-RAG indexing
-    if not test_hirag_emit(video_id):
+    if not test_hirag_emit(video_id, namespace):
         print("\n⚠️  Hi-RAG indexing failed, but continuing...")
-    
+
     # Step 5: Summarization
-    if not test_summarization(video_id):
+    if not test_summarization(video_id, title):
         print("\n⚠️  Summarization failed, but continuing...")
-    
+
     # Step 6: Jellyfin mapping
-    jellyfin_mapping = test_jellyfin_mapping(video_id)
+    jellyfin_mapping = test_jellyfin_mapping(video_id, title, namespace)
     if not jellyfin_mapping:
         print("\n⚠️  Jellyfin mapping failed (may not have matching item in library)")
     
@@ -327,6 +400,10 @@ def run_manual_tests(video_url: str):
     print_section("Test Summary")
     print("✅ Manual integration test completed!")
     print(f"   Video ID: {video_id}")
+    if title:
+        print(f"   Title: {title}")
+    if namespace:
+        print(f"   Namespace: {namespace}")
     print(f"   Services: All operational")
     print(f"   Pipeline: Ingestion → Indexing → Summarization → Mapping")
     print("\nNext steps:")
