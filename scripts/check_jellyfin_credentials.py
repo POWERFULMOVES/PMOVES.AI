@@ -6,6 +6,8 @@ The script verifies that:
   * The Jellyfin API is reachable at JELLYFIN_URL.
   * The supplied JELLYFIN_API_KEY has access to the API.
   * (Optional) The configured JELLYFIN_USER_ID can enumerate items.
+  * Jellyfin accepts a direct `/Library/Refresh` trigger.
+  * (Optional) When `JELLYFIN_REFRESH_WEBHOOK_URL` is set, the webhook responds successfully.
   * (Optional) The server name matches the expected PMOVES branding.
 
 Environment variables:
@@ -13,6 +15,8 @@ Environment variables:
   JELLYFIN_API_KEY              API token with administrator access
   JELLYFIN_USER_ID              Optional user to validate enumeration
   JELLYFIN_EXPECTED_SERVER_NAME Optional branding name (default: PMOVES Jellyfin)
+  JELLYFIN_REFRESH_WEBHOOK_URL  Optional webhook endpoint for delegated refreshes
+  JELLYFIN_REFRESH_WEBHOOK_TOKEN Optional bearer token for the refresh webhook
 """
 
 from __future__ import annotations
@@ -37,6 +41,8 @@ class JellyfinConfig:
     api_key: str
     user_id: Optional[str]
     expected_name: Optional[str]
+    refresh_webhook_url: Optional[str]
+    refresh_webhook_token: Optional[str]
 
     @classmethod
     def from_env(cls) -> "JellyfinConfig":
@@ -44,13 +50,22 @@ class JellyfinConfig:
         api_key = os.environ.get("JELLYFIN_API_KEY")
         user_id = os.environ.get("JELLYFIN_USER_ID")
         expected = os.environ.get("JELLYFIN_EXPECTED_SERVER_NAME", "PMOVES Jellyfin")
+        webhook = os.environ.get("JELLYFIN_REFRESH_WEBHOOK_URL")
+        webhook_token = os.environ.get("JELLYFIN_REFRESH_WEBHOOK_TOKEN")
 
         if not url:
             raise JellyfinCheckError("JELLYFIN_URL is not set")
         if not api_key:
             raise JellyfinCheckError("JELLYFIN_API_KEY is not set")
 
-        return cls(url=url.rstrip("/"), api_key=api_key, user_id=user_id, expected_name=expected)
+        return cls(
+            url=url.rstrip("/"),
+            api_key=api_key,
+            user_id=user_id,
+            expected_name=expected,
+            refresh_webhook_url=webhook,
+            refresh_webhook_token=webhook_token,
+        )
 
 
 def _request(
@@ -178,6 +193,50 @@ def ensure_safe_display_preferences(config: JellyfinConfig) -> None:
             )
 
 
+def trigger_direct_library_refresh(config: JellyfinConfig) -> None:
+    """Issue a POST to /Library/Refresh and ensure Jellyfin accepts it."""
+
+    try:
+        _request(config, "/Library/Refresh", method="POST", timeout=15)
+    except JellyfinCheckError as exc:
+        raise JellyfinCheckError(f"Direct /Library/Refresh call failed: {exc}") from exc
+
+
+def trigger_refresh_webhook(config: JellyfinConfig) -> None:
+    """Validate that the optional refresh webhook responds with a success code."""
+
+    if not config.refresh_webhook_url:
+        return
+
+    payload = json.dumps({"title": "jellyfin-verify", "namespace": "pmoves"}).encode("utf-8")
+    request = urllib.request.Request(
+        config.refresh_webhook_url,
+        data=payload,
+        method="POST",
+    )
+    request.add_header("Content-Type", "application/json")
+    if config.refresh_webhook_token:
+        request.add_header("Authorization", f"Bearer {config.refresh_webhook_token}")
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            # Drain body to surface protocol errors and for completeness.
+            response.read()
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise JellyfinCheckError(
+            f"Webhook {config.refresh_webhook_url} returned HTTP {exc.code}: {body}"
+        ) from exc
+    except TimeoutError as exc:  # pragma: no cover - socket timeout
+        raise JellyfinCheckError(
+            f"Webhook {config.refresh_webhook_url} timed out: {exc}"
+        ) from exc
+    except urllib.error.URLError as exc:  # pragma: no cover - network failure
+        raise JellyfinCheckError(
+            f"Unable to reach webhook {config.refresh_webhook_url}: {exc}"
+        ) from exc
+
+
 def main() -> int:
     try:
         config = JellyfinConfig.from_env()
@@ -191,6 +250,11 @@ def main() -> int:
                 ensure_safe_display_preferences(config)
         else:
             print("ℹ️  JELLYFIN_USER_ID not set; skipped user enumeration check.")
+        trigger_direct_library_refresh(config)
+        print("✅ Jellyfin accepted direct /Library/Refresh trigger")
+        if config.refresh_webhook_url:
+            trigger_refresh_webhook(config)
+            print(f"✅ Refresh webhook responded at {config.refresh_webhook_url}")
         print("All Jellyfin credential checks passed.")
         return 0
     except JellyfinCheckError as exc:

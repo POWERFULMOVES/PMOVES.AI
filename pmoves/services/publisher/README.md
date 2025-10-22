@@ -130,9 +130,14 @@ JELLYFIN_USER_ID=<optional-user> \
 make jellyfin-verify
 ```
 
-The helper script hits `/System/Info`, checks the server branding (defaults to
-`PMOVES Jellyfin`), and, when `JELLYFIN_USER_ID` is provided, enumerates user
-libraries. Fix any reported errors before running end-to-end publisher smokes.
+The helper script now validates:
+
+- `/System/Info` connectivity and branding (defaults to `PMOVES Jellyfin`).
+- A direct `/Library/Refresh` POST using the configured API token.
+- Optional webhook refresh flows when `JELLYFIN_REFRESH_WEBHOOK_URL` is set.
+- User enumeration when `JELLYFIN_USER_ID` is provided.
+
+Fix any reported errors before running end-to-end publisher smokes.
 
 ## Optional Jellyfin AI Stack
 
