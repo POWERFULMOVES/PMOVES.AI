@@ -12,7 +12,7 @@ Compose
 - Typical ports: `8096:8096` (Jellyfin), `9000:9000` (MinIO), `9001:9001` (MinIO console).
 
 Environment
-- `JELLYFIN_URL` (e.g., `http://jellyfin:8096` inside compose)
+- `JELLYFIN_URL` (e.g., `http://cataclysm-jellyfin:8096` inside compose)
 - `JELLYFIN_API_KEY` (admin API key for library refresh/testing)
 - `MINIO_*` (endpoint, access/secret keys; see Presign docs)
 - See also: `pmoves/env.jellyfin-ai.example` and scripts under `scripts/`.

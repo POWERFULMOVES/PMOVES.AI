@@ -21,7 +21,7 @@ Networking/Ports
 - Default Firefly web: `8080` (as defined in the compose bundle)
 
 Environment
-- `FIREFLY_BASE_URL` (e.g., `http://firefly:8080` on the compose network)
+- `FIREFLY_BASE_URL` (e.g., `http://cataclysm-firefly:8080` on the compose network)
 - `FIREFLY_ACCESS_TOKEN` (personal access token)
 
 API/Contracts

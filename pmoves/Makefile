@@ -104,7 +104,8 @@ recreate-v2: ## Force-recreate v2 CPU container (no deps)
 	@echo "✔ Recreated hi-rag-gateway-v2"
 
 .PHONY: up-open-notebook
-up-open-notebook: ensure-env-shared ## Bring up Open Notebook on pmoves-net (defaults UI :8503, API :5055)
+up-open-notebook: ensure-env-shared ## Bring up Open Notebook on cataclysm-net (defaults UI :8503, API :5055)
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
 	@echo "✔ Open Notebook up (http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})"
 
@@ -181,7 +182,8 @@ down:
 clean:
 	docker compose -p $(PROJECT) down -v --remove-orphans
 
-notebook-up: ## Launch the Open Notebook stack alongside pmoves-net
+notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
+	docker network create cataclysm-net >/dev/null 2>&1 || true
 	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
 
 notebook-down: ## Stop the Open Notebook container and remove its resources
@@ -226,23 +228,24 @@ ps:
 # -------- External stacks (forks / published images) ----------
 .PHONY: up-external up-external-wger up-external-firefly up-external-on up-external-jellyfin down-external
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d
 
-up-external-wger: ## Start Wger (Django + nginx proxy) on pmoves-net
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx
 
-up-external-firefly: ## Start Firefly III on pmoves-net
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+up-external-firefly: ## Start Firefly III on cataclysm-net
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d firefly
 
-up-external-on: ## Start Open Notebook on pmoves-net (external image)
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+up-external-on: ## Start Open Notebook on cataclysm-net (external image)
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d open-notebook-ext
 
-up-external-jellyfin: ## Start Jellyfin on pmoves-net (external image)
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext
 
 down-external: ## Stop all external stacks
@@ -251,19 +254,19 @@ down-external: ## Stop all external stacks
 .PHONY: integrations-up-core integrations-up-wger integrations-up-firefly integrations-up-all integrations-down integrations-logs integrations-import-flows
 
 integrations-up-core: ensure-env-shared ## Start n8n (integrations core stack)
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(INTEGRATIONS_PROJECT) -f $(INTEGRATIONS_COMPOSE_CORE) up -d
 
 integrations-up-wger: ensure-env-shared ## Start n8n + Wger profile
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(INTEGRATIONS_PROJECT) -f $(INTEGRATIONS_COMPOSE_CORE) -f $(INTEGRATIONS_COMPOSE_WGER) --profile wger up -d
 
 integrations-up-firefly: ensure-env-shared ## Start n8n + Firefly profile
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(INTEGRATIONS_PROJECT) -f $(INTEGRATIONS_COMPOSE_CORE) -f $(INTEGRATIONS_COMPOSE_FIREFLY) --profile firefly up -d
 
 integrations-up-all: ensure-env-shared ## Start n8n, Wger, Firefly, and flows watcher
-	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(INTEGRATIONS_PROJECT) \
 	  -f $(INTEGRATIONS_COMPOSE_CORE) \
 	  -f $(INTEGRATIONS_COMPOSE_WGER) \

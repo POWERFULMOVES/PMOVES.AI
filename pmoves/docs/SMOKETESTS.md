@@ -29,10 +29,10 @@ This guide covers preflight wiring, starting the core stack, and running the loc
      - `SUPA_REST_INTERNAL_URL=http://api.supabase.internal:8000/rest/v1` (compose services targeting the Supabase CLI stack)
    - After the CLI stack is running, execute `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smokes. Re-run components individually with `make supabase-bootstrap`, `make neo4j-bootstrap`, or `make seed-data` if you only need one layer.
 4. External integrations: copy tokens into `pmoves/.env.local` so the health/finance automations can run without errors.
-   - `WGER_API_TOKEN`, `WGER_BASE_URL=http://wger:8000`
-   - `FIREFLY_ACCESS_TOKEN`, `FIREFLY_BASE_URL=http://firefly:8080`
-   - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_API_URL=http://open-notebook:5055`
-   - `JELLYFIN_API_KEY`, `JELLYFIN_URL=http://jellyfin:8096`
+   - `WGER_API_TOKEN`, `WGER_BASE_URL=http://cataclysm-wger:8000`
+   - `FIREFLY_ACCESS_TOKEN`, `FIREFLY_BASE_URL=http://cataclysm-firefly:8080`
+  - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055`
+   - `JELLYFIN_API_KEY`, `JELLYFIN_URL=http://cataclysm-jellyfin:8096`
 - Override ports before `make -C pmoves up-external` if your host is already using `8000`, `8080`, `8096`, or `8503` (for example, `export FIREFLY_PORT=8082` keeps Firefly off Agent Zero’s 8080 binding). See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for per-service bring-up notes.
 5. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.
 
@@ -157,7 +157,7 @@ Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), 
 4. Notebook sync smoke: `make -C pmoves up-open-notebook` (if using the local add-on) and ensure `OPEN_NOTEBOOK_API_*` envs resolve. Run `make -C pmoves notebook-seed-models` once `env.shared` includes your token + provider keys so `/api/models/providers` reports the enabled backends. `docker logs pmoves-notebook-sync-1` should show successful Supabase writes.
 
 ### 5c) Wger Static Proxy Smoke
-- Ensure `make up-external-wger` (or `make up-external`) is running so both `pmoves-wger` and `pmoves-wger-nginx`
+- Ensure `make up-external-wger` (or `make up-external`) is running so both `cataclysm-wger` and `cataclysm-wger-nginx`
   containers are online. The nginx sidecar mirrors the upstream production guidance where Django writes the static
   bundle and nginx serves `/static` and `/media` from shared volumes.citeturn0search0
 - Run `make smoke-wger` (defaults `WGER_ROOT_URL=http://localhost:8000`). The target:

@@ -34,6 +34,6 @@ payloads resolve correctly.
 ## Maintenance Tips
 
 - Back up `./data/jellyfin/config` to preserve users, libraries, and plugin installs before upgrades.
-- Use `docker logs pmoves-jellyfin` to monitor scheduled tasks such as library scans or plugin updates.
+- Use `docker logs cataclysm-jellyfin` to monitor scheduled tasks such as library scans or plugin updates.
 - When migrating media between machines, keep the folder names identical (Movies/TV/etc.) so the library definitions stay
   valid without recreating paths.

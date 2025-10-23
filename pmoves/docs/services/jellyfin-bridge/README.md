@@ -12,7 +12,7 @@ Compose
 - Depends on: (none explicit) — expects `postgrest` reachable
 
 Environment
-- `JELLYFIN_URL` (default `http://jellyfin:8096`)
+- `JELLYFIN_URL` (default `http://cataclysm-jellyfin:8096`)
 - `JELLYFIN_API_KEY`
 - `JELLYFIN_USER_ID`
 - `SUPA_REST_URL` (default `http://postgrest:3000`)

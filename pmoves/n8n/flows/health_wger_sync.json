@@ -5,7 +5,7 @@
     {
       "parameters": {
         "httpMethod": "GET",
-        "url": "={{$json.WGER_BASE_URL || $env.WGER_BASE_URL || 'http://wger:8000'}}/api/v2/workoutlog/",
+        "url": "={{$json.WGER_BASE_URL || $env.WGER_BASE_URL || 'http://cataclysm-wger:8000'}}/api/v2/workoutlog/",
         "options": {
           "headers": {
             "Authorization": "=Token {{$env.WGER_API_TOKEN}}"
