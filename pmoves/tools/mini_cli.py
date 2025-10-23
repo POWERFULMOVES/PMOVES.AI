@@ -100,7 +100,8 @@ def bootstrap(
 ) -> None:
     args: List[str] = []
     if registry is not None:
-        args.extend(["--registry", str(registry)])
+        registry_path = _resolve_path(registry)
+        args.extend(["--registry", str(registry_path)])
     for svc in service or []:
         args.extend(["--service", svc])
     if accept_defaults:
