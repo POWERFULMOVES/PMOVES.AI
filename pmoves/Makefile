@@ -34,6 +34,13 @@ BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
 
+LOAD_ENV_SHARED := set -a; \
+        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
+        [ -f .env ] && . .env; \
+        [ -f .env.local ] && . .env.local; \
+        set +a;
+export LOAD_ENV_SHARED
+
 .PHONY: ensure-env-shared
 ensure-env-shared:
 	@if [ ! -f "$(ENV_SHARED_FILE)" ]; then \
@@ -125,7 +132,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
-.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
+.PHONY: up down clean up-cloudflare down-cloudflare logs-cloudflare cloudflare-url restart-cloudflare up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 .PHONY: notebook-up notebook-down notebook-logs notebook-seed-models
 
@@ -181,6 +188,30 @@ down:
 
 clean:
 	docker compose -p $(PROJECT) down -v --remove-orphans
+
+up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
+	@bash -c '$(LOAD_ENV_SHARED) \
+	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ] && [ -z "$$CLOUDFLARE_TUNNEL_NAME" ]; then \
+	echo "↷ Set CLOUDFLARE_TUNNEL_TOKEN (Zero Trust token) or CLOUDFLARE_TUNNEL_NAME + credentials in $(ENV_SHARED_FILE) before running make up-cloudflare."; \
+	exit 1; \
+	fi; \
+	exec docker compose -p $(PROJECT) --profile cloudflare up -d cloudflared'
+	@$(MAKE) --no-print-directory cloudflare-url || true
+
+down-cloudflare: ## Stop the Cloudflare tunnel connector
+	@bash -c '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) --profile cloudflare stop cloudflared >/dev/null 2>&1 || true'
+	@echo "✔ Cloudflare tunnel stopped."
+
+restart-cloudflare: ## Restart the Cloudflare tunnel connector
+	@$(MAKE) --no-print-directory down-cloudflare
+	@$(MAKE) --no-print-directory up-cloudflare
+
+logs-cloudflare: ## Tail Cloudflare tunnel logs
+	docker compose -p $(PROJECT) logs -f cloudflared
+
+cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector logs
+	@docker compose -p $(PROJECT) logs --since 30m cloudflared 2>/dev/null | python3 -c 'import re, sys; urls=[m.group(0).rstrip("\"] ,;") for line in sys.stdin for m in re.finditer(r"https://[^\s\"]+", line)]; print(f"🌐 Tunnel URL: {urls[-1]}") if urls else print("↷ No tunnel URL detected in recent cloudflared logs (run `make logs-cloudflare` to inspect startup.)")'
+
 
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
 	docker network create cataclysm-net >/dev/null 2>&1 || true

@@ -40,4 +40,5 @@ Notes
 - If your repo paths differ, open the diffs and adjust target paths.
 - The diffs are unified format and assume LF line endings.
 - All NEW files are included in full; make them executable where noted.
+- Cloudflare remote access landed after the original bundle: mirror the `cloudflared` service + Make targets from `pmoves/docker-compose.yml` and `pmoves/Makefile`, add the `CLOUDFLARE_*` placeholders to `env.shared`, and copy the Cloudflare tunnel section into your local dev docs when refreshing the patches.
 

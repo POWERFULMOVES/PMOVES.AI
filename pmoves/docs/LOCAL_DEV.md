@@ -74,6 +74,51 @@ Manual notes: `env.shared.generated` now carries the Supabase + Meili secrets co
 - `OPEN_NOTEBOOK_API_URL` (+ optional `OPEN_NOTEBOOK_API_TOKEN`) to enable the notebook-sync worker (read from `env.shared`). Adjust `NOTEBOOK_SYNC_INTE
 RVAL_SECONDS`, `NOTEBOOK_SYNC_DB_PATH`, or override `LANGEXTRACT_URL` / `EXTRACT_WORKER_URL` when targeting external services.
 
+## Remote Access via Cloudflare Tunnel
+
+Use the `cloudflare` Compose profile and helper Make targets to expose a local or self-hosted stack without hand-crafted SSH tunnels.
+
+### 1. Generate connector credentials
+
+1. In Cloudflare Zero Trust → **Access → Tunnels**, click **Add a connector**.
+2. Choose **Docker** and copy the generated token (preferred) or download the `cert.pem` credentials bundle for existing accounts. When defining public hostnames, point the origin service at the PMOVES endpoint you plan to surface (e.g., `http://host.docker.internal:8086` for a local gateway or `http://hi-rag-gateway-v2:8086` when the tunnel runs on the same Docker network as the services).
+
+### 2. Wire the environment
+
+- Add the token (or tunnel name) to `pmoves/env.shared`:
+  ```env
+  CLOUDFLARE_TUNNEL_TOKEN=eyJ...   # token path
+  # OR
+  CLOUDFLARE_TUNNEL_NAME=pmoves-gateway
+  CLOUDFLARE_CREDENTIALS_DIR=./cloudflared
+  ```
+- For cert-based flows, drop the downloaded `cert.pem` and tunnel JSON into the `pmoves/cloudflared/` directory (or override `CLOUDFLARE_CREDENTIALS_DIR`) so the container can read them.
+
+### 3. Start / stop the tunnel
+
+- `make up-cloudflare` — loads `env.shared`, starts the `cloudflared` connector, and attempts to print the latest public URL.
+- `make cloudflare-url` — reprints the most recent `https://…` surfaced in the connector logs.
+- `make logs-cloudflare` — follow connector logs (handy while waiting for registration or debugging errors).
+- `make down-cloudflare` / `make restart-cloudflare` — stop or bounce the connector without touching the rest of the stack.
+
+### 4. Local vs. self-hosted considerations
+
+- **Local laptops / desktops**: configure the origin service in Cloudflare Zero Trust as `http://host.docker.internal:<port>` so requests reach services running on the host network. Ensure Docker Desktop exposes the relevant ports.
+- **VPS / bare metal hosts**: when the tunnel runs alongside PMOVES containers, map hostnames to in-network services (e.g., `http://hi-rag-gateway-v2:8086`, `http://render-webhook:8085`, or `http://postgrest:3000`). No additional reverse proxy is required because `cloudflared` attaches to `pmoves-net`.
+- **Firewall rules**: allow outbound TCP 7844 and 443 so `cloudflared` can reach Cloudflare’s edge. No inbound ports are needed, but keep the local firewall open for whichever services the tunnel targets (Supabase REST, Hi‑RAG gateway, etc.).
+
+### 5. Validate connectivity
+
+1. Tail the connector: `make logs-cloudflare` — wait for `Registered tunnel connection` + a public URL.
+2. Print the URL directly: `make cloudflare-url`.
+3. Hit the exposed service from outside your network:
+   ```bash
+   curl -i https://<tunnel-host>/healthz
+   ```
+   Replace `/healthz` with an endpoint that matches the service you exposed (e.g., `/hirag/query`). Capture these commands and responses in the PR evidence log when validating remote access.
+
+`make down-cloudflare` is idempotent, so it is safe to run after validation to ensure the connector shuts down cleanly.
+
 ## External-Mode (reuse existing infra)
 If you already run Neo4j, Meilisearch, Qdrant, or Supabase elsewhere, you can prevent PMOVES from starting local containers:
 

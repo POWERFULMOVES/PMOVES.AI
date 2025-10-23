@@ -36,6 +36,16 @@ Manual notes: Create `.env` (or start with `.env.example`) and include keys from
   incoming media bucket when unset. Use `MEDIA_VIDEO_FRAMES_PREFIX` to customize the object key prefix (defaults to
   `media-video/frames`).
 
+## Remote Access via Cloudflare Tunnel
+
+- Configure Cloudflare Zero Trust → Access → Tunnels → **Add a connector (Docker)** to generate a tunnel token or download an account credential bundle.
+- Store the token (or `CLOUDFLARE_TUNNEL_NAME` + `CLOUDFLARE_CREDENTIALS_DIR`) in `pmoves/env.shared` so the Make targets can export them.
+- Bring the connector up/down with `make up-cloudflare`, `make down-cloudflare`, and use `make cloudflare-url` / `make logs-cloudflare` for the URL + diagnostics.
+- Local development: map the Cloudflare origin to `http://host.docker.internal:<port>` (Docker Desktop exposes host ports to containers).
+- Self-hosted/VPS: target in-network services (`http://hi-rag-gateway-v2:8086`, `http://render-webhook:8085`, `http://postgrest:3000`). The `cloudflared` service lives on `pmoves-net`, so no extra reverse proxy is required.
+- Firewall reminders: allow outbound 7844/443 for the connector; ensure the exposed service port remains reachable inside Docker or via host firewall rules.
+- Validation checklist: `make logs-cloudflare` → wait for the registered URL, `make cloudflare-url` to print it, then `curl https://<url>/healthz` (or matching endpoint) and capture the output in the evidence log.
+
 ## External-Mode (reuse existing infra)
 If you already run Neo4j, Meilisearch, Qdrant, or Supabase elsewhere, you can prevent PMOVES from starting local containers:
 

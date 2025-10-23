@@ -569,6 +569,31 @@ services:
     ports: ["8093:8093"]
     profiles: ["orchestration"]
     networks: [pmoves]
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.8.0
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ -n "$$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+          exec cloudflared tunnel --no-autoupdate run;
+        elif [ -n "$$CLOUDFLARE_TUNNEL_NAME" ]; then
+          exec cloudflared tunnel --no-autoupdate run "$$CLOUDFLARE_TUNNEL_NAME";
+        else
+          echo "Set CLOUDFLARE_TUNNEL_TOKEN or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.";
+          exit 1;
+        fi
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+      - CLOUDFLARE_TUNNEL_NAME=${CLOUDFLARE_TUNNEL_NAME:-}
+    volumes:
+      - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
+    profiles: ["cloudflare"]
+    networks: [pmoves]
 volumes:
   neo4j-data: {}
   minio-data: {}
