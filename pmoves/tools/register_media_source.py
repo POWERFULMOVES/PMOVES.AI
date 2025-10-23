@@ -9,9 +9,13 @@ from pathlib import Path
 from typing import Any, Dict
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVICE_ROOT = ROOT / "services" / "channel-monitor"
+SERVICE_ROOT = ROOT / "pmoves" / "services" / "channel-monitor"
 if str(SERVICE_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVICE_ROOT))
+
+PMOVES_ROOT = ROOT / "pmoves"
+if str(PMOVES_ROOT) not in sys.path:
+    sys.path.insert(0, str(PMOVES_ROOT))
 
 from channel_monitor.config import config_path_from_env, ensure_config, save_config
 
