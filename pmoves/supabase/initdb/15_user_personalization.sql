@@ -31,9 +31,16 @@ create table if not exists pmoves.user_sources (
   last_check_at timestamptz,
   last_ingest_at timestamptz,
   created_at timestamptz default timezone('utc', now()),
-  updated_at timestamptz default timezone('utc', now()),
-  constraint user_sources_unique_key unique (user_id, provider, coalesce(source_identifier, ''), coalesce(source_url, ''))
+  updated_at timestamptz default timezone('utc', now())
 );
+
+create unique index if not exists user_sources_unique_idx
+  on pmoves.user_sources (
+    user_id,
+    provider,
+    coalesce(source_identifier, ''),
+    coalesce(source_url, '')
+  );
 
 create table if not exists pmoves.user_ingest_runs (
   id bigserial primary key,

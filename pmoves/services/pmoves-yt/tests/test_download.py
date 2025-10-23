@@ -50,13 +50,17 @@ def _patch_video_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_download_uploads_and_emits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     upload = MagicMock(return_value="http://s3/abc123.mp4")
     supa = MagicMock()
+    supa_upsert = MagicMock()
     publisher = MagicMock()
 
     yt.upload_to_s3 = upload
     yt.supa_insert = supa
+    yt.supa_upsert = supa_upsert
     yt._publish_event = publisher
     monkeypatch.setenv("YT_TEMP_ROOT", str(tmp_path))
     yt.YT_TEMP_ROOT = tmp_path
+    yt.YT_ARCHIVE_DIR = tmp_path
+    yt.YT_DOWNLOAD_ARCHIVE = str(tmp_path / "download-archive.txt")
 
     client = TestClient(yt.app)
     response = client.post(
@@ -71,7 +75,8 @@ def test_download_uploads_and_emits(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     upload.assert_called_once_with(str(tmp_path / "abc123" / "abc123.mp4"), "bkt", "yt/abc123/raw.mp4")
 
-    assert supa.call_count == 2
+    supa.assert_called_once()
+    supa_upsert.assert_called_once()
     supa.assert_any_call(
         "studio_board",
         {
@@ -90,7 +95,7 @@ def test_download_uploads_and_emits(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         },
     )
 
-    supa.assert_any_call(
+    supa_upsert.assert_called_once_with(
         "videos",
         {
             "video_id": "abc123",
@@ -100,6 +105,7 @@ def test_download_uploads_and_emits(tmp_path: Path, monkeypatch: pytest.MonkeyPa
             "s3_base_prefix": "s3://bkt/yt/abc123",
             "meta": {"thumb": None},
         },
+        on_conflict="video_id",
     )
 
     yt.supa_update.assert_called_once()
@@ -116,3 +122,179 @@ def test_download_uploads_and_emits(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert event_payload["bucket"] == "bkt"
     assert event_payload["key"] == "yt/abc123/raw.mp4"
     assert event_payload["duration"] == 321
+
+
+def test_soundcloud_credentials_and_prefix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    upload = MagicMock(return_value="http://s3/abc123.mp3")
+    supa_insert = MagicMock()
+    supa_upsert = MagicMock()
+    supa_update = MagicMock()
+    publisher = MagicMock()
+    captured_opts: Dict[str, Any] = {}
+
+    class CaptureYDL(DownloadYDL):
+        def __init__(self, opts: Dict[str, Any]):
+            captured_opts.update(opts)
+            super().__init__(opts)
+
+    monkeypatch.setattr(yt.yt_dlp, "YoutubeDL", CaptureYDL)
+    monkeypatch.setenv("YT_TEMP_ROOT", str(tmp_path))
+    monkeypatch.setenv("SOUNDCLOUD_USERNAME", "user@example.com")
+    monkeypatch.setenv("SOUNDCLOUD_PASS", "super-secret")
+    yt.YT_TEMP_ROOT = tmp_path
+    yt.YT_ARCHIVE_DIR = tmp_path
+    yt.YT_DOWNLOAD_ARCHIVE = str(tmp_path / "download-archive.txt")
+    yt.SOUNDCLOUD_USERNAME = "user@example.com"
+    yt.SOUNDCLOUD_PASSWORD = "super-secret"
+    yt.SOUNDCLOUD_COOKIEFILE = None
+    yt.SOUNDCLOUD_COOKIES_FROM_BROWSER = None
+    yt.upload_to_s3 = upload
+    yt.supa_insert = supa_insert
+    yt.supa_upsert = supa_upsert
+    yt.supa_update = supa_update
+    yt._publish_event = publisher
+
+    client = TestClient(yt.app)
+    response = client.post(
+        "/yt/download",
+        json={
+            "url": "https://soundcloud.com/darkxside/sample-track",
+            "bucket": "bkt",
+            "namespace": "ns",
+            "metadata": {"platform": "soundcloud"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured_opts.get("username") == "user@example.com"
+    assert captured_opts.get("password") == "super-secret"
+    upload.assert_called_once_with(
+        str(tmp_path / "abc123" / "abc123.mp4"), "bkt", "sc/abc123/raw.mp4"
+    )
+    supa_insert.assert_any_call(
+        "studio_board",
+        {
+            "title": "Video",
+            "namespace": "ns",
+            "content_url": "http://s3/abc123.mp3",
+            "status": "submitted",
+            "meta": {
+                "source": "soundcloud",
+                "original_url": "https://soundcloud.com/darkxside/sample-track",
+                "thumb": None,
+                "duration": 321,
+                "channel": {"title": "Channel Name", "id": "channel-xyz"},
+                "job_id": None,
+            },
+        },
+    )
+    publisher.assert_called_once()
+    event_payload = publisher.call_args[0][1]
+    assert event_payload["source"] == "soundcloud"
+    assert event_payload["key"] == "sc/abc123/raw.mp4"
+
+
+def test_invidious_companion_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    upload = MagicMock(return_value="http://s3/abc123.raw")
+    supa_insert = MagicMock()
+    supa_upsert = MagicMock()
+    supa_update = MagicMock()
+    publisher = MagicMock()
+
+    yt.upload_to_s3 = upload
+    yt.supa_insert = supa_insert
+    yt.supa_upsert = supa_upsert
+    yt.supa_update = supa_update
+    yt._publish_event = publisher
+    monkeypatch.setenv("YT_TEMP_ROOT", str(tmp_path))
+    monkeypatch.setenv("INVIDIOUS_COMPANION_URL", "http://invidious-companion:8282")
+    monkeypatch.setenv("INVIDIOUS_COMPANION_KEY", "secret")
+    yt.YT_TEMP_ROOT = tmp_path
+    yt.INVIDIOUS_COMPANION_URL = "http://invidious-companion:8282"
+    yt.INVIDIOUS_COMPANION_KEY = "secret"
+
+    class DummyPostResponse:
+        def __init__(self):
+            self.status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> Dict[str, Any]:
+            return {
+                "videoDetails": {
+                    "title": "Companion Title",
+                    "author": "Channel",
+                    "channelId": "channel-xyz",
+                    "thumbnail": {
+                        "thumbnails": [
+                            {"url": "http://thumb/1.jpg", "width": 120},
+                            {"url": "http://thumb/2.jpg", "width": 480},
+                        ]
+                    },
+                },
+                "streamingData": {
+                    "formats": [
+                        {
+                            "qualityLabel": "1080p",
+                            "mimeType": "video/mp4",
+                            "url": "http://media/video.mp4",
+                        }
+                    ]
+                },
+            }
+
+    class DummyGetResponse:
+        def __init__(self, content: bytes, headers: Dict[str, str] | None = None):
+            self._content = content
+            self.status_code = 200
+            self.headers = headers or {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_content(self, _chunk: int):
+            yield self._content
+
+        @property
+        def content(self) -> bytes:
+            return self._content
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+    post_calls: Dict[str, Any] = {}
+
+    def fake_post(url: str, json: Dict[str, Any], headers: Dict[str, Any], timeout: int):
+        post_calls["url"] = url
+        post_calls["json"] = json
+        post_calls["headers"] = headers
+        return DummyPostResponse()
+
+    def fake_get(url: str, stream: bool = False, timeout: int = 0):
+        if "thumb" in url:
+            return DummyGetResponse(b"thumb-bytes", {"content-type": "image/jpeg"})
+        return DummyGetResponse(b"video-bytes")
+
+    monkeypatch.setattr(yt.requests, "post", fake_post)
+    monkeypatch.setattr(yt.requests, "get", fake_get)
+
+    result = yt._download_with_companion(
+        "https://youtu.be/abc123def45",
+        "ns",
+        "bucket",
+        job_id=None,
+        entry_meta={},
+        platform="youtube",
+    )
+
+    assert result["video_id"] == "abc123def45"
+    assert post_calls["url"].endswith("/companion/youtubei/v1/player")
+    assert post_calls["json"] == {"videoId": "abc123def45"}
+    assert post_calls["headers"]["Authorization"] == "Bearer secret"
+    upload.assert_any_call(
+        str(tmp_path / "abc123def45" / "abc123def45.mp4"), "bucket", "yt/abc123def45/raw.mp4"
+    )

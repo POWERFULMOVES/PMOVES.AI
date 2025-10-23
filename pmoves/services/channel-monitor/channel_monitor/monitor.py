@@ -123,7 +123,7 @@ class ChannelMonitor:
                 """
                 SELECT video_id
                 FROM pmoves.channel_monitoring
-                WHERE processing_status IN ('queued', 'processing', 'completed', 'failed')
+                WHERE processing_status IN ('queued', 'processing', 'completed')
                 """
             )
         self._processed_video_ids = {row["video_id"] for row in rows}
@@ -351,7 +351,9 @@ class ChannelMonitor:
         if isinstance(channel_opts, dict):
             merged.update(channel_opts)
         if channel.get("cookies_path"):
-            merged.setdefault("cookies", channel["cookies_path"])
+            # yt-dlp expects `cookiefile`; preserve backward compat with older configs that used `cookies`
+            merged.pop("cookies", None)
+            merged.setdefault("cookiefile", channel["cookies_path"])
         return merged
 
     async def _fetch_youtube_flat(
@@ -474,16 +476,31 @@ class ChannelMonitor:
         record = dict(row)
         config = record.get("config") or {}
         if not isinstance(config, dict):
-            config = {}
+            try:
+                config = dict(config)
+            except Exception:
+                config = {}
         filters = record.get("filters") or config.get("filters") or {}
+        if not isinstance(filters, dict):
+            filters = {}
         yt_options = dict(self.config.get("global_settings", {}).get("yt_options") or {})
-        yt_options.update(record.get("yt_options") or config.get("yt_options") or {})
+        extra_opts = record.get("yt_options") or config.get("yt_options") or {}
+        if isinstance(extra_opts, list):
+            try:
+                extra_opts = dict(extra_opts)
+            except Exception:
+                extra_opts = {}
+        if extra_opts and not isinstance(extra_opts, dict):
+            extra_opts = {}
+        yt_options.update(extra_opts)
         refresh_token = record.get("refresh_token")
         if refresh_token:
             yt_options.setdefault("oauth_refresh_token", refresh_token)
 
         source_identifier = record.get("source_identifier") or record.get("source_url") or str(record["id"])
-        channel_id = f"user:{record['user_id']}:{source_identifier}"
+        user_ref = record.get('user_id')
+        user_label = str(user_ref) if user_ref else 'system'
+        channel_id = f"user:{user_label}:{source_identifier}"
 
         entry = {
             "channel_id": channel_id,
@@ -500,7 +517,7 @@ class ChannelMonitor:
             "yt_options": yt_options,
             "check_interval_minutes": record.get("check_interval_minutes") or config.get("check_interval_minutes"),
             "user_source_id": str(record["id"]),
-            "user_id": str(record["user_id"]),
+            "user_id": str(user_ref) if user_ref else None,
             "cookies_path": record.get("cookies_path") or config.get("cookies_path"),
             "media_type": config.get("media_type", "video"),
             "format": config.get("format"),
@@ -667,7 +684,7 @@ class ChannelMonitor:
         updated_bool = updated not in {"0", "0.0"}
         if updated_bool and status in {"queued", "processing", "completed"}:
             self._processed_video_ids.add(video_id)
-        elif status == "pending":
+        elif status in {"pending", "failed"}:
             self._processed_video_ids.discard(video_id)
         return updated_bool
 

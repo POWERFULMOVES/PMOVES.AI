@@ -313,11 +313,30 @@ services:
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=http://hi-rag-gateway:8086
+      - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
+      - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
+      - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
+      - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
+      - BGUTIL_DISABLE_INNERTUBE=${BGUTIL_DISABLE_INNERTUBE:-1}
+      - CHANNEL_MONITOR_STATUS_URL=${CHANNEL_MONITOR_STATUS_URL:-http://channel-monitor:8097/api/monitor/status}
     volumes:
       - ./config:/app/config
-    depends_on: [minio]
+    depends_on:
+      minio:
+        condition: service_started
+      bgutil-pot-provider:
+        condition: service_started
     ports: ["8077:8077"]
     profiles: ["orchestration","workers","agents"]
+    networks: [pmoves]
+
+  bgutil-pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
+    restart: unless-stopped
+    environment:
+      - PORT=4416
+    depends_on: [minio]
+    profiles: ["orchestration","yt"]
     networks: [pmoves]
 
   channel-monitor:
@@ -335,6 +354,8 @@ services:
       postgres:
         condition: service_healthy
       pmoves-yt:
+        condition: service_started
+      bgutil-pot-provider:
         condition: service_started
     ports: ["8097:8097"]
     profiles: ["orchestration","yt"]
@@ -591,11 +612,124 @@ services:
     ports: ["8093:8093"]
     profiles: ["orchestration"]
     networks: [pmoves]
+
+  invidious-db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${INVIDIOUS_PG_DB:-invidious}
+      POSTGRES_USER: ${INVIDIOUS_PG_USER:-kemal}
+      POSTGRES_PASSWORD: ${INVIDIOUS_PG_PASSWORD:-kemal}
+    volumes:
+      - invidious-postgres-data:/var/lib/postgresql/data
+      - ./services/invidious/config/sql:/config/sql:ro
+      - ./services/invidious/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    profiles: ["invidious"]
+    networks: [pmoves]
+
+  invidious-companion:
+    image: quay.io/invidious/invidious-companion:latest
+    restart: unless-stopped
+    environment:
+      PORT: 8282
+      HOST: 0.0.0.0
+      SERVER_SECRET_KEY: ${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}
+      CACHE_DIRECTORY: /var/tmp/youtubei.js
+      SERVER_BASE_URL: ${INVIDIOUS_COMPANION_PUBLIC_URL:-}
+    volumes:
+      - invidious-companion-cache:/var/tmp/youtubei.js
+    ports:
+      - "${INVIDIOUS_COMPANION_LISTEN:-127.0.0.1:8282}:8282"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8282/healthz >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    profiles: ["invidious"]
+    networks: [pmoves]
+
+  invidious:
+    image: quay.io/invidious/invidious:latest
+    restart: unless-stopped
+    environment:
+      INVIDIOUS_CONFIG: |
+        db:
+          dbname: ${INVIDIOUS_PG_DB:-invidious}
+          user: ${INVIDIOUS_PG_USER:-kemal}
+          password: ${INVIDIOUS_PG_PASSWORD:-kemal}
+          host: invidious-db
+          port: 5432
+          check_tables: true
+        domain: ${INVIDIOUS_DOMAIN:-}
+        external_port: ${INVIDIOUS_EXTERNAL_PORT:-3000}
+        https_only: ${INVIDIOUS_HTTPS_ONLY:-false}
+        hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
+        invidious_companion:
+          - private_url: "http://invidious-companion:8282"
+            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8282}"
+        invidious_companion_key: "${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}"
+        statistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}
+        use_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}
+        redirector:
+          use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}
+          redirector_url: "${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}"
+    ports:
+      - "${INVIDIOUS_BIND:-127.0.0.1:3000}:3000"
+    depends_on:
+      invidious-db:
+        condition: service_healthy
+      invidious-companion:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/trending >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    profiles: ["invidious"]
+    networks: [pmoves]
+
+  grayjay-plugin-host:
+    build: ./services/grayjay-plugin-host
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    environment:
+      - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
+      - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
+      - GRAYJAY_PLUGIN_REGISTRY_TITLE=${GRAYJAY_PLUGIN_REGISTRY_TITLE:-PMOVES Plugin Registry}
+      - GRAYJAY_JELLYFIN_PLUGIN_NAME=${GRAYJAY_JELLYFIN_PLUGIN_NAME:-PMOVES Jellyfin}
+      - GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION=${GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION:-Self-hosted Jellyfin connector for PMOVES}
+      - GRAYJAY_JELLYFIN_PLUGIN_ID=${GRAYJAY_JELLYFIN_PLUGIN_ID:-pmoves-jellyfin}
+    ports: ["9096:8080"]
+    profiles: ["grayjay"]
+    networks: [pmoves]
+
+  grayjay-server:
+    image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    environment:
+      - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
+      - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
+      - GRAYJAY_SERVER_PORT=${GRAYJAY_SERVER_PORT:-9095}
+    ports: ["9095:9095"]
+    depends_on:
+      grayjay-plugin-host:
+        condition: service_started
+    profiles: ["grayjay"]
+    networks: [pmoves]
+
 volumes:
   neo4j-data: {}
   minio-data: {}
   supabase-data: {}
   notebook-sync-data: {}
+  invidious-postgres-data: {}
+  invidious-companion-cache: {}
 networks:
   pmoves:
     external: true

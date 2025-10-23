@@ -52,6 +52,9 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
    - 2025-10-23: Documented yt-dlp archive/subtitle/postprocessor knobs shared between monitor and pmoves-yt.
    - 2025-10-23: Linked personalization design (`USER_PREFERENCES_AND_INSIGHTS.md`) for per-user source ingestion.
    - 2025-10-23: Supabase `user_tokens`/`user_sources` schema + REST endpoints shipped (`/api/oauth/google/token`, `/api/monitor/user-source`).
+   - 2025-10-23: Invidious companion fallback wired into `pmoves-yt` to handle SABR playlists when credentials/cookies fail.
+   - 2025-10-23: Added optional `invidious` docker-compose profile (Invidious + companion + Postgres) with env defaults so smokes can run fully offline.
+   - 2025-10-23: SoundCloud feed temporarily disabled pending OAuth flow (see `pmoves/config/channel_monitor.json`).
 10. [ ] Run end-to-end validation (monitor two channels, ensure pmoves-yt ingests videos, capture evidence).
 
 ---
@@ -60,6 +63,7 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
 - **Local smoke**: `make channel-monitor-smoke` → seeds test config with one channel, runs single check, confirms Supabase row and queue POST.
 - **Integration**: Start full stack (`make up`, `make up-yt`, `make channel-monitor-up`), trigger `/api/monitor/check-now`, ensure pmoves-yt ingestion pipeline processes the queued video.
 - **Evidence**: Supabase `channel_monitoring` rows, pmoves-yt logs, n8n/Discord notifications (if configured), and screenshots/log exports added to `pmoves/docs/logs/`.
+- **Fallback smoke**: With `INVIDIOUS_COMPANION_URL` + key configured, re-trigger playlist ingestion and confirm SABR-only videos succeed (queued → completed) before closing the checklist.
 
 ---
 
@@ -68,7 +72,7 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
 |------|-------|--------|--------|-------|
 | Queue transport decision | — | 2025-10-23 | ✅ | HTTP → `pmoves-yt/yt/ingest` for initial cut. |
 | Migration drafted | — | 2025-10-23 | ✅ | `supabase/initdb/14_channel_monitoring.sql`. |
-| Service scaffolded | — | 2025-10-23 | 🚧 | FastAPI worker + Dockerfile committed; status transitions + callback endpoint + pytest coverage added; awaiting validation. |
+| Service scaffolded | — | 2025-10-23 | 🚧 | FastAPI worker + Dockerfile committed; status transitions + callback endpoint + pytest coverage added; awaiting validation (2025-10-23: pmoves-yt accepts single-video downloads via `web_safari` + bgutil POT, playlist/SoundCloud still blocked by SABR). |
 | Docs updated | — | 2025-10-23 | ✅ | Local dev, tooling reference, roadmap updated. |
 | End-to-end smoke | — |  | ☐ | Pending once ingestion queue verified. |
 
