@@ -1,4 +1,4 @@
-import os, json, tempfile, shutil, asyncio, time, re, math, uuid, copy
+import os, json, tempfile, shutil, asyncio, time, re, math, uuid, copy, logging
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
@@ -38,6 +38,7 @@ except Exception:  # pragma: no cover - fallback when module unavailable
         return None
 
 app = FastAPI(title="PMOVES.YT", version="1.0.0")
+logger = logging.getLogger("pmoves-yt")
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID") or "minioadmin"
@@ -56,6 +57,9 @@ NATS_URL = (os.environ.get("NATS_URL") or "").strip()
 YT_NATS_ENABLE = os.environ.get("YT_NATS_ENABLE", "false").lower() == "true"
 FFW_URL = os.environ.get("FFW_URL","http://ffmpeg-whisper:8078")
 HIRAG_URL = os.environ.get("HIRAG_URL","http://hi-rag-gateway-v2:8086")
+
+CHANNEL_MONITOR_STATUS_URL = os.environ.get("CHANNEL_MONITOR_STATUS_URL")
+CHANNEL_MONITOR_STATUS_SECRET = os.environ.get("CHANNEL_MONITOR_STATUS_SECRET")
 
 # Summarization (Gemma) configuration
 YT_SUMMARY_PROVIDER = os.environ.get("YT_SUMMARY_PROVIDER", "ollama")  # ollama|hf
@@ -96,6 +100,34 @@ except ValueError:
 YT_COOKIES = os.environ.get("YT_COOKIES")
 
 _nc: Optional[NATS] = None
+
+
+def _channel_monitor_notify(
+    video_id: Optional[str],
+    status: str,
+    *,
+    error: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> None:
+    if not video_id or not CHANNEL_MONITOR_STATUS_URL:
+        return
+    payload: Dict[str, Any] = {"video_id": video_id, "status": status}
+    if error:
+        payload["error"] = error
+    if metadata:
+        payload["metadata"] = metadata
+    headers = {"content-type": "application/json"}
+    if CHANNEL_MONITOR_STATUS_SECRET:
+        headers["X-Channel-Monitor-Token"] = CHANNEL_MONITOR_STATUS_SECRET
+    try:
+        requests.post(
+            CHANNEL_MONITOR_STATUS_URL,
+            json=payload,
+            headers=headers,
+            timeout=5,
+        )
+    except requests.RequestException as exc:  # pragma: no cover - best effort
+        logger.warning("Channel monitor notify failed for %s: %s", video_id, exc)
 
 def _with_ytdlp_defaults(opts: Dict[str, Any]) -> Dict[str, Any]:
     """Add hardened defaults so youtube-dl works without manual cookies."""
@@ -407,18 +439,41 @@ def yt_transcript(body: Dict[str,Any] = Body(...)):
 def yt_ingest(body: Dict[str,Any] = Body(...)):
     # Convenience orchestration: info + download + transcript
     url = body.get('url'); ns = body.get('namespace') or DEFAULT_NAMESPACE
-    if not url: raise HTTPException(400, 'url required')
-    dl = yt_download({'url': url, 'namespace': ns, 'bucket': body.get('bucket') or DEFAULT_BUCKET})
-    tr_payload = {
-        'video_id': dl['video_id'],
-        'namespace': ns,
-        'bucket': body.get('bucket') or DEFAULT_BUCKET,
-        'language': body.get('language'),
-        'whisper_model': body.get('whisper_model'),
-    }
-    if body.get('provider'):
-        tr_payload['provider'] = body['provider']
-    tr = yt_transcript(tr_payload)
+    if not url:
+        raise HTTPException(400, 'url required')
+    bucket = body.get('bucket') or DEFAULT_BUCKET
+    dl: Optional[Dict[str, Any]] = None
+    try:
+        dl = yt_download({'url': url, 'namespace': ns, 'bucket': bucket})
+        tr_payload = {
+            'video_id': dl['video_id'],
+            'namespace': ns,
+            'bucket': bucket,
+            'language': body.get('language'),
+            'whisper_model': body.get('whisper_model'),
+        }
+        if body.get('provider'):
+            tr_payload['provider'] = body['provider']
+        tr = yt_transcript(tr_payload)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else json.dumps(exc.detail)
+        _channel_monitor_notify(dl.get('video_id') if dl else None, 'failed', error=detail)
+        raise
+    except Exception as exc:
+        _channel_monitor_notify(dl.get('video_id') if dl else None, 'failed', error=str(exc))
+        raise
+
+    _channel_monitor_notify(
+        dl.get('video_id'),
+        'completed',
+        metadata={
+            'ingest': {
+                'source': 'pmoves-yt',
+                'namespace': ns,
+                'bucket': bucket,
+            }
+        },
+    )
     return {'ok': True, 'video': dl, 'transcript': tr}
 
 # -------------------- Playlist / Channel ingestion --------------------

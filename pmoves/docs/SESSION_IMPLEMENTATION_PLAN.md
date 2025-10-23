@@ -1,8 +1,12 @@
 # M2 Automation Kickoff & Roadmap Prep Plan
 Note: For cross-references, see pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-10-20_
+_Last updated: 2025-10-23_
 
 This working session establishes the concrete implementation tasks needed to close Milestone M2 while warming up broader roadmap threads for Milestones M3–M5. It consolidates the operational reminders from the sprint brief and ties each step to the canonical checklists in `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`, `pmoves/docs/NEXT_STEPS.md`, and `pmoves/docs/ROADMAP.md`.
+
+## Session Log (2025-10-23)
+
+- Hardened the PMOVES.yt channel monitor queue path: status transitions now capture `processing` → `queued`/`completed`/`failed` timestamps in Supabase metadata, added `/api/monitor/status` callback guarded by `CHANNEL_MONITOR_SECRET`, and pytest coverage exercises happy-path + failure flows (`pytest pmoves/services/channel-monitor/tests`). Pending: run `make channel-monitor-smoke` once pmoves-yt and Supabase are online to log evidence.
 
 ## Session Log (2025-10-20)
 

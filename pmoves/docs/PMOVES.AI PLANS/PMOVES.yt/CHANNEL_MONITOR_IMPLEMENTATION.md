@@ -29,7 +29,7 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
 ---
 
 ## 3. Open Design Questions
-1. **Queue transport** – Are we standardising on HTTP to pmoves-yt (`/queue/add`) or NATS (`pmoves.yt.ingest.request.v1`)? Decide before implementation.
+1. **Queue transport** – Initial implementation uses HTTP to `pmoves-yt` (`POST /yt/ingest`). Revisit NATS emission once ingestion topics are finalised.
 2. **Deduplication horizon** – Current prototype persists `processed_videos` in Redis. Prefer Supabase unique constraint + status column; confirm retention strategy (e.g., mark `archived` after N days).
 3. **Quota management** – If YouTube Data API usage is required, add service-level throttling and fallback to RSS where possible.
 4. **Notification channel** – Slack/Discord webhook optional; determine if default should be disabled or point to operations channel.
@@ -44,15 +44,17 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
 4. [ ] Implement config loader, scheduler wiring, RSS ingestion, filter logic.
 5. [ ] Wire queue publisher, Supabase persistence, dedupe.
 6. [ ] Add `/healthz`, `/api/monitor/*` endpoints & stats.
-7. [ ] Write unit tests + smoke script (`make yt-channel-monitor-smoke`).
+7. [ ] Write unit tests + smoke script (`make channel-monitor-smoke`).
+   - 2025-10-23: Added pytest coverage for filter logic and queue status transitions (`pytest pmoves/services/channel-monitor/tests`).
 8. [ ] Create compose profile `channel-monitor` with env defaults.
 9. [ ] Update documentation (`PMOVES_YT.md`, `LOCAL_DEV.md`, `LOCAL_TOOLING_REFERENCE.md`, `SESSION_IMPLEMENTATION_PLAN.md`).
+   - 2025-10-23: Added callback secret + status webhook notes (channel monitor README + env guides).
 10. [ ] Run end-to-end validation (monitor two channels, ensure pmoves-yt ingests videos, capture evidence).
 
 ---
 
 ## 5. Validation Plan
-- **Local smoke**: `make yt-channel-monitor-smoke` → seeds test config with one channel, runs single check, confirms Supabase row and queue POST.
+- **Local smoke**: `make channel-monitor-smoke` → seeds test config with one channel, runs single check, confirms Supabase row and queue POST.
 - **Integration**: Start full stack (`make up`, `make up-yt`, `make channel-monitor-up`), trigger `/api/monitor/check-now`, ensure pmoves-yt ingestion pipeline processes the queued video.
 - **Evidence**: Supabase `channel_monitoring` rows, pmoves-yt logs, n8n/Discord notifications (if configured), and screenshots/log exports added to `pmoves/docs/logs/`.
 
@@ -61,11 +63,11 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
 ## 6. Status Tracker
 | Task | Owner | Target | Status | Notes |
 |------|-------|--------|--------|-------|
-| Queue transport decision |  |  | ☐ |  |
-| Migration drafted |  |  | ☐ |  |
-| Service scaffolded |  |  | ☐ |  |
-| Docs updated |  |  | ☐ |  |
-| End-to-end smoke |  |  | ☐ |  |
+| Queue transport decision | — | 2025-10-23 | ✅ | HTTP → `pmoves-yt/yt/ingest` for initial cut. |
+| Migration drafted | — | 2025-10-23 | ✅ | `supabase/initdb/14_channel_monitoring.sql`. |
+| Service scaffolded | — | 2025-10-23 | 🚧 | FastAPI worker + Dockerfile committed; status transitions + callback endpoint + pytest coverage added; awaiting validation. |
+| Docs updated | — | 2025-10-23 | ✅ | Local dev, tooling reference, roadmap updated. |
+| End-to-end smoke | — |  | ☐ | Pending once ingestion queue verified. |
 
 Update the table as work progresses and link to PRs/evidence in the notes column.
 

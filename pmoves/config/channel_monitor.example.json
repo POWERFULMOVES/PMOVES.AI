@@ -1,0 +1,28 @@
+{
+  "channels": [
+    {
+      "channel_id": "UC_x5XG1OV2P6uZZ5FSM9Ttw",
+      "channel_name": "Google Developers",
+      "enabled": false,
+      "check_interval_minutes": 60,
+      "auto_process": true,
+      "filters": {
+        "max_age_days": 30,
+        "exclude_keywords": ["#shorts"]
+      },
+      "priority": 1,
+      "namespace": "pmoves",
+      "tags": ["tech"]
+    }
+  ],
+  "global_settings": {
+    "max_videos_per_check": 10,
+    "use_rss_feed": true,
+    "use_youtube_api": false,
+    "check_on_startup": true
+  },
+  "monitoring_schedule": {
+    "enabled": true,
+    "interval_minutes": 30
+  }
+}

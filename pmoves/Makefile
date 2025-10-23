@@ -124,7 +124,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
-.PHONY: up down clean up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
+.PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 .PHONY: notebook-up notebook-down notebook-logs notebook-seed-models
 
@@ -531,7 +531,15 @@ smoke:
 
 	@echo "[13/14] Health weekly → CGP..." && python3 pmoves/tools/events_to_cgp.py --file pmoves/contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
 	@echo "[14/14] Finance monthly → CGP..." && python3 pmoves/tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
-	 rm -f $$TMP
+
+.PHONY: channel-monitor-up
+channel-monitor-up:
+	docker compose -p $(PROJECT) --profile yt up -d channel-monitor
+
+.PHONY: channel-monitor-smoke
+channel-monitor-smoke:
+	@echo "[Channel Monitor] Triggering check..." && curl -sS -X POST http://localhost:8097/api/monitor/check-now | jq -e '.status=="ok"' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[Channel Monitor] Fetching stats..." && curl -sS http://localhost:8097/api/monitor/stats | jq '.summary'
 	@echo "Smoke tests passed."
 
 .PHONY: smoke-rerank

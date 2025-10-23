@@ -254,6 +254,12 @@ PY
 │   │   ├── analysis-echo/
 │   │   ├── archon/
 │   │   │   ├── README.md
+│   │   ├── channel-monitor/
+│   │   │   ├── Dockerfile
+│   │   │   ├── README.md
+│   │   │   ├── channel_monitor/
+│   │   │   ├── requirements.txt
+│   │   │   └── tests/
 │   │   ├── comfy-watcher/
 │   │   ├── comfyui/
 │   │   ├── common/

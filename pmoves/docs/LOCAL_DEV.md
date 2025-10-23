@@ -21,6 +21,7 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
 - publisher-discord: 8094 -> 8092 (internal name `publisher-discord`)
 - notebook-sync: 8095 (internal name `notebook-sync`) – polls Open Notebook and ships normalized content into LangExtract + extract-worker.
+- channel-monitor: 8097 (internal name `channel-monitor`) – watches YouTube channels and queues new videos for pmoves-yt ingestion.
 
 External bundles (via `make up-external`):
 - wger: 8000 (nginx proxy to Django; override host mapping with `WGER_ROOT_URL` when reverse-proxying)
