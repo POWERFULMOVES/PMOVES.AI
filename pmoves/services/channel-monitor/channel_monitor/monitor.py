@@ -267,6 +267,7 @@ class ChannelMonitor:
                 "auto_emit": False,
                 "source": "channel_monitor",
                 "tags": channel.get("tags", []),
+                "yt_options": self._build_yt_options(channel),
             }
             for video in videos
         ]
@@ -295,6 +296,16 @@ class ChannelMonitor:
                         "queued",
                         extra_metadata={"queue_status_code": getattr(resp, "status_code", None)},
                     )
+
+    def _build_yt_options(self, channel: Dict[str, Any]) -> Dict[str, Any]:
+        merged: Dict[str, Any] = {}
+        global_opts = self.config.get("global_settings", {}).get("yt_options") or {}
+        if isinstance(global_opts, dict):
+            merged.update(global_opts)
+        channel_opts = channel.get("yt_options") or {}
+        if isinstance(channel_opts, dict):
+            merged.update(channel_opts)
+        return merged
 
     async def _update_status(
         self,

@@ -177,6 +177,7 @@ def test_queue_videos_success_updates_status(tmp_path, monkeypatch):
     assert url == "http://example.test/yt/ingest"
     assert payload["url"] == videos[0]["url"]
     assert payload["source"] == "channel_monitor"
+    assert payload["yt_options"] == {"write_info_json": True}
     assert statuses[0][0:3] == ("vid-42", "processing", None)
     assert statuses[1][0:3] == ("vid-42", "queued", None)
     assert statuses[1][3] == {"queue_status_code": 202}
@@ -255,3 +256,20 @@ def test_apply_status_update_invokes_internal_update(tmp_path):
     assert updates == [
         ("vid-complete", "completed", {"ingest": {"source": "pmoves-yt"}})
     ]
+
+
+def test_build_yt_options_merges_global_and_channel(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    channel = {
+        "channel_id": "UCmerged",
+        "yt_options": {
+            "download_archive": "/custom/archive.txt",
+            "write_info_json": False,
+        },
+    }
+
+    merged = monitor._build_yt_options(channel)
+
+    assert merged["download_archive"] == "/custom/archive.txt"
+    assert merged["write_info_json"] is False
+    assert "write_info_json" in merged

@@ -54,6 +54,10 @@ Notes
   - `YT_EXTRACTOR_RETRIES` controls yt-dlp retry attempts (default `2`). Increase when scraping longer playlists or spotty connections.
   - `YT_TEMP_ROOT` (default `/tmp/pmoves-yt`) stores resumable downloads. Successful ingests clean the directory; failures keep partial files so retries resume automatically.
   - `YT_RETRY_MAX` caps automatic retry attempts per video (default `3`). Combine with `YT_RATE_LIMIT` to throttle aggressive playlists.
+  - `YT_ARCHIVE_DIR` + `YT_ENABLE_DOWNLOAD_ARCHIVE` control yt-dlp's `--download-archive` file so reruns skip duplicates. Override per channel via `yt_options.download_archive`.
+  - `YT_SUBTITLE_LANGS` (comma-separated) + `YT_SUBTITLE_AUTO` (bool) fetch caption tracks; set `yt_options.subtitle_langs` for channel-specific overrides.
+  - `YT_WRITE_INFO_JSON` (default true) saves `.info.json` alongside media; disable per-channel with `yt_options.write_info_json=false`.
+  - `YT_POSTPROCESSORS_JSON` lets you swap yt-dlp post-processors. By default we embed metadata + thumbnails (requires ffmpeg + AtomicParsley shipped in the image).
 - Gemma providers:
   - `YT_SUMMARY_PROVIDER=ollama|hf`, `OLLAMA_URL`, `YT_GEMMA_MODEL` (default gemma2:9b-instruct)
   - `HF_GEMMA_MODEL`, `HF_USE_GPU`, `HF_TOKEN` (requires transformers+torch if using HF locally)

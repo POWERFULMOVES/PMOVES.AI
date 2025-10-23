@@ -75,6 +75,41 @@ YT_CONCURRENCY = int(os.environ.get("YT_CONCURRENCY", "2"))
 YT_RATE_LIMIT = float(os.environ.get("YT_RATE_LIMIT", "0.0"))  # seconds between downloads
 YT_RETRY_MAX = int(os.environ.get("YT_RETRY_MAX", "3"))
 YT_TEMP_ROOT = Path(os.environ.get("YT_TEMP_ROOT", "/tmp/pmoves-yt"))
+YT_ARCHIVE_DIR = Path(os.environ.get("YT_ARCHIVE_DIR", "/data/yt-dlp"))
+YT_ENABLE_DOWNLOAD_ARCHIVE = os.environ.get("YT_ENABLE_DOWNLOAD_ARCHIVE", "true").lower() == "true"
+YT_DOWNLOAD_ARCHIVE = os.environ.get("YT_DOWNLOAD_ARCHIVE")
+if not YT_DOWNLOAD_ARCHIVE:
+    YT_DOWNLOAD_ARCHIVE = str(YT_ARCHIVE_DIR / "download-archive.txt")
+
+_subtitle_env = os.environ.get("YT_SUBTITLE_LANGS", "")
+YT_SUBTITLE_LANGS = [lang.strip() for lang in _subtitle_env.split(",") if lang.strip()]
+YT_SUBTITLE_AUTO = os.environ.get("YT_SUBTITLE_AUTO", "false").lower() == "true"
+YT_WRITE_INFO_JSON = os.environ.get("YT_WRITE_INFO_JSON", "true").lower() == "true"
+
+_postprocessors_env = os.environ.get("YT_POSTPROCESSORS_JSON")
+_postprocessors_default: List[Dict[str, Any]]
+if _postprocessors_env:
+    try:
+        parsed = json.loads(_postprocessors_env)
+        if isinstance(parsed, list):
+            _postprocessors_default = parsed
+        else:
+            logger.warning("YT_POSTPROCESSORS_JSON must be a list; falling back to defaults")
+            _postprocessors_default = [
+                {"key": "FFmpegMetadata"},
+                {"key": "EmbedThumbnail"},
+            ]
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse YT_POSTPROCESSORS_JSON; using defaults")
+        _postprocessors_default = [
+            {"key": "FFmpegMetadata"},
+            {"key": "EmbedThumbnail"},
+        ]
+else:
+    _postprocessors_default = [
+        {"key": "FFmpegMetadata"},
+        {"key": "EmbedThumbnail"},
+    ]
 
 # Segmentation thresholds (smart boundaries)
 YT_SEG_TARGET_DUR = float(os.environ.get("YT_SEG_TARGET_DUR", "30.0"))
@@ -280,6 +315,7 @@ def yt_download(body: Dict[str,Any] = Body(...)):
     if not url: raise HTTPException(400, 'url required')
     YT_TEMP_ROOT.mkdir(parents=True, exist_ok=True)
     outtmpl = os.path.join(str(YT_TEMP_ROOT), '%(id)s', '%(id)s.%(ext)s')
+    yt_options = body.get('yt_options') or {}
     ydl_opts = _with_ytdlp_defaults({
         'outtmpl': outtmpl,
         'format': body.get('format') or 'bestvideo+bestaudio/best',
@@ -288,6 +324,36 @@ def yt_download(body: Dict[str,Any] = Body(...)):
         'quiet': True,
         'noprogress': True,
     })
+    archive_enabled = bool(yt_options.get('use_download_archive', YT_ENABLE_DOWNLOAD_ARCHIVE))
+    archive_path_value = yt_options.get('download_archive', YT_DOWNLOAD_ARCHIVE)
+    if archive_enabled and archive_path_value:
+        archive_path = Path(archive_path_value)
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        ydl_opts['download_archive'] = str(archive_path)
+
+    subtitle_langs = yt_options.get('subtitle_langs', None)
+    if isinstance(subtitle_langs, str):
+        subtitle_langs = [lang.strip() for lang in subtitle_langs.split(',') if lang.strip()]
+    if subtitle_langs is None:
+        subtitle_langs = YT_SUBTITLE_LANGS
+    auto_sub = bool(yt_options.get('subtitle_auto', YT_SUBTITLE_AUTO))
+    if subtitle_langs:
+        ydl_opts['writesubtitles'] = True
+        ydl_opts['subtitleslangs'] = subtitle_langs
+        if auto_sub:
+            ydl_opts['writeautomaticsub'] = True
+
+    write_info_json = yt_options.get('write_info_json', YT_WRITE_INFO_JSON)
+    if write_info_json:
+        ydl_opts['writeinfojson'] = True
+
+    postprocessors = yt_options.get('postprocessors', None)
+    if not isinstance(postprocessors, list):
+        postprocessors = copy.deepcopy(_postprocessors_default)
+    else:
+        postprocessors = copy.deepcopy(postprocessors)
+    if postprocessors:
+        ydl_opts['postprocessors'] = postprocessors
     success = False
     vid_dir: Optional[Path] = None
     try:
@@ -329,6 +395,12 @@ def yt_download(body: Dict[str,Any] = Body(...)):
                     'version': 1,
                     'downloader': 'yt-dlp',
                     'yt_dlp_version': getattr(yt_dlp, '__version__', None),
+                    'options': {
+                        'download_archive': ydl_opts.get('download_archive'),
+                        'subtitleslangs': ydl_opts.get('subtitleslangs'),
+                        'write_info_json': bool(write_info_json),
+                        'postprocessors': [pp.get('key') for pp in postprocessors] if postprocessors else [],
+                    },
                 },
                 'statistics': {
                     'view_count': info.get('view_count'),

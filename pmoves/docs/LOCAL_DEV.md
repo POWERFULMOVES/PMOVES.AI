@@ -22,6 +22,7 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - publisher-discord: 8094 -> 8092 (internal name `publisher-discord`)
 - notebook-sync: 8095 (internal name `notebook-sync`) – polls Open Notebook and ships normalized content into LangExtract + extract-worker.
 - channel-monitor: 8097 (internal name `channel-monitor`) – watches YouTube channels and queues new videos for pmoves-yt ingestion.
+  - Tune yt-dlp via env: `YT_ARCHIVE_DIR` + `YT_ENABLE_DOWNLOAD_ARCHIVE` manage archive files, `YT_SUBTITLE_LANGS`/`YT_SUBTITLE_AUTO` pull captions, `YT_POSTPROCESSORS_JSON` overrides post-processing (defaults embed metadata + thumbnails).
 
 External bundles (via `make up-external`):
 - wger: 8000 (nginx proxy to Django; override host mapping with `WGER_ROOT_URL` when reverse-proxying)

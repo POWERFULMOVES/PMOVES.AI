@@ -47,6 +47,7 @@ _Last updated: 2025-10-14_
 - [ ] Promote YouTube channel monitor prototype into core service (see `PMOVES.yt/CHANNEL_MONITOR_IMPLEMENTATION.md`).
   - Scaffold FastAPI worker, Supabase migration, queue wiring, smoke tests.
   - 2025-10-23: Added queue status transitions + webhook callback + pytest coverage (`pytest pmoves/services/channel-monitor/tests`). Stack smoke pending.
+  - 2025-10-23: Surfaced yt-dlp archive/caption/postprocessor knobs in env + channel configs.
   - Provide default channel config + env vars; update docs once smoke passes.
 - [ ] Implement PMOVES.YT summarization + resilient downloader backlog (Gemma endpoints, multipart upload, `make yt-smoke` helper).
 - [ ] Design and document the resilient download module (resume, retries, rate limiting, playlist/channel ingestion, bounded worker pool).

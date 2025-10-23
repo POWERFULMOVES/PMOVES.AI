@@ -22,6 +22,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "priority": 1,
             "namespace": "pmoves",
             "tags": ["tech"],
+            "yt_options": {
+                "download_archive": "/data/yt-dlp/google-developers.archive",
+                "subtitle_langs": ["en"],
+            },
         }
     ],
     "global_settings": {
@@ -33,6 +37,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "notification_webhook": "",
         "batch_processing": True,
         "batch_size": 5,
+        "yt_options": {
+            "write_info_json": True,
+        },
     },
     "monitoring_schedule": {
         "enabled": True,

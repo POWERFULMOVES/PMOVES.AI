@@ -12,14 +12,22 @@
       },
       "priority": 1,
       "namespace": "pmoves",
-      "tags": ["tech"]
+      "tags": ["tech"],
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/google-developers.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
     }
   ],
   "global_settings": {
     "max_videos_per_check": 10,
     "use_rss_feed": true,
     "use_youtube_api": false,
-    "check_on_startup": true
+    "check_on_startup": true,
+    "yt_options": {
+      "write_info_json": true
+    }
   },
   "monitoring_schedule": {
     "enabled": true,

@@ -7,6 +7,7 @@ This working session establishes the concrete implementation tasks needed to clo
 ## Session Log (2025-10-23)
 
 - Hardened the PMOVES.yt channel monitor queue path: status transitions now capture `processing` → `queued`/`completed`/`failed` timestamps in Supabase metadata, added `/api/monitor/status` callback guarded by `CHANNEL_MONITOR_SECRET`, and pytest coverage exercises happy-path + failure flows (`pytest pmoves/services/channel-monitor/tests`). Pending: run `make channel-monitor-smoke` once pmoves-yt and Supabase are online to log evidence.
+- Pulled in yt-dlp optional deps (`yt-dlp[default]`, `curl-cffi`, AtomicParsley) and exposed archive/subtitle/postprocessor knobs via `YT_*` env + `yt_options` blocks so playlists skip duplicates, embed metadata, and capture captions during backfill.
 
 ## Session Log (2025-10-20)
 

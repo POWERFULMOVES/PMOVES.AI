@@ -36,6 +36,13 @@ curl -X POST http://localhost:8097/api/monitor/channel \
   -d '{"channel_id":"UCabc123xyz","channel_name":"Example Channel","auto_process":true}'
 ```
 
+`yt_options` blocks (global or per-channel) are forwarded to pmoves-yt, letting you tune yt-dlp behaviour without rebuilding containers. Example knobs:
+
+- `download_archive`: absolute path to the archive file so yt-dlp skips previously ingested videos.
+- `subtitle_langs`: list of language codes to pull caption tracks (e.g. `["en", "es"]`).
+- `postprocessors`: override yt-dlp post-processing chain; defaults embed thumbnails + metadata.
+- `write_info_json`: emit `.info.json` alongside downloads for downstream RAG enrichment.
+
 ### Persistence
 
 Discovered videos are stored in `pmoves.channel_monitoring` with status flags (`pending`, `processing`, `queued`, `completed`, `failed`). The service records each transition timestamp inside the row metadata so operations can audit ingestion attempts. The `pmoves/supabase/initdb/14_channel_monitoring.sql` migration creates the table and indexes for Supabase/Postgres environments.
