@@ -235,7 +235,7 @@ services:
 
   ffmpeg-whisper:
     build:
-      context: ..
+      context: ./services
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]

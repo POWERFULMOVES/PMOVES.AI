@@ -72,12 +72,14 @@ COPY --from=ffmpeg-builder /usr/local /usr/local
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY ffmpeg-whisper/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir uv && \
     uv pip install --system --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY . /app/services
+
+ENV PYTHONPATH=/app
 
 EXPOSE 8078
 
-CMD ["uvicorn","server:app","--host","0.0.0.0","--port","8078"]
+CMD ["uvicorn","services.ffmpeg-whisper.server:app","--host","0.0.0.0","--port","8078"]

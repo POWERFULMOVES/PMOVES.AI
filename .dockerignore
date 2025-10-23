@@ -1,0 +1,4 @@
+# Exclude large or permission-restricted assets from build contexts
+pmoves/jellyfin-ai/neo4j/import
+pmoves/jellyfin-ai/neo4j/import/*
+pmoves/jellyfin-ai/neo4j/import/**
