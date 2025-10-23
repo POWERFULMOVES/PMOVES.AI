@@ -3,10 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from functools import partial
 from typing import Any, Dict, List, Optional, Set
+from uuid import UUID
 
 import asyncpg
 import httpx
@@ -44,24 +44,22 @@ class ChannelMonitor:
         self._tasks: List[asyncio.Task] = []
         self._processed_video_ids: Set[str] = set()
         self._shutdown = asyncio.Event()
+        self._dynamic_channels: List[Dict[str, Any]] = []
 
     async def start(self) -> None:
         if self._pool is None:
             self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=5)
         await self._ensure_tables()
         await self._load_processed_videos()
+        await self._load_user_sources()
 
         if self.config["global_settings"].get("check_on_startup", True):
             await self.check_all_channels()
 
-        interval_default = (
-            self.config.get("monitoring_schedule", {}).get("interval_minutes") or 30
-        )
-
-        for channel in self.config.get("channels", []):
+        for channel in self._active_channels():
             if not channel.get("enabled", True):
                 continue
-            interval = channel.get("check_interval_minutes") or interval_default
+            interval = channel.get("check_interval_minutes") or self._default_interval()
             interval = max(1, int(interval))
             task = asyncio.create_task(self._channel_loop(channel, interval))
             self._tasks.append(task)
@@ -133,7 +131,7 @@ class ChannelMonitor:
 
     async def check_all_channels(self) -> int:
         total_new = 0
-        channels = [c for c in self.config.get("channels", []) if c.get("enabled", True)]
+        channels = self._active_channels()
         for channel in channels:
             total_new += await self.check_single_channel(channel)
         return total_new
@@ -181,6 +179,8 @@ class ChannelMonitor:
 
         if channel.get("auto_process", True):
             await self._queue_videos(channel, new_videos)
+
+        await self._update_user_source_status(channel, len(new_videos))
 
         return len(new_videos)
 
@@ -247,15 +247,7 @@ class ChannelMonitor:
         assert self._pool
         async with self._pool.acquire() as conn:
             async with conn.transaction():
-                channel_identifier = (
-                    channel.get("channel_id")
-                    or channel.get("source_url")
-                    or channel.get("source_id")
-                    or channel.get("channel_name")
-                )
-                if not channel_identifier:
-                    raise ValueError("channel configuration missing channel_id/source identifier")
-
+                channel_identifier = self._resolve_channel_identifier(channel)
                 for video in videos:
                     published = video["published"]
                     if published.tzinfo is None:
@@ -304,12 +296,7 @@ class ChannelMonitor:
             or channel.get("source_id")
             or "unknown"
         )
-        channel_identifier = (
-            channel.get("channel_id")
-            or channel.get("source_url")
-            or channel.get("source_id")
-            or channel_label
-        )
+        channel_identifier = self._resolve_channel_identifier(channel)
         for video in videos:
             payloads.append(
                 {
@@ -445,6 +432,196 @@ class ChannelMonitor:
                 )
         return results
 
+    def _default_interval(self) -> int:
+        return max(1, int(self.config.get("monitoring_schedule", {}).get("interval_minutes") or 30))
+
+    def _active_channels(self) -> List[Dict[str, Any]]:
+        channels = [c for c in self.config.get("channels", []) if c.get("enabled", True)]
+        channels.extend([c for c in self._dynamic_channels if c.get("enabled", True)])
+        return channels
+
+    def _resolve_channel_identifier(self, channel: Dict[str, Any]) -> str:
+        identifier = (
+            channel.get("channel_id")
+            or channel.get("source_identifier")
+            or channel.get("source_url")
+            or channel.get("channel_name")
+        )
+        if identifier:
+            return str(identifier)
+        raise ValueError("channel configuration missing identifier")
+
+    async def _load_user_sources(self) -> None:
+        assert self._pool
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT us.*, ut.refresh_token
+                FROM pmoves.user_sources us
+                LEFT JOIN pmoves.user_tokens ut ON us.token_id = ut.id
+                WHERE us.status = 'active'
+                """
+            )
+
+        dynamic: List[Dict[str, Any]] = []
+        for row in rows:
+            entry = self._build_dynamic_channel(row)
+            dynamic.append(entry)
+
+        self._dynamic_channels = dynamic
+
+    def _build_dynamic_channel(self, row: asyncpg.Record) -> Dict[str, Any]:
+        record = dict(row)
+        config = record.get("config") or {}
+        if not isinstance(config, dict):
+            config = {}
+        filters = record.get("filters") or config.get("filters") or {}
+        yt_options = dict(self.config.get("global_settings", {}).get("yt_options") or {})
+        yt_options.update(record.get("yt_options") or config.get("yt_options") or {})
+        refresh_token = record.get("refresh_token")
+        if refresh_token:
+            yt_options.setdefault("oauth_refresh_token", refresh_token)
+
+        source_identifier = record.get("source_identifier") or record.get("source_url") or str(record["id"])
+        channel_id = f"user:{record['user_id']}:{source_identifier}"
+
+        entry = {
+            "channel_id": channel_id,
+            "channel_name": record.get("source_url") or source_identifier,
+            "platform": record.get("provider", "youtube"),
+            "source_type": record.get("source_type", "channel"),
+            "source_identifier": source_identifier,
+            "source_url": record.get("source_url"),
+            "enabled": record.get("status") == "active",
+            "auto_process": record.get("auto_process", True),
+            "namespace": record.get("namespace") or self.namespace_default,
+            "tags": record.get("tags") or [],
+            "filters": filters,
+            "yt_options": yt_options,
+            "check_interval_minutes": record.get("check_interval_minutes") or config.get("check_interval_minutes"),
+            "user_source_id": str(record["id"]),
+            "user_id": str(record["user_id"]),
+            "cookies_path": record.get("cookies_path") or config.get("cookies_path"),
+            "media_type": config.get("media_type", "video"),
+            "format": config.get("format"),
+        }
+        return entry
+
+    async def _update_user_source_status(self, channel: Dict[str, Any], discovered: int) -> None:
+        user_source_id = channel.get("user_source_id")
+        if not user_source_id or not self._pool:
+            return
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE pmoves.user_sources
+                SET last_check_at = timezone('utc', now()),
+                    last_ingest_at = CASE WHEN $2 > 0 THEN timezone('utc', now()) ELSE last_ingest_at END
+                WHERE id = $1
+                """,
+                UUID(user_source_id),
+                discovered,
+            )
+
+    async def upsert_user_token(self, payload: Dict[str, Any]) -> UUID:
+        assert self._pool
+        user_id = UUID(payload["user_id"])
+        provider = payload.get("provider", "youtube")
+        refresh_token = payload["refresh_token"]
+        scope = payload.get("scope") or []
+        if isinstance(scope, str):
+            scope = [scope]
+        expires_at = payload.get("expires_at")
+
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO pmoves.user_tokens (user_id, provider, scope, refresh_token, expires_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (user_id, provider)
+                DO UPDATE SET scope = EXCLUDED.scope,
+                              refresh_token = EXCLUDED.refresh_token,
+                              expires_at = EXCLUDED.expires_at,
+                              updated_at = timezone('utc', now())
+                RETURNING id
+                """,
+                user_id,
+                provider,
+                scope,
+                refresh_token,
+                expires_at,
+            )
+        await self._load_user_sources()
+        return row["id"]
+
+    async def upsert_user_source(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        assert self._pool
+        user_id = UUID(payload["user_id"])
+        provider = payload.get("provider", "youtube")
+        source_type = payload["source_type"].lower()
+        source_identifier = payload.get("source_identifier") or payload.get("source_url")
+        source_url = payload.get("source_url")
+        namespace = payload.get("namespace") or self.namespace_default
+        tags = payload.get("tags") or []
+        auto_process = payload.get("auto_process", True)
+        check_interval = payload.get("check_interval_minutes")
+        filters = payload.get("filters") or {}
+        yt_options = payload.get("yt_options") or {}
+        token_id = payload.get("token_id")
+        status = payload.get("status", "active")
+
+        token_uuid = UUID(token_id) if token_id else None
+
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO pmoves.user_sources (
+                    user_id, provider, source_type, source_identifier, source_url,
+                    namespace, tags, status, auto_process, check_interval_minutes,
+                    filters, yt_options, token_id
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                ON CONFLICT (user_id, provider, COALESCE(source_identifier, ''), COALESCE(source_url, ''))
+                DO UPDATE SET namespace = EXCLUDED.namespace,
+                              tags = EXCLUDED.tags,
+                              status = EXCLUDED.status,
+                              auto_process = EXCLUDED.auto_process,
+                              check_interval_minutes = EXCLUDED.check_interval_minutes,
+                              filters = EXCLUDED.filters,
+                              yt_options = EXCLUDED.yt_options,
+                              token_id = EXCLUDED.token_id,
+                              updated_at = timezone('utc', now())
+                RETURNING *
+                """,
+                user_id,
+                provider,
+                source_type,
+                source_identifier,
+                source_url,
+                namespace,
+                tags,
+                status,
+                auto_process,
+                check_interval,
+                filters,
+                yt_options,
+                token_uuid,
+            )
+
+        await self._load_user_sources()
+        return dict(row)
+
+    async def list_user_sources(self) -> List[Dict[str, Any]]:
+        assert self._pool
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM pmoves.user_sources ORDER BY created_at DESC")
+        return [dict(row) for row in rows]
+
+    def list_channels(self) -> List[Dict[str, Any]]:
+        return self._active_channels()
+
+    def channel_count(self) -> int:
+        return len(self._active_channels())
+
     async def _update_status(
         self,
         video_id: str,
@@ -532,7 +709,8 @@ class ChannelMonitor:
         return {
             "summary": dict(row) if row else {},
             "recent": [dict(r) for r in recent],
-            "active_channels": len([c for c in self.config.get("channels", []) if c.get("enabled", True)]),
+            "active_channels": len(self._active_channels()),
+            "dynamic_channels": len([c for c in self._dynamic_channels if c.get("enabled", True)]),
         }
 
     async def add_channel(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -570,12 +748,3 @@ class ChannelMonitor:
             except Exception:  # pragma: no cover
                 return None
         return info.get("uploader")
-
-
-@asynccontextmanager
-async def lifespan_monitor(monitor: ChannelMonitor):
-    await monitor.start()
-    try:
-        yield {"monitor": monitor}
-    finally:
-        await monitor.shutdown()

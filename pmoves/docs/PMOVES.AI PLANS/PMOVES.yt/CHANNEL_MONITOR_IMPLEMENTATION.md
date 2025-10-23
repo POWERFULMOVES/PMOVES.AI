@@ -51,6 +51,7 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
    - 2025-10-23: Added callback secret + status webhook notes (channel monitor README + env guides).
    - 2025-10-23: Documented yt-dlp archive/subtitle/postprocessor knobs shared between monitor and pmoves-yt.
    - 2025-10-23: Linked personalization design (`USER_PREFERENCES_AND_INSIGHTS.md`) for per-user source ingestion.
+   - 2025-10-23: Supabase `user_tokens`/`user_sources` schema + REST endpoints shipped (`/api/oauth/google/token`, `/api/monitor/user-source`).
 10. [ ] Run end-to-end validation (monitor two channels, ensure pmoves-yt ingests videos, capture evidence).
 
 ---

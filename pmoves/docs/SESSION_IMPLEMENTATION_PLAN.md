@@ -10,6 +10,7 @@ This working session establishes the concrete implementation tasks needed to clo
 - Pulled in yt-dlp optional deps (`yt-dlp[default]`, `curl-cffi`, AtomicParsley) and exposed archive/subtitle/postprocessor knobs via `YT_*` env + `yt_options` blocks so playlists skip duplicates, embed metadata, and capture captions during backfill.
 - Authored `PMOVES.yt/USER_PREFERENCES_AND_INSIGHTS.md`, defining the user personalization architecture (Supabase tables, per-user `yt_options`, PMOVES.TV channel scheduling) to support custom playlists/likes ingestion and engagement dashboards.
 - Added multi-source tooling: channel monitor now supports YouTube playlists + SoundCloud feeds via yt-dlp flat extraction, and `python -m pmoves.tools.register_media_source` appends sources with per-user namespaces/archive settings.
+- Introduced Supabase-backed personalization schema (`pmoves.user_tokens`, `pmoves.user_sources`, `pmoves.user_ingest_runs`) with channel monitor APIs for token + user-source registration; dynamic sources now merge with static config for stats and check loops.
 
 ## Session Log (2025-10-20)
 
