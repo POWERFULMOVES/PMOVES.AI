@@ -1,4 +1,5 @@
 # Local Development & Networking
+_Last updated: 2025-10-23_
 
 Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md for cross-links.
 
@@ -120,6 +121,22 @@ OpenAI-compatible presets:
 - OpenRouter: set `OPENAI_API_BASE=https://openrouter.ai/api` and `OPENAI_API_KEY=<token>`.
 - Groq: set `OPENAI_API_BASE=https://api.groq.com/openai` and `OPENAI_API_KEY=<token>`.
 - LM Studio: set `OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1` and leave API key blank.
+
+### Cloudflare Workers AI (LangExtract)
+
+- Enable the provider by setting `LANGEXTRACT_PROVIDER=cloudflare` and exporting:
+  - `CLOUDFLARE_ACCOUNT_ID=<uuid from dash.cloudflare.com>`
+  - `CLOUDFLARE_API_TOKEN=<token with Workers AI permissions>`
+  - `CLOUDFLARE_LLM_MODEL=@cf/meta/llama-3.1-8b-instruct` (or any catalog slug)
+- Optional overrides:
+  - `CLOUDFLARE_API_BASE=https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run` (default) — swap to a mock URL during tests.
+  - `OPENAI_API_BASE=https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai` for other OpenAI-compatible clients.
+- Free plan quota (as of 2025-10-23): 10k text tokens/day and ~100 generations/day for meta Llama 3.1 models. Queue longer batch ingests or throttle concurrency to stay within limits.
+- Local dev workflow:
+  1. Add the variables to `.env` and `env.shared` (or rely on `make env-setup`).
+  2. Run `LANGEXTRACT_PROVIDER=cloudflare uvicorn pmoves.services.langextract.api:app --reload` to exercise the FastAPI endpoints.
+  3. Capture smoke evidence with `curl -X POST http://localhost:8084/extract/text ...` once the mock or real Workers AI token is available.
+- VPS deployment: sync the same variables into your secret manager (Docker Swarm, Fly.io, Coolify). Document the base URL helper in `.env` so ops teams can rotate tokens without rediscovering the Cloudflare path.
 
 ## Start
 - `make up` (data + workers, v2 CPU on :8086, v2 GPU on :8087 when available)

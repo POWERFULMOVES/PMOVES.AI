@@ -3,17 +3,24 @@ from typing import Dict, Any
 
 from .providers.rule import RuleProvider
 try:
-    from .providers.llm import OpenAIChatProvider, GeminiProvider
+    from .providers.llm import (
+        OpenAIChatProvider,
+        GeminiProvider,
+        CloudflareWorkersAIProvider,
+    )
 except Exception:
     OpenAIChatProvider = None
     GeminiProvider = None
+    CloudflareWorkersAIProvider = None
 
 def _get_provider():
     name = os.environ.get("LANGEXTRACT_PROVIDER", "rule").lower()
-    if name in ("openai","openrouter","groq") and OpenAIChatProvider:
+    if name in ("openai", "openrouter", "groq") and OpenAIChatProvider:
         return OpenAIChatProvider()
     if name in ("gemini",) and GeminiProvider:
         return GeminiProvider()
+    if name in ("cloudflare", "workers", "workers-ai") and CloudflareWorkersAIProvider:
+        return CloudflareWorkersAIProvider()
     # default local, rule-based
     return RuleProvider()
 

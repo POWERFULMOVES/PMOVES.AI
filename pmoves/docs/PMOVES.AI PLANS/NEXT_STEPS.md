@@ -1,6 +1,6 @@
 
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-10-18_
+_Last updated: 2025-10-23_
 
 ## Immediate
 
@@ -105,6 +105,7 @@ _Last updated: 2025-10-18_
 - [ ] (Optional) Draft ComfyUI ↔ MinIO presign notebook walk-through for inclusion in `docs/`.
 - [x] Local CI checklist published (`docs/LOCAL_CI_CHECKS.md`) with pytest/CHIT/SQL/env preflight expectations before every PR.
 - [x] Publish local CI checklist (`docs/LOCAL_CI_CHECKS.md`) and gate PRs on the pytest/grep/env preflight routine.
+- [x] Document LangExtract Workers AI option (env vars, local/VPS instructions) — 2025-10-23.
 
 ### PMOVES.YT Enhancements (Detailed)
 

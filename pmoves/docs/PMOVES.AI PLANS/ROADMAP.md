@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-10-18_
+_Last updated: 2025-10-23_
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -68,3 +68,4 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - ✅ Hi‑RAG reranker toggle + evaluation suite update — implemented (parameter sweeps still optional)
 - 🚧 Jellyfin refresh + rich Discord embeds — waiting on publisher metadata polish and Discord wiring
 - ✅ Roadmap/NEXT_STEPS — aligned with repo state
+- ✅ LangExtract Workers AI option + docs/env wiring — 2025-10-23

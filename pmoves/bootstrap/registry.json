@@ -137,6 +137,31 @@
           "sensitive": false
         },
         {
+          "key": "CLOUDFLARE_ACCOUNT_ID",
+          "file": "pmoves/env.shared",
+          "prompt": "Cloudflare account ID",
+          "help": "Workers AI base URL helper (used for LangExtract + OpenAI-compatible shims).",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "key": "CLOUDFLARE_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Cloudflare API token",
+          "help": "Token with Workers AI permissions for LangExtract Cloudflare provider.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "CLOUDFLARE_LLM_MODEL",
+          "file": "pmoves/env.shared",
+          "prompt": "Cloudflare Workers AI model",
+          "default": "@cf/meta/llama-3.1-8b-instruct",
+          "help": "Workers AI model identifier (see Cloudflare catalog).",
+          "required": false,
+          "type": "string"
+        },
+        {
           "key": "GROQ_API_KEY",
           "file": "pmoves/env.shared",
           "prompt": "Groq API key",

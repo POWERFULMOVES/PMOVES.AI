@@ -1,4 +1,5 @@
 # Local Development & Networking
+_Last updated: 2025-10-23_
 
 Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
 
@@ -82,6 +83,20 @@ OpenAI-compatible presets:
 - OpenRouter: set `OPENAI_API_BASE=https://openrouter.ai/api` and `OPENAI_API_KEY=<token>`.
 - Groq: set `OPENAI_API_BASE=https://api.groq.com/openai` and `OPENAI_API_KEY=<token>`.
 - LM Studio: set `OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1` and leave API key blank.
+
+### Workers AI quick start
+
+- Provider flag: `LANGEXTRACT_PROVIDER=cloudflare`.
+- Required env:
+  - `CLOUDFLARE_ACCOUNT_ID=<from dashboard>`
+  - `CLOUDFLARE_API_TOKEN=<Workers AI token>`
+  - `CLOUDFLARE_LLM_MODEL=@cf/meta/llama-3.1-8b-instruct` (default).
+- Optional:
+  - `CLOUDFLARE_API_BASE` to hit mocks/tunnels; defaults to `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run`.
+  - `OPENAI_API_BASE=https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai` to reuse the shim elsewhere.
+- Free tier reminder: 10k tokens/day + 100 generations/day on the base tier. Stage large re-ingest jobs or upgrade before running multi-hour LangExtract batches.
+- Local dev: store secrets in `.env` + `env.shared`, run `uvicorn pmoves.services.langextract.api:app --reload`, and capture a smoke `curl` once the provider responds.
+- VPS/Hybrid: sync via `python3 -m pmoves.tools.secrets_sync generate`, push to the remote secret store, and annotate `.env` with the helper base URL comment for on-call rotation.
 
 ## Start
 - `make up` (v2 gateway by default)
