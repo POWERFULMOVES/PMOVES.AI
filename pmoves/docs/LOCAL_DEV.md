@@ -1,5 +1,5 @@
 # Local Development & Networking
-_Last updated: 2025-10-23_
+_Last updated: 2025-02-15_
 
 Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md for cross-links.
 
@@ -71,6 +71,34 @@ registers MCP stubs (mini CLI, Docker, n8n), and seeds default context paths so
 Crush starts with PMOVES-aware prompts.
 
 See also: `docs/SECRETS.md` for optional secret provider integrations.
+
+### Supabase auth redirect & provider setup
+
+The Next.js console under `pmoves/ui` uses Supabase for session management. To enable both
+password and social sign-in locally:
+
+1. Copy the new UI variables from `pmoves/.env.example` into your `.env.local` or
+   allow `make env-setup` to merge them. Minimum required keys:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_SUPABASE_AUTH_CALLBACK_URL` (defaults to `http://localhost:3000/callback`)
+   - Optional flags: `NEXT_PUBLIC_SUPABASE_PASSWORD_AUTH_ENABLED` /
+     `NEXT_PUBLIC_SUPABASE_OAUTH_ENABLED` to toggle UI experiences without editing code.
+2. In Supabase Studio → **Authentication → URL Configuration**, add the callback URL from the
+   variable above to the redirect allow-list (e.g., `http://localhost:3000/callback`).
+3. For social providers (GitHub, Google, etc.):
+   - Enable the provider in `supabase/config.toml` under `[auth.external.<provider>]` by setting
+     `enabled = true`.
+   - Supply the OAuth client ID/secret via environment variables (for example,
+     `SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET`) or update the config for self-hosted setups.
+   - Supabase will surface the sign-in buttons automatically once the config is toggled and the
+     feature flag `NEXT_PUBLIC_SUPABASE_OAUTH_ENABLED` remains `true`.
+4. Restart the Supabase CLI stack (`make supa-stop && make supa-start`) so config changes apply,
+   then run `pnpm install` (or `npm install`) inside `pmoves/ui` before `pnpm dev` to boot the Next
+   console on port 3000.
+
+Tip: when testing third-party providers, configure the OAuth app’s redirect URL to match the
+Supabase callback path above to avoid provider-side mismatches.
 
 Manual notes: `env.shared.generated` now carries the Supabase + Meili secrets consumed by Compose. Keep `env.shared` around for local overrides or non-secret feature flags and include any additions from:
 - `env.presign.additions` (MINIO creds and shared secret)
