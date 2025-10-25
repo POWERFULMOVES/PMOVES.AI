@@ -99,6 +99,28 @@ Perform the following steps in order to validate the pipeline:
 
 > **Follow-up**: Next session should import the n8n flows, wire credentials, and run a full poller → publisher cycle against Supabase so `studio_board` audit fields update with real timestamps/screenshots.
 
+## Realtime Collaboration Channels (`studio_board_presence`, `session_messages`)
+
+The new multi-editor UI depends on Supabase Realtime for both ephemeral cursor sync and durable chat persistence. Run the following steps **after** the base schema is migrated so the automation stack can capture live collaboration evidence alongside Discord notifications.
+
+1. **Enable the `pmoves_core.message` publication**
+   - Compose / CLI SQL helper: `psql "$SUPABASE_DB_URL" -c "alter publication supabase_realtime add table pmoves_core.message;"`
+   - Verify with `select * from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'pmoves_core' and tablename = 'message';`
+   - Leave row-level security disabled for now; the UI escalates to the service role when the anonymous key is blocked.
+2. **Expose the Realtime service key to trusted clients**
+   - Populate `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` for browser subscriptions.
+   - Provide `SUPABASE_SERVICE_ROLE_KEY` to server-side renderers or edge functions so `pmoves_core.message` inserts succeed when RLS is re-enabled.
+   - For Jamstack deployments, surface the service role writes through a signed HTTP endpoint instead of shipping the key to the browser.
+3. **Register presence channels**
+   - No SQL migration required: the UI publishes to `studio_board_presence:<board_id>` via the built-in Realtime presence API.
+   - Confirm the channel appears with `supabase realtime channels list` once at least one client connects.
+
+### Evidence capture workflow
+
+- Record a short session with two cursors visible in the new overlay (`pmoves/ui/components/realtime/CursorOverlay.tsx`).
+- Export the chat transcript via `select content, created_at from pmoves_core.message where session_id = '<session-id>' order by created_at;` and attach it to the evidence log (`make evidence-log LABEL="studio-board-collab"`).
+- Drop the screenshot plus SQL output into the Discord automation session notes before closing the run.
+
 ## Troubleshooting Tips
 - **403 from Agent Zero** — check `AGENT_ZERO_EVENTS_TOKEN` and ensure the shared secret matches the server configuration.
 - **Discord rate limits** — limit embed updates to <5/minute per webhook. n8n logs include X-RateLimit headers for inspection.

@@ -42,6 +42,11 @@ testkeys.md
 /pmoves/jellyfin-ai/
 /pmoves/tensorzero/config/tensorzero.toml
 
+# Next.js UI build artifacts
+/pmoves/ui/.next
+/pmoves/ui/node_modules
+/pmoves/ui/out
+
 # Local exports: keep operator-only dumps out of the repo
 /pmoves/docs/coolify/
 .clinerules/byterover-rules.md
@@ -52,3 +57,8 @@ testkeys.md
 .kiro/steering/byterover-rules.md
 .qoder/rules/byterover-rules.md
 .augment/rules/byterover-rules.md
+
+# JavaScript workspaces
+node_modules/
+pmoves/ui/.next/
+pmoves/ui/out/

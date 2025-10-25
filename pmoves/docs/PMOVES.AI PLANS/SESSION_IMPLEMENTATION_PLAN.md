@@ -1,5 +1,5 @@
 # M2 Automation Kickoff & Roadmap Prep Plan
-_Last updated: 2025-09-30_
+_Last updated: 2025-10-24_
 
 This working session establishes the concrete implementation tasks needed to close Milestone M2 while warming up broader roadmap threads for Milestones M3–M5. It consolidates the operational reminders from the sprint brief and ties each step to the canonical checklists in `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`, `pmoves/docs/NEXT_STEPS.md`, and `pmoves/docs/ROADMAP.md`.
 
@@ -38,6 +38,19 @@ This working session establishes the concrete implementation tasks needed to clo
 - 2025-10-13T01:04:09Z — `make -C pmoves smoke-archon` succeeded after pointing `SUPABASE_URL` to `http://postgrest:3000` and restarting the Supabase CLI stack; Archon healthz reports `{"status":"ok","service":"archon"}`.
 - 2025-10-13T01:55:00Z — Rebuilt `pmoves-archon` image with `playwright` Chromium preinstalled and switched `SUPABASE_URL` to the Supabase CLI gateway (`http://host.docker.internal:54321`) so the vendor Archon backend initializes successfully.
 - 2025-10-18T03:04:28Z — Rebuilt `pmoves-archon` with the expanded Supabase client shim, applied `GRANT` permissions on `public.archon_prompts`, and verified the prompt loader logs `Loaded 2 prompts into memory` after `docker compose --profile agents --profile orchestration up -d archon`.
+
+## 4. Supabase Approval Dashboards (Studio Board & Videos)
+
+- **UI entry points** live under `pmoves/ui/app/dashboard/studio-board/page.tsx` and `pmoves/ui/app/dashboard/videos/page.tsx`. Both pages are client components that bootstrap a shared hook, `pmoves/ui/hooks/useInfiniteSupabaseQuery.ts`, to paginate Supabase tables with cursor-aware `range` queries and surfaced loading/error states.
+- **Filters & deep links**: the dashboards expose namespace + status filters plus a lightweight search box. Setting `NEXT_PUBLIC_SUPABASE_REST_URL` (or `SUPABASE_REST_URL`) enables direct anchors into PostgREST for the visible rows so on-call engineers can validate payloads without leaving the UI.
+- **Approval actions**:
+  - Studio Board rows patch `status` (`approved`/`rejected`) and append to `meta.review_history`, stamping `reviewed_at`, `reviewed_by`, and optional `rejection_reason` for audit parity with the automation pollers.
+  - Videos rows update `meta.approval_status` and `meta.approval_history`, mirroring the metadata fields the YouTube ingestion workers emit today; the reviewer prompt mirrors the Studio Board rejection note flow.
+- **Operational checklist**:
+  1. Set reviewer initials in the UI before approving/rejecting so the `meta.review_history` / `meta.approval_history` entries carry attribution.
+  2. Use the namespace filter to scope rows when validating Jellyfin/publisher backfills (e.g., `pmoves.art`, `pmoves.audio`).
+  3. Capture `content_url` / `source_url` links alongside the PostgREST anchors when logging evidence in this plan or in automation runbooks.
+- **Future enhancements** tracked here: add realtime subscriptions so newly submitted assets appear without manual refresh, and surface `meta.publish_event_sent_at` gap warnings to highlight content awaiting publisher pickup.
 
 ## 3. Broader Roadmap Prep (M3–M5)
 
@@ -153,6 +166,7 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 | n8n activated (poller → echo publisher) | 2025-10-17T15:25:46Z | Container restart logged activation for both workflows; scheduler still idle (0 executions). |
 | Supabase REST URL correction | 2025-10-17T16:45:30Z | Set `SUPABASE_REST_URL=http://host.docker.internal:54321/rest/v1` in `.env.local` so n8n container can reach Supabase CLI (was `localhost`, causing connection refused). |
 | Supabase row seeded (status=approved) | 2025-10-17T15:20:52Z | `bash tools/seed_studio_board.sh "Automation Live Demo" s3://outputs/demo/live.png` created row id 39. |
+| Studio/videos dashboards wired | — | UI at `pmoves/ui/app/dashboard/studio-board` and `/videos`; set `NEXT_PUBLIC_SUPABASE_REST_URL` to deep-link PostgREST rows during validation. |
 | Archon prompt loader ok | 2025-10-18T03:04:28Z | `docker compose --profile agents --profile orchestration logs archon` shows Supabase fetch success and prompt count (2). |
 | Agent Zero received content.publish.approved.v1 | — | Blocked by inactive poller. |
 | Supabase row patched (status=published, publish_event_sent_at) | — | Blocked by inactive poller. |

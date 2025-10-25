@@ -1,6 +1,6 @@
 # Repository Directory Map
 
-_Last updated: 2025-10-21_
+_Last updated: 2025-10-25_
 
 This document captures the current layout of the `PMOVES.AI` repository to help new contributors find key resources quickly. The tree below is trimmed to a maximum depth of two levels (root → child → grandchild) to balance detail and readability.
 
@@ -97,6 +97,13 @@ PY
 │   ├── Makefile
 │   ├── PR_BODY_HIRAG_PLUS_EVAL.md
 │   ├── README.md
+│   ├── ui/
+│   │   ├── app/
+│   │   ├── config/
+│   │   ├── lib/
+│   │   ├── next.config.js
+│   │   ├── package.json
+│   │   └── tsconfig.json
 │   ├── comfyui/
 │   │   ├── custom_nodes/
 │   │   └── minio_loader.py
@@ -315,5 +322,12 @@ PY
 │       ├── seed_studio_board.ps1
 │       ├── seed_studio_board.sh
 │       └── smoke_webhook.py
+├── pmoves/ui/
+│   ├── app/
+│   ├── config/
+│   ├── hooks/
+│   ├── lib/
+│   ├── middleware.ts
+│   └── package.json
 └── repomix-output.xml
 ```
