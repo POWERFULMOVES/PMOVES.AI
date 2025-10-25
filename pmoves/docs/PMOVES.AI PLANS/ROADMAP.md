@@ -1,4 +1,5 @@
 # PMOVES v5 • ROADMAP
+_Last updated: 2025-10-24_
 _Last updated: 2025-10-23_
 
 ## Vision
@@ -69,4 +70,5 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - ✅ Hi‑RAG reranker toggle + evaluation suite update — implemented (parameter sweeps still optional)
 - 🚧 Jellyfin refresh + rich Discord embeds — waiting on publisher metadata polish and Discord wiring
 - ✅ Roadmap/NEXT_STEPS — aligned with repo state
+- ✅ TensorZero gateway integration for LangExtract — gateway profile, Crush auto-detection, and observability metadata tags routed through `LANGEXTRACT_PROVIDER=tensorzero`.
 - ✅ LangExtract Workers AI option + docs/env wiring — 2025-10-23

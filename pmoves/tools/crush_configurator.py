@@ -116,6 +116,12 @@ PROVIDER_SPECS: List[ProviderSpec] = [
         default_small="gemini-2.0-flash-exp",
     ),
     ProviderSpec(
+        id="tensorzero",
+        name="TensorZero Gateway",
+        base_url="http://localhost:3030/openai/v1",
+        type="openai",
+    ),
+    ProviderSpec(
         id="deepseek",
         name="DeepSeek",
         base_url="https://api.deepseek.com/v1",
@@ -188,7 +194,7 @@ MCP_SPECS: List[MCPSpec] = [
 def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str, List[ModelSpec]]) -> Dict[str, Dict[str, str]]:
     large: Optional[Tuple[str, str]] = None
     small: Optional[Tuple[str, str]] = None
-    priority = ["openai", "anthropic", "deepseek", "gemini", "ollama"]
+    priority = ["tensorzero", "openai", "anthropic", "deepseek", "gemini", "ollama"]
     for provider_id in priority:
         if provider_id not in available:
             continue
@@ -218,6 +224,45 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     provider_models: Dict[str, List[ModelSpec]] = {}
 
     for spec in PROVIDER_SPECS:
+        if spec.id == "tensorzero":
+            base_url_env = _lookup_env("TENSORZERO_BASE_URL", env_cache)
+            if not base_url_env:
+                continue
+            base_url = f"{base_url_env.rstrip('/')}/openai/v1"
+            large_model_id = _lookup_env("TENSORZERO_LARGE_MODEL", env_cache) or "openai::gpt-4o"
+            small_model_id = _lookup_env("TENSORZERO_SMALL_MODEL", env_cache) or "openai::gpt-4o-mini"
+            models = [
+                ModelSpec(id=large_model_id, name=large_model_id, role="large"),
+                ModelSpec(id=small_model_id, name=small_model_id, role="small"),
+            ]
+            entry = {
+                "name": spec.name,
+                "base_url": base_url,
+                "type": spec.type,
+                "models": [model.to_dict() for model in models],
+            }
+            api_key = _lookup_env("TENSORZERO_API_KEY", env_cache)
+            extra_headers = dict(spec.extra_headers)
+            if api_key:
+                entry["api_key"] = "$TENSORZERO_API_KEY"
+                extra_headers = dict(extra_headers)
+                extra_headers.setdefault("Authorization", "Bearer $TENSORZERO_API_KEY")
+            if extra_headers:
+                entry["extra_headers"] = extra_headers
+            providers_dict[spec.id] = entry
+            available_specs[spec.id] = ProviderSpec(
+                id=spec.id,
+                name=spec.name,
+                base_url=base_url,
+                type=spec.type,
+                env_var="TENSORZERO_API_KEY" if api_key else None,
+                extra_headers=extra_headers,
+                models=models,
+                default_large=large_model_id,
+                default_small=small_model_id,
+            )
+            provider_models[spec.id] = models
+            continue
         if spec.env_var:
             value = _lookup_env(spec.env_var, env_cache)
             if not value:

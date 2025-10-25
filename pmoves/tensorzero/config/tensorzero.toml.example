@@ -1,0 +1,12 @@
+# Minimal TensorZero configuration used by the PMOVES LangExtract integration.
+# Copy to pmoves/tensorzero/config/tensorzero.toml and adjust models/providers as needed.
+
+[gateway]
+observability.enabled = false
+
+[functions.langextract]
+type = "chat"
+
+[functions.langextract.variants.langextract_default]
+type = "chat_completion"
+model = "openai::gpt-4o-mini"

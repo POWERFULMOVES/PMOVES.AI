@@ -618,6 +618,61 @@ services:
     profiles: ["orchestration"]
     networks: [pmoves]
 
+  tensorzero-clickhouse:
+    image: clickhouse/clickhouse-server:24.12-alpine
+    restart: unless-stopped
+    environment:
+      - CLICKHOUSE_USER=${TENSORZERO_CLICKHOUSE_USER:-chuser}
+      - CLICKHOUSE_PASSWORD=${TENSORZERO_CLICKHOUSE_PASSWORD:-chpassword}
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ports: ["8123:8123"]
+    volumes:
+      - tensorzero-clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping"]
+      start_period: 30s
+      interval: 5s
+      timeout: 2s
+      retries: 5
+    profiles: ["tensorzero"]
+    networks: [pmoves]
+
+  tensorzero-gateway:
+    image: tensorzero/gateway:latest
+    restart: unless-stopped
+    command: ["--config-file", "/app/config/tensorzero.toml"]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    environment:
+      - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://chuser:chpassword@tensorzero-clickhouse:8123/tensorzero}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+    ports: ["3030:3000"]
+    profiles: ["tensorzero"]
+    networks: [pmoves]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  tensorzero-ui:
+    image: tensorzero/ui:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://chuser:chpassword@tensorzero-clickhouse:8123/tensorzero}
+    volumes:
+      - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+      tensorzero-gateway:
+        condition: service_started
+    ports: ["4000:4000"]
+    profiles: ["tensorzero"]
   invidious-db:
     image: postgres:14
     restart: unless-stopped
@@ -757,6 +812,7 @@ volumes:
   minio-data: {}
   supabase-data: {}
   notebook-sync-data: {}
+  tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
 networks:

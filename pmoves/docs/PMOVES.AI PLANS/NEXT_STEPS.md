@@ -1,5 +1,6 @@
 
 # PMOVES v5 • NEXT_STEPS
+_Last updated: 2025-10-24_
 _Last updated: 2025-10-23_
 
 ## Immediate
@@ -46,6 +47,7 @@ _Last updated: 2025-10-23_
 - [x] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits (see `pmoves/docs/SUPABASE_RLS_HARDENING_CHECKLIST.md`, 2025-10-14).
 - [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
 - [x] Harden Archon Supabase bootstrap: extended the client shim to cover `get_supabase_client()`, granted `public.archon_prompts` access to service/auth roles, and confirmed prompt load succeeds during `make up` (2025-10-18).
+- [x] TensorZero gateway integration for LangExtract — compose profile, Crush auto-detect, and metadata forwarding documented in `LOCAL_DEV.md`/`LOCAL_TOOLING_REFERENCE.md`.
 - [x] Add Cloudflare tunnel profile + Make helpers for WAN validation (2025-10-23).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
 

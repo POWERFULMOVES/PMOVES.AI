@@ -25,6 +25,11 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - channel-monitor: 8097 (internal name `channel-monitor`) – watches YouTube channels and queues new videos for pmoves-yt ingestion.
   - Tune yt-dlp via env: `YT_ARCHIVE_DIR` + `YT_ENABLE_DOWNLOAD_ARCHIVE` manage archive files, `YT_SUBTITLE_LANGS`/`YT_SUBTITLE_AUTO` pull captions, `YT_POSTPROCESSORS_JSON` overrides post-processing (defaults embed metadata + thumbnails).
 
+Optional TensorZero gateway profile (`docker compose --profile tensorzero up tensorzero-clickhouse tensorzero-gateway tensorzero-ui`):
+- tensorzero-clickhouse: 8123 (internal name `tensorzero-clickhouse`)
+- tensorzero-gateway: 3030 -> 3000 (internal name `tensorzero-gateway`)
+- tensorzero-ui: 4000 (internal name `tensorzero-ui`)
+
 External bundles (via `make up-external`):
 - wger: 8000 (nginx proxy to Django; override host mapping with `WGER_ROOT_URL` when reverse-proxying)
 - Firefly III: ${FIREFLY_PORT:-8082} (set `FIREFLY_PORT` in `env.shared`; 8082 avoids the Agent Zero API on 8080)
@@ -48,7 +53,8 @@ Quick start:
 - With Make: `make env-setup` (runs `python3 -m pmoves.tools.secrets_sync generate` under the hood) to produce `.env.generated` / `env.shared.generated` from `pmoves/chit/secrets_manifest.yaml`, then run `make bootstrap` to capture Supabase CLI endpoints (including Realtime) before `make env-check`. When you populate Supabase values, use the live keys surfaced by `make supa-status` (`sb_publishable_…` / `sb_secret_…`) so Archon, Agent Zero, and other agents load the correct service role credentials.
 - No Make? `python3 -m pmoves.tools.onboarding_helper generate` produces the same env files and reports any missing CHIT labels before you bring up containers.
 - Configure Crush with `python3 -m pmoves.tools.mini_cli crush setup` so your local Crush CLI session understands PMOVES context paths, providers, and MCP stubs.
-- Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
+  - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
+- TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces.
 
 ### Crush CLI Integration
 

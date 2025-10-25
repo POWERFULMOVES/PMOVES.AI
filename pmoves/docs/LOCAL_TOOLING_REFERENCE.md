@@ -16,11 +16,13 @@ This guide aggregates the entry points that keep local environments consistent a
 - `python3 -m pmoves.tools.onboarding_helper status` → summarize manifest coverage and highlight missing CGP labels before generating env files (`… generate` writes the files directly).
 - `make manifest-audit` → scans `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/inventory/nodes.yaml` (and optional Supabase exports) for unsupported 32-bit hardware. Use it ahead of Jellyfin 10.11 upgrades to ensure all nodes are x86_64 or aarch64.
 - `python3 -m pmoves.tools.mini_cli crush setup` → write a PMOVES-aware `~/.config/crush/crush.json` (providers, MCP stubs, context paths). After running, launch `crush` from the repo root. See `CRUSH.md` for the day-to-day flow.
+  - Set `TENSORZERO_BASE_URL` (and optional `TENSORZERO_API_KEY`) before running this command to auto-register the TensorZero gateway. The generator wires the Authorization header automatically and prefers the TensorZero models when both large/small defaults are present.
 - `make env-check` → calls `scripts/env_check.{sh,ps1}` for dependency checks, port collisions, and `.env` completeness.
   - CI runs the PowerShell preflight on Windows runners only; Linux contributors should run `scripts/env_check.sh` locally if they bypass Make.
 - `scripts/create_venv*.{sh,ps1}` → optional helpers to create/activate Python virtualenvs outside of Conda. Pass the environment name as the first argument on Bash, or `-Name` in PowerShell.
 - `scripts/codex_bootstrap*.{sh,ps1}` → standardizes editor/agent prerequisites inside Codex or WSL sessions (installs `jq`, configures Make, syncs Python deps).
 - `scripts/install_all_requirements*.{sh,ps1}` → one-shot installs for every Python requirement file when you need parity with CI or remote hosts.
+  - Optional TensorZero gateway: copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if the gateway enforces auth). LangExtract will honour `LANGEXTRACT_PROVIDER=tensorzero` and forward `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` metadata tags when these variables are present.
 - Offline Python deps: `pmoves/vendor/python/` ships a bundled copy of `httpx` + dependencies for the Jellyfin backfill path. The script automatically prepends this directory to `sys.path`, so once the repository is synced no external pip download is required. Open Notebook also exposes a default login (`changeme`), defined in `.env.shared`/`.env.local`, to keep first-time bring-up painless—rotate it immediately after confirming access.
 
 ## Stack Orchestration (Make Targets)
@@ -38,6 +40,7 @@ This guide aggregates the entry points that keep local environments consistent a
 - Windows without GNU Make: `scripts/pmoves.ps1` replicates the same targets (`./scripts/pmoves.ps1 up`, `./scripts/pmoves.ps1 smoke`, etc.).
 - `make jellyfin-folders` → prepares `pmoves/data/jellyfin/{config,cache,transcode,media/...}` so Jellyfin launches with a categorized library tree (Movies/TV/Music/Audiobooks/Podcasts/Photos/HomeVideos) owned by the host user.
 - `FIREFLY_PORT` in `env.shared` defaults to `8082` to avoid colliding with the Agent Zero API on 8080; adjust before running `make up-external` if that port is taken on your host.
+- TensorZero gateway (optional): `docker compose --profile tensorzero up tensorzero-clickhouse tensorzero-gateway tensorzero-ui` boots the ClickHouse backing store, gateway, and UI (http://localhost:4000). Point `TENSORZERO_BASE_URL` at `http://localhost:3030` so LangExtract and the Crush configurator detect the gateway automatically.
 
 ## Supabase Workflows
 - CLI parity (default):

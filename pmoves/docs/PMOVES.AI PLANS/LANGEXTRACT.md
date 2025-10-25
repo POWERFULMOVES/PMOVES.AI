@@ -25,6 +25,7 @@ This service and scripts convert XML into structured chunks ready for embedding 
 - `LANGEXTRACT_PROVIDER=rule` (default): Fast rule-based segmentation and IT error extraction.
 - `LANGEXTRACT_PROVIDER=openai`: Uses any OpenAI-compatible endpoint (OpenAI, OpenRouter, Groq, or local LM Studio/vLLM/NIM) via `OPENAI_API_BASE`, `OPENAI_API_KEY`, `OPENAI_MODEL`.
 - `LANGEXTRACT_PROVIDER=gemini`: Uses Google Gemini via `GEMINI_API_KEY`, `GEMINI_MODEL`.
+- `LANGEXTRACT_PROVIDER=tensorzero`: Uses the TensorZero gateway (`TENSORZERO_BASE_URL`, optional `TENSORZERO_API_KEY`). Tags emitted via `LANGEXTRACT_REQUEST_ID` and `LANGEXTRACT_FEEDBACK_*` are forwarded to the gateway as request metadata.
 - `LANGEXTRACT_PROVIDER=cloudflare`: Targets Cloudflare Workers AI chat models using `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `CLOUDFLARE_LLM_MODEL` (defaults to `@cf/meta/llama-3.1-8b-instruct`). Override the API root with `CLOUDFLARE_API_BASE` if you proxy through a tunnel or mock server.
 If a provider is not configured or fails, prefer `rule` for offline local use.
 
