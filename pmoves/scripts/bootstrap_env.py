@@ -26,18 +26,33 @@ DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
 
 
 def _warn(msg: str) -> None:
+    """Prints a warning message to stderr."""
     print(f"[warn] {msg}", file=sys.stderr)
 
 
 def _info(msg: str) -> None:
+    """Prints an informational message to stdout."""
     print(f"[info] {msg}")
 
 
 def _error(msg: str) -> None:
+    """Prints an error message to stderr."""
     print(f"[error] {msg}", file=sys.stderr)
 
 
 def load_registry(path: Path) -> Dict:
+    """Loads and validates the bootstrap registry file.
+
+    Args:
+        path: The path to the registry JSON file.
+
+    Raises:
+        FileNotFoundError: If the registry file does not exist.
+        ValueError: If the registry file is invalid or has an unsupported version.
+
+    Returns:
+        The loaded registry data as a dictionary.
+    """
     if not path.exists():
         raise FileNotFoundError(f"Bootstrap registry not found: {path}")
     with path.open("r", encoding="utf-8") as fh:
@@ -51,6 +66,16 @@ def load_registry(path: Path) -> Dict:
 
 
 def generate_value(spec: Optional[Dict]) -> Optional[str]:
+    """Generates a random value based on a specification.
+
+    Supports generating random hex strings, URL-safe strings, and passphrases.
+
+    Args:
+        spec: A dictionary describing the value to generate.
+
+    Returns:
+        The generated string value, or None if the spec is invalid.
+    """
     if not spec or "type" not in spec:
         return None
     gen_type = spec["type"]
@@ -74,6 +99,17 @@ def generate_value(spec: Optional[Dict]) -> Optional[str]:
 
 
 def normalize_bool(value: str) -> str:
+    """Normalizes a string representation of a boolean to 'true' or 'false'.
+
+    Args:
+        value: The input string (e.g., 'y', 'true', '1').
+
+    Raises:
+        ValueError: If the input string is not a recognized boolean value.
+
+    Returns:
+        The normalized string 'true' or 'false'.
+    """
     truthy = {"true", "t", "yes", "y", "1"}
     falsy = {"false", "f", "no", "n", "0"}
     lower = value.lower()
@@ -85,6 +121,15 @@ def normalize_bool(value: str) -> str:
 
 
 def validate_value(value: str, meta: Dict) -> Tuple[bool, Optional[str]]:
+    """Validates a user-provided value against its metadata specification.
+
+    Args:
+        value: The value to validate.
+        meta: The metadata dictionary for the variable.
+
+    Returns:
+        A tuple containing a boolean indicating validity and an optional error message.
+    """
     if value == "" and not meta.get("required", False):
         return True, None
     val_type = meta.get("type", "string")
@@ -114,6 +159,15 @@ def validate_value(value: str, meta: Dict) -> Tuple[bool, Optional[str]]:
 
 
 def normalize_value(value: str, meta: Dict) -> str:
+    """Normalizes a value to its canonical string representation.
+
+    Args:
+        value: The input value.
+        meta: The metadata dictionary for the variable.
+
+    Returns:
+        The normalized string value.
+    """
     val_type = meta.get("type", "string")
     if val_type == "bool":
         return normalize_bool(value)
@@ -124,6 +178,19 @@ def normalize_value(value: str, meta: Dict) -> str:
 
 @dataclass
 class EnvFile:
+    """Manages reading, updating, and writing of a single .env file.
+
+    This class preserves comments and the order of unmanaged keys.
+
+    Attributes:
+        path: The path to the .env file.
+        original_values: A dictionary of key-value pairs from the original file.
+        original_order: The order of keys in the original file.
+        original_text: The full text of the original file.
+        comments: A list of comments from the original file.
+        managed_values: A dictionary of key-value pairs managed by the bootstrap process.
+        managed_order: The order of managed keys.
+    """
     path: Path
     original_values: Dict[str, str] = field(default_factory=dict)
     original_order: List[str] = field(default_factory=list)
@@ -163,6 +230,14 @@ class EnvFile:
                 self.comments.append(line)
 
     def get(self, key: str) -> Optional[str]:
+        """Gets a value from the env file, prioritizing managed values.
+
+        Args:
+            key: The environment variable key.
+
+        Returns:
+            The value of the variable, or None if not found.
+        """
         if key in self.managed_values:
             return self.managed_values[key]
         if key in self.original_values:
@@ -170,11 +245,22 @@ class EnvFile:
         return None
 
     def set(self, key: str, value: str) -> None:
+        """Sets a managed key-value pair.
+
+        Args:
+            key: The environment variable key.
+            value: The value to set.
+        """
         if key not in self.managed_order:
             self.managed_order.append(key)
         self.managed_values[key] = value
 
     def write(self) -> bool:
+        """Writes the updated .env file to disk if changes were made.
+
+        Returns:
+            True if the file was written, False otherwise.
+        """
         if not self.managed_order:
             # No managed keys for this file – leave the original content untouched.
             return False
@@ -209,6 +295,20 @@ class EnvFile:
 
 
 def select_services(registry: Dict, selected_ids: Optional[Iterable[str]]) -> List[Dict]:
+    """Selects services from the registry based on provided IDs.
+
+    If no IDs are provided, all services are returned.
+
+    Args:
+        registry: The full bootstrap registry.
+        selected_ids: An iterable of service IDs to select.
+
+    Raises:
+        ValueError: If any of the selected service IDs are not found.
+
+    Returns:
+        A list of the selected service definition dictionaries.
+    """
     services = registry.get("services", [])
     if not selected_ids:
         return services
@@ -221,6 +321,15 @@ def select_services(registry: Dict, selected_ids: Optional[Iterable[str]]) -> Li
 
 
 def run_check(registry: Dict, services: List[Dict]) -> int:
+    """Checks for missing required configuration values without prompting.
+
+    Args:
+        registry: The full bootstrap registry.
+        services: The list of services to check.
+
+    Returns:
+        0 if all required values are present, 1 otherwise.
+    """
     missing: List[Tuple[str, str, str]] = []
     for svc in services:
         for var in svc.get("variables", []):
@@ -247,6 +356,17 @@ def prompt_for_value(
     default_value: Optional[str],
     pre_generated: Optional[str],
 ) -> str:
+    """Interactively prompts the user for a configuration value.
+
+    Args:
+        svc_name: The name of the service being configured.
+        var: The variable's metadata dictionary.
+        default_value: The default value to present.
+        pre_generated: A pre-generated value to use if no other default is available.
+
+    Returns:
+        The value provided by the user.
+    """
     prompt_text = var.get("prompt", var["key"])
     help_text = var.get("help")
     required = var.get("required", False)
@@ -290,6 +410,19 @@ def prompt_for_value(
 
 
 def bootstrap(registry: Dict, services: List[Dict], accept_defaults: bool) -> int:
+    """The main bootstrap orchestration function.
+
+    Iterates through services and variables, collects values, and writes them to
+    the appropriate .env files.
+
+    Args:
+        registry: The full bootstrap registry.
+        services: The list of services to bootstrap.
+        accept_defaults: If True, runs in non-interactive mode.
+
+    Returns:
+        An exit code (0 for success, 2 for missing values in non-interactive mode).
+    """
     env_files: Dict[str, EnvFile] = {}
     updated_files: List[Path] = []
 
@@ -372,6 +505,14 @@ def bootstrap(registry: Dict, services: List[Dict], accept_defaults: bool) -> in
 
 
 def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+    """Parses command-line arguments for the script.
+
+    Args:
+        argv: An optional list of command-line arguments.
+
+    Returns:
+        The parsed arguments as a namespace object.
+    """
     parser = argparse.ArgumentParser(
         description="Bootstrap PMOVES environment configuration."
     )
@@ -401,6 +542,16 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
+    """The main entry point for the script.
+
+    Parses arguments and calls the appropriate orchestration function.
+
+    Args:
+        argv: An optional list of command-line arguments.
+
+    Returns:
+        An exit code.
+    """
     args = parse_args(argv)
     registry = load_registry(args.registry)
     try:

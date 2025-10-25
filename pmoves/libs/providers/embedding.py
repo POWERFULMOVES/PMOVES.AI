@@ -18,6 +18,14 @@ ST_MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
 _st_model = None
 
 def _embed_ollama(text: str):
+    """Generates an embedding using a local Ollama instance.
+
+    Args:
+        text: The text to embed.
+
+    Returns:
+        The embedding vector as a list of floats, or None on failure.
+    """
     try:
         r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model": OLLAMA_EMBED_MODEL, "prompt": text}, timeout=15)
         if r.ok:
@@ -28,6 +36,14 @@ def _embed_ollama(text: str):
     return None
 
 def _embed_openai_compat(text: str):
+    """Generates an embedding using an OpenAI-compatible API.
+
+    Args:
+        text: The text to embed.
+
+    Returns:
+        The embedding vector as a list of floats, or None on failure.
+    """
     if not OA_BASE:
         return None
     try:
@@ -41,6 +57,14 @@ def _embed_openai_compat(text: str):
     return None
 
 def _embed_hf(text: str):
+    """Generates an embedding using the Hugging Face Inference API.
+
+    Args:
+        text: The text to embed.
+
+    Returns:
+        The embedding vector as a list of floats, or None on failure.
+    """
     if not HF_API_KEY:
         return None
     try:
@@ -59,6 +83,14 @@ def _embed_hf(text: str):
     return None
 
 def _embed_sentence_transformers(text: str):
+    """Generates an embedding using a local `sentence-transformers` model.
+
+    Args:
+        text: The text to embed.
+
+    Returns:
+        The embedding vector as a list of floats.
+    """
     global _st_model
     from sentence_transformers import SentenceTransformer
     if _st_model is None:
@@ -66,6 +98,21 @@ def _embed_sentence_transformers(text: str):
     return _st_model.encode([text], normalize_embeddings=True).tolist()[0]
 
 def embed_text(text: str) -> List[float]:
+    """Generates an embedding for a given text by trying multiple providers.
+
+    The function attempts to generate an embedding using the following providers
+    in order, returning the result from the first successful one:
+    1. Ollama (local)
+    2. OpenAI-compatible API (e.g., LM Studio, vLLM)
+    3. Hugging Face Inference API
+    4. `sentence-transformers` (local)
+
+    Args:
+        text: The text to embed.
+
+    Returns:
+        The embedding vector as a list of floats.
+    """
     return (
         _embed_ollama(text)
         or _embed_openai_compat(text)

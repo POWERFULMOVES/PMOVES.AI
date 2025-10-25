@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
+#
+# Post-installation script for Jetson devices to bootstrap the PMOVES.AI environment.
+#
+# This script configures the system with required packages, Docker, Tailscale,
+# and the PMOVES.AI application stack. It supports different installation modes
+# to allow for flexible provisioning.
+#
 set -euo pipefail
+
+# ==============================================================================
+# VARIABLES
+# ==============================================================================
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BUNDLE_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
@@ -15,6 +26,8 @@ JELLYFIN_BACKUP_HELPER=${JELLYFIN_BACKUP_HELPER:-${JELLYFIN_BACKUP_HELPER_DEFAUL
 JELLYFIN_STACK_ROOT_DEFAULT="${TARGET_DIR}/docker-stacks/jellyfin-ai"
 JELLYFIN_STACK_ROOT=${JELLYFIN_STACK_ROOT:-${JELLYFIN_STACK_ROOT_DEFAULT}}
 JELLYFIN_ARCHIVE_DIR=${JELLYFIN_ARCHIVE_DIR:-${JELLYFIN_STACK_ROOT}/backups}
+
+# --- Logging and Utility Functions ---
 
 log() {
   echo -e "\n[jetson-postinstall] $*"
@@ -33,6 +46,8 @@ require_supported_arch() {
       ;;
   esac
 }
+
+# --- Argument Parsing and Usage ---
 
 usage() {
   cat <<USAGE
@@ -80,6 +95,8 @@ parse_args() {
   done
 }
 
+# --- Environment and Configuration ---
+
 load_env_file() {
   local file="$1"
   [[ -f "$file" ]] || return 0
@@ -104,6 +121,8 @@ load_stack_env() {
   load_env_file "${root}/.env"
   load_env_file "${root}/.env.local"
 }
+
+# --- Service-specific Helpers ---
 
 run_jellyfin_backup_if_available() {
   local reason="$1"
@@ -137,6 +156,10 @@ ensure_env_file() {
     log "Skipping ${target}; template ${template} not found."
   fi
 }
+
+# ==============================================================================
+# INSTALLATION AND CONFIGURATION FUNCTIONS
+# ==============================================================================
 
 install_base_packages() {
   local packages=("$@")
@@ -359,6 +382,10 @@ install_jetson_containers() {
   fi
 }
 
+# ==============================================================================
+# RUN MODES
+# ==============================================================================
+
 run_standalone_mode() {
   install_base_packages ca-certificates curl gnupg lsb-release git unzip jq
   install_tailscale
@@ -385,6 +412,10 @@ run_full_mode() {
   link_docker_stacks
   install_jetson_containers
 }
+
+# ==============================================================================
+# MAIN
+# ==============================================================================
 
 main() {
   parse_args "$@"

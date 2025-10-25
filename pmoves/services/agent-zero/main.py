@@ -587,14 +587,6 @@ async def on_startup() -> None:
     _controller_task = asyncio.create_task(
         _controller_connect_loop(), name="agent-zero-controller-connect"
     )
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
-            loop.add_signal_handler(
-                sig, lambda s=sig: asyncio.create_task(process_manager.stop())
-            )
-        except NotImplementedError:  # pragma: no cover - platform specific
-            logger.warning("Signal handlers not supported on this platform")
 
 
 @app.on_event("shutdown")

@@ -26,10 +26,23 @@ ALLOWED_FIELDS = {
 }
 
 def strip_payload(raw: dict) -> dict:
-    """Keep only allowed fields for PUT /workflows/:id"""
+    """Strips a workflow dictionary to include only fields allowed by the n8n API.
+
+    Args:
+        raw: The raw workflow dictionary.
+
+    Returns:
+        A new dictionary containing only the allowed fields.
+    """
     return {k: v for k, v in raw.items() if k in ALLOWED_FIELDS}
 
 def main():
+    """Main entry point for the n8n workflow update script.
+
+    This function orchestrates the process of reading a local workflow file,
+    fetching the latest version from the n8n server, merging them, and
+    uploading the updated workflow.
+    """
     if not API_KEY:
         print("ERROR: N8N_KEY environment variable not set", file=sys.stderr)
         sys.exit(1)

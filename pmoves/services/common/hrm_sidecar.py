@@ -46,6 +46,7 @@ def is_torch_available() -> bool:
 
 
 def _require_torch() -> None:
+    """Raises a RuntimeError if PyTorch is not available."""
     if not is_torch_available():  # pragma: no cover - simple guard
         raise RuntimeError("PyTorch is required for HRM sidecar support")
 
@@ -64,6 +65,16 @@ if is_torch_available():  # pragma: no branch - definition gate
             dropout: float = 0.1,
             vocab_size: int = 32,
         ) -> None:
+            """Initializes the TinyTransformer.
+
+            Args:
+                d_model: The number of expected features in the input.
+                nhead: The number of heads in the multiheadattention models.
+                num_layers: The number of sub-encoder-layers in the encoder.
+                dim_feedforward: The dimension of the feedforward network model.
+                dropout: The dropout value.
+                vocab_size: The size of the vocabulary.
+            """
             super().__init__()
             self.emb = nn.Embedding(vocab_size, d_model)
             encoder_layer = nn.TransformerEncoderLayer(
@@ -78,20 +89,44 @@ if is_torch_available():  # pragma: no branch - definition gate
             self.d_model = d_model
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Forward pass for the TinyTransformer.
+
+            Args:
+                x: The input tensor of token IDs.
+
+            Returns:
+                The encoded output tensor.
+            """
             bsz, seq = x.shape
             h = self.emb(x) + self.pos[:, :seq, :]
             return self.encoder(h)
 
     class TokenHead(nn.Module):
+        """A head for projecting transformer outputs to token logits."""
         def __init__(self, d_model: int = 128, vocab_size: int = 32) -> None:
+            """Initializes the TokenHead.
+
+            Args:
+                d_model: The number of features in the input tensor.
+                vocab_size: The size of the vocabulary for the output projection.
+            """
             super().__init__()
             self.ln = nn.LayerNorm(d_model)
             self.proj = nn.Linear(d_model, vocab_size)
 
         def forward(self, h: torch.Tensor) -> torch.Tensor:
+            """Forward pass for the TokenHead.
+
+            Args:
+                h: The input tensor from the transformer.
+
+            Returns:
+                The output logits tensor.
+            """
             return self.proj(self.ln(h))
 
     class LModule(nn.Module):
+        """A single-layer transformer block for refinement steps in the SidecarHRM."""
         def __init__(
             self,
             d_model: int = 128,
@@ -99,6 +134,14 @@ if is_torch_available():  # pragma: no branch - definition gate
             dim_feedforward: int = 512,
             dropout: float = 0.1,
         ) -> None:
+            """Initializes the LModule.
+
+            Args:
+                d_model: The number of features in the input.
+                nhead: The number of heads in the multiheadattention models.
+                dim_feedforward: The dimension of the feedforward network model.
+                dropout: The dropout value.
+            """
             super().__init__()
             layer = nn.TransformerEncoderLayer(
                 d_model=d_model,
@@ -111,17 +154,38 @@ if is_torch_available():  # pragma: no branch - definition gate
             self.ln = nn.LayerNorm(d_model)
 
         def forward(self, h: torch.Tensor) -> torch.Tensor:
+            """Forward pass for the LModule.
+
+            Args:
+                h: The input tensor.
+
+            Returns:
+                The processed output tensor.
+            """
             return self.ln(self.block(h))
 
     class ConstantHaltHead(nn.Module):
         """Simple head that emits a constant halt logit for every position."""
 
         def __init__(self, logit: float) -> None:
+            """Initializes the ConstantHaltHead.
+
+            Args:
+                logit: The constant logit value to be emitted.
+            """
             super().__init__()
             value = torch.tensor(float(logit), dtype=torch.float32)
             self.register_buffer("logit", value)
 
         def forward(self, h: torch.Tensor) -> torch.Tensor:
+            """Forward pass for the ConstantHaltHead.
+
+            Args:
+                h: The input tensor (shape is used to expand the constant logit).
+
+            Returns:
+                A tensor of shape (batch_size, seq_len, 1) filled with the constant logit.
+            """
             bsz, seq, _ = h.shape
             return self.logit.expand(bsz, seq, 1)
 
@@ -129,12 +193,26 @@ if is_torch_available():  # pragma: no branch - definition gate
         """Embedding encoder that simply returns one-hot vectors for tokens."""
 
         def __init__(self, vocab_size: int) -> None:
+            """Initializes the _IdentityEncoder.
+
+            Args:
+                vocab_size: The size of the vocabulary. The embedding dimension
+                    will be equal to this.
+            """
             super().__init__()
             self.emb = nn.Embedding(vocab_size, vocab_size)
             with torch.no_grad():
                 self.emb.weight.copy_(torch.eye(vocab_size))
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Forward pass for _IdentityEncoder.
+
+            Args:
+                x: Input tensor of token IDs.
+
+            Returns:
+                A tensor of one-hot encoded vectors.
+            """
             return self.emb(x)
 
     class SidecarHRM(nn.Module):
@@ -151,6 +229,19 @@ if is_torch_available():  # pragma: no branch - definition gate
             l_module: Optional[nn.Module] = None,
             q_head: Optional[nn.Module] = None,
         ) -> None:
+            """Initializes the SidecarHRM.
+
+            Args:
+                base_encoder: The initial encoder module (e.g., TinyTransformer).
+                token_head: The module for projecting to token logits.
+                d_model: The number of features in the model.
+                Mmax: The maximum number of refinement steps.
+                Mmin: The minimum number of refinement steps before halting is allowed.
+                l_module: The refinement module (L-module). If None, a default
+                    LModule is created.
+                q_head: The halting head (Q-head). If None, a default linear
+                    head is created.
+            """
             super().__init__()
             self.base = base_encoder
             self.head = token_head
@@ -165,6 +256,19 @@ if is_torch_available():  # pragma: no branch - definition gate
             *,
             h: Optional[torch.Tensor] = None,
         ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            """Performs a single refinement step.
+
+            Args:
+                x: The input tensor of token IDs.
+                h: The hidden state from the previous step. If None, the base
+                    encoder is used to create the initial hidden state.
+
+            Returns:
+                A tuple containing:
+                - The updated hidden state.
+                - The output logits.
+                - The halting logits.
+            """
             if h is None:
                 h = self.base(x)
             h2 = h + self.l_module(h)
@@ -179,6 +283,17 @@ if is_torch_available():  # pragma: no branch - definition gate
             *,
             threshold: float = 0.5,
         ) -> Tuple[torch.Tensor, torch.Tensor]:
+            """Performs inference with adaptive computation time (halting).
+
+            Args:
+                x: The input tensor of token IDs.
+                threshold: The probability threshold for halting.
+
+            Returns:
+                A tuple containing:
+                - The final predicted token IDs.
+                - The number of steps taken for each item in the batch.
+            """
             self.eval()
             device = x.device
             done = torch.zeros(x.size(0), dtype=torch.bool, device=device)
@@ -212,6 +327,20 @@ if is_torch_available():  # pragma: no branch - definition gate
             ce_weight: float = 1.0,
             act_weight: float = 0.1,
         ) -> torch.Tensor:
+            """Performs a single training step.
+
+            Calculates a combined loss including cross-entropy for token prediction
+            and adaptive computation time (ACT) loss for halting.
+
+            Args:
+                x: The input tensor of token IDs.
+                y: The target tensor of token IDs.
+                ce_weight: The weight for the cross-entropy loss component.
+                act_weight: The weight for the ACT loss component.
+
+            Returns:
+                The combined loss tensor.
+            """
             h: Optional[torch.Tensor] = None
             total_ce = 0.0
             total_act = 0.0
@@ -257,6 +386,18 @@ else:  # pragma: no cover - exercised in environments without torch
 
 @dataclass
 class HrmSidecarConfig:
+    """Configuration for an HRM sidecar.
+
+    Attributes:
+        vocab_size: The size of the vocabulary.
+        d_model: The number of features in the model.
+        nhead: The number of attention heads.
+        dim_feedforward: The dimension of the feedforward network.
+        dropout: The dropout rate.
+        mmax: The maximum number of refinement steps.
+        mmin: The minimum number of refinement steps before halting.
+        halt_threshold: The probability threshold for halting.
+    """
     vocab_size: int
     d_model: int = 128
     nhead: int = 4
@@ -271,15 +412,39 @@ class AsciiCodec:
     """Simple codec that maps ASCII characters into token ids."""
 
     def __init__(self, vocab_size: int = 128) -> None:
+        """Initializes the AsciiCodec.
+
+        Args:
+            vocab_size: The size of the vocabulary. Tokens will be clamped to
+                this size.
+        """
         self.vocab_size = max(32, int(vocab_size))
 
     def encode(self, text: str) -> List[int]:
+        """Encodes a string into a list of token IDs.
+
+        Args:
+            text: The input string.
+
+        Returns:
+            A list of integer token IDs.
+        """
         if not text:
             return []
         limit = self.vocab_size - 1
         return [min(ord(ch), limit) for ch in text]
 
     def decode(self, tokens: List[int], *, original_length: Optional[int] = None) -> str:
+        """Decodes a list of token IDs into a string.
+
+        Args:
+            tokens: The list of token IDs.
+            original_length: If provided, the decoded string will be truncated
+                to this length.
+
+        Returns:
+            The decoded string.
+        """
         if original_length is not None:
             tokens = tokens[: original_length]
         chars = []
@@ -291,6 +456,14 @@ class AsciiCodec:
 
 
 def _logit(p: float) -> float:
+    """Calculates the logit for a given probability.
+
+    Args:
+        p: A probability value between 0 and 1.
+
+    Returns:
+        The logit of the probability.
+    """
     eps = 1e-6
     p = max(eps, min(1 - eps, p))
     return math.log(p / (1.0 - p))
@@ -306,6 +479,13 @@ def create_identity_sidecar(
     The model uses one-hot embeddings and a constant halting head so that
     inference is deterministic. This is primarily used for integration tests
     and to provide a safe runtime default until a trained sidecar is wired in.
+
+    Args:
+        config: The configuration for the sidecar.
+        device: The PyTorch device to create the model on.
+
+    Returns:
+        An initialized SidecarHRM model.
     """
 
     _require_torch()
@@ -340,6 +520,7 @@ def create_identity_sidecar(
 
 @dataclass
 class _CachedState:
+    """Internal state for the HrmDecoderController cache."""
     signature: Tuple[Any, ...]
     enabled: bool
     reason: str
@@ -360,6 +541,15 @@ class HrmDecoderController:
         modality: str = "text",
         device: Optional["torch.device"] = None,
     ) -> None:
+        """Initializes the HrmDecoderController.
+
+        Args:
+            pack_fetcher: A callable that fetches decoder packs from a source
+                like Supabase.
+            codec: The codec to use for tokenization. Defaults to AsciiCodec.
+            modality: The default modality to use when fetching packs.
+            device: The PyTorch device to use for models.
+        """
         self._pack_fetcher = pack_fetcher
         self._codec = codec or AsciiCodec()
         self._modality = modality
@@ -368,10 +558,23 @@ class HrmDecoderController:
         self._cache: Dict[Tuple[str, str], _CachedState] = {}
 
     def clear_cache(self) -> None:
+        """Clears the internal cache of decoder pack states."""
         with self._lock:
             self._cache.clear()
 
     def _ensure_state(self, namespace: str, modality: Optional[str] = None) -> _CachedState:
+        """Ensures the cached state for a given namespace/modality is up to date.
+
+        This method fetches the latest decoder pack, compares it with the cached
+        version, and re-initializes the sidecar model if necessary.
+
+        Args:
+            namespace: The namespace for the decoder pack.
+            modality: The modality for the decoder pack.
+
+        Returns:
+            The current cached state.
+        """
         key = (namespace, modality or self._modality)
         with self._lock:
             cached = self._cache.get(key)
@@ -429,6 +632,15 @@ class HrmDecoderController:
             return state
 
     def status(self, namespace: str, modality: Optional[str] = None) -> Dict[str, Any]:
+        """Gets the current status of the HRM sidecar for a namespace.
+
+        Args:
+            namespace: The namespace to check.
+            modality: The modality to check.
+
+        Returns:
+            A dictionary containing the status information.
+        """
         state = self._ensure_state(namespace, modality)
         return {
             "enabled": bool(state.enabled and state.sidecar is not None),
@@ -446,6 +658,18 @@ class HrmDecoderController:
         namespace: str,
         modality: Optional[str] = None,
     ) -> Tuple[str, Dict[str, Any]]:
+        """Applies HRM refinement to a text if the sidecar is enabled.
+
+        Args:
+            text: The input text to refine.
+            namespace: The namespace to use for fetching the decoder pack.
+            modality: The modality to use.
+
+        Returns:
+            A tuple containing:
+            - The refined text.
+            - A dictionary with status information about the refinement process.
+        """
         state = self._ensure_state(namespace, modality)
         info = {
             "enabled": bool(state.enabled and state.sidecar is not None),

@@ -5,10 +5,22 @@ from typing import Dict, List, Any
 
 
 def _now_iso() -> str:
+    """Returns the current UTC time in ISO 8601 format with a 'Z' suffix."""
     return _dt.datetime.utcnow().isoformat() + "Z"
 
 
 def _norm(v: float | None, lo: float, hi: float) -> float | None:
+    """Normalizes a value to a 0-1 scale.
+
+    Args:
+        v: The value to normalize.
+        lo: The lower bound of the scale.
+        hi: The upper bound of the scale.
+
+    Returns:
+        The normalized value, clamped to the [0, 1] range, or None if the
+        input value is None.
+    """
     if v is None:
         return None
     if hi == lo:
@@ -22,6 +34,16 @@ def _norm(v: float | None, lo: float, hi: float) -> float | None:
 
 
 def map_health_weekly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
+    """Maps a `health.weekly.summary.v1` event to the CGP format.
+
+    This function creates constellations for adherence, training load, and recovery.
+
+    Args:
+        evt: The event dictionary.
+
+    Returns:
+        A dictionary representing the event in the CGP format.
+    """
     p = evt.get("payload", evt)
     ns = p.get("namespace", "pmoves")
     period = f"{p.get('period_start')}..{p.get('period_end')}"
@@ -96,6 +118,17 @@ def map_health_weekly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def map_finance_monthly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
+    """Maps a `finance.monthly.summary.v1` event to the CGP format.
+
+    This function creates a constellation for each spending category, with points
+    representing spend, budget, and variance.
+
+    Args:
+        evt: The event dictionary.
+
+    Returns:
+        A dictionary representing the event in the CGP format.
+    """
     p = evt.get("payload", evt)
     ns = p.get("namespace", "pmoves")
     month = p.get("month")

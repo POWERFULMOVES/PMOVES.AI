@@ -14,6 +14,11 @@ _DEFAULT_TTL = int(os.getenv("GEOMETRY_PACK_TTL", "600"))
 
 
 def _rest_config() -> tuple[Optional[str], Optional[str]]:
+    """Retrieves Supabase REST URL and service key from environment variables.
+
+    Returns:
+        A tuple containing the REST URL and the service key.
+    """
     rest_url = os.getenv("SUPA_REST_URL") or os.getenv("SUPABASE_REST_URL")
     service_key = (
         os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -25,10 +30,28 @@ def _rest_config() -> tuple[Optional[str], Optional[str]]:
 
 
 def _cache_key(namespace: str, modality: str, pack_type: str) -> str:
+    """Creates a standardized cache key.
+
+    Args:
+        namespace: The namespace of the parameter pack.
+        modality: The modality of the parameter pack.
+        pack_type: The type of the parameter pack (e.g., 'cg_builder').
+
+    Returns:
+        A string to be used as a cache key.
+    """
     return f"{namespace}:{modality}:{pack_type}"
 
 
 def _cached_pack(key: str) -> Optional[Dict[str, Any]]:
+    """Retrieves a parameter pack from the cache if it's not expired.
+
+    Args:
+        key: The cache key.
+
+    Returns:
+        The cached parameter pack dictionary, or None if not found or expired.
+    """
     now = time.time()
     with _LOCK:
         cached = _CACHE.get(key)
@@ -38,11 +61,27 @@ def _cached_pack(key: str) -> Optional[Dict[str, Any]]:
 
 
 def _store_pack(key: str, pack: Dict[str, Any]) -> None:
+    """Stores a parameter pack in the cache.
+
+    Args:
+        key: The cache key.
+        pack: The parameter pack dictionary to store.
+    """
     with _LOCK:
         _CACHE[key] = (time.time(), pack)
 
 
 def _fetch_pack(namespace: str, modality: str, pack_type: str) -> Optional[Dict[str, Any]]:
+    """Fetches the latest active parameter pack from Supabase.
+
+    Args:
+        namespace: The namespace of the parameter pack.
+        modality: The modality of the parameter pack.
+        pack_type: The type of the parameter pack.
+
+    Returns:
+        The fetched parameter pack dictionary, or None on failure.
+    """
     rest_url, service_key = _rest_config()
     if not rest_url:
         return None
@@ -94,7 +133,17 @@ def get_builder_pack(namespace: str, modality: str) -> Optional[Dict[str, Any]]:
 
 
 def get_decoder_pack(namespace: str, modality: str) -> Optional[Dict[str, Any]]:
-    """Fetch the latest active decoder parameter pack, when present."""
+    """Retrieves the latest active decoder parameter pack for a namespace and modality.
+
+    This function uses a time-based cache to avoid repeated requests to Supabase.
+
+    Args:
+        namespace: The namespace of the parameter pack.
+        modality: The modality of the parameter pack.
+
+    Returns:
+        The decoder parameter pack dictionary, or None if not found.
+    """
 
     key = _cache_key(namespace, modality, "decoder")
     cached = _cached_pack(key)
@@ -109,5 +158,6 @@ def get_decoder_pack(namespace: str, modality: str) -> Optional[Dict[str, Any]]:
 
 
 def clear_cache() -> None:
+    """Clears the in-memory cache of parameter packs."""
     with _LOCK:
         _CACHE.clear()

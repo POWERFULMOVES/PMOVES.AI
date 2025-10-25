@@ -15,11 +15,24 @@ DEFAULT_CONSTELLATION = os.getenv(
 
 
 def _pretty_print(payload: Dict[str, Any]) -> None:
+    """Prints a dictionary to stdout as indented JSON.
+
+    Args:
+        payload: The dictionary to print.
+    """
     json.dump(payload, sys.stdout, indent=2)
     sys.stdout.write("\n")
 
 
 def main() -> int:
+    """Main entry point for the mindmap query script.
+
+    Parses command-line arguments, queries the mindmap endpoint, and prints
+    the results.
+
+    Returns:
+        An exit code (0 for success, 1 for failure).
+    """
     parser = argparse.ArgumentParser(
         description="Fetch mindmap points/media for a constellation.",
     )

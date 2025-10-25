@@ -127,10 +127,28 @@ PROVIDERS: Dict[str, ProviderSpec] = {
 
 
 def have_provider_env(env_keys: List[str]) -> bool:
+    """Checks if any of the specified environment variables are set.
+
+    Args:
+        env_keys: A list of environment variable keys to check.
+
+    Returns:
+        True if at least one of the environment variables is set, False otherwise.
+    """
     return any(os.environ.get(key) for key in env_keys)
 
 
 def request(method: str, path: str, payload: Optional[dict] = None) -> Tuple[int, str]:
+    """Sends an authenticated request to the Open Notebook API.
+
+    Args:
+        method: The HTTP method (e.g., 'GET', 'POST').
+        path: The API endpoint path.
+        payload: An optional dictionary to send as the JSON request body.
+
+    Returns:
+        A tuple containing the HTTP status code and the response body as a string.
+    """
     url = f"{API_ROOT}/api{path}"
     data_bytes = json.dumps(payload).encode("utf-8") if payload is not None else None
     req = urllib.request.Request(url, data=data_bytes, method=method, headers=HEADERS)
@@ -143,6 +161,18 @@ def request(method: str, path: str, payload: Optional[dict] = None) -> Tuple[int
 
 
 def get_json(method: str, path: str) -> dict:
+    """Sends a GET request and parses the JSON response.
+
+    Args:
+        method: The HTTP method (should be 'GET' or similar).
+        path: The API endpoint path.
+
+    Raises:
+        RuntimeError: If the API request fails.
+
+    Returns:
+        The parsed JSON response as a dictionary.
+    """
     status, body = request(method, path)
     if status >= 400:
         raise RuntimeError(f"{method} {path} failed ({status}): {body}")
@@ -150,6 +180,18 @@ def get_json(method: str, path: str) -> dict:
 
 
 def post_json(path: str, payload: dict) -> dict:
+    """Sends a POST request with a JSON payload and parses the response.
+
+    Args:
+        path: The API endpoint path.
+        payload: The dictionary to send as the JSON request body.
+
+    Raises:
+        RuntimeError: If the API request fails.
+
+    Returns:
+        The parsed JSON response as a dictionary.
+    """
     status, body = request("POST", path, payload)
     if status >= 400:
         raise RuntimeError(f"POST {path} failed ({status}): {body}")
@@ -157,6 +199,18 @@ def post_json(path: str, payload: dict) -> dict:
 
 
 def put_json(path: str, payload: dict) -> dict:
+    """Sends a PUT request with a JSON payload and parses the response.
+
+    Args:
+        path: The API endpoint path.
+        payload: The dictionary to send as the JSON request body.
+
+    Raises:
+        RuntimeError: If the API request fails.
+
+    Returns:
+        The parsed JSON response as a dictionary.
+    """
     status, body = request("PUT", path, payload)
     if status >= 400:
         raise RuntimeError(f"PUT {path} failed ({status}): {body}")
@@ -164,6 +218,14 @@ def put_json(path: str, payload: dict) -> dict:
 
 
 def ensure_models(models_by_provider: Dict[str, List[dict]]) -> Dict[str, dict]:
+    """Ensures that all specified models exist in the Open Notebook database.
+
+    Args:
+        models_by_provider: A dictionary mapping provider names to lists of models.
+
+    Returns:
+        A dictionary of all created or existing models, indexed by model name.
+    """
     current = get_json("GET", "/models")
     indexed = {(m["name"], m["provider"]): m for m in current}
     created: Dict[str, dict] = {}
@@ -187,6 +249,12 @@ def ensure_models(models_by_provider: Dict[str, List[dict]]) -> Dict[str, dict]:
 
 
 def update_defaults(defaults: Dict[str, str], created_models: Dict[str, dict]) -> None:
+    """Updates the default model settings in Open Notebook.
+
+    Args:
+        defaults: A dictionary mapping default fields to model names.
+        created_models: A dictionary of created models, used to resolve model IDs.
+    """
     if not defaults:
         return
 
@@ -204,6 +272,10 @@ def update_defaults(defaults: Dict[str, str], created_models: Dict[str, dict]) -
 
 
 def main() -> None:
+    """Main entry point for the Open Notebook seeder script.
+
+    Determines eligible providers, creates missing models, and sets defaults.
+    """
     eligible: Dict[str, List[dict]] = {}
     defaults: Dict[str, str] = {}
 

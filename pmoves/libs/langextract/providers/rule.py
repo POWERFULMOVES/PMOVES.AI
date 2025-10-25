@@ -7,7 +7,25 @@ from .base import BaseProvider
 ERROR_TAGS = {"error","exception","stacktrace","stack","code","message","service","host","timestamp","time","severity","level"}
 
 class RuleProvider(BaseProvider):
+    """An extraction provider that uses a set of hardcoded rules to chunk content.
+
+    This provider is suitable for well-structured text and XML, where content can be
+    reliably segmented based on paragraph breaks, titles, and specific tags.
+    """
     def extract_text(self, document: str, namespace: str, doc_id: str) -> Dict[str, Any]:
+        """Extracts chunks from a plain text document.
+
+        This method splits the document by blank lines to create paragraph chunks
+        and also identifies sentences ending with a question mark as 'question' chunks.
+
+        Args:
+            document: The text content of the document.
+            namespace: The namespace of the document.
+            doc_id: The unique identifier of the document.
+
+        Returns:
+            A dictionary containing the extracted 'chunks' and an empty 'errors' list.
+        """
         chunks: List[Dict[str, Any]] = []
         # split paragraphs by blank lines
         paras = re.split(r"\n\s*\n+", document or "")
@@ -42,6 +60,20 @@ class RuleProvider(BaseProvider):
         return {"chunks": chunks, "errors": []}
 
     def extract_xml(self, xml: str, namespace: str, doc_id: str) -> Dict[str, Any]:
+        """Extracts chunks and errors from an XML document.
+
+        This method iterates through the XML elements, creating chunks from tags
+        like <p>, <title>, and <q>. It also identifies potential error messages
+        based on a set of common error-related tags.
+
+        Args:
+            xml: The XML content of the document.
+            namespace: The namespace of the document.
+            doc_id: The unique identifier of the document.
+
+        Returns:
+            A dictionary containing the extracted 'chunks' and 'errors'.
+        """
         parser = etree.XMLParser(recover=True)
         root = etree.fromstring((xml or '').encode('utf-8'), parser=parser)
         chunks: List[Dict[str,Any]] = []

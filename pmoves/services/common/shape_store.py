@@ -18,6 +18,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ShapePoint:
+    """Represents a single point within a constellation.
+
+    Attributes:
+        id: The unique identifier for this point.
+        constellation_id: The ID of the constellation this point belongs to.
+        modality: The modality of the data this point represents (e.g., 'video', 'text').
+        ref_id: A reference to the external data source (e.g., a video ID, document ID).
+        t_start: The start time in seconds for time-based modalities.
+        t_end: The end time in seconds for time-based modalities.
+        frame_idx: The frame index for video modalities.
+        token_start: The starting token index for text modalities.
+        token_end: The ending token index for text modalities.
+        proj: The projection value of the point.
+        conf: The confidence value of the point.
+        meta: A dictionary for any additional metadata.
+    """
     id: str
     constellation_id: str
     modality: str
@@ -51,6 +67,7 @@ class ShapeStore:
 
     # ---- basic LRU bookkeeping ----
     def _touch(self, key: str) -> None:
+        """Updates the LRU cache to mark a key as recently used."""
         if key in self._lru:
             self._lru.move_to_end(key)
         else:
@@ -60,17 +77,20 @@ class ShapeStore:
             self._evict(old_key)
 
     def _evict(self, key: str) -> None:
+        """Removes an item from all internal stores."""
         self._anchors.pop(key, None)
         self._constellations.pop(key, None)
         self._points.pop(key, None)
 
     # ---- CGP ingest ----
     def _pack_key(self, namespace: str, modality: Optional[str]) -> tuple[str, str]:
+        """Creates a standardized key for a builder pack."""
         ns = (namespace or "").strip().lower()
         mod = (modality or "*").strip().lower() or "*"
         return ns, mod
 
     def _resolve_pack_locked(self, namespace: Optional[str], modality: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Resolves a builder pack, including fallback to a wildcard modality."""
         if not namespace:
             return None
         key = self._pack_key(namespace, modality)
@@ -84,6 +104,13 @@ class ShapeStore:
         return None
 
     def update_builder_pack(self, namespace: str, modality: Optional[str], pack: Optional[Dict[str, Any]]) -> None:
+        """Updates or removes a builder pack and applies it to existing constellations.
+
+        Args:
+            namespace: The namespace of the pack.
+            modality: The modality of the pack.
+            pack: The builder pack dictionary, or None to remove the pack.
+        """
         if not namespace:
             return
         key = self._pack_key(namespace, modality)
@@ -116,6 +143,15 @@ class ShapeStore:
                     meta["builder_pack"] = copy.deepcopy(pack)
 
     def get_builder_pack(self, namespace: str, modality: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Retrieves a builder pack for a given namespace and modality.
+
+        Args:
+            namespace: The namespace of the pack.
+            modality: The modality of the pack.
+
+        Returns:
+            The builder pack dictionary, or None if not found.
+        """
         key_ns = (namespace or "").strip()
         if not key_ns:
             return None
@@ -203,6 +239,14 @@ class ShapeStore:
 
     # ---- lookups ----
     def get_constellation(self, constellation_id: str) -> Optional[Dict[str, Any]]:
+        """Retriev's a constellation by its ID.
+
+        Args:
+            constellation_id: The ID of the constellation to retrieve.
+
+        Returns:
+            The constellation dictionary, or None if not found.
+        """
         with self._lock:
             c = self._constellations.get(constellation_id)
             if c:
@@ -210,6 +254,14 @@ class ShapeStore:
             return c
 
     def get_point(self, point_id: str) -> Optional[ShapePoint]:
+        """Retrieves a ShapePoint by its ID.
+
+        Args:
+            point_id: The ID of the point to retrieve.
+
+        Returns:
+            The ShapePoint object, or None if not found.
+        """
         with self._lock:
             sp = self._points.get(point_id)
             if sp:

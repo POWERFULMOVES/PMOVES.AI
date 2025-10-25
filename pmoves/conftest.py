@@ -130,6 +130,15 @@ def stub_external_modules() -> None:
         nats_module = ModuleType("nats")
         aio_module = ModuleType("nats.aio")
         client_module = ModuleType("nats.aio.client")
+        js_api_module = ModuleType("nats.js.api")
+
+        class RetentionPolicy:
+            WORKQUEUE = "workqueue"
+            WORK_QUEUE = "workqueue"
+            LIMITS = "limits"
+            INTEREST = "interest"
+
+        js_api_module.RetentionPolicy = RetentionPolicy  # type: ignore[attr-defined]
 
         class _FakeNATS:
             async def connect(self, *args, **kwargs):  # pragma: no cover - trivial
@@ -145,13 +154,14 @@ def stub_external_modules() -> None:
         _install_module("nats", nats_module)
         _install_module("nats.aio", aio_module)
         _install_module("nats.aio.client", client_module)
+        _install_module("nats.js.api", js_api_module)
 
 
 @pytest.fixture(scope="session")
 def load_service_module() -> Callable[[str, str], ModuleType]:
     """Helper to import service modules by file path once per session."""
     cache: Dict[str, ModuleType] = {}
-    base = Path(__file__).resolve().parents[1]
+    base = Path(__file__).resolve().parent
 
     def _load(name: str, relative_path: str) -> ModuleType:
         if name in cache:
@@ -161,6 +171,7 @@ def load_service_module() -> Callable[[str, str], ModuleType]:
         if spec is None or spec.loader is None:
             raise ImportError(f"Cannot load module {name} from {module_path}")
         module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
         spec.loader.exec_module(module)
         cache[name] = module
         return module

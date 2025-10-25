@@ -45,6 +45,14 @@ PMOVES_YT_BASE_URL = "http://localhost:8077"
 
 
 def load_env() -> Dict[str, str]:
+    """Loads and validates required environment variables from the host.
+
+    Raises:
+        SystemExit: If any required environment variables are missing.
+
+    Returns:
+        A dictionary containing the validated environment variables.
+    """
     env = {
         "SUPA_REST_URL": os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL"),
         "SUPABASE_SERVICE_ROLE_KEY": os.environ.get("SUPABASE_SERVICE_ROLE_KEY"),
@@ -67,11 +75,33 @@ def load_env() -> Dict[str, str]:
 
 
 def _safe_meta(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Safely extracts a dictionary from the 'meta' field of a row.
+
+    Args:
+        row: A dictionary representing a row from the studio_board table.
+
+    Returns:
+        The 'meta' dictionary if it exists and is a dict, otherwise an empty dict.
+    """
     meta = row.get("meta")
     return dict(meta) if isinstance(meta, dict) else {}
 
 
 def _artifact_and_path(row: Dict[str, Any], meta: Dict[str, Any]) -> Tuple[str, str]:
+    """Extracts artifact URI and published path from a row and its metadata.
+
+    Derives a published path from the artifact URI if not explicitly provided.
+
+    Args:
+        row: The studio_board row.
+        meta: The extracted metadata from the row.
+
+    Raises:
+        ValueError: If an artifact URI cannot be found.
+
+    Returns:
+        A tuple containing the artifact URI and the published path.
+    """
     artifact = (
         meta.get("artifact_uri")
         or row.get("artifact_uri")
@@ -94,6 +124,15 @@ def _artifact_and_path(row: Dict[str, Any], meta: Dict[str, Any]) -> Tuple[str, 
 
 
 def _derive_namespace(row: Dict[str, Any], meta: Dict[str, Any]) -> str:
+    """Derives the namespace for a content item.
+
+    Args:
+        row: The studio_board row.
+        meta: The extracted metadata from the row.
+
+    Returns:
+        The derived namespace string.
+    """
     return (
         row.get("namespace")
         or meta.get("namespace")
@@ -102,10 +141,29 @@ def _derive_namespace(row: Dict[str, Any], meta: Dict[str, Any]) -> str:
 
 
 def _derive_title(row: Dict[str, Any], meta: Dict[str, Any]) -> str:
+    """Derives the title for a content item.
+
+    Args:
+        row: The studio_board row.
+        meta: The extracted metadata from the row.
+
+    Returns:
+        The derived title string.
+    """
     return row.get("title") or meta.get("title") or row.get("content_title") or "Untitled"
 
 
 def _extract_tags(meta: Dict[str, Any]) -> Optional[List[str]]:
+    """Extracts a list of tags from metadata.
+
+    Handles both list- and comma-separated string formats.
+
+    Args:
+        meta: The metadata dictionary.
+
+    Returns:
+        A list of tags, or None if no tags are found.
+    """
     tags = meta.get("tags")
     if isinstance(tags, list):
         return [str(tag) for tag in tags]
@@ -115,17 +173,42 @@ def _extract_tags(meta: Dict[str, Any]) -> Optional[List[str]]:
 
 
 def _extension_from_path(path: str) -> str:
+    """Extracts the file extension from a path.
+
+    Args:
+        path: The file path or URL.
+
+    Returns:
+        The file extension (e.g., ".mp4").
+    """
     parsed = urlparse(path)
     suffix = Path(parsed.path).suffix
     return suffix
 
 
 def _filename_from_path(path: str) -> str:
+    """Extracts the filename from a path.
+
+    Args:
+        path: The file path or URL.
+
+    Returns:
+        The filename.
+    """
     parsed = urlparse(path)
     return Path(parsed.path).name or "asset"
 
 
 def _build_thumbnail_url(jellyfin_url: str, item: Dict[str, Any]) -> Optional[str]:
+    """Constructs the full URL for a Jellyfin item's primary image.
+
+    Args:
+        jellyfin_url: The base URL of the Jellyfin server.
+        item: The Jellyfin item metadata dictionary.
+
+    Returns:
+        The full thumbnail URL, or None if no primary image tag is found.
+    """
     image_tags = item.get("ImageTags") or {}
     primary_tag = image_tags.get("Primary")
     if not primary_tag:
@@ -134,6 +217,14 @@ def _build_thumbnail_url(jellyfin_url: str, item: Dict[str, Any]) -> Optional[st
 
 
 def _ticks_to_seconds(value: Any) -> Optional[float]:
+    """Converts Jellyfin's `RunTimeTicks` to seconds.
+
+    Args:
+        value: The value of `RunTimeTicks`.
+
+    Returns:
+        The duration in seconds as a float, or None if conversion fails.
+    """
     try:
         ticks = float(value)
         return ticks / 10_000_000.0
@@ -142,6 +233,19 @@ def _ticks_to_seconds(value: Any) -> Optional[float]:
 
 
 async def fetch_candidates(client: httpx.AsyncClient, limit: int, start_after: Optional[str]) -> List[Dict[str, Any]]:
+    """Fetches candidate rows from Supabase that need Jellyfin metadata backfilled.
+
+    Candidates are rows that are 'published' but do not have a 'jellyfin_public_url'
+    in their metadata.
+
+    Args:
+        client: The httpx client for Supabase.
+        limit: The maximum number of rows to fetch.
+        start_after: An optional row ID to start fetching after.
+
+    Returns:
+        A list of candidate rows.
+    """
     params = {
         "select": "id,title,content_url,namespace,meta",
         "status": "eq.published",
@@ -157,12 +261,30 @@ async def fetch_candidates(client: httpx.AsyncClient, limit: int, start_after: O
 
 
 async def fetch_jellyfin_item(client: httpx.AsyncClient, item_id: str) -> Dict[str, Any]:
+    """Fetches detailed metadata for a specific item from Jellyfin.
+
+    Args:
+        client: The httpx client for Jellyfin.
+        item_id: The ID of the Jellyfin item.
+
+    Returns:
+        A dictionary of the item's metadata.
+    """
     resp = await client.get(f"/Items/{item_id}")
     resp.raise_for_status()
     return resp.json()
 
 
 async def publish_event(agent_client: httpx.AsyncClient, payload: Dict[str, Any]) -> str:
+    """Publishes a `content.published.v1` event to Agent Zero.
+
+    Args:
+        agent_client: The httpx client for Agent Zero.
+        payload: The event payload.
+
+    Returns:
+        The ID of the published event envelope.
+    """
     resp = await agent_client.post("/events/publish", json={"topic": "content.published.v1", "payload": payload, "source": "backfill"})
     resp.raise_for_status()
     data = resp.json()
@@ -170,6 +292,13 @@ async def publish_event(agent_client: httpx.AsyncClient, payload: Dict[str, Any]
 
 
 async def update_supabase(client: httpx.AsyncClient, row_id: str, meta: Dict[str, Any]) -> None:
+    """Updates the metadata for a row in the `studio_board` table.
+
+    Args:
+        client: The httpx client for Supabase.
+        row_id: The ID of the row to update.
+        meta: The new metadata to set.
+    """
     resp = await client.patch(
         f"/studio_board?id=eq.{row_id}",
         content=json.dumps({"meta": meta}),
@@ -194,6 +323,24 @@ async def search_youtube_transcripts(client: httpx.AsyncClient, query: str, limi
 
 
 def build_payload(row: Dict[str, Any], meta: Dict[str, Any], jellyfin_item: Dict[str, Any], env: Dict[str, str], youtube_links: Optional[List[Dict[str, Any]]] = None) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    """Constructs the full `content.published.v1` event payload.
+
+    Args:
+        row: The studio_board row.
+        meta: The extracted metadata from the row.
+        jellyfin_item: The full Jellyfin item metadata.
+        env: The dictionary of environment variables.
+        youtube_links: Optional list of related YouTube transcript search results.
+
+    Raises:
+        ValueError: If a Jellyfin item ID cannot be found.
+
+    Returns:
+        A tuple containing:
+        - The full event payload.
+        - A dictionary of extracted Jellyfin metadata.
+        - A summary dictionary of the backfilled data.
+    """
     jellyfin_id = (
         meta.get("jellyfin_item_id")
         or row.get("jellyfin_item_id")
@@ -274,6 +421,19 @@ def build_payload(row: Dict[str, Any], meta: Dict[str, Any], jellyfin_item: Dict
 
 
 async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optional[str], link_youtube: bool, youtube_threshold: float) -> None:
+    """Main orchestration function for the backfill process.
+
+    Fetches candidates, gets Jellyfin data, optionally links YouTube transcripts,
+    publishes events, and updates Supabase.
+
+    Args:
+        limit: Maximum number of rows to process.
+        dry_run: If True, logs actions without performing them.
+        sleep: Delay between processing each row.
+        start_after: Optional row ID to resume processing from.
+        link_youtube: If True, enables YouTube transcript similarity search.
+        youtube_threshold: The similarity threshold for YouTube matches.
+    """
     env = load_env()
     supabase_headers = {
         "apikey": env["SUPABASE_SERVICE_ROLE_KEY"],
@@ -352,6 +512,14 @@ async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optiona
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parses command-line arguments for the script.
+
+    Args:
+        argv: An optional list of command-line arguments.
+
+    Returns:
+        The parsed arguments as a namespace object.
+    """
     parser = argparse.ArgumentParser(description="Backfill Jellyfin metadata and republish content.published.v1 events.")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Maximum number of rows to process (default: 10).")
     parser.add_argument("--dry-run", action="store_true", help="Do not publish or update Supabase; log planned actions.")
@@ -363,6 +531,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    """Main entry point for the script.
+
+    Parses arguments and runs the backfill process.
+
+    Args:
+        argv: An optional list of command-line arguments.
+
+    Returns:
+        An exit code (0 for success, 130 for interruption).
+    """
     args = parse_args(argv)
     try:
         asyncio.run(backfill(
