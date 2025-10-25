@@ -7,12 +7,14 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - **`CATACLYSM_STUDIOS_INC/`** – Provisioning bundles and infrastructure automations for homelab and field hardware, including unattended OS installs, Jetson bootstrap scripts, and ready-to-run Docker stacks that mirror the production mesh topology.
 - **`docs/`** – High-level strategy, architecture, and integration guides for the overall PMOVES ecosystem, such as system overviews, multi-agent coordination notes, and archival research digests.
 - **`pmoves/`** – The primary application stack with docker-compose definitions, service code, datasets, Supabase schema, and in-depth runbooks for daily operations and advanced workflows.
+- **`pmoves/ui/`** – Next.js + Supabase Platform Kit workspace for the upcoming web UI; reuses `pmoves/.env.local` so frontend hooks can target the same Supabase CLI stack.
 
 ## Essential Documentation
 - [PMOVES Stack README](pmoves/README.md) – Quickstart environment setup, service inventory, and Codex bootstrap steps for running the orchestration mesh locally.
 - [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) – One-stop index for environment scripts, Make targets, Supabase workflows, smoke tests, and provisioning helpers.
 - [Supabase Service Guide](pmoves/docs/services/supabase/README.md) – CLI vs compose expectations, realtime wiring (`supabase start --network-id pmoves-net`), and how PMOVES consumes PostgREST/Realtime in both local and self-hosted deployments.
 - [PMOVES Docs Index](pmoves/docs/README_DOCS_INDEX.md) – Curated entry points into the pmoves-specific runbooks covering Creator Pipeline, ComfyUI flows, reranker configurations, and smoke tests.
+- [UI workspace bring-up](pmoves/docs/LOCAL_DEV.md#ui-workspace-nextjs--supabase-platform-kit) – Next.js + Supabase quickstart (npm/yarn commands, env loading from `pmoves/.env.local`, Supabase CLI prerequisites).
 - [Service Docs Index](pmoves/docs/services/README.md) – Per‑service guides (overview, compose/ports, runbooks, smoke tests, and roadmap alignment).
 - [External Integrations Bring-Up](pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md) – Wger, Firefly III, Open Notebook, and Jellyfin commands, token wiring, and port overrides for `make up-external`.
 - [Architecture Primer](docs/PMOVES_ARC.md) – Deep dive into mesh topology, service responsibilities, and evolution of the orchestration layers.
@@ -32,8 +34,9 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 ### Initial Setup & Tooling Flow
 1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, copy `.env`, and populate secrets. Run `make bootstrap` (wrapping `python -m pmoves.scripts.bootstrap_env`) to capture Supabase CLI endpoints/keys (including Realtime), Wger and Firefly tokens, Open Notebook credentials, Discord/Jellyfin secrets, and regenerated shared passphrases.
 2. **Supabase realtime alignment** – Follow the [Supabase Service Guide](pmoves/docs/services/supabase/README.md) to start the CLI stack with `supabase start --network-id pmoves-net` (run this before accepting Supabase prompts in `make bootstrap`) and mirror the websocket endpoint (`SUPABASE_REALTIME_URL=ws://host.docker.internal:65421/realtime/v1`). This matches our self-hosted Supabase deployments.
-3. **Tooling cheatsheet** – Keep [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) handy for Make targets, smoke tests, and environment scripts (`env_setup`, `flight-check`, `smoke`).
-4. **Provisioning & hardware targets** – Browse `CATACLYSM_STUDIOS_INC/` for automated OS images, Jetson bootstrap bundles, and pmoves-net Docker stacks ready for edge hardware.
+3. **UI workspace bring-up** – `cd pmoves/ui` then `npm install` (or `yarn install`). The Next.js app loads Supabase creds from `pmoves/.env.local` and expects the Supabase CLI stack (`make supa-start` + `make supa-status`) before running `npm run dev`.
+4. **Tooling cheatsheet** – Keep [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) handy for Make targets, smoke tests, and environment scripts (`env_setup`, `flight-check`, `smoke`).
+5. **Provisioning & hardware targets** – Browse `CATACLYSM_STUDIOS_INC/` for automated OS images, Jetson bootstrap bundles, and pmoves-net Docker stacks ready for edge hardware.
 
 ## Service Index + CHIT Map
 

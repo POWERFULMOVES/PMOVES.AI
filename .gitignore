@@ -57,3 +57,8 @@ testkeys.md
 .kiro/steering/byterover-rules.md
 .qoder/rules/byterover-rules.md
 .augment/rules/byterover-rules.md
+
+# JavaScript workspaces
+node_modules/
+pmoves/ui/.next/
+pmoves/ui/out/

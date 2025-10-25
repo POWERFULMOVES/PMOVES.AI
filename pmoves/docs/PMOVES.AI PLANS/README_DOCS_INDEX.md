@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2025-10-18_
+_Last updated: 2025-10-25_
 
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
@@ -20,6 +20,10 @@ _Last updated: 2025-10-18_
 - **M2 Validation Guide** — `M2_VALIDATION_GUIDE.md`
 - **n8n Quick Checklist (wiki)** — `N8N_CHECKLIST.md`
 - **PMOVES v5.12 Task Backlog** — `context/pmoves_v_5.12_tasks.md`
+
+## UI workspace bring-up
+- Quickstart: [`LOCAL_DEV.md` – UI workspace](../LOCAL_DEV.md#ui-workspace-nextjs--supabase-platform-kit)
+  - Supabase CLI prerequisites: run `make supa-start` then `make supa-status` to populate `pmoves/.env.local` before `npm run dev`.
 
 ## Creative Tutorials (Automation Inputs)
 - Qwen Image Edit Plus — `pmoves/creator/tutorials/qwen_image_edit_plus_tutorial.md`

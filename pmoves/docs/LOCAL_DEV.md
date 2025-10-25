@@ -1,5 +1,5 @@
 # Local Development & Networking
-_Last updated: 2025-02-15_
+_Last updated: 2025-10-25_
 
 Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md for cross-links.
 
@@ -55,6 +55,16 @@ Quick start:
 - Configure Crush with `python3 -m pmoves.tools.mini_cli crush setup` so your local Crush CLI session understands PMOVES context paths, providers, and MCP stubs.
   - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
 - TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces.
+
+### UI Workspace (Next.js + Supabase Platform Kit)
+
+- Location: `pmoves/ui/` (Next.js App Router + Tailwind). The workspace consumes the same Supabase CLI stack that powers the core services.
+- Prerequisites: run `make supa-start` and `make supa-status` so `pmoves/.env.local` is populated with `SUPABASE_URL`, anon key, service role key, REST URL, and realtime URL.
+- Env loading: `pmoves/ui/next.config.js` automatically reads `pmoves/.env.local` and exposes the public variables to the browser bundle. Update that file if you need to point the UI at a remote Supabase instance.
+- Install dependencies: `cd pmoves/ui && npm install` (or `yarn install`).
+- Dev server: `npm run dev` / `yarn dev` (default http://localhost:3000). Pair with `make supa-start` to back the UI against the local Supabase CLI gateway.
+- Other scripts: `npm run lint`, `npm run build`, `npm run start`.
+- Shared helpers: `pmoves/ui/config/index.ts` exposes API + websocket URLs, while `pmoves/ui/lib/supabaseClient.ts` returns typed Supabase clients (browser/service-role). These helpers throw descriptive errors if the Supabase env vars are missing.
 
 ### Crush CLI Integration
 
