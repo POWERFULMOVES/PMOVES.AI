@@ -64,3 +64,23 @@ The `mcp_server.py` helper exposes a lightweight HTTP client (`ArchonClient`) th
 - **Prompt catalog missing**: run `make supabase-bootstrap` (or rerun `make supabase-initdb`) so `public.archon_prompts` exists. The init script lives at `supabase/initdb/09_archon_prompts.sql` and prevents the PostgREST `PGRST205` warning during startup.
 - **Vendor missing**: run `git submodule update --init --recursive` if `vendor/archon` was pruned.
 - **Playwright browser missing**: the container now installs Chromium via `python -m playwright install --with-deps chromium`. If you rebuild the image without that step, rerun the command (or `playwright install chromium`) so crawl workflows can launch a browser.
+
+## Archon Prompt Catalog Workflow (UI)
+
+The dashboard page at `pmoves/ui/app/dashboard/archon-prompts/page.tsx` surfaces the `public.archon_prompts` table so operators can review, edit, and retire prompt templates without leaving the PMOVES stack.
+
+1. **Read access** uses the anonymous Supabase key and only requires membership in the `authenticated` role. Results are filtered client-side and the helpers in `pmoves/ui/lib/archonPrompts.ts` wrap `supabase.from('archon_prompts')` for consistency with the rest of the stack.
+2. **Writes require the service-role key.** Row level security only allows `insert`, `update`, and `delete` when the Supabase client authenticates with the service role. The UI delegates to server-side helpers that instantiate a service-role client; never expose the key in the browser bundle.
+3. **Optimistic updates** keep the UI responsive. The page updates the table immediately and then reconciles with the Supabase response. Duplicate prompt names throw a `23505` error which is surfaced to the user as “Prompt name already exists.” Policy violations surface the RLS error copy directly so the operator can double check credentials.
+
+### Required permissions
+
+- `service_role`: full CRUD (handled by `createArchonPrompt`, `updateArchonPrompt`, `deleteArchonPrompt`).
+- `authenticated`: read-only (`listArchonPrompts`).
+- Ensure `.env.local` or deployment secrets include `SUPABASE_SERVICE_ROLE_KEY` for the server layer and `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` for the browser.
+
+### Rollback
+
+- **UI rollback:** redeploy the previous UI build or revert the `pmoves/ui/app/dashboard/archon-prompts` route in Git.
+- **Data rollback:** if a prompt edit needs to be undone, copy the `archon_prompts` row from the `supabase` point-in-time recovery snapshot or re-run the seed data in `pmoves/supabase/initdb/10_archon_prompts_seed.sql` after confirming with stakeholders.
+- **Credential rollback:** rotate the `SUPABASE_SERVICE_ROLE_KEY` if it was exposed during troubleshooting, then restart services depending on the Archon prompt helpers so new tokens propagate.
