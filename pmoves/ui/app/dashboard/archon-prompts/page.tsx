@@ -6,11 +6,85 @@ import {
   ArchonPromptInput,
   DuplicatePromptNameError,
   PolicyViolationError,
-  createArchonPrompt,
-  deleteArchonPrompt,
   listArchonPrompts,
-  updateArchonPrompt,
 } from '../../../lib/archonPrompts';
+
+type ArchonPromptErrorPayload = {
+  error?: {
+    type?: string;
+    message?: string;
+  };
+};
+
+async function readJson(response: Response) {
+  try {
+    return (await response.json()) as ArchonPromptErrorPayload | { data: ArchonPrompt };
+  } catch (err) {
+    return null;
+  }
+}
+
+async function handleApiError(response: Response, fallback: string): Promise<never> {
+  const payload = (await readJson(response)) as ArchonPromptErrorPayload | null;
+  const message = payload?.error?.message ?? fallback;
+  const type = payload?.error?.type;
+
+  if (type === 'DuplicatePromptNameError') {
+    throw new DuplicatePromptNameError(message);
+  }
+
+  if (type === 'PolicyViolationError') {
+    throw new PolicyViolationError(message);
+  }
+
+  throw new Error(message);
+}
+
+async function createPromptRequest(payload: ArchonPromptInput): Promise<ArchonPrompt> {
+  const response = await fetch('/api/archon-prompts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    await handleApiError(response, 'Failed to create prompt.');
+  }
+
+  const body = (await readJson(response)) as { data?: ArchonPrompt } | null;
+  if (!body?.data) {
+    throw new Error('Supabase did not return the created prompt.');
+  }
+  return body.data;
+}
+
+async function updatePromptRequest(id: string, payload: ArchonPromptInput): Promise<ArchonPrompt> {
+  const response = await fetch(`/api/archon-prompts/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    await handleApiError(response, 'Failed to update prompt.');
+  }
+
+  const body = (await readJson(response)) as { data?: ArchonPrompt } | null;
+  if (!body?.data) {
+    throw new Error('Supabase did not return the updated prompt.');
+  }
+  return body.data;
+}
+
+async function deletePromptRequest(id: string): Promise<void> {
+  const response = await fetch(`/api/archon-prompts/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    await handleApiError(response, 'Failed to delete prompt.');
+  }
+}
 
 type FormState = {
   prompt_name: string;
@@ -116,7 +190,7 @@ export default function ArchonPromptsPage() {
       setPrompts(optimistic);
 
       try {
-        const updated = await updateArchonPrompt(editingPrompt.id, payload);
+        const updated = await updatePromptRequest(editingPrompt.id, payload);
         setPrompts((current) =>
           current.map((prompt) => (prompt.id === updated.id ? updated : prompt))
         );
@@ -145,7 +219,7 @@ export default function ArchonPromptsPage() {
     setPrompts((current) => [optimisticPrompt, ...current]);
 
     try {
-      const created = await createArchonPrompt(payload);
+      const created = await createPromptRequest(payload);
       setPrompts((current) =>
         current.map((prompt) => (prompt.id === temporaryId ? created : prompt))
       );
@@ -167,7 +241,7 @@ export default function ArchonPromptsPage() {
     setPrompts((current) => current.filter((item) => item.id !== prompt.id));
 
     try {
-      await deleteArchonPrompt(prompt.id);
+      await deletePromptRequest(prompt.id);
       if (editingPrompt?.id === prompt.id) {
         resetForm();
       }

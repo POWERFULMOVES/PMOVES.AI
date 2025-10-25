@@ -139,19 +139,22 @@ describe('archonPrompts helpers', () => {
 
 describe('ArchonPromptsPage', () => {
   const listSpy = vi.spyOn(archonPromptsModule, 'listArchonPrompts');
-  const createSpy = vi.spyOn(archonPromptsModule, 'createArchonPrompt');
-  const updateSpy = vi.spyOn(archonPromptsModule, 'updateArchonPrompt');
-  const deleteSpy = vi.spyOn(archonPromptsModule, 'deleteArchonPrompt');
+  const originalFetch: typeof fetch | undefined = globalThis.fetch;
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     listSpy.mockReset();
     listSpy.mockResolvedValue([]);
-    createSpy.mockReset();
-    updateSpy.mockReset();
-    deleteSpy.mockReset();
+    fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
   afterEach(() => {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as any).fetch;
+    }
     vi.clearAllMocks();
   });
 
@@ -194,8 +197,8 @@ describe('ArchonPromptsPage', () => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    const createDeferred = deferred<ArchonPrompt>();
-    createSpy.mockImplementation(() => createDeferred.promise);
+    const createDeferred = deferred<Response>();
+    fetchMock.mockImplementationOnce(() => createDeferred.promise);
 
     render(<ArchonPromptsPage />);
 
@@ -214,11 +217,19 @@ describe('ArchonPromptsPage', () => {
     });
 
     await act(async () => {
-      createDeferred.resolve(createdPrompt);
+      createDeferred.resolve(
+        new Response(JSON.stringify({ data: createdPrompt }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
     });
 
-    await waitFor(() => expect(createSpy).toHaveBeenCalled());
-    expect(createSpy.mock.calls[0][0]).toMatchObject<ArchonPromptInput>({
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/archon-prompts');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toMatchObject<ArchonPromptInput>({
       prompt_name: 'fresh_prompt',
       prompt: 'Fresh body',
       description: 'Optional',
@@ -230,8 +241,8 @@ describe('ArchonPromptsPage', () => {
 
   it('displays duplicate prompt errors', async () => {
     listSpy.mockResolvedValueOnce([]);
-    const createDeferred = deferred<ArchonPrompt>();
-    createSpy.mockImplementation(() => createDeferred.promise);
+    const createDeferred = deferred<Response>();
+    fetchMock.mockImplementationOnce(() => createDeferred.promise);
 
     render(<ArchonPromptsPage />);
     await waitFor(() => expect(listSpy).toHaveBeenCalled());
@@ -244,7 +255,20 @@ describe('ArchonPromptsPage', () => {
     });
 
     await act(async () => {
-      createDeferred.reject(new DuplicatePromptNameError());
+      createDeferred.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              type: 'DuplicatePromptNameError',
+              message: 'A prompt with this name already exists. Choose a different name.',
+            },
+          }),
+          {
+            status: 409,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      );
     });
 
     await waitFor(() =>
@@ -263,8 +287,8 @@ describe('ArchonPromptsPage', () => {
     };
 
     listSpy.mockResolvedValueOnce([row]);
-    const deleteDeferred = deferred<void>();
-    deleteSpy.mockImplementation(() => deleteDeferred.promise);
+    const deleteDeferred = deferred<Response>();
+    fetchMock.mockImplementationOnce(() => deleteDeferred.promise);
 
     render(<ArchonPromptsPage />);
     await waitFor(() => expect(screen.getAllByTestId('prompt-row')).toHaveLength(1));
@@ -272,12 +296,26 @@ describe('ArchonPromptsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /delete/i }));
 
     await act(async () => {
-      deleteDeferred.reject(new PolicyViolationError());
+      deleteDeferred.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              type: 'PolicyViolationError',
+              message: 'Action blocked by row level security policy. Use a service role key for writes.',
+            },
+          }),
+          {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      );
     });
 
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('Action blocked by row level security policy')
     );
+    expect(fetchMock).toHaveBeenCalledWith(`/api/archon-prompts/${row.id}`, expect.objectContaining({ method: 'DELETE' }));
     expect(screen.getAllByTestId('prompt-row')).toHaveLength(1);
   });
 });
