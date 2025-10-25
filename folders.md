@@ -322,5 +322,12 @@ PY
 │       ├── seed_studio_board.ps1
 │       ├── seed_studio_board.sh
 │       └── smoke_webhook.py
+├── pmoves/ui/
+│   ├── app/
+│   ├── config/
+│   ├── hooks/
+│   ├── lib/
+│   ├── middleware.ts
+│   └── package.json
 └── repomix-output.xml
 ```
