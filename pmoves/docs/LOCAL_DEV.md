@@ -1,4 +1,5 @@
 # Local Development & Networking
+_Last updated: 2025-10-23_
 
 Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md for cross-links.
 
@@ -21,6 +22,8 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
 - publisher-discord: 8094 -> 8092 (internal name `publisher-discord`)
 - notebook-sync: 8095 (internal name `notebook-sync`) – polls Open Notebook and ships normalized content into LangExtract + extract-worker.
+- channel-monitor: 8097 (internal name `channel-monitor`) – watches YouTube channels and queues new videos for pmoves-yt ingestion.
+  - Tune yt-dlp via env: `YT_ARCHIVE_DIR` + `YT_ENABLE_DOWNLOAD_ARCHIVE` manage archive files, `YT_SUBTITLE_LANGS`/`YT_SUBTITLE_AUTO` pull captions, `YT_POSTPROCESSORS_JSON` overrides post-processing (defaults embed metadata + thumbnails).
 
 Optional TensorZero gateway profile (`docker compose --profile tensorzero up tensorzero-clickhouse tensorzero-gateway tensorzero-ui`):
 - tensorzero-clickhouse: 8123 (internal name `tensorzero-clickhouse`)
@@ -79,6 +82,51 @@ Manual notes: `env.shared.generated` now carries the Supabase + Meili secrets co
 - `OPEN_NOTEBOOK_API_URL` (+ optional `OPEN_NOTEBOOK_API_TOKEN`) to enable the notebook-sync worker (read from `env.shared`). Adjust `NOTEBOOK_SYNC_INTE
 RVAL_SECONDS`, `NOTEBOOK_SYNC_DB_PATH`, or override `LANGEXTRACT_URL` / `EXTRACT_WORKER_URL` when targeting external services.
 
+## Remote Access via Cloudflare Tunnel
+
+Use the `cloudflare` Compose profile and helper Make targets to expose a local or self-hosted stack without hand-crafted SSH tunnels.
+
+### 1. Generate connector credentials
+
+1. In Cloudflare Zero Trust → **Access → Tunnels**, click **Add a connector**.
+2. Choose **Docker** and copy the generated token (preferred) or download the `cert.pem` credentials bundle for existing accounts. When defining public hostnames, point the origin service at the PMOVES endpoint you plan to surface (e.g., `http://host.docker.internal:8086` for a local gateway or `http://hi-rag-gateway-v2:8086` when the tunnel runs on the same Docker network as the services).
+
+### 2. Wire the environment
+
+- Add the token (or tunnel name) to `pmoves/env.shared`:
+  ```env
+  CLOUDFLARE_TUNNEL_TOKEN=eyJ...   # token path
+  # OR
+  CLOUDFLARE_TUNNEL_NAME=pmoves-gateway
+  CLOUDFLARE_CREDENTIALS_DIR=./cloudflared
+  ```
+- For cert-based flows, drop the downloaded `cert.pem` and tunnel JSON into the `pmoves/cloudflared/` directory (or override `CLOUDFLARE_CREDENTIALS_DIR`) so the container can read them.
+
+### 3. Start / stop the tunnel
+
+- `make up-cloudflare` — loads `env.shared`, starts the `cloudflared` connector, and attempts to print the latest public URL.
+- `make cloudflare-url` — reprints the most recent `https://…` surfaced in the connector logs.
+- `make logs-cloudflare` — follow connector logs (handy while waiting for registration or debugging errors).
+- `make down-cloudflare` / `make restart-cloudflare` — stop or bounce the connector without touching the rest of the stack.
+
+### 4. Local vs. self-hosted considerations
+
+- **Local laptops / desktops**: configure the origin service in Cloudflare Zero Trust as `http://host.docker.internal:<port>` so requests reach services running on the host network. Ensure Docker Desktop exposes the relevant ports.
+- **VPS / bare metal hosts**: when the tunnel runs alongside PMOVES containers, map hostnames to in-network services (e.g., `http://hi-rag-gateway-v2:8086`, `http://render-webhook:8085`, or `http://postgrest:3000`). No additional reverse proxy is required because `cloudflared` attaches to `pmoves-net`.
+- **Firewall rules**: allow outbound TCP 7844 and 443 so `cloudflared` can reach Cloudflare’s edge. No inbound ports are needed, but keep the local firewall open for whichever services the tunnel targets (Supabase REST, Hi‑RAG gateway, etc.).
+
+### 5. Validate connectivity
+
+1. Tail the connector: `make logs-cloudflare` — wait for `Registered tunnel connection` + a public URL.
+2. Print the URL directly: `make cloudflare-url`.
+3. Hit the exposed service from outside your network:
+   ```bash
+   curl -i https://<tunnel-host>/healthz
+   ```
+   Replace `/healthz` with an endpoint that matches the service you exposed (e.g., `/hirag/query`). Capture these commands and responses in the PR evidence log when validating remote access.
+
+`make down-cloudflare` is idempotent, so it is safe to run after validation to ensure the connector shuts down cleanly.
+
 ## External-Mode (reuse existing infra)
 If you already run Neo4j, Meilisearch, Qdrant, or Supabase elsewhere, you can prevent PMOVES from starting local containers:
 
@@ -127,6 +175,22 @@ OpenAI-compatible presets:
 - Groq: set `OPENAI_API_BASE=https://api.groq.com/openai` and `OPENAI_API_KEY=<token>`.
 - LM Studio: set `OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1` and leave API key blank.
 
+### Cloudflare Workers AI (LangExtract)
+
+- Enable the provider by setting `LANGEXTRACT_PROVIDER=cloudflare` and exporting:
+  - `CLOUDFLARE_ACCOUNT_ID=<uuid from dash.cloudflare.com>`
+  - `CLOUDFLARE_API_TOKEN=<token with Workers AI permissions>`
+  - `CLOUDFLARE_LLM_MODEL=@cf/meta/llama-3.1-8b-instruct` (or any catalog slug)
+- Optional overrides:
+  - `CLOUDFLARE_API_BASE=https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run` (default) — swap to a mock URL during tests.
+  - `OPENAI_API_BASE=https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai` for other OpenAI-compatible clients.
+- Free plan quota (as of 2025-10-23): 10k text tokens/day and ~100 generations/day for meta Llama 3.1 models. Queue longer batch ingests or throttle concurrency to stay within limits.
+- Local dev workflow:
+  1. Add the variables to `.env` and `env.shared` (or rely on `make env-setup`).
+  2. Run `LANGEXTRACT_PROVIDER=cloudflare uvicorn pmoves.services.langextract.api:app --reload` to exercise the FastAPI endpoints.
+  3. Capture smoke evidence with `curl -X POST http://localhost:8084/extract/text ...` once the mock or real Workers AI token is available.
+- VPS deployment: sync the same variables into your secret manager (Docker Swarm, Fly.io, Coolify). Document the base URL helper in `.env` so ops teams can rotate tokens without rediscovering the Cloudflare path.
+
 ## Start
 - `make up` (data + workers, v2 CPU on :8086, v2 GPU on :8087 when available)
 - `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090 when available)
@@ -138,12 +202,13 @@ OpenAI-compatible presets:
 
 ### Notebook Sync Worker
 
-- Included with the default `make up` stack once `OPEN_NOTEBOOK_API_URL` is configured.
+- Included with the default `make up` stack once `OPEN_NOTEBOOK_API_URL` is configured (defaults to `http://localhost:5055`).
 - Start individually: `docker compose up notebook-sync` (requires the data + workers profile services).
 - Health check: `curl http://localhost:8095/healthz`.
 - Manual poll: `curl -X POST http://localhost:8095/sync` (returns HTTP 409 while a run is in-flight).
 - Interval tuning: `NOTEBOOK_SYNC_INTERVAL_SECONDS` (seconds, defaults to 300).
 - Cursor storage: `NOTEBOOK_SYNC_DB_PATH` (default `/data/notebook_sync.db` mounted via the `notebook-sync-data` volume).
+- When you launch `make notebook-up`, the bundled SurrealDB endpoint now defaults to `ws://localhost:8000/rpc`; override `SURREAL_URL`/`SURREAL_ADDRESS` in `.env.local` if you target an external Surreal instance. The UI ships with `OPEN_NOTEBOOK_PASSWORD=changeme`—log in with that and update it immediately for your environment.
 
 ### Events (NATS)
 

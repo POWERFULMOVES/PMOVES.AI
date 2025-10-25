@@ -37,18 +37,41 @@ except ImportError as exc:
 
 try:
     import numpy as np
-    from sentence_transformers import SentenceTransformer
 except ImportError as exc:
-    raise SystemExit(
-        "sentence-transformers is required. Install with: pip install sentence-transformers"
-    ) from exc
+    raise SystemExit("numpy is required. Install with: pip install numpy") from exc
+
+try:
+    from sentence_transformers import SentenceTransformer  # type: ignore
+    SentenceTransformerType = SentenceTransformer
+except ImportError:
+    SentenceTransformer = None  # Optional when using remote or non-sentence-transformer models
+    SentenceTransformerType = Any
 
 
 # Environment configuration
 SUPABASE_URL = os.environ.get("SUPA_REST_URL", "http://localhost:54321")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 EMBEDDING_MODEL = os.environ.get("YOUTUBE_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 dimension
+EMBEDDING_API_URL = os.environ.get("YOUTUBE_EMBEDDING_API_URL")
+
+
+def _resolve_embedding_target(model_name: str) -> tuple[str, int]:
+    """Resolve Supabase column + dimension for supported embedding backends."""
+    normalized = (model_name or "").lower()
+
+    if "qwen3-embedding" in normalized or "qwen2-embedding" in normalized or "qwen-embedding" in normalized:
+        # Qwen embedding families expose 2560-d vectors (Matryoshka variants can be truncated)
+        return "embedding_qwen", 2560
+    if "embeddinggemma" in normalized or "embedding-gecko" in normalized:
+        # Google embedding models default to 768 dims
+        return "embedding_gemma", 768
+    # Default to sentence-transformers style 384-d vectors
+    return "embedding_st", 384
+
+
+_DEFAULT_COLUMN, _DEFAULT_DIM = _resolve_embedding_target(EMBEDDING_MODEL)
+EMBEDDING_COLUMN = os.environ.get("YOUTUBE_EMBEDDING_COLUMN", _DEFAULT_COLUMN)
+EMBEDDING_DIM = int(os.environ.get("YOUTUBE_EMBEDDING_DIM", str(_DEFAULT_DIM)))
 
 # FastAPI app
 app = FastAPI(
@@ -58,12 +81,18 @@ app = FastAPI(
 )
 
 # Global state
-_embedding_model: Optional[SentenceTransformer] = None
+_embedding_model: Optional[SentenceTransformerType] = None
 _supabase_client: Optional[httpx.AsyncClient] = None
+_embedding_api_client: Optional[httpx.AsyncClient] = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model() -> SentenceTransformerType:
     """Lazy-load embedding model."""
+    if SentenceTransformer is None:
+        raise RuntimeError(
+            "sentence-transformers not installed. Install it or set YOUTUBE_EMBEDDING_API_URL "
+            "to use an external embedding endpoint."
+        )
     global _embedding_model
     if _embedding_model is None:
         _embedding_model = SentenceTransformer(EMBEDDING_MODEL)
@@ -87,6 +116,47 @@ def get_supabase_client() -> httpx.AsyncClient:
             timeout=30.0
         )
     return _supabase_client
+
+
+async def get_embedding_api_client() -> httpx.AsyncClient:
+    """HTTP client for remote embedding services."""
+    global _embedding_api_client
+    if _embedding_api_client is None:
+        _embedding_api_client = httpx.AsyncClient(timeout=30.0)
+    return _embedding_api_client
+
+
+async def encode_query_text(text: str) -> np.ndarray:
+    """Generate a query embedding using either local model or remote service."""
+    if EMBEDDING_API_URL:
+        client = await get_embedding_api_client()
+        try:
+            resp = await client.post(
+                EMBEDDING_API_URL,
+                json={"model": EMBEDDING_MODEL, "inputs": [text]},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"Embedding API request failed: {exc}") from exc
+        embeddings = data.get("embeddings") or data.get("data")
+        if not embeddings:
+            raise HTTPException(status_code=502, detail="Embedding API response missing 'embeddings'")
+        vector = np.asarray(embeddings[0], dtype=np.float32)
+    else:
+        model = get_embedding_model()
+        vector = model.encode([text], normalize_embeddings=True)[0]
+        vector = np.asarray(vector, dtype=np.float32)
+    return vector
+
+
+def adjust_vector_dimension(vector: np.ndarray, target_dim: int) -> np.ndarray:
+    """Pad or truncate vectors to target dimension for cosine similarity."""
+    if vector.size > target_dim:
+        return vector[:target_dim]
+    if vector.size < target_dim:
+        return np.pad(vector, (0, target_dim - vector.size))
+    return vector
 
 
 # Request/Response models
@@ -124,6 +194,7 @@ class YouTubeVideoMetadata(BaseModel):
     duration: Optional[float] = None
     transcript: Optional[str] = None
     embedding: Optional[List[float]] = None
+    embedding_column: Optional[str] = None
 
 
 # API Endpoints
@@ -143,8 +214,8 @@ async def search_youtube_transcripts(request: YouTubeSearchRequest):
     """
     try:
         # Generate query embedding
-        model = get_embedding_model()
-        query_embedding = model.encode([request.query], normalize_embeddings=True)[0]
+        query_embedding = await encode_query_text(request.query)
+        query_embedding = adjust_vector_dimension(query_embedding, EMBEDDING_DIM)
         
         # Search Supabase for similar transcripts (assuming youtube_transcripts table exists)
         client = get_supabase_client()
@@ -154,7 +225,7 @@ async def search_youtube_transcripts(request: YouTubeSearchRequest):
         resp = await client.get(
             "/youtube_transcripts",
             params={
-                "select": "video_id,title,channel,url,published_at,duration,transcript,embedding",
+                "select": f"video_id,title,channel,url,published_at,duration,transcript,{EMBEDDING_COLUMN}",
                 "limit": "100"  # Fetch top 100 for client-side ranking
             }
         )
@@ -164,15 +235,18 @@ async def search_youtube_transcripts(request: YouTubeSearchRequest):
         # Compute similarities
         results = []
         for transcript in transcripts:
-            if not transcript.get("embedding"):
+            embedding_values = transcript.get(EMBEDDING_COLUMN)
+            if not embedding_values:
                 continue
             
             # Compute cosine similarity
-            stored_embedding = np.array(transcript["embedding"], dtype=np.float32)
-            query_emb = np.array(query_embedding, dtype=np.float32)
+            stored_embedding = np.asarray(embedding_values, dtype=np.float32)
+            stored_embedding = adjust_vector_dimension(stored_embedding, EMBEDDING_DIM)
             
-            similarity = float(np.dot(query_emb, stored_embedding) / 
-                             (np.linalg.norm(query_emb) * np.linalg.norm(stored_embedding)))
+            denom = (np.linalg.norm(query_embedding) * np.linalg.norm(stored_embedding))
+            if denom == 0.0:
+                continue
+            similarity = float(np.dot(query_embedding, stored_embedding) / denom)
             
             if similarity >= request.threshold:
                 # Extract relevant excerpt from transcript
@@ -219,7 +293,7 @@ async def get_youtube_video(video_id: str):
             "/youtube_transcripts",
             params={
                 "video_id": f"eq.{video_id}",
-                "select": "video_id,title,description,channel,url,published_at,duration,transcript,embedding"
+                "select": f"video_id,title,description,channel,url,published_at,duration,transcript,{EMBEDDING_COLUMN}"
             }
         )
         resp.raise_for_status()
@@ -238,7 +312,8 @@ async def get_youtube_video(video_id: str):
             published_at=video.get("published_at"),
             duration=video.get("duration"),
             transcript=video.get("transcript"),
-            embedding=video.get("embedding")
+            embedding=video.get(EMBEDDING_COLUMN),
+            embedding_column=EMBEDDING_COLUMN
         )
     
     except httpx.HTTPStatusError as exc:
@@ -298,21 +373,31 @@ async def startup_event():
     print("🚀 MCP YouTube Adapter starting up...")
     print(f"   Supabase: {SUPABASE_URL}")
     print(f"   Embedding Model: {EMBEDDING_MODEL}")
+    print(f"   Embedding Column: {EMBEDDING_COLUMN} (dim={EMBEDDING_DIM})")
     
     # Pre-load embedding model
-    try:
-        model = get_embedding_model()
-        print(f"   ✅ Loaded {EMBEDDING_MODEL} ({model.get_sentence_embedding_dimension()} dimensions)")
-    except Exception as exc:
-        print(f"   ⚠️  Failed to load embedding model: {exc}")
+    if EMBEDDING_API_URL:
+        print(f"   Using remote embedding API: {EMBEDDING_API_URL}")
+    else:
+        try:
+            model = get_embedding_model()
+            dim = getattr(model, "get_sentence_embedding_dimension", lambda: None)()
+            if dim:
+                print(f"   ✅ Loaded {EMBEDDING_MODEL} ({dim} dimensions)")
+            else:
+                print(f"   ✅ Loaded {EMBEDDING_MODEL}")
+        except Exception as exc:
+            print(f"   ⚠️  Failed to load embedding model: {exc}")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown."""
-    global _supabase_client
+    global _supabase_client, _embedding_api_client
     if _supabase_client:
         await _supabase_client.aclose()
+    if _embedding_api_client:
+        await _embedding_api_client.aclose()
     print("👋 MCP YouTube Adapter shut down")
 
 

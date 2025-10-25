@@ -92,6 +92,8 @@ Implementation checklist:
 4. **Docs**
    - Update `pmoves/services/pmoves-yt/README.md`, `PMOVES_YT.md`, and `NEXT_STEPS.md` once features land.
 
+> Channel monitor integration now tracked separately in `PMOVES.yt/CHANNEL_MONITOR_IMPLEMENTATION.md`. Complete that checklist (service scaffold, migration, queue wiring, smoke tests) before marking PMOVES.YT finalized.
+
 Dependencies: Jellyfin bridge (for playback URLs), presign service (signed uploads), hi-rag gateway (geometry emission).
 
 ---

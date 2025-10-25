@@ -79,13 +79,6 @@ def yt_search(body: Dict[str,Any] = Body(...)):
 
 **File**: `pmoves/scripts/backfill_jellyfin_metadata.py`
 
-Update the `MCP_DOCKER_BASE_URL` constant to point to pmoves-yt:
-
-```python
-# Line ~25
-MCP_DOCKER_BASE_URL = "http://localhost:8077"  # pmoves-yt service
-```
-
 Update the `search_youtube_transcripts` function:
 
 ```python
@@ -124,6 +117,7 @@ def load_env() -> Dict[str, str]:
     return env
 ```
 
+> Configure `PMOVES_YT_URL` to match the pmoves-yt FastAPI service (default `http://localhost:8077`).
 Update the `backfill()` function client initialization:
 
 ```python
@@ -139,6 +133,13 @@ async def backfill(limit: int, dry_run: bool, sleep: float, start_after: Optiona
         httpx.AsyncClient(base_url=env["PMOVES_YT_URL"], timeout=30.0) as yt_client:
         # ... rest of function, replace mcp_client with yt_client
 ```
+
+> **Embedding note:** the Supabase table now persists three vector columns:
+> - `embedding_st` (384 dims) for MiniLM/sentence-transformers models
+> - `embedding_gemma` (768 dims) for `google/embeddinggemma-300m` and related Gecko models
+> - `embedding_qwen` (2560 dims) for `Qwen/Qwen3-Embedding-4B` and Matryoshka variants  
+> Configure `YOUTUBE_EMBEDDING_MODEL`, optional `YOUTUBE_EMBEDDING_COLUMN`, and `YOUTUBE_EMBEDDING_DIM`
+> in `services/mcp_youtube_adapter.py` to pick the correct column when running semantic search.
 
 ## Step 3: Rebuild and Restart pmoves-yt
 
@@ -306,6 +307,10 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-key
 # Optional (defaults provided)
 PMOVES_YT_URL=http://localhost:8077
 JELLYFIN_PUBLIC_BASE_URL=http://172.21.119.177:8096
+YOUTUBE_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2   # override for Qwen/Gemma support
+YOUTUBE_EMBEDDING_COLUMN=embedding_st                            # embedding_st | embedding_gemma | embedding_qwen
+YOUTUBE_EMBEDDING_DIM=384                                         # match selected embedding model
+YOUTUBE_EMBEDDING_API_URL=                                        # optional remote embedding endpoint
 ```
 
 ## Reference

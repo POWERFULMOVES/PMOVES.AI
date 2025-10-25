@@ -21,6 +21,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+SCRIPT_DIR = Path(__file__).resolve()
+PACKAGE_ROOT = SCRIPT_DIR.parents[1]
+REPO_ROOT = SCRIPT_DIR.parents[2]
+VENDOR_PATH = PACKAGE_ROOT / "vendor" / "python"
+for path in (PACKAGE_ROOT, REPO_ROOT):
+    if path.exists():
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+if VENDOR_PATH.exists():
+    vendor_str = str(VENDOR_PATH)
+    if vendor_str not in sys.path:
+        sys.path.insert(0, vendor_str)
+
 try:
     import httpx
 except ImportError as exc:  # pragma: no cover - easy failure mode
@@ -31,8 +45,21 @@ except ImportError as exc:  # pragma: no cover - easy failure mode
 
 try:
     from services.common.events import envelope
-except Exception as exc:  # pragma: no cover
-    raise SystemExit("Unable to import services.common.events.envelope") from exc
+except Exception:  # pragma: no cover
+    def envelope(topic: str, payload: Dict[str, Any], correlation_id: Optional[str] = None, parent_id: Optional[str] = None, source: str = "pmoves-backfill") -> Dict[str, Any]:
+        env: Dict[str, Any] = {
+            "id": os.urandom(16).hex(),
+            "topic": topic,
+            "payload": payload,
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "version": "v1",
+            "source": source,
+        }
+        if correlation_id:
+            env["correlation_id"] = correlation_id
+        if parent_id:
+            env["parent_id"] = parent_id
+        return env
 
 from services.publisher.publisher import build_published_payload, slugify
 
@@ -53,7 +80,6 @@ def load_env() -> Dict[str, str]:
         "JELLYFIN_URL": os.environ.get("JELLYFIN_URL"),
         "JELLYFIN_PUBLIC_BASE_URL": os.environ.get("JELLYFIN_PUBLIC_BASE_URL"),
         "JELLYFIN_API_KEY": os.environ.get("JELLYFIN_API_KEY"),
-        "MCP_DOCKER_URL": os.environ.get("MCP_DOCKER_URL", MCP_DOCKER_BASE_URL).rstrip("/"),
     }
     missing = [key for key, value in env.items() if value in (None, "", [])]
     if missing:

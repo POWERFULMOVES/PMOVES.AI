@@ -158,16 +158,24 @@ Add `--dry-run` and batching before production use.
      published_at timestamptz,
      duration float,
      transcript text,
-     embedding vector(384),
+     embedding_st vector(384),          -- sentence-transformers / MiniLM
+     embedding_gemma vector(768),       -- google/embeddinggemma-* family
+     embedding_qwen vector(2560),       -- Qwen/Qwen3-Embedding-* (full dimension)
      meta jsonb default '{}'::jsonb,
      created_at timestamptz default now(),
      updated_at timestamptz default now()
    );
    
-   -- Enable vector similarity search
-   create index youtube_embedding_idx on youtube_transcripts 
-   using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+   -- Enable vector similarity search for each embedding family
+   create index youtube_embedding_st_idx on youtube_transcripts 
+     using ivfflat (embedding_st vector_cosine_ops) with (lists = 100);
+   create index youtube_embedding_gemma_idx on youtube_transcripts 
+     using ivfflat (embedding_gemma vector_cosine_ops) with (lists = 100);
+   create index youtube_embedding_qwen_idx on youtube_transcripts 
+     using ivfflat (embedding_qwen vector_cosine_ops) with (lists = 100);
    ```
+   > Set `YOUTUBE_EMBEDDING_MODEL`, `YOUTUBE_EMBEDDING_COLUMN`, and optional `YOUTUBE_EMBEDDING_DIM`
+   > in the MCP adapter when switching between MiniLM, Qwen, or EmbeddingGemma vectors.
 
 3. **Start MCP YouTube adapter**:
    ```bash

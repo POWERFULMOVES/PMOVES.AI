@@ -1,4 +1,5 @@
 # Local Development & Networking
+_Last updated: 2025-10-23_
 
 Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
 
@@ -34,6 +35,16 @@ Manual notes: Create `.env` (or start with `.env.example`) and include keys from
 - `MEDIA_VIDEO_FRAMES_BUCKET` (optional) to store extracted video frames separately from the source bucket; defaults to the
   incoming media bucket when unset. Use `MEDIA_VIDEO_FRAMES_PREFIX` to customize the object key prefix (defaults to
   `media-video/frames`).
+
+## Remote Access via Cloudflare Tunnel
+
+- Configure Cloudflare Zero Trust → Access → Tunnels → **Add a connector (Docker)** to generate a tunnel token or download an account credential bundle.
+- Store the token (or `CLOUDFLARE_TUNNEL_NAME` + `CLOUDFLARE_CREDENTIALS_DIR`) in `pmoves/env.shared` so the Make targets can export them.
+- Bring the connector up/down with `make up-cloudflare`, `make down-cloudflare`, and use `make cloudflare-url` / `make logs-cloudflare` for the URL + diagnostics.
+- Local development: map the Cloudflare origin to `http://host.docker.internal:<port>` (Docker Desktop exposes host ports to containers).
+- Self-hosted/VPS: target in-network services (`http://hi-rag-gateway-v2:8086`, `http://render-webhook:8085`, `http://postgrest:3000`). The `cloudflared` service lives on `pmoves-net`, so no extra reverse proxy is required.
+- Firewall reminders: allow outbound 7844/443 for the connector; ensure the exposed service port remains reachable inside Docker or via host firewall rules.
+- Validation checklist: `make logs-cloudflare` → wait for the registered URL, `make cloudflare-url` to print it, then `curl https://<url>/healthz` (or matching endpoint) and capture the output in the evidence log.
 
 ## External-Mode (reuse existing infra)
 If you already run Neo4j, Meilisearch, Qdrant, or Supabase elsewhere, you can prevent PMOVES from starting local containers:
@@ -82,6 +93,20 @@ OpenAI-compatible presets:
 - OpenRouter: set `OPENAI_API_BASE=https://openrouter.ai/api` and `OPENAI_API_KEY=<token>`.
 - Groq: set `OPENAI_API_BASE=https://api.groq.com/openai` and `OPENAI_API_KEY=<token>`.
 - LM Studio: set `OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1` and leave API key blank.
+
+### Workers AI quick start
+
+- Provider flag: `LANGEXTRACT_PROVIDER=cloudflare`.
+- Required env:
+  - `CLOUDFLARE_ACCOUNT_ID=<from dashboard>`
+  - `CLOUDFLARE_API_TOKEN=<Workers AI token>`
+  - `CLOUDFLARE_LLM_MODEL=@cf/meta/llama-3.1-8b-instruct` (default).
+- Optional:
+  - `CLOUDFLARE_API_BASE` to hit mocks/tunnels; defaults to `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run`.
+  - `OPENAI_API_BASE=https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai` to reuse the shim elsewhere.
+- Free tier reminder: 10k tokens/day + 100 generations/day on the base tier. Stage large re-ingest jobs or upgrade before running multi-hour LangExtract batches.
+- Local dev: store secrets in `.env` + `env.shared`, run `uvicorn pmoves.services.langextract.api:app --reload`, and capture a smoke `curl` once the provider responds.
+- VPS/Hybrid: sync via `python3 -m pmoves.tools.secrets_sync generate`, push to the remote secret store, and annotate `.env` with the helper base URL comment for on-call rotation.
 
 ## Start
 - `make up` (v2 gateway by default)

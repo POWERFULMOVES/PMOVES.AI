@@ -91,15 +91,21 @@ create table if not exists youtube_transcripts (
   published_at timestamptz,
   duration float,
   transcript text,
-  embedding vector(384),  -- all-MiniLM-L6-v2 dimensions
+  embedding_st vector(384),          -- sentence-transformers / MiniLM baseline
+  embedding_gemma vector(768),       -- google/embeddinggemma-* family
+  embedding_qwen vector(2560),       -- Qwen/Qwen3-Embedding-* (full dimension)
   meta jsonb default '{}'::jsonb,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
 -- Enable pgvector similarity search
-create index youtube_embedding_idx on youtube_transcripts 
-using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+create index youtube_embedding_st_idx on youtube_transcripts 
+  using ivfflat (embedding_st vector_cosine_ops) with (lists = 100);
+create index youtube_embedding_gemma_idx on youtube_transcripts 
+  using ivfflat (embedding_gemma vector_cosine_ops) with (lists = 100);
+create index youtube_embedding_qwen_idx on youtube_transcripts 
+  using ivfflat (embedding_qwen vector_cosine_ops) with (lists = 100);
 
 -- RLS policies (adjust as needed)
 alter table youtube_transcripts enable row level security;
@@ -300,8 +306,13 @@ MCP_DOCKER_URL="http://localhost:8081"
 SUPA_REST_URL="http://localhost:54321"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
-# Embedding Model
-YOUTUBE_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
+# Embedding configuration
+YOUTUBE_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"   # or Qwen/Qwen3-Embedding-4B, google/embeddinggemma-300m
+YOUTUBE_EMBEDDING_COLUMN="embedding_st"                            # optional override (embedding_st | embedding_gemma | embedding_qwen)
+YOUTUBE_EMBEDDING_DIM="384"                                        # optional override, matches selected model
+
+# Optional remote embedding API (skip local SentenceTransformer load)
+YOUTUBE_EMBEDDING_API_URL="http://localhost:8086/embeddings"       # hi-rag or custom embedding endpoint
 ```
 
 ## Troubleshooting
@@ -322,13 +333,15 @@ uvicorn services.mcp_youtube_adapter:app --port 8081
 
 **Solution**: Populate the corpus first using PMOVES.yt batch processor or manually insert test data:
 ```sql
-insert into youtube_transcripts (video_id, title, url, transcript, embedding)
+insert into youtube_transcripts (video_id, title, url, transcript, embedding_st, embedding_gemma, embedding_qwen)
 values (
   'test123',
   'Test Video',
   'https://youtube.com/watch?v=test123',
   'This is a test transcript about machine learning and AI.',
-  array_fill(0.1::float, array[384])::vector  -- Replace with real embedding
+  array_fill(0.1::float, array[384])::vector,   -- Replace with MiniLM embedding or null
+  null,                                         -- Optional EmbeddingGemma vector
+  null                                          -- Optional Qwen vector
 );
 ```
 
@@ -376,8 +389,8 @@ where id = 'your-row-id';
 - pgvector ivfflat index improves search speed for large corpora (>10k videos)
 - Consider increasing `lists` parameter for larger datasets:
   ```sql
-  create index youtube_embedding_idx on youtube_transcripts 
-  using ivfflat (embedding vector_cosine_ops) with (lists = 500);
+  create index youtube_embedding_qwen_idx on youtube_transcripts 
+    using ivfflat (embedding_qwen vector_cosine_ops) with (lists = 500);
   ```
 
 ## Future Enhancements

@@ -100,6 +100,7 @@ This working session establishes the concrete implementation tasks needed to clo
 - Faster-whisper GPU migration: record Jetson vs desktop flag differences and expected `make` smoke commands.
 - Gemma integration primer: baseline Ollama config (`gemma2:9b-instruct`), HF transformer fallback, and embedding compatibility notes.
 - API/observability/security hardening backlog: request validation, OpenAPI doc generation, metrics to expose, signed URL enforcement, and optional content filters.
+- Channel monitor uplift: promote prototype plan (`PMOVES.yt/CHANNEL_MONITOR_IMPLEMENTATION.md`), lock queue transport decision, draft Supabase migration, and wire smoke coverage (`make yt-channel-monitor-smoke`).
 
 ## 5. Next Session Setup Checklist
 

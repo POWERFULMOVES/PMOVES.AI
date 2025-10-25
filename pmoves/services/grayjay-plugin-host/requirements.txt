@@ -1,0 +1,4 @@
+fastapi==0.114.2
+uvicorn[standard]==0.30.6
+pyqrcode==1.2.1
+pydantic==2.12.3

@@ -1,8 +1,16 @@
 # M2 Automation Kickoff & Roadmap Prep Plan
 Note: For cross-references, see pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-10-20_
+_Last updated: 2025-10-23_
 
 This working session establishes the concrete implementation tasks needed to close Milestone M2 while warming up broader roadmap threads for Milestones M3–M5. It consolidates the operational reminders from the sprint brief and ties each step to the canonical checklists in `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`, `pmoves/docs/NEXT_STEPS.md`, and `pmoves/docs/ROADMAP.md`.
+
+## Session Log (2025-10-23)
+
+- Hardened the PMOVES.yt channel monitor queue path: status transitions now capture `processing` → `queued`/`completed`/`failed` timestamps in Supabase metadata, added `/api/monitor/status` callback guarded by `CHANNEL_MONITOR_SECRET`, and pytest coverage exercises happy-path + failure flows (`pytest pmoves/services/channel-monitor/tests`). Pending: run `make channel-monitor-smoke` once pmoves-yt and Supabase are online to log evidence.
+- Pulled in yt-dlp optional deps (`yt-dlp[default]`, `curl-cffi`, AtomicParsley) and exposed archive/subtitle/postprocessor knobs via `YT_*` env + `yt_options` blocks so playlists skip duplicates, embed metadata, and capture captions during backfill.
+- Authored `PMOVES.yt/USER_PREFERENCES_AND_INSIGHTS.md`, defining the user personalization architecture (Supabase tables, per-user `yt_options`, PMOVES.TV channel scheduling) to support custom playlists/likes ingestion and engagement dashboards.
+- Added multi-source tooling: channel monitor now supports YouTube playlists + SoundCloud feeds via yt-dlp flat extraction, and `python -m pmoves.tools.register_media_source` appends sources with per-user namespaces/archive settings.
+- Introduced Supabase-backed personalization schema (`pmoves.user_tokens`, `pmoves.user_sources`, `pmoves.user_ingest_runs`) with channel monitor APIs for token + user-source registration; dynamic sources now merge with static config for stats and check loops.
 
 ## Session Log (2025-10-20)
 
@@ -200,6 +208,27 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 
 The following checklist captures what could be validated within the hosted Codex workspace. Supabase/Postgres and long-running Docker services are not available in this environment, so database migrations, seeds, and geometry smoke checks could not be executed directly. Use the recorded commands as guidance when rerunning on an operator workstation.
 
+## 2025-10-23 – Channel Monitor Personalization Bring-Up
+
+| Step | Timestamp (UTC) | Evidence |
+| --- | --- | --- |
+| Applied Supabase personalization schema (`15_user_personalization.sql`) | 2025-10-23T07:14:26Z | `docker exec supabase_db_PMOVES.AI psql -U postgres -d postgres -f pmoves/supabase/initdb/15_user_personalization.sql` |
+| Restarted channel monitor after schema apply | 2025-10-23T07:16:10Z | `docker logs pmoves-channel-monitor-1` now shows successful startup and channel polling |
+| Smoke validation for channel monitor | 2025-10-23T07:16:45Z | `make channel-monitor-smoke` → stats endpoint reachable, existing backlog shows `failed=20` due to pmoves-yt 500 |
+| Failure analysis | 2025-10-23T07:17:30Z | `select video_id, metadata->>'last_error' ... from pmoves.channel_monitoring` reveals HTTP 500 from `pmoves-yt /yt/ingest` (no new Supabase rows in `user_ingest_runs`) |
+| Next actions | — | Investigate pmoves-yt ingest 500s (likely missing yt-dlp cookies or API key), requeue once resolved; seed `pmoves.user_sources` via new API when OAuth flow ready. |
+
+## 2025-10-23 – pmoves-yt PO Token + Client Hardening
+
+| Step | Timestamp (UTC) | Evidence |
+| --- | --- | --- |
+| Upgraded pmoves-yt yt-dlp + bgutil plugin | 2025-10-23T07:42:12Z | `docker compose -p pmoves up -d --build pmoves-yt` installs `yt-dlp==2025.9.5` and `bgutil-ytdlp-pot-provider==1.2.2`. |
+| Added bgutil POT provider container | 2025-10-23T07:43:01Z | `docker compose` profile `bgutil-pot-provider` running on `http://bgutil-pot-provider:4416`. |
+| Exposed POT defaults via env | 2025-10-23T07:43:40Z | `pmoves/docker-compose.yml` now passes `BGUTIL_HTTP_BASE_URL` / `BGUTIL_DISABLE_INNERTUBE`. |
+| Web Safari fallback download (manual) | 2025-10-23T07:49:45Z | `curl http://localhost:8077/yt/download ... dQw4w9WgXcQ` returns 200 + MinIO URL. |
+| Channel monitor retry w/ cookies + web_safari | 2025-10-23T07:52:30Z | `make channel-monitor-smoke` shows `pending=26` and no failed rows; queue attempts route through new client + cookies. |
+| Remaining blockers | — | Playlist items and SoundCloud entries still bounce with SABR / connection resets; requires PO tokens for `web_safari` (per [PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)) or Invidious fallback. |
+
 | Task | Status | Notes |
 | --- | --- | --- |
 | Apply SQL bundles (`db/v5_12_grounded_personas.sql`, `db/v5_12_geometry_rls.sql`, `db/v5_12_geometry_realtime.sql`) | Blocked | `psql` access to the target Supabase/Postgres instance is not available inside the Codex sandbox. Re-run using `psql $DATABASE_URL -f <file>` and capture `ANALYZE`/`VACUUM` output plus `\d` schema diffs for the runbook. |
@@ -225,3 +254,26 @@ The following checklist captures what could be validated within the hosted Codex
 - Provision a reproducible local automation profile that bundles Supabase, Agent Zero, and n8n so the activation checklist can be executed without manual service orchestration.
 - Add mock credentials or a dedicated staging webhook to `.env.example` to clarify which secrets must be sourced before running the workflows; document rotation expectations.
 - Automate evidence capture (timestamps, log snapshots) through a scriptable checklist to reduce manual copy/paste during validation sessions.
+
+## 2025-10-23 – Invidious Companion Fallback & Grayjay Prep
+
+| Step | Timestamp (UTC) | Evidence |
+| --- | --- | --- |
+| Companion env defaults committed | 2025-10-23T09:55:12Z | `pmoves/env.shared[.example]` gains `INVIDIOUS_COMPANION_URL`, `INVIDIOUS_COMPANION_KEY`, `INVIDIOUS_FALLBACK_FORMAT`. |
+| pmoves-yt fallback updated | 2025-10-23T09:56:04Z | `_download_with_companion` posts to `/companion/youtubei/v1/player` and streams progressive MP4 when yt-dlp hits SABR. |
+| Regression tests | 2025-10-23T09:58:21Z | `./.venv/bin/pytest pmoves/services/pmoves-yt/tests/test_download.py` (new companion + SoundCloud coverage). |
+| Grayjay integration notes drafted | 2025-10-23T10:02:10Z | Created `pmoves/docs/PMOVES.AI PLANS/PMOVES.yt/GRAYJAY_JELLYFIN_BRIDGE.md` outlining Jellyfin plugin host options and Grayjay server mode prerequisites. |
+| Invidious compose profile added | 2025-10-23T10:24:40Z | `pmoves/docker-compose.yml` now exposes `invidious`, `invidious-companion`, and `invidious-db` under `COMPOSE_PROFILES=invidious` with supporting env defaults. |
+| Invidious schema bootstrapped | 2025-10-23T14:24:05Z | `docker compose -p pmoves up -d invidious-db` now mounts `services/invidious/init-invidious-db.sh` ensuring tables are created during startup. |
+| Grayjay profile scaffolding | 2025-10-23T14:28:12Z | Added `grayjay-plugin-host` (FastAPI) + `grayjay-server` optional profile; plugin registry reachable at `http://localhost:9096/plugins`. |
+| Next steps | — | Embed companion secrets in secrets manager, stand up optional Invidious stack (DB + companion) under `docker-compose` profile, implement auto-retry in channel monitor once completed statuses flow back. |
+
+## 2025-10-23 – Whisper Tuning & Ingest Recovery
+
+| Step | Timestamp (UTC) | Evidence |
+| --- | --- | --- |
+| Added defaults for faster-whisper small model | 2025-10-23T18:12:40Z | `pmoves/docker-compose.yml` now injects `FFW_PROVIDER=faster-whisper` and `WHISPER_MODEL=small`; `pmoves/env.shared.example` documents the new vars. |
+| Propagated transcript defaults to pmoves-yt | 2025-10-23T18:13:05Z | `pmoves/services/pmoves-yt/yt.py` reads `YT_TRANSCRIPT_PROVIDER`, `YT_WHISPER_MODEL`, and `YT_TRANSCRIPT_DIARIZE` when building `/yt/transcript` payloads. |
+| Restarted ffmpeg-whisper to clear hung jobs | 2025-10-23T18:13:15Z | `docker compose -p pmoves restart ffmpeg-whisper` followed by `curl http://localhost:8078/healthz` → `{"ok":true}`; synthetic WAV transcription completes in ~10 s. |
+| Disabled dynamic SoundCloud ingest | 2025-10-23T17:54:28Z | Updated `pmoves.user_sources` via container SQL (status `inactive`, `auto_process=false`) to prevent further SoundCloud 500s. |
+| Rebuilt ffmpeg with whisper filter | 2025-10-23T18:29:40Z | New multi-stage Dockerfile builds whisper.cpp `libwhisper` then FFmpeg git master with `--enable-whisper`; verified `ffmpeg -filters | grep whisper` shows the filter inside the runtime image. |

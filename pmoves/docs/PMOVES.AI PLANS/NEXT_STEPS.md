@@ -1,6 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 _Last updated: 2025-10-24_
+_Last updated: 2025-10-23_
 
 ## Immediate
 
@@ -47,6 +48,7 @@ _Last updated: 2025-10-24_
 - [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
 - [x] Harden Archon Supabase bootstrap: extended the client shim to cover `get_supabase_client()`, granted `public.archon_prompts` access to service/auth roles, and confirmed prompt load succeeds during `make up` (2025-10-18).
 - [x] TensorZero gateway integration for LangExtract — compose profile, Crush auto-detect, and metadata forwarding documented in `LOCAL_DEV.md`/`LOCAL_TOOLING_REFERENCE.md`.
+- [x] Add Cloudflare tunnel profile + Make helpers for WAN validation (2025-10-23).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
 
 ### 6. Grounded Personas & Packs Launch
@@ -106,6 +108,7 @@ _Last updated: 2025-10-24_
 - [ ] (Optional) Draft ComfyUI ↔ MinIO presign notebook walk-through for inclusion in `docs/`.
 - [x] Local CI checklist published (`docs/LOCAL_CI_CHECKS.md`) with pytest/CHIT/SQL/env preflight expectations before every PR.
 - [x] Publish local CI checklist (`docs/LOCAL_CI_CHECKS.md`) and gate PRs on the pytest/grep/env preflight routine.
+- [x] Document LangExtract Workers AI option (env vars, local/VPS instructions) — 2025-10-23.
 
 ### PMOVES.YT Enhancements (Detailed)
 
@@ -190,6 +193,7 @@ _Last updated: 2025-10-05_
 - [x] Unified env + secrets onboarding with `python -m pmoves.scripts.bootstrap_env` / `make bootstrap` and added `make preflight` guard before stack start (2025-10-14).
 - [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
 - [x] Documented the `SUPA_REST_URL=http://localhost:3000` override for local smoke runs and logged the 13/13 harness evidence in `SESSION_IMPLEMENTATION_PLAN.md` (2025-10-18).
+- [x] Added Cloudflare tunnel profile + Make helpers for WAN validation (2025-10-23).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
 
 ### 6. Grounded Personas & Packs Launch

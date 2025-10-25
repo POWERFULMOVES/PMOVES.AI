@@ -10,6 +10,8 @@ services:
       - .env
       - .env.local
     environment:
+      SURREAL_URL: ${SURREAL_URL:-ws://localhost:8000/rpc}
+      SURREAL_ADDRESS: ${SURREAL_ADDRESS:-localhost}
       SURREAL_URL: ${SURREAL_URL:-ws://cataclysm-open-notebook-surrealdb:8000/rpc}
       API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}

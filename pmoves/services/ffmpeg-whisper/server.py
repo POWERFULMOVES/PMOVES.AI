@@ -68,7 +68,7 @@ SUPPORTED_PROVIDERS: Tuple[ProviderLiteral, ...] = ("faster-whisper", "whisper",
 if DEFAULT_PROVIDER not in SUPPORTED_PROVIDERS:
     DEFAULT_PROVIDER = "faster-whisper"
 
-DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "large-v3")
+DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
 QWEN2_AUDIO_MODEL = os.environ.get("QWEN2_AUDIO_MODEL", "Qwen/Qwen2-Audio-7B-Instruct")
 QWEN2_AUDIO_MAX_NEW_TOKENS = int(os.environ.get("QWEN2_AUDIO_MAX_NEW_TOKENS", "512"))
 
@@ -467,4 +467,3 @@ def transcribe(body: Dict[str, Any] = Body(...)):
         raise HTTPException(500, f"transcribe error: {exc}") from exc
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
-
