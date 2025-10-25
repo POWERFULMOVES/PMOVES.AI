@@ -135,6 +135,19 @@ Checks (12):
 11. POST a generated `geometry.cgp.v1` packet to `/geometry/event`
 12. Confirm ShapeStore locator + calibration via `/shape/point/{id}/jump` + `/geometry/calibration/report`
 
+### UI Dropzone smoke
+
+The Dropzone UI rides on the Supabase presign + render webhook path. Once the core stack is live:
+
+1. `cd pmoves/ui && pnpm install` (or `npm install`) then run `pnpm dev`.
+2. Open `http://localhost:3000/dashboard/ingest` and upload a small test file to the default bucket.
+3. Watch Supabase for:
+   - `upload_events` row progressing from `preparing → uploading → persisting → complete`.
+   - `studio_board` insert with `meta.presigned_get` populated from the render webhook proxy.
+   - Matching `videos` and `transcripts` rows keyed by the Dropzone `upload_id`.
+4. Follow the “Open asset” link in the Recent uploads table to verify the MinIO-signed URL streams the object.
+5. When smoke-complete, archive or delete the object from MinIO to keep the bucket tidy.
+
 ### 5b) Workflow Automations
 Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
 1. Import/activate domain flows (shipped in repo):
