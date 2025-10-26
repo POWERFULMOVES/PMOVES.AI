@@ -1,0 +1,7 @@
+Background,Population,Population_Percent,Potential_Participants,Cost_Per_Person,Total_Training_Cost,Success_Rate,Successful_Participants,Avg_Income_Increase,Total_Income_Boost,ROI
+Recent Immigrants,15000,27.3,3000,2250.0,6750000.0,0.68,2040,9520.0,19420800.0,187.7
+Single Parents,8500,15.5,1700,1800.0,3060000.0,0.6,1020,9600.0,9792000.0,220.0
+Young Adults (18-25),12000,21.8,2400,1200.0,2880000.0,0.72,1728,7920.0,13685760.0,375.2
+Displaced Workers,6000,10.9,1200,2200.0,2640000.0,0.52,624,9100.0,5678400.0,115.1
+Retirees/Semi-Retired,9000,16.4,1800,2200.0,3960000.0,0.44,792,8360.0,6621120.0,67.2
+Community College Students,4500,8.2,900,1500.0,1350000.0,0.76,684,6840.0,4678560.0,246.6

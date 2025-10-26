@@ -1,0 +1,17 @@
+Business_Model,Scenario,Scenario_Probability,Adjusted_ROI,Adjusted_Success_Rate,Risk_Adjusted_ROI,Expected_Value,Investment_Required
+AI-Enhanced Local Service Business,Bull Market + High AI Adoption,0.25,2731.5,0.95,2594.9,648.7,5000
+AI-Enhanced Local Service Business,Normal Growth,0.5,1821.0,0.75,1365.8,682.9,5000
+AI-Enhanced Local Service Business,Economic Downturn,0.2,1092.6,0.5,546.3,109.3,5000
+AI-Enhanced Local Service Business,Crypto Winter + AI Skepticism,0.05,728.4,0.4,291.4,14.6,5000
+Sustainable Energy AI Consulting,Bull Market + High AI Adoption,0.25,2044.8,0.8,1635.8,409.0,4000
+Sustainable Energy AI Consulting,Normal Growth,0.5,1363.2,0.6,817.9,409.0,4000
+Sustainable Energy AI Consulting,Economic Downturn,0.2,817.9,0.35,286.3,57.3,4000
+Sustainable Energy AI Consulting,Crypto Winter + AI Skepticism,0.05,545.3,0.25,136.3,6.8,4000
+Community Token Pre-Order System,Bull Market + High AI Adoption,0.25,1311.9,0.6,787.1,196.8,3000
+Community Token Pre-Order System,Normal Growth,0.5,874.6,0.4,349.8,174.9,3000
+Community Token Pre-Order System,Economic Downturn,0.2,524.8,0.15,78.7,15.7,3000
+Community Token Pre-Order System,Crypto Winter + AI Skepticism,0.05,349.8,0.1,35.0,1.7,3000
+Creative Content + Token Rewards,Bull Market + High AI Adoption,0.25,1311.9,0.6,787.1,196.8,3000
+Creative Content + Token Rewards,Normal Growth,0.5,874.6,0.4,349.8,174.9,3000
+Creative Content + Token Rewards,Economic Downturn,0.2,524.8,0.15,78.7,15.7,3000
+Creative Content + Token Rewards,Crypto Winter + AI Skepticism,0.05,349.8,0.1,35.0,1.7,3000
