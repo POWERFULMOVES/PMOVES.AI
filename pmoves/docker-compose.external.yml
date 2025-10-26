@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   wger:
-    image: ${WGER_IMAGE:-ghcr.io/cataclysmstudios/pmoves-health-wger:main}
+    image: ${WGER_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-health-wger:main}
     container_name: cataclysm-wger
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
@@ -10,10 +10,15 @@ services:
       cataclysm:
         aliases:
           - cataclysm-wger
+          - pmoves-wger
     environment:
-      - DJANGO_DEBUG=False
-      - WGER_USE_GUNICORN=True
-      - DJANGO_CLEAR_STATIC_FIRST=True
+      DJANGO_DEBUG: "${WGER_DJANGO_DEBUG:-False}"
+      WGER_USE_GUNICORN: "${WGER_USE_GUNICORN:-True}"
+      DJANGO_CLEAR_STATIC_FIRST: "${WGER_CLEAR_STATIC_FIRST:-True}"
+      TIME_ZONE: "${WGER_TIME_ZONE:-America/New_York}"
+      SITE_URL: "${WGER_SITE_URL:-http://localhost:8000}"
+      FROM_EMAIL: "${WGER_FROM_EMAIL:-PMOVES Health Coach <ops@cataclysmstudios.com>}"
+      DJANGO_ADMINS: "${WGER_DJANGO_ADMINS:-PMOVES Ops <ops@cataclysmstudios.com>}"
     volumes:
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
@@ -82,7 +87,7 @@ services:
         aliases:
           - cataclysm-open-notebook
     environment:
-      SURREAL_URL: ${SURREAL_URL:-ws://cataclysm-open-notebook-surrealdb:8000/rpc}
+      SURREAL_URL: ${OPEN_NOTEBOOK_SURREAL_URL:-ws://cataclysm-open-notebook-surrealdb:8000/rpc}
       SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-cataclysm-open-notebook-surrealdb}
       SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
       SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:-root}

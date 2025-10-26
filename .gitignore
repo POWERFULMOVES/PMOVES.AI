@@ -29,6 +29,7 @@ Thumbs.db
 *.tmp
 *.temp
 .docker-nocreds/
+.docker-config/
 integrations-workspace/
 testkeys.md
 .tmp_*
