@@ -35,7 +35,10 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
   - Starts only the worker layer while ensuring the data profile is active.
 
 - `make up-yt`
-  - Boots the YouTube ingest stack (`ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
+  - Boots the YouTube ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
+
+- `make up-cloudflare`
+  - Starts the Cloudflare tunnel connector for remote reviewers. Requires either `CLOUDFLARE_TUNNEL_TOKEN` or the trio `CLOUDFLARE_TUNNEL_NAME` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_CERT`/`CLOUDFLARE_CRED_FILE` in your env overrides; follow with `make cloudflare-url` to capture the issued hostname and `make down-cloudflare` when finished.
 
 - `make up-media`
   - Adds the optional GPU media analyzers (`media-video`, `media-audio`).
@@ -46,6 +49,10 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 - `make up-nats`
   - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:4222`.
   - Use this before opting into the agents profile (Agent Zero, Archon, mesh-agent, Discord publisher).
+- `make mindmap-notebook-sync`
+  - Runs `python pmoves/scripts/mindmap_to_notebook.py` to pull `/mindmap/{constellation_id}` entries out of `hi-rag-gateway-v2` and mirror them into Open Notebook via `/api/sources/json`. Requires `MINDMAP_BASE`, `MINDMAP_CONSTELLATION_ID`, `MINDMAP_NOTEBOOK_ID`, and `OPEN_NOTEBOOK_API_TOKEN`.
+- `make hirag-notebook-sync`
+  - Runs `python pmoves/scripts/hirag_search_to_notebook.py` to execute `/hirag/query` for one or more `--query` arguments and ingest those hits into the configured Notebook. Configure `HIRAG_URL`, `INDEXER_NAMESPACE`, `HIRAG_NOTEBOOK_ID`, and `OPEN_NOTEBOOK_API_TOKEN` (pass CLI flags via `ARGS="--query 'topic' --k 20"`).
 
 ### Supabase helpers
 

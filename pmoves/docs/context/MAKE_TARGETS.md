@@ -25,7 +25,10 @@
   - Starts only the worker layer while ensuring the data profile is active.
 
 - `make up-yt`
-  - Boots the YouTube ingest stack (`ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
+  - Boots the YouTube ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
+
+- `make up-cloudflare`
+  - Launches the Cloudflare tunnel connector once `CLOUDFLARE_TUNNEL_TOKEN` **or** (`CLOUDFLARE_TUNNEL_NAME`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_CERT`/`CLOUDFLARE_CRED_FILE`) are set. Use `make cloudflare-url` to print the latest tunneled hostname and `make down-cloudflare` to stop it.
 
 - `make up-media`
   - Adds the optional GPU media analyzers (`media-video`, `media-audio`).
@@ -40,6 +43,10 @@
   - Bring the Open Notebook UI/API online (Streamlit on host `:${OPEN_NOTEBOOK_UI_PORT:-8503}`, FastAPI on `:${OPEN_NOTEBOOK_API_PORT:-5055}`) or stop it while leaving data in `pmoves/data/open-notebook/`.
 - `make notebook-seed-models`
   - Calls `scripts/open_notebook_seed.py` to register provider models/defaults once `env.shared` contains `OPEN_NOTEBOOK_API_TOKEN` (or password) and any desired provider keys (`OPENAI_API_KEY`, `GROQ_API_KEY`, etc.). Run this after starting the container so the UI drop-downs populate automatically.
+- `make mindmap-notebook-sync`
+  - Invokes `python pmoves/scripts/mindmap_to_notebook.py` to pull `/mindmap/{constellation_id}` entries from `hi-rag-gateway-v2` and mirror them into Open Notebook. Requires `MINDMAP_BASE`, `MINDMAP_CONSTELLATION_ID`, `MINDMAP_NOTEBOOK_ID`, and `OPEN_NOTEBOOK_API_TOKEN`.
+- `make hirag-notebook-sync`
+  - Invokes `python pmoves/scripts/hirag_search_to_notebook.py` to execute `/hirag/query` for supplied `--query` strings and ingest those hits into Notebook sources. Configure `HIRAG_URL`, `INDEXER_NAMESPACE`, `HIRAG_NOTEBOOK_ID`, and `OPEN_NOTEBOOK_API_TOKEN` (use `ARGS="--query 'topic' --k 20"`).
 
 ### Supabase helpers
 
@@ -77,3 +84,12 @@
 
 - `make smoke-wger`
   - Runs curl checks against the Wger nginx proxy (`http://localhost:8000`) and static bundle (`/static/images/logos/logo-font.svg`) to confirm collectstatic artifacts are mounted and served correctly. Override the target origin with `WGER_ROOT_URL=https://example:port` when testing remote deployments.
+- `make smoke-firefly`
+  - Calls the Firefly III login landing page plus `/api/v1/about` (using `FIREFLY_ACCESS_TOKEN`) to confirm the finance stack is reachable. Override `FIREFLY_ROOT_URL` / `FIREFLY_PORT` for remote hosts.
+
+## External Integrations
+- `make up-external` – start Wger, Firefly III, Open Notebook, and Jellyfin from published images on `cataclysm-net`.
+- `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
+- `make wger-brand-defaults` – reapplies the PMOVES-branded Django `Site`, admin profile, and default gym name using `WGER_BRAND_*` env vars (automatically invoked after `make up-external-wger`).
+- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE`, `JELLYFIN_IMAGE`.
+- See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.

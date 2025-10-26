@@ -16,6 +16,10 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 - See `pmoves/services/pmoves-yt/tests/test_emit.py` for the CGP emission assertion.
 - Run the main smokes in `pmoves/docs/SMOKETESTS.md` after `make up`.
 
+## Testing
+- Unit suite: `python -m pytest pmoves/services/pmoves-yt/tests`
+- Async playlist pacing coverage (`tests/test_rate_limit.py::test_playlist_rate_limit_sleep`) now relies on `pytest-asyncio` for event loop orchestration. The dependency ships in `services/pmoves-yt/requirements.txt`, so re-run `python -m pip install -r services/pmoves-yt/requirements.txt` after pulling this change to keep the test harness green.
+
 ## Resilient Playlist Ingest (2025-10)
 - `/yt/playlist` now runs downloads concurrently (bounded by `YT_CONCURRENCY`) with
   an async worker pool and coordinated rate limiting (`YT_RATE_LIMIT`).
@@ -43,3 +47,14 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 - `YT_POSTPROCESSORS_JSON` lets you override the default postprocessor list
   (`FFmpegMetadata` + `EmbedThumbnail`). Leave empty (`[]`) to skip embedding.
   Channel configs can set `yt_options.postprocessors` for one-off tweaks.
+
+## Hi‑RAG upsert pacing (2025-10-24)
+- `/yt/emit` switches to a background task when `YT_ASYNC_UPSERT_ENABLED=true` and the
+  segmented chunk count ≥ `YT_ASYNC_UPSERT_MIN_CHUNKS` (defaults: enabled, 200 chunks).
+  The API response returns `{"async": true, "job_id": "..."}`; poll
+  `/yt/emit/status/{job_id}` for completion or failure details.
+- `YT_INDEX_LEXICAL_DISABLE_THRESHOLD` (default `0`) disables the Meili/lexical index
+  step automatically for very large transcripts so the request can return quickly.
+- `YT_UPSERT_BATCH_SIZE` (default `200`) defines how many chunks each
+  `/hirag/upsert-batch` call carries. Tune alongside the lexical threshold when
+  dealing with hour-long transcripts.

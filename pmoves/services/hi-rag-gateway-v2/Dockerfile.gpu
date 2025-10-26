@@ -1,6 +1,8 @@
 FROM python:3.10-slim
 
-ARG TORCH_CUDA=cu121
+ARG TORCH_CUDA=cu126
+ARG TORCH_VERSION=2.9.0
+ARG TORCHAUDIO_VERSION=2.9.0
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/libs
@@ -16,7 +18,7 @@ RUN python -m pip install --upgrade pip
 
 # Torch wheels by CUDA variant
 RUN pip install --index-url https://download.pytorch.org/whl/${TORCH_CUDA} \
-      torch==2.4.0 torchaudio==2.4.0
+      torch==${TORCH_VERSION} torchaudio==${TORCHAUDIO_VERSION}
 
 # Base requirements
 COPY services/hi-rag-gateway-v2/requirements.txt /app/requirements.txt

@@ -25,6 +25,10 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Brings up Open Notebook attached to `cataclysm-net`. UI http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055}.
 - `make down-open-notebook`
   - Stops Open Notebook.
+- `make mindmap-notebook-sync`
+  - Wrapper around `python pmoves/scripts/mindmap_to_notebook.py`; reads `/mindmap/{constellation_id}` and mirrors those points into Open Notebook via `/api/sources/json`. Requires `MINDMAP_BASE`, `MINDMAP_CONSTELLATION_ID`, `MINDMAP_NOTEBOOK_ID`, and `OPEN_NOTEBOOK_API_TOKEN`.
+- `make hirag-notebook-sync`
+  - Calls `python pmoves/scripts/hirag_search_to_notebook.py` to run `/hirag/query` for one or more queries and push the hits into Open Notebook. Configure `HIRAG_URL`, `INDEXER_NAMESPACE`, `HIRAG_NOTEBOOK_ID` (or reuse the mindmap notebook), and `OPEN_NOTEBOOK_API_TOKEN`.
 
 ## Supabase
 - `make supa-start`
@@ -42,7 +46,9 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make up-media`
   - Starts optional media analyzers (`media-video`, `media-audio`).
 - `make up-yt`
-  - Starts `ffmpeg-whisper` and `pmoves-yt` for ingest.
+  - Starts the ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`).
+- `make up-cloudflare`
+  - Brings up the Cloudflare tunnel connector (needs `CLOUDFLARE_TUNNEL_TOKEN` or `CLOUDFLARE_TUNNEL_NAME` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_CERT`/`CLOUDFLARE_CRED_FILE` in `env.shared`/`.env.local`). Pair with `make cloudflare-url` to print the latest published endpoint and `make down-cloudflare` to stop it.
 - `make up-jellyfin`
   - Starts the Jellyfin bridge only.
 - `make up-n8n`
@@ -62,6 +68,10 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Confirms v2‑GPU reports a Qwen reranker in stats and uses it on a test query.
 - `make smoke-geometry-db`
   - Verifies seeded geometry rows via PostgREST.
+- `make smoke-wger`
+  - Hits the nginx proxy on `http://localhost:8000` (override via `WGER_ROOT_URL`) plus `/static/images/logos/logo-font.svg` to ensure collectstatic artifacts and the Django backend are available.
+- `make smoke-firefly`
+  - Pings the Firefly III login landing page and `/api/v1/about` (using `FIREFLY_ACCESS_TOKEN` from your shell or `env.shared`) to confirm the finance stack and API token are wired up. Override `FIREFLY_ROOT_URL` / `FIREFLY_PORT` when testing remote hosts.
 
 ## CHIT Demo Mappers
 - `make demo-health-cgp`
@@ -80,6 +90,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 ## External Integrations
 - `make up-external` – start Wger, Firefly III, Open Notebook, and Jellyfin from published images on `cataclysm-net`.
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
+- `make wger-brand-defaults` – idempotently updates the Django `Site`, default admin profile, and seed gym name using `WGER_BRAND_*` env vars (this runs automatically after `up-external-wger`; run it again if you wipe the SQLite volume).
 - Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE`, `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.
 

@@ -23,6 +23,13 @@ _Last updated: 2025-10-14_
   - Compose profiles, watcher sidecar, and helper scripts now live directly in `pmoves/compose/` and `pmoves/scripts/`. Use the
     new `make integrations-*` targets and drop flow exports into `pmoves/integrations/**/n8n/flows/` to keep local n8n in sync.
 
+### 1b. Stability & Release Hardening (prep work)
+- [ ] Draft the shared GHCR build-and-publish workflow template (lint → test → buildx → cosign) under `.github/workflows/release.yml` and document how repos call it.
+- [ ] Write `make build-stable` / `make release` targets that wrap the workflow locally, pinning toolchains and emitting SBOM + digest artefacts.
+- [ ] Update CODEOWNERS/branch protection rules so `pmoves/**`, `pmoves/services/**`, and integration compose files require review + passing CI.
+- [ ] Inventory remaining image references and swap them to `ghcr.io/cataclysm-studios-inc/*` (Wger completed; Firefly/Open Notebook/Jellyfin next).
+- [ ] Capture the end-to-end process (repo transfer, CI usage, release testing) in `docs/LOCAL_CI_CHECKS.md` and the engineering handbook once actions are live.
+
 ### Using CHIT in Persona Prompts (New)
 - Reference constellations by ID in prompts and call Agent Zero MCP `geometry.jump` to fetch locators for deep links.
 - Example prompt fragment:

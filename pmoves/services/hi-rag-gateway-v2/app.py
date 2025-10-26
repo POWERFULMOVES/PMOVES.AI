@@ -14,6 +14,7 @@ from FlagEmbedding import FlagReranker
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
+from urllib.parse import quote_plus
 from services.common.geometry_params import get_decoder_pack
 from services.common.hrm_sidecar import HrmDecoderController
 import asyncio
@@ -876,6 +877,47 @@ def require_tailscale(request: Request, admin_only: bool = False):
 def require_admin_tailscale(request: Request):
     return require_tailscale(request, admin_only=True)
 
+
+def _build_media_url(media: Dict[str, Any]) -> Optional[str]:
+    modality = (media.get("modality") or "").lower()
+    ref_id = media.get("ref_id") or media.get("uid") or ""
+    if modality == "video" and ref_id:
+        video_id = ref_id
+        if ref_id.startswith("yt_"):
+            video_id = ref_id.split("_", 1)[1]
+        base = f"https://www.youtube.com/watch?v={quote_plus(video_id)}"
+        t_start = media.get("t_start") or media.get("start")
+        try:
+            seconds = int(float(t_start)) if t_start is not None else None
+        except (TypeError, ValueError):
+            seconds = None
+        return f"{base}&t={seconds}s" if seconds else base
+    return None
+
+
+def _enrich_mindmap_item(constellation_id: str, point: Dict[str, Any], media: Dict[str, Any]) -> Dict[str, Any]:
+    media_url = _build_media_url(media)
+    t_start = media.get("t_start") or media.get("start")
+    try:
+        timestamp = float(t_start) if t_start is not None else None
+    except (TypeError, ValueError):
+        timestamp = None
+    notebook_payload = {
+        "constellation_id": constellation_id,
+        "point_id": point.get("id"),
+        "title": (point.get("text") or "").strip()[:120],
+        "media_url": media_url,
+        "timestamp": timestamp,
+        "modality": (media.get("modality") or point.get("modality") or "").lower(),
+    }
+    return {
+        "point": point,
+        "media": media,
+        "media_url": media_url,
+        "timestamp": timestamp,
+        "notebook": notebook_payload,
+    }
+
 @app.get("/hirag/admin/stats")
 def stats(request: Request):
     if os.environ.get("SMOKE_ALLOW_ADMIN_STATS", "false").lower() != "true":
@@ -1003,6 +1045,107 @@ def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
 @app.get("/")
 def index(_=Depends(require_tailscale)):
     return {"ok": True, "service": "hi-rag-gateway-v2", "hint": "POST /hirag/query"}
+
+
+@app.get("/mindmap/{constellation_id}")
+def mindmap_route(
+    constellation_id: str,
+    modalities: str = "text,video,audio,doc,image",
+    minProj: float = 0.5,
+    minConf: float = 0.5,
+    limit: int = 200,
+    offset: int = 0,
+    enrich: bool = True,
+    _=Depends(require_tailscale),
+):
+    if driver is None:
+        raise HTTPException(503, "Neo4j unavailable")
+    mods = [m.strip() for m in modalities.split(",") if m.strip()]
+    if not mods:
+        raise HTTPException(400, "At least one modality is required")
+    if limit <= 0:
+        raise HTTPException(400, "limit must be positive")
+    if offset < 0:
+        raise HTTPException(400, "offset must be >= 0")
+    db_limit = limit + 1
+    stats_map: Dict[str, int] = {}
+    total_query = (
+        "MATCH (c:Constellation {id:$cid})-[:HAS]->(p:Point) "
+        "WHERE p.modality IN $mods AND coalesce(p.proj,0.0) >= $minProj "
+        "AND coalesce(p.conf,0.0) >= $minConf "
+        "RETURN count(*) AS total"
+    )
+    stats_query = (
+        "MATCH (c:Constellation {id:$cid})-[:HAS]->(p:Point) "
+        "WHERE p.modality IN $mods AND coalesce(p.proj,0.0) >= $minProj "
+        "AND coalesce(p.conf,0.0) >= $minConf "
+        "RETURN coalesce(p.modality,'unknown') AS modality, count(*) AS count"
+    )
+    query = (
+        "MATCH (c:Constellation {id:$cid})-[:HAS]->(p:Point)-[:LOCATES]->(m:MediaRef) "
+        "WHERE p.modality IN $mods AND coalesce(p.proj,0.0) >= $minProj "
+        "AND coalesce(p.conf,0.0) >= $minConf "
+        "RETURN p{.*, id:p.id} AS point, m{.*, uid:m.uid} AS media "
+        "ORDER BY p.proj DESC SKIP $offset LIMIT $limit"
+    )
+    try:
+        with driver.session() as session:
+            total_result = session.run(
+                total_query,
+                cid=constellation_id,
+                mods=mods,
+                minProj=minProj,
+                minConf=minConf,
+            )
+            total_row = next(iter(total_result), {"total": 0})
+            total = int(total_row.get("total") or 0)
+            stats_rows = session.run(
+                stats_query,
+                cid=constellation_id,
+                mods=mods,
+                minProj=minProj,
+                minConf=minConf,
+            )
+            stats_map: Dict[str, int] = {}
+            for row in stats_rows:
+                mod = str(row.get("modality") or "unknown").lower()
+                stats_map[mod] = int(row.get("count") or 0)
+            records = session.run(
+                query,
+                cid=constellation_id,
+                mods=mods,
+                minProj=minProj,
+                minConf=minConf,
+                limit=db_limit,
+                offset=offset,
+            )
+            raw_items = [(rec["point"], rec["media"]) for rec in records]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("mindmap query failed")
+        raise HTTPException(500, f"mindmap query failed: {exc}")
+    has_more = len(raw_items) > limit
+    trimmed = raw_items[:limit]
+    if enrich:
+        items = [
+            _enrich_mindmap_item(constellation_id, point or {}, media or {})
+            for point, media in trimmed
+        ]
+    else:
+        items = [{"point": point, "media": media} for point, media in trimmed]
+    returned = len(items)
+    remaining = max(total - (offset + returned), 0)
+    return {
+        "items": items,
+        "offset": offset,
+        "limit": limit,
+        "returned": returned,
+        "total": total,
+        "remaining": remaining,
+        "has_more": has_more,
+        "stats": {"per_modality": stats_map},
+    }
 
 # lazy-init reranker to reduce cold start time
 _reranker = None

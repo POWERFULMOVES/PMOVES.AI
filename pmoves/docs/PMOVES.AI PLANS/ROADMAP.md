@@ -1,6 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-10-24_
-_Last updated: 2025-10-23_
+_Last updated: 2025-10-26_
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -44,6 +43,15 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - [x] v2 realtime DNS fallback (host‑gateway derivation) — 2025‑10‑19
 - [x] v2‑GPU default Qwen reranker + env overrides — 2025‑10‑19
 - [x] Meili lexical enabled by default via pmoves/.env.local — 2025‑10‑19
+
+### Stability & Release Hardening Initiative (Prep)
+
+- **Repository & registry unification:** transfer POWERFULMOVES repos into the CATACLYSM-STUDIOS-INC org, mirror all GHCR images to `ghcr.io/cataclysm-studios-inc/*`, and update compose/env defaults (Wger now pulls from the new namespace).
+- **Shared CI release workflow:** author a reusable GitHub Actions pipeline that lint/tests, builds multi-arch images, signs artefacts, and pushes to GHCR only on protected branches/tags; expose it via `workflow_call` so each repo inherits the same release gates.
+- **Reproducible local builds:** standardise `make release` and `make build-stable` targets that wrap the CI scripts, pin toolchains (uv/poetry, corepack), and emit SBOMs + digests for operator verification.
+- **Core change controls:** expand CODEOWNERS + branch protection so `pmoves/` and critical integrations require review, signed commits, and passing CI before merge; route docs/scripts to lighter paths so iteration stays fast.
+- **Client generation from API specs:** use the checked-in docs (e.g., `pmoves/docs/services/wger/wger.yaml`) to generate typed SDKs for Agent Zero/n8n, ensuring downstream integrations track the published schema.
+- **Timeline:** capture ownership + sequencing for these bullets in `NEXT_STEPS.md` and link the eventual CI workflow docs so testers can exercise the stabilized builds once the current improvements land.
 
 ### M3 — Retrieval Quality & Graph Enrichment
 

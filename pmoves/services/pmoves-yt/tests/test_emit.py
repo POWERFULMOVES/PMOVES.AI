@@ -72,6 +72,7 @@ def test_emit_segments_transcript_and_calls_hirag(monkeypatch) -> None:
         "upserted": 1,
         "lexical_indexed": True,
         "profile": None,
+        "lexical_auto_disabled": False,
     }
 
     assert len(calls) == 2
@@ -84,6 +85,84 @@ def test_emit_segments_transcript_and_calls_hirag(monkeypatch) -> None:
     assert geometry_call[1]["type"] == "geometry.cgp.v1"
     assert geometry_call[1]["data"]["spec"] == "chit.cgp.v0.1"
 
+
+def test_emit_async_enqueues_job(monkeypatch) -> None:
+    segments = [{"start": 0.0, "end": 1.0, "text": "hello"}]
+    chunk = {
+        "doc_id": "yt:async",
+        "section_id": None,
+        "chunk_id": "yt:async:0",
+        "text": "hello",
+        "namespace": "pmoves",
+        "payload": {},
+    }
+
+    monkeypatch.setattr(yt, "YT_ASYNC_UPSERT_ENABLED", True)
+    monkeypatch.setattr(yt, "YT_ASYNC_UPSERT_MIN_CHUNKS", 1)
+    monkeypatch.setattr(yt, "YT_INDEX_LEXICAL_DISABLE_THRESHOLD", 0)
+    monkeypatch.setattr(yt, "YT_INDEX_LEXICAL", True)
+    monkeypatch.setattr(yt, "YT_SEG_AUTOTUNE", False)
+    monkeypatch.setattr(yt, "_get_transcript", lambda video_id: {"text": "hello", "segments": segments})
+    monkeypatch.setattr(yt, "_segment_from_whisper_segments", lambda *args, **kwargs: [chunk])
+    monkeypatch.setattr(yt, "supa_get", lambda table, match: [{"title": "Video"}] if table == "videos" else [])
+
+    yt._clear_emit_jobs()
+
+    def fake_async(job_id, video_id, namespace, title, tuned, chunks, lexical, batch_size):
+        yt._update_emit_job(
+            job_id,
+            status="completed",
+            finished_at="now",
+            upserted=42,
+            lexical_indexed=lexical,
+        )
+
+    monkeypatch.setattr(yt, "_emit_async_job", fake_async)
+
+    client = TestClient(yt.app)
+    response = client.post("/yt/emit", json={"video_id": "async", "namespace": "pmoves"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["async"] is True
+    job_id = body["job_id"]
+    assert job_id
+
+    status_resp = client.get(f"/yt/emit/status/{job_id}")
+    assert status_resp.status_code == 200
+    job = status_resp.json()["job"]
+    assert job["status"] == "completed"
+    assert job["upserted"] == 42
+    assert job["lexical_indexed"] is True
+
+
+def test_emit_auto_disables_lexical_when_threshold_hit(monkeypatch) -> None:
+    segments = [{"start": 0.0, "end": 1.0, "text": "hello"}]
+    chunk = {
+        "doc_id": "yt:disable",
+        "section_id": None,
+        "chunk_id": "yt:disable:0",
+        "text": "hello",
+        "namespace": "pmoves",
+        "payload": {},
+    }
+
+    monkeypatch.setattr(yt, "YT_ASYNC_UPSERT_ENABLED", False)
+    monkeypatch.setattr(yt, "YT_INDEX_LEXICAL", True)
+    monkeypatch.setattr(yt, "YT_INDEX_LEXICAL_DISABLE_THRESHOLD", 1)
+    monkeypatch.setattr(yt, "YT_SEG_AUTOTUNE", False)
+    monkeypatch.setattr(yt, "_get_transcript", lambda video_id: {"text": "hello", "segments": segments})
+    monkeypatch.setattr(yt, "_segment_from_whisper_segments", lambda *args, **kwargs: [chunk])
+    monkeypatch.setattr(yt, "supa_get", lambda table, match: [{"title": "Video"}] if table == "videos" else [])
+
+    monkeypatch.setattr(yt, "_upsert_chunks_to_hirag", lambda chunks, lexical, batch_size: {"upserted": len(chunks), "lexical_indexed": lexical})
+    monkeypatch.setattr(yt, "_emit_geometry_event", lambda *args, **kwargs: None)
+
+    client = TestClient(yt.app)
+    response = client.post("/yt/emit", json={"video_id": "disable", "namespace": "pmoves"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lexical_indexed"] is False
+    assert body["lexical_auto_disabled"] is True
 
 def test_cgp_build_uses_pack(monkeypatch) -> None:
     client = TestClient(yt.app)

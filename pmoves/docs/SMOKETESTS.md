@@ -169,19 +169,23 @@ Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), 
    Watch Supabase tables (`health_workouts`, `health_weekly_summaries`, `finance_transactions`, `finance_monthly_summaries`) and MinIO asset paths for inserts.
 4. Notebook sync smoke: `make -C pmoves up-open-notebook` (if using the local add-on) and ensure `OPEN_NOTEBOOK_API_*` envs resolve. Run `make -C pmoves notebook-seed-models` once `env.shared` includes your token + provider keys so `/api/models/providers` reports the enabled backends. `docker logs pmoves-notebook-sync-1` should show successful Supabase writes.
 
-### 5c) Wger Static Proxy Smoke
+### 5c) Firefly Finance API Smoke
+- Run `make smoke-firefly` (defaults to `http://localhost:8082`). The helper waits for the nginx front-end to answer and then calls `/api/v1/about` with `FIREFLY_ACCESS_TOKEN` (pulled from your shell or `pmoves/env.shared`). Expect a JSON payload showing the Firefly version and API version; failures usually mean the container could not finish migrations or the access token is missing. Override the host with `FIREFLY_ROOT_URL`.
+
+### 5d) Wger Static Proxy Smoke
 - Ensure `make up-external-wger` (or `make up-external`) is running so both `cataclysm-wger` and `cataclysm-wger-nginx`
   containers are online. The nginx sidecar mirrors the upstream production guidance where Django writes the static
   bundle and nginx serves `/static` and `/media` from shared volumes.citeturn0search0
 - Run `make smoke-wger` (defaults `WGER_ROOT_URL=http://localhost:8000`). The target:
   1. Performs an HTTP GET to confirm the proxy forwards requests to Gunicorn.
   2. Fetches `/static/images/logos/logo-font.svg` to ensure collectstatic artifacts are mounted correctly.
+- The bring-up target now calls `scripts/wger_brand_defaults.sh`, which sets the Django `Site` record, admin email, and seed gym name using the `WGER_BRAND_*` variables. Override those env vars (for example, `WGER_BRAND_GYM_NAME="PMOVES Wellness Studio"`) before running `make up-external-wger` if you need different first-login branding.
 - If the static check fails, recreate the containers with
   `docker compose -p pmoves -f docker-compose.external.yml up -d --force-recreate wger` to rerun `collectstatic`. Volume
   permission errors are the next suspect—verify `/home/wger/static` is owned by UID 1000 inside the Django container,
   matching the upstream deployment reference.citeturn0search0
 
-### 5d) Creative Automations
+### 5e) Creative Automations
 Prereqs: tutorials installed (`pmoves/creator/tutorials/`), Supabase CLI stack running, `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
 1. Import/activate the creative webhook flows:
    - `pmoves/n8n/flows/wan_to_cgp.webhook.json`

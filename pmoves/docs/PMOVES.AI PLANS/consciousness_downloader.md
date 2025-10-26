@@ -65,7 +65,7 @@ The scraper produces `data-exports/discovered-links.json` and refreshed HTML sna
 ---
 
 ## 4. Pull Authoritative YouTube Videos
-1. Ensure pmoves-yt stack is running (`make -C pmoves up-yt` brings up pmoves-yt + ffmpeg-whisper).
+1. Ensure pmoves-yt stack is running (`make -C pmoves up-yt` brings up bgutil-pot-provider + ffmpeg-whisper + pmoves-yt).
 2. Run the ingestion helper (supports `--dry-run`):
    ```bash
    make -C pmoves ingest-consciousness-yt ARGS="--max 5"
