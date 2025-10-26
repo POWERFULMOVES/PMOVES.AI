@@ -235,7 +235,7 @@ services:
 
   ffmpeg-whisper:
     build:
-      context: ./services
+      context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
@@ -252,7 +252,8 @@ services:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
+            - driver: nvidia
+              capabilities: [compute,utility]
               count: ${GPU_COUNT:-all}
     ports: ["8078:8078"]
     profiles: ["workers","orchestration","agents"]
@@ -314,7 +315,7 @@ services:
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - HIRAG_URL=http://hi-rag-gateway:8086
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
       - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
       - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
       - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
@@ -468,6 +469,10 @@ services:
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
+      args:
+        TORCH_CUDA: ${TORCH_CUDA_VERSION:-cu126}
+        TORCH_VERSION: ${TORCH_VERSION:-2.9.0}
+        TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
     restart: unless-stopped
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]
     env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
@@ -506,6 +511,7 @@ services:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - CUDA_VISIBLE_DEVICES=
     deploy:
       resources:
         reservations:

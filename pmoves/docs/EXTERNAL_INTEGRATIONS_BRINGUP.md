@@ -27,12 +27,20 @@ DOCKER_CONFIG=$PWD/.docker-nocreds \
    - This recreates the `cataclysm-wger` Django service and the `cataclysm-wger-nginx` proxy, sharing
      volumes for `/static` and `/media`.
    - The UI remains available at `http://localhost:8000`, which the proxy forwards to Django.
+   - Override `WGER_IMAGE` if you publish a custom GHCR image (defaults to `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:main`).
 2) Configure PMOVES -> Wger integration secrets in `pmoves/env.shared`:
 ```
 WGER_BASE_URL=http://cataclysm-wger:8000
 WGER_API_TOKEN=<your-token>
 ```
-3) n8n flow: import `pmoves/n8n/flows/wger_sync_to_supabase.json`, activate, and trigger a test run
+3) Branding helper: `make up-external-wger` automatically runs `scripts/wger_brand_defaults.sh`, which
+   waits for Django migrations (including `django_site`) to finish and then updates the `Site` record,
+   default admin profile, and gym seed entries. Adjust the copy via
+   `WGER_SITE_URL`, `WGER_FROM_EMAIL`, and the `WGER_BRAND_*` variables (for example,
+   `WGER_BRAND_GYM_NAME="PMOVES Wellness Lab"`). Re-run `make wger-brand-defaults` whenever you wipe the SQLite volume or want to refresh the welcome copy. The upstream bootstrap still resets the `admin`
+   account to `adminadmin`, so change it right after first login or pre-set the `WGER_BRAND_ADMIN_*`
+   credentials before bringing the stack up. Reference the upstream guidance in the [official Wger documentation](https://wger.readthedocs.io/en/latest/) when tailoring additional fixtures.
+4) n8n flow: import `pmoves/n8n/flows/wger_sync_to_supabase.json`, activate, and trigger a test run
    to confirm Supabase receives payloads.
 
 ## Firefly III (Finance)
@@ -53,6 +61,7 @@ FIREFLY_PORT=8082
 ```
  - Host port override: Firefly defaults to host port 8080, which clashes with Agent Zero’s API. `FIREFLY_PORT` (set to `8082` above) keeps the services side-by-side; adjust if 8082 is unavailable on your workstation.
 3) n8n flow: import `pmoves/n8n/flows/firefly_sync_to_supabase.json` then activate.
+4) Health check: run `make smoke-firefly` (uses `FIREFLY_ACCESS_TOKEN` and hits `/api/v1/about`) before wiring n8n so you know the finance stack finished migrations.
 
 ## Open Notebook
 1) Clone and run:

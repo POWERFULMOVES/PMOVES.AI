@@ -22,6 +22,8 @@ from typing import Dict, List, Optional, Tuple
 
 API_ROOT = os.environ.get("OPEN_NOTEBOOK_API_URL", "http://localhost:5055").rstrip("/")
 AUTH_TOKEN = os.environ.get("OPEN_NOTEBOOK_API_TOKEN") or os.environ.get("OPEN_NOTEBOOK_PASSWORD")
+MINDMAP_BASE = os.environ.get("MINDMAP_BASE")
+MINDMAP_CONSTELLATION = os.environ.get("MINDMAP_CONSTELLATION_ID")
 
 if not AUTH_TOKEN:
     sys.stderr.write(
@@ -235,6 +237,12 @@ def main() -> None:
 
     providers = ", ".join(sorted(eligible.keys()))
     print(f"✔ Open Notebook providers configured: {providers or 'none'}")
+    if MINDMAP_BASE and MINDMAP_CONSTELLATION:
+        base = MINDMAP_BASE.rstrip("/")
+        print(
+            f"Mindmap endpoint wired at {base}/mindmap/{MINDMAP_CONSTELLATION};"
+            " attach this to Notebook data sources for constellation context."
+        )
 
 
 if __name__ == "__main__":

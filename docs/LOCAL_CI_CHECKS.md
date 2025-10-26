@@ -17,9 +17,11 @@ python -m pip install -r services/publisher/requirements.txt \
 pytest -q services/publisher/tests \
         services/pmoves-yt/tests \
         services/publisher-discord/tests
+```
 
 Tip: run per-service in separate virtualenvs if resolver conflicts occur. The repo includes underscore import shims so tests can import `pmoves.services.pmoves_yt` and `pmoves.services.publisher_discord` reliably.
-```
+
+`services/pmoves-yt/requirements.txt` now bundles `pytest-asyncio` because the playlist rate-limit test (`tests/test_rate_limit.py`) executes `async def` coroutines. Make sure you reinstall the requirements file (or `pip install pytest-asyncio`) locally before rerunning the CI mirror commands above.
 
 Keep the virtualenv around so re-runs before each push are quick (`pytest …`).
 

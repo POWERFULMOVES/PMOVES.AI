@@ -10,11 +10,12 @@ This note captures how to build or source container images for the first‑class
   ```bash
   docker build \
     -f integrations-workspace/Pmoves-Health-wger/extras/docker/production/Dockerfile \
-    -t ghcr.io/powerfulmoves/pmoves-health-wger:main \
+    -t ghcr.io/cataclysm-studios-inc/pmoves-health-wger:main \
     integrations-workspace/Pmoves-Health-wger
   ```
 
-- After publishing via GHCR, keep the repository name lowercase (`powerfulmoves/pmoves-health-wger`).
+- Authenticate with `docker login ghcr.io -u <github-user>` (we store creds in `.docker-config/` so they
+  stay out of your global Docker config) and push the lowercase repo `cataclysm-studios-inc/pmoves-health-wger`.
 
 ## Firefly III (pmoves-firefly-iii)
 
@@ -42,5 +43,4 @@ This note captures how to build or source container images for the first‑class
 
 ## Lowercase naming convention
 
-- GHCR repository names must be lowercase. When configuring the compose files or GHCR workflows, ensure the image references use lowercase paths (e.g., `ghcr.io/powerfulmoves/pmoves-health-wger:main`).
-
+- GHCR repository names must be lowercase. When configuring the compose files or GHCR workflows, ensure the image references use lowercase paths (e.g., `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:main`).

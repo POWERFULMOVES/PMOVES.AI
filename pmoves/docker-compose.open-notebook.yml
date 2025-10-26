@@ -10,9 +10,8 @@ services:
       - .env
       - .env.local
     environment:
-      SURREAL_URL: ${SURREAL_URL:-ws://localhost:8000/rpc}
-      SURREAL_ADDRESS: ${SURREAL_ADDRESS:-localhost}
-      SURREAL_URL: ${SURREAL_URL:-ws://cataclysm-open-notebook-surrealdb:8000/rpc}
+      SURREAL_URL: ${OPEN_NOTEBOOK_SURREAL_URL:-ws://localhost:8000/rpc}
+      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-localhost}
       API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
@@ -41,6 +40,8 @@ services:
       VERTEX_PROJECT: ${VERTEX_PROJECT:-}
       VERTEX_LOCATION: ${VERTEX_LOCATION:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      MINDMAP_BASE: ${MINDMAP_BASE:-http://hi-rag-gateway-v2:8086}
+      MINDMAP_CONSTELLATION_ID: ${MINDMAP_CONSTELLATION_ID:-8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111}
     ports:
       - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
       - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"

@@ -46,6 +46,18 @@ Integrations compose profiles (local containers + n8n automation):
 
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
+### Cloudflare tunnel (optional remote access)
+
+Use the bundled `cloudflared` helper when you need to expose local services to collaborators:
+
+- Populate `pmoves/env.shared` (or `.env.local`) with either `CLOUDFLARE_TUNNEL_TOKEN` **or** the tuple `CLOUDFLARE_TUNNEL_NAME`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_CERT`/`CLOUDFLARE_CRED_FILE`. These map directly to the values Cloudflare provides after `cloudflared tunnel create` or `cloudflared tunnel login`.
+- Optional overrides:
+  - `CLOUDFLARE_TUNNEL_INGRESS` — comma-separated ingress rules such as `geometry=http://hi-rag-gateway-v2:8086,yt=http://pmoves-yt:8077`.
+  - `CLOUDFLARE_TUNNEL_HOSTNAMES` — the hostnames that should be created or updated (e.g., `hi-rag.local.pmoves.ai`).
+  - `CLOUDFLARE_TUNNEL_METRICS_PORT` — exported metrics listener (defaults to none).
+- Start/stop the tunnel with `make up-cloudflare` / `make down-cloudflare`; fetch the active URL via `make cloudflare-url` and tail logs with `make logs-cloudflare`.
+- When the tunnel is active the connector runs in the `cloudflare` compose profile; ensure your Supabase or Jellyfin hostnames are routable through the ingress rules you define.
+
 ## Environment
 
 Quick start:
@@ -246,7 +258,17 @@ OpenAI-compatible presets:
 - Manual poll: `curl -X POST http://localhost:8095/sync` (returns HTTP 409 while a run is in-flight).
 - Interval tuning: `NOTEBOOK_SYNC_INTERVAL_SECONDS` (seconds, defaults to 300).
 - Cursor storage: `NOTEBOOK_SYNC_DB_PATH` (default `/data/notebook_sync.db` mounted via the `notebook-sync-data` volume).
-- When you launch `make notebook-up`, the bundled SurrealDB endpoint now defaults to `ws://localhost:8000/rpc`; override `SURREAL_URL`/`SURREAL_ADDRESS` in `.env.local` if you target an external Surreal instance. The UI ships with `OPEN_NOTEBOOK_PASSWORD=changeme`—log in with that and update it immediately for your environment.
+
+### Mindmap + Open Notebook integration
+
+- Set `MINDMAP_BASE` (defaults to `http://localhost:8086`), `MINDMAP_CONSTELLATION_ID`, and `MINDMAP_NOTEBOOK_ID` in `env.shared`/`.env.local`. `make env-setup` propagates the base and constellation into `docker-compose.open-notebook.yml` so the Notebook container can resolve the gateway; the notebook ID is used by the sync script/targets below.
+- After seeding (`make mindmap-seed`), run `python pmoves/scripts/mindmap_query.py --base $MINDMAP_BASE --cid $MINDMAP_CONSTELLATION_ID --limit 25 --offset 0` to preview the enriched payload. The CLI prints a summary (`returned`, `total`, `remaining`, `has_more`) and the JSON contains `media_url` + `notebook` metadata ready for ingestion.
+- Launch Notebook (`make notebook-up`) and seed models (`make notebook-seed-models`). When adding a Notebook data source, point it at `${MINDMAP_BASE}/mindmap/${MINDMAP_CONSTELLATION_ID}?limit=50&enrich=true` to surface constellation context inside the UI, or run `make mindmap-notebook-sync ARGS="--dry-run"` (see `pmoves/scripts/mindmap_to_notebook.py`) to push nodes as Notebook sources via the API.
+- When you launch `make notebook-up`, the bundled SurrealDB endpoint now defaults to `ws://localhost:8000/rpc`; override `OPEN_NOTEBOOK_SURREAL_URL` / `OPEN_NOTEBOOK_SURREAL_ADDRESS` (legacy aliases: `SURREAL_URL` / `SURREAL_ADDRESS`) in `.env.local` if you target an external Surreal instance. The UI ships with `OPEN_NOTEBOOK_PASSWORD=changeme`—log in with that and update it immediately for your environment. Whatever password you keep here must also be copied into `OPEN_NOTEBOOK_API_TOKEN`, since the REST helpers and agents authenticate with the same bearer secret.
+- Hi-RAG search sync: `make hirag-notebook-sync ARGS="--query 'what is pmoves' --k 20 --dry-run"` uses `pmoves/scripts/hirag_search_to_notebook.py` to pull semantic hits from `/hirag/query` and post them into Open Notebook. Configure `HIRAG_NOTEBOOK_ID` (or reuse `MINDMAP_NOTEBOOK_ID`) plus `OPEN_NOTEBOOK_API_TOKEN` first—the script dedupes on URL/title so repeated runs only append novel hits.
+- No embedding provider keys? Pass `--no-embed` to the ingestion helpers (or set `--embed` only when keys exist). Otherwise the backend tries to instantiate OpenAI/Groq clients and returns `ValueError("OpenAI API key not found")`.
+- Local embeddings: if you prefer staying inside the PMOVES stack, set `OLLAMA_API_BASE=http://ollama:11434` (or your self-hosted endpoint), restart `ollama` via Compose, and rerun `make notebook-seed-models`. The seeder will register `ollama` models so Notebook uses local vectors.
+- Scheduling vs on-demand: run `make mindmap-notebook-sync` / `make hirag-notebook-sync` manually whenever you want fresh context, or wire the same commands into cron/n8n once you’re ready for continuous sync. There’s intentionally no default scheduler so operators keep full control.
 
 ### Events (NATS)
 
@@ -318,6 +340,7 @@ OpenAI-compatible presets:
 - Presign: `curl http://localhost:8088/healthz`
 - Webhook: `curl http://localhost:8085/healthz`
 - Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
+- Mindmap API (Neo4j-backed): `curl http://localhost:8086/mindmap/<constellation_id>?offset=0&limit=50` (after `make mindmap-seed` the demo ID is `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111`). Responses now include `media_url`, timestamps, Notebook payloads, and pagination metadata (`total`, `returned`, `remaining`, `has_more`).
 - Retrieval‑Eval UI: `http://localhost:8090`
 - PostgREST: `http://localhost:3000`
   - After seeding: try a query with `namespace=pmoves` in `/hirag/query`

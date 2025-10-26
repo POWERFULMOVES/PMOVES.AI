@@ -69,6 +69,9 @@ Notes
   - Tunables (env): `YT_SEG_TARGET_DUR` (sec), `YT_SEG_GAP_THRESH` (sec), `YT_SEG_MIN_CHARS`, `YT_SEG_MAX_CHARS`, `YT_SEG_MAX_DUR` (sec)
 - Indexing:
   - `YT_INDEX_LEXICAL=true|false` (default true). When true, `/yt/emit` asks Hi‑RAG v2 to also index in Meili via `index_lexical`.
+  - `YT_INDEX_LEXICAL_DISABLE_THRESHOLD` (default `0`) auto-disables lexical indexing when the chunk count meets/exceeds the threshold to keep large drops from blocking the request. Leave `0` to always respect `YT_INDEX_LEXICAL`.
+  - `YT_UPSERT_BATCH_SIZE` (default `200`) controls how many transcript chunks each `/hirag/upsert-batch` call sends. Combine with the lexical threshold to tune large uploads.
+  - `YT_ASYNC_UPSERT_ENABLED` + `YT_ASYNC_UPSERT_MIN_CHUNKS` (default `true` / `200`) switch `/yt/emit` into background mode for oversized transcripts. The endpoint now returns `{async:true, job_id}` immediately and background workers post the batches + CGP envelope; poll `/yt/emit/status/{job_id}` for completion.
 - Auto‑tune:
    - `YT_SEG_AUTOTUNE=true|false` (default true). When enabled, thresholds are auto‑tuned per video using Whisper segment stats (avg duration, gap, words/sec, short‑line ratio) to choose profiles: dialogue, talk, or lyrics.
 

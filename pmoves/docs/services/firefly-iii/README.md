@@ -35,6 +35,7 @@ Smoke
 ```
 curl -sS -H "Authorization: Bearer $FIREFLY_ACCESS_TOKEN" "$FIREFLY_BASE_URL/api/v1/transactions?limit=1" | jq '.data[0] | {journal_id: .id, description: .attributes.description}'
 ```
+- For a quick availability check, run `make smoke-firefly`. It hits the login landing page and `/api/v1/about` (using `FIREFLY_ACCESS_TOKEN` from your shell or `pmoves/env.shared`) and reports the version string. Override `FIREFLY_ROOT_URL` / `FIREFLY_PORT` when you reverse-proxy the finance stack.
 
 Supabase quick checks
 - Upsert a synthetic transaction (dev only):

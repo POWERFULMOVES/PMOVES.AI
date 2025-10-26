@@ -37,6 +37,12 @@ def main() -> int:
     parser.add_argument("--minProj", type=float, default=float(os.getenv("MINDMAP_MIN_PROJ", 0.5)))
     parser.add_argument("--minConf", type=float, default=float(os.getenv("MINDMAP_MIN_CONF", 0.5)))
     parser.add_argument("--limit", type=int, default=int(os.getenv("MINDMAP_LIMIT", 50)))
+    parser.add_argument("--offset", type=int, default=int(os.getenv("MINDMAP_OFFSET", 0)))
+    parser.add_argument(
+        "--no-enrich",
+        action="store_true",
+        help="Return raw point/media objects without notebook enrichment.",
+    )
 
     args = parser.parse_args()
 
@@ -46,6 +52,8 @@ def main() -> int:
         "minProj": args.minProj,
         "minConf": args.minConf,
         "limit": args.limit,
+        "offset": args.offset,
+        "enrich": not args.no_enrich,
     }
 
     try:
@@ -55,7 +63,27 @@ def main() -> int:
         sys.stderr.write(f"mindmap query failed: {exc}\n")
         return 1
 
-    _pretty_print(response.json())
+    payload = response.json()
+    summary = {
+        "returned": payload.get("returned"),
+        "total": payload.get("total"),
+        "offset": payload.get("offset"),
+        "remaining": payload.get("remaining"),
+        "has_more": payload.get("has_more"),
+    }
+    sys.stderr.write(
+        "Mindmap query summary: "
+        + ", ".join(f"{k}={v}" for k, v in summary.items() if v is not None)
+        + "\n"
+    )
+    stats = payload.get("stats", {}).get("per_modality") or {}
+    if stats:
+        sys.stderr.write(
+            "Per-modality counts: "
+            + ", ".join(f"{mod}={count}" for mod, count in sorted(stats.items()))
+            + "\n"
+        )
+    _pretty_print(payload)
     return 0
 
 

@@ -1,8 +1,8 @@
-import os, json, tempfile, shutil, asyncio, time, re, math, uuid, copy, logging
+import os, json, tempfile, shutil, asyncio, time, re, math, uuid, copy, logging, threading
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
-from fastapi import FastAPI, Body, HTTPException
+from fastapi import FastAPI, Body, HTTPException, BackgroundTasks
 import yt_dlp
 try:
     from yt_dlp.utils import DownloadError, PostProcessingError
@@ -147,6 +147,16 @@ BGUTIL_HTTP_BASE_URL = os.environ.get("BGUTIL_HTTP_BASE_URL")
 BGUTIL_DISABLE_INNERTUBE = os.environ.get("BGUTIL_DISABLE_INNERTUBE")
 # Always include lexical indexing on upsert (can be disabled)
 YT_INDEX_LEXICAL = os.environ.get("YT_INDEX_LEXICAL", "true").lower() == "true"
+try:
+    YT_INDEX_LEXICAL_DISABLE_THRESHOLD = max(0, int(os.environ.get("YT_INDEX_LEXICAL_DISABLE_THRESHOLD", "0")))
+except ValueError:
+    YT_INDEX_LEXICAL_DISABLE_THRESHOLD = 0
+
+YT_ASYNC_UPSERT_ENABLED = os.environ.get("YT_ASYNC_UPSERT_ENABLED", "true").lower() == "true"
+try:
+    YT_ASYNC_UPSERT_MIN_CHUNKS = max(1, int(os.environ.get("YT_ASYNC_UPSERT_MIN_CHUNKS", "200")))
+except ValueError:
+    YT_ASYNC_UPSERT_MIN_CHUNKS = 600
 
 # Auto-tune segmentation thresholds based on content profile
 YT_SEG_AUTOTUNE = os.environ.get("YT_SEG_AUTOTUNE", "true").lower() == "true"
@@ -164,8 +174,13 @@ INVIDIOUS_COMPANION_URL = os.environ.get("INVIDIOUS_COMPANION_URL")
 INVIDIOUS_COMPANION_KEY = os.environ.get("INVIDIOUS_COMPANION_KEY")
 INVIDIOUS_FALLBACK_FORMAT = os.environ.get("INVIDIOUS_FALLBACK_FORMAT", "video/mp4")
 YT_ENABLE_PO_TOKEN = os.environ.get("YT_ENABLE_PO_TOKEN", "false").lower() == "true"
+YT_COMPANION_ENABLED = os.environ.get("YT_COMPANION_ENABLED", "true").lower() in {"true", "1", "yes", "y"}
 YT_PO_TOKEN_VALUE = os.environ.get("YT_PO_TOKEN_VALUE")
 YT_PO_TOKEN_ITAG = os.environ.get("YT_PO_TOKEN_ITAG", "18")
+try:
+    YT_UPSERT_BATCH_SIZE = max(1, int(os.environ.get("YT_UPSERT_BATCH_SIZE", "200")))
+except ValueError:
+    YT_UPSERT_BATCH_SIZE = 200
 SOUNDCLOUD_USERNAME = os.environ.get("SOUNDCLOUD_USERNAME")
 SOUNDCLOUD_PASSWORD = os.environ.get("SOUNDCLOUD_PASSWORD") or os.environ.get("SOUNDCLOUD_PASS")
 SOUNDCLOUD_COOKIEFILE = os.environ.get("SOUNDCLOUD_COOKIEFILE") or os.environ.get("SOUNDCLOUD_COOKIES")
@@ -180,6 +195,35 @@ else:
     YT_TRANSCRIPT_DIARIZE = False if parsed is None else parsed
 
 _nc: Optional[NATS] = None
+
+_emit_jobs: Dict[str, Dict[str, Any]] = {}
+_emit_job_lock = threading.Lock()
+
+
+def _record_emit_job(job_id: str, state: Dict[str, Any]) -> None:
+    with _emit_job_lock:
+        _emit_jobs[job_id] = state
+
+
+def _update_emit_job(job_id: str, **updates: Any) -> None:
+    with _emit_job_lock:
+        current = copy.deepcopy(_emit_jobs.get(job_id) or {})
+        current.update(updates)
+        _emit_jobs[job_id] = current
+
+
+def _get_emit_job(job_id: str) -> Dict[str, Any]:
+    with _emit_job_lock:
+        return copy.deepcopy(_emit_jobs.get(job_id) or {})
+
+
+def _clear_emit_jobs() -> None:  # pragma: no cover - primarily used in tests
+    with _emit_job_lock:
+        _emit_jobs.clear()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _channel_monitor_notify(
@@ -250,6 +294,10 @@ def _with_ytdlp_defaults(opts: Dict[str, Any], *, po_token: Optional[str] = None
         merged['extractor_retries'] = YT_EXTRACTOR_RETRIES
     merged.setdefault('continuedl', True)
     merged.setdefault('nooverwrites', True)
+    merged.setdefault('format', 'best')
+    merged.setdefault('merge_output_format', 'mp4')
+    merged.setdefault('noplaylist', True)
+    merged.setdefault('hls_prefer_native', True)
     return merged
 
 def s3_client():
@@ -425,6 +473,8 @@ def _apply_provider_defaults(
 
 
 def _fetch_po_token_from_companion(video_id: str) -> Optional[str]:
+    if not YT_COMPANION_ENABLED:
+        return None
     if not (INVIDIOUS_COMPANION_URL and INVIDIOUS_COMPANION_KEY):
         return None
     base = INVIDIOUS_COMPANION_URL.rstrip("/")
@@ -652,6 +702,8 @@ def _download_with_companion(
     entry_meta: Dict[str, Any],
     platform: str,
 ) -> Dict[str, Any]:
+    if not YT_COMPANION_ENABLED:
+        raise HTTPException(503, "Invidious companion disabled")
     if not (INVIDIOUS_COMPANION_URL and INVIDIOUS_COMPANION_KEY):
         raise HTTPException(503, "Invidious companion not configured")
     video_id = _extract_video_id(url)
@@ -1012,14 +1064,17 @@ def yt_download(body: Dict[str,Any] = Body(...)):
     except (DownloadError, PostProcessingError) as err:
         if platform == "youtube" and _should_use_invidious(err):
             logger.warning("yt-dlp failed, attempting fallback", extra={"video_id": _extract_video_id(url), "error": str(err)})
-            if INVIDIOUS_COMPANION_URL and INVIDIOUS_COMPANION_KEY:
+            if YT_COMPANION_ENABLED and INVIDIOUS_COMPANION_URL and INVIDIOUS_COMPANION_KEY:
                 try:
                     return _download_with_companion(url, ns, bucket, job_id, entry_meta, platform)
                 except HTTPException as companion_exc:
                     logger.exception("companion fallback failed", extra={"video_id": _extract_video_id(url), "error": str(companion_exc)})
                     raise companion_exc
-            fallback = _download_with_invidious(url, ns, bucket, job_id, entry_meta, platform)
-            return fallback
+            if INVIDIOUS_BASE_URL:
+                fallback = _download_with_invidious(url, ns, bucket, job_id, entry_meta, platform)
+                return fallback
+            logger.warning("No Invidious fallback configured; propagating yt-dlp error", extra={"video_id": _extract_video_id(url)})
+            raise HTTPException(500, f"yt-dlp error: {err}") from err
         raise HTTPException(500, f"yt-dlp error: {err}") from err
     except HTTPException:
         raise
@@ -1871,19 +1926,132 @@ def yt_cgp_build(body: Dict[str, Any] = Body(...)):
     cgp = _build_cgp(video_id, chunks, title, namespace)
     return {'ok': True, 'cgp': cgp}
 
+
+def _upsert_chunks_to_hirag(
+    chunks: List[Dict[str, Any]],
+    *,
+    lexical: bool,
+    batch_size: int,
+) -> Dict[str, Any]:
+    payload_template = {'index_lexical': lexical}
+    total_upserted = 0
+    lexical_indexed = False
+    batch_size = max(1, batch_size) if batch_size else len(chunks)
+    for idx in range(0, len(chunks), batch_size):
+        batch = chunks[idx:idx + batch_size]
+        payload = dict(payload_template)
+        payload['items'] = batch
+        payload['ensure_collection'] = idx == 0
+        r = requests.post(
+            f"{HIRAG_URL}/hirag/upsert-batch",
+            headers={'content-type': 'application/json'},
+            data=json.dumps(payload),
+            timeout=(10, 600),
+        )
+        r.raise_for_status()
+        if r.headers.get('content-type', '').startswith('application/json'):
+            up_resp = r.json()
+            total_upserted += up_resp.get('upserted', 0) or 0
+            lexical_indexed = up_resp.get('lexical_indexed', lexical_indexed) or lexical_indexed
+    return {
+        'upserted': total_upserted,
+        'lexical_indexed': lexical_indexed if lexical else False,
+    }
+
+
+def _emit_geometry_event(
+    video_id: str,
+    chunks: List[Dict[str, Any]],
+    title: Optional[str],
+    namespace: str,
+) -> None:
+    cgp = _build_cgp(video_id, chunks, title, namespace)
+    r2 = requests.post(
+        f"{HIRAG_URL}/geometry/event",
+        headers={'content-type': 'application/json'},
+        data=json.dumps({'type': 'geometry.cgp.v1', 'data': cgp}),
+        timeout=60,
+    )
+    r2.raise_for_status()
+
+
+def _emit_async_job(
+    job_id: str,
+    video_id: str,
+    namespace: str,
+    title: Optional[str],
+    tuned: Optional[Dict[str, Any]],
+    chunks: List[Dict[str, Any]],
+    lexical: bool,
+    batch_size: int,
+) -> None:
+    logger.info(
+        "yt_emit_async_started",
+        extra={
+            "event": "yt_emit_async_started",
+            "job_id": job_id,
+            "video_id": video_id,
+            "namespace": namespace,
+            "chunks": len(chunks),
+            "lexical": lexical,
+        },
+    )
+    try:
+        up = _upsert_chunks_to_hirag(chunks, lexical=lexical, batch_size=batch_size)
+        _emit_geometry_event(video_id, chunks, title, namespace)
+        _update_emit_job(
+            job_id,
+            status="completed",
+            finished_at=_utc_now(),
+            upserted=up.get('upserted'),
+            lexical_indexed=up.get('lexical_indexed'),
+            profile=(tuned or {}).get('profile') if tuned else None,
+        )
+        logger.info(
+            "yt_emit_async_completed",
+            extra={
+                "event": "yt_emit_async_completed",
+                "job_id": job_id,
+                "video_id": video_id,
+                "namespace": namespace,
+                "upserted": up.get('upserted'),
+                "lexical_indexed": up.get('lexical_indexed'),
+            },
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.exception(
+            "yt_emit_async_failed",
+            extra={
+                "event": "yt_emit_async_failed",
+                "job_id": job_id,
+                "video_id": video_id,
+                "namespace": namespace,
+                "error": str(exc),
+            },
+        )
+        _update_emit_job(
+            job_id,
+            status="failed",
+            finished_at=_utc_now(),
+            error=str(exc),
+        )
+
 @app.post('/yt/emit')
-def yt_emit(body: Dict[str,Any] = Body(...)):
-    vid = body.get('video_id'); ns = body.get('namespace') or DEFAULT_NAMESPACE
-    if not vid: raise HTTPException(400, 'video_id required')
+def yt_emit(background_tasks: BackgroundTasks, body: Dict[str, Any] = Body(...)):
+    vid = body.get('video_id')
+    ns = body.get('namespace') or DEFAULT_NAMESPACE
+    if not vid:
+        raise HTTPException(400, 'video_id required')
     # fetch metadata for optional title
     vids = supa_get('videos', {'video_id': vid}) or []
     title = vids[0].get('title') if vids else None
     tr = _get_transcript(vid)
     text = body.get('text') or tr.get('text')
     segs = tr.get('segments') or []
-    if not (text or segs): raise HTTPException(404, 'transcript not found; run /yt/transcript first')
+    if not (text or segs):
+        raise HTTPException(404, 'transcript not found; run /yt/transcript first')
     doc_id = f"yt:{vid}"
-    tuned = None
+    tuned: Optional[Dict[str, Any]] = None
     if segs and YT_SEG_AUTOTUNE:
         tuned = _auto_tune_segment_params(segs, text)
         chunks = _segment_from_whisper_segments(
@@ -1900,29 +2068,112 @@ def yt_emit(body: Dict[str,Any] = Body(...)):
         chunks = _segment_from_whisper_segments(segs, doc_id, ns)
     else:
         chunks = _segment_transcript(text, doc_id, ns)
-    # upsert JSONL to hi-rag v2
+
+    lexical_enabled = YT_INDEX_LEXICAL
+    lexical_override = body.get('index_lexical')
+    if isinstance(lexical_override, bool):
+        lexical_enabled = lexical_override
+    elif isinstance(lexical_override, str):
+        parsed = _parse_bool(lexical_override)
+        if parsed is not None:
+            lexical_enabled = parsed
+
+    lexical_auto_disabled = False
+    if (
+        lexical_enabled
+        and YT_INDEX_LEXICAL_DISABLE_THRESHOLD
+        and len(chunks) >= YT_INDEX_LEXICAL_DISABLE_THRESHOLD
+    ):
+        lexical_enabled = False
+        lexical_auto_disabled = True
+
     try:
-        payload = {'items': chunks, 'ensure_collection': True, 'index_lexical': YT_INDEX_LEXICAL}
-        r = requests.post(f"{HIRAG_URL}/hirag/upsert-batch", headers={'content-type':'application/json'}, data=json.dumps(payload), timeout=180)
-        r.raise_for_status()
-        up = r.json() if r.headers.get('content-type','').startswith('application/json') else {}
-    except Exception as e:
-        raise HTTPException(502, f"upsert-batch failed: {e}")
-    # emit CGP
+        batch_size = int(body.get('upsert_batch_size') or YT_UPSERT_BATCH_SIZE)
+        if batch_size <= 0:
+            batch_size = len(chunks) or 1
+    except Exception:
+        batch_size = len(chunks) or 1
+
+    async_override = body.get('async') if 'async' in body else body.get('async_upsert')
+    should_async = False
+    if YT_ASYNC_UPSERT_ENABLED:
+        if async_override is not None:
+            if isinstance(async_override, bool):
+                should_async = async_override
+            elif isinstance(async_override, str):
+                parsed = _parse_bool(async_override)
+                if parsed is not None:
+                    should_async = parsed
+        if not should_async and len(chunks) >= YT_ASYNC_UPSERT_MIN_CHUNKS:
+            should_async = True
+
+    if should_async and background_tasks is None:
+        background_tasks = BackgroundTasks()
+
+    if should_async:
+        job_id = str(uuid.uuid4())
+        _record_emit_job(
+            job_id,
+            {
+                'job_id': job_id,
+                'status': 'pending',
+                'video_id': vid,
+                'namespace': ns,
+                'chunks': len(chunks),
+                'lexical_enabled': lexical_enabled,
+                'lexical_auto_disabled': lexical_auto_disabled,
+                'created_at': _utc_now(),
+            },
+        )
+        background_tasks.add_task(
+            _emit_async_job,
+            job_id,
+            vid,
+            ns,
+            title,
+            tuned,
+            copy.deepcopy(chunks),
+            lexical_enabled,
+            batch_size,
+        )
+        return {
+            'ok': True,
+            'video_id': vid,
+            'chunks': len(chunks),
+            'async': True,
+            'job_id': job_id,
+            'lexical_enabled': lexical_enabled,
+            'lexical_auto_disabled': lexical_auto_disabled,
+            'profile': (tuned or {}).get('profile') if tuned else None,
+        }
+
     try:
-        cgp = _build_cgp(vid, chunks, title, ns)
-        r2 = requests.post(f"{HIRAG_URL}/geometry/event", headers={'content-type':'application/json'}, data=json.dumps({'type':'geometry.cgp.v1','data':cgp}), timeout=60)
-        r2.raise_for_status()
-    except Exception as e:
-        raise HTTPException(502, f"CGP emit failed: {e}")
+        up = _upsert_chunks_to_hirag(chunks, lexical=lexical_enabled, batch_size=batch_size)
+    except Exception as exc:
+        raise HTTPException(502, f"upsert-batch failed: {exc}")
+
+    try:
+        _emit_geometry_event(vid, chunks, title, ns)
+    except Exception as exc:
+        raise HTTPException(502, f"CGP emit failed: {exc}")
+
     return {
         'ok': True,
         'video_id': vid,
         'chunks': len(chunks),
-        'upserted': (up or {}).get('upserted'),
-        'lexical_indexed': (up or {}).get('lexical_indexed'),
-        'profile': (tuned or {}).get('profile') if tuned else None
+        'upserted': up.get('upserted'),
+        'lexical_indexed': up.get('lexical_indexed'),
+        'profile': (tuned or {}).get('profile') if tuned else None,
+        'lexical_auto_disabled': lexical_auto_disabled,
     }
+
+
+@app.get('/yt/emit/status/{job_id}')
+def yt_emit_status(job_id: str):
+    job = _get_emit_job(job_id)
+    if not job:
+        raise HTTPException(404, 'job not found')
+    return {'ok': True, 'job': job}
 
 @app.post('/yt/search')
 def yt_search(body: Dict[str,Any] = Body(...)):

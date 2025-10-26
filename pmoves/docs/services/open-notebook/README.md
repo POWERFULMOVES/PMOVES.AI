@@ -27,7 +27,13 @@ Troubleshooting
   ```
   OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055
   OPEN_NOTEBOOK_API_TOKEN=<generated-token>
+  OPEN_NOTEBOOK_SURREAL_URL=ws://cataclysm-open-notebook-surrealdb:8000/rpc
+  OPEN_NOTEBOOK_SURREAL_ADDRESS=cataclysm-open-notebook-surrealdb
   ```
+- The password that unlocks the UI also serves as the API bearer. Keep `OPEN_NOTEBOOK_API_TOKEN` identical to `OPEN_NOTEBOOK_PASSWORD` (branded defaults ship this way) so CLI helpers and agents reuse the same secret.
+- The `OPEN_NOTEBOOK_SURREAL_*` variables drive both the local SurrealDB container and any external Surreal endpoint; `SURREAL_*` aliases remain for legacy agents/Make targets that still read the older names.
+- If embeddings are not configured (no `OPENAI_API_KEY`, `GROQ_API_KEY`, etc.), run the ingestion helpers with `--no-embed` so `/api/sources/json` doesn’t attempt to call EsperanTO’s provider chain and fail with `ValueError("OpenAI API key not found")`.
+- Local-only embeddings: point `OLLAMA_API_BASE` (or another self-hosted provider endpoint) at your Compose service, then rerun `make notebook-seed-models`. The seeder already registers `ollama` models (`llama3.1`, `mxbai-embed-large`) whenever the base URL is present, letting Open Notebook stay inside the PMOVES stack without touching external APIs.
 - Health checks:
   - UI: `curl -I http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}` (expect HTTP 200/307)
   - API: `curl http://localhost:${OPEN_NOTEBOOK_API_PORT:-5055}/health` (returns `{ "status": "healthy" }`)

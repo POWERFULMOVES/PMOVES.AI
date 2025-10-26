@@ -213,7 +213,6 @@ logs-cloudflare: ## Tail Cloudflare tunnel logs
 cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector logs
 	@docker compose -p $(PROJECT) logs --since 30m cloudflared 2>/dev/null | python3 -c 'import re, sys; urls=[m.group(0).rstrip("\"] ,;") for line in sys.stdin for m in re.finditer(r"https://[^\s\"]+", line)]; print(f"🌐 Tunnel URL: {urls[-1]}") if urls else print("↷ No tunnel URL detected in recent cloudflared logs (run `make logs-cloudflare` to inspect startup.)")'
 
-
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
 	docker network create cataclysm-net >/dev/null 2>&1 || true
 	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
@@ -267,6 +266,7 @@ up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfi
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx
+	@$(MAKE) wger-brand-defaults
 
 up-external-firefly: ## Start Firefly III on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
@@ -282,6 +282,12 @@ up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 
 down-external: ## Stop all external stacks
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml down
+
+.PHONY: vendor-httpx
+vendor-httpx: ## Refresh vendored pmoves-yt dependencies via uv
+	@command -v uv >/dev/null 2>&1 || { echo "uv is required (https://github.com/astral-sh/uv)"; exit 1; }
+	@rm -rf vendor/python
+	@uv pip install --requirement services/pmoves-yt/requirements.txt --target vendor/python --upgrade --quiet --compile-bytecode
 
 .PHONY: integrations-up-core integrations-up-wger integrations-up-firefly integrations-up-all integrations-down integrations-logs integrations-import-flows
 
@@ -305,6 +311,10 @@ integrations-up-all: ensure-env-shared ## Start n8n, Wger, Firefly, and flows wa
 	  -f $(INTEGRATIONS_COMPOSE_FIREFLY) \
 	  -f $(INTEGRATIONS_COMPOSE_WATCHER) \
 	  --profile wger --profile firefly up -d
+
+.PHONY: wger-brand-defaults
+wger-brand-defaults:
+	@./scripts/wger_brand_defaults.sh
 
 integrations-down: ## Stop integrations stack and remove volumes
 	@docker compose -p $(INTEGRATIONS_PROJECT) \
@@ -337,11 +347,11 @@ integrations-workspace: ## Clone forks and apply PR kits into INTEGRATIONS_BASE 
 .PHONY: demo-health-cgp demo-finance-cgp
 demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 	@echo "→ Posting health.weekly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
-	@python pmoves/tools/events_to_cgp.py --file pmoves/contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+	@PYTHONPATH=. python tools/events_to_cgp.py --file pmoves/contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 demo-finance-cgp: ## Map sample finance monthly summary to CGP and POST to gateway
 	@echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
-	@python3 pmoves/tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+	@PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 .PHONY: webhook-health-cgp webhook-finance-cgp
 webhook-health-cgp: ## Call n8n health weekly → CGP webhook (workflow must be active)
@@ -564,8 +574,8 @@ smoke:
 	 echo "[11/12] Geometry event ingest..." && curl -sf http://localhost:$$GHPORT/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 	 echo "[12/14] Geometry jump & calibration..." && curl -sf "http://localhost:$$GHPORT/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && curl -sf http://localhost:$$GHPORT/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 
-	@echo "[13/14] Health weekly → CGP..." && python3 pmoves/tools/events_to_cgp.py --file pmoves/contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
-	@echo "[14/14] Finance monthly → CGP..." && python3 pmoves/tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
+	@echo "[13/14] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
+	@echo "[14/14] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
 
 .PHONY: channel-monitor-up
 channel-monitor-up:
@@ -697,6 +707,14 @@ mindmap-smoke:
 	@echo "Querying /mindmap demo constellation..."
 	python scripts/mindmap_query.py --base $${MINDMAP_BASE:-http://localhost:8000} --cid $${MINDMAP_CONSTELLATION_ID:-8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111} --limit $${MINDMAP_LIMIT:-5}
 
+.PHONY: mindmap-notebook-sync
+mindmap-notebook-sync:
+	@python scripts/mindmap_to_notebook.py $(ARGS)
+
+.PHONY: hirag-notebook-sync
+hirag-notebook-sync:
+	@python scripts/hirag_search_to_notebook.py $(ARGS)
+
 .PHONY: seed-data
 seed-data:
 	@echo "Building hi-rag-gateway-v2 (to include seed scripts) if needed..."
@@ -754,6 +772,24 @@ smoke-wger:
 	 printf "[Wger] GET %s\n" "$$STATIC_URL"; \
 	 curl -fsS "$$STATIC_URL" >/dev/null; \
 	 echo "Wger smoke passed."'
+
+.PHONY: smoke-firefly
+smoke-firefly:
+	@which curl >/dev/null 2>&1 || (echo "curl is required for smoke-firefly" && exit 1)
+	@which python3 >/dev/null 2>&1 || (echo "python3 is required for smoke-firefly" && exit 1)
+	@bash -c 'set -euo pipefail; \
+	 ROOT_PORT="$${FIREFLY_PORT:-8082}"; \
+	 ROOT_URL="$${FIREFLY_ROOT_URL:-http://localhost:$$ROOT_PORT}"; \
+	 printf "[Firefly] GET %s\n" "$$ROOT_URL"; \
+	 curl -fsS "$$ROOT_URL" >/dev/null; \
+	 TOKEN="$${FIREFLY_ACCESS_TOKEN:-$$(grep -m1 "^FIREFLY_ACCESS_TOKEN=" env.shared 2>/dev/null | cut -d= -f2-)}"; \
+	 if [ -z "$$TOKEN" ]; then \
+	   echo "FIREFLY_ACCESS_TOKEN not set in env or env.shared; required for API smoke." >&2; \
+	   exit 1; \
+	 fi; \
+	 printf "[Firefly] GET %s/api/v1/about\n" "$$ROOT_URL"; \
+	 RESP=$$(curl -fsS -H "Authorization: Bearer $$TOKEN" "$$ROOT_URL/api/v1/about"); \
+	 printf "%s" "$$RESP" | python3 -c "import json, sys; payload=json.load(sys.stdin); data=payload.get(\"data\") or {}; version=data.get(\"version\"); api_version=data.get(\"api_version\"); assert version, \"Firefly about response missing version field\"; print(f\"Firefly smoke passed (version {version}, API {api_version}).\")"'
 
 .PHONY: smoke-archon
 smoke-archon:
@@ -1131,4 +1167,3 @@ seed-approval-ps:
 .PHONY: manifest-audit
 manifest-audit: ## Audit provisioning inventory and Supabase exports for unsupported hardware
 	@PYTHONPATH=.. $(PYTHON) -m pmoves.tools.manifest_audit
-

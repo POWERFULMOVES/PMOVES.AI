@@ -26,6 +26,9 @@
 ## Maintenance Reminders
 - Whenever the repository structure changes, update the root `README.md` and `folders.md` directory map to reflect the latest organization.
 - Keep documentation pointers synchronized so new contributors can onboard easily.
+- For Open Notebook bring-up, populate `OPEN_NOTEBOOK_SURREAL_URL` / `OPEN_NOTEBOOK_SURREAL_ADDRESS` (or use the legacy `SURREAL_*` aliases) before running `make notebook-up` so the UI can reach SurrealDB.
+- Branded deployments reuse the Open Notebook password as the API bearer token; keep `OPEN_NOTEBOOK_API_TOKEN` in lockstep with `OPEN_NOTEBOOK_PASSWORD` so CLI helpers and agents authenticate cleanly.
+- Prefer local inference? Start the `ollama` service (or another provider) and set `OLLAMA_API_BASE` before running `make notebook-seed-models` so Notebook seeds its catalog with in-cluster models instead of calling external APIs.
 
 ## Testing & Validation
 - Before running checks, review `pmoves/docs/SMOKETESTS.md` for the current 12-step smoke harness flow and optional follow-on targets.
@@ -54,7 +57,7 @@ Follow this flow before running smokes or automation. Commands run from repo roo
 7. `make bootstrap-data` – seeds Supabase SQL, Neo4j graph, Qdrant/Meili demo data.
 8. Optional stacks:
    - `make up-n8n` – workflow engine (UI at http://localhost:5678).
-   - `make notebook-up` / `make notebook-seed-models` – Open Notebook + SurrealDB.
+   - `make notebook-up` / `make notebook-seed-models` – Open Notebook + SurrealDB (set `OPEN_NOTEBOOK_SURREAL_URL`/`OPEN_NOTEBOOK_SURREAL_ADDRESS`, or rely on the legacy `SURREAL_*` aliases, before launching).
    - `make jellyfin-folders` prior to first Jellyfin boot.
 
 ## Smoketests & Diagnostics
