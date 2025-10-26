@@ -45,6 +45,9 @@
 
 ## Security & Configuration Tips
 - Copy `.env.example` → `.env`; never commit secrets. Key envs: `PMOVES_CONTRACTS_DIR` for schema resolution.
+- Branded Open Notebook deployments reuse the UI password as the API bearer token; keep `OPEN_NOTEBOOK_API_TOKEN` aligned with `OPEN_NOTEBOOK_PASSWORD` so ingestion helpers and agents authenticate successfully.
+- When working with Open Notebook, populate `OPEN_NOTEBOOK_SURREAL_URL` / `OPEN_NOTEBOOK_SURREAL_ADDRESS` (or the legacy `SURREAL_*` aliases) so the Streamlit UI can reach SurrealDB inside Compose.
+- To keep embeddings local, launch your provider (e.g., `ollama`) and set `OLLAMA_API_BASE` before running `make notebook-seed-models`; the seeder will add `ollama`-backed models so Notebook never calls external APIs unless you want it to.
 - Use Compose profiles (`data`, `workers`) to scope what runs locally.
 - Validate payloads against schemas before publishing events (`services/common/events.py`).
 

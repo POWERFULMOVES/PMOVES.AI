@@ -277,3 +277,26 @@ The following checklist captures what could be validated within the hosted Codex
 | Restarted ffmpeg-whisper to clear hung jobs | 2025-10-23T18:13:15Z | `docker compose -p pmoves restart ffmpeg-whisper` followed by `curl http://localhost:8078/healthz` → `{"ok":true}`; synthetic WAV transcription completes in ~10 s. |
 | Disabled dynamic SoundCloud ingest | 2025-10-23T17:54:28Z | Updated `pmoves.user_sources` via container SQL (status `inactive`, `auto_process=false`) to prevent further SoundCloud 500s. |
 | Rebuilt ffmpeg with whisper filter | 2025-10-23T18:29:40Z | New multi-stage Dockerfile builds whisper.cpp `libwhisper` then FFmpeg git master with `--enable-whisper`; verified `ffmpeg -filters | grep whisper` shows the filter inside the runtime image. |
+| TODO: surface long transcription progress | — | CPU-only faster-whisper jobs (e.g., `_6zcV0JnwM8`) run for 10+ minutes with no logs. Add an ingest-progress heartbeat or status endpoint so operators see activity instead of repeated HTTP timeouts. |
+
+## 2025-10-24 – /yt/emit Async Upsert & Mindmap Check
+
+| Step | Timestamp (UTC) | Evidence |
+| --- | --- | --- |
+| Async hi-rag batching refactored | 2025-10-24T19:09:00Z | `pmoves/services/pmoves-yt/yt.py` introduces `/yt/emit` background jobs, `/yt/emit/status/{job_id}`, and env toggles (`YT_ASYNC_UPSERT_*`, `YT_INDEX_LEXICAL_DISABLE_THRESHOLD`). Sample defaults mirrored in `pmoves/env.shared.example`. |
+| Regression tests | 2025-10-24T19:09:00Z | `./.venv/bin/python -m pytest pmoves/services/pmoves-yt/tests/test_emit.py` (covers sync + async paths, lexical threshold). |
+| Neo4j mindmap snapshot | 2025-10-24T19:09:00Z | `docker compose -p pmoves exec neo4j cypher-shell -u neo4j -p ***** "MATCH (c:Constellation)-[:HAS]->(p:Point) RETURN count(DISTINCT c) AS constellations, count(p) AS points"` → `constellations=1`, `points=3` (seed data only). |
+| Open Notebook model catalog | 2025-10-24T19:09:00Z | `curl -sS -H 'Authorization: Bearer changeme' http://localhost:5055/api/models | jq length` → `13` models registered. |
+| Mindmap endpoint reinstated | 2025-10-24T19:22:25Z | Added `/mindmap/{constellation_id}` route to `hi-rag-gateway-v2` (FastAPI) with coverage in `pmoves/services/hi-rag-gateway-v2/tests/test_mindmap_route.py`. Restart the gateway containers to load the new route in a running stack. |
+| Mindmap pagination + Notebook hooks | 2025-10-24T21:36:58Z | `/mindmap/{constellation_id}` now supports `offset`, `limit`, `enrich` toggles and emits `media_url` + Open Notebook payloads. `pmoves/scripts/mindmap_query.py` exposes the new params, env defaults live in `env.shared.example`, and the Open Notebook seed helper prints the active mindmap endpoint for operators. |
+| Mindmap stats + Notebook sync helper | 2025-10-24T22:39:00Z | Gateway response now includes `total`, `remaining`, and `stats.per_modality` while `pmoves/scripts/mindmap_to_notebook.py` (and `make mindmap-notebook-sync`) push nodes into Open Notebook via `/api/sources/json`. Docs updated under `LOCAL_DEV.md` / `LOCAL_TOOLING_REFERENCE.md`. |
+
+## 2025-10-26 – Open Notebook Auth & Ingestion Validation
+
+| Step | Timestamp (UTC) | Evidence |
+| --- | --- | --- |
+| Branded password mirrored to API token | 2025-10-26T04:25:00Z | `pmoves/env.shared` now sets `OPEN_NOTEBOOK_API_TOKEN=pmoves4482` alongside `OPEN_NOTEBOOK_PASSWORD=pmoves4482`, plus `MINDMAP_NOTEBOOK_ID=notebook:l0m0qt6q0db40atkr2j7` for ingestion helpers. Docs (`LOCAL_DEV.md`, `services/open-notebook/README.md`, `AGENTS.md`, `pmoves/AGENTS.md`) call out the password/token pairing expectation. |
+| Mindmap ingest dry-run | 2025-10-26T04:40:12Z | `python pmoves/scripts/mindmap_to_notebook.py --base http://localhost:8086 --cid 8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111 --notebook-id notebook:l0m0qt6q0db40atkr2j7 --token changeme --max-items 2 --dry-run` reports two pending sources (`Basketball practice and drills`, `Ball handling basics`). |
+| Mindmap ingest (live) | 2025-10-26T04:47:04Z | Retried without `--dry-run`; Open Notebook created `source:0gfq69g7warpyre9h9h2` and `source:ms3x27sca995oke809qz`. Missing OpenAI key surfaced in logs; reruns should pass once embeddings are configured or invoked with `--no-embed`. |
+| Hi-RAG search ingest dry-run | 2025-10-26T04:43:18Z | `python pmoves/scripts/hirag_search_to_notebook.py --hirag http://localhost:8086 --namespace pmoves --notebook-id notebook:l0m0qt6q0db40atkr2j7 --token changeme --query "what is pmoves" --k 5 --dry-run --max-items 3` queued three Notebook sources based on `/hirag/query` hits. |
+| pmoves-yt regression | 2025-10-26T04:30:22Z | `./.venv/bin/python -m pytest pmoves/services/pmoves-yt/tests/test_emit.py` passed (5 tests) confirming async upsert flows stay green after env churn. |
