@@ -43,3 +43,4 @@ supabase-data/
 data/jellyfin/
 data/open-notebook/
 data/chit/
+cloudflared/
