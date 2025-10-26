@@ -297,6 +297,11 @@ run_standalone_mode() {
   install_base_packages ca-certificates curl gnupg lsb-release git unzip jq
   install_tailscale
   install_rustdesk
+  if ! command -v docker >/dev/null 2>&1; then
+    log "Docker Engine not found; installing container stack for RustDesk relay services."
+    install_docker_stack
+  fi
+  configure_rustdesk_server
 }
 
 run_web_mode() {
@@ -313,6 +318,7 @@ run_full_mode() {
   install_docker_stack
   install_tailscale
   install_rustdesk
+  configure_rustdesk_server
   sync_pmoves_repo
   ensure_pmoves_env || true
   install_pmoves_python_dependencies
