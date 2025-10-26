@@ -283,6 +283,12 @@ up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 down-external: ## Stop all external stacks
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml down
 
+.PHONY: vendor-httpx
+vendor-httpx: ## Refresh vendored pmoves-yt dependencies via uv
+	@command -v uv >/dev/null 2>&1 || { echo "uv is required (https://github.com/astral-sh/uv)"; exit 1; }
+	@rm -rf vendor/python
+	@uv pip install --requirement services/pmoves-yt/requirements.txt --target vendor/python --upgrade --quiet --compile-bytecode
+
 .PHONY: integrations-up-core integrations-up-wger integrations-up-firefly integrations-up-all integrations-down integrations-logs integrations-import-flows
 
 integrations-up-core: ensure-env-shared ## Start n8n (integrations core stack)

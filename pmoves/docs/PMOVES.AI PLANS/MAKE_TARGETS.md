@@ -36,6 +36,8 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 
 - `make up-yt`
   - Boots the YouTube ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
+- `make vendor-httpx`
+  - Rebuilds `pmoves/vendor/python/` using `uv` so the Jellyfin backfill helper keeps an offline `httpx` bundle. Run this after updating `services/pmoves-yt/requirements.txt`.
 
 - `make up-cloudflare`
   - Starts the Cloudflare tunnel connector for remote reviewers. Requires either `CLOUDFLARE_TUNNEL_TOKEN` or the trio `CLOUDFLARE_TUNNEL_NAME` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_CERT`/`CLOUDFLARE_CRED_FILE` in your env overrides; follow with `make cloudflare-url` to capture the issued hostname and `make down-cloudflare` when finished.

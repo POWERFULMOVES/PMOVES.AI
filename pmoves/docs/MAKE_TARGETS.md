@@ -47,6 +47,8 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Starts optional media analyzers (`media-video`, `media-audio`).
 - `make up-yt`
   - Starts the ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`).
+- `make vendor-httpx`
+  - Rebuilds `pmoves/vendor/python/` with `uv` so the Jellyfin backfill script has an offline `httpx` bundle. Requires `uv` in your PATH.
 - `make up-cloudflare`
   - Brings up the Cloudflare tunnel connector (needs `CLOUDFLARE_TUNNEL_TOKEN` or `CLOUDFLARE_TUNNEL_NAME` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_CERT`/`CLOUDFLARE_CRED_FILE` in `env.shared`/`.env.local`). Pair with `make cloudflare-url` to print the latest published endpoint and `make down-cloudflare` to stop it.
 - `make up-jellyfin`

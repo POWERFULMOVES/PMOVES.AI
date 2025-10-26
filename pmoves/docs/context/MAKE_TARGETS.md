@@ -26,6 +26,8 @@
 
 - `make up-yt`
   - Boots the YouTube ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
+- `make vendor-httpx`
+  - Uses `uv` to refresh the offline `pmoves/vendor/python/` bundle so Jellyfin backfill scripts can import `httpx` without pip.
 
 - `make up-cloudflare`
   - Launches the Cloudflare tunnel connector once `CLOUDFLARE_TUNNEL_TOKEN` **or** (`CLOUDFLARE_TUNNEL_NAME`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_CERT`/`CLOUDFLARE_CRED_FILE`) are set. Use `make cloudflare-url` to print the latest tunneled hostname and `make down-cloudflare` to stop it.

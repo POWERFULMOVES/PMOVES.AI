@@ -19,6 +19,7 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 ## Testing
 - Unit suite: `python -m pytest pmoves/services/pmoves-yt/tests`
 - Async playlist pacing coverage (`tests/test_rate_limit.py::test_playlist_rate_limit_sleep`) now relies on `pytest-asyncio` for event loop orchestration. The dependency ships in `services/pmoves-yt/requirements.txt`, so re-run `python -m pip install -r services/pmoves-yt/requirements.txt` after pulling this change to keep the test harness green.
+- Offline bundle refresh: `make vendor-httpx` (requires [uv](https://github.com/astral-sh/uv)) rebuilds `pmoves/vendor/python/` so helper scripts like `pmoves/scripts/backfill_jellyfin_metadata.py` can import `httpx` without pip.
 
 ## Resilient Playlist Ingest (2025-10)
 - `/yt/playlist` now runs downloads concurrently (bounded by `YT_CONCURRENCY`) with
