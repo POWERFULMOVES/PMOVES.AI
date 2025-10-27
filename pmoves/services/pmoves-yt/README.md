@@ -35,6 +35,18 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 - Summaries/chapters emit `ingest.summary.ready.v1` / `ingest.chapters.ready.v1`
   events so downstream automations (Discord, n8n) can react in real time.
 
+## Channel Monitor Enrichment (2025-10-26)
+- `pmoves.channel_monitor` now forwards detailed channel metadata with each
+  queue payload. pmoves-yt persists the enriched context into the
+  `youtube_transcripts` table via new columns:
+  - `channel_id`, `channel_url`, `channel_thumbnail`
+  - `channel_tags` (text array) and `namespace`
+  - `channel_metadata` (JSONB with priority + subscriber counts)
+- The `meta` JSON payload also stores the raw `channel_monitor` metadata so
+  downstream RAG jobs can audit ingestion history or render richer UI chrome.
+- Use the metadata to filter notebook syncs or n8n workflows by brand/namespace
+  without additional joins — e.g. `channel_tags @> '{"darkxside"}'`.
+
 ### yt-dlp configuration (2025-10)
 - `yt-dlp[default]` + `curl-cffi` ship within the image; `ffmpeg` and `atomicparsley`
   are installed via apt so metadata/thumbnail embedding works out of the box.

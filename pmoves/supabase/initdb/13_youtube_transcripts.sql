@@ -14,6 +14,12 @@ BEGIN
         title text not null,
         description text,
         channel text,
+        channel_id text,
+        channel_url text,
+        channel_thumbnail text,
+        channel_tags text[],
+        namespace text,
+        channel_metadata jsonb default '{}'::jsonb,
         url text not null,
         published_at timestamptz,
         duration double precision,
@@ -33,6 +39,12 @@ BEGIN
         title text not null,
         description text,
         channel text,
+        channel_id text,
+        channel_url text,
+        channel_thumbnail text,
+        channel_tags text[],
+        namespace text,
+        channel_metadata jsonb default '{}'::jsonb,
         url text not null,
         published_at timestamptz,
         duration double precision,
@@ -125,6 +137,8 @@ $YT_INDEX$;
 
 create index if not exists youtube_transcripts_title_idx on youtube_transcripts using gin (to_tsvector('english', title));
 create index if not exists youtube_transcripts_transcript_idx on youtube_transcripts using gin (to_tsvector('english', coalesce(transcript, '')));
+create index if not exists youtube_transcripts_channel_idx on youtube_transcripts(channel_id);
+create index if not exists youtube_transcripts_namespace_idx on youtube_transcripts(namespace);
 
 grant select on youtube_transcripts to anon, authenticated;
 grant select, insert, update, delete on youtube_transcripts to service_role;

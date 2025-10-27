@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from functools import partial
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 from uuid import UUID
 
 import asyncpg
@@ -24,6 +24,54 @@ TERMINAL_STATUSES = {"completed", "failed"}
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _compact(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned: Dict[str, Any] = {}
+        for key, val in value.items():
+            compacted = _compact(val)
+            if compacted is not None:
+                cleaned[key] = compacted
+        return cleaned or None
+    if isinstance(value, list):
+        cleaned_list = [item for item in (_compact(v) for v in value) if item is not None]
+        return cleaned_list or None
+    if value in (None, "", [], {}):
+        return None
+    return value
+
+
+def _to_iso(value: Optional[datetime]) -> Optional[str]:
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def _best_thumbnail(thumbnails: Any) -> Optional[str]:
+    if isinstance(thumbnails, list):
+        sorted_entries = sorted(
+            (
+                entry
+                for entry in thumbnails
+                if isinstance(entry, dict) and entry.get("url")
+            ),
+            key=lambda item: item.get("width") or 0,
+            reverse=True,
+        )
+        if sorted_entries:
+            return sorted_entries[0]["url"]
+    if isinstance(thumbnails, dict):
+        url = thumbnails.get("url")
+        if isinstance(url, str) and url:
+            return url
+    if isinstance(thumbnails, str) and thumbnails:
+        return thumbnails
+    return None
 
 
 class ChannelMonitor:
@@ -204,6 +252,35 @@ class ChannelMonitor:
                 published = date_parser.parse(published_raw)
             else:
                 published = utcnow()
+            media_thumbnail = getattr(entry, "media_thumbnail", None)
+            thumbnail_url = None
+            thumbnails: Optional[List[Dict[str, Any]]] = None
+            if isinstance(media_thumbnail, list):
+                thumbnails = [
+                    {"url": thumb.get("url"), "width": thumb.get("width"), "height": thumb.get("height")}
+                    for thumb in media_thumbnail
+                    if isinstance(thumb, dict) and thumb.get("url")
+                ]
+                thumbnail_url = thumbnails[0]["url"] if thumbnails else None
+            elif isinstance(media_thumbnail, dict):
+                if media_thumbnail.get("url"):
+                    thumbnail_url = media_thumbnail["url"]
+                    thumbnails = [media_thumbnail]
+
+            author_detail = getattr(entry, "author_detail", None)
+            if isinstance(author_detail, dict):
+                channel_href = author_detail.get("href")
+            else:
+                channel_href = getattr(author_detail, "href", None)
+
+            channel_info = _compact(
+                {
+                    "id": channel_id,
+                    "name": getattr(entry, "author", None),
+                    "url": channel_href,
+                }
+            )
+
             results.append(
                 {
                     "video_id": video_id,
@@ -212,6 +289,11 @@ class ChannelMonitor:
                     "published": published,
                     "author": getattr(entry, "author", ""),
                     "description": getattr(entry, "summary", ""),
+                    "duration": getattr(entry, "media_duration", None),
+                    "thumbnails": thumbnails,
+                    "thumbnail": thumbnail_url,
+                    "tags": getattr(entry, "media_keywords", None),
+                    "channel": channel_info or {},
                 }
             )
         return results
@@ -252,15 +334,7 @@ class ChannelMonitor:
                     published = video["published"]
                     if published.tzinfo is None:
                         published = published.replace(tzinfo=timezone.utc)
-                    metadata = json.dumps(
-                        {
-                            "description": video.get("description", ""),
-                            "author": video.get("author", ""),
-                            "platform": channel.get("platform"),
-                            "source_type": channel.get("source_type"),
-                            "source_url": channel.get("source_url"),
-                        }
-                    )
+                    metadata_payload = self._build_metadata(channel, video)
                     await conn.execute(
                         """
                         INSERT INTO pmoves.channel_monitoring (
@@ -278,7 +352,7 @@ class ChannelMonitor:
                         channel.get("priority", 0),
                         channel.get("namespace", self.namespace_default),
                         channel.get("tags", []),
-                        metadata,
+                        json.dumps(metadata_payload),
                     )
         for video in videos:
             self._processed_video_ids.add(video["video_id"])
@@ -298,6 +372,30 @@ class ChannelMonitor:
         )
         channel_identifier = self._resolve_channel_identifier(channel)
         for video in videos:
+            monitor_metadata = self._build_metadata(channel, video)
+            channel_context = (
+                monitor_metadata.get("channel") if isinstance(monitor_metadata.get("channel"), dict) else {}
+            )
+            video_context = (
+                monitor_metadata.get("video") if isinstance(monitor_metadata.get("video"), dict) else {}
+            )
+            payload_metadata = _compact(
+                {
+                    "platform": channel.get("platform", "youtube"),
+                    "source_type": channel.get("source_type", "channel"),
+                    "channel_name": channel_label,
+                    "channel_id": channel_identifier,
+                    "channel_url": channel_context.get("url"),
+                    "channel_thumbnail": channel_context.get("thumbnail"),
+                    "channel_namespace": channel_context.get("namespace"),
+                    "channel_tags": channel_context.get("tags"),
+                    "channel_priority": channel_context.get("priority"),
+                    "channel_subscriber_count": channel_context.get("subscriber_count"),
+                    "video_thumbnail": video_context.get("thumbnail"),
+                    "video_duration_seconds": video_context.get("duration_seconds"),
+                    "channel_monitor": monitor_metadata,
+                }
+            ) or {}
             payloads.append(
                 {
                     "url": video["url"],
@@ -308,12 +406,7 @@ class ChannelMonitor:
                     "media_type": media_type,
                     "format": format_override,
                     "yt_options": yt_options,
-                    "metadata": {
-                        "platform": channel.get("platform", "youtube"),
-                        "source_type": channel.get("source_type", "channel"),
-                        "channel_name": channel_label,
-                        "channel_id": channel_identifier,
-                    },
+                    "metadata": payload_metadata,
                 }
             )
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -422,6 +515,23 @@ class ChannelMonitor:
                     published = datetime.fromtimestamp(published_ts, tz=timezone.utc)
                 else:
                     published = utcnow()
+                channel_info = {
+                    "id": entry.get("channel_id") or entry.get("uploader_id"),
+                    "name": entry.get("uploader") or entry.get("channel"),
+                    "url": entry.get("uploader_url") or entry.get("channel_url"),
+                    "description": entry.get("channel_description"),
+                    "thumbnail": entry.get("channel_thumbnail"),
+                    "subscriber_count": entry.get("channel_follower_count")
+                    or entry.get("channel_subscriber_count")
+                    or entry.get("channel_view_count"),
+                    "view_count": entry.get("channel_view_count"),
+                }
+                stats = {
+                    "view_count": entry.get("view_count"),
+                    "like_count": entry.get("like_count"),
+                    "comment_count": entry.get("comment_count"),
+                }
+                thumbnails = entry.get("thumbnails")
                 results.append(
                     {
                         "video_id": str(video_id),
@@ -430,12 +540,212 @@ class ChannelMonitor:
                         "published": published,
                         "author": entry.get("uploader") or entry.get("channel") or "",
                         "description": entry.get("description") or "",
+                        "duration": entry.get("duration"),
+                        "thumbnails": thumbnails,
+                        "thumbnail": entry.get("thumbnail") or _best_thumbnail(thumbnails),
+                        "tags": entry.get("tags"),
+                        "categories": entry.get("categories"),
+                        "channel": _compact(channel_info) or {},
+                        "stats": _compact(stats) or {},
                     }
                 )
         return results
 
     def _default_interval(self) -> int:
         return max(1, int(self.config.get("monitoring_schedule", {}).get("interval_minutes") or 30))
+
+    def _global_channel_metadata_fields(self) -> List[str]:
+        fields = self.config.get("global_settings", {}).get("channel_metadata_fields") or []
+        if not isinstance(fields, list):
+            return []
+        return [str(field) for field in fields if isinstance(field, str)]
+
+    def _global_video_metadata_fields(self) -> List[str]:
+        fields = self.config.get("global_settings", {}).get("video_metadata_fields") or []
+        if not isinstance(fields, list):
+            return []
+        return [str(field) for field in fields if isinstance(field, str)]
+
+    def _metadata_fields_for(self, channel: Dict[str, Any], key: str, default: List[str]) -> List[str]:
+        override = channel.get(key)
+        if isinstance(override, list):
+            return [str(field) for field in override if isinstance(field, str)]
+        return list(default)
+
+    def _resolve_channel_breakdown_limit(self) -> int:
+        value = self.config.get("global_settings", {}).get("channel_breakdown_limit")
+        try:
+            limit = int(value)
+        except (TypeError, ValueError):
+            limit = 25
+        return max(1, limit)
+
+    def _extract_channel_metadata(
+        self,
+        channel: Dict[str, Any],
+        video: Dict[str, Any],
+        fields: List[str],
+    ) -> Dict[str, Any]:
+        metadata: Dict[str, Any] = {}
+        video_channel = video.get("channel") if isinstance(video.get("channel"), dict) else {}
+        channel_identifier: Optional[str]
+        try:
+            channel_identifier = self._resolve_channel_identifier(channel)
+        except Exception:
+            channel_identifier = None
+
+        for field in fields:
+            value: Any = None
+            if field == "id":
+                value = (
+                    video_channel.get("id")
+                    or channel.get("channel_id")
+                    or channel.get("source_identifier")
+                    or channel_identifier
+                )
+            elif field == "name":
+                value = channel.get("channel_name") or video_channel.get("name") or video.get("author")
+            elif field == "url":
+                value = channel.get("source_url") or video_channel.get("url")
+                if not value:
+                    candidate_id = (
+                        video_channel.get("id")
+                        or channel.get("channel_id")
+                        or channel.get("source_identifier")
+                    )
+                    if isinstance(candidate_id, str) and candidate_id:
+                        value = f"https://www.youtube.com/channel/{candidate_id}"
+            elif field == "namespace":
+                value = channel.get("namespace", self.namespace_default)
+            elif field == "tags":
+                tags = channel.get("tags")
+                if isinstance(tags, list):
+                    value = [str(tag) for tag in tags if isinstance(tag, str)]
+            elif field == "priority":
+                value = channel.get("priority")
+            elif field == "subscriber_count":
+                value = video_channel.get("subscriber_count") or video_channel.get("view_count")
+            elif field == "thumbnail":
+                value = video_channel.get("thumbnail")
+            elif field == "description":
+                value = video_channel.get("description")
+            elif field == "notes":
+                value = channel.get("notes")
+            if value is not None:
+                metadata[field] = value
+
+        return _compact(metadata) or {}
+
+    def _extract_video_metadata(
+        self,
+        channel: Dict[str, Any],
+        video: Dict[str, Any],
+        fields: List[str],
+    ) -> Dict[str, Any]:
+        metadata: Dict[str, Any] = {}
+        stats = video.get("stats") if isinstance(video.get("stats"), dict) else {}
+
+        for field in fields:
+            value: Any = None
+            if field == "duration":
+                duration = video.get("duration")
+                if isinstance(duration, (int, float)):
+                    value = float(duration)
+                elif isinstance(duration, str):
+                    try:
+                        value = float(duration)
+                    except ValueError:
+                        value = None
+                if value is not None:
+                    metadata["duration_seconds"] = value
+            elif field == "view_count":
+                view_count = stats.get("view_count")
+                if view_count is None:
+                    view_count = video.get("view_count")
+                if isinstance(view_count, (int, float)):
+                    metadata["view_count"] = int(view_count)
+                elif isinstance(view_count, str):
+                    try:
+                        metadata["view_count"] = int(float(view_count))
+                    except ValueError:
+                        pass
+            elif field == "like_count":
+                like_count = stats.get("like_count")
+                if like_count is None:
+                    like_count = video.get("like_count")
+                if isinstance(like_count, (int, float)):
+                    metadata["like_count"] = int(like_count)
+                elif isinstance(like_count, str):
+                    try:
+                        metadata["like_count"] = int(float(like_count))
+                    except ValueError:
+                        pass
+            elif field == "thumbnail":
+                thumb = video.get("thumbnail") or _best_thumbnail(video.get("thumbnails"))
+                if thumb:
+                    metadata["thumbnail"] = thumb
+            elif field == "published_at":
+                published = video.get("published")
+                iso = _to_iso(published) if isinstance(published, datetime) else None
+                if iso:
+                    metadata["published_at"] = iso
+            elif field == "categories":
+                categories = video.get("categories")
+                if isinstance(categories, list):
+                    metadata["categories"] = [
+                        str(category) for category in categories if isinstance(category, str)
+                    ]
+            elif field == "tags":
+                tags = video.get("tags")
+                if isinstance(tags, list):
+                    metadata["tags"] = [str(tag) for tag in tags if isinstance(tag, str)]
+
+        return _compact(metadata) or {}
+
+    def _build_metadata(self, channel: Dict[str, Any], video: Dict[str, Any]) -> Dict[str, Any]:
+        channel_fields = self._metadata_fields_for(
+            channel, "channel_metadata_fields", self._global_channel_metadata_fields()
+        )
+        video_fields = self._metadata_fields_for(
+            channel, "video_metadata_fields", self._global_video_metadata_fields()
+        )
+        channel_section = self._extract_channel_metadata(channel, video, channel_fields)
+        video_section = self._extract_video_metadata(channel, video, video_fields)
+
+        metadata = {
+            "platform": channel.get("platform"),
+            "source_type": channel.get("source_type"),
+            "source_url": channel.get("source_url"),
+            "author": video.get("author"),
+            "description": video.get("description"),
+            "channel": channel_section or None,
+            "video": video_section or None,
+        }
+
+        stats = video.get("stats")
+        if isinstance(stats, dict) and stats:
+            metadata["stats"] = stats
+
+        if channel_section:
+            metadata.setdefault("channel_id", channel_section.get("id"))
+            metadata.setdefault("channel_name", channel_section.get("name"))
+            metadata.setdefault("channel_url", channel_section.get("url"))
+            metadata.setdefault("channel_thumbnail", channel_section.get("thumbnail"))
+            metadata.setdefault("channel_description", channel_section.get("description"))
+            metadata.setdefault("channel_namespace", channel_section.get("namespace"))
+            metadata.setdefault("channel_tags", channel_section.get("tags"))
+            metadata.setdefault("subscriber_count", channel_section.get("subscriber_count"))
+
+        if video_section:
+            if "thumbnail" in video_section:
+                metadata.setdefault("video_thumbnail", video_section.get("thumbnail"))
+            if "duration_seconds" in video_section:
+                metadata.setdefault("video_duration_seconds", video_section.get("duration_seconds"))
+
+        metadata.setdefault("namespace", channel.get("namespace", self.namespace_default))
+        metadata.setdefault("tags", channel.get("tags"))
+
+        return _compact(metadata) or {}
 
     def _active_channels(self) -> List[Dict[str, Any]]:
         channels = [c for c in self.config.get("channels", []) if c.get("enabled", True)]
@@ -522,6 +832,16 @@ class ChannelMonitor:
             "media_type": config.get("media_type", "video"),
             "format": config.get("format"),
         }
+        channel_fields = record.get("channel_metadata_fields") or config.get("channel_metadata_fields")
+        if isinstance(channel_fields, list):
+            entry["channel_metadata_fields"] = [
+                str(field) for field in channel_fields if isinstance(field, str)
+            ]
+        video_fields = record.get("video_metadata_fields") or config.get("video_metadata_fields")
+        if isinstance(video_fields, list):
+            entry["video_metadata_fields"] = [
+                str(field) for field in video_fields if isinstance(field, str)
+            ]
         return entry
 
     async def _update_user_source_status(self, channel: Dict[str, Any], discovered: int) -> None:
@@ -717,15 +1037,99 @@ class ChannelMonitor:
             )
             recent = await conn.fetch(
                 """
-                SELECT channel_name, video_title, video_url, discovered_at, processing_status
+                SELECT channel_id, channel_name, video_title, video_url, discovered_at, processing_status,
+                       metadata->>'channel_url' AS channel_url,
+                       metadata->>'channel_thumbnail' AS channel_thumbnail
                 FROM pmoves.channel_monitoring
                 ORDER BY discovered_at DESC
                 LIMIT 10
                 """
             )
+            channel_rows = await conn.fetch(
+                """
+                SELECT
+                    channel_id,
+                    MAX(channel_name) AS channel_name,
+                    MAX(namespace) AS namespace,
+                    ARRAY_AGG(tags) AS tags_collection,
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE processing_status='pending') AS pending,
+                    COUNT(*) FILTER (WHERE processing_status='queued') AS queued,
+                    COUNT(*) FILTER (WHERE processing_status='processing') AS processing,
+                    COUNT(*) FILTER (WHERE processing_status='completed') AS completed,
+                    COUNT(*) FILTER (WHERE processing_status='failed') AS failed,
+                    MAX(discovered_at) AS last_discovered_at,
+                    MAX(published_at) AS last_published_at,
+                    MAX(metadata->>'channel_url') AS channel_url,
+                    MAX(metadata->>'channel_thumbnail') AS channel_thumbnail,
+                    MAX(metadata->>'channel_description') AS channel_description,
+                    MAX(metadata->>'last_status') AS last_status,
+                    MAX(metadata->>'last_status_at') AS last_status_at,
+                    MAX(metadata->>'subscriber_count') AS subscriber_count_raw
+                FROM pmoves.channel_monitoring
+                GROUP BY channel_id
+                ORDER BY last_discovered_at DESC NULLS LAST
+                LIMIT $1
+                """,
+                self._resolve_channel_breakdown_limit(),
+            )
+        summary = dict(row) if row else {}
+        if summary.get("first_discovery"):
+            summary["first_discovery"] = _to_iso(summary["first_discovery"])
+        if summary.get("last_discovery"):
+            summary["last_discovery"] = _to_iso(summary["last_discovery"])
+
+        formatted_recent: List[Dict[str, Any]] = []
+        for item in recent:
+            data = dict(item)
+            data["discovered_at"] = _to_iso(data.get("discovered_at"))
+            formatted_recent.append(data)
+
+        channel_breakdown: List[Dict[str, Any]] = []
+        for item in channel_rows:
+            tags_collection = item.get("tags_collection") or []
+            tag_set = {
+                tag
+                for tags in tags_collection
+                if isinstance(tags, list)
+                for tag in tags
+                if isinstance(tag, str) and tag
+            }
+            subscriber_raw = item.get("subscriber_count_raw")
+            try:
+                subscriber_count = int(subscriber_raw) if subscriber_raw is not None else None
+            except (TypeError, ValueError):
+                subscriber_count = None
+
+            channel_breakdown.append(
+                {
+                    "channel_id": item.get("channel_id"),
+                    "channel_name": item.get("channel_name"),
+                    "namespace": item.get("namespace"),
+                    "tags": sorted(tag_set),
+                    "totals": {
+                        "total": item.get("total", 0),
+                        "pending": item.get("pending", 0),
+                        "queued": item.get("queued", 0),
+                        "processing": item.get("processing", 0),
+                        "completed": item.get("completed", 0),
+                        "failed": item.get("failed", 0),
+                    },
+                    "last_discovered_at": _to_iso(item.get("last_discovered_at")),
+                    "last_published_at": _to_iso(item.get("last_published_at")),
+                    "channel_url": item.get("channel_url"),
+                    "channel_thumbnail": item.get("channel_thumbnail"),
+                    "channel_description": item.get("channel_description"),
+                    "subscriber_count": subscriber_count,
+                    "last_status": item.get("last_status"),
+                    "last_status_at": item.get("last_status_at"),
+                }
+            )
+
         return {
-            "summary": dict(row) if row else {},
-            "recent": [dict(r) for r in recent],
+            "summary": summary,
+            "recent": formatted_recent,
+            "channels": channel_breakdown,
             "active_channels": len(self._active_channels()),
             "dynamic_channels": len([c for c in self._dynamic_channels if c.get("enabled", True)]),
         }
@@ -748,6 +1152,10 @@ class ChannelMonitor:
             "namespace": data.get("namespace", self.namespace_default),
             "tags": data.get("tags", []),
         }
+        for key in ("channel_metadata_fields", "video_metadata_fields"):
+            value = data.get(key)
+            if isinstance(value, list):
+                new_channel[key] = [str(field) for field in value if isinstance(field, str)]
         self.config.setdefault("channels", []).append(new_channel)
         save_config(self.config_path, self.config)
         if new_channel["enabled"]:

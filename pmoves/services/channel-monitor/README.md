@@ -43,6 +43,27 @@ curl -X POST http://localhost:8097/api/monitor/channel \
 - `postprocessors`: override yt-dlp post-processing chain; defaults embed thumbnails + metadata.
 - `write_info_json`: emit `.info.json` alongside downloads for downstream RAG enrichment.
 
+#### Metadata profiles
+
+Global defaults live under `global_settings.channel_metadata_fields` and
+`global_settings.video_metadata_fields`. The lists control which attributes are
+captured for each discovered item and mirrored into the `metadata` JSONB column
+as well as the payload sent to `pmoves-yt`.
+
+- Channel fields include identifiers, canonical URLs, namespace/tags, priority,
+  thumbnail, and subscriber counts. The defaults surface all of these so the
+  `/api/monitor/stats` endpoint can report per-channel health.
+- Video fields include duration, view/like counts, best thumbnail, publish
+  timestamps, categories, and tags.
+
+Override the defaults per-channel by setting `channel_metadata_fields` or
+`video_metadata_fields` on the channel entry (or via the `POST
+/api/monitor/channel` payload). The monitor only persists the requested keys,
+keeping metadata lean for sources that do not need the full profile.
+
+`global_settings.channel_breakdown_limit` controls how many channels are
+returned by `/api/monitor/stats` in the aggregated breakdown (default 25).
+
 CLI helper (writes to the active config path):
 
 ```bash
@@ -70,3 +91,19 @@ curl -X POST http://localhost:8097/api/monitor/status \
 ```
 
 Accepted statuses: `pending`, `processing`, `queued`, `completed`, `failed`.
+
+### Observability
+
+`GET /api/monitor/stats` now returns:
+
+- `summary`: global totals plus the first/last discovery timestamps (UTC ISO
+  strings).
+- `recent`: the ten most recent discoveries including channel ID, URLs, and
+  thumbnails.
+- `channels`: aggregated metrics per monitored channel (counts by status,
+  namespace, tags, last discovery/publish timestamps, subscriber counts, and
+  thumbnail/URL hints).
+
+Use the channel breakdown to spot stalled sources (e.g. increasing `pending`
+counts or repeated failures) and to confirm branding metadata is being
+populated as expected.

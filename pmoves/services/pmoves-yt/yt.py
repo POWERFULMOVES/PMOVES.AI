@@ -434,6 +434,28 @@ def _parse_upload_date(value: Optional[str]) -> Optional[str]:
         return None
 
 
+def _fetch_channel_monitor_context(video_id: str) -> Optional[Dict[str, Any]]:
+    rows = supa_get("pmoves_channel_monitoring", {"video_id": video_id}) or []
+    if not rows:
+        return None
+    row = rows[0]
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    context = {
+        "channel_id": row.get("channel_id"),
+        "channel_name": row.get("channel_name"),
+        "channel_url": metadata.get("channel_url") or metadata.get("source_url"),
+        "channel_thumbnail": metadata.get("channel_thumbnail"),
+        "namespace": row.get("namespace"),
+        "tags": row.get("tags"),
+        "priority": row.get("priority"),
+        "last_status": metadata.get("last_status"),
+        "last_status_at": metadata.get("last_status_at"),
+        "subscriber_count": metadata.get("subscriber_count"),
+        "channel_description": metadata.get("channel_description"),
+    }
+    return _compact(context) or None
+
+
 def _collect_video_metadata(video_id: str) -> Dict[str, Any]:
     metadata: Dict[str, Any] = {
         "title": f"YouTube {video_id}",
@@ -452,11 +474,13 @@ def _collect_video_metadata(video_id: str) -> Dict[str, Any]:
     meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
     provenance = meta.get("provenance") if isinstance(meta.get("provenance"), dict) else {}
     channel_meta = meta.get("channel") if isinstance(meta.get("channel"), dict) else {}
+    channel_context = _fetch_channel_monitor_context(video_id)
 
     metadata["title"] = row.get("title") or metadata["title"]
     metadata["description"] = meta.get("description")
-    metadata["channel"] = channel_meta.get("title") or channel_meta.get("name")
     metadata["duration"] = meta.get("duration") or meta.get("duration_seconds")
+    metadata["namespace"] = row.get("namespace") or (channel_context or {}).get("namespace")
+    metadata["tags"] = (channel_context or {}).get("tags")
 
     source_url = row.get("source_url") or provenance.get("original_url")
     if isinstance(source_url, str) and source_url.strip():
@@ -467,6 +491,26 @@ def _collect_video_metadata(video_id: str) -> Dict[str, Any]:
     if isinstance(published_at, str):
         parsed = _parse_upload_date(published_at) or published_at
         metadata["published_at"] = parsed
+
+    channel_details = {
+        "id": (channel_context or {}).get("channel_id") or channel_meta.get("id"),
+        "name": (channel_context or {}).get("channel_name")
+        or channel_meta.get("title")
+        or channel_meta.get("name"),
+        "url": (channel_context or {}).get("channel_url") or channel_meta.get("url"),
+        "thumbnail": (channel_context or {}).get("channel_thumbnail")
+        or channel_meta.get("thumbnail"),
+        "description": (channel_context or {}).get("channel_description")
+        or channel_meta.get("description"),
+        "namespace": (channel_context or {}).get("namespace"),
+        "tags": (channel_context or {}).get("tags"),
+        "priority": (channel_context or {}).get("priority"),
+        "subscriber_count": (channel_context or {}).get("subscriber_count")
+        or channel_meta.get("subscriber_count"),
+    }
+    metadata["channel"] = _compact(channel_details)
+    if channel_context:
+        metadata["channel_monitor"] = channel_context
 
     metadata["meta"] = meta
     return metadata
@@ -1180,11 +1224,18 @@ def yt_transcript(body: Dict[str,Any] = Body(...)):
         if SUPA_SERVICE_KEY:
             try:
                 video_meta = _collect_video_metadata(vid)
+                channel_block = video_meta.get("channel") if isinstance(video_meta.get("channel"), dict) else {}
+                channel_name = channel_block.get("name") if channel_block else video_meta.get("channel")
                 yt_record: Dict[str, Any] = {
                     'video_id': vid,
                     'title': video_meta.get('title') or f"YouTube {vid}",
                     'description': video_meta.get('description'),
-                    'channel': video_meta.get('channel'),
+                    'channel': channel_name,
+                    'channel_id': channel_block.get('id') if channel_block else None,
+                    'channel_url': channel_block.get('url') if channel_block else None,
+                    'channel_thumbnail': channel_block.get('thumbnail') if channel_block else None,
+                    'channel_tags': channel_block.get('tags') if channel_block else None,
+                    'namespace': video_meta.get('namespace'),
                     'url': video_meta.get('url'),
                     'published_at': video_meta.get('published_at'),
                     'duration': video_meta.get('duration'),
@@ -1194,6 +1245,11 @@ def yt_transcript(body: Dict[str,Any] = Body(...)):
                         'language': j.get('language') or body.get('language') or 'auto',
                         's3_uri': j.get('s3_uri'),
                         'segments': j.get('segments'),
+                        'channel_monitor': video_meta.get('channel_monitor'),
+                    }) or None,
+                    'channel_metadata': _compact({
+                        'priority': channel_block.get('priority') if channel_block else None,
+                        'subscriber_count': channel_block.get('subscriber_count') if channel_block else None,
                     }) or None,
                 }
                 supa_upsert('youtube_transcripts', yt_record, on_conflict='video_id')

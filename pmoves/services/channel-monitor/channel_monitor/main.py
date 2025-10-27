@@ -48,6 +48,14 @@ class AddChannelRequest(BaseModel):
     tags: list[str] | None = None
     filters: Dict[str, Any] | None = None
     enabled: bool = True
+    channel_metadata_fields: list[str] | None = Field(
+        None,
+        description="Override the fields captured in channel metadata (defaults from global settings)",
+    )
+    video_metadata_fields: list[str] | None = Field(
+        None,
+        description="Override the fields captured in per-video metadata (defaults from global settings)",
+    )
 
 
 class UpdateStatusRequest(BaseModel):

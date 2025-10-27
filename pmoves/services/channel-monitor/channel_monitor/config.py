@@ -5,6 +5,29 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
+DEFAULT_CHANNEL_METADATA_FIELDS = [
+    "id",
+    "name",
+    "url",
+    "namespace",
+    "tags",
+    "priority",
+    "subscriber_count",
+    "thumbnail",
+    "description",
+]
+
+DEFAULT_VIDEO_METADATA_FIELDS = [
+    "duration",
+    "view_count",
+    "like_count",
+    "thumbnail",
+    "published_at",
+    "categories",
+    "tags",
+]
+
+
 DEFAULT_CONFIG: Dict[str, Any] = {
     "channels": [
         {
@@ -28,6 +51,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "format": None,
             "media_type": "video",
             "cookies_path": None,
+            "channel_metadata_fields": None,
+            "video_metadata_fields": None,
             "yt_options": {
                 "download_archive": "/data/yt-dlp/google-developers.archive",
                 "subtitle_langs": ["en"],
@@ -47,6 +72,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "yt_options": {
             "write_info_json": True,
         },
+        "channel_metadata_fields": DEFAULT_CHANNEL_METADATA_FIELDS,
+        "video_metadata_fields": DEFAULT_VIDEO_METADATA_FIELDS,
+        "channel_breakdown_limit": 25,
     },
     "monitoring_schedule": {
         "enabled": True,
@@ -70,8 +98,21 @@ def ensure_config(path: Path) -> Dict[str, Any]:
     for channel in merged.get("channels", []):
         merged_channel = DEFAULT_CONFIG["channels"][0].copy()
         merged_channel.update(channel)
+        if merged_channel.get("channel_metadata_fields") is None:
+            merged_channel["channel_metadata_fields"] = None
+        if merged_channel.get("video_metadata_fields") is None:
+            merged_channel["video_metadata_fields"] = None
         channels.append(merged_channel)
     merged["channels"] = channels
+    global_settings = DEFAULT_CONFIG["global_settings"].copy()
+    global_settings.update(merged.get("global_settings", {}))
+    if not isinstance(global_settings.get("channel_metadata_fields"), list):
+        global_settings["channel_metadata_fields"] = DEFAULT_CHANNEL_METADATA_FIELDS
+    if not isinstance(global_settings.get("video_metadata_fields"), list):
+        global_settings["video_metadata_fields"] = DEFAULT_VIDEO_METADATA_FIELDS
+    if not isinstance(global_settings.get("channel_breakdown_limit"), int):
+        global_settings["channel_breakdown_limit"] = 25
+    merged["global_settings"] = global_settings
     return merged
 
 

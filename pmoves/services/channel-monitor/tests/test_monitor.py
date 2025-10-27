@@ -27,7 +27,9 @@ if "asyncpg" not in sys.modules:
     asyncpg_stub.Pool = object  # type: ignore[attr-defined]
     sys.modules["asyncpg"] = asyncpg_stub
 
-if "httpx" not in sys.modules:
+try:  # pragma: no cover - allow real httpx when available
+    import httpx  # type: ignore  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
     httpx_stub = ModuleType("httpx")
 
     class _AsyncClient:  # pragma: no cover - guard path
@@ -184,7 +186,16 @@ def test_queue_videos_success_updates_status(tmp_path, monkeypatch):
     assert payload["yt_options"] == {"write_info_json": True}
     assert payload["format"] is None
     assert payload["media_type"] == "video"
-    assert payload["metadata"]["platform"] == "youtube"
+    metadata = payload["metadata"]
+    assert metadata["platform"] == "youtube"
+    assert metadata["channel_id"] == "UC123"
+    assert metadata["channel_name"] == "UC123"
+    assert metadata["channel_namespace"] == "pmoves"
+    assert metadata["channel_tags"] == ["news"]
+    assert "channel_monitor" in metadata
+    monitor_context = metadata["channel_monitor"]
+    assert monitor_context["channel"]["id"] == "UC123"
+    assert monitor_context["channel"]["namespace"] == "pmoves"
     assert statuses[0][0:3] == ("vid-42", "processing", None)
     assert statuses[1][0:3] == ("vid-42", "queued", None)
     assert statuses[1][3] == {"queue_status_code": 202}
@@ -238,6 +249,40 @@ def test_queue_videos_failure_marks_failed(tmp_path, monkeypatch):
     assert statuses[0][0:3] == ("vid-fail", "processing", None)
     assert statuses[1][0:3] == ("vid-fail", "failed", "queue failure")
     assert statuses[1][3] == {"queue_error_type": "RuntimeError"}
+
+
+def test_build_metadata_respects_overrides(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    now = datetime.now(timezone.utc)
+    channel = {
+        "channel_id": "UCOVERRIDE",
+        "channel_name": "Override Channel",
+        "namespace": "pmoves.override",
+        "tags": ["override"],
+        "channel_metadata_fields": ["id", "name", "namespace"],
+        "video_metadata_fields": ["duration", "thumbnail"],
+    }
+    video = {
+        "video_id": "vid-override",
+        "url": "https://www.youtube.com/watch?v=vid-override",
+        "title": "Override",
+        "published": now,
+        "duration": 180,
+        "thumbnail": "https://example.test/thumb.jpg",
+        "channel": {"id": "UCOVERRIDE", "name": "Override Channel"},
+    }
+
+    metadata = monitor._build_metadata(channel, video)
+
+    assert metadata["channel"]["id"] == "UCOVERRIDE"
+    assert metadata["channel"]["name"] == "Override Channel"
+    assert metadata["channel"]["namespace"] == "pmoves.override"
+    assert "tags" not in metadata["channel"]
+    assert metadata["namespace"] == "pmoves.override"
+    video_section = metadata.get("video")
+    assert video_section is not None
+    assert video_section["duration_seconds"] == 180.0
+    assert video_section["thumbnail"] == "https://example.test/thumb.jpg"
 
 
 def test_apply_status_update_invokes_internal_update(tmp_path):

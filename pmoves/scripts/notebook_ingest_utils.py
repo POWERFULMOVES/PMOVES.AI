@@ -24,7 +24,7 @@ class NotebookSource:
     url: Optional[str] = None
     content: Optional[str] = None
     embed: bool = True
-    async_processing: bool = False
+    async_processing: bool = True
 
     def dedupe_key(self) -> str:
         if self.source_type == "link" and self.url:
