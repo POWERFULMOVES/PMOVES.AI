@@ -106,7 +106,7 @@ CONTRACTS = ROOT / "contracts" / "topics.json"
 HTTP_HEALTH = [
     ("qdrant", "http://localhost:6333/ready", "json_ok_or_200"),
     ("meilisearch", "http://localhost:7700/health", "json_ok_or_200"),
-    ("postgrest", "http://localhost:3000", "http_200"),
+    ("postgrest", "http://localhost:3010", "http_200"),
     ("neo4j-ui", "http://localhost:7474", "http_200"),
     ("agent-zero", "http://localhost:8080/healthz", "ok_true"),
     ("extract-worker", "http://localhost:8083/healthz", "ok_true"),

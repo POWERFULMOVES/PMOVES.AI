@@ -364,7 +364,7 @@ integrations-workspace: ## Clone forks and apply PR kits into INTEGRATIONS_BASE 
 .PHONY: demo-health-cgp demo-finance-cgp
 demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 	@echo "→ Posting health.weekly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
-	@PYTHONPATH=. python tools/events_to_cgp.py --file pmoves/contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+	@PYTHONPATH=. python tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 demo-finance-cgp: ## Map sample finance monthly summary to CGP and POST to gateway
 	@echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
@@ -559,14 +559,14 @@ smoke:
 	@echo "[4/12] presign health..." && curl -sf http://localhost:8088/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[5/12] render-webhook health..." && curl -sf http://localhost:8085/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
 	# Auto-detect PostgREST: prefer localhost:3000 when compose PostgREST is up, else use SUPA_REST_URL or CLI fallback
-	@REST_BASE="$$( if curl -sf http://localhost:3000 >/dev/null 2>&1; then echo http://localhost:3000/rest/v1; else echo "$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; fi )"; \
+	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; elif curl -sf http://localhost:3000 >/dev/null 2>&1; then echo http://localhost:3000; else echo "$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; fi )"; \
 	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
 	 echo "[6/12] PostgREST reachable..." && curl -sf "$${REST_BASE}/it_errors?select=id&limit=1" -H "apikey: $$APIKEY" >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[7/12] Insert via render-webhook..." && curl -sf -X POST http://localhost:8085/comfy/webhook \
 	 -H "Content-Type: application/json" \
 	 -H "Authorization: Bearer $${RENDER_WEBHOOK_SHARED_SECRET:-change_me}" \
 	 -d '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","presigned_get":null,"title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@REST_BASE="$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; \
+	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; elif curl -sf http://localhost:3000 >/dev/null 2>&1; then echo http://localhost:3000; else echo "$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; fi )"; \
 	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
 	 echo "[8/12] Verify studio_board row..." && curl -sf "$${REST_BASE}/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[9/12] Hi-RAG v2 query..." && \
@@ -591,8 +591,8 @@ smoke:
 	 echo "[11/12] Geometry event ingest..." && curl -sf http://localhost:$$GHPORT/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 	 echo "[12/14] Geometry jump & calibration..." && curl -sf "http://localhost:$$GHPORT/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && curl -sf http://localhost:$$GHPORT/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 
-	@echo "[13/14] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
-	@echo "[14/14] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
+	@echo "[13/14] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
+	@echo "[14/14] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
 
 .PHONY: channel-monitor-up
 channel-monitor-up:
@@ -726,15 +726,15 @@ mindmap-smoke:
 
 .PHONY: mindmap-notebook-sync
 mindmap-notebook-sync:
-	@python scripts/mindmap_to_notebook.py $(ARGS)
+	@bash -c '$(LOAD_ENV_SHARED) exec $(PYTHON) scripts/mindmap_to_notebook.py $(ARGS)'
 
 .PHONY: hirag-notebook-sync
 hirag-notebook-sync:
-	@python scripts/hirag_search_to_notebook.py $(ARGS)
+	@bash -c '$(LOAD_ENV_SHARED) exec $(PYTHON) scripts/hirag_search_to_notebook.py $(ARGS)'
 
 .PHONY: yt-notebook-sync
 yt-notebook-sync:
-	@python scripts/yt_transcripts_to_notebook.py $(ARGS)
+	@bash -c '$(LOAD_ENV_SHARED) exec $(PYTHON) scripts/yt_transcripts_to_notebook.py $(ARGS)'
 
 .PHONY: seed-data
 seed-data:
@@ -992,7 +992,7 @@ smoke-geometry:
 .PHONY: smoke-geometry-db
 smoke-geometry-db:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-geometry-db" && exit 1)
-	@SUPA_URL=${SUPABASE_REST_URL:-${SUPA_REST_URL:-http://localhost:3000}} ; \
+	@SUPA_URL=${SUPABASE_REST_URL:-${SUPA_REST_URL:-http://localhost:3010}} ; \
 	 CONST_ID=8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111 ; \
 	 echo "[1/3] GET $SUPA_URL/constellations?id=eq.$CONST_ID" ; \
 	 curl -sf "$SUPA_URL/constellations" --get --data-urlencode "id=eq.$CONST_ID" --data-urlencode "select=id,summary,meta" | jq -e 'length==1' >/dev/null && echo OK || (echo FAIL && exit 1) ; \
@@ -1052,7 +1052,7 @@ yt-playlist-smoke:
 	  echo "[YT] Poll yt_items for job (up to 10x)"; \
 	  for i in $$(seq 1 10); do \
 	    sleep 6; \
-	    curl -s "http://localhost:3000/yt_items?job_id=eq.$$JOB&select=video_id,status&order=created_at.asc" | tee .tmp_items.json >/dev/null; \
+	    curl -s "http://localhost:3010/yt_items?job_id=eq.$$JOB&select=video_id,status&order=created_at.asc" | tee .tmp_items.json >/dev/null; \
 	    CNT=$$(jq 'length' .tmp_items.json); \
 	    if [ "$$CNT" -ge 1 ]; then echo "items=$$CNT"; break; fi; \
 	    echo "retry $$i"; \
@@ -1084,7 +1084,7 @@ discord-smoke:
 jellyfin-smoke:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
 	@echo "[Jellyfin] Health" && curl -sf http://localhost:8093/healthz | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[Jellyfin] Playback URL for latest video" && VID=$$(curl -s 'http://localhost:3000/videos?order=id.desc&select=video_id&limit=1' | jq -r '.[0].video_id // empty'); \
+	@echo "[Jellyfin] Playback URL for latest video" && VID=$$(curl -s 'http://localhost:3010/videos?order=id.desc&select=video_id&limit=1' | jq -r '.[0].video_id // empty'); \
 	if [ -z "$$VID" ]; then echo "No videos found in Supabase; run yt-emit-smoke first"; exit 0; fi; \
 	curl -sS -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"t\":5}" | jq -e '.ok==true and (.url|length)>0' >/dev/null && echo OK || (echo FAIL && exit 1)
 .PHONY: demo-content-published

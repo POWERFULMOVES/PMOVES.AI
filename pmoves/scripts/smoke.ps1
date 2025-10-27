@@ -108,7 +108,7 @@ try {
 
   # 6. PostgREST reachable
   Write-Step "[6/12] PostgREST reachable..."
-  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200 -Url 'http://localhost:3000' } | Out-Null
+  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200 -Url 'http://localhost:3010' } | Out-Null
   Write-OK
 
   # 7. Insert via render-webhook
@@ -122,7 +122,7 @@ try {
 
   # 8. Verify studio_board row
   Write-Step "[8/12] Verify studio_board row..."
-  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJson -Url 'http://localhost:3000/studio_board?order=id.desc&limit=1' }
+  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJson -Url 'http://localhost:3010/studio_board?order=id.desc&limit=1' }
   if ($null -eq $rows -or $rows.Count -lt 1 -or $null -eq $rows[0].title) { throw 'No row with title found' }
   Write-OK
 

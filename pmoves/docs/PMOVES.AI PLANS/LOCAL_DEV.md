@@ -187,7 +187,7 @@ OpenAI-compatible presets:
 - Webhook: `curl http://localhost:8085/healthz`
 - Hi‑RAG v2 stats: `curl http://localhost:8086/hirag/admin/stats`
 - Retrieval‑Eval UI: `http://localhost:8090`
-- PostgREST: `http://localhost:3000`
+- PostgREST: `http://localhost:3010`
   - After seeding: try a query with `namespace=pmoves` in `/hirag/query`
 - Publisher-Discord: `curl http://localhost:8094/healthz`
   - Make helper: `make health-publisher-discord`

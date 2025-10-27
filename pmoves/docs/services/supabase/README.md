@@ -76,7 +76,7 @@ When the CLI stack is active, the Makefile detects `supabase_db_<project>` conta
 | Check | Command | Expected |
 | --- | --- | --- |
 | PostgREST (CLI) | `curl http://localhost:65421/rest/v1` | JSON, HTTP 200 |
-| PostgREST (compose) | `curl http://localhost:3000` | JSON, HTTP 200 |
+| PostgREST (compose) | `curl http://localhost:3010` | JSON, HTTP 200 |
 | Supabase status | `make supa-status` | Lists service ports + anon/service keys |
 | Geometry warmup | `docker logs pmoves-hi-rag-gateway-v2-gpu-1 | grep 'Supabase realtime geometry listener started'` | Confirms the gateway subscribed to `geometry.cgp.v1` over WebSocket |
 

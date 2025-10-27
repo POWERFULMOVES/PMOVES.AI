@@ -72,7 +72,7 @@ _Last updated: 2025-10-26_
   2. Rename the flows if desired and keep them inactive until credentials are configured.
 - **Required environment**
 
-  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3000`).
+  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
   - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
   - `AGENT_ZERO_BASE_URL` – Agent Zero events endpoint base (defaults to `http://agent-zero:8080`).
   - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.
@@ -192,7 +192,7 @@ _Last updated: 2025-10-05_
 - [x] Seeded `public.archon_prompts` via `supabase/initdb/09_archon_prompts.sql` + `10_archon_prompts_seed.sql` and mirrored CHIT geometry tables in `11_chit_geometry.sql` so Archon local stacks stay aligned with migrations (2025-10-13). Extended the geometry demo with `supabase/initdb/12_geometry_fixture.sql` plus `neo4j/cypher/010_chit_geometry_fixture.cypher` and the follow-on smoke check `011_chit_geometry_smoke.cypher`; the new `make bootstrap-data` target chains `supabase-bootstrap`/`neo4j-bootstrap` so the curated CHIT constellation and demo vectors replay automatically (2025-10-20).
 - [x] Unified env + secrets onboarding with `python -m pmoves.scripts.bootstrap_env` / `make bootstrap` and added `make preflight` guard before stack start (2025-10-14).
 - [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
-- [x] Documented the `SUPA_REST_URL=http://localhost:3000` override for local smoke runs and logged the 13/13 harness evidence in `SESSION_IMPLEMENTATION_PLAN.md` (2025-10-18).
+- [x] Documented the `SUPA_REST_URL=http://localhost:3010` override for local smoke runs and logged the 13/13 harness evidence in `SESSION_IMPLEMENTATION_PLAN.md` (2025-10-18).
 - [x] Added Cloudflare tunnel profile + Make helpers for WAN validation (2025-10-23).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
 
@@ -213,7 +213,7 @@ _Last updated: 2025-10-05_
   1. Open n8n → *Workflows* → *Import from File* and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
   2. Rename the flows if desired and keep them inactive until credentials are configured.
 - **Required environment**
-  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3000`).
+  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
   - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
   - `AGENT_ZERO_BASE_URL` – Agent Zero events endpoint base (defaults to `http://agent-zero:8080`).
   - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.

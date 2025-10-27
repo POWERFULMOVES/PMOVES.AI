@@ -58,7 +58,7 @@ Useful health checks:
 
 - Presign: `curl http://localhost:8088/healthz`
 - Render Webhook: `curl http://localhost:8085/healthz`
-- PostgREST: `curl http://localhost:3000`
+- PostgREST: `curl http://localhost:3010`
 - Hi‑RAG v2 stats: `curl http://localhost:8086/hirag/admin/stats`
 - Discord Publisher: `curl http://localhost:8092/healthz`
 

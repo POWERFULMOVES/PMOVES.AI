@@ -53,7 +53,7 @@ Optional secret bundle:
 Useful health checks:
 - Presign: `curl http://localhost:8088/healthz`
 - Render Webhook: `curl http://localhost:8085/healthz`
-- PostgREST: `curl http://localhost:3000`
+- PostgREST: `curl http://localhost:3010`
 - Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
 - Discord Publisher: `curl http://localhost:8092/healthz`
 
@@ -140,7 +140,7 @@ Checks (12):
 The Dropzone UI rides on the Supabase presign + render webhook path. Once the core stack is live:
 
 1. `cd pmoves/ui && pnpm install` (or `npm install`) then run `pnpm dev`.
-2. Open `http://localhost:3000/dashboard/ingest` and upload a small test file to the default bucket.
+2. Open `http://localhost:3010/dashboard/ingest` and upload a small test file to the default bucket.
 3. Watch Supabase for:
    - `upload_events` row progressing from `preparing → uploading → persisting → complete`.
    - `studio_board` insert with `meta.presigned_get` populated from the render webhook proxy.
@@ -359,13 +359,13 @@ Enable gateway persistence and verify rows via PostgREST:
 2. Re-run the demo mappers (steps above).
 3. Verify tables via PostgREST:
    ```bash
-   curl -s "http://localhost:3000/constellations?order=created_at.desc&limit=5" | jq '.[].summary'
-   curl -s "http://localhost:3000/shape_points?order=created_at.desc&limit=5" | jq '.[].id'
+   curl -s "http://localhost:3010/constellations?order=created_at.desc&limit=5" | jq '.[].summary'
+   curl -s "http://localhost:3010/shape_points?order=created_at.desc&limit=5" | jq '.[].id'
    ```
 ### Quick DB smoke (Supabase)
 
 ### Quick DB smoke (Supabase)
- - `make smoke-geometry-db` — verifies the seeded demo constellation is reachable via PostgREST (`constellations`, `shape_points`, and `shape_index`). Ensure `SUPABASE_REST_URL` or `SUPA_REST_URL` is exported; defaults to `http://localhost:3000`.
+- `make smoke-geometry-db` — verifies the seeded demo constellation is reachable via PostgREST (`constellations`, `shape_points`, and `shape_index`). Ensure `SUPABASE_REST_URL` or `SUPA_REST_URL` is exported; defaults to `http://localhost:3010`.
  
  ## 8) Mesh Handshake (NATS)
 

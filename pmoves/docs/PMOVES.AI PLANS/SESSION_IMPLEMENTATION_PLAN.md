@@ -156,7 +156,7 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 | Jellyfin credential smoke (`make jellyfin-verify`) | 2025-10-18T02:15:27Z | Script now autofixes `ScrollBehavior` display prefs for Kodi/web clients; `/Users/{id}/Views` timeout still observed on baseline stack. |
 | Jellyfin stack rebuilt via `make up-jellyfin-ai` | 2025-10-18T02:29:56Z | Followed Kodi rollout guide: composed down existing services, restarted stack, reran `make jellyfin-verify` (still warns on `/Views` timeout, but ScrollBehavior patched). |
 | Full smoke harness (`make smoke`) | 2025-10-18T02:15:27Z | 13/13 steps pass (Meilisearch UI warning expected); baseline captured prior to Jellyfin/Kodi rebuild. |
-| Full smoke harness (`SUPA_REST_URL=http://localhost:3000 make smoke`) | 2025-10-18T04:14:52Z | 13/13 steps pass after overriding PostgREST URL to the compose gateway; make output archived in session logs alongside Archon restart evidence. |
+| Full smoke harness (`SUPA_REST_URL=http://localhost:3010 make smoke`) | 2025-10-18T04:14:52Z | 13/13 steps pass after overriding PostgREST URL to the compose gateway; make output archived in session logs alongside Archon restart evidence. |
 | Full smoke harness (`make smoke`) | 2025-10-18T13:44:48Z | `pmoves/docs/logs/2025-10-18-smoke.log` captures raw harness output (13/13 checks OK). |
 | Webhook smoke (dry) reviewed | — | Outstanding. |
 | Webhook smoke (live) returns 200 | 2025-10-16T22:18:18Z | Manual `/publish` call returned HTTP 200 with embed payload. |

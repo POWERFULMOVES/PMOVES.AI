@@ -99,7 +99,7 @@ _Last updated: 2025-10-14_
   1. Open n8n → *Workflows* → *Import from File* and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
   2. Rename the flows if desired and keep them inactive until credentials are configured.
 - **Required environment**
-  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3000`).
+  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
   - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
   - `AGENT_ZERO_BASE_URL` – Agent Zero events endpoint base (defaults to `http://agent-zero:8080`).
   - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.
@@ -230,7 +230,7 @@ _Last updated: 2025-10-05_
   1. Open n8n → *Workflows* → *Import from File* and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
   2. Rename the flows if desired and keep them inactive until credentials are configured.
 - **Required environment**
-  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3000`).
+  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
   - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
   - `AGENT_ZERO_BASE_URL` – Agent Zero events endpoint base (defaults to `http://agent-zero:8080`).
   - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.

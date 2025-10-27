@@ -21,7 +21,7 @@ Populate the following entries in `.env` (see `.env.example` for placement). Res
 
 ```
 # Supabase
-SUPABASE_REST_URL=http://localhost:3000
+SUPABASE_REST_URL=http://localhost:3010
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 
 # Agent Zero
