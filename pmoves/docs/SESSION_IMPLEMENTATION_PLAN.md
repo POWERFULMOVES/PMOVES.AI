@@ -322,7 +322,7 @@ The following checklist captures what could be validated within the hosted Codex
 | Notebook sync dry-run (with join metadata) | 2025-10-26T17:08:26Z | `make -C pmoves yt-notebook-sync ARGS="--limit 5 --dry-run --supabase-url http://127.0.0.1:65421/rest/v1 --api http://127.0.0.1:5055"` returned enriched titles (`Rick Astley…`, `Sketch 8 B Loud Dark`, etc.) without warnings. |
 | Created default notebook | 2025-10-26T17:28:04Z | `curl -H "Authorization: Bearer pmoves4482" -H "content-type: application/json" -d '{"name":"PMOVES Research"}' http://localhost:5055/api/notebooks` → `notebook:04q1fd9pbbvmkkbwvxzb`; env files now point `MINDMAP_NOTEBOOK_ID` / `YOUTUBE_NOTEBOOK_ID` at the new record. |
 | Notebook sync toggles wired | 2025-10-26T19:45:00Z | `services/notebook-sync/sync.py` now honours `NOTEBOOK_SYNC_MODE`, `NOTEBOOK_SYNC_INTERVAL_SECONDS`, and `NOTEBOOK_SYNC_SOURCES` so Supabase Studio / n8n can flip live vs offline, adjust cadence, and select resources. |
-| LangExtract & extract worker embeddings | 2025-10-26T20:05:00Z | `EMBEDDING_BACKEND=tensorzero` now routes extract-worker embeddings through TensorZero (`embeddinggemma:300m` via Ollama); worker auto-falls back to sentence-transformers when unset. |
+| LangExtract & extract worker embeddings | 2025-10-26T20:05:00Z | `EMBEDDING_BACKEND=tensorzero` now routes extract-worker embeddings through TensorZero (`gemma_embed_local` → Ollama `embeddinggemma:300m`); worker auto-falls back to sentence-transformers when unset. |
 
 ### 2025-10-26 – Open Notebook Credential Rotation Helper
 

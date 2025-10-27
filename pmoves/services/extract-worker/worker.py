@@ -20,7 +20,9 @@ app = FastAPI(title="PMOVES Extract Worker", version="1.0.0")
 _embedder = None
 TENSORZERO_BASE = os.environ.get("TENSORZERO_BASE_URL", "http://tensorzero-gateway:3000")
 TENSORZERO_API_KEY = os.environ.get("TENSORZERO_API_KEY")
-TENSORZERO_EMBED_MODEL = os.environ.get("TENSORZERO_EMBED_MODEL", "embeddinggemma:300m")
+TENSORZERO_EMBED_MODEL = os.environ.get(
+    "TENSORZERO_EMBED_MODEL", "gemma_embed_local"
+)
 
 def _meili(method: str, path: str, **kwargs):
     headers = kwargs.pop('headers', {})
@@ -90,4 +92,3 @@ def ingest(body: Dict[str, Any] = Body(...)):
         except Exception:
             continue
     return {"ok": True, "chunks": len(chunks), "errors_inserted": inserted}
-

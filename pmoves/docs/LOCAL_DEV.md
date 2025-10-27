@@ -73,7 +73,7 @@ Quick start:
 - No Make? `python3 -m pmoves.tools.onboarding_helper generate` produces the same env files and reports any missing CHIT labels before you bring up containers.
 - Configure Crush with `python3 -m pmoves.tools.mini_cli crush setup` so your local Crush CLI session understands PMOVES context paths, providers, and MCP stubs.
   - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
-- TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces.
+- TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces. Pull the Ollama backing model once (`ollama pull embeddinggemma:300m`) so the gateway's default `gemma_embed_local` route succeeds.
   - Advanced toggles: `TENSORZERO_MODEL` overrides the default chat backend, `TENSORZERO_TIMEOUT_SECONDS` adjusts request timeouts, and `TENSORZERO_STATIC_TAGS` (JSON or `key=value,key2=value2`) forwards deployment metadata as `tensorzero::tags`.
 
 ### UI Workspace (Next.js + Supabase Platform Kit)
@@ -271,7 +271,7 @@ OpenAI-compatible presets:
 - Live/offline toggle: `NOTEBOOK_SYNC_MODE` (`live` or `offline`) controls whether the worker processes updates at all.
 - Source filter: `NOTEBOOK_SYNC_SOURCES` (comma list of `notebooks`, `notes`, `sources`) limits which resources feed LangExtract.
 - Cursor storage: `NOTEBOOK_SYNC_DB_PATH` (default `/data/notebook_sync.db` mounted via the `notebook-sync-data` volume).
-- Extract worker routing: set `EMBEDDING_BACKEND=tensorzero` to call the TensorZero gateway for chunk embeddings (uses `TENSORZERO_BASE_URL` + `TENSORZERO_EMBED_MODEL`, defaults to `embeddinggemma:300m`). Leave unset for local `sentence-transformers`.
+- Extract worker routing: set `EMBEDDING_BACKEND=tensorzero` to call the TensorZero gateway for chunk embeddings (uses `TENSORZERO_BASE_URL` + `TENSORZERO_EMBED_MODEL`, defaults to `gemma_embed_local`, which proxies to Ollama's `embeddinggemma:300m`). Leave unset for local `sentence-transformers`.
 
 ### Mindmap + Open Notebook integration
 
@@ -356,7 +356,7 @@ OpenAI-compatible presets:
 - Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
 - Mindmap API (Neo4j-backed): `curl http://localhost:8086/mindmap/<constellation_id>?offset=0&limit=50` (after `make mindmap-seed` the demo ID is `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111`). Responses now include `media_url`, timestamps, Notebook payloads, and pagination metadata (`total`, `returned`, `remaining`, `has_more`).
 - Retrieval‑Eval UI: `http://localhost:8090`
-- PostgREST: `http://localhost:3000`
+- PostgREST: `http://localhost:3010`
   - After seeding: try a query with `namespace=pmoves` in `/hirag/query`
 - Publisher-Discord: `curl http://localhost:8094/healthz`
   - Make helper: `make health-publisher-discord`

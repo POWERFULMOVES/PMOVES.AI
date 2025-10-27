@@ -129,11 +129,15 @@ PROVIDERS: Dict[str, ProviderSpec] = {
         "env": ["TENSORZERO_BASE_URL"],
         "models": [
             (os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini", "language"),
-            (os.environ.get("TENSORZERO_EMBED_MODEL") or "openai::text-embedding-3-small", "embedding"),
+            (
+                os.environ.get("TENSORZERO_EMBED_MODEL") or "gemma_embed_local",
+                "embedding",
+            ),
         ],
         "defaults": {
             "default_chat_model": os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini",
-            "default_embedding_model": os.environ.get("TENSORZERO_EMBED_MODEL") or "openai::text-embedding-3-small",
+            "default_embedding_model": os.environ.get("TENSORZERO_EMBED_MODEL")
+            or "gemma_embed_local",
         },
     },
     "cloudflare": {
