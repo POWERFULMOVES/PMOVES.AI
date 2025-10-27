@@ -715,11 +715,10 @@ services:
       - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
       - "${INVIDIOUS_COMPANION_LISTEN:-127.0.0.1:8282}:8282"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8282/healthz >/dev/null"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    # The upstream image does not ship common shell utilities (wget/curl),
+    # so docker-level health checks misreport the service as unhealthy even
+    # when the /healthz endpoint is serving 200s. Rely on the invidious smoke
+    # target for runtime verification instead.
     profiles: ["invidious"]
     networks: [pmoves]
 

@@ -10,3 +10,7 @@
 - Logs show PO token generation succeeding and the service now remains up (health state transitions from `starting` to `healthy`).
 
 Next steps: supply a valid API key if required for production workloads, otherwise the fallback client will continue to work for ad-hoc token generation.
+
+### 2025-10-27
+
+- Removed the Docker health check from `invidious-companion`. The upstream image no longer ships `wget`/`curl`, causing the Compose health probe to fail even while `http://127.0.0.1:8282/healthz` responds with 200. Validate the service with targeted HTTP checks (`curl http://127.0.0.1:8282/healthz`) or by tailing the PO token job logs.
