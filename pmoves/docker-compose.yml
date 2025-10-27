@@ -29,7 +29,7 @@ services:
       - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
       - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
       - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
-    ports: ["3000:3000"]
+    ports: ["3010:3000"]
     profiles: ["orchestration","workers","supabase-local"]
     networks: [pmoves]
   qdrant:
@@ -708,6 +708,9 @@ services:
       SERVER_SECRET_KEY: ${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}
       CACHE_DIRECTORY: /var/tmp/youtubei.js
       SERVER_BASE_URL: ${INVIDIOUS_COMPANION_PUBLIC_URL:-}
+      YOUTUBE_API_KEY: ${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
+      YOUTUBEI_CLIENT: ${INVIDIOUS_COMPANION_YOUTUBEI_CLIENT:-IOS}
+      YOUTUBEI_API_BASE: ${INVIDIOUS_COMPANION_CA_URL:-https://www.youtube.com}
     volumes:
       - invidious-companion-cache:/var/tmp/youtubei.js
     ports:

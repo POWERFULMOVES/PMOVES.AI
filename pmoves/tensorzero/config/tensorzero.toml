@@ -34,7 +34,3 @@ type = "chat"
 [functions.langextract.variants.langextract_default]
 type = "chat_completion"
 model = "llama3_local"
-
-[clickhouse]
-url = "http://tensorzero-clickhouse:8123"
-healthcheck = "http://tensorzero-clickhouse:8123/ping"

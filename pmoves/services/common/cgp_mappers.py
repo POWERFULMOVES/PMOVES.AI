@@ -40,7 +40,7 @@ def map_health_weekly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
         workouts = int(d.get("workouts", 0))
         adh_points.append({
             "id": f"{day}:adh",
-            "modality": "metric",
+            "modality": "latent",
             "ref_id": day,
             "proj": 1.0 if workouts > 0 else 0.0,
             "summary": f"workouts={workouts}",
@@ -60,7 +60,7 @@ def map_health_weekly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
         nload = _norm(d.get("load"), load_lo, load_hi)
         load_points.append({
             "id": f"{day}:load",
-            "modality": "metric",
+            "modality": "latent",
             "ref_id": day,
             "proj": 0.0 if nload is None else nload,
             "summary": f"load={d.get('load')}",
@@ -79,7 +79,7 @@ def map_health_weekly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
         "id": f"health.recovery.{period}",
         "summary": "recovery score",
         "spectrum": [0.0 if rec is None else float(rec)/100.0],
-        "points": [{"id": f"rec:{period}", "modality": "metric", "proj": 0.0 if rec is None else float(rec)/100.0}],
+        "points": [{"id": f"rec:{period}", "modality": "latent", "proj": 0.0 if rec is None else float(rec)/100.0}],
         "meta": {"namespace": ns, "period": period}
     })
 
@@ -114,9 +114,9 @@ def map_finance_monthly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
             "summary": f"{cat} spend vs budget",
             "spectrum": [ _norm(spend, s_lo, s_hi) or 0.0, 0.0 if budget is None else _norm(budget, s_lo, s_hi) or 0.0 ],
             "points": [
-                {"id": f"{month}:{cat}:spend", "modality": "metric", "proj": _norm(spend, s_lo, s_hi) or 0.0, "summary": f"${spend:.2f}"},
-                {"id": f"{month}:{cat}:budget", "modality": "metric", "proj": 0.0 if budget is None else _norm(budget, s_lo, s_hi) or 0.0, "summary": f"${(budget or 0):.2f}"},
-                {"id": f"{month}:{cat}:variance", "modality": "metric", "proj": 0.5 + (0 if var is None else max(min(var/ max(abs(s_hi),1.0), 0.5), -0.5)), "summary": f"var={(var or 0):+.2f}"}
+                {"id": f"{month}:{cat}:spend", "modality": "latent", "proj": _norm(spend, s_lo, s_hi) or 0.0, "summary": f"${spend:.2f}"},
+                {"id": f"{month}:{cat}:budget", "modality": "latent", "proj": 0.0 if budget is None else _norm(budget, s_lo, s_hi) or 0.0, "summary": f"${(budget or 0):.2f}"},
+                {"id": f"{month}:{cat}:variance", "modality": "latent", "proj": 0.5 + (0 if var is None else max(min(var/ max(abs(s_hi),1.0), 0.5), -0.5)), "summary": f"var={(var or 0):+.2f}"}
             ],
             "meta": {"namespace": ns, "month": month, "category": cat}
         })
@@ -131,4 +131,3 @@ def map_finance_monthly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
         "meta": {"source": "finance.monthly.summary.v1", "currency": p.get("currency"), "tags": p.get("tags", [])}
     }
     return cgp
-
