@@ -11,6 +11,12 @@ This guide aggregates the entry points that keep local environments consistent a
   `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/` (override with `--output`). Use
   `--registry`/`--service` when you need to scope the env refresh to a subset of
   services.
+- `python3 -m pmoves.tools.mini_cli deps check` → confirm host tooling like
+  `make`, `jq`, and `pytest` are available. `deps install` can automatically
+  install missing binaries via your package manager (auto-detects `apt`,
+  `dnf`, `brew`, `choco`, etc.) or, with `--use-container`, run the installs
+  inside a disposable container (`python:3.11-slim` by default) so the host
+  environment stays untouched.
 - `make env-setup` → runs `python3 -m pmoves.tools.secrets_sync generate` to materialize `.env.generated` / `env.shared.generated` from `pmoves/chit/secrets_manifest.yaml`, then calls `scripts/env_setup.{sh,ps1}` to merge `.env.example` with the optional `env.*.additions`. Use `make env-setup -- --yes` to accept defaults non-interactively.
 - `make bootstrap` → interactive secret capture (still writes overrides to `env.shared`, which now layers on top of the generated secrets for Supabase, provider tokens, Wger/Firefly/Open Notebook, Discord/Jellyfin). Re-run after `supabase start --network-id pmoves-net` or whenever external credentials change. Supports `BOOTSTRAP_FLAGS="--service supabase"` and `--accept-defaults` for targeted updates.
 - `make supabase-bootstrap` → replays `supabase/initdb/*.sql`, `supabase/migrations/*.sql`, and `db/v5_12_grounded_personas.sql` into the Supabase CLI Postgres container. Run it once after `make supa-start` (and again whenever schema changes land) to keep the local CLI stack in sync.

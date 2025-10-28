@@ -74,3 +74,28 @@ def test_bootstrap_stages_bundle_and_updates_env(tmp_path) -> None:
     assert wizard.exists()
     source_wizard = mini_cli.PROVISIONING_SOURCE / "scripts" / "install" / "wizard.sh"
     assert (wizard.stat().st_mode & 0o777) == (source_wizard.stat().st_mode & 0o777)
+
+
+def test_deps_check_reports_missing(monkeypatch) -> None:
+    from pmoves.tools import mini_cli
+
+    runner = CliRunner()
+    monkeypatch.setattr(mini_cli, "_command_available", lambda command: command == "pytest")
+
+    result = runner.invoke(mini_cli.app, ["deps", "check"])
+    assert result.exit_code == 1
+    assert "make: missing" in result.output
+    assert "jq: missing" in result.output
+    assert "pytest: available" in result.output
+
+
+def test_deps_install_container_requires_docker(monkeypatch) -> None:
+    from pmoves.tools import mini_cli
+
+    runner = CliRunner()
+    monkeypatch.setattr(mini_cli, "_command_available", lambda command: False)
+    monkeypatch.setattr(mini_cli, "_docker_available", lambda: False)
+
+    result = runner.invoke(mini_cli.app, ["deps", "install", "--use-container"])
+    assert result.exit_code == 1
+    assert "Docker CLI is required" in result.output

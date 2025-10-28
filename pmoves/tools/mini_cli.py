@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import os
+import platform
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import List, Optional
 
-import json
 try:
     import typer
 except ImportError as exc:
@@ -35,11 +37,50 @@ profile_app = typer.Typer(help="Hardware profile management")
 mcp_app = typer.Typer(help="Manage MCP toolkits")
 automations_app = typer.Typer(help="n8n automations")
 crush_app = typer.Typer(help="Crush CLI integration")
+deps_app = typer.Typer(help="Host tooling dependency helpers")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(profile_app, name="profile")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(automations_app, name="automations")
 app.add_typer(crush_app, name="crush")
+app.add_typer(deps_app, name="deps")
+
+
+DEPENDENCY_DEFINITIONS = {
+    "make": {
+        "command": "make",
+        "kind": "system",
+        "packages": {
+            "apt-get": ["make"],
+            "apt": ["make"],
+            "dnf": ["make"],
+            "yum": ["make"],
+            "pacman": ["make"],
+            "brew": ["make"],
+            "choco": ["make"],
+            "winget": ["GnuWin32.Make"],
+        },
+    },
+    "jq": {
+        "command": "jq",
+        "kind": "system",
+        "packages": {
+            "apt-get": ["jq"],
+            "apt": ["jq"],
+            "dnf": ["jq"],
+            "yum": ["jq"],
+            "pacman": ["jq"],
+            "brew": ["jq"],
+            "choco": ["jq"],
+            "winget": ["jqlang.jq"],
+        },
+    },
+    "pytest": {
+        "command": "pytest",
+        "kind": "python",
+        "package": "pytest",
+    },
+}
 
 
 def _default_manifest() -> Path:
@@ -153,6 +194,218 @@ def _run_module(module: str, args: list[str]) -> int:
     cmd = [sys.executable, "-m", module, *args]
     completed = subprocess.run(cmd, check=False)
     return completed.returncode
+
+
+def _command_available(command: str) -> bool:
+    return shutil.which(command) is not None
+
+
+def _docker_available() -> bool:
+    return _command_available("docker")
+
+
+def _sudo_prefix() -> list[str]:
+    if platform.system() == "Windows":
+        return []
+    try:
+        if os.geteuid() == 0:
+            return []
+    except AttributeError:  # pragma: no cover - platform without geteuid
+        return []
+    return ["sudo"] if _command_available("sudo") else []
+
+
+def _detect_package_manager(preferred: Optional[str]) -> Optional[str]:
+    if preferred:
+        return preferred if _command_available(preferred) else None
+    for candidate in ("apt-get", "apt", "dnf", "yum", "pacman", "brew", "choco", "winget"):
+        if _command_available(candidate):
+            return candidate
+    return None
+
+
+def _install_python_dependency(package: str) -> bool:
+    if _command_available("uv"):
+        cmd = ["uv", "pip", "install", package]
+    else:
+        cmd = [sys.executable, "-m", "pip", "install", package]
+    result = subprocess.run(cmd, check=False)
+    return result.returncode == 0
+
+
+def _run_with_optional_sudo(command: list[str]) -> int:
+    prefix = _sudo_prefix()
+    if prefix:
+        command = prefix + command
+    result = subprocess.run(command, check=False)
+    return result.returncode
+
+
+def _install_with_manager(manager: str, packages: list[str]) -> bool:
+    commands: list[list[str]] = []
+    if manager in {"apt-get", "apt"}:
+        commands.append([manager, "update"])
+        commands.append([manager, "install", "-y", *packages])
+    elif manager == "dnf":
+        commands.append([manager, "-y", "makecache"])
+        commands.append([manager, "-y", "install", *packages])
+    elif manager == "yum":
+        commands.append([manager, "-y", "install", *packages])
+    elif manager == "pacman":
+        commands.append([manager, "-S", "--noconfirm", *packages])
+    elif manager == "brew":
+        commands.append(["brew", "install", *packages])
+    elif manager == "choco":
+        commands.append(["choco", "install", "-y", *packages])
+    elif manager == "winget":
+        for package in packages:
+            commands.append(["winget", "install", "--id", package, "-e", "--silent"])
+    else:  # pragma: no cover - defensive branch
+        return False
+
+    for command in commands:
+        code = _run_with_optional_sudo(command)
+        if code != 0:
+            return False
+    return True
+
+
+def _install_in_container(missing: list[str], container_image: str) -> bool:
+    if not _docker_available():
+        typer.echo("Docker CLI is required when using --use-container.")
+        return False
+
+    system_packages: set[str] = set()
+    python_packages: set[str] = set()
+    for dep in missing:
+        info = DEPENDENCY_DEFINITIONS[dep]
+        if info["kind"] == "system":
+            packages = info["packages"].get("apt-get") or info["packages"].get("apt")
+            if packages:
+                system_packages.update(packages)
+        else:
+            python_packages.add(info["package"])
+
+    script_parts = ["set -euo pipefail"]
+    script_parts.append("apt-get update")
+    if system_packages:
+        pkg_list = " ".join(sorted(system_packages))
+        script_parts.append(
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y " + pkg_list
+        )
+    if python_packages:
+        script_parts.append("pip install " + " ".join(sorted(python_packages)))
+    script = " && ".join(script_parts)
+
+    command = [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{REPO_ROOT}:/workspace",
+        "-w",
+        "/workspace",
+        container_image,
+        "bash",
+        "-lc",
+        script,
+    ]
+    result = subprocess.run(command, check=False)
+    return result.returncode == 0
+
+
+@deps_app.command("check", help="Report whether host dependencies are available.")
+def deps_check() -> None:
+    missing: list[str] = []
+    for dep, info in DEPENDENCY_DEFINITIONS.items():
+        available = _command_available(info["command"])
+        status = "available" if available else "missing"
+        typer.echo(f"{dep}: {status}")
+        if not available:
+            missing.append(dep)
+    if missing:
+        typer.echo(
+            "Missing dependencies detected. Run 'python -m pmoves.tools.mini_cli deps install' to remediate."
+        )
+        raise typer.Exit(1)
+    typer.echo("All tracked dependencies are available.")
+
+
+@deps_app.command("install", help="Install missing dependencies on the host or via container.")
+def deps_install(
+    manager: Optional[str] = typer.Option(
+        None,
+        "--manager",
+        "-m",
+        help="Package manager to use for system dependencies (auto-detect by default).",
+    ),
+    assume_yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Automatically proceed without confirmation prompts.",
+    ),
+    use_container: bool = typer.Option(
+        False,
+        "--use-container",
+        help="Install dependencies inside an ephemeral container to avoid host changes.",
+    ),
+    container_image: str = typer.Option(
+        "python:3.11-slim",
+        "--container-image",
+        help="Container image to use when --use-container is set.",
+    ),
+) -> None:
+    missing = [dep for dep, info in DEPENDENCY_DEFINITIONS.items() if not _command_available(info["command"])]
+    if not missing:
+        typer.echo("All tracked dependencies are already available.")
+        return
+
+    typer.echo("Missing dependencies: " + ", ".join(missing))
+
+    if use_container:
+        if not _install_in_container(missing, container_image):
+            raise typer.Exit(1)
+        typer.echo("Dependencies installed inside container image.")
+        return
+
+    resolved_manager = _detect_package_manager(manager)
+    if resolved_manager is None:
+        typer.echo("Could not detect a supported package manager. Use --use-container or install manually.")
+        raise typer.Exit(1)
+
+    for dep in missing:
+        info = DEPENDENCY_DEFINITIONS[dep]
+        if info["kind"] == "python":
+            if not assume_yes:
+                confirm = typer.confirm(f"Install Python package '{info['package']}'?", default=True)
+                if not confirm:
+                    typer.echo(f"Skipping {dep} at user request.")
+                    continue
+            if not _install_python_dependency(info["package"]):
+                typer.echo(f"Failed to install Python package '{info['package']}'.")
+                raise typer.Exit(1)
+            continue
+
+        packages = info["packages"].get(resolved_manager)
+        if not packages:
+            typer.echo(
+                f"No package mapping for dependency '{dep}' with manager '{resolved_manager}'."
+            )
+            raise typer.Exit(1)
+        if not assume_yes:
+            confirm = typer.confirm(
+                f"Install {dep} using {resolved_manager} ({', '.join(packages)})?",
+                default=True,
+            )
+            if not confirm:
+                typer.echo(f"Skipping {dep} at user request.")
+                continue
+        if not _install_with_manager(resolved_manager, packages):
+            typer.echo(f"Failed to install '{dep}' via {resolved_manager}.")
+            raise typer.Exit(1)
+
+    typer.echo("Dependency installation completed.")
 
 
 @secrets_app.command("encode", help="Encode env to CHIT bundle.")
