@@ -240,61 +240,61 @@ export function UploadDropzone({
       <div
         {...getRootProps({
           className:
-            'flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center transition hover:border-slate-500 hover:bg-white',
+            'flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-brand-border bg-brand-surface-muted p-8 text-center transition hover:border-brand-slate hover:bg-brand-inverse',
         })}
       >
         <input {...getInputProps()} />
-        <div className="text-lg font-semibold text-slate-800">Upload creative assets</div>
-        <p className="max-w-lg text-sm text-slate-500">
+        <div className="text-lg font-semibold text-brand-ink">Upload creative assets</div>
+        <p className="max-w-lg text-sm text-brand-muted">
           Drag &amp; drop renders or voiceovers here, or
           <button
             type="button"
             onClick={open}
-            className="ml-1 rounded bg-slate-900 px-2 py-1 text-sm font-medium text-white hover:bg-slate-700"
+            className="ml-1 rounded bg-brand-forest px-2 py-1 text-sm font-medium text-brand-ink-strong hover:bg-brand-gold"
           >
             browse files
           </button>
         </p>
-        <p className="text-xs uppercase tracking-wide text-slate-400">
-          Target bucket: <span className="font-mono text-slate-600">{bucket}</span>
+        <p className="text-xs uppercase tracking-wide text-brand-subtle">
+          Target bucket: <span className="font-mono text-brand-muted">{bucket}</span>
         </p>
-        {isDragActive && <p className="text-sm text-slate-600">Release to start the upload…</p>}
+        {isDragActive && <p className="text-sm text-brand-muted">Release to start the upload…</p>}
       </div>
 
       {uploads.length > 0 && (
         <div className="mt-6 space-y-3">
           {uploads.map((upload) => (
-            <div key={upload.id} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div key={upload.id} className="rounded-md border border-brand-border bg-brand-inverse p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-medium text-slate-900">{upload.file.name}</div>
-                  <div className="text-xs text-slate-500">{formatBytes(upload.file.size)}</div>
+                  <div className="font-medium text-brand-ink">{upload.file.name}</div>
+                  <div className="text-xs text-brand-subtle">{formatBytes(upload.file.size)}</div>
                 </div>
                 <span
                   className={
                     upload.status === 'complete'
-                      ? 'rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700'
+                      ? 'rounded border border-brand-forest bg-brand-inverse px-2 py-1 text-xs font-medium text-brand-forest'
                       : upload.status === 'error'
-                      ? 'rounded bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700'
-                      : 'rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600'
+                      ? 'rounded border border-brand-crimson bg-brand-inverse px-2 py-1 text-xs font-medium text-brand-crimson'
+                      : 'rounded border border-brand-border bg-brand-surface-muted px-2 py-1 text-xs font-medium text-brand-muted'
                   }
                 >
                   {upload.status}
                 </span>
               </div>
-              <div className="mt-3 h-2 w-full rounded-full bg-slate-100">
+              <div className="mt-3 h-2 w-full rounded-full bg-brand-surface-muted">
                 <div
-                  className="h-2 rounded-full bg-slate-900 transition-all"
+                  className="h-2 rounded-full bg-brand-forest transition-all"
                   style={{ width: `${upload.progress}%` }}
                 />
               </div>
-              {upload.error && <p className="mt-2 text-xs text-rose-600">{upload.error}</p>}
+              {upload.error && <p className="mt-2 text-xs text-brand-crimson">{upload.error}</p>}
               {upload.presignedGetUrl && (
                 <a
                   href={upload.presignedGetUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-flex items-center text-xs font-medium text-slate-700 hover:underline"
+                  className="mt-2 inline-flex items-center text-xs font-medium text-brand-ink hover:text-brand-ink-strong hover:underline"
                 >
                   View asset
                 </a>
