@@ -195,6 +195,7 @@ else:
     YT_TRANSCRIPT_DIARIZE = False if parsed is None else parsed
 
 _nc: Optional[NATS] = None
+_nc_connect_task: Optional[asyncio.Task] = None
 
 _emit_jobs: Dict[str, Dict[str, Any]] = {}
 _emit_job_lock = threading.Lock()
@@ -304,36 +305,92 @@ def s3_client():
     endpoint_url = MINIO_ENDPOINT if "://" in MINIO_ENDPOINT else f"{'https' if MINIO_SECURE else 'http'}://{MINIO_ENDPOINT}"
     return boto3.client("s3", aws_access_key_id=MINIO_ACCESS_KEY, aws_secret_access_key=MINIO_SECRET_KEY, endpoint_url=endpoint_url)
 
+async def _nats_connect_loop() -> None:
+    """Background task to keep the NATS connection alive."""
+    global _nc
+    backoff = 1.0
+    while True:
+        try:
+            nc = NATS()
+            closed_event: asyncio.Event = asyncio.Event()
+
+            async def _handle_disconnected() -> None:
+                logger.warning("Lost connection to NATS; waiting for reconnect")
+
+            async def _handle_closed() -> None:
+                global _nc
+                logger.warning("NATS connection closed; scheduling reconnect")
+                _nc = None
+                closed_event.set()
+
+            await nc.connect(
+                servers=[NATS_URL],
+                disconnected_cb=_handle_disconnected,
+                closed_cb=_handle_closed,
+            )
+            _nc = nc
+            logger.info("Connected to NATS at %s", NATS_URL)
+            backoff = 1.0
+            await closed_event.wait()
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            logger.warning("Failed to connect to NATS at %s: %s", NATS_URL, err)
+            _nc = None
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30.0)
+
+
 @app.on_event("startup")
 async def startup():
     # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
-    global _nc
+    global _nc, _nc_connect_task
     if not YT_NATS_ENABLE or not NATS_URL:
         _nc = None
         return
 
-    async def _try_connect():
-        global _nc
-        nc = NATS()
-        try:
-            # Short timeout, no reconnect storm
-            await asyncio.wait_for(nc.connect(servers=[NATS_URL], allow_reconnect=False), timeout=1.0)
-            _nc = nc
-        except Exception:
-            _nc = None
+    if _nc_connect_task is None or _nc_connect_task.done():
+        _nc_connect_task = asyncio.create_task(_nats_connect_loop(), name="pmoves-yt-nats-connect")
 
-    # Fire and forget; errors are suppressed and won't block startup
-    asyncio.create_task(_try_connect())
+
+@app.on_event("shutdown")
+async def shutdown():
+    global _nc, _nc_connect_task
+    if _nc_connect_task is not None:
+        _nc_connect_task.cancel()
+        try:
+            await _nc_connect_task
+        except asyncio.CancelledError:
+            pass
+        _nc_connect_task = None
+
+    if _nc is not None and not getattr(_nc, "is_closed", True):
+        try:
+            await _nc.close()
+        except Exception as err:
+            logger.debug("Error closing NATS client during shutdown: %s", err)
+    _nc = None
 
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
 
-def _publish_event(topic: str, payload: Dict[str,Any]):
-    if _nc is None:
+def _publish_event(topic: str, payload: Dict[str, Any]):
+    nc = _nc
+    if nc is None:
+        logger.warning("NATS client unavailable; dropping event for topic %s", topic)
         return
+
+    if getattr(nc, "is_closed", True) or getattr(nc, "is_draining", False) or not getattr(nc, "is_connected", False):
+        logger.warning("NATS client not ready (closed=%s, draining=%s, connected=%s); dropping topic %s",
+                       getattr(nc, "is_closed", True), getattr(nc, "is_draining", False), getattr(nc, "is_connected", False), topic)
+        return
+
     msg = envelope(topic, payload, source="pmoves-yt")
-    asyncio.create_task(_nc.publish(topic, json.dumps(msg).encode()))
+    try:
+        asyncio.create_task(nc.publish(topic, json.dumps(msg).encode()))
+    except Exception as exc:
+        logger.exception("Failed to schedule publish for topic %s: %s", topic, exc)
 
 def upload_to_s3(local_path: str, bucket: str, key: str):
     s3 = s3_client()
