@@ -22,6 +22,12 @@ export default function HomePage() {
         >
           View ingestion dashboard
         </Link>
+        <Link
+          href="/community"
+          className="rounded border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:text-slate-900"
+        >
+          Explore the community vision
+        </Link>
       </div>
     </main>
   );
