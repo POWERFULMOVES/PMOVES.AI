@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import datetime
 import json
 import logging
@@ -49,6 +50,7 @@ DISCORD_METRICS_CONFLICT = os.environ.get("DISCORD_METRICS_CONFLICT", "published
 
 
 _nc: Optional[NATS] = None
+_nats_loop_task: Optional[asyncio.Task] = None
 _webhook_counters = Counter()
 _telemetry_metrics = PublisherMetrics()
 logger = logging.getLogger("publisher_discord")
@@ -186,6 +188,157 @@ async def _persist_discord_rollup(
             extra={"table": DISCORD_METRICS_TABLE, "row": row},
             exc_info=exc,
         )
+
+
+async def _handle_nats_message(msg):
+    try:
+        data = json.loads(msg.data.decode("utf-8"))
+        envelope: Dict[str, Any] = data if isinstance(data, dict) else {}
+    except Exception:
+        envelope = {}
+
+    name = envelope.get("topic") or msg.subject
+    payload = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else envelope or {}
+    if not isinstance(payload, dict):
+        payload = {"raw": msg.data.decode("utf-8", errors="ignore")}
+
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
+    published_at = datetime.datetime.now(datetime.timezone.utc)
+    telemetry = compute_publish_telemetry(
+        meta,
+        envelope.get("ts") if isinstance(envelope, dict) else None,
+        published_at,
+    )
+    _record_publish_telemetry(telemetry)
+
+    rendered = _format_event(name, payload)
+    ok = await _post_discord(rendered.get("content"), rendered.get("embeds"))
+    if not ok:
+        logger.warning(
+            "discord_delivery_failed",
+            extra={
+                "event": "discord_delivery_failed",
+                "subject": name,
+                "nats_subject": msg.subject,
+            },
+        )
+
+    await _persist_discord_rollup(telemetry, payload, envelope if isinstance(envelope, dict) else {}, ok)
+    logger.info(
+        "discord_event_processed",
+        extra={
+            "subject": name,
+            "nats_subject": msg.subject,
+            "webhook_success": ok,
+            "metrics": {
+                "webhook": _webhook_snapshot(),
+                "telemetry": _telemetry_metrics.summary(),
+            },
+        },
+    )
+
+
+async def _register_nats_subscriptions(nc: Optional[NATS]) -> None:
+    subjects = [subj.strip() for subj in SUBJECTS if subj.strip()]
+    if nc is None:
+        logger.warning(
+            "nats_subscription_skipped",
+            extra={
+                "event": "nats_subscription_skipped",
+                "subjects": subjects,
+                "reason": "nats_client_none",
+            },
+        )
+        return
+
+    for subj in subjects:
+        try:
+            await nc.subscribe(subj, cb=_handle_nats_message)
+            logger.info(
+                "nats_subscription_registered",
+                extra={"event": "nats_subscription_registered", "subject": subj},
+            )
+        except Exception as exc:
+            logger.warning(
+                "nats_subscription_failed",
+                extra={
+                    "event": "nats_subscription_failed",
+                    "subject": subj,
+                    "error": str(exc),
+                },
+            )
+
+
+async def _nats_resilience_loop() -> None:
+    backoff = 1.0
+    while True:
+        nc = NATS()
+        disconnect_event = asyncio.Event()
+
+        def _mark_connection_lost(reason: str) -> None:
+            global _nc
+            if _nc is nc:
+                _nc = None
+            if not disconnect_event.is_set():
+                disconnect_event.set()
+            logger.warning(
+                "nats_connection_lost",
+                extra={
+                    "event": "nats_connection_lost",
+                    "reason": reason,
+                    "servers": [NATS_URL],
+                },
+            )
+
+        async def _disconnected_cb():
+            _mark_connection_lost("disconnected")
+
+        async def _closed_cb():
+            _mark_connection_lost("closed")
+
+        try:
+            logger.info(
+                "nats_connect_attempt",
+                extra={"event": "nats_connect_attempt", "servers": [NATS_URL], "backoff": backoff},
+            )
+            await nc.connect(servers=[NATS_URL], disconnected_cb=_disconnected_cb, closed_cb=_closed_cb)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "nats_connect_failed",
+                extra={
+                    "event": "nats_connect_failed",
+                    "servers": [NATS_URL],
+                    "error": str(exc),
+                    "backoff": backoff,
+                },
+            )
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2.0, 30.0)
+            continue
+
+        global _nc
+        _nc = nc
+        backoff = 1.0
+        logger.info(
+            "nats_connected",
+            extra={"event": "nats_connected", "servers": [NATS_URL]},
+        )
+        await _register_nats_subscriptions(nc)
+
+        try:
+            await disconnect_event.wait()
+        except asyncio.CancelledError:
+            with contextlib.suppress(Exception):
+                await nc.close()
+            if _nc is nc:
+                _nc = None
+            raise
+
+        with contextlib.suppress(Exception):
+            await nc.close()
+
 
 @app.get("/healthz")
 async def healthz():
@@ -435,72 +588,45 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 
 @app.on_event("startup")
 async def startup():
-    global _nc
-    _nc = NATS()
-    try:
-        await _nc.connect(servers=[NATS_URL])
-    except Exception:
-        _nc = None
-        return
-    async def handler(msg):
+    global _nats_loop_task
+    if _nats_loop_task and _nats_loop_task.done():
         try:
-            data = json.loads(msg.data.decode("utf-8"))
-            envelope: Dict[str, Any] = data if isinstance(data, dict) else {}
-        except Exception:
-            envelope = {}
-
-        name = envelope.get("topic") or msg.subject
-        payload = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else envelope or {}
-        if not isinstance(payload, dict):
-            payload = {"raw": msg.data.decode("utf-8", errors="ignore")}
-
-        meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
-        published_at = datetime.datetime.now(datetime.timezone.utc)
-        telemetry = compute_publish_telemetry(
-            meta,
-            envelope.get("ts") if isinstance(envelope, dict) else None,
-            published_at,
-        )
-        _record_publish_telemetry(telemetry)
-
-        rendered = _format_event(name, payload)
-        ok = await _post_discord(rendered.get("content"), rendered.get("embeds"))
-        if not ok:
+            _nats_loop_task.result()
+        except Exception as exc:  # pragma: no cover - startup diagnostics
             logger.warning(
-                "discord_delivery_failed",
-                extra={
-                    "event": "discord_delivery_failed",
-                    "subject": name,
-                    "nats_subject": msg.subject,
-                },
+                "nats_loop_previous_failure",
+                extra={"event": "nats_loop_previous_failure", "error": str(exc)},
             )
-
-        await _persist_discord_rollup(telemetry, payload, envelope if isinstance(envelope, dict) else {}, ok)
+    if _nats_loop_task is None or _nats_loop_task.done():
         logger.info(
-            "discord_event_processed",
-            extra={
-                "subject": name,
-                "nats_subject": msg.subject,
-                "webhook_success": ok,
-                "metrics": {
-                    "webhook": _webhook_snapshot(),
-                    "telemetry": _telemetry_metrics.summary(),
-                },
-            },
+            "nats_loop_start",
+            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
         )
-    for subj in SUBJECTS:
-        s = subj.strip()
-        if not s:
-            continue
-        try:
-            await _nc.subscribe(s, cb=handler)
-        except Exception:
-            pass
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    global _nats_loop_task, _nc
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        with contextlib.suppress(Exception):
+            await _nats_loop_task
+        _nats_loop_task = None
+    if _nc:
+        with contextlib.suppress(Exception):
+            await _nc.close()
+        _nc = None
 
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):
     content = body.get("content") or "PMOVES test message"
     embeds = body.get("embeds")
+    if _nc is None:
+        logger.warning(
+            "nats_publish_skipped",
+            extra={"event": "nats_publish_skipped", "reason": "nats_client_none"},
+        )
     ok = await _post_discord(content, embeds)
     if not ok:
         raise HTTPException(502, "discord webhook failed")
