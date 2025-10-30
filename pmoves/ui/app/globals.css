@@ -4,6 +4,37 @@
 
 :root {
   color-scheme: light;
+  --cataclysm-void: #050b1a;
+  --cataclysm-ember: #f97316;
+  --cataclysm-aurora: #7c3aed;
+  --cataclysm-horizon: #22d3ee;
+  --cataclysm-foam: #f8fafc;
+}
+
+.bg-cataclysm-void {
+  background-color: var(--cataclysm-void);
+}
+
+.text-cataclysm-ember {
+  color: var(--cataclysm-ember);
+}
+
+.border-cataclysm-ember {
+  border-color: var(--cataclysm-ember);
+}
+
+.hover\:border-cataclysm-ember:hover {
+  border-color: var(--cataclysm-ember);
+}
+
+.hover\:text-cataclysm-ember:hover {
+  color: var(--cataclysm-ember);
+}
+
+.cataclysm-gradient {
+  background-image: radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.35), transparent 55%),
+    radial-gradient(circle at 80% 10%, rgba(34, 211, 238, 0.3), transparent 60%),
+    linear-gradient(180deg, rgba(5, 11, 26, 0.95), rgba(5, 11, 26, 0.75));
   /* Cataclysm Studios brand palette */
   --cataclysm-cyan: #1fb8cd;
   --cataclysm-ember: #db4545;

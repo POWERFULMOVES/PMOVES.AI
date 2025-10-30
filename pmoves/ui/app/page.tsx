@@ -35,6 +35,25 @@ export default function HomePage() {
           </svg>
         </div>
       </div>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Link
+          href="/login"
+          className="rounded bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-slate-700"
+        >
+          Continue to login
+        </Link>
+        <Link
+          href="/dashboard/ingest"
+          className="rounded border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:text-slate-900"
+        >
+          View ingestion dashboard
+        </Link>
+        <Link
+          href="/community"
+          className="rounded border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:text-slate-900"
+        >
+          Explore the community vision
+        </Link>
 
       <div className="relative z-10 flex w-full max-w-5xl flex-col items-center gap-16 text-center">
         <div className="space-y-6">
