@@ -35,6 +35,12 @@
   background-image: radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.35), transparent 55%),
     radial-gradient(circle at 80% 10%, rgba(34, 211, 238, 0.3), transparent 60%),
     linear-gradient(180deg, rgba(5, 11, 26, 0.95), rgba(5, 11, 26, 0.75));
+  /* Cataclysm Studios brand palette */
+  --cataclysm-cyan: #1fb8cd;
+  --cataclysm-ember: #db4545;
+  --cataclysm-forest: #2e8b57;
+  --cataclysm-gold: #d2ba4c;
+  --cataclysm-slate: #5d878f;
 }
 
 a {
