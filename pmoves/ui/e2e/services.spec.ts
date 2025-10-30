@@ -5,7 +5,7 @@ const SERVICES = [
   { slug: 'pmoves-yt', title: 'PMOVES.YT' },
   { slug: 'jellyfin', title: 'Jellyfin' },
   { slug: 'wger', title: 'Wger' },
-  { slug: 'firefly-iii', title: 'Firefly' },
+  { slug: 'firefly', title: 'Firefly' },
 ];
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

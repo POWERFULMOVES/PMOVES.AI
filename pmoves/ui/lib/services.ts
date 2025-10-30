@@ -35,7 +35,7 @@ export const INTEGRATION_SERVICES: ServiceDefinition[] = [
     docPath: '../docs/services/wger/README.md',
   },
   {
-    slug: 'firefly-iii',
+    slug: 'firefly',
     title: 'Firefly',
     summary:
       'Personal finance management suite bundled into the PMOVES external stack for revenue and spend tracking.',
