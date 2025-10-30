@@ -15,6 +15,13 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'playwright-anon-key',
+      SUPABASE_SERVICE_ROLE_KEY: 'playwright-service-role',
+      SUPABASE_URL: 'http://127.0.0.1:54321',
+      SUPABASE_SERVICE_URL: 'http://127.0.0.1:54321',
+    },
   },
   use: {
     baseURL: BASE_URL,

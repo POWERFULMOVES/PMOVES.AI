@@ -82,12 +82,13 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 ## 6. Governance & Token Strategy (Research Track)
 
-- The repo currently contains **no smart contract code or token schemas**; all references to Food-USD, GroToken, Fame Coin/$WORK remain conceptual.  
+- Prototype smart contracts now live under [`pmoves/contracts/solidity/`](../../pmoves/contracts/solidity), delivering the Food-USD stablecoin, GroToken governance asset, GroVault staking, CoopGovernor quadratic voting, and GroupPurchase pooling flows described in the v2.0 tokenomics brief. Automated Hardhat tests model representative staking and buying scenarios; see [`pmoves/docs/contracts/README.md`](../../pmoves/docs/contracts/README.md) for deployment and audit guidance.
 - Actions required before launch:
-  1. Produce technical specs and risk assessment (`docs/` future section).  
-  2. Align DAO constitution drafts with `pmoves/docs/` formatting and host them in-repo (replace external links).  
-  3. Prototype off-chain governance via Supabase tables + serverless functions before deploying on-chain implementations.
-- Until implemented, messaging should label tokenomics as “planned” and avoid implying production availability.
+  1. Commission external audits covering vault math, governance griefing vectors, and supplier payout flows; document findings alongside remediation commits.
+  2. Align DAO constitution drafts with `pmoves/docs/` formatting and reference the new on-chain modules (supply policies, quorum thresholds, emergency pauses).
+  3. Implement Supabase telemetry ingestion for CoopGovernor and GroupPurchase events so dashboards can reconcile on-chain voting with community analytics (see the Supabase integration plan in `pmoves/docs/contracts/README.md`).
+- Supabase alignment: instrument Hardhat deployments (or follow-on indexers) to stream `ProposalCreated`, `VoteCast`, `ProposalExecuted`, `OrderCreated`, `OrderExecuted`, and `RefundClaimed` events into Supabase tables consumed by Agent Zero and publisher services. This keeps DAO decisions observable in the existing telemetry fabric and satisfies the governance transparency promises in Sections 2 and 5.
+- Messaging should continue labeling tokenomics as “pilot” until audits, treasury multi-sig configuration, and Supabase telemetry wiring are complete.
 
 ## 7. Reference Map
 

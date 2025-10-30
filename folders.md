@@ -1,6 +1,6 @@
 # Repository Directory Map
 
-_Last updated: 2025-10-25_
+_Last updated: 2025-10-29_
 
 This document captures the current layout of the `PMOVES.AI` repository to help new contributors find key resources quickly. The tree below is trimmed to a maximum depth of two levels (root → child → grandchild) to balance detail and readability.
 
@@ -121,6 +121,7 @@ PY
 │   ├── contracts/
 │   │   ├── samples/
 │   │   ├── schemas/
+│   │   ├── solidity/
 │   │   └── topics.json
 │   ├── datasets/
 │   │   ├── example_capsule.json

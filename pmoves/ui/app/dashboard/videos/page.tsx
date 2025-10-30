@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import DashboardNavigation from "../../../components/DashboardNavigation";
 import useInfiniteSupabaseQuery from "../../../hooks/useInfiniteSupabaseQuery";
 import {
   getSupabaseBrowserClient,
@@ -230,6 +231,7 @@ export default function VideosDashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <DashboardNavigation active="videos" />
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Videos Library</h1>
         <p className="text-sm text-neutral-600">

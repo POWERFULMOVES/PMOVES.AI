@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import DashboardNavigation from '../../../components/DashboardNavigation';
 import { UploadDropzone } from '../../../components/UploadDropzone';
 import { callPresignService } from '../../../lib/presign';
 import type { Database } from '../../../lib/database.types';
@@ -111,6 +112,7 @@ export default async function IngestDashboardPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
+      <DashboardNavigation active="ingest" />
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-slate-900">Ingestion dashboard</h1>
         <p className="text-sm text-slate-600">
