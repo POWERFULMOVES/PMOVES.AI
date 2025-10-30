@@ -25,7 +25,7 @@
 - Logs: `docker compose logs -f <service>`.
 
 ## Coding Style & Naming Conventions
-- Python 3.10+, 4‑space indentation, prefer type hints.
+- Python 3.11+, 4‑space indentation, prefer type hints.
 - FastAPI routes: snake_case function names; path names kebab-case only in URLs.
 - Event contracts: keep `v{n}` suffix in filenames (e.g., `*.v1.schema.json`) and update `contracts/topics.json` when adding topics.
 - Keep modules small and single‑purpose; share helpers in `services/common/`.
@@ -54,7 +54,7 @@
 
 ## Environment Bootstrap (Codex + Local)
 
-- Preferred Python: Conda 3.10+ (env name: `PMOVES.AI` or `pmoves-ai`). A ready-to-use `environment.yml` is at the repo root.
+- Preferred Python: Conda 3.11+ (env name: `PMOVES.AI` or `pmoves-ai`). A ready-to-use `environment.yml` is at the repo root.
 - One‑time setup on Windows (PowerShell 7+):
   - Install GNU Make (Chocolatey): `choco install make -y` (requires admin PowerShell).
   - Create/refresh Conda env: `conda env create -f environment.yml -n PMOVES.AI` (or use the default name inside the file).

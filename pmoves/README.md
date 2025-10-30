@@ -38,6 +38,7 @@
 
 ### Dev Environment (Conda + Windows/macOS/Linux)
 
+- Baseline interpreter: Python 3.11 (installed via the provided Conda environment).
 - Conda: create the env and install deps once:
   - Windows (PowerShell 7+):
     - (Admin) `choco install make -y` to get GNU Make

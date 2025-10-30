@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 function Have($n){ Get-Command $n -ErrorAction SilentlyContinue | Out-Null }
 
 if (-not (Have 'py') -and -not (Have 'python')) {
-  Write-Error 'Python not found. Install Python 3.10+ from https://www.python.org/downloads/windows/'
+  Write-Error 'Python not found. Install Python 3.11+ from https://www.python.org/downloads/windows/'
   exit 1
 }
 

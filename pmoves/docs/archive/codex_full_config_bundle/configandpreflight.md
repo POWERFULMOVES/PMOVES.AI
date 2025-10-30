@@ -125,7 +125,7 @@ PowerShell (save as scripts/env_check.ps1)
       if ($cap.docker -and $cap.compose) { "You can likely run: make up (or: docker compose up -d)" }   
       elseif ($cap.docker) { "Docker present; install compose plugin to use docker compose" }           
       else { "Install Docker Desktop (for make up/docker compose)" }                                    
-      if (-not $cap.python) { "Install Python 3.10+ for running services locally" }                     
+      if (-not $cap.python) { "Install Python 3.11+ for running services locally" }
       if (-not $cap.ripgrep) { "Install ripgrep for fast code search (optional)" }                      
     )                                                                                                   
   }                                                                                                     
@@ -236,9 +236,9 @@ PowerShell (save as scripts/env_check.ps1)
   fi
   if ! have python && ! have python3; then
   if ! have python && ! have python3; then
-    echo "- Install Python 3.10+ for running services locally"
+    echo "- Install Python 3.11+ for running services locally"
   fi
-    echo "- Install Python 3.10+ for running services locally"
+    echo "- Install Python 3.11+ for running services locally"
   fi
   if ! have rg; then
   if ! have rg; then
@@ -492,7 +492,7 @@ PowerShell (save as scripts/env_check.ps1)
   elseif (-not $composeOK) { $recommendations += "Install Compose plugin (docker compose) or docker-    
   compose." }                                                                                           
   if (-not $cmdStatus['python'].present -and -not $cmdStatus['python3'].present) { $recommendations +=  
-  "Install Python 3.10+ for local services." }                                                          
+  "Install Python 3.11+ for local services." }
   if (-not (Test-Path '.env')) { $recommendations += "Create .env (start from docs/LOCAL_DEV.md or your 
   template)." }                                                                                         
   if ($missingEnv.Count -gt 0) { $recommendations += "Add missing env keys: {0}" -f ($missingEnv -join  
