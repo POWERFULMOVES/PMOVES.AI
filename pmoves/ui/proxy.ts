@@ -7,6 +7,9 @@ const isPublicPath = (pathname: string) => {
   if (PUBLIC_PATHS.has(pathname)) {
     return true;
   }
+  if (pathname.startsWith('/dashboard/services')) {
+    return true;
+  }
   return pathname.startsWith('/_next') || pathname.startsWith('/api/auth');
 };
 
