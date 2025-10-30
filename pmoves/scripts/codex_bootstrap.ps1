@@ -7,8 +7,16 @@ $ErrorActionPreference = 'Continue'
 
 function Have($n){ Get-Command $n -ErrorAction SilentlyContinue | Out-Null }
 
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = Split-Path -Parent $ScriptDir
+$EnvFile = Join-Path $RepoRoot 'environment.yml'
+$Installer = Join-Path $RepoRoot 'scripts/install_all_requirements.ps1'
+
 Write-Host "== PMOVES Codex Bootstrap ==" -ForegroundColor Cyan
 Write-Host "CWD: $((Get-Location).Path)"
+Write-Host "Repo root: $RepoRoot"
+Write-Host "Environment file: $EnvFile"
+Write-Host "Install script: $Installer"
 
 # 1) Install GNU Make via Chocolatey if available and missing
 if (-not (Have 'make')) {
@@ -33,11 +41,11 @@ if ($condaOk) {
   $exists = $false
   try { & conda env list | Select-String -SimpleMatch " $CondaEnvName " | Out-Null; if ($LASTEXITCODE -eq 0) { $exists = $true } } catch {}
   if (-not $exists) {
-    if (Test-Path 'environment.yml') {
-      Write-Host "Creating conda env '$CondaEnvName' from environment.yml..." -ForegroundColor Yellow
-      try { conda env create -f environment.yml -n $CondaEnvName } catch { Write-Warning "conda env create failed. You can try: conda env create -f environment.yml -n $CondaEnvName" }
+    if (Test-Path $EnvFile) {
+      Write-Host "Creating conda env '$CondaEnvName' from $EnvFile..." -ForegroundColor Yellow
+      try { conda env create -f $EnvFile -n $CondaEnvName } catch { Write-Warning "conda env create failed. You can try: conda env create -f `"$EnvFile`" -n $CondaEnvName" }
     } else {
-      Write-Warning "environment.yml not found; skipping conda env creation."
+      Write-Warning "environment.yml not found at $EnvFile; skipping conda env creation."
     }
   } else {
     Write-Host "Conda env '$CondaEnvName' already exists." -ForegroundColor Green
@@ -47,8 +55,19 @@ if ($condaOk) {
 }
 
 # 3) Install Python deps across services/tools
-if ($IncludeDocs) { ./scripts/install_all_requirements.ps1 -CondaEnvName $CondaEnvName -IncludeDocs }
-else { ./scripts/install_all_requirements.ps1 -CondaEnvName $CondaEnvName }
+if (-not (Test-Path $Installer)) {
+  Write-Error "Install script not found at $Installer"
+  exit 1
+}
+
+Push-Location $RepoRoot
+try {
+  if ($IncludeDocs) { & $Installer -CondaEnvName $CondaEnvName -IncludeDocs }
+  else { & $Installer -CondaEnvName $CondaEnvName }
+}
+finally {
+  Pop-Location
+}
 
 Write-Host "Bootstrap complete." -ForegroundColor Green
 
