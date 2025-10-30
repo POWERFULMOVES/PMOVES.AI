@@ -31,6 +31,36 @@ API/Contracts
 - Store `FIREFLY_ACCESS_TOKEN` in PMOVES secrets.
 - n8n flows in `pmoves/integrations/firefly-iii/n8n/flows/` poll Firefly transactions, normalize categories, and write to Supabase.
 
+## Sample dataset
+- Script: `pmoves/scripts/firefly_seed_sample_data.py` (Make target `make firefly-seed-sample`).
+- Fixture: `pmoves/data/firefly/sample_transactions.json` (deterministic 5-year projection revenue/cost mix).
+- Required env vars: `FIREFLY_BASE_URL`, `FIREFLY_ACCESS_TOKEN` (admin token if creating demo users).
+- Usage:
+  ```bash
+  # Optional preview
+  DRY_RUN=1 make -C pmoves firefly-seed-sample
+
+  # Apply dataset (loads users → accounts → transactions)
+  make -C pmoves firefly-seed-sample
+  ```
+- Direct invocation:
+  ```bash
+  python pmoves/scripts/firefly_seed_sample_data.py \
+    --base-url "$FIREFLY_BASE_URL" \
+    --token "$FIREFLY_ACCESS_TOKEN" \
+    --fixture pmoves/data/firefly/sample_transactions.json
+  ```
+- Verification (Supabase mirror, expects finance sync flow active):
+  ```bash
+  curl -sS "$SUPA_REST_URL/finance_transactions" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    -G --data-urlencode "source=eq.firefly" \
+    -G --data-urlencode "category=in.(AI-Enhanced Local Service Business,Sustainable Energy AI Consulting,Community Token Pre-Order System,Creative Content + Token Rewards)" \
+    | jq '[.[] | {occurred_at, category, amount, description}]'
+  ```
+- Expect Firefly categories for the four projection tracks and paired revenue/cost transactions spanning 2025–2029.
+
 Smoke
 ```
 curl -sS -H "Authorization: Bearer $FIREFLY_ACCESS_TOKEN" "$FIREFLY_BASE_URL/api/v1/transactions?limit=1" | jq '.data[0] | {journal_id: .id, description: .attributes.description}'

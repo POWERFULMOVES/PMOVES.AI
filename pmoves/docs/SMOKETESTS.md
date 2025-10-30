@@ -171,6 +171,17 @@ Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), 
 
 ### 5c) Firefly Finance API Smoke
 - Run `make smoke-firefly` (defaults to `http://localhost:8082`). The helper waits for the nginx front-end to answer and then calls `/api/v1/about` with `FIREFLY_ACCESS_TOKEN` (pulled from your shell or `pmoves/env.shared`). Expect a JSON payload showing the Firefly version and API version; failures usually mean the container could not finish migrations or the access token is missing. Override the host with `FIREFLY_ROOT_URL`.
+- Populate demo data (optional but recommended before running the n8n sync):
+  ```bash
+  make -C pmoves firefly-seed-sample    # uses pmoves/data/firefly/sample_transactions.json
+  ```
+  Re-run with `DRY_RUN=1 make -C pmoves firefly-seed-sample` to preview API calls without mutating Firefly. After n8n sync completes, confirm the mirrored rows in Supabase:
+  ```bash
+  curl -sS "$SUPA_REST_URL/finance_transactions?source=eq.firefly" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    | jq 'map({occurred_at, category, amount, description})'
+  ```
+  Expect both revenue and expense rows for each of the 5-year projection categories (`AI-Enhanced Local Service Business`, `Sustainable Energy AI Consulting`, `Community Token Pre-Order System`, `Creative Content + Token Rewards`).
 
 ### 5d) Wger Static Proxy Smoke
 - Ensure `make up-external-wger` (or `make up-external`) is running so both `cataclysm-wger` and `cataclysm-wger-nginx`

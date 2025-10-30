@@ -361,14 +361,20 @@ integrations-workspace: ## Clone forks and apply PR kits into INTEGRATIONS_BASE 
 	@bash pmoves/tools/integrations/bootstrap_workspace.sh "$${INTEGRATIONS_BASE:-integrations-workspace}"
 
 # ---- CHIT demo mappers (health/finance → CGP) ----
-.PHONY: demo-health-cgp demo-finance-cgp
+.PHONY: demo-health-cgp demo-finance-cgp firefly-seed-sample
 demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 	@echo "→ Posting health.weekly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
 	@PYTHONPATH=. python tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 demo-finance-cgp: ## Map sample finance monthly summary to CGP and POST to gateway
-	@echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
-	@PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+        @echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
+        @PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+
+firefly-seed-sample: ensure-env-shared ## Seed Firefly III with PMOVES 5-year projection sample dataset
+        @bash -c '$(LOAD_ENV_SHARED) \
+          DRY_FLAG=""; \
+          if [ -n "$${DRY_RUN:-}" ] && [ "$${DRY_RUN}" != "0" ]; then DRY_FLAG="--dry-run"; fi; \
+          exec $(PYTHON) scripts/firefly_seed_sample_data.py $$DRY_FLAG --fixture data/firefly/sample_transactions.json'
 
 .PHONY: webhook-health-cgp webhook-finance-cgp
 webhook-health-cgp: ## Call n8n health weekly → CGP webhook (workflow must be active)
