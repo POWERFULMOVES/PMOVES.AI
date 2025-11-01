@@ -32,26 +32,30 @@ export default function MarketingLayout({
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="bg-cataclysm-void cataclysm-gradient text-slate-100">
+    <div className="relative min-h-screen bg-brand-ink-strong text-brand-inverse">
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--color-brand-sky)/0.2,transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,var(--color-brand-gold)/0.18,transparent_60%)]" />
+      </div>
       <SupabaseClientBootstrap />
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 lg:px-10">
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 lg:px-10">
         <header className="flex flex-col gap-4 pb-10 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/" className="text-base font-semibold text-cataclysm-ember">
+          <Link href="/" className="text-base font-semibold text-brand-gold transition hover:text-brand-sky">
             Cataclysm Studios
           </Link>
-          <nav className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-200">
-            <Link href="/community" className="transition hover:text-cataclysm-ember">
+          <nav className="flex flex-wrap items-center gap-4 text-sm font-medium text-brand-subtle">
+            <Link href="/community" className="transition hover:text-brand-inverse">
               Community
             </Link>
-            <Link href="/dashboard/ingest" className="transition hover:text-cataclysm-ember">
+            <Link href="/dashboard/ingest" className="transition hover:text-brand-inverse">
               Operator Console
             </Link>
-            <Link href="/login" className="transition hover:text-cataclysm-ember">
+            <Link href="/login" className="transition hover:text-brand-inverse">
               Sign in
             </Link>
             <a
               href="https://supabase.com/dashboard/sign-up"
-              className="transition hover:text-cataclysm-ember"
+              className="transition hover:text-brand-inverse"
               target="_blank"
               rel="noreferrer"
             >
@@ -60,7 +64,7 @@ export default function MarketingLayout({
           </nav>
         </header>
         <main className="flex-1 pb-16">{children}</main>
-        <footer className="border-t border-white/10 pt-8 text-xs text-slate-400">
+        <footer className="border-t border-brand-border pt-8 text-xs text-brand-subtle">
           <p>© {currentYear} Cataclysm Studios Inc. Community-powered AI with PMOVES.AI.</p>
         </footer>
       </div>
