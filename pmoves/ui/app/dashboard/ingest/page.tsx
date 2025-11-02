@@ -114,8 +114,8 @@ export default async function IngestDashboardPage() {
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-slate-900">Cooperative Ingestion Bay</h1>
         <p className="text-sm text-slate-600">
-          Drop the assets that power our cooperative empowerment story—DARKXSIDE counts on each upload to arm the crew with fresh media.
-          {' '}Confirm owner-scoped guardrails in the{' '}
+          Drop the assets that power our cooperative empowerment story—DARKXSIDE counts on each upload to arm the crew with fresh
+          media. Confirm owner-scoped guardrails in the{' '}
           <a
             className="underline"
             href="https://github.com/Cataclysm-Studios-Inc/PMOVES.AI/blob/main/pmoves/docs/LOCAL_TOOLING_REFERENCE.md#L23"
@@ -125,7 +125,7 @@ export default async function IngestDashboardPage() {
             local tooling reference
           </a>{' '}
           before inviting collaborators to ingest alongside you.
-        <h1 className="text-2xl font-semibold text-brand-ink">Ingestion dashboard</h1>
+        </p>
         <p className="text-sm text-brand-muted">
           Upload new creative assets and monitor ingestion progress across Supabase and MinIO.
         </p>
