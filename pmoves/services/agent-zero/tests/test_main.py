@@ -113,3 +113,56 @@ def test_mcp_endpoints_expose_registry(monkeypatch, load_service_module):
     assert execute_payload["result"]["ok"] is True
     assert execute_payload["result"]["args"] == {"value": 42}
     assert executed["call"] == ("demo.cmd", {"value": 42})
+
+
+def test_geometry_decode_text_uses_new_payload(monkeypatch, load_service_module):
+    module = load_service_module("agent_zero_geometry", "services/agent-zero/main.py")
+    module = _prepare_agent_zero(module, monkeypatch)
+
+    captured: dict[str, dict[str, object]] = {}
+
+    class DummyResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:  # pragma: no cover - simple stub
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"ok": True}
+
+    def fake_post(url: str, json: dict[str, object], timeout: int) -> DummyResponse:
+        captured["url"] = url
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return DummyResponse()
+
+    monkeypatch.setattr(module.mcp_server.requests, "post", fake_post)
+
+    with TestClient(module.app) as client:
+        response = client.post(
+            "/mcp/execute",
+            json={
+                "cmd": "geometry.decode_text",
+                "arguments": {
+                    "mode": "geometry",
+                    "constellation_id": "const-123",
+                    "k": 3,
+                    "shape_id": "shape-789",
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["result"]["ok"] is True
+
+    assert captured["url"] == f"{module.mcp_server.GATEWAY_URL}/geometry/decode/text"
+    assert captured["timeout"] == 60
+
+    request_body = captured["json"]
+    assert request_body["mode"] == "geometry"
+    assert request_body["constellation_id"] == "const-123"
+    assert request_body["k"] == 3
+    assert request_body["constellation_ids"] == ["const-123"]
+    assert request_body["per_constellation"] == 3
+    assert request_body["shape_id"] == "shape-789"
