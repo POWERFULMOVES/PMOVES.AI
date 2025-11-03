@@ -123,7 +123,7 @@ Add `--dry-run` and batching before production use.
 
 ### Completed
 
-- ✅ Jellyfin server operational (v10.10.7) on port 8096
+- ✅ Jellyfin server operational (v10.11.0) on port 8096
 - ✅ Device ID persisted correctly in `jellyfin-ai/config/data/data/device.txt`
 - ✅ Published server URL configured via `JELLYFIN_PUBLISHED_URL`
 - ✅ Web UI accessible and cache clear utility created

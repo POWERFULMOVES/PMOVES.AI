@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint . --ext ts,tsx,js,jsx --max-warnings=0",
-    "test": "jest",
-    "test:e2e": "playwright test"
+    "dev": "node scripts/with-env.mjs next dev",
+    "build": "node scripts/with-env.mjs next build",
+    "start": "node scripts/with-env.mjs next start",
+    "lint": "node scripts/with-env.mjs eslint . --ext ts,tsx,js,jsx --max-warnings=0",
+    "test": "node scripts/with-env.mjs jest",
+    "test:e2e": "node scripts/with-env.mjs playwright test"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",

@@ -32,6 +32,7 @@
 
 ## Testing & Validation
 - Before running checks, review `pmoves/docs/SMOKETESTS.md` for the current 12-step smoke harness flow and optional follow-on targets.
+- Notebook Workbench: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` after UI/runtime changes to lint the bundle and confirm Supabase connectivity (see `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md`).
 - Use `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` and `pmoves/docs/LOCAL_DEV.md` to confirm environment scripts, Make targets, and Supabase CLI expectations.
 - Log smoke or manual verification evidence back into `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md` so roadmaps and next-step trackers stay aligned.
 
@@ -46,10 +47,11 @@
 - Tie summaries to the active roadmap items or checklists so parallel workstreams stay coherent across longer sessions.
 
 ## Core Bring-Up Sequence (Supabase CLI default)
+Prefer the automated path: `make first-run` stitches together the env bootstrap, Supabase CLI bring-up, data seeding, compose profiles, and smoketests described below (see `pmoves/docs/FIRST_RUN.md`).
 Follow this flow before running smokes or automation. Commands run from repo root unless noted.
 
-1. `cp pmoves/env.shared.example pmoves/env.shared` → populate secrets (Supabase keys, Discord webhook, MinIO, Firefly, etc.). Keep `.env` entries commented so they don’t override shared secrets.
-2. `make env-setup` – sync `.env`, `.env.local`, and Supabase config defaults.
+1. `cp pmoves/env.shared.example pmoves/env.shared` → populate secrets (Supabase keys, Discord webhook, MinIO, Firefly, etc.). This file now holds the branded defaults the entire stack reads on startup.
+2. `make env-setup` – sync `env.shared`, `.env.generated`, and `.env.local` so Supabase CLI credentials and integration tokens land in both Docker Compose and the UI launcher. All UI `npm run` scripts shell through `pmoves/ui/scripts/with-env.mjs`, so keeping `env.shared` + `.env.local` current automatically hydrates the Next.js workspace.
 3. `make supa-start` – launches the Supabase CLI stack (REST on 65421). Check status with `make supa-status`. Stop with `make supa-stop`.
 4. `make up` – core PMOVES services (presign, render-webhook, hi-rag, etc.).
 5. `make up-agents` – NATS, Agent Zero, Archon, mesh-agent, publisher-discord.
@@ -59,6 +61,18 @@ Follow this flow before running smokes or automation. Commands run from repo roo
    - `make up-n8n` – workflow engine (UI at http://localhost:5678).
    - `make notebook-up` / `make notebook-seed-models` – Open Notebook + SurrealDB (set `OPEN_NOTEBOOK_SURREAL_URL`/`OPEN_NOTEBOOK_SURREAL_ADDRESS`, or rely on the legacy `SURREAL_*` aliases, before launching).
    - `make jellyfin-folders` prior to first Jellyfin boot.
+   - `make up-jellyfin-ai` – brings up the LinuxServer Jellyfin overlay (UI on http://localhost:9096, API gateway on http://localhost:8300, dashboard on http://localhost:8400); follow the runbook in [`pmoves/docs/PMOVES.AI PLANS/JELLYFIN_BRIDGE_INTEGRATION.md`](pmoves/docs/PMOVES.AI%20PLANS/JELLYFIN_BRIDGE_INTEGRATION.md).
+
+### UI Quickstart & Links
+- Supabase Studio: http://127.0.0.1:65433 (started via `make -C pmoves supa-start`; confirm with `make -C pmoves supa-status`).
+- Notebook Workbench: http://localhost:3000/notebook-workbench (run `npm run dev` inside `pmoves/ui`; the script now layers `env.shared` + `.env.local` for you; lint + REST check via `make -C pmoves notebook-workbench-smoke`).
+- TensorZero Playground: http://localhost:4000 (requires `make -C pmoves up-tensorzero`; gateway API at http://localhost:3030).
+- Firefly Finance: http://localhost:8082 (launched with `make -C pmoves up-external-firefly`; populate `FIREFLY_*` secrets).
+- Wger Coach Portal: http://localhost:8000 (`make -C pmoves up-external-wger`; defaults apply automatically).
+- Jellyfin Media Hub: http://localhost:8096 (`make -C pmoves up-external-jellyfin`; ensure media folders exist).
+- Jellyfin AI Overlay: http://localhost:9096 (`make -C pmoves up-jellyfin-ai`; see above for API gateway/dashboard ports).
+- Open Notebook UI: http://localhost:8503 (restart with `docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`; keep API token/password in sync).
+- n8n Automation: http://localhost:5678 (`make -C pmoves up-n8n`; import flows from `pmoves/integrations`).
 
 ## Smoketests & Diagnostics
 - Full harness: `make smoke`
@@ -76,6 +90,7 @@ Follow this flow before running smokes or automation. Commands run from repo roo
 - Seed helpers: `make seed-approval`, `make seed-data`, `make mindmap-seed`
 - CI parity: `make chit-contract-check`, `make jellyfin-verify`, `pytest` via `make test-discord-format` etc.
 - Integration workspace helpers live in `pmoves/tools/integrations/*.sh|ps1` (bootstrap, import flows, push PRs).
+- Jellyfin bridge/Jellyfin AI instructions live in `pmoves/docs/PMOVES.AI PLANS/JELLYFIN_BRIDGE_INTEGRATION.md`, `pmoves/docs/PMOVES.AI PLANS/JELLYFIN_BACKFILL_PLAN.md`, and the enhanced media stack notes under `pmoves/docs/PMOVES.AI PLANS/`.
 - Consciousness harvest: `make harvest-consciousness` (scaffolds dataset + processed artifacts)
 - Consciousness YouTube ingestion: `make ingest-consciousness-yt ARGS="--max 5"` (requires pmoves-yt)
 - CHIT secret bundle: `make chit-encode-secrets ARGS="--env-file pmoves/env.shared"`; round-trip via `make chit-decode-secrets`.
@@ -89,6 +104,7 @@ Follow this flow before running smokes or automation. Commands run from repo roo
 - Service-specific guides: `pmoves/docs/services/<service>/README.md`
 - Creative pipeline: `pmoves/docs/PMOVES.AI PLANS/CREATOR_PIPELINE*.md` and `pmoves/creator/README.md`
 - Automation checklists: `pmoves/docs/PMOVES.AI PLANS/N8N_SETUP.md`, `N8N_CHECKLIST.md`
+- Media integrations: `pmoves/docs/PMOVES.AI PLANS/JELLYFIN_BRIDGE_INTEGRATION.md`, `JELLYFIN_BACKFILL_PLAN.md`, and `Enhanced Media Stack with Advanced AudioVideo Analysis/`.
 
 ## Working Practice Reminders
 - Sync with the latest `main` (`git fetch origin && git checkout main && git pull --rebase`) before branching for new work.

@@ -1,0 +1,16 @@
+servers:
+  dockerhub:
+    image: mcp/dockerhub
+    enabled: true
+  neo4j-memory:
+    image: mcp/neo4j-memory
+    enabled: true
+  fetch:
+    image: mcp/fetch
+    enabled: true
+  duckduckgo:
+    image: mcp/duckduckgo
+    enabled: true
+  ffmpeg:
+    image: linuxserver/ffmpeg:version-7.1-cli
+    enabled: true

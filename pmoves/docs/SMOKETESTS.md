@@ -148,6 +148,18 @@ The Dropzone UI rides on the Supabase presign + render webhook path. Once the co
 4. Follow the “Open asset” link in the Recent uploads table to verify the MinIO-signed URL streams the object.
 5. When smoke-complete, archive or delete the object from MinIO to keep the bucket tidy.
 
+### Notebook Workbench smoke
+
+Prereqs: Supabase CLI stack online (`make supa-start`), env synced via `make env-setup`, and at least one thread in `chat_messages`.
+
+1. Run the consolidated target: `make notebook-workbench-smoke ARGS="--thread=<thread_uuid>"`.
+   - Step 1 lints the Next.js bundle (`npm --prefix ui run lint`).
+   - Step 2 loads Supabase env vars from `env.shared`/`.env.local` and hits the REST endpoint for the supplied thread ID.
+2. Review the output; non-zero exit codes signal missing env vars or REST connectivity issues. Capture the console log in PR evidence when validating UI/runtime changes.
+3. Optional manual check: `npm run dev` inside `pmoves/ui` and visit `http://localhost:3000/notebook-workbench` to interactively confirm layout edits, group management, and snapshot persistence.
+
+See `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` for extended workflows and troubleshooting tips.
+
 ### 5b) Workflow Automations
 Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
 1. Import/activate domain flows (shipped in repo):

@@ -2,16 +2,25 @@
 
 ## Quickstart
 
-### 1. Prepare environment files
-- Copy `.env.example` → `.env` once; it holds the base compose settings shared by every service.
-- Run the interactive bootstrapper to populate machine-specific secrets and overlays:
-  - `make bootstrap` (uses `python -m pmoves.scripts.bootstrap_env` under the hood)
-  - Copy `env.shared.example` → `env.shared` (or let `make` auto-seed it) before adding secrets.
-  - Pass `BOOTSTRAP_FLAGS="--service supabase"` to scope the prompts, or `--accept-defaults` to reuse existing values without prompting.
-- The bootstrap writes `env.shared`, `.env.local`, `env.jellyfin-ai`, and the `env.*.additions` helpers with branded PMOVES defaults, Supabase pointers, and generated secrets. Re-run the command any time you change Supabase endpoints or want to regenerate credentials.
-- Manual edits are still supported; re-run `make bootstrap` afterwards to validate and persist updates.
+### One command, full stack
 
-### 2. Choose your Supabase backend
+```bash
+make first-run
+```
+
+This aggregates the entire onboarding sequence: env bootstrap, Supabase CLI bring-up, core + agent + external compose profiles, Supabase/Neo4j/Qdrant seeding, and the smoketest harness. A full breakdown lives in [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
+
+### Manual path
+
+#### 1. Prepare environment files
+- Copy `pmoves/env.shared.example` → `pmoves/env.shared` so every container ships with the branded defaults (Supabase CLI endpoints, Discord/Jellyfin tokens, MinIO buckets, etc.).
+- Run the interactive bootstrapper to layer machine-specific secrets on top:
+  - `make bootstrap` (wraps `python -m pmoves.scripts.bootstrap_env`) or `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults`
+  - Pass `BOOTSTRAP_FLAGS="--service supabase"` to scope the prompts when needed.
+- The bootstrap now writes `env.shared`, `.env.generated`, `.env.local`, `env.jellyfin-ai`, and the `env.*.additions` helpers so Docker Compose, Supabase CLI, and the UI all read the same values. Compose loads them in order (`env.shared.generated` → `env.shared` → `.env.generated` → `.env.local`), and the UI launcher mirrors that stack via `scripts/with-env.mjs`.
+- Manual edits remain supported—adjust `env.shared` for shared defaults or `.env.local` for host-specific overrides, then rerun `make bootstrap` (or `make env-check`) to validate.
+
+#### 2. Choose your Supabase backend
 - **Supabase CLI (full feature parity, default path)**
   - Install the `supabase` CLI and run `make supa-init` once per repo.
   - Start/stop with `make supa-start` / `make supa-stop`, inspect endpoints with `make supa-status`, then `make supa-use-local` to copy the CLI defaults into `.env.local` before starting the stack.
@@ -23,7 +32,7 @@
   - Populate `.env.supa.remote` with your endpoints/keys (generate from `supa.md` via `make supa-extract-remote` if provided).
   - Apply the remote profile with `make supa-use-remote` before running the main stack.
 
-### 3. Start the PMOVES stack
+#### 3. Start the PMOVES stack
 - `make up` — default entry point. Brings up the data profile (`qdrant`, `neo4j`, `minio`, `meilisearch`, `presign`), all default workers (`hi-rag-gateway-v2`, `retrieval-eval`, `render-webhook`, `langextract`, `extract-worker`), plus pmoves.yt (`ffmpeg-whisper`, `pmoves-yt`) and the Jellyfin bridge. When `SUPABASE_RUNTIME=compose` it automatically chains to `make supabase-up`.
 - `make preflight` — run the bootstrap validator without starting containers. `make up` runs this check automatically and exits early if required secrets are missing.
 - `make up-cli` / `make up-compose` — one-shot shims that force CLI vs. compose Supabase for a single `make up` run.

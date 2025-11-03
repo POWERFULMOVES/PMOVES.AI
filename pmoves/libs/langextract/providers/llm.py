@@ -181,6 +181,35 @@ class TensorZeroProvider(BaseProvider):
         payload: Dict[str, Any] = {
             "model": self.model,
             "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": SYS_PROMPT},
+                {"role": "user", "content": content},
+            ],
+        }
+        tags = self._build_tags(namespace, doc_id, metadata)
+        if tags:
+            payload["tensorzero::tags"] = tags
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, dict) and data.get("success") is False:
+            raise RuntimeError(f"TensorZero error: {data.get('errors')}")
+        text = ""
+        choices = data.get("choices") if isinstance(data, dict) else None
+        if isinstance(choices, list) and choices:
+            message = choices[0].get("message", {})
+            text = message.get("content", "")
+        if not text and isinstance(data, dict):
+            text = data.get("response") or data.get("text") or ""
+        if not text:
+            text = json.dumps(data)
+        return _parse_json_from_text(text)
+
 class CloudflareWorkersAIProvider(BaseProvider):
     def __init__(self):
         self.account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
@@ -203,6 +232,7 @@ class CloudflareWorkersAIProvider(BaseProvider):
             raise RuntimeError(
                 "Cloudflare Workers AI provider selected but CLOUDFLARE_API_TOKEN is missing"
             )
+        self.timeout = int(os.environ.get("CLOUDFLARE_TIMEOUT_SECONDS", "60"))
 
     def _chat(self, content: str) -> Dict[str, Any]:
         url = f"{self.base}/{self.model.lstrip('/')}"
@@ -216,36 +246,9 @@ class CloudflareWorkersAIProvider(BaseProvider):
                 {"role": "user", "content": content},
             ],
         }
-        tags = self._build_tags(namespace, doc_id, metadata)
-        if tags:
-            payload["tensorzero::tags"] = tags
-        r = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
-        r.raise_for_status()
-        txt = r.json()["choices"][0]["message"]["content"]
-        return _parse_json_from_text(txt)
-
-    def extract_text(
-        self,
-        document: str,
-        namespace: str,
-        doc_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        body = USER_TMPL_TEXT.format(ns=namespace, doc=doc_id, content=document)
-        return self._chat(body, namespace, doc_id, metadata)
-
-    def extract_xml(
-        self,
-        xml: str,
-        namespace: str,
-        doc_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        body = USER_TMPL_XML.format(ns=namespace, doc=doc_id, content=xml)
-        return self._chat(body, namespace, doc_id, metadata)
-        r = requests.post(url, headers=headers, json=payload, timeout=60)
-        r.raise_for_status()
-        data = r.json()
+        response = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+        response.raise_for_status()
+        data = response.json()
         if data.get("success") is False:
             raise RuntimeError(f"Cloudflare Workers AI error: {data.get('errors')}")
         result = data.get("result") or {}
@@ -267,11 +270,22 @@ class CloudflareWorkersAIProvider(BaseProvider):
             text = json.dumps(data)
         return _parse_json_from_text(text)
 
-    def extract_text(self, document: str, namespace: str, doc_id: str) -> Dict[str, Any]:
+    def extract_text(
+        self,
+        document: str,
+        namespace: str,
+        doc_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         body = USER_TMPL_TEXT.format(ns=namespace, doc=doc_id, content=document)
         return self._chat(body)
 
-    def extract_xml(self, xml: str, namespace: str, doc_id: str) -> Dict[str, Any]:
+    def extract_xml(
+        self,
+        xml: str,
+        namespace: str,
+        doc_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         body = USER_TMPL_XML.format(ns=namespace, doc=doc_id, content=xml)
         return self._chat(body)
-

@@ -11,7 +11,7 @@ routing = ["ollama_local"]
 
 [models.llama3_local.providers.ollama_local]
 type = "openai"
-api_base = "http://host.docker.internal:11434/v1"
+api_base = "http://pmoves-ollama:11434/v1"
 model_name = "llama3.1"
 api_key_location = "none"
 
@@ -21,7 +21,7 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.gemma_embed_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://host.docker.internal:11434/v1"
+api_base = "http://pmoves-ollama:11434/v1"
 model_name = "embeddinggemma:300m"
 api_key_location = "none"
 

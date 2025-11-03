@@ -1,0 +1,82 @@
+{
+  "version": "1.1.0",
+  "name": "comic-pop",
+  "assets": {
+    "baseUrl": "/skins/comic-pop/1.1.0/",
+    "images": {
+      "bubble_round": "img/bubble.svg",
+      "bubbleTail": "img/tail.svg"
+    }
+  },
+  "tokens": {
+    "colors": {
+      "--bg": "#0b0b10",
+      "--fg": "#f3f3f7",
+      "--accent": "#ffd400",
+      "--bubble-fill": "#ffffff",
+      "--bubble-stroke": "#121212"
+    },
+    "typography": {
+      "fontFamily": "Bangers, system-ui, sans-serif",
+      "sizeScale": {
+        "--text-md": "1rem"
+      },
+      "lineHeights": {
+        "--lh-tight": "1.2"
+      }
+    }
+  },
+  "components": {
+    "bubble": {
+      "archetypes": {
+        "speech.round": {
+          "renderer": "svg9",
+          "svg": "bubble_round",
+          "nineSlice": {
+            "left": 16,
+            "right": 16,
+            "top": 16,
+            "bottom": 24
+          }
+        },
+        "speech.shout": {
+          "renderer": "procedural",
+          "synth": "burst",
+          "params": {
+            "spikes": 18,
+            "innerR": 0.75,
+            "outerR": 1.15,
+            "irregularity": 0.18
+          }
+        },
+        "thought.cloud": {
+          "renderer": "procedural",
+          "synth": "cloud",
+          "params": {
+            "lobes": 9,
+            "noise": 0.22
+          }
+        },
+        "digital.hud": {
+          "renderer": "svg9",
+          "svg": "bubble_round"
+        }
+      },
+      "variants": {
+        "primary": {
+          "fill": "var(--bubble-fill)",
+          "stroke": "var(--bubble-stroke)",
+          "strokeWidth": 3
+        },
+        "whisper": {
+          "fill": "#ffffffcc",
+          "strokeDasharray": "4 4"
+        },
+        "shout": {
+          "fill": "#fff",
+          "strokeWidth": 4
+        }
+      }
+    }
+  }
+}

@@ -22,7 +22,7 @@ services:
     image: postgrest/postgrest:latest
     restart: unless-stopped
     depends_on: [postgres]
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
@@ -81,7 +81,7 @@ services:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
@@ -114,7 +114,7 @@ services:
   retrieval-eval:
     build: ./services/retrieval-eval
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
       - EVAL_HTTP_PORT=${EVAL_HTTP_PORT}
@@ -131,7 +131,7 @@ services:
   presign:
     build: ./services/presign
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -147,7 +147,7 @@ services:
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
@@ -163,7 +163,7 @@ services:
   extract-worker:
     build: ./services/extract-worker
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -181,7 +181,7 @@ services:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
     restart: unless-stopped
-    env_file: [.env.generated, .env]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -205,7 +205,7 @@ services:
       context: .
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     ports: ["8084:8084"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -213,7 +213,7 @@ services:
   notebook-sync:
     build: ./services/notebook-sync
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
       - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
@@ -238,7 +238,7 @@ services:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -262,7 +262,7 @@ services:
   media-video:
     build: ./services/media-video
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -285,7 +285,7 @@ services:
   media-audio:
     build: ./services/media-audio
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -305,7 +305,7 @@ services:
   pmoves-yt:
     build: ./services/pmoves-yt
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -330,8 +330,11 @@ services:
     depends_on:
       minio:
         condition: service_started
-      bgutil-pot-provider:
-        condition: service_started
+      # bgutil-pot-provider is optional and may be excluded when compose is
+      # invoked with profiles that don't include the 'yt' provider. Remove
+      # the hard dependency so `make up` with different profiles doesn't
+      # fail with an "undefined service" error. The image/service is still
+      # defined below and can be enabled via profiles when needed.
     ports: ["8077:8077"]
     profiles: ["orchestration","workers","agents"]
     networks: [pmoves]
@@ -348,7 +351,7 @@ services:
   channel-monitor:
     build: ./services/channel-monitor
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
@@ -373,7 +376,7 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -423,7 +426,7 @@ services:
         - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu121}
         - TORCH_SKIP_CUDA=0
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
@@ -475,7 +478,7 @@ services:
         TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
     restart: unless-stopped
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -545,7 +548,7 @@ services:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -570,7 +573,7 @@ services:
       context: .
       dockerfile: ./services/archon/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8091
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -587,7 +590,7 @@ services:
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
@@ -601,7 +604,7 @@ services:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -614,7 +617,7 @@ services:
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://jellyfin:8096}
       - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
@@ -622,6 +625,17 @@ services:
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
     ports: ["8093:8093"]
     profiles: ["orchestration"]
+    networks: [pmoves]
+
+  pmoves-ollama:
+    image: ${PMOVES_OLLAMA_IMAGE:-pmoves/ollama:0.12.6}
+    restart: unless-stopped
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_MODELS=/root/.ollama/models
+    volumes:
+      - pmoves-ollama-models:/root/.ollama/models
+    profiles: ["tensorzero"]
     networks: [pmoves]
 
   tensorzero-clickhouse:
@@ -648,7 +662,7 @@ services:
     image: tensorzero/gateway:latest
     restart: unless-stopped
     command: ["--config-file", "/app/config/tensorzero.toml"]
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -666,7 +680,7 @@ services:
   tensorzero-ui:
     image: tensorzero/ui:latest
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
@@ -765,7 +779,7 @@ services:
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
       - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
@@ -780,7 +794,7 @@ services:
   grayjay-server:
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
       - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
@@ -807,7 +821,7 @@ services:
           echo "Set CLOUDFLARE_TUNNEL_TOKEN or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.";
           exit 1;
         fi
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
       - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
@@ -824,6 +838,7 @@ volumes:
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
+  pmoves-ollama-models: {}
 networks:
   pmoves:
     external: true

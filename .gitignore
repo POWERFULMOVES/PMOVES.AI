@@ -58,3 +58,4 @@ playwright-deps/
 pmoves/ui/test-results/
 *.deb
 temp*.mp4
+/data/

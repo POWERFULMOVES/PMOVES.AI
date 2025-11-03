@@ -40,6 +40,36 @@ HEADERS = {
 
 ProviderSpec = Dict[str, object]
 
+
+def _tensorzero_embedding_name(model: str) -> str:
+    """
+    TensorZero's OpenAI-compatible embeddings endpoint expects model identifiers
+    to be prefixed with ``tensorzero::embedding_model_name::``.  Allow callers
+    to supply short names (e.g. ``gemma_embed_local``) and normalize here so
+    seeds/defaults always use the canonical form.
+    """
+    prefix = "tensorzero::embedding_model_name::"
+    if model.startswith(prefix):
+        return model
+    return f"{prefix}{model}"
+
+
+def _tensorzero_models() -> Tuple[Tuple[str, str], Tuple[str, str]]:
+    chat_name = os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini"
+    embed_base = os.environ.get("TENSORZERO_EMBED_MODEL") or "gemma_embed_local"
+    embed_name = _tensorzero_embedding_name(embed_base)
+    return (chat_name, "language"), (embed_name, "embedding")
+
+
+def _tensorzero_defaults() -> Dict[str, str]:
+    chat_name = os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini"
+    embed_base = os.environ.get("TENSORZERO_EMBED_MODEL") or "gemma_embed_local"
+    return {
+        "default_chat_model": chat_name,
+        "default_embedding_model": _tensorzero_embedding_name(embed_base),
+    }
+
+
 PROVIDERS: Dict[str, ProviderSpec] = {
     "openai": {
         "env": ["OPENAI_API_KEY"],
@@ -127,18 +157,9 @@ PROVIDERS: Dict[str, ProviderSpec] = {
     },
     "tensorzero": {
         "env": ["TENSORZERO_BASE_URL"],
-        "models": [
-            (os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini", "language"),
-            (
-                os.environ.get("TENSORZERO_EMBED_MODEL") or "gemma_embed_local",
-                "embedding",
-            ),
-        ],
-        "defaults": {
-            "default_chat_model": os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini",
-            "default_embedding_model": os.environ.get("TENSORZERO_EMBED_MODEL")
-            or "gemma_embed_local",
-        },
+        "provider_alias": "openai-compatible",
+        "models": list(_tensorzero_models()),
+        "defaults": _tensorzero_defaults(),
     },
     "cloudflare": {
         "env": ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"],
@@ -192,20 +213,21 @@ def ensure_models(models_by_provider: Dict[str, List[dict]]) -> Dict[str, dict]:
     indexed = {(m["name"], m["provider"]): m for m in current}
     created: Dict[str, dict] = {}
 
-    for provider, model_list in models_by_provider.items():
+    for provider_key, model_list in models_by_provider.items():
         for model in model_list:
-            key = (model["name"], provider)
+            actual_provider = model.get("provider") or provider_key
+            key = (model["name"], actual_provider)
             if key in indexed:
                 created[model["name"]] = indexed[key]
                 continue
             payload = {
                 "name": model["name"],
-                "provider": provider,
+                "provider": actual_provider,
                 "type": model["type"],
             }
             created_model = post_json("/models", payload)
             created[model["name"]] = created_model
-            print(f"↳ Added {provider}:{model['name']} ({model['type']})")
+            print(f"↳ Added {actual_provider}:{model['name']} ({model['type']})")
 
     return created
 
@@ -230,6 +252,7 @@ def update_defaults(defaults: Dict[str, str], created_models: Dict[str, dict]) -
 def main() -> None:
     eligible: Dict[str, List[dict]] = {}
     defaults: Dict[str, str] = {}
+    provider_labels: List[str] = []
 
     for provider, spec in PROVIDERS.items():
         env_keys = spec.get("env", [])
@@ -238,13 +261,16 @@ def main() -> None:
         if not have_provider_env(env_keys):
             continue
 
+        provider_alias = spec.get("provider_alias") or provider
         model_specs = [
-            {"name": name, "type": model_type}
+            {"name": name, "type": model_type, "provider": provider_alias}
             for name, model_type in spec.get("models", [])
         ]
         if not model_specs:
             continue
         eligible[provider] = model_specs
+        label = provider_alias if provider_alias == provider else f"{provider}->{provider_alias}"
+        provider_labels.append(label)
 
         defaults.update(spec.get("defaults", {}))
 
@@ -257,7 +283,7 @@ def main() -> None:
     if defaults:
         update_defaults(defaults, created)
 
-    providers = ", ".join(sorted(eligible.keys()))
+    providers = ", ".join(sorted(provider_labels or eligible.keys()))
     print(f"✔ Open Notebook providers configured: {providers or 'none'}")
     if MINDMAP_BASE and MINDMAP_CONSTELLATION:
         base = MINDMAP_BASE.rstrip("/")

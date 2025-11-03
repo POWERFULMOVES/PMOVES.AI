@@ -186,6 +186,7 @@ def build_source(
         title=title,
         source_type="text",
         notebooks=[notebook_id],
+        url=url,
         content=content,
         embed=embed,
         async_processing=async_processing,

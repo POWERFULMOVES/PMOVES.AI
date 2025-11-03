@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2025-10-25_
+_Last updated: 2025-11-03_
 
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
@@ -11,6 +11,7 @@ _Last updated: 2025-10-25_
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md`
 - **Smoke Tests** — `SMOKETESTS.md`
 - **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
+- **First-Run Bootstrap** — `FIRST_RUN.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
 - **Archon Service README** — `../services/archon/README.md`
@@ -22,8 +23,9 @@ _Last updated: 2025-10-25_
 - **PMOVES v5.12 Task Backlog** — `context/pmoves_v_5.12_tasks.md`
 
 ## UI workspace bring-up
-- Quickstart: [`LOCAL_DEV.md` – UI workspace](../LOCAL_DEV.md#ui-workspace-nextjs--supabase-platform-kit)
-  - Supabase CLI prerequisites: run `make supa-start` then `make supa-status` to populate `pmoves/.env.local` before `npm run dev`.
+- Quickstart: [`LOCAL_DEV.md` – Web UI quick links](../LOCAL_DEV.md#web-ui-quick-links)
+  - Supabase CLI prerequisites: run `make supa-start` then `make supa-status` to refresh Supabase keys. `npm run dev` now layers `env.shared` + `.env.local` automatically, so keep those root files current.
+- Notebook Workbench: [`UI_NOTEBOOK_WORKBENCH.md`](../UI_NOTEBOOK_WORKBENCH.md) — Supabase prerequisites, smoketest target, and troubleshooting tips for the `/notebook-workbench` page.
 
 ## Creative Tutorials (Automation Inputs)
 - Qwen Image Edit Plus — `pmoves/creator/tutorials/qwen_image_edit_plus_tutorial.md`

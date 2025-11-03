@@ -36,7 +36,7 @@ ENV_SHARED_TEMPLATE ?= env.shared.example
 
 LOAD_ENV_SHARED := set -a; \
         [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f .env ] && . .env; \
+        [ -f .env.generated ] && . .env.generated; \
         [ -f .env.local ] && . .env.local; \
         set +a;
 export LOAD_ENV_SHARED
@@ -235,6 +235,13 @@ notebook-seed-models: ## Seed Open Notebook models based on provider keys from t
 	@echo "Seeding Open Notebook providers..."
 	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; exec $(PYTHON) scripts/open_notebook_seed.py'
 
+.PHONY: notebook-workbench-smoke
+notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
+	@echo "→ Linting Notebook Workbench UI…"
+	@npm --prefix ui run lint
+	@echo "→ Validating Supabase environment…"
+	@bash -c '$(LOAD_ENV_SHARED) node scripts/notebook_workbench_smoke.mjs $(ARGS)'
+
 # Bring only worker services (ensures data deps are active)
 up-workers:
 	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
@@ -278,7 +285,7 @@ ps:
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d
+	@bash -c 'set -a; [ -f env.shared ] && . env.shared; [ -f .env.local ] && . .env.local; set +a; exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d'
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
@@ -367,14 +374,14 @@ demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 	@PYTHONPATH=. python tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 demo-finance-cgp: ## Map sample finance monthly summary to CGP and POST to gateway
-        @echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
-        @PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+	@echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
+	@PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 firefly-seed-sample: ensure-env-shared ## Seed Firefly III with PMOVES 5-year projection sample dataset
-        @bash -c '$(LOAD_ENV_SHARED) \
-          DRY_FLAG=""; \
-          if [ -n "$${DRY_RUN:-}" ] && [ "$${DRY_RUN}" != "0" ]; then DRY_FLAG="--dry-run"; fi; \
-          exec $(PYTHON) scripts/firefly_seed_sample_data.py $$DRY_FLAG --fixture data/firefly/sample_transactions.json'
+	@bash -c '$(LOAD_ENV_SHARED) \
+	  DRY_FLAG=""; \
+	  if [ -n "$${DRY_RUN:-}" ] && [ "$${DRY_RUN}" != "0" ]; then DRY_FLAG="--dry-run"; fi; \
+	  exec $(PYTHON) scripts/firefly_seed_sample_data.py $$DRY_FLAG --fixture data/firefly/sample_transactions.json'
 
 .PHONY: webhook-health-cgp webhook-finance-cgp
 webhook-health-cgp: ## Call n8n health weekly → CGP webhook (workflow must be active)
@@ -860,16 +867,17 @@ up-jellyfin-ai:
 	@mkdir -p $(JELLYFIN_AI_BASE)/qwen/models $(JELLYFIN_AI_BASE)/qwen/cache
 	@mkdir -p $(JELLYFIN_AI_BASE)/logs $(JELLYFIN_AI_BASE)/redis
 	@echo "Starting Jellyfin AI stack..."
-	@JELLYFIN_AI_BASE=$(JELLYFIN_AI_BASE) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.jellyfin-ai.yml up -d --force-recreate \
+	@set -a; . ./env.jellyfin-ai; set +a; \
+	JELLYFIN_AI_BASE=$(JELLYFIN_AI_BASE) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.jellyfin-ai.yml up -d --force-recreate \
 		jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-redis jellyfin-audio-processor jellyfin-api-gateway jellyfin-dashboard
 	@echo "✓ Jellyfin AI stack started successfully!"
 	@echo ""
 	@echo "Services:"
-	@echo "  - Jellyfin Media Server:  http://localhost:8096"
-	@echo "  - Dashboard:              http://localhost:8400"
-	@echo "  - API Gateway:            http://localhost:8300"
-	@echo "  - Ollama (Qwen2-Audio):   http://localhost:11434"
-	@echo "  - Neo4j Browser:          bolt://localhost:7687"
+	@. ./env.jellyfin-ai; echo "  - Jellyfin Media Server:  $$JELLYFIN_PUBLIC_BASE_URL"; \
+	  echo "  - Dashboard:              http://localhost:${JELLYFIN_DASHBOARD_PORT:-8400}"; \
+	  echo "  - API Gateway:            http://localhost:${JELLYFIN_API_PORT:-8300}"; \
+	  echo "  - Ollama (Qwen2-Audio):   http://localhost:11434"; \
+	  echo "  - Neo4j Browser:          bolt://localhost:7687"
 	@echo ""
 	@echo "Note: Qwen2-Audio model is already pulled and ready to use!"
 
@@ -924,7 +932,8 @@ help:
 	@echo "  chit-contract-check Run local CHIT contract grep (mirrors CI)"
 	@echo "  flight-check     Run environment preflight (deps, ports, .env)"
 	@echo "  flight-check-retro Retro-styled Rich CLI preflight"
-	@echo "  env-dedupe       Remove duplicate keys from .env (keeps last, writes .bak)"
+	@echo "  env-dedupe       Remove duplicate keys from .env.local (keeps last, writes .bak)"
+	@echo "  first-run        One-shot bootstrap: env, Supabase, seeds, full stack, smoke tests"
 	@echo "  logs-core        Tail core services (docker compose logs -f ...)"
 	@echo "  setup            Run Codex/bootstrap env setup (make, conda deps)"
 	@echo "  venv             Create a local Python virtualenv (.venv) and install deps"
@@ -970,6 +979,32 @@ setup:
 .PHONY: bootstrap
 bootstrap:
 	@$(PYTHON) scripts/bootstrap_env.py $(BOOTSTRAP_FLAGS)
+
+.PHONY: first-run
+first-run: ensure-env-shared ## One-shot env bootstrap, seed data, start full stack, and run smokes
+	@echo "→ Bootstrapping environment registry values..."
+	@$(MAKE) bootstrap
+	@echo "→ Ensuring Supabase backend is running..."
+	@if [ "$(SUPA_PROVIDER)" = "cli" ]; then \
+		if docker ps --format '{{.Names}}' | grep -q '^supabase_db_'; then \
+			echo "   • Supabase CLI stack already running."; \
+		else \
+			$(MAKE) supa-start; \
+		fi; \
+	else \
+		$(MAKE) supabase-up; \
+	fi
+	@echo "→ Starting core PMOVES services (data + workers)..."
+	@$(MAKE) up
+	@echo "→ Applying database seeds and demo corpora..."
+	@$(MAKE) bootstrap-data
+	@echo "→ Bringing agents online..."
+	@$(MAKE) up-agents
+	@echo "→ Starting bundled integrations (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@$(MAKE) up-external
+	@echo "→ Running 12-step smoke harness..."
+	@$(MAKE) smoke
+	@echo "✔ First-run bootstrap complete."
 
 .PHONY: supabase-migrate
 supabase-migrate:

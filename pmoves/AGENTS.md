@@ -7,7 +7,7 @@
 - `supabase/`, `neo4j/`, `services/*/migrations/`: DB migrations and Cypher/SQL.
 - `n8n/`, `comfyui/`: Workflow exports and ComfyUI assets.
 - `datasets/`, `docs/`: Sample data and documentation.
-- Root: `docker-compose.yml`, `Makefile`, `.env.example`.
+- Root: `docker-compose.yml`, `Makefile`, `env.shared.example`.
 
 ## Planning & Documentation Expectations
 - **Mandatory context before changes:** read `docs/ROADMAP.md` and `docs/NEXT_STEPS.md` to align with the current sprint focus (M2 — Creator & Publishing). These documents spell out the active priorities, including Jellyfin refresh polish, Discord embeds, and Supabase→Discord automation; confirm your work reinforces or explicitly updates those targets before you start coding.
@@ -15,6 +15,7 @@
 - **Supporting references:**
   - `docs/MAKE_TARGETS.md` — authoritative Make targets, smoke checks, and automation entry points.
   - `docs/README_DOCS_INDEX.md` — high-level index of the documentation set and where to find service-specific guides.
+  - Jellyfin integration runbooks live under `pmoves/docs/PMOVES.AI PLANS/` (see `JELLYFIN_BRIDGE_INTEGRATION.md`, `JELLYFIN_BACKFILL_PLAN.md`, and `Enhanced Media Stack with Advanced AudioVideo Analysis/`).
   - Additional operational primers live alongside services (e.g., `services/**/README.md`) and should be consulted when touching those areas.
 
 ## Build, Test, and Development Commands
@@ -36,7 +37,23 @@
 - Suggested commands: `pip install -r services/<name>/requirements.txt pytest` then `pytest -q`.
 - Before pushing, mirror the GitHub Actions checks documented in `docs/LOCAL_CI_CHECKS.md` (pytest suites, `make chit-contract-check`, `make jellyfin-verify` when the publisher is affected, SQL policy lint, env preflight). Capture each command/output in the PR template’s Testing section.
 - If you intentionally skip one of those checks (docs-only change, etc.), record the rationale in the PR Reviewer Notes so reviewers know the risk envelope.
+- UI updates: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` to lint the Next.js bundle and validate Supabase connectivity. Reference `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` when collecting smoke evidence.
 - JetStream drift can surface as `nats: JetStream.Error cannot create queue subscription…` in the Agent Zero container logs. Rebuild with `docker compose build agent-zero && docker compose up -d agent-zero` so the pull-subscribe controller code ships and the consumer metadata is recreated automatically.
+
+## Bring-Up Sequence
+- Prefer `make first-run` to bootstrap secrets, start the Supabase CLI stack, launch core/agent/external services, seed Supabase + Neo4j + Qdrant, and run the smoketests in one shot (see `docs/FIRST_RUN.md`).
+- Manual flow: `make bootstrap` → `make supa-start` → `make up` → `make bootstrap-data` → `make up-agents` → `make up-external` → `make smoke`.
+
+### UI Quickstart & Links
+- Supabase Studio → http://127.0.0.1:65433 (`make -C pmoves supa-start`; status via `make -C pmoves supa-status`).
+- Notebook Workbench → http://localhost:3000/notebook-workbench (`npm run dev` in `pmoves/ui`; the launcher now layers `env.shared` + `.env.local` automatically; smoke with `make -C pmoves notebook-workbench-smoke`).
+- TensorZero Playground → http://localhost:4000 (`make -C pmoves up-tensorzero`; gateway API exposed on http://localhost:3030).
+- Firefly Finance → http://localhost:8082 (`make -C pmoves up-external-firefly`; configure `FIREFLY_*` secrets).
+- Wger Coach Portal → http://localhost:8000 (`make -C pmoves up-external-wger`; brand defaults apply automatically).
+- Jellyfin Media Hub → http://localhost:8096 (`make -C pmoves up-external-jellyfin`; ensure `pmoves/data/jellyfin` is populated).
+- Jellyfin AI Overlay → http://localhost:9096 (`make -C pmoves up-jellyfin-ai`; exposes API gateway on http://localhost:8300 and dashboard on http://localhost:8400).
+- Open Notebook UI → http://localhost:8503 (`docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`; keep password/token aligned).
+- n8n Automation → http://localhost:5678 (`make -C pmoves up-n8n`; flows sync from `pmoves/integrations`).
 
 ## Commit & Pull Request Guidelines
 - Prefer Conventional Commits (e.g., `feat(hi-rag): hybrid search option`).
@@ -44,7 +61,7 @@
 - Keep changes atomic; update docs/schemas when interfaces change.
 
 ## Security & Configuration Tips
-- Copy `.env.example` → `.env`; never commit secrets. Key envs: `PMOVES_CONTRACTS_DIR` for schema resolution.
+- Copy `env.shared.example` → `env.shared`; never commit secrets. Keep shared defaults in `env.shared` and machine-specific overrides in `.env.local`. Key envs: `PMOVES_CONTRACTS_DIR` for schema resolution.
 - Branded Open Notebook deployments reuse the UI password as the API bearer token; keep `OPEN_NOTEBOOK_API_TOKEN` aligned with `OPEN_NOTEBOOK_PASSWORD` so ingestion helpers and agents authenticate successfully.
 - When working with Open Notebook, populate `OPEN_NOTEBOOK_SURREAL_URL` / `OPEN_NOTEBOOK_SURREAL_ADDRESS` (or the legacy `SURREAL_*` aliases) so the Streamlit UI can reach SurrealDB inside Compose.
 - To keep embeddings local, launch your provider (e.g., `ollama`) and set `OLLAMA_API_BASE` before running `make notebook-seed-models`; the seeder will add `ollama`-backed models so Notebook never calls external APIs unless you want it to.
