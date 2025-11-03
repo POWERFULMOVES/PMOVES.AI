@@ -1,4 +1,4 @@
-import os, json, base64, hashlib
+import os, json, base64, hashlib, logging
 from typing import Any, Dict, List, Optional, Sequence
 
 from fastapi import APIRouter, HTTPException
@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
 
 router = APIRouter(tags=["CHIT"])
+logger = logging.getLogger(__name__)
 
 CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="true"
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
@@ -151,8 +152,9 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     try:
         if supa and supa.enabled():
             supa.publish_cgp(shape_id, cgp)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception("Failed to sync CGP to Supabase")
+        raise HTTPException(status_code=502, detail="Failed to sync CGP to Supabase") from exc
 
 
     try:

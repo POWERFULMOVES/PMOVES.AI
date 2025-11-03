@@ -43,8 +43,18 @@ def geometry_jump(point_id: str) -> Dict[str, Any]:
     r.raise_for_status(); return r.json()
 
 
-def geometry_decode_text(mode: str, constellation_id: str, k: int = 5) -> Dict[str, Any]:
-    body = {"mode": mode, "constellation_id": constellation_id, "k": k}
+def geometry_decode_text(
+    mode: str, constellation_id: str, k: int = 5, shape_id: Optional[str] = None
+) -> Dict[str, Any]:
+    body: Dict[str, Any] = {
+        "mode": mode,
+        "constellation_id": constellation_id,
+        "k": k,
+        "constellation_ids": [constellation_id],
+        "per_constellation": k,
+    }
+    if shape_id:
+        body["shape_id"] = shape_id
     r = requests.post(f"{GATEWAY_URL}/geometry/decode/text", json=body, timeout=60)
     r.raise_for_status(); return r.json()
 
@@ -197,7 +207,7 @@ def _stdout(msg: Dict[str, Any]):
 COMMAND_REGISTRY: Dict[str, str] = {
     "geometry.publish_cgp": "Publish a constellation graph program to the geometry gateway",
     "geometry.jump": "Jump to a geometry point by ID",
-    "geometry.decode_text": "Decode text embeddings from a constellation",
+    "geometry.decode_text": "Decode text embeddings (mode, constellation_id, k=5, optional shape_id)",
     "geometry.calibration.report": "Send calibration results to geometry gateway",
     "ingest.youtube": "Ingest a YouTube URL via the ingest pipeline",
     "media.transcribe": "Generate or fetch transcript for a video",
@@ -227,7 +237,8 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
         if not constellation_id:
             raise ValueError("'constellation_id' is required")
         k = int(payload.get("k", 5))
-        return geometry_decode_text(mode, constellation_id, k)
+        shape_id = payload.get("shape_id")
+        return geometry_decode_text(mode, constellation_id, k, shape_id=shape_id)
     if cmd == "geometry.calibration.report":
         return geometry_calibration_report(payload.get("data") or {})
     if cmd == "ingest.youtube":
