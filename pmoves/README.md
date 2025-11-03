@@ -8,7 +8,7 @@
 make first-run
 ```
 
-This aggregates the entire onboarding sequence: env bootstrap, Supabase CLI bring-up, core + agent + external compose profiles, Supabase/Neo4j/Qdrant seeding, and the smoketest harness.
+This aggregates the entire onboarding sequence: env bootstrap, Supabase CLI bring-up, core + agent + external compose profiles, Supabase/Neo4j/Qdrant seeding, and the smoketest harness. A full breakdown lives in [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
 
 ### Manual path
 

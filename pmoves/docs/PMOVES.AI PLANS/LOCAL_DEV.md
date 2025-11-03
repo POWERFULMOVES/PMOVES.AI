@@ -20,7 +20,7 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
 ## First Run
-- `make first-run` — boots Supabase CLI, core PMOVES services, agents, and external integrations, applies Supabase/Neo4j migrations, seeds demo corpora, and runs the smoke harness so every integration starts with branded defaults.
+- `make first-run` — boots Supabase CLI, core PMOVES services, agents, and external integrations, applies Supabase/Neo4j migrations, seeds demo corpora, and runs the smoke harness so every integration starts with branded defaults. Refer to [`docs/FIRST_RUN.md`](../FIRST_RUN.md) for a task-by-task breakdown.
 - Prefer scripting? `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` mirrors the env bootstrap and stages the provisioning bundle before running on local or VPS targets.
 
 ## Environment

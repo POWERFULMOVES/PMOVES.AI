@@ -47,7 +47,7 @@
 - Tie summaries to the active roadmap items or checklists so parallel workstreams stay coherent across longer sessions.
 
 ## Core Bring-Up Sequence (Supabase CLI default)
-Prefer the automated path: `make first-run` stitches together the env bootstrap, Supabase CLI bring-up, data seeding, compose profiles, and smoketests described below.
+Prefer the automated path: `make first-run` stitches together the env bootstrap, Supabase CLI bring-up, data seeding, compose profiles, and smoketests described below (see `pmoves/docs/FIRST_RUN.md`).
 Follow this flow before running smokes or automation. Commands run from repo root unless noted.
 
 1. `cp pmoves/env.shared.example pmoves/env.shared` → populate secrets (Supabase keys, Discord webhook, MinIO, Firefly, etc.). This file now holds the branded defaults the entire stack reads on startup.

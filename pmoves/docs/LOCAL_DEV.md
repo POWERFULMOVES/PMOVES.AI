@@ -6,7 +6,7 @@ Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md
 Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
 
 ## First Run
-- `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, and executes the 12-step smoke harness so every integration ships with branded defaults out of the gate.
+- `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, and executes the 12-step smoke harness so every integration ships with branded defaults out of the gate. See [FIRST_RUN.md](FIRST_RUN.md) for the full sequence and seeded resources.
 - Optional provisioning bundle: `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` produces the same env overlays and stages the provisioning artifacts under `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS` before you run the stack locally or on a VPS.
 
 ## Services and Ports

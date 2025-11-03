@@ -5,7 +5,7 @@ _Last updated: 2025-11-03_
 This guide aggregates the entry points that keep local environments consistent across Windows, WSL, and Linux hosts. Use it alongside `pmoves/docs/LOCAL_DEV.md` (service ports, networking) and `pmoves/docs/SMOKETESTS.md` (verification flows) when onboarding new contributors or refreshing a workstation.
 
 ## Environment & Secrets
-- `make first-run` → one-shot bootstrap: prompts for secrets, starts Supabase CLI, launches core/agent/external stacks, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, and runs the 12-step smoke harness.
+- `make first-run` → one-shot bootstrap: prompts for secrets, starts Supabase CLI, launches core/agent/external stacks, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, and runs the 12-step smoke harness (see `FIRST_RUN.md`).
 - `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` → wraps the
   registry-driven env bootstrap and then stages the curated provisioning
   bundle (GPU compose profile, install wizard, Proxmox bootstrap helper, and
