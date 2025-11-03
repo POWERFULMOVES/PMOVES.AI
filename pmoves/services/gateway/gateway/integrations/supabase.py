@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 
@@ -9,19 +9,33 @@ def enabled() -> bool:
     return os.getenv("SUPABASE_ENABLED", "false").lower() == "true" and bool(os.getenv("SUPABASE_URL")) and bool(os.getenv("SUPABASE_KEY"))
 
 
-def _headers() -> Dict[str, str]:
+def _headers(*, prefer: Optional[Sequence[str]] = None) -> Dict[str, str]:
     key = os.environ["SUPABASE_KEY"]
+    prefer_values = ["return=representation"]
+    if prefer:
+        prefer_values.extend(prefer)
     return {
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
-        "Prefer": "return=representation",
+        "Prefer": ",".join(prefer_values),
     }
 
 
-def _post(table: str, rows: List[Dict[str, Any]]):
+def _post(
+    table: str,
+    rows: List[Dict[str, Any]],
+    *,
+    params: Optional[Dict[str, str]] = None,
+    prefer: Optional[Sequence[str]] = None,
+):
     url = f"{os.environ['SUPABASE_URL'].rstrip('/')}/rest/v1/{table}"
-    resp = requests.post(url, headers=_headers(), data=json.dumps(rows))
+    resp = requests.post(
+        url,
+        headers=_headers(prefer=prefer),
+        params=params,
+        data=json.dumps(rows),
+    )
     resp.raise_for_status()
     return resp.json()
 
@@ -70,9 +84,24 @@ def publish_cgp(shape_id: str, cgp: Dict[str, Any]):
                 })
 
     if anchors_rows:
-        _post("anchors", anchors_rows)
+        _post(
+            "anchors",
+            anchors_rows,
+            params={"on_conflict": "id"},
+            prefer=["resolution=merge-duplicates"],
+        )
     if const_rows:
-        _post("constellations", const_rows)
+        _post(
+            "constellations",
+            const_rows,
+            params={"on_conflict": "id"},
+            prefer=["resolution=merge-duplicates"],
+        )
     if points_rows:
-        _post("shape_points", points_rows)
+        _post(
+            "shape_points",
+            points_rows,
+            params={"on_conflict": "id"},
+            prefer=["resolution=merge-duplicates"],
+        )
 
