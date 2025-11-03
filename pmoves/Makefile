@@ -900,6 +900,10 @@ flight-check-retro:
 preflight:
 	@echo "Running PMOVES preflight checks..."
 	@$(PYTHON) scripts/bootstrap_env.py --check
+	@echo "→ Ensuring flightcheck dependencies..." && \
+		( command -v uv >/dev/null 2>&1 && \
+			uv pip install -q -r tools/flightcheck/requirements.txt \
+			|| $(PYTHON) -m pip install -q -r tools/flightcheck/requirements.txt )
 	@$(PYTHON) tools/flightcheck/retro_flightcheck.py --quick || true
 	@$(PYTHON) tools/flightcheck/retro_flightcheck.py --theme neon --beep || true
 
