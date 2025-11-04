@@ -48,33 +48,17 @@ export default function LoginPage({
   const providers = featureFlags.oauth ? getEnabledAuthProviders() : [];
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '4rem 1.5rem'
-      }}
-    >
-      <section
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1.5rem',
-          width: '100%',
-          maxWidth: '960px'
-        }}
-      >
-        <header>
-          <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>Welcome back</h1>
-          <p style={{ opacity: 0.8 }}>
+    <main className="flex min-h-screen items-center justify-center bg-brand-surface px-6 py-16 text-brand-ink">
+      <section className="flex w-full max-w-4xl flex-col gap-6">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-semibold text-brand-ink-strong sm:text-4xl">Welcome back</h1>
+          <p className="text-sm text-brand-muted">
             Use your PMOVES Supabase credentials or a supported social provider to continue.
           </p>
         </header>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}>
-          <div style={{ flex: '1 1 320px' }}>
+        <div className="flex flex-wrap gap-6">
+          <div className="flex min-w-[280px] flex-1">
             <LoginForm
               providers={providers}
               passwordEnabled={featureFlags.passwordAuth}
@@ -84,20 +68,9 @@ export default function LoginPage({
             />
           </div>
 
-          <aside
-            style={{
-              flex: '1 1 280px',
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid rgba(148, 163, 184, 0.25)',
-              borderRadius: '1rem',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem'
-            }}
-          >
-            <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Having trouble?</h2>
-            <ul style={{ margin: 0, paddingLeft: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <aside className="flex min-w-[240px] flex-1 flex-col gap-4 rounded-2xl border border-brand-border bg-[rgba(16,43,47,0.1)] p-6 text-sm text-brand-ink">
+            <h2 className="text-lg font-semibold text-brand-ink">Having trouble?</h2>
+            <ul className="list-disc space-y-2 pl-5 text-brand-muted">
               <li>Confirm you are on the approved redirect host defined in Supabase.</li>
               <li>Use the password reset flow in Supabase Studio if you have forgotten your credentials.</li>
               <li>Reach out in #ops with the request ID shown in failed login toast messages.</li>
