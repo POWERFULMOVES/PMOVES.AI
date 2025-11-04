@@ -15,6 +15,24 @@ const ctaLinks = [
   }
 ];
 
+const principles = [
+  {
+    title: 'Collective pilots',
+    description:
+      'Spin up Cataclysm field labs in neighborhoods that want hands-on governance for AI, holographic pipelines, and resource routing.'
+  },
+  {
+    title: 'Transparent telemetry',
+    description:
+      'Leverage Supabase as the shared ledger for votes, approvals, and contributor attribution so every move is auditable.'
+  },
+  {
+    title: 'Creator equity',
+    description:
+      'Fold DARKXSIDE’s storytelling into economic loops that reward stewards, not platforms, ensuring culture and capital stay local.'
+  }
+];
+
 export default function CommunityPage() {
   return (
     <section className="space-y-16">
@@ -94,6 +112,22 @@ export default function CommunityPage() {
             </p>
           </div>
         </aside>
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-slate-950/30 p-8">
+        <h2 className="text-2xl font-semibold text-slate-100">How the pilots operate</h2>
+        <p className="mt-4 text-sm leading-relaxed text-slate-300">
+          Every Cataclysm cohort blends PMOVES.AI operators, DARKXSIDE narrative stewards, and local stakeholders. These principles
+          keep the marketing-to-onboarding loop honest and grounded in community ownership.
+        </p>
+        <div className="mt-6 grid gap-6 md:grid-cols-3">
+          {principles.map((principle) => (
+            <div key={principle.title} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/40 p-5">
+              <h3 className="text-sm font-semibold text-cataclysm-ember">{principle.title}</h3>
+              <p className="text-xs leading-relaxed text-slate-300">{principle.description}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

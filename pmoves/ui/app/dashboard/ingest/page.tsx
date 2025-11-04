@@ -112,19 +112,17 @@ export default async function IngestDashboardPage() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold text-brand-ink">Ingestion dashboard</h1>
-        <p className="text-sm text-brand-muted">
-          Upload new creative assets and monitor ingestion progress across Supabase and MinIO.
-        </p>
-        <p className="text-xs text-brand-subtle">
-          Confirm owner-scoped guardrails in the{' '}
+        <h1 className="text-2xl font-semibold text-slate-900">Cooperative Ingestion Bay</h1>
+        <p className="text-sm text-slate-600">
+          Drop the assets that fuel our cooperative empowerment story—DARKXSIDE counts on each upload to arm the crew with fresh media.
+          {' '}Lock in bucket and row-level guardrails with the{' '}
           <a
-            className="font-medium text-brand-sky underline underline-offset-4 hover:text-brand-gold"
-            href="https://github.com/Cataclysm-Studios-Inc/PMOVES.AI/blob/main/pmoves/docs/LOCAL_TOOLING_REFERENCE.md#L23"
+            className="underline"
+            href="https://github.com/Cataclysm-Studios-Inc/PMOVES.AI/blob/main/pmoves/docs/PMOVES.AI%20PLANS/SUPABASE_RLS_HARDENING_CHECKLIST.md"
             target="_blank"
             rel="noreferrer"
           >
-            local tooling reference
+            Supabase RLS hardening checklist
           </a>{' '}
           before inviting collaborators to ingest alongside you.
         </p>

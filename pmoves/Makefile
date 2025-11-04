@@ -263,7 +263,7 @@ up-jellyfin:
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
 .PHONY: up-agents
 up-agents:
-	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
+	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared

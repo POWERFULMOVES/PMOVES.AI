@@ -1,96 +1,44 @@
 import Link from 'next/link';
 
-const featureHighlights = [
+type Feature = {
+  title: string;
+  description: string;
+  accent: string;
+};
+
+const features: Feature[] = [
   {
     title: 'Cymatic Storyweaving',
     description:
-      'Visualize resonance and trace how data pulses through PMOVES. Every collaborator can see the flows that keep the collective in sync.',
-    accentClass: 'text-brand-sky',
-    shadow: 'shadow-[0_18px_42px_-22px_rgba(31,184,205,0.65)]',
+      'Visualize resonance: sound-reactive plots show how data pulses across PMOVES, making invisible flows tangible for every collaborator.',
+    accent: 'var(--cataclysm-cyan)'
   },
   {
     title: 'Geometry Bus',
     description:
-      'Align holographic schemas, choreograph automations, and keep publishing pipelines aligned with the geometry-first logic core.',
-    accentClass: 'text-brand-gold',
-    shadow: 'shadow-[0_18px_42px_-22px_rgba(210,186,76,0.6)]',
+      'Align holographic schemas, blueprint automations, and choreograph supply chains with the geometry-first logic core of PMOVES.',
+    accent: 'var(--cataclysm-gold)'
   },
   {
     title: 'Chit System',
     description:
-      'Tokenize commitments, route resources, and surface accountability loops so communities can move with precision and care.',
-    accentClass: 'text-brand-crimson',
-    shadow: 'shadow-[0_18px_42px_-22px_rgba(180,65,60,0.6)]',
-  },
-] as const;
+      'Tokenize commitments, route resources, and surface accountability loops that let communities move with precision and care.',
+    accent: 'var(--cataclysm-ember)'
+  }
+];
 
 export default function HomePage() {
   return (
-    <main className="relative flex min-h-screen flex-col items-center overflow-hidden bg-brand-surface text-brand-ink">
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-950 px-6 py-20 text-slate-100">
       <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--color-brand-sky)/0.15,transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,var(--color-brand-gold)/0.12,transparent_65%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent,var(--color-brand-sky)/0.08_45%,transparent_65%)]" />
-      </div>
-
-      <div className="relative z-10 flex w-full max-w-5xl flex-1 flex-col items-center gap-20 px-6 py-20 text-center lg:px-10">
-        <header className="space-y-6">
-          <span className="inline-flex items-center justify-center rounded-full border border-brand-border bg-brand-inverse/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.32em] text-brand-gold">
-            Powered by Cataclysm Studios
-          </span>
-          <h1 className="text-4xl font-extrabold tracking-tight text-brand-ink-strong sm:text-6xl">
-            PMOVES Operator Console
-          </h1>
-          <p className="mx-auto max-w-3xl text-base text-brand-muted sm:text-xl">
-            Manage ingestion workflows, upload new assets, and monitor Supabase processing pipelines with a palette tuned to the
-            PMOVES brand.
-          </p>
-          <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/login"
-              className="inline-flex items-center justify-center rounded-full bg-brand-sky px-6 py-2 text-sm font-semibold text-brand-ink-strong shadow-[0_16px_36px_-20px_rgba(31,184,205,0.85)] transition hover:bg-brand-gold hover:text-brand-ink-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 focus-visible:ring-offset-brand-inverse"
-            >
-              Continue to login
-            </Link>
-            <Link
-              href="/dashboard/ingest"
-              className="inline-flex items-center justify-center rounded-full border border-brand-border bg-brand-inverse px-6 py-2 text-sm font-semibold text-brand-ink transition hover:border-brand-slate hover:text-brand-ink-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-slate focus-visible:ring-offset-2 focus-visible:ring-offset-brand-inverse"
-            >
-              View ingestion dashboard
-            </Link>
-            <Link
-              href="/community"
-              className="inline-flex items-center justify-center rounded-full border border-brand-border bg-brand-surface-muted px-6 py-2 text-sm font-semibold text-brand-muted transition hover:bg-brand-inverse hover:text-brand-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-muted focus-visible:ring-offset-2 focus-visible:ring-offset-brand-inverse"
-            >
-              Explore the community vision
-            </Link>
-          </div>
-        </header>
-
-        <section className="grid w-full gap-6 text-left sm:grid-cols-3">
-          {featureHighlights.map((feature) => (
-            <article
-              key={feature.title}
-              className={`rounded-3xl border border-brand-border bg-brand-inverse/90 p-6 ${feature.shadow}`}
-            >
-              <h2 className={`text-lg font-semibold ${feature.accentClass}`}>{feature.title}</h2>
-              <p className="mt-3 text-sm text-brand-ink">{feature.description}</p>
-            </article>
-          ))}
-        </section>
-
-        <p className="text-xs uppercase tracking-[0.3em] text-brand-subtle">
-          Cyan · Crimson · Forest · Slate · Gold · Rust — the PMOVES palette for cooperative action.
-    <main className="cataclysm-gradient relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-20 text-slate-100">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 opacity-60 blur-3xl" aria-hidden>
-          <div className="absolute left-1/4 top-10 h-72 w-72 rounded-full bg-[var(--cataclysm-horizon)]/40 mix-blend-screen" />
+        <div className="absolute inset-0 opacity-60 blur-3xl">
+          <div className="absolute left-1/4 top-10 h-72 w-72 rounded-full bg-[var(--cataclysm-cyan)]/40 mix-blend-screen" />
           <div className="absolute right-1/5 top-1/3 h-96 w-96 rounded-full bg-[var(--cataclysm-forest)]/30 mix-blend-screen" />
           <div className="absolute left-1/2 bottom-10 h-80 w-80 rounded-full bg-[var(--cataclysm-ember)]/25 mix-blend-screen" />
         </div>
         <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-[var(--cataclysm-gold)]/10 via-transparent to-transparent" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(31,184,205,0.12),rgba(10,10,20,0.9))]" aria-hidden />
-        <div className="absolute inset-0 opacity-30" aria-hidden>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(31,184,205,0.12),rgba(10,10,20,0.9))]" />
+        <div className="absolute inset-0 opacity-40">
           <svg className="h-full w-full" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="grid" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -118,13 +66,10 @@ export default function HomePage() {
         <div className="space-y-6">
           <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl">Powerful Moves for everyday creators</h1>
           <p className="mx-auto max-w-3xl text-base text-slate-200 sm:text-xl">
-            PMOVES is the confident pulse behind modern creator cooperatives—equipping every contributor with the same precision
-            tooling, knowledge routing, and expressive surfaces the studio team uses to ship breakthroughs together.
+            From <strong className="text-[var(--cataclysm-cyan)]">CATACLYSM STUDIOS INC.</strong> and the POWERFULMOVES initiative comes a symphony of cymatics, holography, and precision geometry. PMOVES orchestrates the Chit System, Geometry Bus, and cooperative automations so collectives can prototype, publish, and scale together.
           </p>
           <p className="mx-auto max-w-2xl text-sm text-slate-300 sm:text-lg">
-            Plug into the <span className="text-[var(--cataclysm-cyan)]">Powerful Moves</span> community to co-design workflows, or
-            step into the engineer console for authenticated access to Supabase-powered operations. Whatever your lane, the
-            network is ready to move in sync with you.
+            Explore <strong className="text-[var(--cataclysm-gold)]">PMOVES.AI</strong> for the full capability atlas, tap into <strong className="text-[var(--cataclysm-forest)]">cataclsmtudios.com</strong> for the studio constellation, and connect via the Cataclysm home lab network spanning cataclsysmstudios.net.
           </p>
         </div>
 
@@ -141,6 +86,21 @@ export default function HomePage() {
           >
             Launch engineer console
           </Link>
+        </div>
+
+        <div className="grid w-full gap-6 text-left sm:grid-cols-3">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg backdrop-blur"
+              style={{ boxShadow: `0 20px 45px -20px ${feature.accent}26` }}
+            >
+              <h2 className="text-lg font-semibold" style={{ color: feature.accent }}>
+                {feature.title}
+              </h2>
+              <p className="mt-3 text-sm text-slate-200">{feature.description}</p>
+            </div>
+          ))}
         </div>
 
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--cataclysm-slate)]">
