@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-10-26_
+_Last updated: 2025-10-27_
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -22,6 +22,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 | 🚧 | Publisher (Jellyfin) | `services/publisher/publisher.py` consumes approval events and refreshes Jellyfin; optional dependency guards and envelope fallback landed, but richer metadata handling and error reporting are still pending. |
 | ✅ | Publisher telemetry & ROI rollups | `/metrics` feeds from `services/publisher/publisher.py` and `services/publisher-discord/main.py` expose turnaround/latency/cost telemetry, with Supabase rollups powering the ROI dashboards documented in `pmoves/docs/TELEMETRY_ROI.md`. |
 | ✅ | PDF/MinIO ingestion | `services/pdf-ingest/app.py` pulls PDFs from MinIO, extracts text, forwards chunks, and emits ingest events. |
+| ✅ | DeepResearch agent service | `services/deepresearch/worker.py` routes `research.deepresearch.*` events, calls Tongyi DeepResearch (OpenRouter/local), and mirrors summaries into Open Notebook. |
 | ✅ | PMOVES.YT geometry smoke hardening | `services/pmoves-yt/yt.py` now signs Supabase requests with the service-role key and falls back to direct pack lookups so `make smoke` stays green. |
 | ✅ | Cloudflare remote access profile | `cloudflared` Compose profile + `make up-cloudflare`/`make cloudflare-url` provide one-command WAN exposure for laptops and VPS hosts. |
 | ⏳ | n8n flows (Discord/webhooks) | `n8n/flows/*.json` only define placeholder workflows; Supabase pollers and Discord actions must be configured. |
@@ -30,6 +31,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 
 **Outstanding to close M2:**
 
+- run DeepResearch request/result smoke once OpenRouter + Notebook credentials are configured; capture the Notebook entry id in `SESSION_IMPLEMENTATION_PLAN.md`.
 - publisher metadata/envelope polish — namespace-aware filenames, dependency guards, and fallback envelopes merged; monitor adoption and backfill historic assets if needed
 - Supabase approval dashboards (studio board + videos) now live under `pmoves/ui/app/dashboard/*`; follow the usage notes in [SESSION_IMPLEMENTATION_PLAN.md](SESSION_IMPLEMENTATION_PLAN.md#4-supabase-approval-dashboards-studio-board--videos) when routing reviewers
 - add published-event Discord embeds via `content.published.v1`; execution plan staged in `SESSION_IMPLEMENTATION_PLAN.md`

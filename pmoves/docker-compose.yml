@@ -596,6 +596,31 @@ services:
     profiles: ["agents"]
     networks: [pmoves]
 
+  deepresearch:
+    build:
+      context: ./services
+      dockerfile: deepresearch/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
+      - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
+      - DEEPRESEARCH_API_BASE=${DEEPRESEARCH_API_BASE:-http://deepresearch-local:8080}
+      - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
+      - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
+      - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
+      - DEEPRESEARCH_NOTEBOOK_ID=${DEEPRESEARCH_NOTEBOOK_ID}
+      - DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX=${DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX}
+      - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
+      - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
+      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
+      - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    depends_on: [nats]
+    profiles: ["agents"]
+    networks: [pmoves]
+
   publisher-discord:
     build:
       context: .

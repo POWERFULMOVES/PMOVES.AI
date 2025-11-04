@@ -271,9 +271,9 @@ export default function ArchonPromptsPage() {
   return (
     <div className="archon-prompts-page" data-testid="archon-prompts-page">
       <header>
-        <h1 className="title">Archon Prompt Guild</h1>
+        <h1 className="title">Archon Prompt Forge</h1>
         <p className="subtitle">
-          Script the cooperative voice that lets neighborhoods steer Archon—DARKXSIDE’s rebel optimism turned into reusable intelligence.
+          Forge the cooperative empowerment playbooks that let neighborhoods co-direct Archon—DARKXSIDE’s rebel optimism bottled as reusable intelligence.
           Review the{' '}
           <a
             className="underline"
@@ -283,7 +283,7 @@ export default function ArchonPromptsPage() {
           >
             Supabase RLS hardening checklist
           </a>{' '}
-          before shipping service-role updates so every cooperative stays shielded.
+          before shipping service-role updates so every cooperative run stays shielded.
         </p>
       </header>
 

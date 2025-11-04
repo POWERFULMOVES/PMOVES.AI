@@ -10,6 +10,15 @@ export const metadata: Metadata = {
   },
   description:
     'Cataclysm Studios fuses PMOVES.AI technology, decentralized governance, and the DARKXSIDE creative narrative to empower communities with AI, blockchain, and collaborative creativity.',
+  keywords: [
+    'Cataclysm Studios',
+    'PMOVES.AI',
+    'DARKXSIDE',
+    'community-owned AI',
+    'cooperative onboarding',
+    'Supabase pilot'
+  ],
+  category: 'technology',
   openGraph: {
     title: 'Cataclysm Studios • Community-Powered AI',
     description:
