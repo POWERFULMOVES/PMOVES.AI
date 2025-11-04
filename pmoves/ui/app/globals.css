@@ -20,10 +20,10 @@
   --color-brand-border: #c2d8dd;
   --color-brand-inverse: #ffffff;
   --cataclysm-void: #050b1a;
-  --cataclysm-ember: #f97316;
+  --cataclysm-ember: var(--color-brand-crimson);
   --cataclysm-aurora: #7c3aed;
-  --cataclysm-horizon: #22d3ee;
-  --cataclysm-foam: #f8fafc;
+  --cataclysm-horizon: var(--color-brand-sky);
+  --cataclysm-foam: var(--color-brand-inverse);
 }
 
 .bg-cataclysm-void {

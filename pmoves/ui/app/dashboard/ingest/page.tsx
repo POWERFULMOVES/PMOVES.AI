@@ -117,7 +117,7 @@ export default async function IngestDashboardPage() {
           Drop the assets that power our cooperative empowerment story—DARKXSIDE counts on each upload to arm the crew with fresh
           media. Confirm owner-scoped guardrails in the{' '}
           <a
-            className="underline"
+            className="font-medium text-brand-sky underline underline-offset-4 hover:text-brand-gold"
             href="https://github.com/Cataclysm-Studios-Inc/PMOVES.AI/blob/main/pmoves/docs/LOCAL_TOOLING_REFERENCE.md#L23"
             target="_blank"
             rel="noreferrer"

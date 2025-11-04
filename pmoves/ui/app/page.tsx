@@ -59,14 +59,12 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="relative z-10 flex w-full max-w-5xl flex-col items-center gap-16 text-center">
+      <div className="relative z-10 flex w-full max-w-4xl flex-col items-center gap-10 text-center">
+        <span className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.32em] text-[var(--cataclysm-gold)]">
+          Cataclysm Studios Inc.
+        </span>
         <div className="space-y-6">
-          <span className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.32em] text-[var(--cataclysm-gold)]">
-            Cataclysm Studios Inc. presents
-          </span>
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl">
-            Powerful Moves for everyday creators
-          </h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl">Powerful Moves for everyday creators</h1>
           <p className="mx-auto max-w-3xl text-base text-slate-200 sm:text-xl">
             From <strong className="text-[var(--cataclysm-cyan)]">CATACLYSM STUDIOS INC.</strong> and the POWERFULMOVES initiative comes a symphony of cymatics, holography, and precision geometry. PMOVES orchestrates the Chit System, Geometry Bus, and cooperative automations so collectives can prototype, publish, and scale together.
           </p>
@@ -75,16 +73,16 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <div className="flex w-full flex-col items-center justify-center gap-4 sm:w-auto sm:flex-row">
           <Link
             href="/community"
-            className="inline-flex items-center justify-center rounded-full bg-[var(--cataclysm-cyan)] px-8 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_20px_45px_-20px_rgba(31,184,205,0.8)] transition duration-200 ease-out hover:scale-[1.02] hover:bg-[var(--cataclysm-forest)] hover:shadow-[0_25px_50px_-20px_rgba(46,139,87,0.9)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cataclysm-gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            className="inline-flex w-full items-center justify-center rounded-full bg-[var(--cataclysm-cyan)] px-8 py-3 text-sm font-semibold uppercase tracking-wide text-slate-950 shadow-[0_18px_40px_-18px_rgba(31,184,205,0.9)] transition duration-200 ease-out hover:scale-[1.02] hover:bg-[var(--cataclysm-forest)] hover:text-white hover:shadow-[0_22px_50px_-20px_rgba(46,139,87,0.9)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cataclysm-gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:w-auto"
           >
-            Enter community onboarding
+            Join the creator community
           </Link>
           <Link
             href="/login?next=%2Fdashboard%2Fingest"
-            className="inline-flex items-center justify-center rounded-full bg-[var(--cataclysm-ember)] px-8 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_20px_45px_-20px_rgba(219,69,69,0.8)] transition duration-200 ease-out hover:scale-[1.02] hover:bg-[var(--cataclysm-gold)] hover:text-slate-900 hover:shadow-[0_25px_50px_-20px_rgba(210,186,76,0.95)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cataclysm-cyan)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            className="inline-flex w-full items-center justify-center rounded-full bg-[var(--cataclysm-ember)] px-8 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-[0_18px_40px_-18px_rgba(219,69,69,0.9)] transition duration-200 ease-out hover:scale-[1.02] hover:bg-[var(--cataclysm-gold)] hover:text-slate-900 hover:shadow-[0_22px_50px_-20px_rgba(210,186,76,0.95)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cataclysm-cyan)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:w-auto"
           >
             Launch engineer console
           </Link>
@@ -106,7 +104,7 @@ export default function HomePage() {
         </div>
 
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--cataclysm-slate)]">
-          Cataclysm palette: cyan · ember · forest · gold — engineered for luminous collaboration.
+          Cyan · Ember · Forest · Gold — the Cataclysm palette guiding every move.
         </p>
       </div>
     </main>

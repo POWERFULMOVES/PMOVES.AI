@@ -229,14 +229,14 @@ export default function VideosDashboardPage() {
   }, [refresh]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 p-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Videos Signal Vault</h1>
-        <p className="text-sm text-neutral-600">
+        <h1 className="text-2xl font-semibold text-brand-ink">Videos Signal Vault</h1>
+        <p className="text-sm text-brand-muted">
           Keep the cooperative empowerment story in motion—DARKXSIDE trusts this vault to surface the clips that rally each crew.
           {' '}Run the{' '}
           <a
-            className="underline"
+            className="font-medium text-brand-sky underline underline-offset-4 hover:text-brand-gold"
             href="https://github.com/Cataclysm-Studios-Inc/PMOVES.AI/blob/main/pmoves/docs/SMOKETESTS.md#L143"
             target="_blank"
             rel="noreferrer"
@@ -246,9 +246,10 @@ export default function VideosDashboardPage() {
           whenever approvals shift so Supabase and MinIO stay in sync.
         </p>
         {restUrl ? (
-          <p className="text-xs text-neutral-500">
-            REST endpoint preview: <a
-              className="underline"
+          <p className="text-xs text-brand-subtle">
+            REST endpoint preview:{' '}
+            <a
+              className="font-medium text-brand-sky underline underline-offset-4 hover:text-brand-gold"
               href={`${restUrl}/videos?order=id.desc&limit=20`}
               target="_blank"
               rel="noreferrer"
@@ -257,7 +258,7 @@ export default function VideosDashboardPage() {
             </a>
           </p>
         ) : (
-          <p className="text-xs text-red-600">
+          <p className="text-xs text-brand-crimson">
             Configure <code>NEXT_PUBLIC_SUPABASE_REST_URL</code> for PostgREST
             links.
           </p>
@@ -265,12 +266,12 @@ export default function VideosDashboardPage() {
       </header>
 
       <section className="grid gap-4 md:grid-cols-4">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Status</span>
+        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+          <span className="font-medium text-brand-ink">Status</span>
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="rounded border px-2 py-1"
+            className="rounded border border-brand-border bg-brand-inverse px-2 py-1 text-brand-ink"
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -280,12 +281,12 @@ export default function VideosDashboardPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Namespace</span>
+        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+          <span className="font-medium text-brand-ink">Namespace</span>
           <select
             value={namespaceFilter}
             onChange={(event) => setNamespaceFilter(event.target.value)}
-            className="rounded border px-2 py-1"
+            className="rounded border border-brand-border bg-brand-inverse px-2 py-1 text-brand-ink"
           >
             <option value="all">All</option>
             {namespaces.map((ns) => (
@@ -296,84 +297,84 @@ export default function VideosDashboardPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Search title or video id</span>
+        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+          <span className="font-medium text-brand-ink">Search title or video id</span>
           <input
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Search"
-            className="rounded border px-2 py-1"
+            className="rounded border border-brand-border bg-brand-inverse px-2 py-1 text-brand-ink placeholder:text-brand-subtle"
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Reviewer</span>
+        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+          <span className="font-medium text-brand-ink">Reviewer</span>
           <input
             value={reviewer}
             onChange={(event) => setReviewer(event.target.value)}
             placeholder="Initials or handle"
-            className="rounded border px-2 py-1"
+            className="rounded border border-brand-border bg-brand-inverse px-2 py-1 text-brand-ink placeholder:text-brand-subtle"
           />
         </label>
       </section>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-brand-ink">
         <button
-          className="rounded border border-neutral-300 px-3 py-1"
+          className="rounded border border-brand-border bg-brand-inverse px-3 py-1 font-medium text-brand-ink transition hover:border-brand-slate hover:text-brand-ink-strong"
           onClick={() => refresh()}
         >
           Refresh
         </button>
         <button
-          className="rounded border border-neutral-300 px-3 py-1"
+          className="rounded border border-brand-border bg-brand-inverse px-3 py-1 font-medium text-brand-ink transition hover:border-brand-slate hover:text-brand-ink-strong"
           onClick={handleClearFilters}
         >
           Reset filters
         </button>
-        <span className="text-neutral-600">
+        <span className="text-brand-muted">
           Showing {items.length} record{items.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {isInitialLoading ? (
-        <div className="rounded border border-dashed border-neutral-300 p-6 text-sm text-neutral-600">
+        <div className="rounded border border-dashed border-brand-border p-6 text-sm text-brand-muted">
           Loading videos…
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded border border-brand-crimson bg-[rgba(219,69,69,0.08)] p-4 text-sm text-brand-crimson">
           Failed to load rows: {error.message}
         </div>
       ) : null}
 
       {actionError ? (
-        <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded border border-brand-crimson bg-[rgba(219,69,69,0.08)] p-4 text-sm text-brand-crimson">
           {actionError}
         </div>
       ) : null}
 
       {actionMessage ? (
-        <div className="rounded border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+        <div className="rounded border border-brand-forest bg-[rgba(46,139,87,0.12)] p-4 text-sm text-brand-forest">
           {actionMessage}
         </div>
       ) : null}
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-3 py-2 text-left font-semibold">ID</th>
-              <th className="px-3 py-2 text-left font-semibold">Video</th>
-              <th className="px-3 py-2 text-left font-semibold">Namespace</th>
-              <th className="px-3 py-2 text-left font-semibold">Status</th>
-              <th className="px-3 py-2 text-left font-semibold">Created</th>
-              <th className="px-3 py-2 text-left font-semibold">Meta</th>
-              <th className="px-3 py-2 text-left font-semibold">Links</th>
-              <th className="px-3 py-2 text-left font-semibold">Actions</th>
+        <table className="min-w-full divide-y divide-brand-border text-sm">
+          <thead className="bg-brand-surface-muted">
+            <tr className="text-left text-xs font-semibold uppercase tracking-wide text-brand-muted">
+              <th className="px-3 py-2">ID</th>
+              <th className="px-3 py-2">Video</th>
+              <th className="px-3 py-2">Namespace</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Created</th>
+              <th className="px-3 py-2">Meta</th>
+              <th className="px-3 py-2">Links</th>
+              <th className="px-3 py-2">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-200">
+          <tbody className="divide-y divide-brand-border bg-brand-inverse text-brand-ink">
             {items.map((row) => {
               const meta = isObject(row.meta) ? row.meta : {};
               const status = meta.approval_status || "pending";
@@ -385,51 +386,51 @@ export default function VideosDashboardPage() {
                 : null;
               return (
                 <tr key={row.id} className="align-top">
-                  <td className="px-3 py-2 text-neutral-600">
-                    <div className="font-mono text-xs">{row.id}</div>
+                  <td className="px-3 py-2 text-brand-subtle">
+                    <div className="font-mono text-xs text-brand-muted">{row.id}</div>
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-medium">
+                    <div className="font-medium text-brand-ink-strong">
                       {row.title || row.video_id || "Untitled"}
                     </div>
-                    <div className="text-xs text-neutral-500">
+                    <div className="text-xs text-brand-subtle">
                       {row.video_id ? `video_id: ${row.video_id}` : "no video id"}
                     </div>
                     {meta.channel?.title ? (
-                      <div className="text-xs text-neutral-500">
+                      <div className="text-xs text-brand-subtle">
                         channel: {meta.channel.title}
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2">{row.namespace || "—"}</td>
+                  <td className="px-3 py-2 text-brand-ink">{row.namespace || "—"}</td>
                   <td className="px-3 py-2">
-                    <div className="font-medium capitalize">{status}</div>
+                    <div className="font-medium capitalize text-brand-ink">{status}</div>
                     {meta.rejection_reason ? (
-                      <div className="text-xs text-red-600">
+                      <div className="text-xs text-brand-crimson">
                         rejected: {meta.rejection_reason}
                       </div>
                     ) : null}
                     {lastReview ? (
-                      <div className="text-xs text-neutral-500">
+                      <div className="text-xs text-brand-subtle">
                         last review {lastReview.status} by {lastReview.reviewer || "—"}
                       </div>
                     ) : null}
                   </td>
                   <td className="px-3 py-2">
-                    <div>{formatDate(row.created_at)}</div>
+                    <div className="text-brand-ink">{formatDate(row.created_at)}</div>
                     {meta.reviewed_at ? (
-                      <div className="text-xs text-neutral-500">
+                      <div className="text-xs text-brand-subtle">
                         reviewed {formatDate(meta.reviewed_at)}
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2 text-xs text-neutral-600">
+                  <td className="px-3 py-2 text-xs text-brand-muted">
                     {meta.thumb ? (
                       <a
                         href={meta.thumb}
                         target="_blank"
                         rel="noreferrer"
-                        className="underline"
+                        className="font-medium text-brand-sky underline underline-offset-4 hover:text-brand-gold"
                       >
                         preview thumb
                       </a>
@@ -446,13 +447,13 @@ export default function VideosDashboardPage() {
                           href={row.source_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="underline"
+                          className="font-medium text-brand-sky underline underline-offset-4 hover:text-brand-gold"
                         >
                           source
                         </a>
                       ) : null}
                       {row.s3_base_prefix ? (
-                        <span className="font-mono text-[11px] text-neutral-500">
+                        <span className="font-mono text-[11px] text-brand-subtle">
                           {row.s3_base_prefix}
                         </span>
                       ) : null}
@@ -461,7 +462,7 @@ export default function VideosDashboardPage() {
                           href={`${restUrl}/videos?id=eq.${row.id}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="underline"
+                          className="font-medium text-brand-sky underline underline-offset-4 hover:text-brand-gold"
                         >
                           PostgREST row
                         </a>
@@ -471,7 +472,7 @@ export default function VideosDashboardPage() {
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-2">
                       <button
-                        className="rounded bg-emerald-600 px-3 py-1 text-white"
+                        className="rounded bg-brand-forest px-3 py-1 text-brand-inverse transition hover:bg-brand-sky hover:text-brand-ink-strong"
                         disabled={pendingAction?.id === row.id}
                         onClick={() => handleAction(row, "approve")}
                       >
@@ -481,7 +482,7 @@ export default function VideosDashboardPage() {
                           : "Approve"}
                       </button>
                       <button
-                        className="rounded bg-red-600 px-3 py-1 text-white"
+                        className="rounded bg-brand-crimson px-3 py-1 text-brand-inverse transition hover:bg-brand-rust"
                         disabled={pendingAction?.id === row.id}
                         onClick={() => handleAction(row, "reject")}
                       >
@@ -499,7 +500,7 @@ export default function VideosDashboardPage() {
               <tr>
                 <td
                   colSpan={8}
-                  className="px-3 py-6 text-center text-sm text-neutral-500"
+                  className="px-3 py-6 text-center text-sm text-brand-muted"
                 >
                   No records match the current filters.
                 </td>
@@ -509,15 +510,15 @@ export default function VideosDashboardPage() {
         </table>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 text-brand-ink">
         <button
-          className="rounded border border-neutral-300 px-3 py-1"
+          className="rounded border border-brand-border bg-brand-inverse px-3 py-1 font-medium text-brand-ink transition hover:border-brand-slate hover:text-brand-ink-strong disabled:opacity-60"
           disabled={isFetchingMore || !hasMore}
           onClick={() => fetchNext()}
         >
           {isFetchingMore ? "Loading…" : hasMore ? "Load more" : "No more rows"}
         </button>
-        <span className="text-xs text-neutral-500">
+        <span className="text-xs text-brand-subtle">
           Cursor: {cursorSummary(items)}
         </span>
       </div>

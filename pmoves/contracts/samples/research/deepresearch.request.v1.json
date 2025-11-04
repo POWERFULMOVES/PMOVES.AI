@@ -1,0 +1,18 @@
+{
+  "query": "Summarize the latest breakthroughs in multimodal retrieval for open notebooks",
+  "mode": "openrouter",
+  "max_steps": 8,
+  "context": {
+    "audience": "pmoves-platform",
+    "preferred_format": "bullet-summary"
+  },
+  "metadata": {
+    "request_id": "req_1234"
+  },
+  "notebook": {
+    "notebook_id": "7a1d0d9d-a2d0-4206-9d50-f5b1e668f1f3",
+    "title_prefix": "DeepResearch",
+    "embed": true,
+    "async_processing": true
+  }
+}

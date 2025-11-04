@@ -100,30 +100,16 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
   );
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2rem',
-        width: '100%',
-        maxWidth: '420px'
-      }}
-    >
+    <div className="flex w-full max-w-md flex-col gap-8">
       {passwordEnabled && (
         <form
           onSubmit={handlePasswordLogin}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-            padding: '1.5rem',
-            borderRadius: '1rem',
-            background: 'rgba(15, 23, 42, 0.8)',
-            border: '1px solid rgba(148, 163, 184, 0.3)'
-          }}
+          className="flex flex-col gap-4 rounded-2xl border border-brand-border bg-[rgba(16,43,47,0.85)] p-6 text-brand-inverse shadow-lg shadow-[rgba(16,43,47,0.25)]"
         >
-          <div>
-            <label htmlFor="email">Email</label>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium" htmlFor="email">
+              Email
+            </label>
             <input
               id="email"
               name="email"
@@ -132,19 +118,13 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
               value={formState.email}
               onChange={handleChange}
               required
-              style={{
-                marginTop: '0.5rem',
-                width: '100%',
-                padding: '0.75rem 1rem',
-                borderRadius: '0.75rem',
-                border: '1px solid rgba(148, 163, 184, 0.3)',
-                background: 'rgba(15, 23, 42, 0.6)',
-                color: 'inherit'
-              }}
+              className="w-full rounded-lg border border-brand-border bg-[rgba(16,43,47,0.6)] px-4 py-3 text-sm text-brand-inverse placeholder:text-brand-subtle focus:outline-none focus:ring-2 focus:ring-brand-sky"
             />
           </div>
-          <div>
-            <label htmlFor="password">Password</label>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium" htmlFor="password">
+              Password
+            </label>
             <input
               id="password"
               name="password"
@@ -153,30 +133,13 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
               value={formState.password}
               onChange={handleChange}
               required
-              style={{
-                marginTop: '0.5rem',
-                width: '100%',
-                padding: '0.75rem 1rem',
-                borderRadius: '0.75rem',
-                border: '1px solid rgba(148, 163, 184, 0.3)',
-                background: 'rgba(15, 23, 42, 0.6)',
-                color: 'inherit'
-              }}
+              className="w-full rounded-lg border border-brand-border bg-[rgba(16,43,47,0.6)] px-4 py-3 text-sm text-brand-inverse placeholder:text-brand-subtle focus:outline-none focus:ring-2 focus:ring-brand-sky"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            style={{
-              padding: '0.75rem 1rem',
-              borderRadius: '9999px',
-              border: 'none',
-              background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
-              color: '#0f172a',
-              fontWeight: 600,
-              cursor: 'pointer',
-              opacity: loading ? 0.7 : 1
-            }}
+            className="rounded-full bg-brand-sky px-4 py-3 text-sm font-semibold text-brand-ink-strong transition hover:bg-brand-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 focus-visible:ring-offset-brand-inverse disabled:opacity-70"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
@@ -184,28 +147,15 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
       )}
 
       {providers.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.75rem'
-          }}
-        >
-          <span style={{ opacity: 0.7 }}>Or sign in with</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div className="flex flex-col gap-3 text-brand-inverse">
+          <span className="text-sm text-brand-subtle">Or sign in with</span>
+          <div className="flex flex-col gap-2">
             {providers.map((provider) => (
               <button
                 key={provider.key}
                 onClick={() => handleOAuthLogin(provider.key)}
                 type="button"
-                style={{
-                  padding: '0.75rem 1rem',
-                  borderRadius: '0.75rem',
-                  border: '1px solid rgba(148, 163, 184, 0.3)',
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  color: 'inherit',
-                  cursor: 'pointer'
-                }}
+                className="rounded-xl border border-brand-border bg-[rgba(16,43,47,0.6)] px-4 py-3 text-sm font-medium text-brand-inverse transition hover:border-brand-sky hover:text-brand-inverse focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-sky"
               >
                 Continue with {provider.label}
               </button>
@@ -215,27 +165,13 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
       )}
 
       {(formError || error) && (
-        <div style={{
-          borderRadius: '0.75rem',
-          padding: '1rem',
-          border: '1px solid rgba(248, 113, 113, 0.4)',
-          background: 'rgba(248, 113, 113, 0.1)',
-          color: '#fecaca'
-        }}>
+        <div className="rounded-xl border border-brand-crimson bg-[rgba(219,69,69,0.15)] p-4 text-sm text-brand-crimson">
           {formError || error}
         </div>
       )}
 
       {status && (
-        <div
-          style={{
-            borderRadius: '0.75rem',
-            padding: '1rem',
-            border: '1px solid rgba(74, 222, 128, 0.4)',
-            background: 'rgba(74, 222, 128, 0.1)',
-            color: '#bbf7d0'
-          }}
-        >
+        <div className="rounded-xl border border-brand-forest bg-[rgba(46,139,87,0.18)] p-4 text-sm text-brand-forest">
           {status}
         </div>
       )}
