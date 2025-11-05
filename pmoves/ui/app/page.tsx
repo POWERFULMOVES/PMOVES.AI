@@ -41,6 +41,7 @@ export default async function HomePage() {
     { label: 'Jellyfin (8096)', href: process.env.NEXT_PUBLIC_JELLYFIN_URL || 'http://localhost:8096', health: (process.env.NEXT_PUBLIC_JELLYFIN_URL || 'http://localhost:8096').replace(/\/$/, '') + '/System/Info' },
     { label: 'Open Notebook (8503)', href: process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_URL || 'http://localhost:8503', health: process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_URL || 'http://localhost:8503' },
     { label: 'Supabase Studio (65433)', href: process.env.NEXT_PUBLIC_SUPABASE_STUDIO_URL || 'http://127.0.0.1:65433', health: process.env.NEXT_PUBLIC_SUPABASE_STUDIO_URL || 'http://127.0.0.1:65433' },
+    { label: 'Invidious (3000)', href: process.env.NEXT_PUBLIC_INVIDIOUS_URL || 'http://127.0.0.1:3000', health: process.env.NEXT_PUBLIC_INVIDIOUS_URL || 'http://127.0.0.1:3000' },
   ];
 
   const statuses = await Promise.all(links.map(l => probe(l.health)));

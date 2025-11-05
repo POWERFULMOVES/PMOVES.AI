@@ -764,7 +764,7 @@ services:
         hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
         invidious_companion:
           - private_url: "http://invidious-companion:8282"
-            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8282}"
+            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}"
         invidious_companion_key: "${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}"
         statistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}
         use_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}
@@ -839,6 +839,16 @@ services:
     volumes:
       - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
     profiles: ["cloudflare"]
+    networks: [pmoves]
+
+  invidious-companion-proxy:
+    build: ./services/invidious-companion-proxy
+    restart: unless-stopped
+    depends_on:
+      invidious-companion:
+        condition: service_started
+    ports: ["8281:80"]
+    profiles: ["invidious"]
     networks: [pmoves]
 volumes:
   neo4j-data: {}
