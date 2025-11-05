@@ -59,7 +59,7 @@ External bundles (via `make up-external`):
 | --- | --- | --- | --- |
 | Supabase Studio | http://127.0.0.1:65433 | `make -C pmoves supa-start` *(CLI-managed)* | Requires the Supabase CLI stack; confirm status with `make -C pmoves supa-status`. |
 | Notebook Workbench (Next.js) | http://localhost:3000/notebook-workbench | `npm run dev` in `pmoves/ui` | Lint + env validation via `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"`. |
-| Agent Zero Admin (FastAPI docs) | http://localhost:8080/docs | `make -C pmoves up` | Useful for manual message dispatch debugging; requires a valid `OPENAI_API_KEY` for full functionality. |
+| Agent Zero Admin (FastAPI docs) | http://localhost:8080/docs | `make -C pmoves up` | Useful for manual message dispatch debugging; default UI badge probes `/healthz` (override with `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH`). |
 | TensorZero Playground | http://localhost:4000 | `make -C pmoves up-tensorzero` | Brings up ClickHouse, gateway/UI, and `pmoves-ollama`. Gateway API at http://localhost:3030; set `TENSORZERO_BASE_URL` to a remote gateway if Ollama runs elsewhere. |
 | Firefly Finance | http://localhost:8082 | `make -C pmoves up-external-firefly` | Set `FIREFLY_APP_KEY`/`FIREFLY_ACCESS_TOKEN` in `pmoves/env.shared` before first login. |
 | Wger Coach Portal | http://localhost:8000 | `make -C pmoves up-external-wger` | Auto-applies brand defaults; admin credentials live in `pmoves/env.shared`. |
@@ -108,6 +108,13 @@ Quick start:
 ### Agent UIs (headless MCP with console wrappers)
 - Archon page: `http://localhost:3001/dashboard/archon` — Health/Info, prompts editor link, and a button to open the native API.
 - Agent Zero page: `http://localhost:3001/dashboard/agent-zero` — Health/Info, MCP connection details, and a button to open the native UI/API.
+
+You can customize the badge probe paths if your forks expose different health endpoints:
+
+- `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` (default `/healthz`, fallbacks: `/api/health` → `/`).
+- `NEXT_PUBLIC_ARCHON_HEALTH_PATH` (default `/healthz`, fallbacks: `/api/health` → `/`).
+
+See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 - Personas page: `http://localhost:3001/dashboard/personas` — Lists personas from `pmoves_core.personas`.
 
 ### Use published Agent UI images
@@ -146,6 +153,8 @@ make -C pmoves up-agents-integrations
 Notes:
 - Override the workspace path with `INTEGRATIONS_WORKSPACE=/path/to/integrations-workspace`.
 - Ports and env remain the same (Agent Zero on 8080, Archon on 8091); the override compose file only swaps the build contexts.
+
+If your fork’s internal port differs, adjust `AGENT_ZERO_EXTRA_ARGS` / `ARCHON_SERVER_PORT` or update the compose mapping. The console reads `NEXT_PUBLIC_AGENT_ZERO_URL` / `NEXT_PUBLIC_ARCHON_URL`.
 - Docker Compose now reads the same set in order: `env.shared.generated` (CHIT secrets) → `env.shared` (branded defaults) → `.env.generated` (local secret bundles) → `.env.local` (per-machine overrides). The root `.env` file is no longer sourced; keep any host-specific tweaks in `.env.local` instead of editing `.env`.
 - Supabase CLI remains the default backend for both local laptops and self-hosted VPS installs; `env.shared` ships with the CLI ports/keys, and `make supa-status` → `make env-setup` keeps `.env.local` aligned with the CLI stack unless you explicitly run `make supa-use-remote`.
 - No Make? `python3 -m pmoves.tools.onboarding_helper generate` produces the same env files and reports any missing CHIT labels before you bring up containers.
@@ -534,3 +543,12 @@ Minimal venv (only tools helpers):
 - Linux/macOS: `make venv-min`
 
 Tip (Windows): If `make` is missing, `make setup` installs GNU Make via Chocolatey when available and then installs Python requirements across services using the preferred package manager.
+### Personas REST fallback (PostgREST)
+
+If the Supabase CLI REST host (65421) does not expose `pmoves_core`, the console personas page can query a PostgREST instance directly using profile headers.
+
+- Start the CLI-bound PostgREST: `docker compose -p pmoves up -d postgrest-cli` (publishes `http://localhost:3011`).
+- Set `POSTGREST_URL=http://localhost:3011` in `pmoves/env.shared` and run `make -C pmoves env-setup`.
+- Reload `/dashboard/personas`.
+
+Alternatively, run the compose PostgREST on `http://localhost:3010` and set `POSTGREST_URL` accordingly.

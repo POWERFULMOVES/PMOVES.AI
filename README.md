@@ -32,6 +32,7 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - TensorZero Gateway: http://localhost:3030 (proxy to 3000 in‑container).
 - Agent Zero UI: http://localhost:8080 (after `make up-agents`).
 - Archon Health: http://localhost:8091/healthz (after `make up-agents`).
+  - If your forks use non-standard health endpoints, set `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` / `NEXT_PUBLIC_ARCHON_HEALTH_PATH`. See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 - Jellyfin: http://localhost:8096 (after `make -C pmoves up-jellyfin-ai`).
 - Jellyfin API Dashboard: http://localhost:8400; Gateway: http://localhost:8300.
 - Open Notebook: http://localhost:8503 (after `make -C pmoves notebook-up`).

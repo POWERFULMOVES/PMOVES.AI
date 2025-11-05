@@ -49,6 +49,20 @@
   ```
 - JetStream drift can surface as `nats: JetStream.Error cannot create queue subscription…` in the Agent Zero container logs. Rebuild with `docker compose build agent-zero && docker compose up -d agent-zero` so the pull-subscribe controller code ships and the consumer metadata is recreated automatically.
 
+#### Health badges and custom endpoints
+
+The console Quick Links probe Agent Zero and Archon using `/healthz` by default. If your forks expose different health endpoints, set:
+
+- `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` (default `/healthz`)
+- `NEXT_PUBLIC_ARCHON_HEALTH_PATH` (default `/healthz`)
+
+Personas page fallback when Supabase CLI REST hides `pmoves_core`:
+
+- Start a PostgREST bound to the CLI DB: `docker compose -p pmoves up -d postgrest-cli` (host `http://localhost:3011`).
+- Set `POSTGREST_URL=http://localhost:3011` and reload `/dashboard/personas`.
+
+See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+
 ## Bring-Up Sequence
 - Prefer `make first-run` to bootstrap secrets, start the Supabase CLI stack, launch core/agent/external services, seed Supabase + Neo4j + Qdrant, and run the smoketests in one shot (see `docs/FIRST_RUN.md`).
 - Manual flow: `make bootstrap` → `make supabase-boot-user` → `make supa-start` → `make up` → `make bootstrap-data` → `make up-agents` → `make up-external` → `make smoke`.

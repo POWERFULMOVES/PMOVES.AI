@@ -440,6 +440,14 @@ Consciousness follow-up:
 - Qdrant not ready: `docker compose logs -f qdrant` and retry after a few seconds.
 - 401 from Render Webhook: ensure `Authorization: Bearer $RENDER_WEBHOOK_SHARED_SECRET` matches `.env`.
 - PostgREST errors: confirm `postgres` is up and `/supabase/initdb` scripts finished; check `docker compose logs -f postgres postgrest`.
+- Agents health badge shows “down” but API responds on a different path: set console overrides
+  - `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH=/your/health`
+  - `NEXT_PUBLIC_ARCHON_HEALTH_PATH=/your/health`
+  See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Personas page “Invalid schema: pmoves_core”:
+  - Start the PostgREST bound to Supabase CLI DB: `docker compose -p pmoves up -d postgrest-cli` (publishes `http://localhost:3011`).
+  - Set `POSTGREST_URL=http://localhost:3011` in `pmoves/env.shared` and run `make -C pmoves env-setup`.
+  - Reload `/dashboard/personas`.
 - Rerank disabled: if providers are unreachable, set `RERANK_ENABLE=false` or configure provider keys in `.env`.
 
 ## Log Triage
