@@ -561,14 +561,14 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - PORT=8080
+      - PORT=80
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
       - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
       - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     depends_on: [nats]
-    ports: ["8080:8080"]
+    ports: ["8080:80"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
@@ -587,6 +587,7 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8091
+      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
