@@ -1,10 +1,14 @@
 import 'server-only';
 
 async function fetchHealth(base: string) {
+  const baseClean = base.replace(/\/$/, '');
+  const custom = (process.env.NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH || '').trim();
   const urls = [
-    `${base.replace(/\/$/, '')}/healthz`,
-    `${base.replace(/\/$/, '')}/`,
-  ];
+    custom && (custom.startsWith('/') ? baseClean + custom : `${baseClean}/${custom}`),
+    `${baseClean}/healthz`,
+    `${baseClean}/api/health`,
+    `${baseClean}/`,
+  ].filter(Boolean) as string[];
   for (const u of urls) {
     try {
       const res = await fetch(u, { next: { revalidate: 0 } });
@@ -22,7 +26,7 @@ async function fetchHealth(base: string) {
 }
 
 export default async function AgentZeroPage() {
-  const base = process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080';
+  const base = (process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080').replace(/\/$/, '');
   const health = await fetchHealth(base);
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -47,7 +51,7 @@ export default async function AgentZeroPage() {
         <h2 className="mb-2 text-base font-semibold">Connect MCP client</h2>
         <ul className="list-disc pl-5 text-sm text-slate-700">
           <li>Endpoint: <code>{base}</code></li>
-          <li>Health path: <code>/healthz</code></li>
+          <li>Health path: <code>{(process.env.NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH || '/healthz')}</code></li>
           <li>Broker: NATS at <code>{process.env.NATS_URL || 'nats://nats:4222'}</code> (internal)</li>
         </ul>
         <div className="mt-3 flex gap-3">

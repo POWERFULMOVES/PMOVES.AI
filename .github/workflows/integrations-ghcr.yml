@@ -1,0 +1,84 @@
+name: Build and publish integration images to GHCR
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 7 * * *'
+
+env:
+  REGISTRY: ghcr.io
+  GHCR_NAMESPACE: ${{ secrets.GHCR_NAMESPACE || github.repository_owner }}
+
+jobs:
+  build-publish:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: agent-zero
+            git_url: https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
+            ref: main
+            context: .
+            dockerfile: Dockerfile
+            image_name: pmoves-agent-zero
+          - name: archon
+            git_url: https://github.com/POWERFULMOVES/PMOVES-Archon.git
+            ref: main
+            context: .
+            dockerfile: Dockerfile
+            image_name: pmoves-archon
+          # To add other integrations, duplicate one of the entries above.
+          # Example (commented):
+          # - name: open-notebook
+          #   git_url: https://github.com/lfnovo/open-notebook.git
+          #   ref: main
+          #   context: .
+          #   dockerfile: Dockerfile
+          #   image_name: pmoves-open-notebook
+
+    steps:
+      - name: Checkout (stub)
+        uses: actions/checkout@v4
+
+      - name: Clone integration repo
+        run: |
+          git clone --depth=1 --branch "${{ matrix.ref }}" "${{ matrix.git_url }}" integration-src
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: meta
+        run: |
+          DATE_TAG=$(date +%Y%m%d)
+          echo "date_tag=${DATE_TAG}" >> $GITHUB_OUTPUT
+          echo "sha_short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: integration-src/${{ matrix.context }}
+          file: integration-src/${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.GHCR_NAMESPACE }}/${{ matrix.image_name }}:pmoves-latest
+            ${{ env.REGISTRY }}/${{ env.GHCR_NAMESPACE }}/${{ matrix.image_name }}:${{ steps.meta.outputs.date_tag }}-${{ steps.meta.outputs.sha_short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+

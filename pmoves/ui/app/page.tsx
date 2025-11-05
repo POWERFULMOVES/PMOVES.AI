@@ -24,12 +24,22 @@ export default async function HomePage() {
     {
       label: 'Agent Zero',
       href: '/dashboard/agent-zero',
-      health: (process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080').replace(/\/$/, '') + '/healthz',
+      health: (() => {
+        const base = (process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080').replace(/\/$/, '');
+        const custom = (process.env.NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH || '').trim();
+        if (custom) return base + (custom.startsWith('/') ? custom : '/' + custom);
+        return base + '/healthz';
+      })(),
     },
     {
       label: 'Archon',
       href: '/dashboard/archon',
-      health: (process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091').replace(/\/$/, '') + '/healthz',
+      health: (() => {
+        const base = (process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091').replace(/\/$/, '');
+        const custom = (process.env.NEXT_PUBLIC_ARCHON_HEALTH_PATH || '').trim();
+        if (custom) return base + (custom.startsWith('/') ? custom : '/' + custom);
+        return base + '/healthz';
+      })(),
     },
     {
       label: 'Hi‑RAG Geometry (GPU)',

@@ -1,10 +1,14 @@
 import 'server-only';
 
 async function fetchHealth(base: string) {
+  const baseClean = base.replace(/\/$/, '');
+  const custom = (process.env.NEXT_PUBLIC_ARCHON_HEALTH_PATH || '').trim();
   const urls = [
-    `${base.replace(/\/$/, '')}/healthz`,
-    `${base.replace(/\/$/, '')}/`,
-  ];
+    custom && (custom.startsWith('/') ? baseClean + custom : `${baseClean}/${custom}`),
+    `${baseClean}/healthz`,
+    `${baseClean}/api/health`,
+    `${baseClean}/`,
+  ].filter(Boolean) as string[];
   for (const url of urls) {
     try {
       const res = await fetch(url, { next: { revalidate: 0 } });
@@ -22,7 +26,7 @@ async function fetchHealth(base: string) {
 }
 
 export default async function ArchonPage() {
-  const base = process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091';
+  const base = (process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091').replace(/\/$/, '');
   const health = await fetchHealth(base);
   return (
     <main className="mx-auto max-w-3xl p-6">
