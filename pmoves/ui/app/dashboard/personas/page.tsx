@@ -10,21 +10,48 @@ type Persona = {
   runtime: Record<string, any> | null;
 };
 
+async function fetchFromPostgrest(): Promise<{ data: Persona[]; error?: string }>
+{
+  const base = (process.env.POSTGREST_URL || 'http://localhost:3010').replace(/\/$/, '');
+  const url = `${base}/personas?select=name,version,description,runtime&order=name.asc&limit=100`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept-Profile': 'pmoves_core',
+        'Content-Profile': 'pmoves_core',
+        ...(process.env.SUPABASE_SERVICE_ROLE_KEY ? { 'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } : {}),
+      },
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return { data: [], error: `PostgREST ${res.status}` };
+    const rows = await res.json();
+    return { data: rows as Persona[] };
+  } catch (e: any) {
+    return { data: [], error: e?.message || 'PostgREST fetch failed' };
+  }
+}
+
 async function loadPersonas(): Promise<{ data: Persona[]; error?: string }>
 {
+  // Try supabase-js first (when SUPABASE_* points to a supabase-style base URL)
   try {
     const client = getServiceSupabaseClient();
-    // Prefer explicit schema to avoid collisions
     const { data, error } = await client
       .schema('pmoves_core')
       .from('personas')
       .select('name, version, description, runtime')
       .order('name')
       .limit(100);
-    if (error) return { data: [], error: error.message };
+    if (error) {
+      // Fallback to direct PostgREST if schema isn’t exposed on the primary REST host
+      const pg = await fetchFromPostgrest();
+      return pg.data.length ? pg : { data: [], error: error.message };
+    }
     return { data: data as Persona[] };
   } catch (e: any) {
-    return { data: [], error: e?.message || 'Unexpected error' };
+    // Attempt PostgREST fallback
+    const pg = await fetchFromPostgrest();
+    return pg.data.length ? pg : { data: [], error: e?.message || 'Unexpected error' };
   }
 }
 
@@ -43,8 +70,8 @@ export default async function PersonasPage() {
           Unable to fetch personas from Supabase REST. If you are using the Supabase CLI
           PostgREST (65421) and it doesn’t expose the pmoves_core schema, either:
           <ul className="ml-5 list-disc">
-            <li>Set <code>SUPABASE_SERVICE_URL</code> to a PostgREST endpoint configured with <code>public,pmoves_core</code>.</li>
-            <li>Or run the compose PostgREST on 3010 and point the service client there.</li>
+            <li>Set <code>POSTGREST_URL</code> (e.g. <code>http://localhost:3010</code>) so the console can query PostgREST directly with <code>Accept-Profile: pmoves_core</code>.</li>
+            <li>Or configure your primary REST to expose <code>public,pmoves_core</code> and keep using <code>SUPABASE_* </code> variables.</li>
           </ul>
           Error: {error}
         </div>
@@ -74,4 +101,3 @@ export default async function PersonasPage() {
     </main>
   );
 }
-
