@@ -5,11 +5,7 @@ import { createSupabaseBrowserClient, hasBootJwt } from '@/lib/supabaseClient';
 
 const SupabaseDiagnostics = () => {
   useEffect(() => {
-    const client = createSupabaseBrowserClient();
-    (window as any).__PMOVES_SUPABASE_BOOT = {
-      hasBootJwt: hasBootJwt(),
-      authorization: (client as any)?.rest?.headers?.Authorization,
-    };
+    createSupabaseBrowserClient();
   }, []);
 
   return (
