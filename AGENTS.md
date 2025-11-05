@@ -33,7 +33,9 @@
 ## Testing & Validation
 - Before running checks, review `pmoves/docs/SMOKETESTS.md` for the current 12-step smoke harness flow and optional follow-on targets.
 - Notebook Workbench: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` after UI/runtime changes to lint the bundle and confirm Supabase connectivity (see `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md`).
+- Hi-RAG gateway: run `make -C pmoves smoke-gpu` after reranker or embedding changes. The target now proxies the test query through `docker compose exec` so FlagEmbedding/Qwen rerankers that only accept batch size 1 still return `"used_rerank": true` (first run downloads the 4B checkpoint).
 - Use `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` and `pmoves/docs/LOCAL_DEV.md` to confirm environment scripts, Make targets, and Supabase CLI expectations.
+- Jellyfin bridge: start it with `make -C pmoves up-jellyfin` and set `JELLYFIN_URL`/`JELLYFIN_API_KEY` before running `make yt-jellyfin-smoke`; the smoketest now surfaces `missing jellyfin mapping or JELLYFIN_URL` when the link or base URL is absent.
 - Log smoke or manual verification evidence back into `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md` so roadmaps and next-step trackers stay aligned.
 
 ## Local CI Expectations
@@ -52,14 +54,16 @@ Follow this flow before running smokes or automation. Commands run from repo roo
 
 1. `cp pmoves/env.shared.example pmoves/env.shared` → populate secrets (Supabase keys, Discord webhook, MinIO, Firefly, etc.). This file now holds the branded defaults the entire stack reads on startup.
 2. `make env-setup` – sync `env.shared`, `.env.generated`, and `.env.local` so Supabase CLI credentials and integration tokens land in both Docker Compose and the UI launcher. All UI `npm run` scripts shell through `pmoves/ui/scripts/with-env.mjs`, so keeping `env.shared` + `.env.local` current automatically hydrates the Next.js workspace.
-3. `make supa-start` – launches the Supabase CLI stack (REST on 65421). Check status with `make supa-status`. Stop with `make supa-stop`.
-4. `make up` – core PMOVES services (presign, render-webhook, hi-rag, etc.).
-5. `make up-agents` – NATS, Agent Zero, Archon, mesh-agent, publisher-discord.
-6. `make up-external` (or `make up-external-wger`, `...-firefly`, `...-jellyfin`, `...-on`) – third-party integrations.
-7. `make bootstrap-data` – seeds Supabase SQL, Neo4j graph, Qdrant/Meili demo data.
-8. Optional stacks:
+3. `make supabase-boot-user` – create (or rotate) the dashboard-safe Supabase account, update `env.shared`, `.env.local`, and `pmoves/.env.local` with the password/JWT, and keep the UI off the anon key. (`make first-run` runs this automatically; rerun the target after intentional rotations.)
+4. `make supa-start` – launches the Supabase CLI stack (REST on 65421). Check status with `make supa-status`. Stop with `make supa-stop`.
+5. `make up` – core PMOVES services (presign, render-webhook, hi-rag, etc.).
+6. `make up-agents` – NATS, Agent Zero, Archon, mesh-agent, publisher-discord.
+7. `make up-external` (or `make up-external-wger`, `...-firefly`, `...-jellyfin`, `...-on`) – third-party integrations.
+8. `make bootstrap-data` – seeds Supabase SQL, Neo4j graph, Qdrant/Meili demo data.
+9. Optional stacks:
    - `make up-n8n` – workflow engine (UI at http://localhost:5678).
    - `make notebook-up` / `make notebook-seed-models` – Open Notebook + SurrealDB (set `OPEN_NOTEBOOK_SURREAL_URL`/`OPEN_NOTEBOOK_SURREAL_ADDRESS`, or rely on the legacy `SURREAL_*` aliases, before launching).
+   - `make up-invidious` – launches Invidious + companion (YouTube fallback) on http://127.0.0.1:3000 and http://127.0.0.1:8282.
    - `make jellyfin-folders` prior to first Jellyfin boot.
    - `make up-jellyfin-ai` – brings up the LinuxServer Jellyfin overlay (UI on http://localhost:9096, API gateway on http://localhost:8300, dashboard on http://localhost:8400); follow the runbook in [`pmoves/docs/PMOVES.AI PLANS/JELLYFIN_BRIDGE_INTEGRATION.md`](pmoves/docs/PMOVES.AI%20PLANS/JELLYFIN_BRIDGE_INTEGRATION.md).
 
@@ -69,8 +73,8 @@ Follow this flow before running smokes or automation. Commands run from repo roo
 - TensorZero Playground: http://localhost:4000 (requires `make -C pmoves up-tensorzero`; gateway API at http://localhost:3030).
 - Firefly Finance: http://localhost:8082 (launched with `make -C pmoves up-external-firefly`; populate `FIREFLY_*` secrets).
 - Wger Coach Portal: http://localhost:8000 (`make -C pmoves up-external-wger`; defaults apply automatically).
-- Jellyfin Media Hub: http://localhost:8096 (`make -C pmoves up-external-jellyfin`; ensure media folders exist).
-- Jellyfin AI Overlay: http://localhost:9096 (`make -C pmoves up-jellyfin-ai`; see above for API gateway/dashboard ports).
+- Jellyfin Media Hub: http://localhost:8096 (`make -C pmoves up-external-jellyfin`; run `make -C pmoves jellyfin-folders` + copy media if you need the classic stack).
+- Jellyfin AI Overlay: http://localhost:9096 (`make -C pmoves up-jellyfin-ai`; smoketests hit this instance—drop a seed asset with `python scripts/seed_jellyfin_media.py` if the libraries are empty).
 - Open Notebook UI: http://localhost:8503 (restart with `docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`; keep API token/password in sync).
 - n8n Automation: http://localhost:5678 (`make -C pmoves up-n8n`; import flows from `pmoves/integrations`).
 
@@ -79,7 +83,7 @@ Follow this flow before running smokes or automation. Commands run from repo roo
 - Discord publisher: `make discord-smoke` (requires `DISCORD_WEBHOOK_URL` in `env.shared`/`.env.local`; host port 8094).
 - Geometry web UI: `make web-geometry`
 - Health checks: `make health-agent-zero`, `make health-publisher-discord`, `make health-jellyfin-bridge`
-- External integrations: `make smoke-wger`, `make smoke-presign-put`, `make jellyfin-smoke`
+- External integrations: `make smoke-wger`, `make smoke-presign-put`, `make yt-jellyfin-smoke` (pmoves.yt ingest + Jellyfin playback; ensure `make up`, `make up-yt`, `make up-invidious`, and `make up-jellyfin` are running and that `JELLYFIN_API_KEY` covers the overlay) or `make jellyfin-smoke` (playback-only; the target now auto-attempts `/jellyfin/map-by-title` and, on a miss, links the newest library item via the bridge before requesting the playback URL). Keep `SUPA_REST_URL`/`SUPA_REST_INTERNAL_URL` pointed at the active Supabase REST host — `http://host.docker.internal:65421/rest/v1` when the CLI stack is running, and set `HIRAG_URL`/`HIRAG_GPU_URL` to `http://hi-rag-gateway-v2-gpu:8086` so ShapeStore stays warm with `HIRAG_CPU_URL` as the fallback.
 - Creative CGP demos: `make demo-health-cgp`, `make demo-finance-cgp`, plus manual WAN/Qwen/VibeVoice webhook triggers (see `pmoves/creator/README.md`).
 - Environment sanity: `make preflight` (tooling) and `make flight-check` (runtime)
 

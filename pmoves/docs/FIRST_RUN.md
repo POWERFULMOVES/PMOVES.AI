@@ -32,6 +32,7 @@ The command exits non-zero if any step fails, making it safe to re-run after fix
 
 ## After First Run
 - **UI workspace** — `npm install && npm run dev` in `pmoves/ui`. The launcher automatically layers the same env files used by `make first-run`.
+- **Supabase boot operator** — `make first-run` automatically calls `make supabase-boot-user`, which creates (or rotates) the dashboard operator, updates `env.shared`, `.env.local`, and `pmoves/.env.local`, and keeps the UI JWT in sync. Run `make supabase-boot-user` again whenever you intentionally rotate credentials or switch Supabase projects.
 - **Evidence capture** — run additional smokes (e.g., `make smoke-wger`, `make jellyfin-verify`) and log results via `make evidence-log`.
 - **Additional docs**:
   - [Local Development & Networking](LOCAL_DEV.md) — service ports, Supabase runtime modes, and Cloudflare tunnel guidance.

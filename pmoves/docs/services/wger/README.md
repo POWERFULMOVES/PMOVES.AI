@@ -17,7 +17,7 @@ working.
 
 ## Image + Branding Defaults
 
-- Compose now points at `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:main` by default. Override it with
+- Compose now points at `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest` by default. Override it with
   `WGER_IMAGE` if you publish a branded build elsewhere (same shape as the upstream production Dockerfile).
 - `make up-external-wger` calls `scripts/wger_brand_defaults.sh` after the containers start. The helper
   now waits for Django to finish migrations (including the `django_site` bootstrap) before touching the

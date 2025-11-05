@@ -11,7 +11,8 @@ Oversee external services (Jellyfin, Wger, Firefly, n8n), VPS maintenance, and a
    - n8n HTTP bridges or scripts in `pmoves/tools/integrations/`
    - Fetch/HTTP clients for endpoint sanity checks
 4. Encourage local health commands:
-   - `make up-external-*`, `make jellyfin-smoke`, `make smoke-wger`, `make preflight`
+   - `make up-external-*`, `make up-invidious`, `make yt-jellyfin-smoke`, `make jellyfin-smoke`, `make smoke-wger`, `make preflight`
+   - Keep `HIRAG_URL`/`HIRAG_GPU_URL` aimed at `http://hi-rag-gateway-v2-gpu:8086` (host port 8087) so pmoves.yt CGPs hydrate the GPU ShapeStore; leave `HIRAG_CPU_URL` defined for CPU-only bring-ups.
    - `docker compose logs <service>`, `make logs-core`
    - `codex run` helpers from `CODEX_TASKS_ALL_IN_ONE.toml`
 5. Record diagnostics and fixes in `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md` and update roadmap status as needed.

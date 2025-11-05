@@ -74,6 +74,8 @@ A **single JSON** that describes the boundary cymatics you want to visualize and
 * `x,y` are 2D layout coords so the front‑end doesn’t have to recompute PCA/placement each time.
 * `super_nodes` are optional “modes-of-modes” (we’ll synthesize by clustering the anchors **U**), matching your UI’s *Resonant Mode → Harmonics* breadcrumb.
 
+> **Runtime wiring:** The pmoves.yt publisher emits each CGP to the Hi‑RAG geometry gateway via `HIRAG_URL`. Keep `HIRAG_URL`/`HIRAG_GPU_URL` aimed at `http://hi-rag-gateway-v2-gpu:8086` (host port 8087) so the GPU ShapeStore ingests CHIT packets immediately; retain `HIRAG_CPU_URL=http://hi-rag-gateway-v2:8086` as a fallback when running the CPU gateway only.
+
 ---
 
 ## 3) Backend patch (Python) — emit **CGP** from your CHR run

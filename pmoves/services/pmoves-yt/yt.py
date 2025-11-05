@@ -14,7 +14,7 @@ except Exception:  # pragma: no cover - fallback when utils module missing
         pass
 import boto3
 import requests
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlunparse
 from nats.aio.client import Client as NATS
 from tenacity import AsyncRetrying, retry_if_exception, wait_exponential, stop_after_attempt, RetryError
 # Prefer shared envelope util if present; otherwise, fall back to a local stub
@@ -2163,6 +2163,63 @@ def _upsert_chunks_to_hirag(
     }
 
 
+def _geometry_url_candidates() -> List[str]:
+    candidates: List[str] = []
+
+    def _push(url: Optional[str]) -> None:
+        if not url:
+            return
+        cleaned = url.rstrip('/')
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+
+    base = os.environ.get("HIRAG_URL")
+    _push(base)
+    _push(os.environ.get("HIRAG_GPU_URL"))
+    _push(os.environ.get("HIRAG_CPU_URL"))
+
+    # Derive common fallbacks from the primary base URL (CPU ↔ GPU, port swap, host bridge).
+    derived_hosts: List[str] = []
+    if base:
+        parsed = urlparse(base)
+        host = parsed.hostname or ""
+        port = parsed.port
+        scheme = parsed.scheme or "http"
+
+        if host:
+            if "hi-rag-gateway-v2" in host and "-gpu" not in host:
+                derived_hosts.append(host.replace("hi-rag-gateway-v2", "hi-rag-gateway-v2-gpu"))
+            if "hi-rag-gateway-v2-gpu" in host:
+                derived_hosts.append(host.replace("hi-rag-gateway-v2-gpu", "hi-rag-gateway-v2"))
+        if port == 8086:
+            derived_hosts.append(f"{host}:8087" if host else "localhost:8087")
+        elif port == 8087:
+            derived_hosts.append(f"{host}:8086" if host else "localhost:8086")
+
+        for derived in derived_hosts:
+            if not derived:
+                continue
+            if ":" in derived:
+                d_host, d_port = derived.split(":", 1)
+            else:
+                d_host, d_port = derived, ""
+            new_netloc = derived
+            if not d_port:
+                new_netloc = f"{derived}:8086"
+            derived_url = urlunparse((scheme, new_netloc, '', '', '', ''))
+            _push(derived_url)
+
+    # Default fallbacks for typical local setups.
+    _push("http://hi-rag-gateway-v2-gpu:8086")
+    _push("http://hi-rag-gateway-v2:8086")
+    _push("http://host.docker.internal:8087")
+    _push("http://host.docker.internal:8086")
+    _push("http://localhost:8087")
+    _push("http://localhost:8086")
+
+    return candidates
+
+
 def _emit_geometry_event(
     video_id: str,
     chunks: List[Dict[str, Any]],
@@ -2170,13 +2227,40 @@ def _emit_geometry_event(
     namespace: str,
 ) -> None:
     cgp = _build_cgp(video_id, chunks, title, namespace)
-    r2 = requests.post(
-        f"{HIRAG_URL}/geometry/event",
-        headers={'content-type': 'application/json'},
-        data=json.dumps({'type': 'geometry.cgp.v1', 'data': cgp}),
-        timeout=60,
-    )
-    r2.raise_for_status()
+    payload = {'type': 'geometry.cgp.v1', 'data': cgp}
+    last_error: Optional[Exception] = None
+    for base in _geometry_url_candidates():
+        try:
+            r2 = requests.post(
+                f"{base}/geometry/event",
+                headers={'content-type': 'application/json'},
+                data=json.dumps(payload),
+                timeout=60,
+            )
+            r2.raise_for_status()
+            if base != (HIRAG_URL.rstrip('/') if HIRAG_URL else None):
+                logger.info(
+                    "geometry_event_routed",
+                    extra={
+                        "event": "geometry_event_routed",
+                        "video_id": video_id,
+                        "target": base,
+                    },
+                )
+            return
+        except Exception as exc:  # pylint: disable=broad-except
+            last_error = exc
+            logger.warning(
+                "geometry_event_post_failed",
+                extra={
+                    "event": "geometry_event_post_failed",
+                    "video_id": video_id,
+                    "target": base,
+                    "error": str(exc),
+                },
+            )
+            continue
+    raise HTTPException(502, f"Failed to publish geometry event: {last_error}")
 
 
 def _emit_async_job(

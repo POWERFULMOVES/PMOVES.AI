@@ -5,8 +5,8 @@ Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md
 
 Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
 
-## First Run
-- `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, and executes the 12-step smoke harness so every integration ships with branded defaults out of the gate. See [FIRST_RUN.md](FIRST_RUN.md) for the full sequence and seeded resources.
+- `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, provisions the Supabase boot operator, and executes the 12-step smoke harness so every integration ships with branded defaults. See [FIRST_RUN.md](FIRST_RUN.md) for the full sequence and seeded resources.
+- `make supabase-boot-user` — manually reprovision (or rotate) the Supabase operator and refresh `env.shared`/`.env.local` with the latest password + JWT. Use this after changing Supabase domains or when you intentionally rotate credentials.
 - Optional provisioning bundle: `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` produces the same env overlays and stages the provisioning artifacts under `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS` before you run the stack locally or on a VPS.
 
 ## Services and Ports
@@ -19,8 +19,10 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - presign: 8088 -> 8080 (internal name `presign`)
 - hi-rag-gateway (v1, CPU): 8089 -> 8086 (internal name `hi-rag-gateway`)
 - hi-rag-gateway-gpu (v1, GPU): 8090 -> 8086 (internal name `hi-rag-gateway-gpu`)
-- hi-rag-gateway-v2 (CPU): 8086 (internal name `hi-rag-gateway-v2`)
-- hi-rag-gateway-v2-gpu (GPU): 8087 -> 8086 (internal name `hi-rag-gateway-v2-gpu`)
+- hi-rag-gateway-v2 (CPU): `${HIRAG_V2_HOST_PORT:-8086}` → 8086 (internal name `hi-rag-gateway-v2`)
+- hi-rag-gateway-v2-gpu (GPU): `${HIRAG_V2_GPU_HOST_PORT:-8087}` → 8086 (internal name `hi-rag-gateway-v2-gpu`)
+  - Tip: when local tools already bind to 8086/8087 (e.g., legacy uvicorn processes), set `HIRAG_V2_HOST_PORT` / `HIRAG_V2_GPU_HOST_PORT` in `.env.local` (or the shell) before running `make up` to remap the published ports (for example `18086` / `18087`).
+- Embedding defaults: the v2 gateways now pull embeddings from TensorZero (`http://tensorzero-gateway:3000`) which proxies Ollama’s `embeddinggemma` family. Bring up the tensorzero profile (`make -C pmoves up-tensorzero`) and pull `embeddinggemma:latest` plus `embeddinggemma:300m` on `pmoves-ollama` so GPU queries don’t fall back to CPU sentence-transformer models. citeturn0search0turn0search2
 - retrieval-eval: 8090 (internal name `retrieval-eval`)
 - render-webhook: 8085 (internal name `render-webhook`)
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
@@ -275,7 +277,7 @@ OpenAI-compatible presets:
 - VPS deployment: sync the same variables into your secret manager (Docker Swarm, Fly.io, Coolify). Document the base URL helper in `.env` so ops teams can rotate tokens without rediscovering the Cloudflare path.
 
 ## Start
-- `make up` (data + workers, v2 CPU on :8086, v2 GPU on :8087 when available)
+- `make up` (data + workers, v2 CPU on :${HIRAG_V2_HOST_PORT:-8086}, v2 GPU on :${HIRAG_V2_GPU_HOST_PORT:-8087} when available)
 - `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090 when available)
 - Legacy gateway: `make up-legacy`
 - Seed demo data (Qdrant/Meili): `make seed-data`
@@ -375,7 +377,7 @@ OpenAI-compatible presets:
 
 - Presign: `curl http://localhost:8088/healthz`
 - Webhook: `curl http://localhost:8085/healthz`
-- Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
+- Hi‑RAG v2 stats: `curl http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/admin/stats` (or `${HIRAG_V2_HOST_PORT:-8086}` for CPU-only bring-up)
 - Mindmap API (Neo4j-backed): `curl http://localhost:8086/mindmap/<constellation_id>?offset=0&limit=50` (after `make mindmap-seed` the demo ID is `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111`). Responses now include `media_url`, timestamps, Notebook payloads, and pagination metadata (`total`, `returned`, `remaining`, `has_more`).
 - Retrieval‑Eval UI: `http://localhost:8090`
 - PostgREST: `http://localhost:3010`

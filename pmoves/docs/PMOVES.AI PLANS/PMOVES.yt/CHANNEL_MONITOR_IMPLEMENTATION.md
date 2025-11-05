@@ -20,7 +20,7 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
 | Persistence | Add Supabase migration for `pmoves.channel_monitoring` (table + indexes from prototype). | Use CLI `supabase/initdb` + migration file; include RLS policies mirroring other pmoves schemas. |
 | State cache | Replace Redis dependency with Supabase-only tracking, _or_ add Redis container/profile if necessary. | Prefer Supabase-first approach to reduce infrastructure. |
 | Queue integration | Emit to pmoves-yt ingestion endpoint (e.g. `POST /yt/queue/add`), or publish NATS event `pmoves.yt.ingest.request.v1`. | Choose approach consistent with existing pmoves-yt tooling. |
-| Configuration | Support `channel-monitor.config.json` in `pmoves/config/` plus environment overrides (`CHANNEL_MONITOR_CONFIG`, `CHANNEL_MONITOR_QUEUE_URL`). | Document defaults and secrets in `env.shared.example`. |
+| Configuration | Support `channel-monitor.config.json` in `pmoves/config/` plus environment overrides (`CHANNEL_MONITOR_CONFIG`, `CHANNEL_MONITOR_QUEUE_URL`). | Document defaults and secrets in `env.shared.example`; align `HIRAG_URL`/`HIRAG_GPU_URL` with the GPU gateway (`http://hi-rag-gateway-v2-gpu:8086`) so pmoves-yt and the monitor publish CGPs to the same ShapeStore cache. |
 | Scheduling | APScheduler interval/cron jobs, plus manual `/api/monitor/check-now` trigger. | Ensure jobs survive restarts (reload config & last-discovered state). |
 | Observability | Add `/api/monitor/stats`, `/healthz`, basic structured logging (JSON). | Include Grafana/Prometheus TODO if metrics are desired later. |
 | Tests | Unit tests for filter logic, config loader, queue publisher. | Add smoke script `make yt-channel-monitor-smoke`. |

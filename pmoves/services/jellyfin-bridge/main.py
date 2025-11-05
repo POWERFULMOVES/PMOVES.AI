@@ -139,7 +139,12 @@ def _supa_patch(table: str, match: Dict[str, Any], patch: Dict[str, Any]):
     url = f"{SUPA}/{table}?" + "&".join(qs)
     r = httpx.patch(url, json=patch, timeout=10)
     r.raise_for_status()
-    return r.json()
+    if not r.content:
+        return {}
+    try:
+        return r.json()
+    except json.JSONDecodeError:
+        return {}
 
 def _supa_get(table: str, match: Dict[str, Any]):
     qs = []

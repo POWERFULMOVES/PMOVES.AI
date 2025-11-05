@@ -45,7 +45,9 @@ Use the pills at the top of the ingestion, video, and services pages to move bet
    - Ensure the following keys are present (either in `.env.local` or exported before you start the dev server):
      - `NEXT_PUBLIC_SUPABASE_URL`
      - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+     - `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` – reproducible JWT managed by `make supabase-boot-user` (invoked automatically by `make first-run`); keeps the UI authenticated as the branded operator instead of the anon role.
      - Optional but recommended: `NEXT_PUBLIC_SUPABASE_REST_URL` (falls back to `<SUPABASE_URL>/rest/v1`).
+   - Server components/read routes also honour `SUPABASE_BOOT_USER_JWT`; set it alongside the `NEXT_PUBLIC_…` value so API routes inherit the same session.
 
 4. **Start the dev server**:
    ```bash

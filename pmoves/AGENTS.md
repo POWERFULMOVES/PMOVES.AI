@@ -38,11 +38,21 @@
 - Before pushing, mirror the GitHub Actions checks documented in `docs/LOCAL_CI_CHECKS.md` (pytest suites, `make chit-contract-check`, `make jellyfin-verify` when the publisher is affected, SQL policy lint, env preflight). Capture each command/output in the PR template’s Testing section.
 - If you intentionally skip one of those checks (docs-only change, etc.), record the rationale in the PR Reviewer Notes so reviewers know the risk envelope.
 - UI updates: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` to lint the Next.js bundle and validate Supabase connectivity. Reference `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` when collecting smoke evidence.
+- Hi-RAG gateway: after touching reranker or embedding code, run `make -C pmoves smoke-gpu`. The target now pipes the validation query through `docker compose exec` so FlagEmbedding/Qwen rerankers that only accept batch size 1 still report `"used_rerank": true` (first run downloads the 4B checkpoint).
 - JetStream drift can surface as `nats: JetStream.Error cannot create queue subscription…` in the Agent Zero container logs. Rebuild with `docker compose build agent-zero && docker compose up -d agent-zero` so the pull-subscribe controller code ships and the consumer metadata is recreated automatically.
 
 ## Bring-Up Sequence
 - Prefer `make first-run` to bootstrap secrets, start the Supabase CLI stack, launch core/agent/external services, seed Supabase + Neo4j + Qdrant, and run the smoketests in one shot (see `docs/FIRST_RUN.md`).
-- Manual flow: `make bootstrap` → `make supa-start` → `make up` → `make bootstrap-data` → `make up-agents` → `make up-external` → `make smoke`.
+- Manual flow: `make bootstrap` → `make supabase-boot-user` → `make supa-start` → `make up` → `make bootstrap-data` → `make up-agents` → `make up-external` → `make smoke`.
+
+## Smoketests & Diagnostics
+- Full harness: `make smoke`
+- Discord publisher: `make discord-smoke` (requires `DISCORD_WEBHOOK_URL` in `env.shared`/`.env.local`; host port 8094).
+- Geometry web UI: `make web-geometry`
+- Health checks: `make health-agent-zero`, `make health-publisher-discord`, `make health-jellyfin-bridge`
+- External integrations: `make smoke-wger`, `make smoke-presign-put`, `make yt-jellyfin-smoke` (pmoves.yt ingest + Jellyfin playback; ensure `make up`, `make up-yt`, `make up-invidious`, and `make up-jellyfin` are running, and keep the overlay `JELLYFIN_API_KEY` in sync so the bridge can mint playback URLs) or `make jellyfin-smoke` (playback-only; the target now attempts `/jellyfin/map-by-title` first and, if that misses, links the newest Jellyfin library item through `/jellyfin/link` before requesting a playback URL). Keep `SUPA_REST_URL`/`SUPA_REST_INTERNAL_URL` pointed at the active Supabase REST host — `http://host.docker.internal:65421/rest/v1` when the CLI stack is running, and set `HIRAG_URL`/`HIRAG_GPU_URL` to `http://hi-rag-gateway-v2-gpu:8086` so CGPs land in the GPU ShapeStore before falling back to `HIRAG_CPU_URL`.
+- Creative CGP demos: `make demo-health-cgp`, `make demo-finance-cgp`, plus manual WAN/Qwen/VibeVoice webhook triggers (see `pmoves/creator/README.md`).
+- Environment sanity: `make preflight` (tooling) and `make flight-check` (runtime)
 
 ### UI Quickstart & Links
 - Supabase Studio → http://127.0.0.1:65433 (`make -C pmoves supa-start`; status via `make -C pmoves supa-status`).
@@ -50,8 +60,9 @@
 - TensorZero Playground → http://localhost:4000 (`make -C pmoves up-tensorzero`; gateway API exposed on http://localhost:3030).
 - Firefly Finance → http://localhost:8082 (`make -C pmoves up-external-firefly`; configure `FIREFLY_*` secrets).
 - Wger Coach Portal → http://localhost:8000 (`make -C pmoves up-external-wger`; brand defaults apply automatically).
-- Jellyfin Media Hub → http://localhost:8096 (`make -C pmoves up-external-jellyfin`; ensure `pmoves/data/jellyfin` is populated).
-- Jellyfin AI Overlay → http://localhost:9096 (`make -C pmoves up-jellyfin-ai`; exposes API gateway on http://localhost:8300 and dashboard on http://localhost:8400).
+- Jellyfin Media Hub → http://localhost:8096 (`make -C pmoves up-external-jellyfin`; run `make -C pmoves jellyfin-folders` and drop media into `pmoves/data/jellyfin` if you need the legacy stack).
+- Jellyfin AI Overlay → http://localhost:9096 (`make -C pmoves up-jellyfin-ai`; exposes API gateway on http://localhost:8300 and dashboard on http://localhost:8400; seed a sample asset with `python scripts/seed_jellyfin_media.py` so smoketests have something to link).
+- Invidious + Companion → http://127.0.0.1:3000 / http://127.0.0.1:8282 (`make -C pmoves up-invidious`; provides YouTube fallback for pmoves.yt).
 - Open Notebook UI → http://localhost:8503 (`docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`; keep password/token aligned).
 - n8n Automation → http://localhost:5678 (`make -C pmoves up-n8n`; flows sync from `pmoves/integrations`).
 

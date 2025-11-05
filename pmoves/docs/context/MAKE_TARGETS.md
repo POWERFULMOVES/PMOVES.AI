@@ -76,6 +76,9 @@
 - `make supa-extract-remote`
   - Parses `supa.md` and produces `.env.supa.remote` (ignored by Git) with the endpoints/keys discovered upstream.
 
+- `make supabase-boot-user`
+  - Creates or rotates the Supabase operator account, waits for the auth API to come online, and writes the resulting password/JWT into `env.shared`, `.env.local`, and `pmoves/.env.local`. `make first-run` invokes this automatically; rerun it any time you need to rotate credentials.
+
 ### Notes
 
 - `.env.local` overlays `.env` for services that declare `env_file: [.env, .env.local]`. Run one of the Supabase switch helpers above when Compose warns about a missing `.env.local`.
@@ -93,5 +96,5 @@
 - `make up-external` – start Wger, Firefly III, Open Notebook, and Jellyfin from published images on `cataclysm-net`.
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
 - `make wger-brand-defaults` – reapplies the PMOVES-branded Django `Site`, admin profile, and default gym name using `WGER_BRAND_*` env vars (automatically invoked after `make up-external-wger`).
-- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE`, `JELLYFIN_IMAGE`.
+- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:v1-latest`), `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.
