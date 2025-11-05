@@ -6,10 +6,13 @@ This package contains the Next.js front end that surfaces ingestion workflows, v
 
 ```bash
 npm install
+# If port 3000 is free: 
 npm run dev
+# If Invidious is bound to 3000, use an alternate port:
+npm run dev:3001
 ```
 
-The development server runs on [http://localhost:3000](http://localhost:3000). Any changes under `app/`, `components/`, or `lib/` trigger automatic reloads.
+The development server runs on [http://localhost:3000](http://localhost:3000) (or [http://localhost:3001](http://localhost:3001) when using `dev:3001`). Any changes under `app/`, `components/`, or `lib/` trigger automatic reloads.
 
 ### Quick Links on the landing page
 The home page renders a “Quick Links” grid to common dashboards when available:
