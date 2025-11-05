@@ -7,8 +7,8 @@ export default function HomePage() {
   const primaryHref = hasBootJwt ? '/dashboard/ingest' : '/login';
   const primaryLabel = hasBootJwt ? 'Open dashboard' : 'Continue to login';
   const links: { label: string; href: string }[] = [
-    { label: 'Agent Zero (8080)', href: process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080' },
-    { label: 'Archon Health (8091)', href: process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091/healthz' },
+    { label: 'Agent Zero', href: '/dashboard/agent-zero' },
+    { label: 'Archon', href: '/dashboard/archon' },
     { label: 'Hi‑RAG Geometry (GPU)', href: `http://localhost:${process.env.HIRAG_V2_GPU_HOST_PORT || '8087'}/geometry/` },
     { label: 'TensorZero UI (4000)', href: process.env.NEXT_PUBLIC_TENSORZERO_UI || 'http://localhost:4000' },
     { label: 'TensorZero Gateway (3030)', href: process.env.NEXT_PUBLIC_TENSORZERO_GATEWAY || 'http://localhost:3030' },

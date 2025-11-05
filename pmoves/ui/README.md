@@ -127,6 +127,11 @@ The Jest coverage exercises the services index/detail routes and Notebook Workbe
 | Open Notebook UI | http://localhost:8503 | `docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`
 | n8n Automation Canvas | http://localhost:5678 | `make -C pmoves up-n8n`
 
+Additional headless services surfaced via the console:
+
+- Agent Zero (MCP): UI wrapper at `/dashboard/agent-zero` (reads `NEXT_PUBLIC_AGENT_ZERO_URL`, default `http://localhost:8080`). Start with `make -C pmoves up-agents`.
+- Archon (MCP): UI wrapper at `/dashboard/archon` (reads `NEXT_PUBLIC_ARCHON_URL`, default `http://localhost:8091`). Start with `make -C pmoves up-agents`.
+
 Link to the consolidated rundown in `pmoves/docs/LOCAL_DEV.md` for more context on ports and dependent Make targets.
 
 ## Useful scripts

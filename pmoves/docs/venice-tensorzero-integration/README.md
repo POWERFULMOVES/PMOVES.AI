@@ -29,3 +29,43 @@ This guide shows how to use PMOVES with a local or remote TensorZero gateway and
 ## Troubleshooting
 - If the UI shows “Route not found: POST /v1/embeddings”, ensure the gateway is on 3000 and `TENSORZERO_BASE_URL` matches.
 - If Ollama cannot run on the host (e.g., Jetson), keep TensorZero remote and do not start the local sidecar; the gateway still works.
+
+## Operator UIs (PMOVES UI, Agent Zero, Archon)
+
+Bring these up to operate and verify the stack end-to-end:
+
+1) PMOVES Operator Console (Next.js)
+- Ensure the Supabase CLI stack is running and the boot operator exists:
+  ```bash
+  make -C pmoves supa-start
+  make -C pmoves supabase-boot-user   # idempotent; updates env.shared/.env.local
+  ```
+- Start the UI dev server:
+  ```bash
+  cd pmoves/ui
+  npm install
+  npm run dev
+  # open http://localhost:3000
+  ```
+- The console auto‑authenticates using `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` written by `make supabase-boot-user`. To sign in manually, copy `SUPABASE_BOOT_USER_EMAIL` and `SUPABASE_BOOT_USER_PASSWORD` from `pmoves/.env.local` or `pmoves/env.shared`.
+- The landing page includes Quick Links to common dashboards (Agent Zero, Archon health, Geometry, TensorZero, Jellyfin, Open Notebook, Supabase Studio). Override any link with `NEXT_PUBLIC_*` vars (see pmoves/ui/README.md).
+
+2) Agent Zero UI
+- Start the agents profile:
+  ```bash
+  make -C pmoves up-agents
+  # Agent Zero UI: http://localhost:8080
+  # Health: curl -sf http://localhost:8080/healthz | jq
+  ```
+
+3) Archon
+- Runs with the agents profile as well:
+  ```bash
+  make -C pmoves up-agents
+  # Health: http://localhost:8091/healthz
+  make -C pmoves smoke-archon
+  ```
+
+Notes
+- If NATS JetStream errors appear after upgrades, rebuild Agent Zero and restart: `docker compose -p pmoves build agent-zero && docker compose -p pmoves up -d agent-zero`.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` current in `pmoves/env.shared` so Archon can read/write its prompt tables.
