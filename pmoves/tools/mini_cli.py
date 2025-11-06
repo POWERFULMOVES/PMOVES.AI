@@ -30,6 +30,7 @@ from pmoves.tools import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROVISIONING_DEST = REPO_ROOT / "CATACLYSM_STUDIOS_INC" / "PMOVES-PROVISIONS"
 ENV_SHARED = REPO_ROOT / "pmoves" / "env.shared"
+CANONICAL_PROVISIONING_SOURCE = DEFAULT_PROVISIONING_DEST
 
 PROVISIONING_BUNDLE_FILES: dict[Path, Path] = {
     Path("README_APPLY.txt"): REPO_ROOT / "docs" / "provisioning" / "README_APPLY.txt",
@@ -43,6 +44,19 @@ PROVISIONING_BUNDLE_FILES: dict[Path, Path] = {
     / "pmoves-bootstrap.sh",
     Path("tailscale/tailscale_brand_up.sh"): REPO_ROOT / "pmoves" / "scripts" / "tailscale_brand_up.sh",
 }
+
+PROVISIONING_BUNDLE_DIRS: tuple[str, ...] = (
+    "backup",
+    "docker-stacks",
+    "docs",
+    "inventory",
+    "jetson",
+    "linux",
+    "proxmox",
+    "tailscale",
+    "ventoy",
+    "windows",
+)
 
 
 app = typer.Typer(help="PMOVES mini CLI (alpha)")
@@ -117,6 +131,24 @@ def _stage_provisioning_bundle(destination: Path) -> None:
         target = destination / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+
+    canonical_root = CANONICAL_PROVISIONING_SOURCE.resolve()
+    destination_root = destination.resolve()
+    if destination_root == canonical_root:
+        return
+
+    readme_source = CANONICAL_PROVISIONING_SOURCE / "README.md"
+    if readme_source.exists():
+        shutil.copy2(readme_source, destination / "README.md")
+
+    for relative_dir in PROVISIONING_BUNDLE_DIRS:
+        source_dir = CANONICAL_PROVISIONING_SOURCE / relative_dir
+        if not source_dir.exists():
+            continue
+        target_dir = destination / relative_dir
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        shutil.copytree(source_dir, target_dir)
 
 
 def _update_env_value(env_path: Path, key: str, value: str) -> None:
