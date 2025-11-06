@@ -1,0 +1,6 @@
+profile: creator
+vlm:
+  workstation_5090: mistral/pixtral-12b@int8
+  laptop_4090:      qwen2.5-vl-7b-instruct@gguf-q8_0
+sd_workflows:
+  comfyui: ["flux", "wan2.2", "qwen-image-edit"]

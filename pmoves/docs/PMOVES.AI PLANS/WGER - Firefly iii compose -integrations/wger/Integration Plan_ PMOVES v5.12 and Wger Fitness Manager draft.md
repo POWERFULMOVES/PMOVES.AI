@@ -98,7 +98,7 @@ This target starts the core stack with profiles: data (which includes the databa
 
 services:  
   wger:  
-    image: wger/wger:latest  \# or specify a version tag  
+    image: ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest  \# override with a specific tag if you publish one  
     env\_file: wger.env       \# contains DJANGO settings (DB credentials, etc.)  
     ports:  
       \- "8000:8000"  

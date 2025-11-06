@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callPresignService, type PresignMethod } from '../../../../lib/presign';
-import { createSupabaseRouteHandlerClient } from '../../../../lib/supabaseServer';
+import { createSupabaseRouteHandlerClient, getServiceSupabaseClient } from '../../../../lib/supabaseServer';
 import type { Database } from '../../../../lib/database.types';
 
 type UploadEventSelection = Pick<Database['public']['Tables']['upload_events']['Row'], 'bucket' | 'object_key' | 'owner_id' | 'meta'>;
@@ -33,14 +33,18 @@ export async function POST(request: NextRequest) {
     const supabase = createSupabaseRouteHandlerClient(() => cookieStore);
     const {
       data: { session },
-      error: sessionError,
     } = await supabase.auth.getSession();
+    const bootJwt = process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
 
-    if (sessionError || !session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // When running with a boot JWT (no browser cookie session), switch to service-role client
+    const readClient = session ? supabase : getServiceSupabaseClient();
+    const userId = session?.user?.id || (body.ownerId as string | undefined);
+
+    if (!session && bootJwt && !userId) {
+      return NextResponse.json({ error: 'ownerId is required when using boot JWT' }, { status: 400 });
     }
 
-    const { data: eventRow, error: eventError } = await supabase
+    const { data: eventRow, error: eventError } = await readClient
       .from('upload_events')
       .select('bucket, object_key, owner_id, meta')
       .eq('upload_id' as any, uploadId as any)
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Upload event not found' }, { status: 404 });
     }
 
-    if (eventRow.owner_id !== session.user.id) {
+    if (userId && eventRow.owner_id !== userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const namespace = resolveNamespace(eventRow.meta as Record<string, unknown> | null, process.env.PMOVES_DEFAULT_NAMESPACE || 'pmoves');
-    const expectedPrefix = `${namespace}/users/${session.user.id}/uploads/${uploadId}/`;
+    const expectedPrefix = `${namespace}/users/${userId}/uploads/${uploadId}/`;
     if (!eventRow.object_key.startsWith(expectedPrefix)) {
       return NextResponse.json({ error: 'Object key outside authorised prefix' }, { status: 403 });
     }

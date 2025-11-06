@@ -1,0 +1,90 @@
+{
+  "title": "PMOVES Services Overview",
+  "schemaVersion": 38,
+  "version": 2,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Up: GPU Gateway",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "probe_success{instance=\"http://host.docker.internal:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/healthz\"}",
+          "legendFormat": "hi-rag-v2-gpu"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Up: CPU Gateway",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "probe_success{instance=\"http://host.docker.internal:${HIRAG_V2_HOST_PORT:-8086}/hirag/healthz\"}",
+          "legendFormat": "hi-rag-v2"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Up: Presign",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        { "expr": "probe_success{instance=\"http://host.docker.internal:8088/healthz\"}" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Up: Archon",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        { "expr": "probe_success{instance=\"http://host.docker.internal:8091/healthz\"}" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "HTTP Probe Duration",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "probe_duration_seconds{job=\"blackbox_http\"}", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Container CPU (cAdvisor)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{image!=\"\"}[1m]))" }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Recent Logs (Loki)",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 10 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true },
+      "targets": [ { "expr": "{job=\"docker\"}" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Channel Monitor: Status Updates (5m)",
+      "gridPos": { "x": 0, "y": 22, "w": 6, "h": 4 },
+      "targets": [ { "expr": "sum(increase(channel_monitor_status_updates_total[5m]))" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Channel Monitor: Checks (5m)",
+      "gridPos": { "x": 6, "y": 22, "w": 6, "h": 4 },
+      "targets": [ { "expr": "sum(increase(channel_monitor_checks_total[5m]))" } ]
+    },
+    {
+      "type": "graph",
+      "title": "Channel Monitor Activity",
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by (result) (increase(channel_monitor_status_updates_total[5m]))", "legendFormat": "updates:{{result}}" },
+        { "expr": "sum by (kind) (increase(channel_monitor_checks_total[5m]))", "legendFormat": "checks:{{kind}}" }
+      ]
+    }
+  ],
+  "time": { "from": "now-6h", "to": "now" }
+}

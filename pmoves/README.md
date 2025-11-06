@@ -2,16 +2,25 @@
 
 ## Quickstart
 
-### 1. Prepare environment files
-- Copy `.env.example` → `.env` once; it holds the base compose settings shared by every service.
-- Run the interactive bootstrapper to populate machine-specific secrets and overlays:
-  - `make bootstrap` (uses `python -m pmoves.scripts.bootstrap_env` under the hood)
-  - Copy `env.shared.example` → `env.shared` (or let `make` auto-seed it) before adding secrets.
-  - Pass `BOOTSTRAP_FLAGS="--service supabase"` to scope the prompts, or `--accept-defaults` to reuse existing values without prompting.
-- The bootstrap writes `env.shared`, `.env.local`, `env.jellyfin-ai`, and the `env.*.additions` helpers with branded PMOVES defaults, Supabase pointers, and generated secrets. Re-run the command any time you change Supabase endpoints or want to regenerate credentials.
-- Manual edits are still supported; re-run `make bootstrap` afterwards to validate and persist updates.
+### One command, full stack
 
-### 2. Choose your Supabase backend
+```bash
+make first-run
+```
+
+This aggregates the entire onboarding sequence: env bootstrap, Supabase CLI bring-up, core + agent + external compose profiles, Supabase/Neo4j/Qdrant seeding, and the smoketest harness. A full breakdown lives in [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
+
+### Manual path
+
+#### 1. Prepare environment files
+- Copy `pmoves/env.shared.example` → `pmoves/env.shared` so every container ships with the branded defaults (Supabase CLI endpoints, Discord/Jellyfin tokens, MinIO buckets, etc.).
+- Run the interactive bootstrapper to layer machine-specific secrets on top:
+  - `make bootstrap` (wraps `python -m pmoves.scripts.bootstrap_env`) or `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults`
+  - Pass `BOOTSTRAP_FLAGS="--service supabase"` to scope the prompts when needed.
+- The bootstrap now writes `env.shared`, `.env.generated`, `.env.local`, `env.jellyfin-ai`, and the `env.*.additions` helpers so Docker Compose, Supabase CLI, and the UI all read the same values. Compose loads them in order (`env.shared.generated` → `env.shared` → `.env.generated` → `.env.local`), and the UI launcher mirrors that stack via `scripts/with-env.mjs`.
+- Manual edits remain supported—adjust `env.shared` for shared defaults or `.env.local` for host-specific overrides, then rerun `make bootstrap` (or `make env-check`) to validate.
+
+#### 2. Choose your Supabase backend
 - **Supabase CLI (full feature parity, default path)**
   - Install the `supabase` CLI and run `make supa-init` once per repo.
   - Start/stop with `make supa-start` / `make supa-stop`, inspect endpoints with `make supa-status`, then `make supa-use-local` to copy the CLI defaults into `.env.local` before starting the stack.
@@ -23,7 +32,7 @@
   - Populate `.env.supa.remote` with your endpoints/keys (generate from `supa.md` via `make supa-extract-remote` if provided).
   - Apply the remote profile with `make supa-use-remote` before running the main stack.
 
-### 3. Start the PMOVES stack
+#### 3. Start the PMOVES stack
 - `make up` — default entry point. Brings up the data profile (`qdrant`, `neo4j`, `minio`, `meilisearch`, `presign`), all default workers (`hi-rag-gateway-v2`, `retrieval-eval`, `render-webhook`, `langextract`, `extract-worker`), plus pmoves.yt (`ffmpeg-whisper`, `pmoves-yt`) and the Jellyfin bridge. When `SUPABASE_RUNTIME=compose` it automatically chains to `make supabase-up`.
 - `make preflight` — run the bootstrap validator without starting containers. `make up` runs this check automatically and exits early if required secrets are missing.
 - `make up-cli` / `make up-compose` — one-shot shims that force CLI vs. compose Supabase for a single `make up` run.
@@ -36,8 +45,17 @@
 - Additional helpers: `make ps`, `make down`, `make clean`. See `docs/MAKE_TARGETS.md` for the full catalogue.
 - Open Notebook workspace: `make notebook-up` starts the Streamlit UI (8502) and REST API (5055) defined in `docker-compose.open-notebook.yml`. Populate `env.shared` with `OPEN_NOTEBOOK_API_URL` (defaults to `http://cataclysm-open-notebook:5055`) plus either `OPEN_NOTEBOOK_PASSWORD` or `OPEN_NOTEBOOK_API_TOKEN` before launching. Once your provider keys (`OPENAI_API_KEY`, `GROQ_API_KEY`, etc.) live in `env.shared`, run `make notebook-seed-models` to register models/defaults in SurrealDB so the UI drop-downs are pre-populated. Use `make notebook-logs` for live output and `make notebook-down` to stop the container while preserving data in `pmoves/data/open-notebook/`.
 
+### Model selection (Ollama / TensorZero / OpenAI-compatible)
+
+- List profiles: `make -C pmoves model-profiles`
+- Apply defaults for Hi‑RAG/Archon: `make -C pmoves model-apply PROFILE=archon HOST=workstation_5090`
+- Apply defaults for Agent Zero: `make -C pmoves model-apply PROFILE=agent-zero HOST=workstation_5090`
+- Pre‑pull local models: `make -C pmoves models-seed-ollama`
+- Restart gateways after changes: `make -C pmoves recreate-v2` (and `recreate-v2-gpu` if using GPU)
+
 ### Dev Environment (Conda + Windows/macOS/Linux)
 
+- Baseline interpreter: Python 3.11 (installed via the provided Conda environment).
 - Conda: create the env and install deps once:
   - Windows (PowerShell 7+):
     - (Admin) `choco install make -y` to get GNU Make
@@ -83,6 +101,24 @@ Agents Profile
 - Start: `docker compose --profile agents up -d nats agent-zero archon mesh-agent publisher-discord`
 - Defaults: agents read `NATS_URL=nats://nats:4222`; override via `.env`/`.env.local` if you are targeting an external broker.
 - Explore architecture and workflows in `docs/PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md`.
+
+## Dashboards & UIs
+- Supabase Studio (CLI): http://127.0.0.1:65433 — `make supa-start`.
+- Agent Zero UI: http://localhost:8080 — `make up-agents`.
+- Archon Health: http://localhost:8091/healthz — `make up-agents`.
+- Hi‑RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ — `make up`.
+- TensorZero UI: http://localhost:4000; Gateway: http://localhost:3030 — `make up-tensorzero`.
+- Jellyfin: http://localhost:8096 — `make -C pmoves up-jellyfin-ai`.
+- Jellyfin API Dashboard: http://localhost:8400; Gateway: http://localhost:8300 — `make -C pmoves up-jellyfin-ai`.
+- Open Notebook: http://localhost:8503 — `make -C pmoves notebook-up`.
+- Invidious: http://127.0.0.1:3000 (companion http://127.0.0.1:8282) — `make -C pmoves up-invidious`.
+- n8n: http://localhost:5678 — `make -C pmoves up-n8n`.
+
+### Default access and operator credentials
+- Supabase boot operator is provisioned by `make supabase-boot-user` and written to `pmoves/env.shared` / `pmoves/.env.local`:
+  - `SUPABASE_BOOT_USER_EMAIL`, `SUPABASE_BOOT_USER_PASSWORD`, `SUPABASE_BOOT_USER_JWT`.
+  - The console auto‑auths via `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT`; to sign in manually, copy the email/password from your env files.
+- Jellyfin admin/API: confirm user and key in the Jellyfin UI; keep `JELLYFIN_API_KEY` and `JELLYFIN_USER_ID` in sync in `pmoves/env.shared` or `pmoves/env.jellyfin-ai` if rotated.
 
 Supabase (Full)
 - Recommended: Supabase CLI (see `docs/SUPABASE_FULL.md`). Or use `docker-compose.supabase.yml` with `./scripts/pmoves.ps1 up-fullsupabase`.

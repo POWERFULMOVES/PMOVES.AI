@@ -1,5 +1,5 @@
 # Local Development & Networking
-_Last updated: 2025-10-23_
+_Last updated: 2025-11-03_
 
 Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
 
@@ -19,16 +19,23 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 
 All services are attached to the `pmoves-net` Docker network. Internal URLs should use service names (e.g., `http://qdrant:6333`).
 
+## First Run
+- `make first-run` — boots Supabase CLI, core PMOVES services, agents, and external integrations, applies Supabase/Neo4j migrations, seeds demo corpora, and runs the smoke harness so every integration starts with branded defaults. Refer to [`docs/FIRST_RUN.md`](../FIRST_RUN.md) for a task-by-task breakdown.
+- Prefer scripting? `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` mirrors the env bootstrap and stages the provisioning bundle before running on local or VPS targets.
+
 ## Environment
 
 Quick start:
 - Windows without Make: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1`
-- With Make: `make env-setup` to interactively fill `.env` from `.env.example`, then `make env-check` to confirm nothing is missing. When Supabase CLI is active, copy the live keys from `make supa-status` (`sb_publishable_…` / `sb_secret_…`) into `env.shared` first so all agents receive valid credentials.
+- With Make: `make env-setup` to populate `env.shared` + `.env.local` from the branded defaults, then run `make env-check` to confirm nothing is missing. When Supabase CLI is active, copy the live keys from `make supa-status` (`sb_publishable_…` / `sb_secret_…`) into `env.shared` so every integration boots with valid credentials.
+- UI scripts: every `npm run` command under `pmoves/ui` now shells through `node scripts/with-env.mjs …`, layering `env.shared`, `env.shared.generated`, `.env.generated`, `.env.local`, and `pmoves/ui/.env.local`. Update those root files when credentials change; the UI inherits them automatically.
+- Docker Compose mirrors that order (`env.shared.generated` → `env.shared` → `.env.generated` → `.env.local`). The root `.env` file is no longer sourced; keep overrides in `.env.local` so restarts remain predictable.
+- Supabase CLI remains the baseline: `env.shared` carries the CLI URLs/keys, and running `make supa-status` followed by `make env-setup` keeps `.env.local` synced for both local workstations and self-hosted VPS targets. Use `make supa-use-remote` only when you intentionally point the stack at a hosted project.
 - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
 
 See also: `docs/SECRETS.md` for optional secret provider integrations.
 
-Manual notes: Create `.env` (or start with `.env.example`) and include keys from:
+Manual notes: Add missing keys to `env.shared` (commit-safe defaults) or `.env.local` (per-machine overrides) before launching services. At minimum include values from:
 - `env.presign.additions` (MINIO creds and shared secret)
 - `env.render_webhook.additions` (webhook shared secret)
 - `env.hirag.reranker.additions`, `env.hirag.reranker.providers.additions` (optional reranker config)
@@ -105,8 +112,8 @@ OpenAI-compatible presets:
   - `CLOUDFLARE_API_BASE` to hit mocks/tunnels; defaults to `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run`.
   - `OPENAI_API_BASE=https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai` to reuse the shim elsewhere.
 - Free tier reminder: 10k tokens/day + 100 generations/day on the base tier. Stage large re-ingest jobs or upgrade before running multi-hour LangExtract batches.
-- Local dev: store secrets in `.env` + `env.shared`, run `uvicorn pmoves.services.langextract.api:app --reload`, and capture a smoke `curl` once the provider responds.
-- VPS/Hybrid: sync via `python3 -m pmoves.tools.secrets_sync generate`, push to the remote secret store, and annotate `.env` with the helper base URL comment for on-call rotation.
+- Local dev: store secrets in `env.shared` + `.env.local`, run `uvicorn pmoves.services.langextract.api:app --reload`, and capture a smoke `curl` once the provider responds.
+- VPS/Hybrid: sync via `python3 -m pmoves.tools.secrets_sync generate`, push to the remote secret store, and annotate `env.shared` with the helper base URL comment for on-call rotation.
 
 ## Start
 - `make up` (v2 gateway by default)
@@ -250,7 +257,7 @@ docker compose --project-name pmoves -f pmoves/docker-compose.n8n.yml up n8n n8n
 - A local Postgres + PostgREST are included. `render-webhook` and the other compose workers now honour `SUPA_REST_INTERNAL_URL` (defaults to the compose host `http://postgrest:3000`). Host-side scripts continue to use `SUPA_REST_URL` (`http://postgrest:3000`). Override both if you rely on the Supabase CLI (`http://127.0.0.1:65421/rest/v1` + `http://api.supabase.internal:8000/rest/v1`) or a remote Supabase instance. After starting the CLI stack, run `make bootstrap-data` (or the granular `make supabase-bootstrap`) so schema migrations and seeds replay before smoke tests.
 - Neo4j seeds: the bundled `neo4j/datasets/person_aliases_seed.csv` keeps the alias dictionary in sync while `neo4j/cypher/010_chit_geometry_fixture.cypher` and `011_chit_geometry_smoke.cypher` replay the curated CHIT constellation and confirm it spans multiple modalities. Run `make neo4j-bootstrap` standalone when you need only the graph seed, or rely on `make bootstrap-data` to chain Supabase SQL + Neo4j + Qdrant/Meili demo loads.
 - For Cataclysm Provisioning, the stable network name `pmoves-net` allows cross‑stack service discovery.
-- Clean up duplicate .env keys: `make env-dedupe` (keeps last occurrence, writes `.env.bak`).
+- Clean up duplicate `.env.local` keys: `make env-dedupe` (keeps last occurrence, writes `.env.local.bak`).
 
 ## Python Virtual Environment (optional)
 

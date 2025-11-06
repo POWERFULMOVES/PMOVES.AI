@@ -298,7 +298,7 @@ export PMOVES_YT_URL="http://pmoves-yt:8077"
 
 ```bash
 # Required for backfill
-JELLYFIN_URL=http://localhost:8096
+JELLYFIN_URL=http://localhost:9096
 JELLYFIN_API_KEY=your-api-key
 AGENT_ZERO_BASE_URL=http://localhost:8080
 SUPA_REST_URL=http://localhost:54321
@@ -306,7 +306,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-key
 
 # Optional (defaults provided)
 PMOVES_YT_URL=http://localhost:8077
-JELLYFIN_PUBLIC_BASE_URL=http://172.21.119.177:8096
+JELLYFIN_PUBLIC_BASE_URL=http://172.21.119.177:9096
 YOUTUBE_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2   # override for Qwen/Gemma support
 YOUTUBE_EMBEDDING_COLUMN=embedding_st                            # embedding_st | embedding_gemma | embedding_qwen
 YOUTUBE_EMBEDDING_DIM=384                                         # match selected embedding model

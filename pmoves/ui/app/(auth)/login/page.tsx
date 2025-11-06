@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { featureFlags } from '@/config/featureFlags';
 import { getEnabledAuthProviders } from '@/config/supabaseProviders';
 import { LoginForm } from './LoginForm';
@@ -34,18 +34,35 @@ export const metadata: Metadata = {
   description: 'Authenticate with Supabase to access the PMOVES operator console.'
 };
 
-export default function LoginPage({
+type LoginPageSearchParamsInput =
+  | LoginPageSearchParams
+  | Promise<LoginPageSearchParams>
+  | undefined;
+
+export default async function LoginPage({
   searchParams
 }: {
-  searchParams?: LoginPageSearchParams;
+  searchParams?: LoginPageSearchParamsInput;
 }) {
   if (!featureFlags.passwordAuth && !featureFlags.oauth) {
     notFound();
   }
 
-  const nextParam = sanitizeNextParam(searchParams?.next);
-  const initialError = sanitizeErrorParam(searchParams?.error);
+  const resolvedSearchParams =
+    searchParams && typeof (searchParams as Promise<LoginPageSearchParams>).then === 'function'
+      ? await (searchParams as Promise<LoginPageSearchParams>)
+      : (searchParams as LoginPageSearchParams | undefined);
+
+  const nextParam = sanitizeNextParam(resolvedSearchParams?.next);
+  const initialError = sanitizeErrorParam(resolvedSearchParams?.error);
   const providers = featureFlags.oauth ? getEnabledAuthProviders() : [];
+
+  const bootJwt =
+    process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
+
+  if (bootJwt) {
+    redirect(nextParam ?? '/dashboard/ingest');
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-surface px-6 py-16 text-brand-ink">

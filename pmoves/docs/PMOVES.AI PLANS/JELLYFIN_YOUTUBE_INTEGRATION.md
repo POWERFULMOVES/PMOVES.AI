@@ -77,6 +77,24 @@ uvicorn services.mcp_youtube_adapter:app --host 0.0.0.0 --port 8081
 
 ## Setup Instructions
 
+### Step 0: Start Invidious Fallback
+
+The pmoves.yt downloader prefers Invidious/companion whenever YouTube throttles direct downloads. Launch the stack before running ingestion or smoketests:
+
+```bash
+make -C pmoves up-invidious
+```
+
+Verify the services:
+
+- Invidious API: `curl http://127.0.0.1:3000/api/v1/stats`
+- Companion health: `curl http://127.0.0.1:8282/healthz`
+
+Both endpoints should return HTTP 200.
+
+SABR/Transcript note:
+- If `/yt/emit` returns 404 (no transcript) after `/yt/transcript`, YouTube may be throttling captions. Prefer Invidious fallback or add an offline Whisper step (download audio → transcribe) before emitting chunks.
+
 ### Step 1: Deploy YouTube Transcript Infrastructure
 
 1. **Create Supabase table**:
@@ -128,7 +146,7 @@ pip install fastapi uvicorn sentence-transformers pydantic httpx numpy
 3. **Start MCP YouTube Adapter**:
 ```bash
 # Set environment variables
-export SUPA_REST_URL="http://localhost:65421"
+export SUPA_REST_URL="http://localhost:65421/rest/v1"
 export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 export YOUTUBE_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
 
@@ -232,8 +250,8 @@ python scripts/backfill_jellyfin_metadata.py \
   "tags": ["demo", "youtube-linked"],
   "duration": 123.4,
   "jellyfin_item_id": "abc123def456",
-  "jellyfin_public_url": "http://localhost:8096/web/index.html#!/details?id=abc123def456",
-  "thumbnail_url": "http://localhost:8096/Items/abc123def456/Images/Primary?tag=xyz",
+  "jellyfin_public_url": "http://localhost:9096/web/index.html#!/details?id=abc123def456",
+  "thumbnail_url": "http://localhost:9096/Items/abc123def456/Images/Primary?tag=xyz",
   "meta": {
     "jellyfin_meta": {
       "id": "abc123def456",
@@ -288,8 +306,8 @@ SUPA_REST_URL="http://localhost:54321"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
 # Jellyfin
-JELLYFIN_URL="http://localhost:8096"
-JELLYFIN_PUBLIC_BASE_URL="http://172.21.119.177:8096"
+JELLYFIN_URL="http://localhost:9096"
+JELLYFIN_PUBLIC_BASE_URL="http://172.21.119.177:9096"
 JELLYFIN_API_KEY="your-jellyfin-api-key"
 
 # Agent Zero

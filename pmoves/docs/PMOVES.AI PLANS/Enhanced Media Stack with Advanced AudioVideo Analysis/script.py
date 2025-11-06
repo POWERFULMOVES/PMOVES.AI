@@ -83,7 +83,7 @@ networks:
 services:
   # Original Jellyfin service remains the same...
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:latest
+    image: lscr.io/linuxserver/jellyfin:10.11.0
     container_name: jellyfin
     environment:
       - PUID=1000

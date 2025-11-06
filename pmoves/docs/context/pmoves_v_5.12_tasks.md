@@ -54,3 +54,35 @@ This backlog turns the integration plan for PMOVES v5.12 into actionable work it
 ### Cross-Cutting Follow-Up
 - [ ] Update `docs/NEXT_STEPS.md` and `docs/ROADMAP.md` when major tasks change status or when new deliverables emerge from execution.
 - [ ] Share weekly status summaries with the M2 milestone channel, flagging blockers on reranker defaults, persona gates, or geometry realtime listeners.
+## Implementation Notes — 2025‑11‑06
+
+This snapshot documents work landed as part of the stabilization and monitoring/MCP bring‑up. Cross‑links point to code and docs.
+
+- Observability & Health
+  - Channel Monitor: added GET `/api/monitor/status` and Prometheus `/metrics`; instrumented counters for checks/updates.
+    - Code: `pmoves/services/channel-monitor/channel_monitor/main.py`, `requirements.txt`
+    - Docs: `pmoves/services/channel-monitor/README.md`
+  - Monitoring: blackbox probes include channel-monitor `/healthz`; Prometheus scrapes channel-monitor metrics.
+    - Config: `pmoves/monitoring/prometheus/prometheus.yml`
+    - Grafana: updated mounts/provisioning; dashboard shows channel-monitor activity panels.
+      - Files: `pmoves/monitoring/grafana/provisioning/dashboards.yml`, `pmoves/monitoring/grafana/dashboards/services-overview.json`
+    - cAdvisor: gated by linux profile with Make toggle `MON_INCLUDE_CADVISOR=true`.
+      - Files: `pmoves/monitoring/docker-compose.monitoring.yml`, `pmoves/Makefile`
+
+- Headless Agents + A2A (MCP)
+  - Archon headless ports published (8091 API, 8051 MCP, 8052 agents). Archon UI defaults to API at `archon-server:8091` inside Docker.
+    - Files: `pmoves/docker-compose.yml`, `pmoves/docker-compose.agents.images.yml`, `pmoves/docker-compose.agents.integrations.yml`, `pmoves/AGENTS.md`
+  - Agent Zero MCP seeding and smokes.
+    - Script: `pmoves/tools/seed_agent_zero_mcp.py`
+    - Make: `a0-mcp-seed`, `archon-mcp-smoke`, `archon-ui-smoke`
+    - Env example: `pmoves/env.shared.example` (`A0_MCP_SERVERS`)
+  - Archon API MCP describe shim for JSON capability report.
+    - Endpoint: `GET /mcp/describe` on 8091 (probes MCP bridge ports and reports status)
+    - Code: `pmoves/services/archon/main.py`
+
+- Supabase alignments
+  - Archon continues to resolve Supabase REST base from single‑env (prefers CLI REST), keeping RLS/profile flows intact for v5.12 personas.
+
+Runbook links
+- Smoketests: `pmoves/docs/SMOKETESTS.md` (Agents UIs section includes new MCP/UI smokes)
+- Monitoring stack: `pmoves/docs/services/monitoring/README.md`

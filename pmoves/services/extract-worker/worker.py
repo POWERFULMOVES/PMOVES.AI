@@ -21,7 +21,7 @@ _embedder = None
 TENSORZERO_BASE = os.environ.get("TENSORZERO_BASE_URL", "http://tensorzero-gateway:3000")
 TENSORZERO_API_KEY = os.environ.get("TENSORZERO_API_KEY")
 TENSORZERO_EMBED_MODEL = os.environ.get(
-    "TENSORZERO_EMBED_MODEL", "gemma_embed_local"
+    "TENSORZERO_EMBED_MODEL", "tensorzero::embedding_model_name::gemma_embed_local"
 )
 
 def _meili(method: str, path: str, **kwargs):

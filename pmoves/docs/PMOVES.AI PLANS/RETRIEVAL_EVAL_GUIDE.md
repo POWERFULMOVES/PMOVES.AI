@@ -9,7 +9,7 @@ This guide covers end-to-end retrieval quality evaluation for the hi-RAG stack, 
 
 ## Prerequisites
 
-1. **Environment** – Activate the repo Python environment (3.10+) and install dependencies:
+1. **Environment** – Activate the repo Python environment (3.11+) and install dependencies:
    ```bash
    pip install -r pmoves/services/retrieval-eval/requirements.txt
    pip install -r pmoves/services/retrieval-eval/requirements-rerank.txt

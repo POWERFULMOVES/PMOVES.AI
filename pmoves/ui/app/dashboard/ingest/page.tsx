@@ -1,10 +1,10 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import DashboardNavigation from '../../../components/DashboardNavigation';
 import { UploadDropzone } from '../../../components/UploadDropzone';
 import { callPresignService } from '../../../lib/presign';
 import type { Database } from '../../../lib/database.types';
+import { createSupabaseServerClient, createSupabaseServiceRoleClient, getBootUser, hasBootJwt, isBootJwtExpired, getBootJwt } from '@/lib/supabaseClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,23 +94,42 @@ async function fetchRecentUploads(
 }
 
 export default async function IngestDashboardPage() {
-  const cookieStore = cookies();
-  const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // Prefer boot JWT path for zero-click auth; if absent or expired fall back to login
+  let user = hasBootJwt() ? await getBootUser(createSupabaseServerClient()) : null;
+  // Avoid redirect loops when a stale/expired boot token is present
+  const bootExpired = hasBootJwt() && isBootJwtExpired(5);
+  if (!user && !bootExpired) {
     redirect(`/login?next=/dashboard/ingest`);
   }
+  // Use service-role for server reads of recent uploads (RLS-safe by owner_id)
+  const supabase: SupabaseClient<Database, 'public'> = createSupabaseServiceRoleClient() as unknown as SupabaseClient<Database, 'public'>;
 
-  const uploads = await fetchRecentUploads(
-    supabase as SupabaseClient<Database, 'public', any>,
-    user.id
-  );
+  // Derive an ownerId even when the boot token is expired by parsing the JWT `sub`.
+  let ownerId = user?.id || '';
+  if (!ownerId) {
+    try {
+      const token = getBootJwt();
+      if (token) {
+        const [, payload] = token.split('.') as [string, string, string];
+        const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
+        if (json?.sub && typeof json.sub === 'string') {
+          ownerId = json.sub;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  const uploads = ownerId
+    ? await fetchRecentUploads(
+        supabase as SupabaseClient<Database, 'public', any>,
+        ownerId
+      )
+    : [];
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
+      <DashboardNavigation active="ingest" />
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-slate-900">Cooperative Ingestion Bay</h1>
         <p className="text-sm text-slate-600">
@@ -128,14 +147,25 @@ export default async function IngestDashboardPage() {
         </p>
       </header>
 
-      <section>
-        <UploadDropzone
-          bucket={DEFAULT_BUCKET}
-          namespace={DEFAULT_NAMESPACE}
-          author={DEFAULT_AUTHOR}
-          ownerId={user.id}
-        />
-      </section>
+      {ownerId ? (
+        <section>
+          <UploadDropzone
+            bucket={DEFAULT_BUCKET}
+            namespace={DEFAULT_NAMESPACE}
+            author={DEFAULT_AUTHOR}
+            ownerId={ownerId}
+          />
+        </section>
+      ) : (
+        <section className="rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-800">
+          <div className="font-semibold">Boot token expired</div>
+          <p className="mt-1 text-sm">
+            The console detected an expired boot JWT. Rotate it with
+            <code className="ml-1 rounded bg-slate-900 px-1 py-0.5 text-white">make -C pmoves supabase-boot-user</code>
+            , then restart the UI dev server.
+          </p>
+        </section>
+      )}
 
       <section className="space-y-4">
         <div>

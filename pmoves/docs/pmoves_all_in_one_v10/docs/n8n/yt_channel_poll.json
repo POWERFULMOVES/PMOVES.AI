@@ -1,0 +1,215 @@
+{
+  "name": "PMOVES YouTube Channel Poll \u2192 Notebook",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "hourInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "Cron",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ supabaseUrl:$env.SUPABASE_URL, supabaseAnonKey:$env.SUPABASE_ANON_KEY, threadId:$env.THREAD_ID, userId:$env.USER_ID, ytApiKey:$env.YOUTUBE_API_KEY, channelId:$env.YOUTUBE_CHANNEL_ID }];"
+      },
+      "id": "FnEnv",
+      "name": "Function",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "GET",
+        "url": "=https://www.googleapis.com/youtube/v3/search",
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "part",
+              "value": "snippet,id"
+            },
+            {
+              "name": "channelId",
+              "value": "={{$json.channelId}}"
+            },
+            {
+              "name": "order",
+              "value": "date"
+            },
+            {
+              "name": "maxResults",
+              "value": "20"
+            },
+            {
+              "name": "key",
+              "value": "={{$json.ytApiKey}}"
+            }
+          ]
+        }
+      },
+      "id": "YTSearch",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items=$json.items||[]; return items.filter(x=>x.id&&x.id.videoId).map(x=>({ videoId:x.id.videoId, title:x.snippet.title }));"
+      },
+      "id": "FnPick",
+      "name": "Function1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "requestMethod": "POST",
+        "url": "={{$json.supabaseUrl}}/rest/v1/chat_messages",
+        "jsonParameters": true,
+        "options": {
+          "sendHeaders": true
+        },
+        "headerParametersJson": "={\"apikey\":\"{{$json.supabaseAnonKey}}\",\"Authorization\":\"Bearer {{$json.supabaseAnonKey}}\",\"Content-Type\":\"application/json\"}",
+        "queryParametersJson": "={\"select\":\"*\"}",
+        "bodyParametersJson": "={\"thread_id\":\"{{$json.threadId}}\",\"author_id\":\"{{$json.userId}}\",\"role\":\"system\",\"text\":\"YouTube: {{$json.title}}\",\"cgp\":{\"provider\":\"youtube\",\"videoId\":\"{{$json.videoId}}\"}}"
+      },
+      "id": "InsertMsg",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        960,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "requestMethod": "POST",
+        "url": "={{$json.supabaseUrl}}/rest/v1/content_blocks",
+        "jsonParameters": true,
+        "options": {
+          "sendHeaders": true
+        },
+        "headerParametersJson": "={\"apikey\":\"{{$json.supabaseAnonKey}}\",\"Authorization\":\"Bearer {{$json.supabaseAnonKey}}\",\"Content-Type\":\"application/json\"}",
+        "queryParametersJson": "={\"select\":\"*\"}",
+        "bodyParametersJson": "={\"message_id\":\"={{$json[\"HTTP Request\"].body[0].id}}\",\"kind\":\"video\",\"uri\":\"yt://{{$json.videoId}}\",\"meta\":{\"provider\":\"youtube\",\"videoId\":\"{{$json.videoId}}\"}}"
+      },
+      "id": "InsertBlk",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        960,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "requestMethod": "POST",
+        "url": "={{$json.supabaseUrl}}/rest/v1/message_views",
+        "jsonParameters": true,
+        "options": {
+          "sendHeaders": true
+        },
+        "headerParametersJson": "={\"apikey\":\"{{$json.supabaseAnonKey}}\",\"Authorization\":\"Bearer {{$json.supabaseAnonKey}}\",\"Content-Type\":\"application/json\"}",
+        "queryParametersJson": "={\"select\":\"*\"}",
+        "bodyParametersJson": "={\"message_id\":\"={{$json[\"HTTP Request\"].body[0].id}}\",\"block_id\":\"={{$json[\"HTTP Request1\"].body[0].id}}\",\"archetype\":\"digital.hud\",\"variant\":\"primary\",\"seed\":42,\"layout\":{\"x\":60,\"y\":60,\"w\":420,\"h\":260}}"
+      },
+      "id": "InsertView",
+      "name": "HTTP Request2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1160,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Cron": {
+      "main": [
+        [
+          {
+            "node": "Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Function1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

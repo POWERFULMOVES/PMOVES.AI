@@ -276,6 +276,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
+import httpx
 
 
 LOGGER = logging.getLogger("pmoves.archon")
@@ -488,6 +489,39 @@ app = _import_archon_app()
 @app.get("/healthz")
 async def _pmoves_healthcheck():
     return {"status": "ok", "service": "archon"}
+
+
+@app.get("/mcp/describe")
+async def _pmoves_mcp_describe():
+    """Lightweight JSON capability shim for the MCP bridge.
+
+    Tries a few common probe paths against the local MCP HTTP bridge and
+    reports reachability + status codes without assuming a specific
+    upstream route shape.
+    """
+    host = os.environ.get("ARCHON_MCP_HOST", "localhost")
+    port = int(os.environ.get("ARCHON_MCP_PORT", "8051"))
+    base = f"http://{host}:{port}"
+    probes = {"/": None, "/health": None, "/tools": None, "/openapi.json": None}
+    reachable = False
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            for path in list(probes.keys()):
+                try:
+                    r = await client.get(f"{base}{path}")
+                    probes[path] = r.status_code
+                    if 100 <= r.status_code < 600:
+                        reachable = True
+                except Exception:
+                    probes[path] = 0
+    except Exception:
+        pass
+
+    return {
+        "endpoint": base,
+        "reachable": reachable,
+        "probes": probes,
+    }
 
 
 class ManagedSubprocess:

@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from fastapi import Depends, FastAPI, HTTPException, Header, Request
+from fastapi.responses import PlainTextResponse
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
 
 from .config import config_path_from_env, ensure_config, save_config
@@ -93,6 +95,9 @@ class UserSourceRequest(BaseModel):
 async def startup_event() -> None:
     await monitor.start()
     app.state.monitor = monitor
+    # Ensure metrics counters exist
+    _ = CHANNEL_CHECKS_TOTAL.labels(kind="startup").inc(0)
+    _ = STATUS_UPDATES_TOTAL.labels(result="noop").inc(0)
 
 
 @app.on_event("shutdown")
@@ -136,6 +141,7 @@ async def channels():
 @app.post("/api/monitor/check-now")
 async def trigger_check(monitor: ChannelMonitor = Depends(get_monitor)):
     await monitor.check_all_channels()
+    CHANNEL_CHECKS_TOTAL.labels(kind="manual").inc()
     return {"status": "ok"}
 
 
@@ -165,7 +171,42 @@ async def update_status(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    STATUS_UPDATES_TOTAL.labels(result="success").inc()
     return {"status": "ok", "updated": updated}
+
+
+# Lightweight health probe for monitoring (does not require secret)
+@app.get("/api/monitor/status")
+async def status_probe() -> Dict[str, Any]:
+    try:
+        # Return a minimal payload quickly; full stats remain at /api/monitor/stats
+        return {
+            "status": "ok",
+            "service": "channel-monitor",
+        }
+    except Exception as exc:  # pragma: no cover
+        # If anything unexpected occurs, surface a 503 for blackbox
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+# ---- Prometheus metrics ----
+CHANNEL_CHECKS_TOTAL = Counter(
+    "channel_monitor_checks_total",
+    "Total number of channel checks triggered",
+    labelnames=("kind",),
+)
+
+STATUS_UPDATES_TOTAL = Counter(
+    "channel_monitor_status_updates_total",
+    "Total number of status updates received",
+    labelnames=("result",),
+)
+
+
+@app.get("/metrics")
+async def metrics() -> PlainTextResponse:
+    data = generate_latest()  # type: ignore[arg-type]
+    return PlainTextResponse(data, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/api/oauth/google/token")

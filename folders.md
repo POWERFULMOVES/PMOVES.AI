@@ -1,6 +1,6 @@
 # Repository Directory Map
 
-_Last updated: 2025-10-27_
+_Last updated: 2025-11-02_
 
 This document captures the current layout of the `PMOVES.AI` repository to help new contributors find key resources quickly. The tree below is trimmed to a maximum depth of two levels (root → child → grandchild) to balance detail and readability.
 
@@ -125,6 +125,12 @@ PY
 │   │   └── coleam00-archon.txt
 │   └── research/
 │       └── pmoves_paper_sources.md
+│   ├── provisioning/
+│   │   └── README_APPLY.txt
+│   └── repoingest/
+│       ├── agent0ai-agent-zero.txt
+│       ├── charmbracelet-crush.txt
+│       └── coleam00-archon.txt
 ├── folders.md
 ├── pmoves/
 │   ├── .compose_config.yaml
@@ -180,6 +186,15 @@ PY
 │   │   ├── __init__.py
 │   │   ├── codec.py
 │   │   └── secrets_manifest.yaml
+│   ├── ui/
+│   │   ├── app/
+│   │   ├── config/
+│   │   ├── lib/
+│   │   ├── public/
+│   │   ├── runtime/
+│   │   ├── next.config.js
+│   │   ├── package.json
+│   │   └── tsconfig.json
 │   ├── comfyui/
 │   │   ├── custom_nodes/
 │   │   └── minio_loader.py
@@ -201,6 +216,7 @@ PY
 │   ├── contracts/
 │   │   ├── samples/
 │   │   ├── schemas/
+│   │   ├── solidity/
 │   │   └── topics.json
 │   ├── creator/
 │   │   ├── README.md

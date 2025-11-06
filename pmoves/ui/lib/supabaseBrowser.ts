@@ -1,13 +1,15 @@
 'use client';
 
-import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
+import { createSupabaseBrowserClient } from './supabaseClient';
 
 let browserClient: SupabaseClient<Database> | null = null;
 
 export function getBrowserSupabaseClient(): SupabaseClient<Database> {
   if (!browserClient) {
-    browserClient = createClientComponentClient<Database>() as unknown as SupabaseClient<Database>;
+    // Single browser client that respects boot-JWT (no cookie session)
+    browserClient = createSupabaseBrowserClient();
   }
-  return browserClient;
+  return browserClient as SupabaseClient<Database>;
 }

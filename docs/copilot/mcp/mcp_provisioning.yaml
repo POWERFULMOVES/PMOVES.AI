@@ -1,0 +1,13 @@
+servers:
+  supabase:
+    image: mcp/api-mcp-server
+    enabled: true
+  fetch:
+    image: mcp/fetch
+    enabled: true
+  ffmpeg:
+    image: linuxserver/ffmpeg:version-7.1-cli
+    enabled: true
+  context7:
+    image: mcp/context7
+    enabled: true

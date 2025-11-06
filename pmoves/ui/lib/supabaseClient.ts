@@ -25,6 +25,9 @@ const ensureAnonKey = (): string => {
   return key;
 };
 
+const resolveBootJwt = (): string | undefined =>
+  process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
+
 const ensureServiceRoleKey = (): string => {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) {
@@ -40,13 +43,30 @@ let cachedRestUrl: string | null = null;
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
 
-export const createSupabaseBrowserClient = (): TypedSupabaseClient =>
-  createClient<Database>(ensureUrl(), ensureAnonKey(), {
+export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
+  const bootJwt = resolveBootJwt();
+  const validBoot = bootJwt && !isBootJwtExpired(5);
+  const client = createClient<Database>(ensureUrl(), ensureAnonKey(), {
     auth: {
-      autoRefreshToken: true,
-      persistSession: true,
+      autoRefreshToken: !validBoot,
+      persistSession: !validBoot,
     },
+    global: validBoot
+      ? {
+          headers: {
+            Authorization: `Bearer ${bootJwt}`,
+          },
+        }
+      : undefined,
   });
+  if (typeof window !== 'undefined') {
+    (window as any).__PMOVES_SUPABASE_BOOT = {
+      hasBootJwt: Boolean(bootJwt),
+      authorization: bootJwt ? `Bearer ${bootJwt}` : undefined,
+    };
+  }
+  return client;
+};
 
 export const getSupabaseBrowserClient = (): TypedSupabaseClient => {
   if (!cachedBrowserClient) {
@@ -73,13 +93,66 @@ export const createSupabaseServerClient = (
 ): TypedSupabaseClient => {
   const { serviceRole = false } = options;
   const key = serviceRole ? ensureServiceRoleKey() : ensureAnonKey();
+  const bootJwt = !serviceRole ? resolveBootJwt() : undefined;
+  const validBoot = bootJwt && !isBootJwtExpired(5);
   return createClient<Database>(ensureUrl(), key, {
     auth: {
-      autoRefreshToken: !serviceRole,
+      autoRefreshToken: serviceRole ? false : !validBoot,
       persistSession: false,
     },
+    global: validBoot
+      ? {
+          headers: {
+            Authorization: `Bearer ${bootJwt}`,
+          },
+        }
+      : undefined,
   });
 };
 
 export const createSupabaseServiceRoleClient = (): TypedSupabaseClient =>
   createSupabaseServerClient({ serviceRole: true });
+
+export const getBootJwt = (): string | undefined => resolveBootJwt();
+
+export const hasBootJwt = (): boolean => Boolean(resolveBootJwt());
+
+function decodeJwtExp(token: string | undefined): number | null {
+  try {
+    if (!token) return null;
+    const [, payload] = token.split('.') as [string, string, string];
+    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { exp?: number };
+    return typeof json.exp === 'number' ? json.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+export const isBootJwtExpired = (graceSeconds = 0): boolean => {
+  const exp = decodeJwtExp(resolveBootJwt());
+  if (!exp) return false;
+  const now = Math.floor(Date.now() / 1000);
+  return now + graceSeconds >= exp;
+};
+
+export const getBootUser = async (client: TypedSupabaseClient) => {
+  const bootJwt = resolveBootJwt();
+  if (!bootJwt) {
+    return null;
+  }
+  // Short-circuit if obviously expired to avoid noisy loops
+  if (isBootJwtExpired(5)) {
+    return null;
+  }
+  try {
+    const { data, error } = await client.auth.getUser(bootJwt);
+    if (error) {
+      console.warn('[supabaseClient] Failed to fetch boot user via JWT', error);
+      return null;
+    }
+    return data.user ?? null;
+  } catch (err) {
+    console.warn('[supabaseClient] Unexpected error when fetching boot user', err);
+    return null;
+  }
+};

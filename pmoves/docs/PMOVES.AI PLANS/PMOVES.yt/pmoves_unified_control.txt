@@ -1,6 +1,10 @@
 # ============================================
-# PMOVES.AI Unified Control Center
-# Complete system management and integration
+# PMOVES.AI Unified Control Center (Optional / Legacy)
+# Complete system management and integration (Windows PowerShell, pre‑Compose)
+#
+# Note: The primary, supported path is Docker Compose via Make targets in `pmoves/`.
+# This script remains for historical/standalone workflows and is not invoked by
+# the Compose bring‑up. Keep variables aligned manually if you use it.
 # ============================================
 
 param(

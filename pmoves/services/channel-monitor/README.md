@@ -52,7 +52,7 @@ as well as the payload sent to `pmoves-yt`.
 
 - Channel fields include identifiers, canonical URLs, namespace/tags, priority,
   thumbnail, and subscriber counts. The defaults surface all of these so the
-  `/api/monitor/stats` endpoint can report per-channel health.
+`/api/monitor/stats` endpoint reports per-channel health (aggregated counters, recent activity). For lightweight monitoring probes, `GET /api/monitor/status` returns `{ "status": "ok" }` without requiring a secret, while `POST /api/monitor/status` remains the authenticated status update hook used by downstream services.
 - Video fields include duration, view/like counts, best thumbnail, publish
   timestamps, categories, and tags.
 

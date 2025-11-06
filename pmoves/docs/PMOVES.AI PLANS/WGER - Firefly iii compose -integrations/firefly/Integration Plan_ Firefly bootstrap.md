@@ -5,7 +5,7 @@ _Last updated: 2025-10-20_
 This note captures the fast path to get the Firefly III finance stack online inside the `pmoves` external integrations workspace, align it with Geometry Bus (CHIT) consumers, and surface an API token for downstream automation.
 
 ## 1. Compose + environment requirements
-- The shared external compose (`pmoves/docker-compose.external.yml`) now pins Firefly III to the published `fireflyiii/core:latest` image, binds to `FIREFLY_PORT` (compose default `8080`, but we set `FIREFLY_PORT=8082` in `env.shared` to avoid Agent Zero on 8080), and mounts a named volume `firefly-storage` so the SQLite database persists across restarts.
+- The shared external compose (`pmoves/docker-compose.external.yml`) now pins Firefly III to the published `ghcr.io/cataclysm-studios-inc/pmoves-firefly-iii:pmoves-latest` image, binds to `FIREFLY_PORT` (compose default `8080`, but we set `FIREFLY_PORT=8082` in `env.shared` to avoid Agent Zero on 8080), and mounts a named volume `firefly-storage` so the SQLite database persists across restarts.
 - New environment knobs:
   - `FIREFLY_APP_KEY` → Laravel encryption key. Defaults to `SomeRandomStringOf32CharsExactly` for local smoke tests; override with a generated key before pushing to shared stacks.
   - `FIREFLY_APP_ENV`, `FIREFLY_SITE_OWNER`, `FIREFLY_TZ`, `FIREFLY_TRUSTED_PROXIES` → quality-of-life defaults that keep HTTP + logging sane behind pmoves’ reverse proxies.

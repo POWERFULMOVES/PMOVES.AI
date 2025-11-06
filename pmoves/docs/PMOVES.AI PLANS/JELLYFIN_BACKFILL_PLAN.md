@@ -4,6 +4,8 @@ _Last updated: 2025-10-14_
 ## Goal
 Retrofit historic `content.published` records so every asset in the PMOVES catalog exposes the enriched Jellyfin metadata fields (`jellyfin_public_url`, `thumbnail_url`, duration, tags, etc.). The backfill ensures Discord embeds, Agent Zero clients, and downstream analytics receive consistent payloads regardless of when the item was published.
 
+For local smoke runs, make sure the Jellyfin overlay contains at least one media asset (`python scripts/seed_jellyfin_media.py` drops a lightweight tone clip under `pmoves/jellyfin-ai/media/music`) so the bridge can mint playback URLs even on fresh machines.
+
 ## Data Sources
 | Source | Purpose |
 | --- | --- |
@@ -123,7 +125,8 @@ Add `--dry-run` and batching before production use.
 
 ### Completed
 
-- ✅ Jellyfin server operational (v10.10.7) on port 8096
+- ✅ Jellyfin server operational (v10.11.0) on port 8096
+- ✅ Invidious + companion stack online (launch via `make -C pmoves up-invidious`)
 - ✅ Device ID persisted correctly in `jellyfin-ai/config/data/data/device.txt`
 - ✅ Published server URL configured via `JELLYFIN_PUBLISHED_URL`
 - ✅ Web UI accessible and cache clear utility created

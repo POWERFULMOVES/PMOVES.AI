@@ -5,8 +5,9 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 
 ## Key Directories
 - **`CATACLYSM_STUDIOS_INC/`** – Provisioning bundles and infrastructure automations for homelab and field hardware, including unattended OS installs, Jetson bootstrap scripts, and ready-to-run Docker stacks that mirror the production mesh topology.
-- **`docs/`** – High-level strategy, architecture, and integration guides for the overall PMOVES ecosystem, such as system overviews, multi-agent coordination notes, and archival research digests.
+- **`docs/`** – High-level strategy, architecture, and integration guides for the overall PMOVES ecosystem, such as system overviews, multi-agent coordination notes, and archival research digests. See also `pmoves/docs/ENVIRONMENT_POLICY.md` for the single‑file environment policy and Jellyfin host‑mount instructions.
 - **`pmoves/`** – The primary application stack with docker-compose definitions, service code, datasets, Supabase schema, and in-depth runbooks for daily operations and advanced workflows.
+- **`pmoves/contracts/solidity/`** – Hardhat workspace prototyping Food-USD / GroToken governance flows with automated tests that model staking, quadratic voting, and group-buy execution.
 - **`pmoves/ui/`** – Next.js + Supabase Platform Kit workspace for the upcoming web UI; reuses `pmoves/.env.local` so frontend hooks can target the same Supabase CLI stack.
 
 ## Essential Documentation
@@ -23,6 +24,27 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - [Codex + Copilot Review Workflow](docs/COPILOT_REVIEW_WORKFLOW.md) – How to combine the Codex CLI reviewer with GitHub Copilot’s PR assistant, including token setup and evidence logging expectations.
 - [Archon Updates for PMOVES](pmoves/docs/archonupdateforpmoves.md) – What changed in the October 2025 Archon bundle, how to wire the Supabase CLI stack, and the MCP/NATS expectations.
 - [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) – Command catalog for starting, stopping, and tailoring compose profiles (core data plane, media analyzers, Supabase modes, and agent bundles).
+ - [Single‑User (Owner) Mode](pmoves/docs/SECURITY_SINGLE_USER.md) – Personal‑first operation without login prompts; boot‑JWT auto‑auth, owner chip in the UI, and security notes.
+
+## Dashboards & UIs (local defaults)
+- Supabase Studio: http://127.0.0.1:65433 (CLI stack) — created by `make supa-start`.
+- Hi‑RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (after `make up`).
+- TensorZero UI: http://localhost:4000 (after `make up-tensorzero`).
+- TensorZero Gateway: http://localhost:3030 (proxy to 3000 in‑container).
+- Agent Zero UI: http://localhost:8080 (after `make up-agents`).
+- Archon Health: http://localhost:8091/healthz (after `make up-agents`).
+  - If your forks use non-standard health endpoints, set `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` / `NEXT_PUBLIC_ARCHON_HEALTH_PATH`. See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Jellyfin: http://localhost:8096 (after `make -C pmoves up-jellyfin-ai`).
+- Jellyfin API Dashboard: http://localhost:8400; Gateway: http://localhost:8300.
+- Open Notebook: http://localhost:8503 (after `make -C pmoves notebook-up`).
+- Invidious: http://127.0.0.1:3000 (companion at http://127.0.0.1:8282).
+- n8n: http://localhost:5678 (after `make -C pmoves up-n8n`).
+
+### Default access and operator credentials
+- Supabase operator is provisioned by `make supabase-boot-user` (also run by `make first-run`). The command writes values to `pmoves/env.shared` and `pmoves/.env.local`:
+  - `SUPABASE_BOOT_USER_EMAIL`, `SUPABASE_BOOT_USER_PASSWORD`, `SUPABASE_BOOT_USER_JWT`.
+  - The PMOVES UI auto‑authenticates with `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` so most routes won’t prompt for a password. If you need to log in manually, use the email/password above from your env files.
+- Jellyfin uses the LinuxServer image defaults. After first boot, confirm the admin user and API key in `pmoves/env.jellyfin-ai` or via the Jellyfin UI (Settings → Dashboard). Update `JELLYFIN_API_KEY` and `JELLYFIN_USER_ID` in `pmoves/env.shared` if you rotate.
 
 - **Creator bundle:** see [`pmoves/creator/`](pmoves/creator/README.md) for installers, tutorials, and ComfyUI workflows supporting WAN Animate, Qwen Image Edit+, and VibeVoice TTS. Key guides include:
   - [WAN Animate 2.2 Tutorial](pmoves/creator/tutorials/wan_animate_2.2_tutorial.md)
@@ -31,8 +53,16 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
   - [WAN Animate Installation Scripts](pmoves/creator/tutorials/waninstall%20guide.md)
 - [Creator Pipeline Runbook](pmoves/docs/PMOVES.AI%20PLANS/CREATOR_PIPELINE.md) – Current status of n8n automations (health/finance live, creative flows staging) plus geometry mapping and persona playback prep.
 
-### Initial Setup & Tooling Flow
-1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, copy `.env`, and populate secrets. Run `make bootstrap` (wrapping `python -m pmoves.scripts.bootstrap_env`) to capture Supabase CLI endpoints/keys (including Realtime), Wger and Firefly tokens, Open Notebook credentials, Discord/Jellyfin secrets, and regenerated shared passphrases.
+### Zero-to-running stack (fast path)
+
+```bash
+make first-run
+```
+
+This single command orchestrates the full onboarding sequence: environment prompts, Supabase CLI bring-up, data/service seeding, core + agent + external stacks, and the 12-step smoke harness. When it finishes successfully every bundled integration (Wger, Firefly, Jellyfin, Open Notebook, Agent mesh) is online with branded defaults. See the [First-Run Bootstrap Overview](pmoves/docs/FIRST_RUN.md) for a detailed breakdown of each step.
+
+### Initial Setup & Tooling Flow (manual path)
+1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, seed `pmoves/env.shared`, and populate secrets. Use `make bootstrap` (wrapping `python -m pmoves.scripts.bootstrap_env`) when you need finer control, or invoke `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` to script the same flow alongside the provisioning bundle. Both paths update `env.shared`, `.env.generated`, `.env.local`, and the auxiliary `env.*.additions` files consumed by Compose and the UI launcher.
 2. **Supabase realtime alignment** – Follow the [Supabase Service Guide](pmoves/docs/services/supabase/README.md) to start the CLI stack with `supabase start --network-id pmoves-net` (run this before accepting Supabase prompts in `make bootstrap`) and mirror the websocket endpoint (`SUPABASE_REALTIME_URL=ws://host.docker.internal:65421/realtime/v1`). This matches our self-hosted Supabase deployments.
 3. **UI workspace bring-up** – `cd pmoves/ui` then `npm install` (or `yarn install`). The Next.js app loads Supabase creds from `pmoves/.env.local` and expects the Supabase CLI stack (`make supa-start` + `make supa-status`) before running `npm run dev`.
 4. **Tooling cheatsheet** – Keep [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) handy for Make targets, smoke tests, and environment scripts (`env_setup`, `flight-check`, `smoke`).
@@ -69,7 +99,7 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 See each directory’s README for ports, Make targets, and geometry notes. New integrations reference external repositories under `integrations-workspace/` and the setup steps captured in `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`.
 
 ## Getting Started
-1. **Bootstrap the stack** – Follow the environment and container launch instructions in the [pmoves/README.md](pmoves/README.md). Place environment overrides in `pmoves/.env.local` (not the repo root) so docker compose picks them up. Run `make bootstrap` to capture credentials, `make up` to start the core services, and `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smoke testing.
+1. **Bootstrap the stack** – For brand-new machines run `make first-run`. For incremental setup follow the environment and container launch instructions in the [pmoves/README.md](pmoves/README.md): place overrides in `pmoves/.env.local`, run `make bootstrap` to capture credentials, `make up` to start the core services, and `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smoke testing.
 2. **Review orchestration flows** – Use the [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) for day-to-day compose control, and consult the architecture and multi-agent guides in `/docs` for how Agent Zero, Archon, and supporting services communicate across the mesh.
 
 Need a full directory tour? Regenerate `folders.md` using the embedded script to explore the repository structure at depth two before diving deeper into service-specific documentation.

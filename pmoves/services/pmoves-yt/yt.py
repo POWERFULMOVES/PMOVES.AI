@@ -14,7 +14,7 @@ except Exception:  # pragma: no cover - fallback when utils module missing
         pass
 import boto3
 import requests
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlunparse
 from nats.aio.client import Client as NATS
 from tenacity import AsyncRetrying, retry_if_exception, wait_exponential, stop_after_attempt, RetryError
 # Prefer shared envelope util if present; otherwise, fall back to a local stub
@@ -70,7 +70,12 @@ MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SEC
 MINIO_SECURE = (os.environ.get("MINIO_SECURE","false").lower() == "true")
 DEFAULT_BUCKET = os.environ.get("YT_BUCKET","assets")
 DEFAULT_NAMESPACE = os.environ.get("INDEXER_NAMESPACE","pmoves")
-SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
+# Prefer unified Supabase REST; fall back to legacy compose PostgREST only if neither is present
+SUPA = (
+    os.environ.get("SUPABASE_REST_URL")
+    or os.environ.get("SUPA_REST_URL")
+    or "http://postgrest:3000"
+)
 SUPA_SERVICE_KEY = (
     os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     or os.environ.get("SUPABASE_SERVICE_KEY")
@@ -195,6 +200,7 @@ else:
     YT_TRANSCRIPT_DIARIZE = False if parsed is None else parsed
 
 _nc: Optional[NATS] = None
+_nc_connect_task: Optional[asyncio.Task] = None
 
 _emit_jobs: Dict[str, Dict[str, Any]] = {}
 _emit_job_lock = threading.Lock()
@@ -304,36 +310,92 @@ def s3_client():
     endpoint_url = MINIO_ENDPOINT if "://" in MINIO_ENDPOINT else f"{'https' if MINIO_SECURE else 'http'}://{MINIO_ENDPOINT}"
     return boto3.client("s3", aws_access_key_id=MINIO_ACCESS_KEY, aws_secret_access_key=MINIO_SECRET_KEY, endpoint_url=endpoint_url)
 
+async def _nats_connect_loop() -> None:
+    """Background task to keep the NATS connection alive."""
+    global _nc
+    backoff = 1.0
+    while True:
+        try:
+            nc = NATS()
+            closed_event: asyncio.Event = asyncio.Event()
+
+            async def _handle_disconnected() -> None:
+                logger.warning("Lost connection to NATS; waiting for reconnect")
+
+            async def _handle_closed() -> None:
+                global _nc
+                logger.warning("NATS connection closed; scheduling reconnect")
+                _nc = None
+                closed_event.set()
+
+            await nc.connect(
+                servers=[NATS_URL],
+                disconnected_cb=_handle_disconnected,
+                closed_cb=_handle_closed,
+            )
+            _nc = nc
+            logger.info("Connected to NATS at %s", NATS_URL)
+            backoff = 1.0
+            await closed_event.wait()
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            logger.warning("Failed to connect to NATS at %s: %s", NATS_URL, err)
+            _nc = None
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30.0)
+
+
 @app.on_event("startup")
 async def startup():
     # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
-    global _nc
+    global _nc, _nc_connect_task
     if not YT_NATS_ENABLE or not NATS_URL:
         _nc = None
         return
 
-    async def _try_connect():
-        global _nc
-        nc = NATS()
-        try:
-            # Short timeout, no reconnect storm
-            await asyncio.wait_for(nc.connect(servers=[NATS_URL], allow_reconnect=False), timeout=1.0)
-            _nc = nc
-        except Exception:
-            _nc = None
+    if _nc_connect_task is None or _nc_connect_task.done():
+        _nc_connect_task = asyncio.create_task(_nats_connect_loop(), name="pmoves-yt-nats-connect")
 
-    # Fire and forget; errors are suppressed and won't block startup
-    asyncio.create_task(_try_connect())
+
+@app.on_event("shutdown")
+async def shutdown():
+    global _nc, _nc_connect_task
+    if _nc_connect_task is not None:
+        _nc_connect_task.cancel()
+        try:
+            await _nc_connect_task
+        except asyncio.CancelledError:
+            pass
+        _nc_connect_task = None
+
+    if _nc is not None and not getattr(_nc, "is_closed", True):
+        try:
+            await _nc.close()
+        except Exception as err:
+            logger.debug("Error closing NATS client during shutdown: %s", err)
+    _nc = None
 
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
 
-def _publish_event(topic: str, payload: Dict[str,Any]):
-    if _nc is None:
+def _publish_event(topic: str, payload: Dict[str, Any]):
+    nc = _nc
+    if nc is None:
+        logger.warning("NATS client unavailable; dropping event for topic %s", topic)
         return
+
+    if getattr(nc, "is_closed", True) or getattr(nc, "is_draining", False) or not getattr(nc, "is_connected", False):
+        logger.warning("NATS client not ready (closed=%s, draining=%s, connected=%s); dropping topic %s",
+                       getattr(nc, "is_closed", True), getattr(nc, "is_draining", False), getattr(nc, "is_connected", False), topic)
+        return
+
     msg = envelope(topic, payload, source="pmoves-yt")
-    asyncio.create_task(_nc.publish(topic, json.dumps(msg).encode()))
+    try:
+        asyncio.create_task(nc.publish(topic, json.dumps(msg).encode()))
+    except Exception as exc:
+        logger.exception("Failed to schedule publish for topic %s: %s", topic, exc)
 
 def upload_to_s3(local_path: str, bucket: str, key: str):
     s3 = s3_client()
@@ -518,19 +580,31 @@ def _collect_video_metadata(video_id: str) -> Dict[str, Any]:
 def _should_use_invidious(exc: Exception) -> bool:
     if not (INVIDIOUS_BASE_URL or (INVIDIOUS_COMPANION_URL and INVIDIOUS_COMPANION_KEY)):
         return False
-    msg = str(exc)
+    # Allow operator to force fallback unconditionally (e.g., during SABR waves)
+    if (os.environ.get("YT_FORCE_FALLBACK", "false").lower() in {"1","true","yes","y"}):
+        return True
+    msg = (str(exc) or "").lower()
     indicators = (
-        "Requested format is not available",
-        "Sign in to confirm you're not a bot",
-        "Sign in to confirm you’re not a bot",
-        "Sign in to view this video",
-        "This video is only available on certain devices",
-        "nsig extraction failed",
+        # yt-dlp / SABR / nsig symptoms
+        "signature extraction failed",
+        "nsig",
+        "sabr streaming",
+        "missing a url",
+        # client gating
+        "player_ias",
+        "innertube",
+        # auth/throttling/region blocks
+        "sign in to confirm",
+        "sign in to view",
+        "only available on certain devices",
+        # http blocks and generic failures
+        "http error 410",
+        "http error 403",
+        "http error 429",
         "unable to rename file",
         "downloaded file is empty",
         "did not get any data blocks",
-        "Did not get any data blocks",
-        "All connection attempts failed",
+        "all connection attempts failed",
         "yt_dlp returned no info",
     )
     return any(indicator in msg for indicator in indicators)
@@ -1189,6 +1263,19 @@ def yt_transcript(body: Dict[str,Any] = Body(...)):
     if not vid: raise HTTPException(400, 'video_id required')
     ns = body.get('namespace') or DEFAULT_NAMESPACE
     audio_key = f"{base_prefix(vid)}/audio.m4a"
+    # Ensure raw.mp4 exists before attempting transcription. This triggers
+    # yt-dlp with SABR-aware fallbacks (companion/invidious) when needed.
+    try:
+        yt_url = f"https://www.youtube.com/watch?v={vid}"
+        _ = yt_download({'url': yt_url, 'namespace': ns, 'bucket': bucket})
+    except HTTPException as dl_exc:
+        # If download still fails, continue to ffmpeg-whisper which may be
+        # able to transcribe from an existing raw.mp4 if it was uploaded by
+        # another path; otherwise we’ll return its error below.
+        logger.warning(
+            "yt_transcript_prefetch_failed",
+            extra={"event": "yt_transcript_prefetch_failed", "video_id": vid, "error": str(dl_exc.detail) if hasattr(dl_exc, 'detail') else str(dl_exc)},
+        )
     # If audio not present, try to extract from raw.mp4 using ffmpeg-whisper
     payload = {
         'bucket': bucket,
@@ -2106,6 +2193,63 @@ def _upsert_chunks_to_hirag(
     }
 
 
+def _geometry_url_candidates() -> List[str]:
+    candidates: List[str] = []
+
+    def _push(url: Optional[str]) -> None:
+        if not url:
+            return
+        cleaned = url.rstrip('/')
+        if cleaned and cleaned not in candidates:
+            candidates.append(cleaned)
+
+    base = os.environ.get("HIRAG_URL")
+    _push(base)
+    _push(os.environ.get("HIRAG_GPU_URL"))
+    _push(os.environ.get("HIRAG_CPU_URL"))
+
+    # Derive common fallbacks from the primary base URL (CPU ↔ GPU, port swap, host bridge).
+    derived_hosts: List[str] = []
+    if base:
+        parsed = urlparse(base)
+        host = parsed.hostname or ""
+        port = parsed.port
+        scheme = parsed.scheme or "http"
+
+        if host:
+            if "hi-rag-gateway-v2" in host and "-gpu" not in host:
+                derived_hosts.append(host.replace("hi-rag-gateway-v2", "hi-rag-gateway-v2-gpu"))
+            if "hi-rag-gateway-v2-gpu" in host:
+                derived_hosts.append(host.replace("hi-rag-gateway-v2-gpu", "hi-rag-gateway-v2"))
+        if port == 8086:
+            derived_hosts.append(f"{host}:8087" if host else "localhost:8087")
+        elif port == 8087:
+            derived_hosts.append(f"{host}:8086" if host else "localhost:8086")
+
+        for derived in derived_hosts:
+            if not derived:
+                continue
+            if ":" in derived:
+                d_host, d_port = derived.split(":", 1)
+            else:
+                d_host, d_port = derived, ""
+            new_netloc = derived
+            if not d_port:
+                new_netloc = f"{derived}:8086"
+            derived_url = urlunparse((scheme, new_netloc, '', '', '', ''))
+            _push(derived_url)
+
+    # Default fallbacks for typical local setups.
+    _push("http://hi-rag-gateway-v2-gpu:8086")
+    _push("http://hi-rag-gateway-v2:8086")
+    _push("http://host.docker.internal:8087")
+    _push("http://host.docker.internal:8086")
+    _push("http://localhost:8087")
+    _push("http://localhost:8086")
+
+    return candidates
+
+
 def _emit_geometry_event(
     video_id: str,
     chunks: List[Dict[str, Any]],
@@ -2113,13 +2257,40 @@ def _emit_geometry_event(
     namespace: str,
 ) -> None:
     cgp = _build_cgp(video_id, chunks, title, namespace)
-    r2 = requests.post(
-        f"{HIRAG_URL}/geometry/event",
-        headers={'content-type': 'application/json'},
-        data=json.dumps({'type': 'geometry.cgp.v1', 'data': cgp}),
-        timeout=60,
-    )
-    r2.raise_for_status()
+    payload = {'type': 'geometry.cgp.v1', 'data': cgp}
+    last_error: Optional[Exception] = None
+    for base in _geometry_url_candidates():
+        try:
+            r2 = requests.post(
+                f"{base}/geometry/event",
+                headers={'content-type': 'application/json'},
+                data=json.dumps(payload),
+                timeout=60,
+            )
+            r2.raise_for_status()
+            if base != (HIRAG_URL.rstrip('/') if HIRAG_URL else None):
+                logger.info(
+                    "geometry_event_routed",
+                    extra={
+                        "event": "geometry_event_routed",
+                        "video_id": video_id,
+                        "target": base,
+                    },
+                )
+            return
+        except Exception as exc:  # pylint: disable=broad-except
+            last_error = exc
+            logger.warning(
+                "geometry_event_post_failed",
+                extra={
+                    "event": "geometry_event_post_failed",
+                    "video_id": video_id,
+                    "target": base,
+                    "error": str(exc),
+                },
+            )
+            continue
+    raise HTTPException(502, f"Failed to publish geometry event: {last_error}")
 
 
 def _emit_async_job(
@@ -2195,6 +2366,30 @@ def yt_emit(background_tasks: BackgroundTasks, body: Dict[str, Any] = Body(...))
     tr = _get_transcript(vid)
     text = body.get('text') or tr.get('text')
     segs = tr.get('segments') or []
+    if not (text or segs):
+        # Auto-fallback: attempt an on-demand transcript via ffmpeg-whisper, then re-check
+        try:
+            payload = {
+                'video_id': vid,
+                'namespace': ns,
+                'bucket': body.get('bucket') or DEFAULT_BUCKET,
+            }
+            # Respect configured defaults
+            if YT_TRANSCRIPT_PROVIDER:
+                payload['provider'] = YT_TRANSCRIPT_PROVIDER
+            if YT_WHISPER_MODEL:
+                payload['whisper_model'] = YT_WHISPER_MODEL
+            res = yt_transcript(payload)  # may raise HTTPException
+            # Prefer immediate result if DB is slow to reflect
+            text = body.get('text') or (res.get('text') if isinstance(res, dict) else None)
+            segs = (res.get('segments') if isinstance(res, dict) else None) or []
+            if not (text or segs):
+                tr = _get_transcript(vid)
+                text = body.get('text') or tr.get('text')
+                segs = tr.get('segments') or []
+        except HTTPException:
+            # fall through to 404 below if still missing
+            pass
     if not (text or segs):
         raise HTTPException(404, 'transcript not found; run /yt/transcript first')
     doc_id = f"yt:{vid}"

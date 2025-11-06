@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2025-10-25_
+_Last updated: 2025-11-03_
 
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
@@ -11,9 +11,11 @@ _Last updated: 2025-10-25_
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md`
 - **Smoke Tests** — `SMOKETESTS.md`
 - **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
+- **First-Run Bootstrap** — `FIRST_RUN.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
 - **Archon Service README** — `../services/archon/README.md`
+- **Monitoring Stack (Prometheus, Grafana, Loki)** — `../services/monitoring/README.md`
 - **n8n Setup (Supabase→Agent Zero→Discord)** — `N8N_SETUP.md`
 - **Supabase→Discord Playbook** — `SUPABASE_DISCORD_AUTOMATION.md`
 - **Tailnet + Discord Deployment** — `TAILSCALE_DISCORD_RUNBOOK.md`
@@ -22,8 +24,9 @@ _Last updated: 2025-10-25_
 - **PMOVES v5.12 Task Backlog** — `context/pmoves_v_5.12_tasks.md`
 
 ## UI workspace bring-up
-- Quickstart: [`LOCAL_DEV.md` – UI workspace](../LOCAL_DEV.md#ui-workspace-nextjs--supabase-platform-kit)
-  - Supabase CLI prerequisites: run `make supa-start` then `make supa-status` to populate `pmoves/.env.local` before `npm run dev`.
+- Quickstart: [`LOCAL_DEV.md` – Web UI quick links](../LOCAL_DEV.md#web-ui-quick-links)
+  - Supabase CLI prerequisites: run `make supa-start` then `make supa-status` to refresh Supabase keys. `npm run dev` now layers `env.shared` + `.env.local` automatically, so keep those root files current.
+- Notebook Workbench: [`UI_NOTEBOOK_WORKBENCH.md`](../UI_NOTEBOOK_WORKBENCH.md) — Supabase prerequisites, smoketest target, and troubleshooting tips for the `/notebook-workbench` page.
 
 ## Creative Tutorials (Automation Inputs)
 - Qwen Image Edit Plus — `pmoves/creator/tutorials/qwen_image_edit_plus_tutorial.md`
@@ -55,6 +58,9 @@ These pair with UI frameworks in:
 - [x] `RENDER_COMPLETION_WEBHOOK.md`
 
 - **Next Steps** — current plan: [`NEXT_STEPS.md`](NEXT_STEPS.md); archive: [`NEXT_STEPS_2025-09-08`](archive/NEXT_STEPS_2025-09-08.md)
+
+## CLIP + Qwen Plan
+- Multimodal enrichment plan: `CLIP_QWEN_INTEGRATION_PLAN.md`
 
 ## Health + Finance Integrations
 - Compose bundle (Wger + Firefly III): `WGER - Firefly iii compose -integrations/`

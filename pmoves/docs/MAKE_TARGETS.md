@@ -39,6 +39,16 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Only relevant when `SUPABASE_RUNTIME=compose`; starts the GoTrue/Realtime/Storage shim defined in `docker-compose.supabase.yml`.
 - `make supabase-bootstrap`
   - Replays `supabase/initdb/*.sql` + `supabase/migrations/*.sql` into whichever Postgres is active (CLI or compose) and re-seeds geometry/persona fixtures.
+- `make supabase-boot-user`
+  - Provisions (or rotates) the Supabase dashboard operator, waits for the auth endpoint, and updates `env.shared`, `.env.local`, and `pmoves/.env.local` with the latest password and JWT. `make first-run` runs this automatically.
+
+## Console (UI)
+- `make ui-dev-start`
+  - Starts the Next.js console on port 3001 using the project env loader; when `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` is present, the console auto‑auths and skips `/login`.
+- `make ui-dev-stop`
+  - Stops the background dev server started by `ui-dev-start`.
+- `make ui-dev-logs`
+  - Tails the console dev log for quick debugging.
 
 ## Agents, Media, and YT
 - `make up-agents`
@@ -93,7 +103,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make up-external` – start Wger, Firefly III, Open Notebook, and Jellyfin from published images on `cataclysm-net`.
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
 - `make wger-brand-defaults` – idempotently updates the Django `Site`, default admin profile, and seed gym name using `WGER_BRAND_*` env vars (this runs automatically after `up-external-wger`; run it again if you wipe the SQLite volume).
-- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE`, `JELLYFIN_IMAGE`.
+- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:v1-latest`), `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.
 
 ## Integrations Compose (local dev)

@@ -58,3 +58,7 @@ playwright-deps/
 pmoves/ui/test-results/
 *.deb
 temp*.mp4
+/data/
+# PMOVES UI dev artifacts
+pmoves/ui/.pmoves_ui_dev.pid
+pmoves/ui/.pmoves_ui_dev.log

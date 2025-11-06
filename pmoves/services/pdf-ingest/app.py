@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, List, Optional
@@ -35,6 +36,8 @@ except Exception:  # pragma: no cover - fallback for local runs without shared m
 
 from libs.langextract import extract_text
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="PMOVES PDF Ingest", version="0.1.0")
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
@@ -53,6 +56,70 @@ PDF_MAX_PAGES = int(os.environ.get("PDF_MAX_PAGES", "0"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 
 _nc: Optional[NATS] = None
+_nats_supervisor: Optional[asyncio.Task[None]] = None
+
+
+async def _nats_connect_loop() -> None:
+    """Background task that maintains a NATS connection with retry backoff."""
+
+    backoff = 1.0
+
+    while True:
+        client = NATS()
+
+        async def _disconnected_cb() -> None:
+            global _nc
+
+            if _nc is client:
+                logger.warning("NATS disconnected; events will be dropped until reconnection")
+                _nc = None
+
+        async def _reconnected_cb() -> None:
+            global _nc
+
+            logger.info("Reconnected to NATS at %s", NATS_URL)
+            _nc = client
+
+        async def _closed_cb() -> None:
+            global _nc
+
+            if _nc is client:
+                logger.warning("NATS connection closed; restarting connection attempts")
+                _nc = None
+
+        try:
+            await client.connect(
+                servers=[NATS_URL],
+                disconnected_cb=_disconnected_cb,
+                reconnected_cb=_reconnected_cb,
+                closed_cb=_closed_cb,
+            )
+        except asyncio.CancelledError:
+            await client.close()
+            raise
+        except Exception as exc:
+            logger.warning("Unable to connect to NATS at %s: %s", NATS_URL, exc)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30.0)
+            continue
+
+        logger.info("Connected to NATS at %s", NATS_URL)
+
+        global _nc
+        _nc = client
+        backoff = 1.0
+
+        try:
+            await client.closed_future
+        except asyncio.CancelledError:
+            await client.close()
+            raise
+        finally:
+            if _nc is client:
+                _nc = None
+
+        await asyncio.sleep(backoff)
+        backoff = min(backoff * 2, 30.0)
 
 
 class PDFIngestRequest(BaseModel):
@@ -67,16 +134,25 @@ class PDFIngestRequest(BaseModel):
 
 @app.on_event("startup")
 async def startup() -> None:
-    global _nc
-    _nc = NATS()
-    try:
-        await _nc.connect(servers=[NATS_URL])
-    except Exception:
-        _nc = None
+    global _nats_supervisor
+
+    if _nats_supervisor is None or _nats_supervisor.done():
+        loop = asyncio.get_running_loop()
+        _nats_supervisor = loop.create_task(_nats_connect_loop())
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    global _nats_supervisor
+
+    if _nats_supervisor is not None:
+        _nats_supervisor.cancel()
+        try:
+            await _nats_supervisor
+        except asyncio.CancelledError:
+            pass
+        _nats_supervisor = None
+
     if _nc is not None:
         try:
             await _nc.close()
@@ -98,6 +174,11 @@ def _slugify(value: str) -> str:
 
 def _publish_event(topic: str, payload: Dict[str, Any]) -> None:
     if _nc is None:
+        logger.warning(
+            "Dropping event %s because NATS connection is unavailable; payload=%s",
+            topic,
+            payload,
+        )
         return
     try:
         msg = envelope(topic, payload, source="pdf-ingest")

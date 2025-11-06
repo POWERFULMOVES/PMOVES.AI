@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-10-14_
+_Last updated: 2025-11-06_
 
 ## Immediate
 
@@ -10,6 +10,30 @@ _Last updated: 2025-10-14_
 - v2‑GPU default Qwen reranker with env overrides; `make smoke-gpu` validated
 - Meilisearch lexical enabled by default via `pmoves/.env.local` (USE_MEILI=true)
 - Neo4j deprecation fix: replace `exists(e.type)` with `e.type IS NOT NULL` in v1 and v2 gateways
+
+### Platform baseline (2025-11-06)
+- Supabase REST unified: `pmoves_core`/`pmoves_kb` exposed via `supabase/config.toml` + grants (`v5_13_pmoves_core_rest_grants.sql`). Legacy PostgREST is optional.
+- Single‑env mode: `pmoves/env.shared` is source of truth; `.env.local` optional. Docs updated (ENVIRONMENT_POLICY.md, AGENTS guides).
+- Agents healthy: Archon backend and Agent Zero up; `/healthz` 200. UI and API tiles reflect status after hard refresh.
+- Hi‑RAG v2: GPU container functional with CPU fallback on RTX 5090 (SM_120 torch wheel gap); rerank smoke passes (containerized batch=1 path).
+- Jellyfin single instance verified (8096) with mounts; smokes pass (verify + enhanced). Bridge auto‑link fallback documented.
+- PMOVES.YT: SABR/nsig causes intermittent `/yt/emit` 404 even after captions fetch; two fixes queued below.
+
+## Stabilization Sprint — Status and Plan (Nov 6, 2025)
+
+Completed
+- Switched object storage to Supabase Storage only; stopped standalone MinIO. Presign/render-webhook recreated and validated.
+- Invidious stabilized on 127.0.0.1:3005 with valid companion/HMAC keys; stats 200.
+- Hi‑RAG v2 CPU/GPU running; health via `/hirag/admin/stats` 200. Core smoke PASS (14/14).
+- Jellyfin overlay reachable (8096) and verified by `make jellyfin-verify-single`.
+- Monitoring baseline: Prometheus/Grafana up.
+
+Next 48 hours
+- [ ] Loki: finalize config for 3.1.x and confirm `/ready` 200; wire into Grafana dashboard set.
+- [ ] YT emit: set `YT_TRANSCRIPT_PROVIDER=qwen2-audio` during smoke; broaden SABR fallback and add a stable test ID list.
+- [ ] GPU rerank: re‑enable and add a targeted integration smoke (batch==1 guarded path); capture stats in evidence.
+- [ ] Document Hi‑RAG health path (`/hirag/admin/stats`) in service README and smoketest docs.
+- [ ] Update docs index with Supabase‑only storage policy and presign health check.
 
 ### 1. Finish the M2 Automation Loop
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
@@ -22,6 +46,11 @@ _Last updated: 2025-10-14_
 - [ ] Health/Finance integrations (Wger + Firefly)
   - Compose profiles, watcher sidecar, and helper scripts now live directly in `pmoves/compose/` and `pmoves/scripts/`. Use the
     new `make integrations-*` targets and drop flow exports into `pmoves/integrations/**/n8n/flows/` to keep local n8n in sync.
+
+### 1a. PMOVES.YT hardening (SABR/Whisper)
+- [ ] Update yt‑dlp and prefer Invidious/companion by default when SABR detected.
+- [ ] Add offline Whisper transcript path (fetch audio → transcribe → persist → retry `/yt/emit`).
+- [ ] Extend smoketest: if `/yt/emit` 404 after captions, automatically run Whisper path and retry.
 
 ### 1b. Stability & Release Hardening (prep work)
 - [ ] Draft the shared GHCR build-and-publish workflow template (lint → test → buildx → cosign) under `.github/workflows/release.yml` and document how repos call it.

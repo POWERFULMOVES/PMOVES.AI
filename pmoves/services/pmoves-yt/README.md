@@ -47,9 +47,36 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 - Use the metadata to filter notebook syncs or n8n workflows by brand/namespace
   without additional joins — e.g. `channel_tags @> '{"darkxside"}'`.
 
-### yt-dlp configuration (2025-10)
+### yt-dlp configuration & images (2025-11)
 - `yt-dlp[default]` + `curl-cffi` ship within the image; `ffmpeg` and `atomicparsley`
   are installed via apt so metadata/thumbnail embedding works out of the box.
+- Dockerfile accepts `ARG YTDLP_VERSION`; if set during build we pin yt‑dlp to
+  that version, otherwise the latest is installed. Example:
+
+```
+docker build --build-arg YTDLP_VERSION=2025.10.15 -t ghcr.io/powerfulmoves/pmoves-yt:dev services/pmoves-yt
+```
+
+#### Fork & GHCR for reproducible builds
+
+We maintain a fork to stabilize SABR/nsig workarounds and keep yt‑dlp fresh:
+
+- Repo: https://github.com/POWERFULMOVES/PMOVES.YT.git
+- Helpers from repo root:
+
+```
+make -C pmoves yt-integrations-clone
+make -C pmoves yt-integrations-build YTDLP_VERSION=2025.10.15
+make -C pmoves yt-integrations-push
+
+# Use the published image in compose
+export PMOVES_YT_IMAGE=ghcr.io/powerfulmoves/pmoves-yt:dev
+make -C pmoves up-yt
+```
+
+The compose service honors `PMOVES_YT_IMAGE` (pulls from GHCR) or builds from
+`services/pmoves-yt` when unset. Use the `yt-image-local` make target to build
+and tag a local image quickly with a custom `YTDLP_VERSION`.
 - `YT_ARCHIVE_DIR` (default `/data/yt-dlp`) + `YT_ENABLE_DOWNLOAD_ARCHIVE=true`
   configure yt-dlp's archive file. Override per channel with
   `yt_options.download_archive` to dedupe imports per playlist.

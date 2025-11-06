@@ -1,0 +1,29 @@
+profile: agent-zero
+# Choose by HOST_CLASS: workstation_5090 | laptop_4090 | desktop_3090ti | jetson_orin | vps_small
+targets:
+  workstation_5090:
+    llm: qwen3-32b-instruct@int8        # prefer int8/fp16; avoid int4
+    ctx: 128k
+    decoding: {temperature: 0.3, top_p: 0.8}
+    provider: ollama                     # or vllm
+  laptop_4090:
+    llm: qwen3-14b-instruct@int8
+    ctx: 64k
+    decoding: {temperature: 0.3, top_p: 0.8}
+    provider: ollama
+  desktop_3090ti:
+    llm: qwen3-32b-instruct@int8
+    ctx: 64k
+    decoding: {temperature: 0.3, top_p: 0.8}
+    provider: vllm
+  jetson_orin:
+    llm: qwen2.5-7b-q8_0@gguf           # llama.cpp server on Jetson, q8_0 or q6_k
+    ctx: 8k
+    decoding: {temperature: 0.4, top_p: 0.8}
+    provider: llama.cpp
+  vps_small:
+    llm: qwen2.5-3b@int8
+    ctx: 32k
+    decoding: {temperature: 0.5, top_p: 0.9}
+    provider: cloudflare                 # Workers AI via OpenAI-compat
+openai_compat_base_url: http://tensorzero:3000  # all services hit TensorZero centrally

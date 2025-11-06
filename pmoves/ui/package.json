@@ -3,21 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint . --ext ts,tsx,js,jsx --max-warnings=0",
-    "test": "jest",
-    "test:e2e": "playwright test"
+    "dev": "node scripts/with-env.mjs next dev",
+    "dev:3001": "PORT=3001 node scripts/with-env.mjs next dev -p 3001",
+    "build": "node scripts/with-env.mjs next build",
+    "start": "node scripts/with-env.mjs next start",
+    "lint": "node scripts/with-env.mjs eslint . --ext ts,tsx,js,jsx --max-warnings=0",
+    "test": "node scripts/with-env.mjs jest",
+    "test:e2e": "node scripts/with-env.mjs playwright test"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.45.0",
     "dotenv": "^16.4.5",
+    "jose": "^5.9.3",
     "next": "16.0.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-dropzone": "14.2.3",
+    "react-markdown": "^9.0.3",
+    "remark-gfm": "^4.0.0",
     "toml": "3.0.0",
     "uuid": "9.0.1"
   },

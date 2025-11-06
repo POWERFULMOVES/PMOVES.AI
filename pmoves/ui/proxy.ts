@@ -4,12 +4,14 @@ import { createSupabaseProxyClient } from '@/lib/supabaseServer';
 const MARKETING_ROUTES = ['/community'];
 const PUBLIC_PATHS = new Set(['/', '/login', '/callback', ...MARKETING_ROUTES]);
 const PUBLIC_PATH_PREFIXES = [...MARKETING_ROUTES];
+const PUBLIC_PATHS = new Set(['/', '/login', '/callback', '/icon.svg', '/favicon.ico']);
 
 const isPublicPath = (pathname: string) => {
   if (PUBLIC_PATHS.has(pathname)) {
     return true;
   }
   if (PUBLIC_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+  if (pathname.startsWith('/dashboard/services')) {
     return true;
   }
   return pathname.startsWith('/_next') || pathname.startsWith('/api/auth');
@@ -19,6 +21,15 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // If the app is configured with a boot JWT, treat the request as authenticated
+  // (the server/client libraries already attach Authorization via env). This avoids
+  // redirect loops when no Supabase cookie session exists.
+  const bootJwt =
+    process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
+  if (bootJwt) {
     return NextResponse.next();
   }
 

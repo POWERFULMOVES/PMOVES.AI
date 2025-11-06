@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 try:
     import typer
@@ -27,8 +28,35 @@ from pmoves.tools import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROVISIONING_SOURCE = REPO_ROOT / "pmoves" / "pmoves_provisioning_pr_pack"
 DEFAULT_PROVISIONING_DEST = REPO_ROOT / "CATACLYSM_STUDIOS_INC" / "PMOVES-PROVISIONS"
+ENV_SHARED = REPO_ROOT / "pmoves" / "env.shared"
+CANONICAL_PROVISIONING_SOURCE = DEFAULT_PROVISIONING_DEST
+
+PROVISIONING_BUNDLE_FILES: dict[Path, Path] = {
+    Path("README_APPLY.txt"): REPO_ROOT / "docs" / "provisioning" / "README_APPLY.txt",
+    Path("docker-compose.gpu.yml"): REPO_ROOT / "pmoves" / "docker-compose.gpu.yml",
+    Path("scripts/install/wizard.sh"): REPO_ROOT / "pmoves" / "scripts" / "install" / "wizard.sh",
+    Path("scripts/install/wizard.ps1"): REPO_ROOT / "pmoves" / "scripts" / "install" / "wizard.ps1",
+    Path("scripts/proxmox/pmoves-bootstrap.sh"): REPO_ROOT
+    / "pmoves"
+    / "scripts"
+    / "proxmox"
+    / "pmoves-bootstrap.sh",
+    Path("tailscale/tailscale_brand_up.sh"): REPO_ROOT / "pmoves" / "scripts" / "tailscale_brand_up.sh",
+}
+
+PROVISIONING_BUNDLE_DIRS: tuple[str, ...] = (
+    "backup",
+    "docker-stacks",
+    "docs",
+    "inventory",
+    "jetson",
+    "linux",
+    "proxmox",
+    "tailscale",
+    "ventoy",
+    "windows",
+)
 
 
 app = typer.Typer(help="PMOVES mini CLI (alpha)")
@@ -38,12 +66,14 @@ mcp_app = typer.Typer(help="Manage MCP toolkits")
 automations_app = typer.Typer(help="n8n automations")
 crush_app = typer.Typer(help="Crush CLI integration")
 deps_app = typer.Typer(help="Host tooling dependency helpers")
+tailscale_app = typer.Typer(help="Tailscale helpers")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(profile_app, name="profile")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(automations_app, name="automations")
 app.add_typer(crush_app, name="crush")
 app.add_typer(deps_app, name="deps")
+app.add_typer(tailscale_app, name="tailscale")
 
 
 DEPENDENCY_DEFINITIONS = {
@@ -92,6 +122,73 @@ def _resolve_path(path: Path) -> Path:
     if expanded.is_absolute():
         return expanded
     return Path.cwd() / expanded
+
+
+def _stage_provisioning_bundle(destination: Path) -> None:
+    for relative_path, source in PROVISIONING_BUNDLE_FILES.items():
+        if not source.exists():
+            raise FileNotFoundError(f"Provisioning source missing: {source}")
+        target = destination / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+    canonical_root = CANONICAL_PROVISIONING_SOURCE.resolve()
+    destination_root = destination.resolve()
+    if destination_root == canonical_root:
+        return
+
+    readme_source = CANONICAL_PROVISIONING_SOURCE / "README.md"
+    if readme_source.exists():
+        shutil.copy2(readme_source, destination / "README.md")
+
+    for relative_dir in PROVISIONING_BUNDLE_DIRS:
+        source_dir = CANONICAL_PROVISIONING_SOURCE / relative_dir
+        if not source_dir.exists():
+            continue
+        target_dir = destination / relative_dir
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+        shutil.copytree(source_dir, target_dir)
+
+
+def _update_env_value(env_path: Path, key: str, value: str) -> None:
+    env_path = _resolve_path(env_path)
+    existing_lines: List[str] = []
+    if env_path.exists():
+        existing_lines = env_path.read_text(encoding="utf-8").splitlines()
+    prefix = f"{key}="
+    updated = False
+    patched: List[str] = []
+    for line in existing_lines:
+        if line.startswith(prefix):
+            patched.append(f"{prefix}{value}")
+            updated = True
+        else:
+            patched.append(line)
+    if not updated:
+        if patched and patched[-1] != "":
+            patched.append("")
+        patched.append(f"{prefix}{value}")
+    env_path.write_text("\n".join(patched) + "\n", encoding="utf-8")
+
+
+def _read_env_value(env_path: Path, key: str) -> Optional[str]:
+    env_path = _resolve_path(env_path)
+    if not env_path.exists():
+        return None
+    prefix = f"{key}="
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith(prefix):
+            return line[len(prefix) :]
+    return None
+
+
+def _mask_value(value: str, visible: int = 4) -> str:
+    if not value:
+        return ""
+    if len(value) <= visible:
+        return "*" * len(value)
+    return value[:visible] + "*" * (len(value) - visible)
 
 
 @app.command(help="Run onboarding helper (status or generate).")
@@ -154,13 +251,144 @@ def bootstrap(
 
     destination = _resolve_path(output)
     try:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(PROVISIONING_SOURCE, destination, dirs_exist_ok=True)
+        destination.mkdir(parents=True, exist_ok=True)
+        _stage_provisioning_bundle(destination)
+    except FileNotFoundError as exc:  # pragma: no cover - error path
+        typer.echo(f"Failed to stage provisioning bundle: {exc}")
+        raise typer.Exit(1)
     except OSError as exc:  # pragma: no cover - error path
         typer.echo(f"Failed to stage provisioning bundle: {exc}")
         raise typer.Exit(1)
 
     typer.echo(f"Provisioning bundle staged to {destination}")
+
+
+@tailscale_app.command("authkey")
+def tailscale_authkey(
+    env_file: Path = typer.Option(
+        ENV_SHARED,
+        "--env-file",
+        "-e",
+        help="Env file that should carry TAILSCALE_AUTHKEY",
+    ),
+    secret_file: Path = typer.Option(
+        Path("CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/tailscale/tailscale_authkey.txt"),
+        "--secret-file",
+        "-s",
+        help="Provisioning secret file where the auth key should be written.",
+    ),
+    write_env: bool = typer.Option(
+        True,
+        "--write-env/--no-write-env",
+        help="Update env file with TAILSCALE_AUTHKEY",
+    ),
+    write_secret: bool = typer.Option(
+        True,
+        "--write-secret/--no-write-secret",
+        help="Write auth key to provisioning secret file",
+    ),
+    sign: bool = typer.Option(
+        True,
+        "--sign/--no-sign",
+        help="Attempt to sign the auth key with 'tailscale lock sign' when Tailnet Lock is enabled.",
+    ),
+) -> None:
+    """Capture a Tailnet auth key and persist it for automation."""
+
+    typer.echo(
+        "Generate a reusable auth key from your Tailnet admin (e.g. headscale preauthkeys create)."
+    )
+    existing_env = _read_env_value(env_file, "TAILSCALE_AUTHKEY") if write_env else None
+    existing_secret: Optional[str] = None
+    if write_secret:
+        resolved_secret = _resolve_path(secret_file)
+        if resolved_secret.exists():
+            existing_secret = resolved_secret.read_text(encoding="utf-8").strip()
+    if existing_env:
+        typer.echo(
+            f"Existing env value: {_mask_value(existing_env)} (will be replaced once you confirm)."
+        )
+    if existing_secret:
+        typer.echo(
+            f"Secret file currently stores: {_mask_value(existing_secret)} (will be replaced)."
+        )
+    auth_key = typer.prompt(
+        "Paste tailnet auth key (leave blank to cancel)",
+        default="",
+        show_default=False,
+        hide_input=True,
+    ).strip()
+    if not auth_key:
+        typer.echo("No auth key provided; aborting without changes.")
+        raise typer.Exit(code=1)
+
+    if sign:
+        finalized_key, sign_messages = _tailscale_sign_auth_key(auth_key)
+        for message in sign_messages:
+            typer.echo(message)
+        if finalized_key:
+            auth_key = finalized_key
+
+    if write_env:
+        _update_env_value(env_file, "TAILSCALE_AUTHKEY", auth_key)
+        typer.echo(f"Updated TAILSCALE_AUTHKEY in {env_file}")
+    if write_secret:
+        resolved_secret = _resolve_path(secret_file)
+        resolved_secret.parent.mkdir(parents=True, exist_ok=True)
+        resolved_secret.write_text(auth_key + "\n", encoding="utf-8")
+        try:
+            os.chmod(resolved_secret, 0o600)
+        except PermissionError:
+            typer.echo(
+                f"Warning: could not tighten permissions on {resolved_secret}; adjust manually if needed."
+            )
+        typer.echo(f"Wrote auth key to {resolved_secret}")
+    typer.echo("Auth key captured. Keep it out of version control.")
+
+
+@tailscale_app.command("join")
+def tailscale_join(
+    env_file: Path = typer.Option(
+        ENV_SHARED,
+        "--env-file",
+        "-e",
+        help="Env file to load (TAILSCALE_* variables)",
+    ),
+    force_reauth: bool = typer.Option(
+        False, "--force-reauth", help="Force re-authentication"
+    ),
+) -> None:
+    """Join the tailnet using pmoves/scripts/tailscale_brand_init.sh."""
+
+    script = REPO_ROOT / "pmoves" / "scripts" / "tailscale_brand_init.sh"
+    if not script.exists():
+        typer.echo(f"Init script missing: {script}")
+        raise typer.Exit(1)
+
+    env = os.environ.copy()
+    env["ENV_FILE"] = str(env_file)
+    env["TAILSCALE_AUTO_JOIN"] = "true"
+    if force_reauth:
+        env["TAILSCALE_FORCE_REAUTH"] = "true"
+    # Respect saved secret file path default if set in env file
+    # scripts/with-env.sh will populate env vars into this process
+    cmd = ["bash", "-lc", f". ./pmoves/scripts/with-env.sh '{env_file}'; bash '{script}'"]
+    rc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env).returncode
+    if rc != 0:
+        raise typer.Exit(rc)
+
+
+@tailscale_app.command("rejoin")
+def tailscale_rejoin(
+    env_file: Path = typer.Option(
+        ENV_SHARED,
+        "--env-file",
+        "-e",
+        help="Env file to load (TAILSCALE_* variables)",
+    )
+) -> None:
+    """Force re-auth join to the tailnet."""
+    tailscale_join(env_file=env_file, force_reauth=True)
 
 
 @app.command(help="Summarize current secret outputs (report).")
@@ -188,6 +416,110 @@ def status(
     else:
         typer.echo(f"Provisioning bundle: missing (expected {wizard})")
     raise typer.Exit(exit_code)
+
+
+def _tailscale_sign_auth_key(auth_key: str) -> Tuple[Optional[str], List[str]]:
+    """Sign a Tailnet auth key when Tailnet Lock is enabled.
+
+    Returns the signed key (if available) alongside log messages that should be surfaced to the user.
+    """
+
+    messages: List[str] = []
+    if not _command_available("tailscale"):
+        messages.append("tailscale CLI not found; skipping Tailnet Lock signing.")
+        return None, messages
+
+    lock_enabled = False
+    status_attempts = (
+        ["tailscale", "lock", "status", "--json"],
+        ["tailscale", "lock", "status"],
+    )
+    status_output: Optional[str] = None
+
+    for cmd in status_attempts:
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            messages.append("tailscale CLI could not be executed; skipping Tailnet Lock signing.")
+            return None, messages
+
+        if proc.returncode != 0:
+            stderr_text = (proc.stderr or "").lower()
+            # If the JSON flag is not supported, fall back to the plain output.
+            if "--json" in cmd and any(
+                phrase in stderr_text for phrase in ("flag provided but not defined", "unknown flag", "unrecognized option", "no such flag")
+            ):
+                continue
+            # Older clients report Tailnet Lock disabled on stderr.
+            status_output = (proc.stdout or proc.stderr or "").strip()
+        else:
+            status_output = proc.stdout.strip()
+
+        if status_output:
+            try:
+                data = json.loads(status_output)
+            except json.JSONDecodeError:
+                lowered = status_output.lower()
+                # Treat "disabled" as authoritative only if "enabled" is absent.
+                if "enabled" in lowered and "disabled" not in lowered:
+                    lock_enabled = True
+                elif "tailnet lock: enabled" in lowered:
+                    lock_enabled = True
+            else:
+                lock_enabled = bool(
+                    data.get("enabled")
+                    or data.get("Enabled")
+                    or data.get("lockEnabled")
+                    or data.get("lock_state") == "enabled"
+                    or data.get("state") == "enabled"
+                    or data.get("state") == "ENABLED"
+                    or (data.get("Status") or {}).get("Enabled")
+                    or (data.get("status") or {}).get("enabled")
+                )
+
+        if lock_enabled:
+            break
+
+    if not lock_enabled:
+        messages.append("Tailnet Lock not detected; stored key remains unsigned.")
+        return None, messages
+
+    messages.append("Tailnet Lock detected; attempting to sign auth key via 'tailscale lock sign'.")
+    sign_proc = subprocess.run(
+        ["tailscale", "lock", "sign", auth_key],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if sign_proc.returncode != 0:
+        stderr = sign_proc.stderr.strip()
+        if stderr:
+            messages.append(f"Failed to sign auth key: {stderr}")
+        else:
+            messages.append("Failed to sign auth key: tailscale lock sign returned a non-zero exit code.")
+        messages.append("Continuing with the original auth key.")
+        return None, messages
+
+    output = sign_proc.stdout.strip()
+    if output:
+        matches = re.findall(r"tskey-[A-Za-z0-9_-]+", output)
+    else:
+        matches = []
+
+    if not matches:
+        messages.append(
+            "tailscale lock sign succeeded but no signed auth key was detected in the output; continuing with the original key."
+        )
+        return None, messages
+
+    signed_key = matches[-1]
+    if signed_key == auth_key:
+        messages.append("tailscale lock sign returned the same auth key; keeping existing value.")
+        return None, messages
+
+    messages.append(f"Signed auth key captured: {_mask_value(signed_key)}")
+    return signed_key, messages
 
 
 def _run_module(module: str, args: list[str]) -> int:

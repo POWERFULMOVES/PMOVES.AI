@@ -1,0 +1,39 @@
+# TensorZero gateway config (OpenAI-compatible)
+[gateway]
+listen = "0.0.0.0:3000"
+
+# Observability (ClickHouse)
+[gateway.observability.clickhouse]
+enabled  = true
+url      = "${TENSORZERO_OBS_CLICKHOUSE_URL}"
+username = "${TENSORZERO_OBS_CLICKHOUSE_USER}"
+password = "${TENSORZERO_OBS_CLICKHOUSE_PASSWORD}"
+database = "${TENSORZERO_OBS_CLICKHOUSE_DB}"
+
+# --- Providers ---
+[providers.local_ollama]
+type     = "openai_compat"
+base_url = "http://ollama:11434/v1"
+
+[providers.local_vllm]
+type     = "openai_compat"
+base_url = "http://vllm:8000/v1"
+
+[providers.local_llamacpp]
+type     = "openai_compat"
+base_url = "http://llamacpp:8080/v1"
+
+[providers.venice]
+type     = "openai_compat"
+base_url = "https://api.venice.ai/api/v1"
+api_key  = "${VENICE_API_KEY}"
+
+# --- Routing examples ---
+[routes.chat.default]
+primary  = "local_vllm"
+fallback = ["local_ollama","venice"]
+
+[routes.embeddings.default]
+primary  = "local_ollama"
+model    = "embedding-gemma-300m"
+fallback = ["venice"]

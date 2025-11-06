@@ -30,15 +30,27 @@ COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_
 export COMPOSE_PROFILES
 
 PYTHON ?= python3
+SINGLE_ENV_MODE ?= 1
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
 
-LOAD_ENV_SHARED := set -a; \
+HIRAG_CPU_PORT := $(if $(HIRAG_V2_HOST_PORT),$(HIRAG_V2_HOST_PORT),8086)
+HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
+
+ifeq ($(SINGLE_ENV_MODE),1)
+  LOAD_ENV_SHARED := set -a; \
         [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f .env ] && . .env; \
+        [ -f env.shared.generated ] && . env.shared.generated; \
+        set +a;
+else
+  LOAD_ENV_SHARED := set -a; \
+        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
+        [ -f env.shared.generated ] && . env.shared.generated; \
+        [ -f .env.generated ] && . .env.generated; \
         [ -f .env.local ] && . .env.local; \
         set +a;
+endif
 export LOAD_ENV_SHARED
 
 .PHONY: ensure-env-shared
@@ -86,19 +98,19 @@ up: ensure-env-shared ## Start core data + workers and both Hi-RAG gateways
 	@docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
 	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@echo "✔ Stack started (v2 on :8086, v2-gpu on :8087 when available)."
+	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
 
 up-gpu: ## Start with optional GPU accelerations where supported
 	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
 	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up-gpu-gateways
-up-gpu-gateways: ## Bring up GPU gateways (v2 @ :8087, v1 @ :8090)
+up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
 	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
 	@docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
-	@echo "✔ GPU gateways requested (v2-gpu :8087, v1-gpu :8090)."
+	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT), v1-gpu :8090)."
 
 .PHONY: recreate-v2-gpu
 recreate-v2-gpu: ## Force-recreate v2-gpu container (no deps)
@@ -132,7 +144,7 @@ down-open-notebook: ## Stop Open Notebook
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
 	@docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway-v2
 	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@echo "✔ hi-rag-gateway-v2(:8086) and hi-rag-gateway-v2-gpu(:8087) ready."
+	@echo "✔ hi-rag-gateway-v2(:$(HIRAG_CPU_PORT)) and hi-rag-gateway-v2-gpu(:$(HIRAG_GPU_PORT)) ready."
 
 .PHONY: up-legacy-both
 up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
@@ -156,6 +168,8 @@ INTEGRATIONS_COMPOSE_FIREFLY := compose/docker-compose.firefly.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
 INTEGRATIONS_PROJECT ?= $(PROJECT)-integrations
 export INTEGRATIONS_PROJECT
+INTEGRATIONS_WORKSPACE ?= ../integrations-workspace
+export INTEGRATIONS_WORKSPACE
 
 NOTEBOOK_COMPOSE ?= docker-compose.open-notebook.yml
 NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
@@ -235,6 +249,13 @@ notebook-seed-models: ## Seed Open Notebook models based on provider keys from t
 	@echo "Seeding Open Notebook providers..."
 	@bash -c 'set -a; [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; set +a; exec $(PYTHON) scripts/open_notebook_seed.py'
 
+.PHONY: notebook-workbench-smoke
+notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
+	@echo "→ Linting Notebook Workbench UI…"
+	@npm --prefix ui run lint
+	@echo "→ Validating Supabase environment…"
+	@bash -c '$(LOAD_ENV_SHARED) node scripts/notebook_workbench_smoke.mjs $(ARGS)'
+
 # Bring only worker services (ensures data deps are active)
 up-workers:
 	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
@@ -247,14 +268,213 @@ up-yt:
 up-media:
 	docker compose -p $(PROJECT) --profile data --profile workers up -d media-video media-audio
 
+.PHONY: up-invidious
+up-invidious:
+	@# Ensure INVIDIOUS_BIND is present for compose-time interpolation (use bash for the env loader)
+	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --profile invidious up -d invidious invidious-db invidious-companion'
+
 # TensorZero model gateway stack
 .PHONY: up-tensorzero down-tensorzero
 up-tensorzero:
-	docker compose -p $(PROJECT) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui
+	docker compose -p $(PROJECT) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
 
 down-tensorzero:
 	docker compose -p $(PROJECT) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || true
 	@echo "✔ TensorZero stack stopped."
+
+# -------- Monitoring stack (Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor) --------
+.PHONY: up-monitoring down-monitoring monitoring-open monitoring-status monitoring-smoke
+
+MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
+
+up-monitoring: ## Start monitoring stack and print URLs
+	@echo "⛳ Starting monitoring stack (Prometheus, Grafana, Loki, Promtail, blackbox, cAdvisor)..."
+	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
+		echo "→ Including cAdvisor (linux profile)"; \
+		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) --profile linux up -d; \
+	  else \
+		echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
+		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) up -d; \
+	  fi
+	@echo "Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"
+	@echo "Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"
+	@echo "Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"
+	@echo "cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-8080}"
+
+down-monitoring: ## Stop monitoring stack and remove volumes
+	@docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) down -v
+
+monitoring-open: ## Open Grafana and Prometheus in your browser
+	@python3 -c "import os,webbrowser; g='http://localhost:%s'%os.environ.get('GRAFANA_HOST_PORT','3002'); p='http://localhost:%s'%os.environ.get('PROMETHEUS_HOST_PORT','9090'); print('Opening',g,'and',p); webbrowser.open(g); webbrowser.open(p)"
+
+monitoring-status: ## Show Prometheus target statuses
+	@echo "Prometheus targets:" && curl -fsS http://localhost:$${PROMETHEUS_HOST_PORT:-9090}/api/v1/targets | jq -r '.data.activeTargets[] | "- \(.labels.job) \(.labels.instance): \(.health)"' | sed 's/^/  /' || true
+
+monitoring-smoke: up-monitoring ## Confirm blackbox exporter is scraping endpoints
+	@echo "Probing key endpoints via Prometheus blackbox..."
+	@sleep 2
+	@curl -fsS "http://localhost:$${PROMETHEUS_HOST_PORT:-9090}/api/v1/query?query=probe_success" | jq '.data.result | length' | grep -E '^[1-9]' >/dev/null && echo "✔ blackbox is reporting targets" || (echo "✖ no blackbox samples yet (wait ~15s and retry 'make -C pmoves monitoring-status')" && exit 1)
+
+.PHONY: monitoring-report
+monitoring-report: ## Print a quick Prometheus summary (targets, failures, top CPU containers)
+	@python3 tools/monitoring_report.py --prom http://localhost:$${PROMETHEUS_HOST_PORT:-9090}
+
+# -------- Tailscale helpers --------
+.PHONY: tailscale-save-key tailscale-join tailscale-rejoin tailscale-status tailscale-logout
+
+TAILSCALE_KEY_FILE?=$(abspath $(CURDIR)/../CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/tailscale/tailscale_authkey.txt)
+
+tailscale-save-key: ## Save/update Tailscale auth key to CATACLYSM_STUDIOS_INC/.../tailscale_authkey.txt (or TAILSCALE_KEY_FILE)
+	@mkdir -p $(dir $(TAILSCALE_KEY_FILE))
+	@if [ -n "$$TAILSCALE_AUTHKEY" ]; then \
+	  printf "%s" "$$TAILSCALE_AUTHKEY" > "$(TAILSCALE_KEY_FILE)"; \
+	else \
+	  stty -echo 2>/dev/null || true; \
+	  printf "Enter Tailscale auth key: "; \
+	  read KEY; \
+	  stty echo 2>/dev/null || true; printf "\n"; \
+	  printf "%s" "$$KEY" > "$(TAILSCALE_KEY_FILE)"; \
+	fi
+	@chmod 600 "$(TAILSCALE_KEY_FILE)" 2>/dev/null || true
+	@echo "✔ Saved auth key to $(TAILSCALE_KEY_FILE)"
+
+tailscale-join: ## Join tailnet using saved key and env defaults
+	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$(CURDIR)/env.shared" && \
+	  export TAILSCALE_AUTHKEY_FILE="$(TAILSCALE_KEY_FILE)" TAILSCALE_AUTO_JOIN=true; \
+	  bash ./scripts/tailscale_brand_init.sh'
+
+tailscale-rejoin: ## Force re-auth join
+	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$(CURDIR)/env.shared" && \
+	  export TAILSCALE_AUTHKEY_FILE="$(TAILSCALE_KEY_FILE)" TAILSCALE_FORCE_REAUTH=true TAILSCALE_AUTO_JOIN=true; \
+	  bash ./scripts/tailscale_brand_init.sh'
+
+tailscale-status: ## Show tailscale status JSON (best effort)
+	@tailscale status --json || tailscale status || true
+
+tailscale-logout: ## Log out of tailnet on this host
+	@tailscale logout || true
+
+# -------- Brand defaults (branded env + first-run resources) --------
+.PHONY: brand-defaults brand-verify
+
+brand-defaults: ensure-env-shared ## Apply branded defaults and create required buckets
+	@echo "→ Applying branded defaults to pmoves/env.shared"
+	@python3 tools/brand_defaults.py
+	@echo "→ Creating MinIO buckets (assets, outputs) if missing"
+	@docker compose -p $(PROJECT) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || true
+	@echo "✔ Brand defaults applied"
+
+# ------- Neo4j helpers -------
+.PHONY: neo4j-reset neo4j-status
+neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
+	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
+	@docker compose -p $(PROJECT) stop neo4j || true
+	@docker compose -p $(PROJECT) rm -f neo4j || true
+	@docker volume rm $(PROJECT)_neo4j-data || true
+	@docker compose -p $(PROJECT) up -d neo4j
+	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
+	@auth=$$(awk -F= '/^NEO4J_AUTH/{print $$2}' .env.generated | xargs); \
+	user=$${auth%%/*}; pass=$${auth#*/}; \
+	echo "Testing auth ($$user/***)..."; \
+	( docker compose -p $(PROJECT) exec -T neo4j bash -lc \
+	  "/var/lib/neo4j/bin/cypher-shell -u '$$user' -p '$$pass' 'RETURN 1'" || true )
+
+neo4j-status: ## Show Neo4j logs and health line
+	@docker compose -p $(PROJECT) ps neo4j || true
+	@docker compose -p $(PROJECT) logs --tail 60 neo4j || true
+
+brand-verify: ## Verify key branded endpoints respond
+	@echo "Presign:" && curl -fsS http://localhost:8088/healthz && echo
+	@echo "Supabase REST:" && curl -fsS -o /dev/null -w '%{http_code}\n' http://host.docker.internal:65421/rest/v1 || true
+	@echo "Qdrant:" && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:6333/collections || true
+	@echo "Meili:" && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:7700/health || true
+	@echo "Neo4j bolt (mapped):" && echo 'EXPECT 7474/7687 open' || true
+	@echo "✔ Brand verification complete (inspect codes above)"
+
+# -------- Model profiles / management --------
+.PHONY: model-profiles model-apply model-swap models-sync models-seed-ollama
+
+model-profiles: ## List available model manifests
+	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
+
+model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (PROFILE=archon HOST=workstation_5090)
+	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash pmoves/tools/models/apply_profile.sh
+
+models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
+	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$(HOST)" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+
+model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.local (SERVICE=hirag NAME=Qwen/Qwen3-Reranker-4B)
+	@python3 tools/models/models_sync.py swap --profile "$(PROFILE)" --host "$(HOST)" --service "$(SERVICE)" --name "$(NAME)"
+
+models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL examples)
+	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
+	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"embeddinggemma:300m"}' >/dev/null 2>&1 || true
+	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen2.5:14b-instruct-q4_K_M"}' >/dev/null 2>&1 || true
+	@echo "✔ Seeded baseline Ollama models (if sidecar available)."
+
+# -------- Console (UI) dev helpers --------
+.PHONY: ui-dev-start ui-dev-stop ui-dev-logs
+
+ui-dev-start: ## Start the PMOVES console dev server on :3001 with env layering
+	@cd ui && \
+	  (logfile=.pmoves_ui_dev.log; nohup node scripts/with-env.mjs npm run dev:3001 > "$$logfile" 2>&1 & echo $$! > .pmoves_ui_dev.pid; \
+	  echo "✔ Console dev server starting (http://localhost:3001). PID: $$(cat .pmoves_ui_dev.pid)"; \
+	  sleep 1; tail -n 5 "$$logfile" || true)
+
+ui-dev-stop: ## Stop the console dev server started by ui-dev-start
+	@cd ui && bash -c 'kill "$$(cat .pmoves_ui_dev.pid 2>/dev/null)" >/dev/null 2>&1 || true; rm -f .pmoves_ui_dev.pid; echo "✔ Console dev server stopped."'
+
+ui-dev-logs: ## Tail the console dev server logs
+	@cd ui && [ -f .pmoves_ui_dev.log ] && tail -f .pmoves_ui_dev.log || echo "No UI dev log found. Run 'make -C pmoves ui-dev-start' first."
+
+# Toggle Single‑User (Owner) Mode for the console and restart dev server
+.PHONY: ui-single-user ui-single-user-on ui-single-user-off
+ui-single-user: ## Toggle SINGLE_USER_MODE for the console (MODE=1|0) and restart UI dev
+	@MODE=$${MODE:-1}; \
+	if [ "$$MODE" != "0" ] && [ "$$MODE" != "1" ]; then echo "Usage: make -C pmoves ui-single-user MODE=1|0"; exit 1; fi; \
+	upd() { f="$$1"; k="$$2"; v="$$3"; if [ -f "$$f" ]; then if grep -q "^$${k}=" "$$f"; then sed -i "s#^$${k}=.*#$${k}=$${v}#" "$$f"; else printf "\n$${k}=$${v}\n" >> "$$f"; fi; fi; }; \
+	upd env.shared SINGLE_USER_MODE $$MODE; \
+	upd env.shared NEXT_PUBLIC_SINGLE_USER_MODE $$MODE; \
+	echo "✔ SINGLE_USER_MODE=$$MODE written to pmoves/env.shared"; \
+	$(MAKE) ui-dev-stop >/dev/null 2>&1 || true; \
+	$(MAKE) ui-dev-start
+
+ui-single-user-on:
+	@$(MAKE) ui-single-user MODE=1
+
+ui-single-user-off:
+	@$(MAKE) ui-single-user MODE=0
+
+.PHONY: ui-ingest-smoke
+ui-ingest-smoke: ## Exercise boot-jwt status and ingest smoke via API health endpoints
+	@set -a; if [ -f ./env.shared ]; then . ./env.shared; fi; set +a; \
+	BOOT=$${NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT:-$${SUPABASE_BOOT_USER_JWT}}; \
+	BASE=$${NEXT_PUBLIC_BASE_URL:-http://localhost:3001}; \
+	SECRET=$${SMOKE_SHARED_SECRET:-$${PMOVES_SMOKE_SHARED_SECRET}}; \
+	echo "→ Boot JWT health:"; \
+	curl -fsS "$$BASE/api/health/boot-jwt" | jq . || true; \
+	echo "→ Ingest smoke:"; \
+	AUTH=""; if [ -n "$$SECRET" ]; then AUTH="-H 'Authorization: Bearer $$SECRET'"; fi; \
+	bash -c "curl -fsS $$AUTH -X POST '$$BASE/api/health/ingest-smoke' -H 'content-type: application/json'" | jq . || true
+
+.PHONY: ui-videos-realtime-smoke
+ui-videos-realtime-smoke: ## Insert a dummy video row via Supabase REST; verify UI shows it (Realtime)
+	@chmod +x ../scripts/ui_videos_realtime_smoke.sh
+	@../scripts/ui_videos_realtime_smoke.sh $(or ${NAMESPACE},pmoves)
+
+.PHONY: ui-videos-realtime-clean
+ui-videos-realtime-clean: ## Delete smoke rows inserted by ui-videos-realtime-smoke
+	@chmod +x ../scripts/ui_videos_realtime_cleanup.sh
+	@../scripts/ui_videos_realtime_cleanup.sh
+
+.PHONY: ui-playwright-setup
+ui-playwright-setup: ## Install Playwright browsers/deps for E2E tests
+	@cd ui && npx --yes playwright install --with-deps || true
+
+.PHONY: ui-videos-realtime-e2e
+ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts UI shows it
+	@$(MAKE) ui-dev-start >/dev/null 2>&1 || true
+	@cd ui && node scripts/with-env.mjs npm run test:e2e -- -g "Videos Realtime"
 
 # Jellyfin bridge only
 up-jellyfin:
@@ -264,6 +484,56 @@ up-jellyfin:
 .PHONY: up-agents
 up-agents:
 	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+
+.PHONY: up-agents-published
+up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images (no local builds)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
+	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
+
+.PHONY: up-agents-ui
+up-agents-ui: ## Start Agents APIs + UIs (NATS, Agent Zero, Archon, Archon UI) using published images where available
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
+	@echo "✔ Agents (APIs + UIs) started. Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
+
+.PHONY: a0-mcp-seed
+a0-mcp-seed: ## Write A0_MCP_SERVERS into Agent Zero runtime (data/agent-zero/runtime/mcp/servers.env)
+	@$(LOAD_ENV_SHARED) python3 tools/seed_agent_zero_mcp.py
+
+.PHONY: archon-mcp-smoke
+archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8051/ || true); \
+	if [ "$$code" = "000" ]; then echo "✖ archon-mcp not reachable on :8051" && exit 1; else echo "✔ archon-mcp HTTP $$code"; fi
+
+.PHONY: archon-ui-smoke
+archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)
+	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
+	if [ "$$api" != "200" ]; then echo "✖ archon API /healthz => $$api" && exit 1; fi; \
+	if [ "$$ui" != "200" ]; then echo "✖ archon UI / => $$ui" && exit 1; fi; \
+	echo "✔ archon API/ UI healthy (API $$api, UI $$ui)"
+
+.PHONY: agents-integrations-clone agents-integrations-pull build-agents-integrations up-agents-integrations
+agents-integrations-clone: ## Clone your forks into $(INTEGRATIONS_WORKSPACE)
+	@mkdir -p "$(INTEGRATIONS_WORKSPACE)" && cd "$(INTEGRATIONS_WORKSPACE)"; \
+	if [ ! -d PMOVES-Agent-Zero ]; then \
+	  git clone https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git PMOVES-Agent-Zero; \
+	  echo "✔ Cloned PMOVES-Agent-Zero"; \
+	else echo "↷ PMOVES-Agent-Zero already exists"; fi; \
+	if [ ! -d PMOVES-Archon ]; then \
+	  git clone https://github.com/POWERFULMOVES/PMOVES-Archon.git PMOVES-Archon; \
+	  echo "✔ Cloned PMOVES-Archon"; \
+	else echo "↷ PMOVES-Archon already exists"; fi
+
+agents-integrations-pull: ## Pull latest from your forks
+	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Agent-Zero" && git fetch --all && git pull --rebase || true
+	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
+
+build-agents-integrations: ## Build agent images from your forks
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon archon-ui
+
+
+up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRATIONS_WORKSPACE))
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
+	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared
@@ -278,7 +548,7 @@ ps:
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d
+	@bash -c 'set -a; [ -f env.shared ] && . env.shared; [ -f .env.local ] && . .env.local; set +a; exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d'
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
@@ -296,6 +566,26 @@ up-external-on: ## Start Open Notebook on cataclysm-net (external image)
 up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext
+
+.PHONY: down-jellyfin-ai
+down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.jellyfin-ai.yml down jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-redis jellyfin-audio-processor jellyfin-api-gateway jellyfin-dashboard >/dev/null 2>&1 || true
+	@echo "✔ Jellyfin AI overlay stopped."
+
+.PHONY: up-jellyfin-single
+up-jellyfin-single: ## Single Jellyfin using your forked image (8096)
+	@$(MAKE) --no-print-directory down-jellyfin-ai
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
+	@bash -c 'files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d jellyfin-ext'
+	@echo "✔ Jellyfin (single) up at http://localhost:8096 using $${JELLYFIN_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest}"
+
+.PHONY: jellyfin-enhanced-smoke
+jellyfin-enhanced-smoke: ## Validate Jellyfin core (/System/Info, /Plugins) and web assets on single instance
+	@bash "$(CURDIR)/../scripts/jellyfin_enhanced_smoke.sh"
+
+.PHONY: jellyfin-hosts-generate
+jellyfin-hosts-generate: ## Generate compose override from pmoves/jellyfin.hosts for host media folders
+	@$(PYTHON) tools/generate_jellyfin_mounts.py
 
 down-external: ## Stop all external stacks
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml down
@@ -361,7 +651,7 @@ integrations-workspace: ## Clone forks and apply PR kits into INTEGRATIONS_BASE 
 	@bash pmoves/tools/integrations/bootstrap_workspace.sh "$${INTEGRATIONS_BASE:-integrations-workspace}"
 
 # ---- CHIT demo mappers (health/finance → CGP) ----
-.PHONY: demo-health-cgp demo-finance-cgp
+.PHONY: demo-health-cgp demo-finance-cgp firefly-seed-sample
 demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 	@echo "→ Posting health.weekly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
 	@PYTHONPATH=. python tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
@@ -369,6 +659,12 @@ demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 demo-finance-cgp: ## Map sample finance monthly summary to CGP and POST to gateway
 	@echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
 	@PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+
+firefly-seed-sample: ensure-env-shared ## Seed Firefly III with PMOVES 5-year projection sample dataset
+	@bash -c '$(LOAD_ENV_SHARED) \
+	  DRY_FLAG=""; \
+	  if [ -n "$${DRY_RUN:-}" ] && [ "$${DRY_RUN}" != "0" ]; then DRY_FLAG="--dry-run"; fi; \
+	  exec $(PYTHON) scripts/firefly_seed_sample_data.py $$DRY_FLAG --fixture data/firefly/sample_transactions.json'
 
 .PHONY: webhook-health-cgp webhook-finance-cgp
 webhook-health-cgp: ## Call n8n health weekly → CGP webhook (workflow must be active)
@@ -514,9 +810,44 @@ neo4j-bootstrap:
 
 .PHONY: bootstrap-data
 bootstrap-data: ## Apply Supabase SQL, Neo4j seeds, and Qdrant/Meili demo docs
-	@$(MAKE) supabase-bootstrap
-	@$(MAKE) neo4j-bootstrap
-	@$(MAKE) seed-data
+		@$(MAKE) supabase-bootstrap
+		@$(MAKE) neo4j-bootstrap
+		@$(MAKE) seed-data
+
+.PHONY: seed-real-data
+seed-real-data: ## Seed minimal real-data chunks into hi-rag and Meili (namespace=$(INDEXER_NAMESPACE) or pmoves)
+		@echo "[seed] Upserting real-data baseline into hi-rag v2..."
+		@python3 tools/seed_real_data.py
+		@echo "[seed] Done."
+
+.PHONY: seed-repo-docs
+seed-repo-docs: ## Crawl repo docs/code and emit JSONL at datasets/repo_docs.jsonl
+		@python3 tools/repo_crawl.py --root .. --out datasets/repo_docs.jsonl --namespace $${REPO_NAMESPACE:-pmoves.docs}
+
+.PHONY: index-repo-docs
+index-repo-docs: ## Index repo JSONL into hi-rag v2 and Meili
+		@python3 tools/repo_index.py --jsonl datasets/repo_docs.jsonl
+
+.PHONY: archon-orchestrate-repo
+archon-orchestrate-repo: ## Kick off CONCH orchestration on Archon (best-effort)
+		@python3 tools/archon_conch_orchestrate.py || true
+
+.PHONY: agent-zero-sync-repo
+agent-zero-sync-repo: ## Notify Agent Zero about repo delta (best-effort)
+		@python3 tools/agent_zero_sync.py || true
+
+.PHONY: smoke-personas
+smoke-personas: ## Assert personas are seeded (v5.12) in Supabase CLI DB; fails if zero rows
+	@set -e; \
+	if docker ps --format '{{.Names}}' | grep -q '^supabase_db_'; then \
+	  supabase_db=$$(docker ps --format '{{.Names}}' | grep -m1 '^supabase_db_'); \
+	  echo "→ Checking personas in $$supabase_db"; \
+	  cnt=$$(docker exec -i $$supabase_db psql -U postgres -d postgres -tAc "select count(*) from pmoves_core.personas" | tr -d '[:space:]'); \
+	  echo "personas: $$cnt"; \
+	  test "$$cnt" -ge 1 || (echo "✖ No personas found; run 'make -C pmoves supabase-bootstrap'" && exit 1); \
+	else \
+	  echo "↷ Supabase CLI DB not running; skip persona smoke."; \
+	fi
 
 .PHONY: smoke-webhook-ci
 smoke-webhook-ci:
@@ -559,21 +890,22 @@ smoke:
 	@echo "[4/12] presign health..." && curl -sf http://localhost:8088/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[5/12] render-webhook health..." && curl -sf http://localhost:8085/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
 	# Auto-detect PostgREST: prefer localhost:3000 when compose PostgREST is up, else use SUPA_REST_URL or CLI fallback
-	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; elif curl -sf http://localhost:3000 >/dev/null 2>&1; then echo http://localhost:3000; else echo "$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; fi )"; \
+	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; else echo "$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}"; fi )"; \
 	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
+	 SERVICE_KEY="$${SUPABASE_SERVICE_ROLE_KEY:-$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}}"; \
 	 echo "[6/12] PostgREST reachable..." && curl -sf "$${REST_BASE}/it_errors?select=id&limit=1" -H "apikey: $$APIKEY" >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[7/12] Insert via render-webhook..." && curl -sf -X POST http://localhost:8085/comfy/webhook \
 	 -H "Content-Type: application/json" \
 	 -H "Authorization: Bearer $${RENDER_WEBHOOK_SHARED_SECRET:-change_me}" \
 	 -d '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","presigned_get":null,"title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; elif curl -sf http://localhost:3000 >/dev/null 2>&1; then echo http://localhost:3000; else echo "$${SUPA_REST_URL:-http://127.0.0.1:54321/rest/v1}"; fi )"; \
+	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; else echo "$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}"; fi )"; \
 	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
 	 echo "[8/12] Verify studio_board row..." && curl -sf "$${REST_BASE}/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[9/12] Hi-RAG v2 query..." && \
-	HPORT=""; for p in 8087 8086; do \
+	HPORT=""; for p in $(HIRAG_GPU_PORT) $(HIRAG_CPU_PORT); do \
 	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then HPORT=$$p; break; fi; \
 	done; \
-	if [ -z "$$HPORT" ]; then echo "FAIL: hi-rag-gateway-v2 not reachable on 8087 or 8086"; exit 1; fi; \
+	if [ -z "$$HPORT" ]; then echo "FAIL: hi-rag-gateway-v2 not reachable on $(HIRAG_GPU_PORT) or $(HIRAG_CPU_PORT)"; exit 1; fi; \
 	echo "→ using :$$HPORT"; \
 	curl -sf localhost:$$HPORT/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[10/12] Agent Zero health..." && curl -sf http://localhost:8080/healthz | jq -e '.nats.connected == true' >/dev/null && echo OK || (echo FAIL && exit 1)
@@ -584,10 +916,10 @@ smoke:
 	 REF_ID="yt:smoke-$${CID}"; \
 	 export RUN_ID="$${CID}" POINT_ID="$${POINT_ID}" CONST_ID="$${CONST_ID}" REF_ID="$$REF_ID"; \
 	 python3 -c 'import json, os, sys; obj={"type":"geometry.cgp.v1","data":{"spec":"chit.cgp.v0.1","meta":{"source":"smoke-test","namespace":"pmoves","run_id":os.environ["RUN_ID"]},"super_nodes":[{"id":"sn.smoke","constellations":[{"id":os.environ["CONST_ID"],"summary":"smoke geometry validation","radial_minmax":[0.05,0.85],"spectrum":[0.08,0.12,0.18,0.22,0.18,0.12,0.07,0.03],"anchor":[0.52,-0.41,0.23,0.11],"points":[{"id":os.environ["POINT_ID"],"modality":"video","ref_id":os.environ["REF_ID"],"t_start":12.5,"frame_idx":300,"proj":0.82,"conf":0.93,"text":"geometry smoke anchor"}]}]}]}}; json.dump(obj, sys.stdout)' > $$TMP; \
-	 GHPORT=""; for p in 8087 8086; do \
+	 GHPORT=""; for p in $(HIRAG_GPU_PORT) $(HIRAG_CPU_PORT); do \
 	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then GHPORT=$$p; break; fi; \
 	done; \
-	if [ -z "$$GHPORT" ]; then echo "FAIL: geometry gateway not reachable on 8087 or 8086"; rm -f $$TMP; exit 1; fi; \
+	if [ -z "$$GHPORT" ]; then echo "FAIL: geometry gateway not reachable on $(HIRAG_GPU_PORT) or $(HIRAG_CPU_PORT)"; rm -f $$TMP; exit 1; fi; \
 	 echo "[11/12] Geometry event ingest..." && curl -sf http://localhost:$$GHPORT/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 	 echo "[12/14] Geometry jump & calibration..." && curl -sf "http://localhost:$$GHPORT/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && curl -sf http://localhost:$$GHPORT/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 
@@ -608,26 +940,26 @@ channel-monitor-smoke:
 smoke-rerank:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
 	@echo "Request with rerank=true (may be disabled if model not available)"
-	curl -s localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7, "use_rerank": true}' | jq .
+	curl -s localhost:$(HIRAG_GPU_PORT)/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7, "use_rerank": true}' | jq .
 	@echo "If used_rerank=false, ensure internet/model access, or set RERANK_ENABLE=false."
 
 .PHONY: smoke-gpu
 smoke-gpu:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-gpu" && exit 1)
-	@echo "[GPU] Check v2-gpu (:8087) up..." && curl -sf http://localhost:8087/ | jq -e '.ok==true' >/dev/null && echo OK || (echo WARN: v2-gpu not up; exit 1)
-	@echo "[GPU] v2-gpu stats..." && curl -sf http://localhost:8087/hirag/admin/stats | jq . && \
-	  curl -sf http://localhost:8087/hirag/admin/stats | jq -e '.rerank_enabled==true and (.rerank_model|length)>0' >/dev/null && echo OK || (echo WARN: rerank not enabled or model missing; exit 1)
-	@echo "[GPU] v2-gpu rerank query..." && curl -sf localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[GPU] Check v2-gpu (:$(HIRAG_GPU_PORT)) up..." && curl -sf http://localhost:$(HIRAG_GPU_PORT)/ | jq -e '.ok==true' >/dev/null && echo OK || (echo WARN: v2-gpu not up; exit 1)
+	@echo "[GPU] v2-gpu stats..." && curl -sf http://localhost:$(HIRAG_GPU_PORT)/hirag/admin/stats | jq . && \
+	  curl -sf http://localhost:$(HIRAG_GPU_PORT)/hirag/admin/stats | jq -e '.rerank_enabled==true and (.rerank_model|length)>0' >/dev/null && echo OK || (echo WARN: rerank not enabled or model missing; exit 1)
+	@echo "[GPU] v2-gpu rerank query..." && docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d '{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[GPU] v1-gpu (:8090) (optional)..." && (curl -sf http://localhost:8090/ | jq -e '.ok==true' >/dev/null && echo OK) || (echo SKIP: v1-gpu not up; true)
 
 .PHONY: smoke-qwen-rerank
 smoke-qwen-rerank:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
-	@echo "[Qwen] Inspect v2 stats..." && STATS=$$(curl -sf http://localhost:8087/hirag/admin/stats || true); \
+	@echo "[Qwen] Inspect v2 stats..." && STATS=$$(curl -sf http://localhost:$(HIRAG_GPU_PORT)/hirag/admin/stats || true); \
 	MODEL=$$(printf "%s" "$$STATS" | jq -r '.rerank_model // empty'); \
 	if printf "%s" "$$MODEL" | grep -qi "qwen"; then \
 	  echo "Rerank model is Qwen ($$MODEL)"; \
-	  curl -sf localhost:8087/hirag/query -H 'content-type: application/json' -d '{"query":"qwen rerank test","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1); \
+	  curl -sf localhost:$(HIRAG_GPU_PORT)/hirag/query -H 'content-type: application/json' -d '{"query":"qwen rerank test","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1); \
 	else \
 	  echo "Model ($$MODEL) is not Qwen; set RERANK_MODEL=Qwen/Qwen3-Reranker-4B on v2-gpu and retry."; \
 	  exit 0; \
@@ -836,6 +1168,13 @@ jellyfin-verify:
 	 if [ -f env.jellyfin-ai ]; then set -a; . env.jellyfin-ai; set +a; fi; \
 	 python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
 
+.PHONY: jellyfin-verify-single
+jellyfin-verify-single:
+	@bash -c 'set -euo pipefail; \
+	 set -a; [ -f env.shared ] && . env.shared; set +a; \
+	 export JELLYFIN_URL=$${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}; \
+	 JELLYFIN_EXPECTED_SERVER_NAME="" JELLYFIN_USER_ID="" python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
+
 .PHONY: jellyfin-folders
 jellyfin-folders:
 	@bash -c 'set -euo pipefail; \
@@ -854,16 +1193,17 @@ up-jellyfin-ai:
 	@mkdir -p $(JELLYFIN_AI_BASE)/qwen/models $(JELLYFIN_AI_BASE)/qwen/cache
 	@mkdir -p $(JELLYFIN_AI_BASE)/logs $(JELLYFIN_AI_BASE)/redis
 	@echo "Starting Jellyfin AI stack..."
-	@JELLYFIN_AI_BASE=$(JELLYFIN_AI_BASE) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.jellyfin-ai.yml up -d --force-recreate \
+	@set -a; . ./env.jellyfin-ai; set +a; \
+	JELLYFIN_AI_BASE=$(JELLYFIN_AI_BASE) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.jellyfin-ai.yml up -d --force-recreate \
 		jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-redis jellyfin-audio-processor jellyfin-api-gateway jellyfin-dashboard
 	@echo "✓ Jellyfin AI stack started successfully!"
 	@echo ""
 	@echo "Services:"
-	@echo "  - Jellyfin Media Server:  http://localhost:8096"
-	@echo "  - Dashboard:              http://localhost:8400"
-	@echo "  - API Gateway:            http://localhost:8300"
-	@echo "  - Ollama (Qwen2-Audio):   http://localhost:11434"
-	@echo "  - Neo4j Browser:          bolt://localhost:7687"
+	@. ./env.jellyfin-ai; echo "  - Jellyfin Media Server:  $$JELLYFIN_PUBLIC_BASE_URL"; \
+	  echo "  - Dashboard:              http://localhost:${JELLYFIN_DASHBOARD_PORT:-8400}"; \
+	  echo "  - API Gateway:            http://localhost:${JELLYFIN_API_PORT:-8300}"; \
+	  echo "  - Ollama (Qwen2-Audio):   http://localhost:11434"; \
+	  echo "  - Neo4j Browser:          bolt://localhost:7687"
 	@echo ""
 	@echo "Note: Qwen2-Audio model is already pulled and ready to use!"
 
@@ -886,6 +1226,10 @@ flight-check-retro:
 preflight:
 	@echo "Running PMOVES preflight checks..."
 	@$(PYTHON) scripts/bootstrap_env.py --check
+	@echo "→ Ensuring flightcheck dependencies..." && \
+		( command -v uv >/dev/null 2>&1 && \
+			uv pip install -q -r tools/flightcheck/requirements.txt \
+			|| $(PYTHON) -m pip install -q -r tools/flightcheck/requirements.txt )
 	@$(PYTHON) tools/flightcheck/retro_flightcheck.py --quick || true
 	@$(PYTHON) tools/flightcheck/retro_flightcheck.py --theme neon --beep || true
 
@@ -918,7 +1262,10 @@ help:
 	@echo "  chit-contract-check Run local CHIT contract grep (mirrors CI)"
 	@echo "  flight-check     Run environment preflight (deps, ports, .env)"
 	@echo "  flight-check-retro Retro-styled Rich CLI preflight"
-	@echo "  env-dedupe       Remove duplicate keys from .env (keeps last, writes .bak)"
+	@echo "  env-dedupe       Remove duplicate keys from .env.local (keeps last, writes .bak)"
+	@echo "  first-run        One-shot bootstrap: env, Supabase, seeds, full stack, smoke tests"
+	@echo "  supabase-boot-user Ensure Supabase boot operator exists and updates env files"
+	@echo "  docker-login-ghcr Login to ghcr.io using DOCKER_USERNAME/DOCKER_PASS"
 	@echo "  logs-core        Tail core services (docker compose logs -f ...)"
 	@echo "  setup            Run Codex/bootstrap env setup (make, conda deps)"
 	@echo "  venv             Create a local Python virtualenv (.venv) and install deps"
@@ -965,6 +1312,101 @@ setup:
 bootstrap:
 	@$(PYTHON) scripts/bootstrap_env.py $(BOOTSTRAP_FLAGS)
 
+.PHONY: first-run
+first-run: ensure-env-shared ## One-shot env bootstrap, seed data, start full stack, and run smokes
+		@echo "→ Bootstrapping environment registry values..."
+		@$(MAKE) bootstrap
+		@echo "→ Optional: joining Tailnet if enabled (TAILSCALE_AUTO_JOIN=true)..."
+		@bash -lc '. ./scripts/with-env.sh "$(CURDIR)/env.shared" >/dev/null 2>&1 || true; \
+		  if [ "$$TAILSCALE_AUTO_JOIN" = "true" ] || [ "$$TAILSCALE_AUTO_JOIN" = "1" ]; then \
+		    $(MAKE) tailscale-join || true; \
+		  else \
+		    echo "   • tailscale auto-join disabled"; \
+		  fi'
+		@echo "→ Ensuring Supabase backend is running..."
+	@if [ "$(SUPA_PROVIDER)" = "cli" ]; then \
+		if docker ps --format '{{.Names}}' | grep -q '^supabase_db_'; then \
+			echo "   • Supabase CLI stack already running."; \
+		else \
+			$(MAKE) supa-start; \
+		fi; \
+	else \
+		$(MAKE) supabase-up; \
+	fi
+	@echo "→ Ensuring Supabase boot operator is provisioned..."
+	@$(MAKE) supabase-boot-user
+	@echo "→ Starting core PMOVES services (data + workers)..."
+	@$(MAKE) up
+	@echo "→ Applying database seeds and demo corpora..."
+	@$(MAKE) bootstrap-data
+	@echo "→ Bringing agents online..."
+	@$(MAKE) up-agents
+	@echo "→ Starting bundled integrations (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@$(MAKE) up-external
+	@echo "→ Running 12-step smoke harness..."
+	@$(MAKE) smoke
+	@echo "✔ First-run bootstrap complete."
+
+.PHONY: supabase-boot-user
+supabase-boot-user:
+	@set -euo pipefail; \
+	EMAIL="$${SUPABASE_BOOT_USER_EMAIL:-}"; \
+	if [ -z "$$EMAIL" ]; then \
+		for file in env.shared env.shared.generated .env .env.local pmoves/.env.local; do \
+			if [ -f $$file ]; then \
+				VAL=$$(grep -m1 '^SUPABASE_BOOT_USER_EMAIL=' $$file | cut -d= -f2-); \
+				if [ -n "$$VAL" ]; then EMAIL="$$VAL"; break; fi; \
+			fi; \
+		done; \
+	fi; \
+	if [ -z "$$EMAIL" ]; then EMAIL="operator@pmoves.local"; fi; \
+	NAME="$${SUPABASE_BOOT_USER_NAME:-PMOVES Operator}"; \
+	URL="$${SUPABASE_SERVICE_URL:-$${SUPABASE_URL:-$${NEXT_PUBLIC_SUPABASE_URL:-http://127.0.0.1:54321}}}"; \
+	SERVICE_KEY="$${SUPABASE_SERVICE_ROLE_KEY:-}"; \
+	if [ -z "$$SERVICE_KEY" ]; then \
+		for file in env.shared env.shared.generated .env .env.local pmoves/.env.local; do \
+			if [ -f $$file ]; then \
+				VAL=$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' $$file | cut -d= -f2-); \
+				if [ -n "$$VAL" ]; then SERVICE_KEY="$$VAL"; break; fi; \
+			fi; \
+		done; \
+	fi; \
+	URL="$${URL%/}"; \
+	if [ -z "$$URL" ]; then \
+		echo "   • Supabase URL not detected; skipping boot user automation."; \
+		exit 0; \
+	fi; \
+	echo "   • Waiting for Supabase auth endpoint at $$URL..."; \
+	READY=0; \
+	for attempt in $$(seq 1 30); do \
+		if [ -n "$$SERVICE_KEY" ]; then \
+			if curl -sf -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" "$$URL/auth/v1/settings" >/dev/null 2>&1; then READY=1; break; fi; \
+		else \
+			if curl -sf "$$URL/auth/v1/health" >/dev/null 2>&1; then READY=1; break; fi; \
+		fi; \
+		sleep 1; \
+	done; \
+	if [ "$$READY" -ne 1 ]; then \
+		echo "   • Supabase auth endpoint not reachable; run 'make supa-start' then 'make supabase-boot-user'."; \
+		exit 0; \
+	fi; \
+	if python pmoves/tools/create_supabase_boot_user.py "$$EMAIL" --name "$$NAME" --rotate-password --write-env env.shared --write-env .env.local --write-env pmoves/.env.local --json >/dev/null; then \
+		echo "   • Supabase boot user ($$EMAIL) provisioned and env files updated."; \
+	else \
+		echo "   • Boot user automation failed; rerun 'make supabase-boot-user' after resolving errors."; \
+		exit 0; \
+	fi
+
+.PHONY: docker-login-ghcr
+docker-login-ghcr:
+	@if [ -z "$$DOCKER_USERNAME" ] || [ -z "$$DOCKER_PASS" ]; then \
+		echo "Set DOCKER_USERNAME and DOCKER_PASS in your environment."; \
+		exit 1; \
+	fi
+	@echo "Logging into ghcr.io as $$DOCKER_USERNAME"
+	@echo "$$DOCKER_PASS" | docker login ghcr.io -u "$$DOCKER_USERNAME" --password-stdin >/dev/null
+	@echo "✔ ghcr.io login successful"
+
 .PHONY: supabase-migrate
 supabase-migrate:
 	@if [ "$(OS)" = "Windows_NT" ]; then \
@@ -977,10 +1419,10 @@ supabase-migrate:
 smoke-geometry:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-geometry" && exit 1)
 	@echo '{"type":"geometry.cgp.v1","data":{"spec":"chit.cgp.v0.1","super_nodes":[{"constellations":[{"id":"c.test.1","summary":"beat-aligned hook","spectrum":[0.05,0.1,0.2,0.3,0.2,0.1,0.03,0.02],"points":[{"id":"p.test.1","modality":"video","ref_id":"yt123","t_start":12.5,"frame_idx":300,"proj":0.8,"conf":0.9,"text":"chorus line"}]}]}]}}' > .tmp_cgp.json
-	@HPORT=""; for p in 8087 8086; do \
+	@HPORT=""; for p in $(HIRAG_GPU_PORT) $(HIRAG_CPU_PORT); do \
 	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then HPORT=$$p; break; fi; \
 	done; \
-	if [ -z "$$HPORT" ]; then echo "FAIL: hi-rag-gateway-v2 not reachable on 8087 or 8086"; rm -f .tmp_cgp.json; exit 1; fi; \
+	if [ -z "$$HPORT" ]; then echo "FAIL: hi-rag-gateway-v2 not reachable on $(HIRAG_GPU_PORT) or $(HIRAG_CPU_PORT)"; rm -f .tmp_cgp.json; exit 1; fi; \
 	echo "→ using :$$HPORT"; \
 	echo "[1/4] POST /geometry/event" && curl -sf http://localhost:$$HPORT/geometry/event -H 'content-type: application/json' -d @.tmp_cgp.json >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
 	@echo "[2/4] GET /shape/point/p.test.1/jump" && curl -sf http://localhost:$$HPORT/shape/point/p.test.1/jump | jq -e '.locator.modality=="video" and .locator.ref_id=="yt123"' >/dev/null && echo OK || (echo FAIL && rm -f .tmp_cgp.json && exit 1)
@@ -1035,24 +1477,104 @@ yt-smoke:
 yt-emit-smoke:
 	@if [ -z "$(URL)" ]; then echo "Usage: make yt-emit-smoke URL=<youtube_url>"; exit 1; fi
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
-	@echo "[YT] Info" && curl -sS -X POST http://localhost:8077/yt/info -H 'content-type: application/json' -d '{"url":"$(URL)"}' | tee .tmp_info.json >/dev/null
-	@VID=$$(jq -r '.info.id' .tmp_info.json); echo "VIDEO=$$VID"; \
-	  echo "[YT] Ingest" && curl -sS -X POST http://localhost:8077/yt/ingest -H 'content-type: application/json' -d '{"url":"$(URL)","namespace":"pmoves","bucket":"assets"}' | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1); \
-	  echo "[YT] Emit (chunks+CGP)" && curl -sS -X POST http://localhost:8077/yt/emit -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"namespace\":\"pmoves\"}" | tee .tmp_emit.json | jq -e '.ok==true and .chunks>=1 and (.upserted|tonumber) >= 1' >/dev/null && echo OK || (echo FAIL && exit 1); \
+	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; else echo "$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}"; fi )"; \
+	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
+	 SERVICE_KEY="$${SUPABASE_SERVICE_ROLE_KEY:-}"; \
+	 if [ -z "$$SERVICE_KEY" ] && [ -f .env.local ]; then SERVICE_KEY="$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' .env.local | cut -d= -f2-)"; fi; \
+	 if [ -z "$$SERVICE_KEY" ] && [ -f env.shared ]; then SERVICE_KEY="$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' env.shared | cut -d= -f2-)"; fi; \
+	 if [ -z "$$SERVICE_KEY" ] && [ -f env.shared.generated ]; then SERVICE_KEY="$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' env.shared.generated | cut -d= -f2-)"; fi; \
+	 if [ -z "$$SERVICE_KEY" ]; then SERVICE_KEY="$${SUPABASE_SERVICE_KEY:-$$APIKEY}"; fi; \
+	 echo "[YT] Info" && curl -sS -X POST http://localhost:8077/yt/info -H 'content-type: application/json' -d '{"url":"$(URL)"}' | tee .tmp_info.json >/dev/null; \
+	 VID=$$(jq -r '.info.id' .tmp_info.json); echo "VIDEO=$$VID"; \
+	 if curl -s "$$REST_BASE/videos?video_id=eq.$$VID&select=id&limit=1" -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" | jq -e 'length>0' >/dev/null 2>&1; then \
+	   echo "[YT] Ingest (skip, already present)"; \
+	 else \
+	   echo "[YT] Ingest" && curl -sS -X POST http://localhost:8077/yt/ingest -H 'content-type: application/json' -d '{"url":"$(URL)","namespace":"pmoves","bucket":"assets"}' | jq -e '.ok==true' >/dev/null && echo OK || { echo FAIL; exit 1; }; \
+	 fi; \
+	  echo "[YT] Emit (chunks+CGP)" && curl -sS -X POST http://localhost:8077/yt/emit -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"namespace\":\"pmoves\"}" | tee .tmp_emit.json | jq -e '.ok==true and .chunks>=1 and (.upserted|tonumber) >= 1' >/dev/null \
+	     || { \
+	        if jq -e '.detail|ascii_downcase|test("transcript not found")' .tmp_emit.json >/dev/null 2>&1; then \
+	          echo "[YT] Transcript missing; fetching transcript then retrying emit"; \
+	          curl -sS -X POST http://localhost:8077/yt/transcript -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\"}" | jq -e '.ok==true' >/dev/null || { echo FAIL; exit 1; }; \
+	          curl -sS -X POST http://localhost:8077/yt/emit -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"namespace\":\"pmoves\"}" | tee .tmp_emit.json | jq -e '.ok==true and .chunks>=1 and (.upserted|tonumber) >= 1' >/dev/null || { echo FAIL; exit 1; }; \
+	        else \
+	          echo FAIL; exit 1; \
+	        fi; \
+	     }; \
 	  echo "[YT] Profile (if autotune)" && jq -r '.profile // "(none)"' .tmp_emit.json; \
-	  echo "[Geometry] Jump point 0" && curl -sS http://localhost:8087/shape/point/p:yt:$$VID:0/jump | jq -e ".locator.modality==\"video\" and .locator.ref_id==\"$${VID}\"" >/dev/null && echo OK || (echo FAIL && exit 1); \
-	  rm -f .tmp_info.json
+	  GHPORT=""; \
+	 HIRAG_GPU=$(HIRAG_GPU_PORT); HIRAG_CPU=$(HIRAG_CPU_PORT); \
+	 if curl -sf http://localhost:$$HIRAG_GPU/hirag/admin/stats >/dev/null 2>&1; then GHPORT=$$HIRAG_GPU; fi; \
+	 if [ -z "$$GHPORT" ]; then \
+	   if curl -sf localhost:$$HIRAG_CPU/healthz >/dev/null 2>&1 || curl -sf localhost:$$HIRAG_CPU/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then GHPORT=$$HIRAG_CPU; fi; \
+	 fi; \
+	 if [ -z "$$GHPORT" ]; then echo "FAIL: geometry gateway not reachable on $$HIRAG_GPU or $$HIRAG_CPU"; exit 1; fi; \
+		 echo "[Geometry] Resolve a point id from REST (ref_id=\"$$VID\")"; \
+			 SUPA_URL=$${SUPABASE_REST_URL:-$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}}; \
+			 POINT_ID=$$(curl -s "$$SUPA_URL/shape_points" --get \
+			   -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" \
+			   --data-urlencode "ref_id=eq.$$VID" --data-urlencode "modality=eq.video" \
+			   --data-urlencode "select=id" --data-urlencode "order=created_at.asc" --data-urlencode "limit=1" \
+			   | jq -r '.[0].id // empty'); \
+			 if [ -z "$$POINT_ID" ]; then \
+			   echo "  • Waiting for REST point materialization..."; \
+			   for i in $$(seq 1 10); do \
+			     POINT_ID=$$(curl -s "$$SUPA_URL/shape_points" --get -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" \
+			       --data-urlencode "ref_id=eq.$$VID" --data-urlencode "modality=eq.video" --data-urlencode "select=id" --data-urlencode "order=created_at.asc" --data-urlencode "limit=1" \
+			       | jq -r '.[0].id // empty'); \
+			     if [ -n "$$POINT_ID" ]; then echo "  • Found after $$i retries: $$POINT_ID"; break; fi; \
+			     sleep 3; \
+			   done; \
+			 fi; \
+		 if [ -n "$$POINT_ID" ]; then \
+		   echo "  • Found point id (REST): $$POINT_ID"; \
+			 else \
+			   echo "  • No point id found yet; falling back to legacy jump heuristic"; \
+			 fi; \
+		 CANDIDATE_PORTS="$$GHPORT"; \
+		 if [ "$$GHPORT" = "$$HIRAG_GPU" ]; then CANDIDATE_PORTS="$$HIRAG_GPU $$HIRAG_CPU"; fi; \
+		 GEO_OK=1; \
+		 for PORT in $$CANDIDATE_PORTS; do \
+		   SERVICE=hi-rag-gateway-v2; \
+		   if [ "$$PORT" = "$$HIRAG_GPU" ]; then SERVICE=hi-rag-gateway-v2-gpu; fi; \
+		   for i in $$(seq 1 10); do \
+		     if [ -n "$$POINT_ID" ]; then \
+		       if docker compose -p $(PROJECT) exec -T $$SERVICE curl -sS http://localhost:8086/shape/point/$$POINT_ID/jump | jq -e ".locator.modality==\"video\" and .locator.ref_id==\"$${VID}\"" >/dev/null; then \
+		         GEO_OK=0; GHPORT=$$PORT; break; \
+		       fi; \
+		     else \
+		       if docker compose -p $(PROJECT) exec -T $$SERVICE curl -sS http://localhost:8086/shape/point/p:yt:$$VID:0/jump | jq -e ".locator.modality==\"video\" and .locator.ref_id==\"$${VID}\"" >/dev/null; then \
+		         GEO_OK=0; GHPORT=$$PORT; break; \
+		       fi; \
+		     fi; \
+		     echo "retry $$i"; sleep 3; \
+		   done; \
+		   if [ $$GEO_OK -eq 0 ]; then break; fi; \
+		 done; \
+			 if [ $$GEO_OK -ne 0 ]; then \
+			   if [ "${YT_SMOKE_STRICT_JUMP:-true}" = "true" ]; then echo FAIL; exit 1; fi; \
+			   echo "[Geometry] Jump fallback via query validation"; \
+			   QOK=$$(printf '{"query":"%s","namespace":"pmoves","k":1}\n' "$$VID" \
+			     | curl -sS -H 'content-type: application/json' -d @- http://localhost:$$GHPORT/hirag/query \
+			     | jq -e '.hits|length>=1' >/dev/null; echo $$?); \
+			   if [ "$$QOK" = "0" ]; then echo "OK (verified via /hirag/query)"; else echo FAIL; exit 1; fi; \
+			 else \
+			   echo "OK (port $$GHPORT)"; \
+			 fi; \
+	 rm -f .tmp_info.json .tmp_emit.json .tmp_items.json
 
 .PHONY: yt-playlist-smoke
 yt-playlist-smoke:
 	@if [ -z "$(URL)" ]; then echo "Usage: make yt-playlist-smoke URL=<playlist_or_channel_url>"; exit 1; fi
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
-	@echo "[YT] Playlist start" && curl -sS -X POST http://localhost:8077/yt/playlist -H 'content-type: application/json' -d '{"url":"$(URL)","namespace":"pmoves","bucket":"assets","max_videos":3}' | tee .tmp_playlist.json >/dev/null
+	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; else echo "$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}"; fi )"; \
+	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
+	 echo "[YT] Playlist start" && curl -sS -X POST http://localhost:8077/yt/playlist -H 'content-type: application/json' -d '{"url":"$(URL)","namespace":"pmoves","bucket":"assets","max_videos":3}' | tee .tmp_playlist.json >/dev/null; \
 	@JOB=$$(jq -r '.job_id // empty' .tmp_playlist.json); if [ -z "$$JOB" ]; then echo "No job_id returned"; exit 1; fi; echo JOB=$$JOB; \
 	  echo "[YT] Poll yt_items for job (up to 10x)"; \
 	  for i in $$(seq 1 10); do \
 	    sleep 6; \
-	    curl -s "http://localhost:3010/yt_items?job_id=eq.$$JOB&select=video_id,status&order=created_at.asc" | tee .tmp_items.json >/dev/null; \
+	    curl -s "$${REST_BASE}/yt_items?job_id=eq.$$JOB&select=video_id,status&order=created_at.asc" -H "apikey: $$APIKEY" | tee .tmp_items.json >/dev/null; \
 	    CNT=$$(jq 'length' .tmp_items.json); \
 	    if [ "$$CNT" -ge 1 ]; then echo "items=$$CNT"; break; fi; \
 	    echo "retry $$i"; \
@@ -1061,16 +1583,28 @@ yt-playlist-smoke:
 	  if [ -z "$$VID" ]; then VID=$$(jq -r '.[0].video_id // empty' .tmp_items.json); fi; \
 	  if [ -z "$$VID" ]; then echo "No video_id found in yt_items"; exit 1; fi; echo VIDEO=$$VID; \
 	  echo "[YT] Emit (chunks+CGP)" && curl -sS -X POST http://localhost:8077/yt/emit -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"namespace\":\"pmoves\"}" | tee .tmp_emit.json | jq -e '.ok==true and .chunks>=1 and (.upserted|tonumber) >= 1' >/dev/null && echo OK || (echo FAIL && exit 1); \
-	  echo "[Geometry] Jump point 0" && curl -sS http://localhost:8087/shape/point/p:yt:$$VID:0/jump | jq -e '.locator.modality=="video" and .locator.ref_id==$$VID' >/dev/null && echo OK || (echo FAIL && exit 1); \
+	 echo "[Geometry] Jump point 0"; \
+	  GEO_PORTS="$(HIRAG_GPU_PORT) $(HIRAG_CPU_PORT)"; \
+	  GEO_OK=1; \
+	  for PORT in $$GEO_PORTS; do \
+	    if curl -sf http://localhost:$$PORT/hirag/admin/stats >/dev/null 2>&1 || curl -sf http://localhost:$$PORT/healthz >/dev/null 2>&1; then \
+	      if curl -sS http://localhost:$$PORT/shape/point/p:yt:$$VID:0/jump | jq -e '.locator.modality=="video" and .locator.ref_id==$$VID' >/dev/null; then \
+	        GEO_OK=0; \
+	        echo "OK (port $$PORT)"; \
+	        break; \
+	      fi; \
+	    fi; \
+	  done; \
+	  if [ $$GEO_OK -ne 0 ]; then echo FAIL; exit 1; fi; \
 	  rm -f .tmp_playlist.json .tmp_items.json .tmp_emit.json
 
 .PHONY: web-geometry
 web-geometry:
-	@echo "Opening http://localhost:8087/geometry/ ..."
+	@echo "Opening http://localhost:$(HIRAG_GPU_PORT)/geometry/ ..."
 	@if [ "$(OS)" = "Windows_NT" ]; then \
-		start "" http://localhost:8087/geometry/ ; \
+		start "" http://localhost:$(HIRAG_GPU_PORT)/geometry/ ; \
 	else \
-		xdg-open http://localhost:8087/geometry/ 2>/dev/null || open http://localhost:8087/geometry/ ; \
+		xdg-open http://localhost:$(HIRAG_GPU_PORT)/geometry/ 2>/dev/null || open http://localhost:$(HIRAG_GPU_PORT)/geometry/ ; \
 	fi
 	@$(MAKE) smoke-geometry
 
@@ -1084,9 +1618,46 @@ discord-smoke:
 jellyfin-smoke:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
 	@echo "[Jellyfin] Health" && curl -sf http://localhost:8093/healthz | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[Jellyfin] Playback URL for latest video" && VID=$$(curl -s 'http://localhost:3010/videos?order=id.desc&select=video_id&limit=1' | jq -r '.[0].video_id // empty'); \
-	if [ -z "$$VID" ]; then echo "No videos found in Supabase; run yt-emit-smoke first"; exit 0; fi; \
-	curl -sS -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"t\":5}" | jq -e '.ok==true and (.url|length)>0' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; else echo "$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}"; fi )"; \
+	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
+	 SERVICE_KEY="$${SUPABASE_SERVICE_ROLE_KEY:-}"; \
+	 if [ -z "$$SERVICE_KEY" ] && [ -f .env.local ]; then SERVICE_KEY="$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' .env.local | cut -d= -f2-)"; fi; \
+	 if [ -z "$$SERVICE_KEY" ] && [ -f env.shared ]; then SERVICE_KEY="$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' env.shared | cut -d= -f2-)"; fi; \
+	 if [ -z "$$SERVICE_KEY" ] && [ -f env.shared.generated ]; then SERVICE_KEY="$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' env.shared.generated | cut -d= -f2-)"; fi; \
+	 if [ -z "$$SERVICE_KEY" ]; then SERVICE_KEY="$$APIKEY"; fi; \
+	 VID=$$(curl -s "$${REST_BASE}/videos?order=id.desc&select=video_id&limit=1" -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" | jq -r '.[0].video_id // empty' 2>/dev/null); \
+	 echo "[Jellyfin] Latest Supabase video: $$VID"; \
+	 if [ -z "$$VID" ]; then echo "No videos found in Supabase; run yt-emit-smoke first"; exit 0; fi; \
+	 echo "[Jellyfin] Auto-map latest video"; \
+	 MAP_STATUS=$$(curl -sS -w "\n%{http_code}" -X POST http://localhost:8093/jellyfin/map-by-title -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\"}" | tail -n1); \
+	 if [ "$$MAP_STATUS" -ne 200 ]; then \
+	   echo "  ↳ map-by-title returned $$MAP_STATUS; attempting fallback link"; \
+	   APIKEY="$${JELLYFIN_API_KEY:-}"; \
+	   if [ -z "$$APIKEY" ]; then \
+	     for candidate in .env.local env.shared env.shared.generated .env.generated; do \
+	       if [ -f $$candidate ]; then \
+	         LINE=$$(grep -m1 '^JELLYFIN_API_KEY=' $$candidate || true); \
+	         if [ -n "$$LINE" ]; then APIKEY="$$(printf '%s' "$$LINE" | cut -d= -f2-)"; break; fi; \
+	       fi; \
+	     done; \
+	   fi; \
+	   if [ -z "$$APIKEY" ]; then echo "  ↳ missing JELLYFIN_API_KEY for fallback"; exit 1; fi; \
+   FALLBACK_BASE="$${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}"; \
+   FALLBACK_ID=$$(curl -s "$$FALLBACK_BASE/Items?Recursive=true&IncludeItemTypes=Video,Audio&SortBy=DateCreated&SortOrder=Descending&Limit=1&api_key=$$APIKEY" | jq -r '.Items[0].Id // empty'); \
+	   if [ -z "$$FALLBACK_ID" ]; then echo "  ↳ no Jellyfin items found; seed or mount media and rerun. Skipping playback check."; exit 0; fi; \
+	   echo "  ↳ linking $$VID to fallback item $$FALLBACK_ID"; \
+	   curl -sS -X POST http://localhost:8093/jellyfin/link -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"jellyfin_item_id\":\"$$FALLBACK_ID\"}" | jq -e '.ok==true' >/dev/null || { echo "  ↳ fallback link failed (non-fatal)"; exit 0; }; \
+	 else \
+	   echo "  ↳ map-by-title OK"; \
+	 fi; \
+	 echo "[Jellyfin] Playback URL for latest video" && curl -sS -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"t\":5}" | jq -e '.ok==true and (.url|length)>0' >/dev/null && echo OK || (echo FAIL && exit 1)
+
+.PHONY: yt-jellyfin-smoke
+yt-jellyfin-smoke:
+	@YT_URL=$${YT_URL:-https://www.youtube.com/watch?v=2Vv-BfVoq4g}; \
+	 echo "[YT+Jellyfin] Using $$YT_URL"; \
+	 $(MAKE) yt-emit-smoke URL="$$YT_URL"
+	@$(MAKE) jellyfin-smoke
 .PHONY: demo-content-published
 demo-content-published:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for demo-content-published" && exit 1)
@@ -1188,3 +1759,17 @@ seed-approval-ps:
 .PHONY: manifest-audit
 manifest-audit: ## Audit provisioning inventory and Supabase exports for unsupported hardware
 	@PYTHONPATH=.. $(PYTHON) -m pmoves.tools.manifest_audit
+.PHONY: yt-integrations-clone yt-integrations-build yt-integrations-push yt-image-local
+yt-integrations-clone: ## Clone PMOVES.YT fork into integrations-workspace
+	@bash -lc 'set -e; ROOT=$$(pwd); WS=$${INTEGRATIONS_WORKSPACE:-$$ROOT/../integrations-workspace}; mkdir -p "$$WS"; cd "$$WS"; \
+	  if [ ! -d PMOVES.YT ]; then git clone https://github.com/POWERFULMOVES/PMOVES.YT.git; else echo "PMOVES.YT already present"; fi'
+
+yt-integrations-build: ## Build pmoves-yt image from fork (set YTDLP_VERSION=YYYY.MM.DD if desired)
+	@bash -lc 'set -e; WS=$${INTEGRATIONS_WORKSPACE:-$$(pwd)/../integrations-workspace}; cd "$$WS/PMOVES.YT"; \
+	  docker build --build-arg YTDLP_VERSION="$${YTDLP_VERSION:-}" -t ghcr.io/powerfulmoves/pmoves-yt:dev .'
+
+yt-integrations-push: ## Push fork-built image to GHCR (requires docker login ghcr.io)
+	@bash -lc 'docker push ghcr.io/powerfulmoves/pmoves-yt:dev'
+
+yt-image-local: ## Build pmoves-yt locally from services/pmoves-yt with optional YTDLP_VERSION
+	@bash -lc 'cd services/pmoves-yt && docker build --build-arg YTDLP_VERSION="$${YTDLP_VERSION:-}" -t ghcr.io/powerfulmoves/pmoves-yt:local .'

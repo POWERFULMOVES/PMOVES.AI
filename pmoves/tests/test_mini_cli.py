@@ -72,7 +72,7 @@ def test_bootstrap_stages_bundle_and_updates_env(tmp_path) -> None:
 
     wizard = destination / "scripts" / "install" / "wizard.sh"
     assert wizard.exists()
-    source_wizard = mini_cli.PROVISIONING_SOURCE / "scripts" / "install" / "wizard.sh"
+    source_wizard = mini_cli.PROVISIONING_BUNDLE_FILES[Path("scripts/install/wizard.sh")]
     assert (wizard.stat().st_mode & 0o777) == (source_wizard.stat().st_mode & 0o777)
 
 

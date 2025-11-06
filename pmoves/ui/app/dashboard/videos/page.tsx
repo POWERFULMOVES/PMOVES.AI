@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import DashboardNavigation from "../../../components/DashboardNavigation";
 import useInfiniteSupabaseQuery from "../../../hooks/useInfiniteSupabaseQuery";
 import {
   getSupabaseBrowserClient,
@@ -72,7 +73,12 @@ const mergeMeta = (
 
 export default function VideosDashboardPage() {
   const client = useMemo(() => getSupabaseBrowserClient(), []);
-  const restUrl = useMemo(() => getSupabaseRestUrl(), []);
+  const [restUrl, setRestUrl] = useState<string | null>(null);
+  useEffect(() => {
+    // Avoid hydration mismatches by resolving on client after mount
+    setRestUrl(getSupabaseRestUrl());
+  }, []);
+  // (moved below to ensure `refresh` is initialized before use)
 
   const [statusFilter, setStatusFilter] = useState<string>("needs-review");
   const [namespaceFilter, setNamespaceFilter] = useState<string>("all");
@@ -134,6 +140,27 @@ export default function VideosDashboardPage() {
     order: { column: "id", ascending: false },
     filters,
   });
+
+  // Live updates: refresh when videos table changes (insert/update/delete)
+  useEffect(() => {
+    const chan = (client as any)
+      ?.channel?.("videos-realtime")
+      ?.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "videos" },
+        () => {
+          // Debounce to avoid bursts during batch updates
+          Promise.resolve().then(() => void refresh());
+        }
+      )
+      ?.subscribe?.();
+
+    return () => {
+      try {
+        chan?.unsubscribe?.();
+      } catch {}
+    };
+  }, [client, refresh]);
 
   const namespaces = useMemo(() => {
     const set = new Set<string>();
@@ -230,6 +257,8 @@ export default function VideosDashboardPage() {
 
   return (
     <div className="space-y-6 p-6">
+    <div className="p-6 space-y-6">
+      <DashboardNavigation active="videos" />
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Videos Signal Vault</h1>
         <p className="text-sm text-neutral-600">
@@ -268,7 +297,11 @@ export default function VideosDashboardPage() {
       <section className="grid gap-4 md:grid-cols-4">
         <label className="flex flex-col gap-1 text-sm text-brand-ink">
           <span className="font-medium text-brand-ink">Status</span>
+        <label className="flex flex-col gap-1 text-sm" htmlFor="statusFilter">
+          <span className="font-medium">Status</span>
           <select
+            id="statusFilter"
+            name="statusFilter"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
             className="rounded border border-brand-border bg-brand-inverse px-2 py-1 text-brand-ink"
@@ -283,7 +316,11 @@ export default function VideosDashboardPage() {
 
         <label className="flex flex-col gap-1 text-sm text-brand-ink">
           <span className="font-medium text-brand-ink">Namespace</span>
+        <label className="flex flex-col gap-1 text-sm" htmlFor="namespaceFilter">
+          <span className="font-medium">Namespace</span>
           <select
+            id="namespaceFilter"
+            name="namespaceFilter"
             value={namespaceFilter}
             onChange={(event) => setNamespaceFilter(event.target.value)}
             className="rounded border border-brand-border bg-brand-inverse px-2 py-1 text-brand-ink"
@@ -299,7 +336,11 @@ export default function VideosDashboardPage() {
 
         <label className="flex flex-col gap-1 text-sm text-brand-ink">
           <span className="font-medium text-brand-ink">Search title or video id</span>
+        <label className="flex flex-col gap-1 text-sm" htmlFor="searchTerm">
+          <span className="font-medium">Search title or video id</span>
           <input
+            id="searchTerm"
+            name="searchTerm"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Search"
@@ -309,7 +350,11 @@ export default function VideosDashboardPage() {
 
         <label className="flex flex-col gap-1 text-sm text-brand-ink">
           <span className="font-medium text-brand-ink">Reviewer</span>
+        <label className="flex flex-col gap-1 text-sm" htmlFor="reviewer">
+          <span className="font-medium">Reviewer</span>
           <input
+            id="reviewer"
+            name="reviewer"
             value={reviewer}
             onChange={(event) => setReviewer(event.target.value)}
             placeholder="Initials or handle"

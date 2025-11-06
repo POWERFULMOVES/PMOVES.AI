@@ -32,10 +32,10 @@ jellyfin-bridge:
   ports: ["8093:8093"]
   profiles: ["orchestration"]
   environment:
-    - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://jellyfin:8096}
+      - JELLYFIN_URL=http://jellyfin-ai:8096
     - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
     - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
-    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-http://postgrest:3000}
+    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}
     - JELLYFIN_AUTOLINK=true  # Enable auto-mapping
     - AUTOLINK_INTERVAL_SEC=60  # Auto-map every 60 seconds
 ```
@@ -44,10 +44,10 @@ jellyfin-bridge:
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `JELLYFIN_URL` | Jellyfin server base URL (internal) | Yes | `http://jellyfin:8096` |
+| `JELLYFIN_URL` | Jellyfin server base URL (internal) | Yes | `http://jellyfin-ai:8096` (overlay container; host access continues on `http://localhost:9096`) |
 | `JELLYFIN_API_KEY` | Jellyfin API key for authentication | Yes | - |
 | `JELLYFIN_USER_ID` | Jellyfin user ID for library access | Yes | - |
-| `SUPA_REST_URL` | PostgREST base URL | Yes | `http://postgrest:3000` |
+| `SUPA_REST_URL` | Supabase REST base URL (CLI or PostgREST) | Yes | `http://host.docker.internal:65421/rest/v1` (Supabase CLI) |
 | `JELLYFIN_AUTOLINK` | Enable automatic title-based mapping | No | `false` |
 | `AUTOLINK_INTERVAL_SEC` | Auto-map check interval (seconds) | No | `60` |
 | `JELLYFIN_DEFAULT_LIBRARY_IDS` | Comma-separated library IDs applied to search when callers omit `library_ids` | No | - |
@@ -66,6 +66,8 @@ jellyfin-bridge:
 | `JELLYFIN_BRANDING_KEY_COLUMN` | Column storing the row identifier in the branding table | No | `key` |
 | `JELLYFIN_BRANDING_VALUE_COLUMN` | Column storing the branding JSON document | No | `value` |
 
+> **Tip:** If you use the compose-hosted PostgREST bundle instead of the Supabase CLI, override `SUPA_REST_URL` and `SUPA_REST_INTERNAL_URL` to `http://postgrest:3000` so the bridge shares the same database connection as the rest of the stack.
+
 ## Jellyfin 10.11 Upgrade Runbook
 
 ### Maintenance Window
@@ -75,7 +77,7 @@ jellyfin-bridge:
 
 ### Required Overrides
 
-- Set `JELLYFIN_IMAGE=jellyfin/jellyfin:10.11.0` before invoking `make up-external` or `make up-jellyfin` so the core bridge runtime pulls the 10.11 series image.
+- Set `JELLYFIN_IMAGE=ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest` before invoking `make up-external` or `make up-jellyfin` so the bridge uses the PMOVES-published 10.11 build (updated tags track upstream releases). Override with a specific version if you need to pin.
 - For the optional AI stack, ensure `docker-compose.jellyfin-ai.yml` is picked up (via `make up-jellyfin-ai`) so the bundled LinuxServer build (`lscr.io/linuxserver/jellyfin:10.11.0`) is used.
 - Keep `JELLYFIN_EXPECTED_SERVER_NAME` aligned with production branding if you changed it from the default; the credential check enforces this string after restart.
 
@@ -200,7 +202,7 @@ Content-Type: application/json
 ```json
 {
   "ok": true,
-  "system": "10.10.7"
+  "system": "10.11.0"
 }
 ```
 
@@ -534,6 +536,12 @@ curl -X POST http://localhost:8093/jellyfin/playback-url \
   -H "Content-Type: application/json" \
   -d '{"video_id": "dQw4w9WgXcQ", "t": 30}'
 ```
+
+### Smoketest Expectations
+
+- `make jellyfin-smoke` (also triggered at the end of `make yt-jellyfin-smoke`) now attempts `/jellyfin/map-by-title` for the most recent Supabase video and logs the HTTP status. If the lookup misses, it links the video to the newest Jellyfin library item via `/jellyfin/link` before requesting `/jellyfin/playback-url`, ensuring the smoke always returns a non-empty URL.
+- Keep at least one asset in the overlay libraries—`python scripts/seed_jellyfin_media.py` drops a lightweight tone clip under `pmoves/jellyfin-ai/media/music`, which doubles as the fallback target for smoke runs on fresh machines.
+- Host access remains on `http://localhost:9096`; the bridge talks to the container alias (`http://jellyfin-ai:8096`) through the shared `cataclysm-net` network so both stacks stay in sync.
 
 ---
 
