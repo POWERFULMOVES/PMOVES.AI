@@ -29,7 +29,7 @@ scrape_configs:
           - http://host.docker.internal:8087/hirag/healthz  # hi-rag v2 GPU
           - http://host.docker.internal:8088/healthz        # presign
           - http://host.docker.internal:8091/healthz        # archon
-          - http://host.docker.internal:8097/api/monitor/status # channel monitor
+          - http://host.docker.internal:8097/healthz            # channel monitor
           - http://host.docker.internal:9096                # jellyfin overlay
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:5678                # n8n
@@ -41,3 +41,7 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox:9115
+
+  - job_name: channel_monitor
+    static_configs:
+      - targets: ["channel-monitor:8097"]

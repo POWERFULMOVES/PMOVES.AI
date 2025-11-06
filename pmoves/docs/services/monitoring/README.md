@@ -21,7 +21,7 @@ What’s wired by default
   - hi-rag-gateway-v2-gpu: http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/healthz
   - presign: http://localhost:8088/healthz
   - archon: http://localhost:8091/healthz
-  - channel-monitor: http://localhost:8097/api/monitor/status
+  - channel-monitor: http://localhost:8097/healthz
   - jellyfin overlay: http://localhost:9096
   - tensorzero UI: http://localhost:4000
   - n8n: http://localhost:5678
@@ -34,6 +34,10 @@ Env knobs
 - `GRAFANA_HOST_PORT=3002`
 - `LOKI_HOST_PORT=3100`
 - `CADVISOR_HOST_PORT=8080`
+- `MON_INCLUDE_CADVISOR=true` to force-start cAdvisor on non-Linux hosts
+
+Notes
+- On Docker Desktop for Windows/macOS, cAdvisor’s kernel mounts can be limited. If cAdvisor reports unhealthy or fails to start, it will auto-retry; you can also temporarily comment out the service or run only on Linux hosts. The rest of the monitoring stack (Prometheus, Grafana, Blackbox, Loki/Promtail) works cross‑platform.
 
 Linking Agent Zero / Archon traces (future)
 - Both services can emit OpenTelemetry (OTLP). When you enable an OTLP collector, set:
@@ -52,4 +56,3 @@ Dashboards
 
 CLI helper
 - `python pmoves/tools/monitoring_report.py` prints a quick status summary (targets, failures, top CPU containers).
-
