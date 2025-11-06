@@ -42,6 +42,14 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make supabase-boot-user`
   - Provisions (or rotates) the Supabase dashboard operator, waits for the auth endpoint, and updates `env.shared`, `.env.local`, and `pmoves/.env.local` with the latest password and JWT. `make first-run` runs this automatically.
 
+## Console (UI)
+- `make ui-dev-start`
+  - Starts the Next.js console on port 3001 using the project env loader; when `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` is present, the console auto‑auths and skips `/login`.
+- `make ui-dev-stop`
+  - Stops the background dev server started by `ui-dev-start`.
+- `make ui-dev-logs`
+  - Tails the console dev log for quick debugging.
+
 ## Agents, Media, and YT
 - `make up-agents`
   - Starts NATS, Agent Zero, Archon, Mesh Agent, and publisher-discord.

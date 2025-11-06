@@ -24,15 +24,25 @@ ST_MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
 
 _st_model = None
 
-def _embed_tensorzero(text: str):
+def _tensorzero_openai_base() -> str:
     if not TENSORZERO_BASE:
+        return ""
+    base = TENSORZERO_BASE.rstrip("/")
+    if base.endswith("/openai"):
+        return base
+    return f"{base}/openai"
+
+
+def _embed_tensorzero(text: str):
+    base = _tensorzero_openai_base()
+    if not base:
         return None
     try:
         headers = {"Content-Type": "application/json"}
         if TENSORZERO_API_KEY:
             headers["Authorization"] = f"Bearer {TENSORZERO_API_KEY}"
         resp = requests.post(
-            f"{TENSORZERO_BASE.rstrip('/')}/v1/embeddings",
+            f"{base}/v1/embeddings",
             json={"model": TENSORZERO_EMBED_MODEL, "input": text},
             headers=headers,
             timeout=30,

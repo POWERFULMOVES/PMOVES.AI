@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { featureFlags } from '@/config/featureFlags';
 import { getEnabledAuthProviders } from '@/config/supabaseProviders';
 import { LoginForm } from './LoginForm';
@@ -56,6 +56,13 @@ export default async function LoginPage({
   const nextParam = sanitizeNextParam(resolvedSearchParams?.next);
   const initialError = sanitizeErrorParam(resolvedSearchParams?.error);
   const providers = featureFlags.oauth ? getEnabledAuthProviders() : [];
+
+  const bootJwt =
+    process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
+
+  if (bootJwt) {
+    redirect(nextParam ?? '/dashboard/ingest');
+  }
 
   return (
     <main

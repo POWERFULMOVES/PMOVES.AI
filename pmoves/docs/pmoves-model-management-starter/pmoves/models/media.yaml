@@ -1,0 +1,9 @@
+profile: media
+vision:
+  jetson_orin_8gb:
+    detector: yolov8n@tensorrt-int8      # CSI camera; set MEDIA_DETECTOR_TRT_ENGINE to your TRT path
+    alt:      yolonas-nano@tensorrt-int8 # optional upgrade
+asr:
+  jetson_orin_8gb: whisper-small@int8 (faster-whisper)
+  laptop_4090:     whisper-large-v2@fp16
+  workstation_5090: whisper-large-v2@fp16

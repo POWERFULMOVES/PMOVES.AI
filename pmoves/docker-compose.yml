@@ -32,6 +32,22 @@ services:
     ports: ["3010:3000"]
     profiles: ["orchestration","workers","supabase-local"]
     networks: [pmoves]
+
+  # Optional: PostgREST against Supabase CLI database (host.docker.internal:65432)
+  # Use profile 'supabase-cli-rest' and set POSTGREST_URL=http://localhost:3011 for console fallbacks.
+  postgrest-cli:
+    image: postgrest/postgrest:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - PGRST_DB_URI=postgres://${SUPABASE_DB_USER:-postgres}:${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:${SUPABASE_DB_PORT:-65432}/${SUPABASE_DB_NAME:-postgres}
+      - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
+      - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
+      - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
+      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
+    ports: ["3011:3000"]
+    profiles: ["supabase-cli-rest"]
+    networks: [pmoves]
   qdrant:
     image: qdrant/qdrant:v1.10.0
     restart: unless-stopped
@@ -561,14 +577,14 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - PORT=8080
+      - PORT=80
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
       - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
       - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     depends_on: [nats]
-    ports: ["8080:8080"]
+    ports: ["8080:80"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
@@ -587,6 +603,7 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8091
+      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
@@ -630,7 +647,7 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      JELLYFIN_URL: http://jellyfin-ai:8096
+      JELLYFIN_URL: ${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
       SUPA_REST_URL: ${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
     ports: ["8093:8093"]
     profiles: ["orchestration"]
@@ -703,6 +720,7 @@ services:
         condition: service_started
     ports: ["4000:4000"]
     profiles: ["tensorzero"]
+    networks: [pmoves]
   invidious-db:
     image: postgres:14
     restart: unless-stopped
@@ -763,7 +781,7 @@ services:
         hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
         invidious_companion:
           - private_url: "http://invidious-companion:8282"
-            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8282}"
+            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}"
         invidious_companion_key: "${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}"
         statistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}
         use_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}
@@ -838,6 +856,16 @@ services:
     volumes:
       - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
     profiles: ["cloudflare"]
+    networks: [pmoves]
+
+  invidious-companion-proxy:
+    build: ./services/invidious-companion-proxy
+    restart: unless-stopped
+    depends_on:
+      invidious-companion:
+        condition: service_started
+    ports: ["8281:80"]
+    profiles: ["invidious"]
     networks: [pmoves]
 volumes:
   neo4j-data: {}

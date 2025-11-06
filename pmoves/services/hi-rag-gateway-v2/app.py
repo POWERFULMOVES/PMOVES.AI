@@ -177,17 +177,45 @@ def embed_query(text: str):
             raise HTTPException(500, f"Embedding error: {e}")
 
 def ensure_qdrant_collection(vector_dim: int):
+    """Create or resync the Qdrant collection when the embed dimension changes."""
     try:
-        qdrant.get_collection(COLL)
-        return
+        info = qdrant.get_collection(COLL)
     except Exception:
-        pass
+        info = None
+
+    needs_recreate = False
+    if info is not None:
+        try:
+            params = getattr(getattr(info, "config", None), "params", None)
+            if isinstance(params, dict):
+                vectors = params.get("vectors") or {}
+                current_dim = vectors.get("size")
+            else:
+                vectors = getattr(params, "vectors", None)
+                current_dim = getattr(vectors, "size", None)
+        except Exception:
+            current_dim = None
+        if current_dim is None:
+            logger.info("Qdrant collection %s dimension unknown; recreating", COLL)
+            needs_recreate = True
+        elif current_dim != vector_dim:
+            logger.info(
+                "Qdrant collection %s dimension changed (%s → %s); recreating",
+                COLL,
+                current_dim,
+                vector_dim,
+            )
+            needs_recreate = True
+        elif info is not None and not needs_recreate:
+            return
+
     try:
-        qdrant.recreate_collection(
-            collection_name=COLL,
-            vectors_config=VectorParams(size=vector_dim, distance=Distance.COSINE)
-        )
-        logger.info("(re)created Qdrant collection %s [dim=%d, metric=cosine]", COLL, vector_dim)
+        if info is None or needs_recreate:
+            qdrant.recreate_collection(
+                collection_name=COLL,
+                vectors_config=VectorParams(size=vector_dim, distance=Distance.COSINE)
+            )
+            logger.info("(re)created Qdrant collection %s [dim=%d, metric=cosine]", COLL, vector_dim)
     except Exception as e:
         logger.exception("ensure_qdrant_collection failed")
         raise HTTPException(500, f"Qdrant collection error: {e}")

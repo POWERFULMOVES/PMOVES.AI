@@ -45,6 +45,14 @@ This aggregates the entire onboarding sequence: env bootstrap, Supabase CLI brin
 - Additional helpers: `make ps`, `make down`, `make clean`. See `docs/MAKE_TARGETS.md` for the full catalogue.
 - Open Notebook workspace: `make notebook-up` starts the Streamlit UI (8502) and REST API (5055) defined in `docker-compose.open-notebook.yml`. Populate `env.shared` with `OPEN_NOTEBOOK_API_URL` (defaults to `http://cataclysm-open-notebook:5055`) plus either `OPEN_NOTEBOOK_PASSWORD` or `OPEN_NOTEBOOK_API_TOKEN` before launching. Once your provider keys (`OPENAI_API_KEY`, `GROQ_API_KEY`, etc.) live in `env.shared`, run `make notebook-seed-models` to register models/defaults in SurrealDB so the UI drop-downs are pre-populated. Use `make notebook-logs` for live output and `make notebook-down` to stop the container while preserving data in `pmoves/data/open-notebook/`.
 
+### Model selection (Ollama / TensorZero / OpenAI-compatible)
+
+- List profiles: `make -C pmoves model-profiles`
+- Apply defaults for Hi‑RAG/Archon: `make -C pmoves model-apply PROFILE=archon HOST=workstation_5090`
+- Apply defaults for Agent Zero: `make -C pmoves model-apply PROFILE=agent-zero HOST=workstation_5090`
+- Pre‑pull local models: `make -C pmoves models-seed-ollama`
+- Restart gateways after changes: `make -C pmoves recreate-v2` (and `recreate-v2-gpu` if using GPU)
+
 ### Dev Environment (Conda + Windows/macOS/Linux)
 
 - Baseline interpreter: Python 3.11 (installed via the provided Conda environment).
@@ -93,6 +101,24 @@ Agents Profile
 - Start: `docker compose --profile agents up -d nats agent-zero archon mesh-agent publisher-discord`
 - Defaults: agents read `NATS_URL=nats://nats:4222`; override via `.env`/`.env.local` if you are targeting an external broker.
 - Explore architecture and workflows in `docs/PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md`.
+
+## Dashboards & UIs
+- Supabase Studio (CLI): http://127.0.0.1:65433 — `make supa-start`.
+- Agent Zero UI: http://localhost:8080 — `make up-agents`.
+- Archon Health: http://localhost:8091/healthz — `make up-agents`.
+- Hi‑RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ — `make up`.
+- TensorZero UI: http://localhost:4000; Gateway: http://localhost:3030 — `make up-tensorzero`.
+- Jellyfin: http://localhost:8096 — `make -C pmoves up-jellyfin-ai`.
+- Jellyfin API Dashboard: http://localhost:8400; Gateway: http://localhost:8300 — `make -C pmoves up-jellyfin-ai`.
+- Open Notebook: http://localhost:8503 — `make -C pmoves notebook-up`.
+- Invidious: http://127.0.0.1:3000 (companion http://127.0.0.1:8282) — `make -C pmoves up-invidious`.
+- n8n: http://localhost:5678 — `make -C pmoves up-n8n`.
+
+### Default access and operator credentials
+- Supabase boot operator is provisioned by `make supabase-boot-user` and written to `pmoves/env.shared` / `pmoves/.env.local`:
+  - `SUPABASE_BOOT_USER_EMAIL`, `SUPABASE_BOOT_USER_PASSWORD`, `SUPABASE_BOOT_USER_JWT`.
+  - The console auto‑auths via `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT`; to sign in manually, copy the email/password from your env files.
+- Jellyfin admin/API: confirm user and key in the Jellyfin UI; keep `JELLYFIN_API_KEY` and `JELLYFIN_USER_ID` in sync in `pmoves/env.shared` or `pmoves/env.jellyfin-ai` if rotated.
 
 Supabase (Full)
 - Recommended: Supabase CLI (see `docs/SUPABASE_FULL.md`). Or use `docker-compose.supabase.yml` with `./scripts/pmoves.ps1 up-fullsupabase`.

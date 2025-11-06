@@ -6,10 +6,32 @@ This package contains the Next.js front end that surfaces ingestion workflows, v
 
 ```bash
 npm install
+# If port 3000 is free: 
 npm run dev
+# If Invidious is bound to 3000, use an alternate port:
+npm run dev:3001
 ```
 
-The development server runs on [http://localhost:3000](http://localhost:3000). Any changes under `app/`, `components/`, or `lib/` trigger automatic reloads.
+The development server runs on [http://localhost:3000](http://localhost:3000) (or [http://localhost:3001](http://localhost:3001) when using `dev:3001`). Any changes under `app/`, `components/`, or `lib/` trigger automatic reloads.
+
+### Quick Links on the landing page
+The home page renders a “Quick Links” grid to common dashboards when available:
+
+- Agent Zero (8080), Archon health (8091), Hi‑RAG Geometry (GPU), TensorZero UI (4000), TensorZero Gateway (3030), Jellyfin (8096), Open Notebook (8503), and Supabase Studio (65433).
+
+Override any link with:
+
+```
+NEXT_PUBLIC_AGENT_ZERO_URL
+NEXT_PUBLIC_ARCHON_URL
+NEXT_PUBLIC_TENSORZERO_UI
+NEXT_PUBLIC_TENSORZERO_GATEWAY
+NEXT_PUBLIC_JELLYFIN_URL
+NEXT_PUBLIC_OPEN_NOTEBOOK_URL
+NEXT_PUBLIC_SUPABASE_STUDIO_URL
+```
+
+The Hi‑RAG Geometry link respects `HIRAG_V2_GPU_HOST_PORT`.
 
 ## Services dashboard workflow
 
@@ -46,6 +68,7 @@ Use the pills at the top of the ingestion, video, and services pages to move bet
      - `NEXT_PUBLIC_SUPABASE_URL`
      - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
      - `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` – reproducible JWT managed by `make supabase-boot-user` (invoked automatically by `make first-run`); keeps the UI authenticated as the branded operator instead of the anon role.
+     - Optional UI links (see above) to surface external dashboards on the home page.
      - Optional but recommended: `NEXT_PUBLIC_SUPABASE_REST_URL` (falls back to `<SUPABASE_URL>/rest/v1`).
    - Server components/read routes also honour `SUPABASE_BOOT_USER_JWT`; set it alongside the `NEXT_PUBLIC_…` value so API routes inherit the same session.
 
@@ -106,6 +129,16 @@ The Jest coverage exercises the services index/detail routes and Notebook Workbe
 | Jellyfin Media Hub | http://localhost:8096 | `make -C pmoves up-external-jellyfin`
 | Open Notebook UI | http://localhost:8503 | `docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`
 | n8n Automation Canvas | http://localhost:5678 | `make -C pmoves up-n8n`
+
+Additional headless services surfaced via the console:
+
+- Agent Zero (MCP): UI wrapper at `/dashboard/agent-zero` (reads `NEXT_PUBLIC_AGENT_ZERO_URL`, default `http://localhost:8080`). Start with `make -C pmoves up-agents`.
+- Archon (MCP): UI wrapper at `/dashboard/archon` (reads `NEXT_PUBLIC_ARCHON_URL`, default `http://localhost:8091`). Start with `make -C pmoves up-agents`.
+
+Health endpoints used for badges can be customized:
+
+- `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` (default `/healthz`, fallbacks to `/api/health` then `/`).
+- `NEXT_PUBLIC_ARCHON_HEALTH_PATH` (default `/healthz`, fallbacks to `/api/health` then `/`).
 
 Link to the consolidated rundown in `pmoves/docs/LOCAL_DEV.md` for more context on ports and dependent Make targets.
 

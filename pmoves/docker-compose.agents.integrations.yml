@@ -1,0 +1,11 @@
+services:
+  agent-zero:
+    build:
+      context: ${INTEGRATIONS_WORKSPACE:-../integrations-workspace}/PMOVES-Agent-Zero
+      dockerfile: ${AGENT_ZERO_DOCKERFILE:-Dockerfile}
+    image: ${AGENT_ZERO_IMAGE:-pmoves/agent-zero:dev-local}
+  archon:
+    build:
+      context: ${ARCHON_BUILD_CONTEXT:-${INTEGRATIONS_WORKSPACE:-../integrations-workspace}/PMOVES-Archon/python}
+      dockerfile: ${ARCHON_DOCKERFILE:-Dockerfile.server}
+    image: ${ARCHON_IMAGE:-pmoves/archon:dev-local}

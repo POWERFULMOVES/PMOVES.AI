@@ -327,11 +327,19 @@ def _search_jellyfin(query: str, filters: Optional[Dict[str, Any]] = None) -> Tu
     if not (JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID):
         raise HTTPException(412, "JELLYFIN_URL, JELLYFIN_API_KEY, and JELLYFIN_USER_ID required")
     params = _build_search_params(query, filters)
+    params.setdefault("api_key", JELLYFIN_API_KEY)
     try:
         r = httpx.get(
             f"{JELLYFIN_URL}/Users/{JELLYFIN_USER_ID}/Items",
             params=params,
-            headers={"X-Emby-Token": JELLYFIN_API_KEY},
+            headers={
+                "X-Emby-Authorization": (
+                    'MediaBrowser Client="PMOVES Bridge", Device="PMOVES Bridge", '
+                    'DeviceId="pmoves-jellyfin-bridge", Version="1.0", '
+                    f'Token="{JELLYFIN_API_KEY}"'
+                ),
+                "Accept": "application/json",
+            },
             timeout=8,
         )
         r.raise_for_status()

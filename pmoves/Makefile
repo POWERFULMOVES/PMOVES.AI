@@ -159,6 +159,8 @@ INTEGRATIONS_COMPOSE_FIREFLY := compose/docker-compose.firefly.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
 INTEGRATIONS_PROJECT ?= $(PROJECT)-integrations
 export INTEGRATIONS_PROJECT
+INTEGRATIONS_WORKSPACE ?= ../integrations-workspace
+export INTEGRATIONS_WORKSPACE
 
 NOTEBOOK_COMPOSE ?= docker-compose.open-notebook.yml
 NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
@@ -264,11 +266,47 @@ up-invidious:
 # TensorZero model gateway stack
 .PHONY: up-tensorzero down-tensorzero
 up-tensorzero:
-	docker compose -p $(PROJECT) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui
+	docker compose -p $(PROJECT) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
 
 down-tensorzero:
 	docker compose -p $(PROJECT) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || true
 	@echo "✔ TensorZero stack stopped."
+
+# -------- Model profiles / management --------
+.PHONY: model-profiles model-apply model-swap models-sync models-seed-ollama
+
+model-profiles: ## List available model manifests
+	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
+
+model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (PROFILE=archon HOST=workstation_5090)
+	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash pmoves/tools/models/apply_profile.sh
+
+models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
+	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$(HOST)" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+
+model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.local (SERVICE=hirag NAME=Qwen/Qwen3-Reranker-4B)
+	@python3 tools/models/models_sync.py swap --profile "$(PROFILE)" --host "$(HOST)" --service "$(SERVICE)" --name "$(NAME)"
+
+models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL examples)
+	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
+	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"embeddinggemma:300m"}' >/dev/null 2>&1 || true
+	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen2.5:14b-instruct-q4_K_M"}' >/dev/null 2>&1 || true
+	@echo "✔ Seeded baseline Ollama models (if sidecar available)."
+
+# -------- Console (UI) dev helpers --------
+.PHONY: ui-dev-start ui-dev-stop ui-dev-logs
+
+ui-dev-start: ## Start the PMOVES console dev server on :3001 with env layering
+	@cd ui && \
+	  (logfile=.pmoves_ui_dev.log; nohup node scripts/with-env.mjs npm run dev:3001 > "$$logfile" 2>&1 & echo $$! > .pmoves_ui_dev.pid; \
+	  echo "✔ Console dev server starting (http://localhost:3001). PID: $$(cat .pmoves_ui_dev.pid)"; \
+	  sleep 1; tail -n 5 "$$logfile" || true)
+
+ui-dev-stop: ## Stop the console dev server started by ui-dev-start
+	@cd ui && bash -c 'kill "$$(cat .pmoves_ui_dev.pid 2>/dev/null)" >/dev/null 2>&1 || true; rm -f .pmoves_ui_dev.pid; echo "✔ Console dev server stopped."'
+
+ui-dev-logs: ## Tail the console dev server logs
+	@cd ui && [ -f .pmoves_ui_dev.log ] && tail -f .pmoves_ui_dev.log || echo "No UI dev log found. Run 'make -C pmoves ui-dev-start' first."
 
 # Jellyfin bridge only
 up-jellyfin:
@@ -278,6 +316,34 @@ up-jellyfin:
 .PHONY: up-agents
 up-agents:
 	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
+
+.PHONY: up-agents-published
+up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images (no local builds)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
+	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
+
+.PHONY: agents-integrations-clone agents-integrations-pull build-agents-integrations up-agents-integrations
+agents-integrations-clone: ## Clone your forks into $(INTEGRATIONS_WORKSPACE)
+	@mkdir -p "$(INTEGRATIONS_WORKSPACE)" && cd "$(INTEGRATIONS_WORKSPACE)"; \
+	if [ ! -d PMOVES-Agent-Zero ]; then \
+	  git clone https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git PMOVES-Agent-Zero; \
+	  echo "✔ Cloned PMOVES-Agent-Zero"; \
+	else echo "↷ PMOVES-Agent-Zero already exists"; fi; \
+	if [ ! -d PMOVES-Archon ]; then \
+	  git clone https://github.com/POWERFULMOVES/PMOVES-Archon.git PMOVES-Archon; \
+	  echo "✔ Cloned PMOVES-Archon"; \
+	else echo "↷ PMOVES-Archon already exists"; fi
+
+agents-integrations-pull: ## Pull latest from your forks
+	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Agent-Zero" && git fetch --all && git pull --rebase || true
+	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
+
+build-agents-integrations: ## Build agent images from your forks
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon
+
+up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRATIONS_WORKSPACE))
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
+	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared
@@ -537,6 +603,19 @@ bootstrap-data: ## Apply Supabase SQL, Neo4j seeds, and Qdrant/Meili demo docs
 	@$(MAKE) supabase-bootstrap
 	@$(MAKE) neo4j-bootstrap
 	@$(MAKE) seed-data
+
+.PHONY: smoke-personas
+smoke-personas: ## Assert personas are seeded (v5.12) in Supabase CLI DB; fails if zero rows
+	@set -e; \
+	if docker ps --format '{{.Names}}' | grep -q '^supabase_db_'; then \
+	  supabase_db=$$(docker ps --format '{{.Names}}' | grep -m1 '^supabase_db_'); \
+	  echo "→ Checking personas in $$supabase_db"; \
+	  cnt=$$(docker exec -i $$supabase_db psql -U postgres -d postgres -tAc "select count(*) from pmoves_core.personas" | tr -d '[:space:]'); \
+	  echo "personas: $$cnt"; \
+	  test "$$cnt" -ge 1 || (echo "✖ No personas found; run 'make -C pmoves supabase-bootstrap'" && exit 1); \
+	else \
+	  echo "↷ Supabase CLI DB not running; skip persona smoke."; \
+	fi
 
 .PHONY: smoke-webhook-ci
 smoke-webhook-ci:
@@ -1275,7 +1354,8 @@ jellyfin-smoke:
 	     done; \
 	   fi; \
 	   if [ -z "$$APIKEY" ]; then echo "  ↳ missing JELLYFIN_API_KEY for fallback"; exit 1; fi; \
-	   FALLBACK_ID=$$(curl -s "http://localhost:9096/Items?Recursive=true&IncludeItemTypes=Video,Audio&SortBy=DateCreated&SortOrder=Descending&Limit=1&api_key=$$APIKEY" | jq -r '.Items[0].Id // empty'); \
+   FALLBACK_BASE="$${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}"; \
+   FALLBACK_ID=$$(curl -s "$$FALLBACK_BASE/Items?Recursive=true&IncludeItemTypes=Video,Audio&SortBy=DateCreated&SortOrder=Descending&Limit=1&api_key=$$APIKEY" | jq -r '.Items[0].Id // empty'); \
 	   if [ -z "$$FALLBACK_ID" ]; then echo "  ↳ unable to locate fallback Jellyfin item"; exit 1; fi; \
 	   echo "  ↳ linking $$VID to fallback item $$FALLBACK_ID"; \
 	   curl -sS -X POST http://localhost:8093/jellyfin/link -H 'content-type: application/json' -d "{\"video_id\":\"$$VID\",\"jellyfin_item_id\":\"$$FALLBACK_ID\"}" | jq -e '.ok==true' >/dev/null || { echo "  ↳ fallback link failed"; exit 1; }; \

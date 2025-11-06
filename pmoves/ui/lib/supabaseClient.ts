@@ -25,7 +25,7 @@ const ensureAnonKey = (): string => {
   return key;
 };
 
-const getBootJwt = (): string | undefined =>
+const resolveBootJwt = (): string | undefined =>
   process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
 
 const ensureServiceRoleKey = (): string => {
@@ -44,7 +44,7 @@ let cachedRestUrl: string | null = null;
 export type TypedSupabaseClient = SupabaseClient<Database>;
 
 export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
-  const bootJwt = getBootJwt();
+  const bootJwt = resolveBootJwt();
   const client = createClient<Database>(ensureUrl(), ensureAnonKey(), {
     auth: {
       autoRefreshToken: !bootJwt,
@@ -92,7 +92,7 @@ export const createSupabaseServerClient = (
 ): TypedSupabaseClient => {
   const { serviceRole = false } = options;
   const key = serviceRole ? ensureServiceRoleKey() : ensureAnonKey();
-  const bootJwt = !serviceRole ? getBootJwt() : undefined;
+  const bootJwt = !serviceRole ? resolveBootJwt() : undefined;
   return createClient<Database>(ensureUrl(), key, {
     auth: {
       autoRefreshToken: serviceRole ? false : !bootJwt,
@@ -111,4 +111,24 @@ export const createSupabaseServerClient = (
 export const createSupabaseServiceRoleClient = (): TypedSupabaseClient =>
   createSupabaseServerClient({ serviceRole: true });
 
-export const hasBootJwt = (): boolean => Boolean(getBootJwt());
+export const getBootJwt = (): string | undefined => resolveBootJwt();
+
+export const hasBootJwt = (): boolean => Boolean(resolveBootJwt());
+
+export const getBootUser = async (client: TypedSupabaseClient) => {
+  const bootJwt = resolveBootJwt();
+  if (!bootJwt) {
+    return null;
+  }
+  try {
+    const { data, error } = await client.auth.getUser(bootJwt);
+    if (error) {
+      console.warn('[supabaseClient] Failed to fetch boot user via JWT', error);
+      return null;
+    }
+    return data.user ?? null;
+  } catch (err) {
+    console.warn('[supabaseClient] Unexpected error when fetching boot user', err);
+    return null;
+  }
+};

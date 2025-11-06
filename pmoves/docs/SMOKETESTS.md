@@ -49,7 +49,7 @@ Optional secret bundle:
 - Start data + workers profile (v2 gateway) after the Supabase CLI stack is online:
   - `make up`
 - Wait ~15–30s for services to become ready. If you see `service missing` errors (Neo4j, Realtime, etc.), confirm the CLI stack is running and that `make up-external` completed successfully for Wger/Firefly/Open Notebook/Jellyfin.
-- TensorZero/Ollama embeddings: for hi‑rag v2 smokes run `make -C pmoves up-tensorzero` (brings up the ClickHouse store, gateway, and UI) and ensure `pmoves-ollama` has `embeddinggemma:latest` plus `embeddinggemma:300m` pulled. The gateway exposes an OpenAI-compatible `/v1/embeddings` endpoint that the smoketests now hit before falling back to CPU sentence-transformers. citeturn0search0turn0search2
+- TensorZero/Ollama embeddings: for hi‑rag v2 smokes run `make -C pmoves up-tensorzero` (starts ClickHouse, gateway/UI, and `pmoves-ollama`). The sidecar automatically serves `embeddinggemma:latest`/`300m`; if you host embeddings elsewhere, point `TENSORZERO_BASE_URL` at that gateway before running smoketests. The gateway exposes an OpenAI-compatible `/v1/embeddings` endpoint that smokes hit before falling back to CPU sentence-transformers. citeturn0search0turn0search2
 
 Useful health checks:
 - Presign: `curl http://localhost:8088/healthz`
@@ -136,6 +136,10 @@ Checks (12):
 10. Agent Zero `/healthz` reports JetStream controller running
 11. POST a generated `geometry.cgp.v1` packet to `/geometry/event`
 12. Confirm ShapeStore locator + calibration via `/shape/point/{id}/jump` + `/geometry/calibration/report`
+
+### 5b) Personas
+
+Run `make smoke-personas` to assert the v5.12 persona library is present in the Supabase CLI database (expects at least one row such as `Archon v1.0`). If this fails, run `make supabase-bootstrap` and retry.
 
 ### UI Dropzone smoke
 
@@ -436,6 +440,14 @@ Consciousness follow-up:
 - Qdrant not ready: `docker compose logs -f qdrant` and retry after a few seconds.
 - 401 from Render Webhook: ensure `Authorization: Bearer $RENDER_WEBHOOK_SHARED_SECRET` matches `.env`.
 - PostgREST errors: confirm `postgres` is up and `/supabase/initdb` scripts finished; check `docker compose logs -f postgres postgrest`.
+- Agents health badge shows “down” but API responds on a different path: set console overrides
+  - `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH=/your/health`
+  - `NEXT_PUBLIC_ARCHON_HEALTH_PATH=/your/health`
+  See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Personas page “Invalid schema: pmoves_core”:
+  - Start the PostgREST bound to Supabase CLI DB: `docker compose -p pmoves up -d postgrest-cli` (publishes `http://localhost:3011`).
+  - Set `POSTGREST_URL=http://localhost:3011` in `pmoves/env.shared` and run `make -C pmoves env-setup`.
+  - Reload `/dashboard/personas`.
 - Rerank disabled: if providers are unreachable, set `RERANK_ENABLE=false` or configure provider keys in `.env`.
 
 ## Log Triage

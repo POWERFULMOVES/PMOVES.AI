@@ -25,6 +25,26 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - [Archon Updates for PMOVES](pmoves/docs/archonupdateforpmoves.md) – What changed in the October 2025 Archon bundle, how to wire the Supabase CLI stack, and the MCP/NATS expectations.
 - [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) – Command catalog for starting, stopping, and tailoring compose profiles (core data plane, media analyzers, Supabase modes, and agent bundles).
 
+## Dashboards & UIs (local defaults)
+- Supabase Studio: http://127.0.0.1:65433 (CLI stack) — created by `make supa-start`.
+- Hi‑RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (after `make up`).
+- TensorZero UI: http://localhost:4000 (after `make up-tensorzero`).
+- TensorZero Gateway: http://localhost:3030 (proxy to 3000 in‑container).
+- Agent Zero UI: http://localhost:8080 (after `make up-agents`).
+- Archon Health: http://localhost:8091/healthz (after `make up-agents`).
+  - If your forks use non-standard health endpoints, set `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` / `NEXT_PUBLIC_ARCHON_HEALTH_PATH`. See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Jellyfin: http://localhost:8096 (after `make -C pmoves up-jellyfin-ai`).
+- Jellyfin API Dashboard: http://localhost:8400; Gateway: http://localhost:8300.
+- Open Notebook: http://localhost:8503 (after `make -C pmoves notebook-up`).
+- Invidious: http://127.0.0.1:3000 (companion at http://127.0.0.1:8282).
+- n8n: http://localhost:5678 (after `make -C pmoves up-n8n`).
+
+### Default access and operator credentials
+- Supabase operator is provisioned by `make supabase-boot-user` (also run by `make first-run`). The command writes values to `pmoves/env.shared` and `pmoves/.env.local`:
+  - `SUPABASE_BOOT_USER_EMAIL`, `SUPABASE_BOOT_USER_PASSWORD`, `SUPABASE_BOOT_USER_JWT`.
+  - The PMOVES UI auto‑authenticates with `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` so most routes won’t prompt for a password. If you need to log in manually, use the email/password above from your env files.
+- Jellyfin uses the LinuxServer image defaults. After first boot, confirm the admin user and API key in `pmoves/env.jellyfin-ai` or via the Jellyfin UI (Settings → Dashboard). Update `JELLYFIN_API_KEY` and `JELLYFIN_USER_ID` in `pmoves/env.shared` if you rotate.
+
 - **Creator bundle:** see [`pmoves/creator/`](pmoves/creator/README.md) for installers, tutorials, and ComfyUI workflows supporting WAN Animate, Qwen Image Edit+, and VibeVoice TTS. Key guides include:
   - [WAN Animate 2.2 Tutorial](pmoves/creator/tutorials/wan_animate_2.2_tutorial.md)
   - [Qwen Image Edit+ Tutorial](pmoves/creator/tutorials/qwen_image_edit_plus_tutorial.md)

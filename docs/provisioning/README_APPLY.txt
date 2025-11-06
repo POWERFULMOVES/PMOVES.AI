@@ -24,6 +24,28 @@ Included assets
   nodes.
 - This README – quick reference for applying the bundle.
 
+Bundled directories
+-------------------
+
+When you target a custom `--output` path, the CLI also mirrors the curated
+subdirectories maintained under `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/` so
+the portable bundle ships with the same Docker stacks and bootstrap helpers
+tracked in this repository:
+
+- `backup/`
+- `docker-stacks/`
+- `docs/`
+- `inventory/`
+- `jetson/`
+- `linux/`
+- `proxmox/`
+- `tailscale/`
+- `ventoy/`
+- `windows/`
+
+The `README.md` from the provisioning bundle is copied alongside these
+directories to preserve the high-level orientation guide for remote recipients.
+
 Applying the bundle in another repository
 -----------------------------------------
 
