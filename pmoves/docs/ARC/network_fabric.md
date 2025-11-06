@@ -100,3 +100,18 @@ graph TB
     tailscale_net --> pmoves_net
     tailscale_net --> cataclysm_net
 ```
+
+## Tailscale overlay & admin guards
+
+PMOVES gateways apply optional Tailnet scoping for sensitive endpoints:
+
+- hi‑rag‑gateway‑v2 uses `TAILSCALE_ONLY`, `TAILSCALE_ADMIN_ONLY`, and `TAILSCALE_CIDRS` to restrict access. Admin routes like `/hirag/upsert-batch` depend on `require_admin_tailscale` and will return 403 when the caller IP is outside configured Tailnet CIDRs (default `100.64.0.0/10`).
+
+Operations quickstart:
+- Save key: `make -C pmoves tailscale-save-key` (writes to `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/tailscale/tailscale_authkey.txt`, 0600).
+- Auto-join during first-run: add `TAILSCALE_AUTO_JOIN=true` in `pmoves/env.shared`.
+- Manual join: `make -C pmoves tailscale-join` (force re-auth with `tailscale-rejoin`).
+- Tagging/routes: `TAILSCALE_TAGS=tag:pmoves,tag:homelab`, `TAILSCALE_ADVERTISE_ROUTES=172.31.10.0/24`, `TAILSCALE_ACCEPT_ROUTES=true`.
+
+See also: pmoves/docs/ENVIRONMENT_POLICY.md (Tailscale section) for environment variables and safety notes.
+

@@ -314,6 +314,51 @@ def tailscale_authkey(
     typer.echo("Auth key captured. Keep it out of version control.")
 
 
+@tailscale_app.command("join")
+def tailscale_join(
+    env_file: Path = typer.Option(
+        ENV_SHARED,
+        "--env-file",
+        "-e",
+        help="Env file to load (TAILSCALE_* variables)",
+    ),
+    force_reauth: bool = typer.Option(
+        False, "--force-reauth", help="Force re-authentication"
+    ),
+) -> None:
+    """Join the tailnet using pmoves/scripts/tailscale_brand_init.sh."""
+
+    script = REPO_ROOT / "pmoves" / "scripts" / "tailscale_brand_init.sh"
+    if not script.exists():
+        typer.echo(f"Init script missing: {script}")
+        raise typer.Exit(1)
+
+    env = os.environ.copy()
+    env["ENV_FILE"] = str(env_file)
+    env["TAILSCALE_AUTO_JOIN"] = "true"
+    if force_reauth:
+        env["TAILSCALE_FORCE_REAUTH"] = "true"
+    # Respect saved secret file path default if set in env file
+    # scripts/with-env.sh will populate env vars into this process
+    cmd = ["bash", "-lc", f". ./pmoves/scripts/with-env.sh '{env_file}'; bash '{script}'"]
+    rc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env).returncode
+    if rc != 0:
+        raise typer.Exit(rc)
+
+
+@tailscale_app.command("rejoin")
+def tailscale_rejoin(
+    env_file: Path = typer.Option(
+        ENV_SHARED,
+        "--env-file",
+        "-e",
+        help="Env file to load (TAILSCALE_* variables)",
+    )
+) -> None:
+    """Force re-auth join to the tailnet."""
+    tailscale_join(env_file=env_file, force_reauth=True)
+
+
 @app.command(help="Summarize current secret outputs (report).")
 def status(
     manifest: Optional[Path] = typer.Option(
