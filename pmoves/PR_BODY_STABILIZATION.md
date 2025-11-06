@@ -1,67 +1,79 @@
-## PMOVES.AI — Stabilization Sprint (Nov 6, 2025)
+Title: Stabilization: Agent Zero UI + JetStream resilience, GPU smokes, DeepResearch in‑net smoke, Monitoring toggle
 
-This PR captures infra/app hardening completed today and a short plan to finish the sprint.
+Summary
+- Fix Agent Zero UI ERR_EMPTY_RESPONSE by aligning container UI to port 80; host 8081→80 now responds 200.
+- Add JetStream resilience to Agent Zero controller: auto‑fallback to core NATS after repeated ServiceUnavailable.
+- Harden DeepResearch: add in‑network NATS smoke and echo subscriber fixes; request decoder fallback.
+- Improve GPU smokes: strict/relaxed modes; relaxed default for bring‑up; strict requires `used_rerank==true`.
+- Monitoring: add Node Exporter toggle (Linux) alongside cAdvisor; expand docs + checks.
+- Update AGENTS.md, NEXT_STEPS.md, ROADMAP.md with latest changes and next‑commit targets.
 
-### Summary
-- Storage unified to Supabase Storage S3 endpoint. Presign + Render Webhook recreated and validated.
-- Invidious stabilized on 127.0.0.1:3005 with valid companion/HMAC keys.
-- Hi‑RAG v2 CPU/GPU up; health at /hirag/admin/stats; core smoke PASS (14/14).
-- Jellyfin verified (8096); bridge up.
-- Monitoring stack online (Prometheus/Grafana); Loki config upgraded and starting. Readiness converging.
+Key Changes
+- Agent Zero
+  - UI: serve on port 80 in‑container; compose maps host 8081→80.
+  - JetStream: controller now counts `ServiceUnavailableError` in pull loop and falls back to core NATS queue subs once threshold exceeded (`AGENTZERO_JS_UNAVAILABLE_THRESHOLD`, default 3; compose uses 1 for local).
+- DeepResearch
+  - New target `deepresearch-smoke-in-net`: copies a minimal smoke script into the container and verifies request→result via in‑net NATS.
+  - Echo subscribers: robust NATS URL handling, retries; no empty `--nats` argument.
+  - Worker: `_decode_request` backwards‑compatible when `extras` param is absent.
+- GPU smokes
+  - `make -C pmoves smoke-gpu` tries multiple queries; relaxed mode validates presence of `used_rerank`; strict requires `true`.
+  - Strict mode = `GPU_SMOKE_STRICT=true`.
+- Monitoring
+  - `MON_INCLUDE_NODE_EXPORTER=true make -C pmoves up-monitoring` enables Node Exporter + cAdvisor (Linux only).
+  - Prometheus/Grafana/Blackbox targets validated; cAdvisor UP by default on Linux.
 
-### Notable decisions
-- Supabase‑only storage (standalone MinIO stopped by default).
-- YouTube smoke will force offline transcript provider when SABR detected.
-- GPU rerank temporarily disabled for smoke while model/runtime are validated.
+How to Verify
+1) Agent Zero UI
+   - `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8081/` → `200`.
+   - Browser: http://localhost:8081
+2) Agent Zero JetStream
+   - If JetStream is unavailable, controller falls back to core NATS; logs quiet down.
+3) DeepResearch
+   - `make -C pmoves deepresearch-smoke-in-net` → `✔ deepresearch-smoke-in-net: status=success`.
+4) GPU smokes
+   - Relaxed: `make -C pmoves smoke-gpu` → PASS.
+   - Strict: `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` → PASS when reranker model/runtime pinned.
+5) Monitoring
+   - `make -C pmoves up-monitoring` (or with Node Exporter toggle on Linux).
+   - `make -C pmoves monitoring-status` shows targets UP; `make -C pmoves monitoring-report` prints summary.
 
-### Operator quick links
-- Supabase REST: http://127.0.0.1:65421/rest/v1 • Studio: http://127.0.0.1:65433
-- Hi‑RAG v2 GPU: http://localhost:8087/hirag/admin/stats • CPU: http://localhost:8086/hirag/admin/stats
-- Invidious: http://127.0.0.1:3005 • Jellyfin: http://localhost:8096
-- Grafana: http://localhost:3002 • Prometheus: http://localhost:9090
-
-### Evidence
-- make -C pmoves smoke → PASS 14/14
-- Invidious /api/v1/stats → 200
-- Loki: restarting → now running; /ready returns 503 while warming; config updated to 3.1 schema.
-- pmoves-yt /yt/emit still failing with 502 (SABR path; next steps below).
-
-### Follow‑ups (next 48h)
-- [ ] Loki: finish config polish until /ready=200; wire panels in Grafana
-- [ ] YT emit: set YT_TRANSCRIPT_PROVIDER=qwen2-audio in smoke; broaden SABR fallback; add stable IDs
-- [ ] GPU rerank: re‑enable and add integration smoke
-- [ ] Document Hi‑RAG health path and Supabase‑only storage in service docs + SMOKETESTS
-
-### Files touched
-- AGENTS.md — stabilization status, quick links, decisions, next actions
-- pmoves/AGENTS.md — operator quick links, env notes, next actions
-- pmoves/docs/NEXT_STEPS.md — “Stabilization Sprint — Status and Plan”
-- pmoves/docs/PMOVES.AI PLANS/ROADMAP.md — new sprint milestone
-- pmoves/monitoring/loki/local-config.yaml — 3.1‑compatible config
-
-
-### Tailscale integration & latest smoke results
-- Added optional auto-join in first-run; Makefile targets (tailscale-save-key/join/rejoin/status/logout) and mini_cli join/rejoin commands.
-- Key stored locally at CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/tailscale/tailscale_authkey.txt (0600). Not versioned.
-- ARC docs updated with overlay/admin guards section.
-
-### Current status (Nov 6, 2025)
-- Core 12-step smoke: PASS
-- Monitoring: Prometheus/Grafana/Loki/Blackbox up; quick report prints healthy probes
-- Jellyfin verify (single): PASS at http://localhost:8096
-- pmoves-yt → geometry:
-  - /yt/emit OK (chunks upserted; /hirag/upsert-batch 200; /geometry/event 200)
-  - /shape/point jump returns {detail: point not found} for p:yt:<vid>:0 after 10 retries via in-container curl; CGP reaching gateway confirmed. Follow-up: align point-id expectation or wait for async indexing.
-
-### Commands from this pass
+Evidence (abbrev.)
 ```
-make -C pmoves tailscale-save-key   # local only; not committed
-make -C pmoves tailscale-join
-make -C pmoves up
-make -C pmoves up-agents
-make -C pmoves up-external
-make -C pmoves up-invidious
-make -C pmoves smoke
-make -C pmoves jellyfin-verify-single
-make -C pmoves yt-emit-smoke URL=https://www.youtube.com/watch?v=jNQXAC9IVRw
+# Agent Zero UI
+$ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8081/
+200
+
+# DeepResearch smoke (in‑net)
+✔ deepresearch-smoke-in-net: status=success
+
+# GPU smoke (relaxed)
+OK
+
+# Monitoring status (excerpt)
+  - blackbox_http http://host.docker.internal:8086/hirag/healthz: up
+  - channel_monitor channel-monitor:8097: up
+  - deepresearch http://host.docker.internal:8098/healthz: up
+  - prometheus prometheus:9090: up
 ```
+
+Docs Updated
+- `AGENTS.md` — latest stabilization changes + next steps
+- `pmoves/docs/NEXT_STEPS.md` — latest changes + next commit targets
+- `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md` — Stabilization sprint notes
+
+Notes / Gotchas
+- Node Exporter requires Linux; on macOS/Windows, keep it off and rely on cAdvisor.
+- GPU strict mode depends on the reranker model/runtime pinned for your node; relaxed mode remains default for CI/local smoke.
+- Agent Zero JetStream fallback threshold is configurable via `AGENTZERO_JS_UNAVAILABLE_THRESHOLD`.
+
+Next Commit Targets (tracked in NEXT_STEPS.md)
+- Re‑enable GPU strict smokes by default on GPU node.
+- Loki `/ready` 200 + Grafana alerts.
+- Real Data Bring‑Up completion → strict geometry jump default.
+- SupaSerch: add NATS subjects + metrics + console badge.
+- n8n public API probe in monitoring.
+- Pin GHCR images for DeepResearch/SupaSerch in `pmoves/env.shared`.
+
+Reviewers: @POWERFULMOVES @cataclysm‑ops
+Labels: stabilization, monitoring, agents, gpu, smoke‑tests
