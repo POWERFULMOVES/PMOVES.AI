@@ -18,9 +18,9 @@ services:
       - N8N_RUNNERS_ENABLED=true
       - N8N_RUNNERS_MODE=external
       - N8N_RUNNERS_PAYLOAD_MODE=filesystem
-      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
       - N8N_PUBLIC_API_ENABLED=true
-      - N8N_API_KEY=${N8N_API_KEY}
+      # Public API auth (n8n >= 1.0)
+      - N8N_API_AUTH_ACTIVE=true
       - WGER_BASE_URL=${WGER_BASE_URL:-http://cataclysm-wger:8000}
       - WGER_API_TOKEN=${WGER_API_TOKEN}
       - FIREFLY_BASE_URL=${FIREFLY_BASE_URL:-http://cataclysm-firefly:8080}

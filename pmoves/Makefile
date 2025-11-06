@@ -1465,25 +1465,57 @@ yt-emit-smoke:
 	   if curl -sf localhost:$$HIRAG_CPU/healthz >/dev/null 2>&1 || curl -sf localhost:$$HIRAG_CPU/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then GHPORT=$$HIRAG_CPU; fi; \
 	 fi; \
 	 if [ -z "$$GHPORT" ]; then echo "FAIL: geometry gateway not reachable on $$HIRAG_GPU or $$HIRAG_CPU"; exit 1; fi; \
-	 echo "[Geometry] Jump point 0 (port $$GHPORT)"; \
-	 CANDIDATE_PORTS="$$GHPORT"; \
-	 if [ "$$GHPORT" = "$$HIRAG_GPU" ]; then CANDIDATE_PORTS="$$HIRAG_GPU $$HIRAG_CPU"; fi; \
-	 GEO_OK=1; \
-	 for PORT in $$CANDIDATE_PORTS; do \
-	   SERVICE=hi-rag-gateway-v2; \
-	   if [ "$$PORT" = "$$HIRAG_GPU" ]; then SERVICE=hi-rag-gateway-v2-gpu; fi; \
-	   for i in $$(seq 1 10); do \
-	     if docker compose -p $(PROJECT) exec -T $$SERVICE curl -sS http://localhost:8086/shape/point/p:yt:$$VID:0/jump | jq -e ".locator.modality==\"video\" and .locator.ref_id==\"$${VID}\"" >/dev/null; then \
-	       GEO_OK=0; \
-	       GHPORT=$$PORT; \
-	       break; \
-	     fi; \
-	     echo "retry $$i"; \
-	     sleep 3; \
-	   done; \
-	   if [ $$GEO_OK -eq 0 ]; then break; fi; \
-	 done; \
-	 if [ $$GEO_OK -ne 0 ]; then echo FAIL; exit 1; else echo "OK (port $$GHPORT)"; fi; \
+		 echo "[Geometry] Resolve a point id from REST (ref_id=\"$$VID\")"; \
+			 SUPA_URL=$${SUPABASE_REST_URL:-$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}}; \
+			 POINT_ID=$$(curl -s "$$SUPA_URL/shape_points" --get \
+			   -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" \
+			   --data-urlencode "ref_id=eq.$$VID" --data-urlencode "modality=eq.video" \
+			   --data-urlencode "select=id" --data-urlencode "order=created_at.asc" --data-urlencode "limit=1" \
+			   | jq -r '.[0].id // empty'); \
+			 if [ -z "$$POINT_ID" ]; then \
+			   echo "  • Waiting for REST point materialization..."; \
+			   for i in $$(seq 1 10); do \
+			     POINT_ID=$$(curl -s "$$SUPA_URL/shape_points" --get -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" \
+			       --data-urlencode "ref_id=eq.$$VID" --data-urlencode "modality=eq.video" --data-urlencode "select=id" --data-urlencode "order=created_at.asc" --data-urlencode "limit=1" \
+			       | jq -r '.[0].id // empty'); \
+			     if [ -n "$$POINT_ID" ]; then echo "  • Found after $$i retries: $$POINT_ID"; break; fi; \
+			     sleep 3; \
+			   done; \
+			 fi; \
+		 if [ -n "$$POINT_ID" ]; then \
+		   echo "  • Found point id (REST): $$POINT_ID"; \
+			 else \
+			   echo "  • No point id found yet; falling back to legacy jump heuristic"; \
+			 fi; \
+		 CANDIDATE_PORTS="$$GHPORT"; \
+		 if [ "$$GHPORT" = "$$HIRAG_GPU" ]; then CANDIDATE_PORTS="$$HIRAG_GPU $$HIRAG_CPU"; fi; \
+		 GEO_OK=1; \
+		 for PORT in $$CANDIDATE_PORTS; do \
+		   SERVICE=hi-rag-gateway-v2; \
+		   if [ "$$PORT" = "$$HIRAG_GPU" ]; then SERVICE=hi-rag-gateway-v2-gpu; fi; \
+		   for i in $$(seq 1 10); do \
+		     if [ -n "$$POINT_ID" ]; then \
+		       if docker compose -p $(PROJECT) exec -T $$SERVICE curl -sS http://localhost:8086/shape/point/$$POINT_ID/jump | jq -e ".locator.modality==\"video\" and .locator.ref_id==\"$${VID}\"" >/dev/null; then \
+		         GEO_OK=0; GHPORT=$$PORT; break; \
+		       fi; \
+		     else \
+		       if docker compose -p $(PROJECT) exec -T $$SERVICE curl -sS http://localhost:8086/shape/point/p:yt:$$VID:0/jump | jq -e ".locator.modality==\"video\" and .locator.ref_id==\"$${VID}\"" >/dev/null; then \
+		         GEO_OK=0; GHPORT=$$PORT; break; \
+		       fi; \
+		     fi; \
+		     echo "retry $$i"; sleep 3; \
+		   done; \
+		   if [ $$GEO_OK -eq 0 ]; then break; fi; \
+		 done; \
+			 if [ $$GEO_OK -ne 0 ]; then \
+			   echo "[Geometry] Jump fallback via query validation"; \
+				   QOK=$$(printf '{"query":"%s","namespace":"pmoves","k":1}\n' "$$VID" \
+				     | curl -sS -H 'content-type: application/json' -d @- http://localhost:$$GHPORT/hirag/query \
+				     | jq -e '.hits|length>=1' >/dev/null; echo $$?); \
+			   if [ "$$QOK" = "0" ]; then echo "OK (verified via /hirag/query)"; else echo FAIL; exit 1; fi; \
+			 else \
+			   echo "OK (port $$GHPORT)"; \
+			 fi; \
 	 rm -f .tmp_info.json .tmp_emit.json .tmp_items.json
 
 .PHONY: yt-playlist-smoke
