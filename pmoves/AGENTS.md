@@ -90,7 +90,33 @@ See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 - Published images (default):
   - `make -C pmoves up-agents-ui` — starts NATS, Agent Zero API, Archon API, and the Archon UI. Open the UIs:
     - Agent Zero UI: `${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}`
-    - Archon UI: `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}`
+    - Archon UI: `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}` (defaults to API `${ARCHON_UI_API_URL:-http://archon-server:8091}` inside Docker; set `ARCHON_UI_API_URL` if you want the UI to talk to a host/remote Archon)
+
+### MCP (Agent‑to‑Agent) wiring
+
+- Register MCP servers for Agent Zero with `A0_MCP_SERVERS` in `pmoves/env.shared`. Example:
+
+```
+A0_MCP_SERVERS=
+  fs: "mcp://filesystem?roots=/data";
+  archon: "mcp://http?endpoint=http://archon-server:8051";
+  neo4j: "mcp://neo4j?url=bolt://neo4j:7687&user=neo4j&password=${NEO4J_PASSWORD}";
+  supabase: "mcp://supabase?url=${SUPABASE_URL}&key=${SUPABASE_SERVICE_ROLE_KEY}";
+```
+
+- Seed the runtime mapping file for Agent Zero (writes to `pmoves/data/agent-zero/runtime/mcp/servers.env`):
+
+```
+make -C pmoves a0-mcp-seed
+```
+
+- Quick MCP smoke for Archon’s bridge (port only, 404 acceptable):
+
+```
+make -C pmoves archon-mcp-smoke
+```
+
+Archon runs headless for orchestrations (Agent Zero → Archon via MCP) while the Archon UI can also issue MCP requests to the same headless bridge.
 - From your forks (integrations workspace):
   - `make -C pmoves agents-integrations-clone` (once)
   - `make -C pmoves build-agents-integrations`
