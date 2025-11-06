@@ -22,7 +22,8 @@ Implemented (compose-managed)
 - [render-webhook](render-webhook/README.md)
 - [retrieval-eval](retrieval-eval/README.md)
  - [open-notebook](open-notebook/README.md)
- - [neo4j](neo4j/README.md)
+- [neo4j](neo4j/README.md)
+ - [monitoring](monitoring/README.md)
 
 Auxiliary / Libraries / Adapters
 - [agents](agents/README.md)

@@ -10,7 +10,9 @@ enabled = true
 port = 65421
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
-schemas = ["public", "graphql_public"]
+# PMOVES: expose project schemas so the Supabase REST can serve
+# domain tables without needing a separate PostgREST instance.
+schemas = ["public", "graphql_public", "pmoves_core", "pmoves_kb"]
 # Extra schemas to add to the search_path of every request.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size

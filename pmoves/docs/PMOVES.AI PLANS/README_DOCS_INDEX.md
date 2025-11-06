@@ -15,6 +15,7 @@ _Last updated: 2025-11-03_
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
 - **Archon Service README** — `../services/archon/README.md`
+- **Monitoring Stack (Prometheus, Grafana, Loki)** — `../services/monitoring/README.md`
 - **n8n Setup (Supabase→Agent Zero→Discord)** — `N8N_SETUP.md`
 - **Supabase→Discord Playbook** — `SUPABASE_DISCORD_AUTOMATION.md`
 - **Tailnet + Discord Deployment** — `TAILSCALE_DISCORD_RUNBOOK.md`
@@ -57,6 +58,9 @@ These pair with UI frameworks in:
 - [x] `RENDER_COMPLETION_WEBHOOK.md`
 
 - **Next Steps** — current plan: [`NEXT_STEPS.md`](NEXT_STEPS.md); archive: [`NEXT_STEPS_2025-09-08`](archive/NEXT_STEPS_2025-09-08.md)
+
+## CLIP + Qwen Plan
+- Multimodal enrichment plan: `CLIP_QWEN_INTEGRATION_PLAN.md`
 
 ## Health + Finance Integrations
 - Compose bundle (Wger + Firefly III): `WGER - Firefly iii compose -integrations/`

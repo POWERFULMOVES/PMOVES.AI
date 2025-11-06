@@ -20,7 +20,7 @@ This guide covers preflight wiring, starting the core stack, and running the loc
      - Optional: `cat env.hirag.reranker.additions env.hirag.reranker.providers.additions >> .env`
 2. Start the Supabase CLI stack **before** running bootstrap or compose:
    - `supabase start --network-id pmoves-net` (or `make supa-start` once `supabase/config.toml` exists)
-   - This keeps PostgREST + Realtime available so `make bootstrap` can pull fresh anon/service keys and websocket endpoints into `.env.local`.
+   - This keeps Supabase REST + Realtime available so `make bootstrap` can pull fresh anon/service keys and websocket endpoints. (Default path is unified REST on port 65421; a separate PostgREST container is optional.)
 3. Set shared secrets (change these):
    - `PRESIGN_SHARED_SECRET`
    - `RENDER_WEBHOOK_SHARED_SECRET`
@@ -54,7 +54,7 @@ Optional secret bundle:
 Useful health checks:
 - Presign: `curl http://localhost:8088/healthz`
 - Render Webhook: `curl http://localhost:8085/healthz`
-- PostgREST: `curl http://localhost:3010`
+- PostgREST (optional fallback): `curl http://localhost:3010`
 - Hi‑RAG v2 stats: `curl http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/admin/stats` (CPU fallback: `${HIRAG_V2_HOST_PORT:-8086}`)
   - When `8086`/`8087` are already bound (for example by legacy uvicorn services), export `HIRAG_V2_HOST_PORT` / `HIRAG_V2_GPU_HOST_PORT` before running `make up` (e.g., `18086` / `18087`) so the high-RAG gateways bind to free ports.
 - Discord Publisher: `curl http://localhost:8092/healthz`
@@ -118,6 +118,14 @@ Remove `public_url` from the payload if you want to confirm the local-path fallb
 
 ## 5) Run Smoke Tests
 
+### Console (UI)
+
+- Start dev server: `make -C pmoves ui-dev-start` (http://localhost:3001)
+- Stop dev server: `make -C pmoves ui-dev-stop`
+- Realtime videos smoke: `make -C pmoves ui-videos-realtime-smoke` — inserts a dummy `public.videos` row via Supabase REST and prints UI/REST links. With the console open at `/dashboard/videos`, you should see the new row appear automatically via Supabase Realtime.
+  - Cleanup inserted rows: `make -C pmoves ui-videos-realtime-clean` (removes `video_id` like `ui-smoke-%` and rows with `meta.inserted_by=ui-videos-realtime-smoke`).
+  - E2E (Playwright): `make -C pmoves ui-playwright-setup && make -C pmoves ui-videos-realtime-e2e` — auto-inserts a row and asserts it appears in the UI.
+
 ### 5a) Core Stack
 Choose one:
 - macOS/Linux: `make smoke` (requires `jq`)
@@ -146,7 +154,7 @@ Run `make smoke-personas` to assert the v5.12 persona library is present in the 
 The Dropzone UI rides on the Supabase presign + render webhook path. Once the core stack is live:
 
 1. `cd pmoves/ui && pnpm install` (or `npm install`) then run `pnpm dev`.
-2. Open `http://localhost:3010/dashboard/ingest` and upload a small test file to the default bucket.
+2. Open `http://localhost:3001/dashboard/ingest` (console UI) and upload a small test file to the default bucket.
 3. Watch Supabase for:
    - `upload_events` row progressing from `preparing → uploading → persisting → complete`.
    - `studio_board` insert with `meta.presigned_get` populated from the render webhook proxy.
@@ -553,3 +561,23 @@ HTTP endpoints checked:
   - Starts a `yt_jobs` playlist job (max_videos=3)
   - Polls `yt_items` until at least one item is present
   - Picks the first completed (or first available) `video_id`, emits chunks+CGP, and verifies geometry jump
+### 5c) Agents UIs (optional)
+
+- Start published Agent APIs + UIs in one call:
+
+```bash
+make -C pmoves up-agents-ui
+```
+
+Expected:
+- Agent Zero API health OK at `${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}${NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH:-/healthz}`.
+- Archon API health OK at `${NEXT_PUBLIC_ARCHON_URL:-http://localhost:8091}${NEXT_PUBLIC_ARCHON_HEALTH_PATH:-/healthz}`.
+- Archon UI reachable at `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}`.
+
+If you use forks instead of published images:
+
+```bash
+make -C pmoves agents-integrations-clone
+make -C pmoves build-agents-integrations
+make -C pmoves up-agents-integrations
+```

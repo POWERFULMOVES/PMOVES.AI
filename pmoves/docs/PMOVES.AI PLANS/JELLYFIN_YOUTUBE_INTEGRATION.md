@@ -92,6 +92,9 @@ Verify the services:
 
 Both endpoints should return HTTP 200.
 
+SABR/Transcript note:
+- If `/yt/emit` returns 404 (no transcript) after `/yt/transcript`, YouTube may be throttling captions. Prefer Invidious fallback or add an offline Whisper step (download audio → transcribe) before emitting chunks.
+
 ### Step 1: Deploy YouTube Transcript Infrastructure
 
 1. **Create Supabase table**:
@@ -143,7 +146,7 @@ pip install fastapi uvicorn sentence-transformers pydantic httpx numpy
 3. **Start MCP YouTube Adapter**:
 ```bash
 # Set environment variables
-export SUPA_REST_URL="http://localhost:65421"
+export SUPA_REST_URL="http://localhost:65421/rest/v1"
 export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 export YOUTUBE_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
 

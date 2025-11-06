@@ -31,6 +31,15 @@ curl -X POST http://localhost:8077/yt/playlist \
 Compose
 - `pmoves-yt` (8077) and `ffmpeg-whisper` (8078) included under profiles `workers|orchestration|agents`.
 
+Single‑env & SABR notes
+- Default mode: single‑env. Place runtime variables in `pmoves/env.shared` (e.g., `YT_CONCURRENCY`, `YT_RATE_LIMIT`, `YT_TRANSCRIPT_PROVIDER`, `TENSORZERO_*`). `.env.local` is optional.
+- If `/yt/emit` 404s after `/yt/transcript`, enable the Invidious fallback (`make -C pmoves up-invidious`) or run an offline transcript via ffmpeg‑whisper (download audio → transcribe) and retry `/yt/emit`.
+
+HTTP clients & tokens
+- The service prefers yt-dlp and falls back to Invidious when SABR/nsig blocks formats.
+- We ship a vendored `httpx` client (pinned) for companion requests and robust retries; see `services/pmoves-yt/requirements.txt`.
+- Provide `INVIDIOUS_HMAC_KEY` and `INVIDIOUS_COMPANION_KEY` in `pmoves/env.shared` to enable authenticated companion requests; `make -C pmoves up-invidious` will start the Invidious + companion pair locally.
+
 Supabase tables
 - `videos` (video_id, namespace, title, source_url, s3_base_prefix, meta)
 - `transcripts` (video_id, language, text, s3_uri, meta)

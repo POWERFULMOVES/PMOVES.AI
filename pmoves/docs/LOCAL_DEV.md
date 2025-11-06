@@ -3,7 +3,7 @@ _Last updated: 2025-11-03_
 
 Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md for cross-links.
 
-Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
+Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below. For personal‑first setups, see [Single‑User (Owner) Mode](SECURITY_SINGLE_USER.md) for how the console auto‑authenticates with a boot JWT and avoids login prompts.
 
 - `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, provisions the Supabase boot operator, and executes the 12-step smoke harness so every integration ships with branded defaults. See [FIRST_RUN.md](FIRST_RUN.md) for the full sequence and seeded resources.
 - `make supabase-boot-user` — manually reprovision (or rotate) the Supabase operator and refresh `env.shared`/`.env.local` with the latest password + JWT. Use this after changing Supabase domains or when you intentionally rotate credentials.
@@ -37,10 +37,27 @@ Optional TensorZero gateway profile (`make -C pmoves up-tensorzero` or `docker c
 - tensorzero-ui: 4000 (internal name `tensorzero-ui`)
 - pmoves-ollama: 11434 (internal name `pmoves-ollama`) — optional; skip and point `TENSORZERO_BASE_URL` at a remote gateway when Ollama runs on another host or you’re deploying to Jetson-class hardware.
 
+### Monitoring & Observability
+- Start the monitoring stack (Prometheus + Grafana + Loki/Promtail + Blackbox + cAdvisor):
+  - `make -C pmoves up-monitoring`
+  - Grafana http://localhost:3002 (admin/admin), Prometheus http://localhost:9090
+  - Docs: `pmoves/docs/services/monitoring/README.md`
+- Quick status:
+  - `make -C pmoves monitoring-status` (Prometheus targets summary)
+  - `python pmoves/tools/monitoring_report.py` (targets, recent probe failures, top CPU containers)
+
 Remote inference quick switch:
 - To use a remote TensorZero instead of the local one, set `TENSORZERO_BASE_URL=http://<remote>:3000` before `make up` (or place it in `.env.local`).
 - hi-rag v2 will automatically send embedding requests to that URL when `EMBEDDING_BACKEND=tensorzero` is set (default in the gateway).
 - You can keep the local `pmoves-ollama` running or stop it via `docker stop pmoves-pmoves-ollama-1`; the gateway will prefer the configured backend.
+
+### Tailscale & Tailnet Defaults
+- `TAILSCALE_TAGS` (`tag:pmoves-vps,tag:pmoves-lab`) and `TAILSCALE_ADVERTISE_ROUTES` (`172.31.10.0/24,172.31.20.0/24`) live in `env.shared` so each host advertises the same lab subnets when it joins.
+- Run `python3 -m pmoves.tools.mini_cli tailscale authkey` after generating a reusable key in Headscale or the Tailnet admin console; the helper hides input, writes `TAILSCALE_AUTHKEY` into `pmoves/env.shared`, and drops a matching secret at `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/tailscale/tailscale_authkey.txt` for remote provisioning. When Tailnet Lock is enabled, the helper calls `tailscale lock sign` by default so the stored key arrives pre-signed; use `--no-sign` if you are on a non-signing workstation.
+- Use `pmoves/scripts/tailscale_brand_init.sh` on provisioned hosts. It reads the auth key from env or disk, optionally re-signs it (`TAILSCALE_SIGN_AUTHKEY=auto|true|false`), starts `tailscaled` when the systemd unit exists, runs `tailscale_brand_up.sh`, and writes a sentinel at `$HOME/.config/pmoves/tailnet-initialized` (override with `TAILSCALE_INIT_SENTINEL`). Set `TAILSCALE_FORCE_REAUTH=true` to ignore the sentinel when rotating keys.
+- Provide `TAILSCALE_AUTHKEY` (or place a `tailscale/tailscale_authkey.txt` secret in the provisioning bundle) before running the init helper; `tailscale_brand_up.sh` adds `--ssh`, `--accept-routes`, tags, hostname, and optional login server automatically. Set `TAILSCALE_LOGIN_SERVER=https://<headscale-host>` when you operate a self-hosted control plane so the helper targets the correct coordinator.
+- `TAILSCALE_ONLY` defaults to `false` for local dev so services stay reachable without a tailnet. Flip it to `true` (and keep `TAILSCALE_CIDRS=100.64.0.0/10`) on remote hosts to require requests to originate from tagged devices.
+- `TAILSCALE_ADMIN_ONLY` remains `true` to gate `/hirag/admin/*` and similar endpoints even when tailnet enforcement is relaxed; adjust per host if you need public ingest while keeping admin paths private.
 
 ### Supabase runtime modes
 - **Supabase CLI stack (`make supa-start`)** — launches the official Supabase Docker bundle (Postgres, auth, storage, Realtime, Studio) managed by the CLI. Requires the `supabase` binary in your `PATH`; monitor with `make supa-status` and shut down via `make supa-stop`.
@@ -528,6 +545,12 @@ docker run --name n8n --rm -it \
 - For Cataclysm Provisioning, the stable network name `pmoves-net` allows cross‑stack service discovery.
 - Clean up duplicate .env keys: `make env-dedupe` (keeps last occurrence, writes `.env.bak`).
 
+### Open Notebook Integration
+
+- The bundled Open Notebook container (UI on `http://localhost:8503`, API on `:5055`) requires the API port 5055 to be exposed. PMOVES compose targets already do this; if you self‑run the upstream image, expose `-p 5055:5055`.
+- Docs for PMOVES’ fork live at `integrations-workspace/Pmoves-open-notebook/docs/index.md` and include the v1 migration notes, REST docs link, and troubleshooting.
+- Env keys: set `OPEN_NOTEBOOK_SURREAL_URL` and/or `OPEN_NOTEBOOK_SURREAL_ADDRESS` so the UI can reach SurrealDB; keep `OPEN_NOTEBOOK_API_TOKEN` in sync with `OPEN_NOTEBOOK_PASSWORD`.
+
 ## Python Virtual Environment (optional)
 
 - Windows (PowerShell 7+):
@@ -552,3 +575,12 @@ If the Supabase CLI REST host (65421) does not expose `pmoves_core`, the console
 - Reload `/dashboard/personas`.
 
 Alternatively, run the compose PostgREST on `http://localhost:3010` and set `POSTGREST_URL` accordingly.
+## Personas REST access (pmoves_core)
+The console now uses the Supabase CLI REST for pmoves_core tables.
+
+- We expose `pmoves_core` and `pmoves_kb` in `supabase/config.toml [api.schemas]`.
+- Grants are applied via `pmoves/db/v5_13_pmoves_core_rest_grants.sql`.
+- No separate PostgREST is required; leave `POSTGREST_URL` commented in `pmoves/env.shared`.
+
+Quick check:
+`curl -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H 'Accept-Profile: pmoves_core' http://127.0.0.1:65421/rest/v1/personas?limit=1`
