@@ -289,7 +289,13 @@ MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 
 up-monitoring: ## Start monitoring stack and print URLs
 	@echo "⛳ Starting monitoring stack (Prometheus, Grafana, Loki, Promtail, blackbox, cAdvisor)..."
-	@docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) up -d
+	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
+		echo "→ Including cAdvisor (linux profile)"; \
+		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) --profile linux up -d; \
+	  else \
+		echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
+		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) up -d; \
+	  fi
 	@echo "Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"
 	@echo "Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"
 	@echo "Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"
@@ -311,7 +317,7 @@ monitoring-smoke: up-monitoring ## Confirm blackbox exporter is scraping endpoin
 
 .PHONY: monitoring-report
 monitoring-report: ## Print a quick Prometheus summary (targets, failures, top CPU containers)
-		@python3 tools/monitoring_report.py --prom http://localhost:$${PROMETHEUS_HOST_PORT:-9090}
+	@python3 tools/monitoring_report.py --prom http://localhost:$${PROMETHEUS_HOST_PORT:-9090}
 
 # -------- Tailscale helpers --------
 .PHONY: tailscale-save-key tailscale-join tailscale-rejoin tailscale-status tailscale-logout
@@ -488,6 +494,22 @@ up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using publ
 up-agents-ui: ## Start Agents APIs + UIs (NATS, Agent Zero, Archon, Archon UI) using published images where available
 	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
 	@echo "✔ Agents (APIs + UIs) started. Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
+
+.PHONY: a0-mcp-seed
+a0-mcp-seed: ## Write A0_MCP_SERVERS into Agent Zero runtime (data/agent-zero/runtime/mcp/servers.env)
+	@$(LOAD_ENV_SHARED) python3 tools/seed_agent_zero_mcp.py
+
+.PHONY: archon-mcp-smoke
+archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8051/ || true); \
+	if [ "$$code" = "000" ]; then echo "✖ archon-mcp not reachable on :8051" && exit 1; else echo "✔ archon-mcp HTTP $$code"; fi
+
+.PHONY: archon-ui-smoke
+archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)
+	@api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); ui=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3737 || true); \
+	if [ "$$api" != "200" ]; then echo "✖ archon API /healthz => $$api" && exit 1; fi; \
+	if [ "$$ui" != "200" ]; then echo "✖ archon UI / => $$ui" && exit 1; fi; \
+	echo "✔ archon API/ UI healthy (API $$api, UI $$ui)"
 
 .PHONY: agents-integrations-clone agents-integrations-pull build-agents-integrations up-agents-integrations
 agents-integrations-clone: ## Clone your forks into $(INTEGRATIONS_WORKSPACE)
@@ -788,9 +810,31 @@ neo4j-bootstrap:
 
 .PHONY: bootstrap-data
 bootstrap-data: ## Apply Supabase SQL, Neo4j seeds, and Qdrant/Meili demo docs
-	@$(MAKE) supabase-bootstrap
-	@$(MAKE) neo4j-bootstrap
-	@$(MAKE) seed-data
+		@$(MAKE) supabase-bootstrap
+		@$(MAKE) neo4j-bootstrap
+		@$(MAKE) seed-data
+
+.PHONY: seed-real-data
+seed-real-data: ## Seed minimal real-data chunks into hi-rag and Meili (namespace=$(INDEXER_NAMESPACE) or pmoves)
+		@echo "[seed] Upserting real-data baseline into hi-rag v2..."
+		@python3 tools/seed_real_data.py
+		@echo "[seed] Done."
+
+.PHONY: seed-repo-docs
+seed-repo-docs: ## Crawl repo docs/code and emit JSONL at datasets/repo_docs.jsonl
+		@python3 tools/repo_crawl.py --root .. --out datasets/repo_docs.jsonl --namespace $${REPO_NAMESPACE:-pmoves.docs}
+
+.PHONY: index-repo-docs
+index-repo-docs: ## Index repo JSONL into hi-rag v2 and Meili
+		@python3 tools/repo_index.py --jsonl datasets/repo_docs.jsonl
+
+.PHONY: archon-orchestrate-repo
+archon-orchestrate-repo: ## Kick off CONCH orchestration on Archon (best-effort)
+		@python3 tools/archon_conch_orchestrate.py || true
+
+.PHONY: agent-zero-sync-repo
+agent-zero-sync-repo: ## Notify Agent Zero about repo delta (best-effort)
+		@python3 tools/agent_zero_sync.py || true
 
 .PHONY: smoke-personas
 smoke-personas: ## Assert personas are seeded (v5.12) in Supabase CLI DB; fails if zero rows
@@ -1508,10 +1552,11 @@ yt-emit-smoke:
 		   if [ $$GEO_OK -eq 0 ]; then break; fi; \
 		 done; \
 			 if [ $$GEO_OK -ne 0 ]; then \
+			   if [ "${YT_SMOKE_STRICT_JUMP:-true}" = "true" ]; then echo FAIL; exit 1; fi; \
 			   echo "[Geometry] Jump fallback via query validation"; \
-				   QOK=$$(printf '{"query":"%s","namespace":"pmoves","k":1}\n' "$$VID" \
-				     | curl -sS -H 'content-type: application/json' -d @- http://localhost:$$GHPORT/hirag/query \
-				     | jq -e '.hits|length>=1' >/dev/null; echo $$?); \
+			   QOK=$$(printf '{"query":"%s","namespace":"pmoves","k":1}\n' "$$VID" \
+			     | curl -sS -H 'content-type: application/json' -d @- http://localhost:$$GHPORT/hirag/query \
+			     | jq -e '.hits|length>=1' >/dev/null; echo $$?); \
 			   if [ "$$QOK" = "0" ]; then echo "OK (verified via /hirag/query)"; else echo FAIL; exit 1; fi; \
 			 else \
 			   echo "OK (port $$GHPORT)"; \

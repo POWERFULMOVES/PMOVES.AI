@@ -118,6 +118,10 @@ Remove `public_url` from the payload if you want to confirm the local-path fallb
 
 ## 5) Run Smoke Tests
 
+### Real Data Bring-Up
+
+See `pmoves/docs/REAL_DATA_BRINGUP.md` for ingesting the PMOVES repository and enabling strict geometry jump validation.
+
 ### Console (UI)
 
 - Start dev server: `make -C pmoves ui-dev-start` (http://localhost:3001)
@@ -580,4 +584,14 @@ If you use forks instead of published images:
 make -C pmoves agents-integrations-clone
 make -C pmoves build-agents-integrations
 make -C pmoves up-agents-integrations
+```
+
+Additional agent smokes:
+
+```bash
+# MCP bridge reachability on :8051 (HTTP code printed; 404 acceptable)
+make -C pmoves archon-mcp-smoke
+
+# Verify Archon API/ UI endpoints return 200
+make -C pmoves archon-ui-smoke
 ```
