@@ -2,12 +2,10 @@
   <users>
     <tensorzero>
       <password></password>
-      <profile>readonly</profile>
+      <profile>default</profile>
       <networks>
         <ip>::/0</ip>
       </networks>
-      <allow_databases>default</allow_databases>
-      <allow_ddl>0</allow_ddl>
     </tensorzero>
   </users>
 </clickhouse>

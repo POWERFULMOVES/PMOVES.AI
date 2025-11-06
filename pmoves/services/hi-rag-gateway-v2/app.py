@@ -11,6 +11,7 @@ from qdrant_client.http.models import Filter, FieldCondition, MatchValue, Distan
 import uuid
 from sentence_transformers import SentenceTransformer
 from FlagEmbedding import FlagReranker
+import torch
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
@@ -37,6 +38,10 @@ RERANK_FUSION = os.environ.get("RERANK_FUSION","mul").lower()  # mul|wsum
 USE_MEILI = os.environ.get("USE_MEILI","false").lower()=="true"
 MEILI_URL = os.environ.get("MEILI_URL","http://meilisearch:7700")
 MEILI_API_KEY = os.environ.get("MEILI_API_KEY","master_key")
+
+_USE_CUDA_ENV = os.environ.get("USE_CUDA", "true").lower() == "true"
+_CUDA_AVAILABLE = torch.cuda.is_available()
+DEVICE = "cuda" if _USE_CUDA_ENV and _CUDA_AVAILABLE else "cpu"
 
 from libs.providers.embedding import embed_text as _embed_via_providers
 
@@ -84,7 +89,15 @@ HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
 NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","pmoves")
 
 logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger("hirag.gateway.v2")
+
+if DEVICE == "cuda":
+    logger.info("CUDA detected; embeddings and reranker will run on GPU")
+elif _USE_CUDA_ENV and not _CUDA_AVAILABLE:
+    logger.warning("USE_CUDA requested but torch reports no CUDA device; falling back to CPU")
+else:
+    logger.info("Running in CPU mode")
 
 qdrant = QdrantClient(url=QDRANT_URL, timeout=30.0)
 
@@ -102,7 +115,7 @@ _embedder = None
 def _get_embedder():
     global _embedder
     if _embedder is None:
-        _embedder = SentenceTransformer(MODEL)
+        _embedder = SentenceTransformer(MODEL, device=DEVICE)
     return _embedder
 
 # --- In-memory rooms for WebSocket signaling and geometry broadcast ---
@@ -164,17 +177,45 @@ def embed_query(text: str):
             raise HTTPException(500, f"Embedding error: {e}")
 
 def ensure_qdrant_collection(vector_dim: int):
+    """Create or resync the Qdrant collection when the embed dimension changes."""
     try:
-        qdrant.get_collection(COLL)
-        return
+        info = qdrant.get_collection(COLL)
     except Exception:
-        pass
+        info = None
+
+    needs_recreate = False
+    if info is not None:
+        try:
+            params = getattr(getattr(info, "config", None), "params", None)
+            if isinstance(params, dict):
+                vectors = params.get("vectors") or {}
+                current_dim = vectors.get("size")
+            else:
+                vectors = getattr(params, "vectors", None)
+                current_dim = getattr(vectors, "size", None)
+        except Exception:
+            current_dim = None
+        if current_dim is None:
+            logger.info("Qdrant collection %s dimension unknown; recreating", COLL)
+            needs_recreate = True
+        elif current_dim != vector_dim:
+            logger.info(
+                "Qdrant collection %s dimension changed (%s → %s); recreating",
+                COLL,
+                current_dim,
+                vector_dim,
+            )
+            needs_recreate = True
+        elif info is not None and not needs_recreate:
+            return
+
     try:
-        qdrant.recreate_collection(
-            collection_name=COLL,
-            vectors_config=VectorParams(size=vector_dim, distance=Distance.COSINE)
-        )
-        logger.info("(re)created Qdrant collection %s [dim=%d, metric=cosine]", COLL, vector_dim)
+        if info is None or needs_recreate:
+            qdrant.recreate_collection(
+                collection_name=COLL,
+                vectors_config=VectorParams(size=vector_dim, distance=Distance.COSINE)
+            )
+            logger.info("(re)created Qdrant collection %s [dim=%d, metric=cosine]", COLL, vector_dim)
     except Exception as e:
         logger.exception("ensure_qdrant_collection failed")
         raise HTTPException(500, f"Qdrant collection error: {e}")
@@ -953,7 +994,13 @@ def set_rerank_model_label(body: Dict[str, Any], request: Request):
     return {"ok": True, "rerank_model_label": _rerank_model_label}
 
 @app.post("/hirag/query", response_model=QueryResp)
-def hirag_query(req: QueryReq = Body(...), _=Depends(require_tailscale)):
+def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(require_tailscale)):
+    client_ip = None
+    try:
+        client_ip = _client_ip(request) if request is not None else None
+    except Exception:
+        client_ip = None
+    logger.warning("hirag.query incoming namespace=%s ip=%s", getattr(req, "namespace", None), client_ip)
     try:
         vec = embed_query(req.query)
         # Lazily ensure collection exists with cosine + correct dim
@@ -970,6 +1017,7 @@ def hirag_query(req: QueryReq = Body(...), _=Depends(require_tailscale)):
             query_filter=Filter(must=must),
             with_payload=True,
         )
+        logger.warning("hirag.query hits=%d namespace=%s ip=%s", len(hits), req.namespace, client_ip)
     except Exception as e:
         logger.exception("Qdrant search error")
         raise HTTPException(503, f"Qdrant search error: {e}")
@@ -1011,8 +1059,28 @@ def hirag_query(req: QueryReq = Body(...), _=Depends(require_tailscale)):
             try:
                 scores = rr.compute_score(pairs, normalize=True)
             except Exception as e:
-                logger.exception("Reranker compute failed")
-                scores = [0.0]*len(pool)
+                # FlagEmbedding rerankers (and some third-party adapters) only
+                # support batch size 1. When that happens we fall back to
+                # running the pairs sequentially so rerank stays available
+                # instead of bubbling an error to the caller.
+                if isinstance(e, ValueError) and "batch" in str(e).lower():
+                    scores = []
+                    for pair in pairs:
+                        try:
+                            res = rr.compute_score([pair], normalize=True)
+                            if isinstance(res, (list, tuple)):
+                                scores.extend(float(r) for r in res)
+                            else:
+                                scores.append(float(res))
+                        except Exception:
+                            logger.exception("Reranker single compute failed")
+                            scores.append(0.0)
+                else:
+                    logger.exception("Reranker compute failed")
+                    scores = [0.0]*len(pool)
+            if len(scores) != len(pool):
+                # ensure downstream zip stays aligned even if a retry failed
+                scores = (scores + [0.0]*len(pool))[:len(pool)]
             fused = []
             for p, s in zip(pool, scores):
                 p = dict(p)
@@ -1156,7 +1224,10 @@ def _get_reranker():
     if not RERANK_ENABLE:
         return None
     try:
-        _reranker = FlagReranker(RERANK_MODEL, use_fp16=True)
+        use_fp16 = DEVICE == "cuda"
+        _reranker = FlagReranker(RERANK_MODEL, use_fp16=use_fp16)
+        if DEVICE == "cuda" and hasattr(_reranker, "model"):
+            _reranker.model = _reranker.model.to("cuda")  # type: ignore[attr-defined]
         return _reranker
     except Exception as e:
         logger.exception("Reranker init failed")

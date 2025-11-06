@@ -27,7 +27,7 @@ DOCKER_CONFIG=$PWD/.docker-nocreds \
    - This recreates the `cataclysm-wger` Django service and the `cataclysm-wger-nginx` proxy, sharing
      volumes for `/static` and `/media`.
    - The UI remains available at `http://localhost:8000`, which the proxy forwards to Django.
-   - Override `WGER_IMAGE` if you publish a custom GHCR image (defaults to `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:main`).
+   - Override `WGER_IMAGE` if you publish a custom GHCR image (defaults to `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest`).
 2) Configure PMOVES -> Wger integration secrets in `pmoves/env.shared`:
 ```
 WGER_BASE_URL=http://cataclysm-wger:8000
@@ -44,14 +44,7 @@ WGER_API_TOKEN=<your-token>
    to confirm Supabase receives payloads.
 
 ## Firefly III (Finance)
-1) Clone and run:
-```bash
-cd ..
-git clone https://github.com/POWERFULMOVES/pmoves-firefly-iii.git
-cd pmoves-firefly-iii
-docker network create cataclysm-net || true
-docker compose up -d
-```
+1) Build/pull the PMOVES-tagged image (`ghcr.io/cataclysm-studios-inc/pmoves-firefly-iii:pmoves-latest`) or override `FIREFLY_IMAGE` if you maintain a fork. The default external compose bundle already points at the PMOVES-tagged image, so `make up-external-firefly` handles the container lifecycle.
 2) Base URL and token
 - In `pmoves/env.shared`:
 ```

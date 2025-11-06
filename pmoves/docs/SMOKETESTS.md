@@ -25,7 +25,7 @@ This guide covers preflight wiring, starting the core stack, and running the loc
    - `PRESIGN_SHARED_SECRET`
    - `RENDER_WEBHOOK_SHARED_SECRET`
    - Supabase REST endpoints:
-     - `SUPA_REST_URL=http://127.0.0.1:54321/rest/v1` (host-side smoke harness + curl snippets)
+   - `SUPA_REST_URL=http://127.0.0.1:65421/rest/v1` (host-side smoke harness + curl snippets)
      - `SUPA_REST_INTERNAL_URL=http://api.supabase.internal:8000/rest/v1` (compose services targeting the Supabase CLI stack)
    - After the CLI stack is running, execute `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smokes. Re-run components individually with `make supabase-bootstrap`, `make neo4j-bootstrap`, or `make seed-data` if you only need one layer.
 4. External integrations: copy tokens into `pmoves/.env.local` so the health/finance automations can run without errors.
@@ -49,12 +49,14 @@ Optional secret bundle:
 - Start data + workers profile (v2 gateway) after the Supabase CLI stack is online:
   - `make up`
 - Wait ~15–30s for services to become ready. If you see `service missing` errors (Neo4j, Realtime, etc.), confirm the CLI stack is running and that `make up-external` completed successfully for Wger/Firefly/Open Notebook/Jellyfin.
+- TensorZero/Ollama embeddings: for hi‑rag v2 smokes run `make -C pmoves up-tensorzero` (starts ClickHouse, gateway/UI, and `pmoves-ollama`). The sidecar automatically serves `embeddinggemma:latest`/`300m`; if you host embeddings elsewhere, point `TENSORZERO_BASE_URL` at that gateway before running smoketests. The gateway exposes an OpenAI-compatible `/v1/embeddings` endpoint that smokes hit before falling back to CPU sentence-transformers. citeturn0search0turn0search2
 
 Useful health checks:
 - Presign: `curl http://localhost:8088/healthz`
 - Render Webhook: `curl http://localhost:8085/healthz`
 - PostgREST: `curl http://localhost:3010`
-- Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
+- Hi‑RAG v2 stats: `curl http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/admin/stats` (CPU fallback: `${HIRAG_V2_HOST_PORT:-8086}`)
+  - When `8086`/`8087` are already bound (for example by legacy uvicorn services), export `HIRAG_V2_HOST_PORT` / `HIRAG_V2_GPU_HOST_PORT` before running `make up` (e.g., `18086` / `18087`) so the high-RAG gateways bind to free ports.
 - Discord Publisher: `curl http://localhost:8092/healthz`
 
 ### Optional GPU smoke
@@ -130,10 +132,14 @@ Checks (12):
 6. PostgREST reachable (`3000`)
 7. Insert a demo row via Render Webhook
 8. Verify a `studio_board` row exists via PostgREST
-9. Run a Hi-RAG v2 query (`8087`)
+9. Run a Hi-RAG v2 query (`${HIRAG_V2_GPU_HOST_PORT:-8087}`)
 10. Agent Zero `/healthz` reports JetStream controller running
 11. POST a generated `geometry.cgp.v1` packet to `/geometry/event`
 12. Confirm ShapeStore locator + calibration via `/shape/point/{id}/jump` + `/geometry/calibration/report`
+
+### 5b) Personas
+
+Run `make smoke-personas` to assert the v5.12 persona library is present in the Supabase CLI database (expects at least one row such as `Archon v1.0`). If this fails, run `make supabase-bootstrap` and retry.
 
 ### UI Dropzone smoke
 
@@ -326,14 +332,14 @@ Persona film automation combines the creative flows above with Supabase tables (
 7. Mind-map query (requires `make neo4j-bootstrap`):
    ```bash
    python docs/pmoves_chit_all_in_one/pmoves_all_in_one/pmoves_chit_graph_plus_mindmap/scripts/mindmap_query.py \
-     --base http://localhost:8087 \
+     --base http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087} \
      --cid <constellation_id>
    ```
    Substitute `<constellation_id>` with one of the seeded IDs (e.g., from the CSV). A JSON payload with `items` confirms Neo4j has the CHIT alias graph available.
 
 ## 7) Live Geometry UI + WebRTC
 
-1. Start v2 gateways: `make up` (v2 CPU on :8086, v2 GPU on :8087 when available). Open http://localhost:8087/geometry/ (GPU) or http://localhost:8086/geometry/ (CPU)
+1. Start v2 gateways: `make up` (v2 CPU on :${HIRAG_V2_HOST_PORT:-8086}, v2 GPU on :${HIRAG_V2_GPU_HOST_PORT:-8087} when available). Open http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (GPU) or http://localhost:${HIRAG_V2_HOST_PORT:-8086}/geometry/ (CPU)
 2. Start v1 gateways if needed: `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090)
 3. Click Connect (room `public`). Post a CGP (make smoke-geometry) and watch points animate.
 4. Open the page in a second browser window; both connect to `public` room. Use Share Shape to send a `shape-hello` on the DataChannel.
@@ -344,7 +350,7 @@ Persona film automation combines the creative flows above with Supabase tables (
 
 Use the mapper helper to turn summary events into CGPs and post them to the gateway.
 
-1. Ensure the v2 gateway is running on `:8086` or set `HIRAG_URL` to `http://localhost:8087` for GPU.
+1. Ensure the v2 gateway is running on `:${HIRAG_V2_HOST_PORT:-8086}` or set `HIRAG_URL` to `http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}` for GPU.
 2. Health weekly summary:
    ```bash
    make -C pmoves demo-health-cgp
@@ -434,6 +440,14 @@ Consciousness follow-up:
 - Qdrant not ready: `docker compose logs -f qdrant` and retry after a few seconds.
 - 401 from Render Webhook: ensure `Authorization: Bearer $RENDER_WEBHOOK_SHARED_SECRET` matches `.env`.
 - PostgREST errors: confirm `postgres` is up and `/supabase/initdb` scripts finished; check `docker compose logs -f postgres postgrest`.
+- Agents health badge shows “down” but API responds on a different path: set console overrides
+  - `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH=/your/health`
+  - `NEXT_PUBLIC_ARCHON_HEALTH_PATH=/your/health`
+  See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Personas page “Invalid schema: pmoves_core”:
+  - Start the PostgREST bound to Supabase CLI DB: `docker compose -p pmoves up -d postgrest-cli` (publishes `http://localhost:3011`).
+  - Set `POSTGREST_URL=http://localhost:3011` in `pmoves/env.shared` and run `make -C pmoves env-setup`.
+  - Reload `/dashboard/personas`.
 - Rerank disabled: if providers are unreachable, set `RERANK_ENABLE=false` or configure provider keys in `.env`.
 
 ## Log Triage
@@ -462,12 +476,28 @@ Steps
 - What it checks:
   - /yt/info yields a valid `video_id`
   - /yt/ingest downloads, extracts audio, transcribes (faster-whisper)
-  - /yt/emit segments transcript into chunks and posts them to /hirag/upsert-batch; emits CGP to /geometry/event
-  - /shape/point/p:yt:<id>:0/jump returns a valid video locator
+- /yt/emit segments transcript into chunks and posts them to /hirag/upsert-batch; emits CGP to /geometry/event
+- /shape/point/p:yt:<id>:0/jump returns a valid video locator
+- Re-runs skip `/yt/ingest` when the clip already exists in Supabase, avoiding repeated downloads.
+- Geometry verification targets the GPU gateway on `http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}` (the instance pmoves-yt uses), falling back to the CPU gateway only if the GPU service is offline.
+- When the Qwen/FlagEmbedding reranker complains about `batch sizes > 1`, the harness now replays the request inside the GPU container with single-pair batches. Expect the first run to stream the 4B checkpoint (1–2 minutes) and subsequent runs to return `"used_rerank": true` without error spam.
 
 Optional
 - Summarize with Gemma (Ollama default):
   - `curl -X POST http://localhost:8077/yt/summarize -H 'content-type: application/json' -d '{"video_id":"<id>","style":"short"}' | jq`
+
+## YouTube → Jellyfin Playback
+
+- Prereqs: run `make up` (Hi-RAG gateways), `make up-yt` (pmoves.yt + ffmpeg-whisper), `make up-invidious` (Invidious + companion fallback), **and** `make up-jellyfin` (bridge API). The smoketest targets the Jellyfin AI overlay on `http://localhost:9096`; keep `JELLYFIN_API_KEY` in sync and drop a seed asset with `python scripts/seed_jellyfin_media.py` on fresh machines so the bridge always has at least one item to link. Wait for the services to report `Up` in `docker compose -p pmoves ps` before starting the smoke.
+- Start the YouTube channel monitor so new uploads keep flowing through the ingest pipeline:
+  - `make channel-monitor-up` (or include the profile flags `docker compose -p pmoves --profile yt --profile data --profile workers up -d channel-monitor` when running manually)
+  - `make channel-monitor-smoke` to kick an immediate poll and surface stats.
+- `make yt-jellyfin-smoke`
+  - Uses `YT_URL` (default `https://www.youtube.com/watch?v=2Vv-BfVoq4g`) to run the full pmoves.yt ingest/emit path.
+  - Confirms `videos` rows were written via Supabase REST (works with the CLI stack on port 65421 or PostgREST on 3010).
+  - Calls `jellyfin-smoke` afterward to request a playback URL from the Jellyfin bridge, ensuring the item can stream with a timestamped link. The target now attempts `/jellyfin/map-by-title` first and, if no match is found, automatically links the video to the newest Jellyfin library item before requesting `/jellyfin/playback-url`.
+- Some videos return `yt_dlp returned no info` in restricted regions. Override with `make yt-jellyfin-smoke YT_URL=<alternate_clip>` (any accessible public YouTube video) if that happens.
+- Geometry is routed to the GPU gateway first (`http://hi-rag-gateway-v2-gpu:8086` / host port `${HIRAG_V2_GPU_HOST_PORT:-8087}`). Keep `HIRAG_URL` / `HIRAG_GPU_URL` aligned in `env.shared` / `.env.local` so pmoves.yt publishes CGPs to the same service the smoketest queries. If the GPU port is healthy but still returns 404, the harness now automatically retries against the CPU gateway on host port `${HIRAG_V2_HOST_PORT:-8086}` before failing. Tail `docker compose -p pmoves logs hi-rag-gateway-v2*` when both ports miss to confirm `/geometry/event` deliveries are landing.
 
 ## Preflight + Health Checks
 
@@ -498,9 +528,11 @@ HTTP endpoints checked:
 
 ## Jellyfin Bridge
 
-- Optional: set `JELLYFIN_URL` and `JELLYFIN_API_KEY` in `.env` to enable live checks.
+- Optional: set `JELLYFIN_URL` (host overlay `http://localhost:9096`) and `JELLYFIN_API_KEY` in `.env` to enable live checks.
+- Shortcut: `make yt-jellyfin-smoke` ingests a sample YouTube video via pmoves.yt and then runs the playback smoke for you.
 - Link a video: `curl -X POST http://localhost:8093/jellyfin/link -H 'content-type: application/json' -d '{"video_id":"<id>","jellyfin_item_id":"<jf_id>"}'`
 - Get playback URL: `curl -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d '{"video_id":"<id>","t":42}'`
+- Fallback behaviour: when `/jellyfin/map-by-title` cannot locate a Jellyfin item, the bridge now returns 200 after wiring the request to the newest library item so smoke runs still produce a valid playback URL.
   - Expect a URL pointing at Jellyfin web with start time.
 - Auto-linking (optional): set `JELLYFIN_AUTOLINK=true` and (optionally) `AUTOLINK_INTERVAL_SEC=60` to periodically map recent videos by title.
 - Search: `curl 'http://localhost:8093/jellyfin/search?query=<title>'`

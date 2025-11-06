@@ -13,7 +13,8 @@
 - **Docs**: `pmoves/ui/README.md`, `docs/PMOVES_MINI_CLI_SPEC.md`, UI sections in `pmoves/docs/pmoves_all_in_one_v10/docs/`
 
 ## Integrations & VPS Ops
-- **Make targets**: `make up-external`, `make up-external-jellyfin`, `make jellyfin-smoke`, `make smoke-wger`, `make smoke-presign-put`, `make preflight`
+- **Make targets**: `make up-external`, `make up-external-jellyfin`, `make up-invidious`, `make yt-jellyfin-smoke`, `make jellyfin-smoke`, `make smoke-wger`, `make smoke-presign-put`, `make preflight`
+- **Hi-RAG geometry**: ensure `HIRAG_URL` / `HIRAG_GPU_URL` aim at `http://hi-rag-gateway-v2-gpu:8086` (host port 8087) so CGPs hydrate the GPU ShapeStore; keep `HIRAG_CPU_URL` available for CPU-only runs.
 - **Docker logs**: `docker compose logs <service>`, `make logs-core`
 - **n8n/automation scripts**: `docs/n8n/*.json`, `pmoves/tools/integrations/*.sh`
 - **Docs**: `pmoves/docs/services/<service>/README.md`, `pmoves/docs/SMOKETESTS.md`, `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`

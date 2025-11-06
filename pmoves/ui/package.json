@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/with-env.mjs next dev",
+    "dev:3001": "PORT=3001 node scripts/with-env.mjs next dev -p 3001",
     "build": "node scripts/with-env.mjs next build",
     "start": "node scripts/with-env.mjs next start",
     "lint": "node scripts/with-env.mjs eslint . --ext ts,tsx,js,jsx --max-warnings=0",

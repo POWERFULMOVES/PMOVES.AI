@@ -7,7 +7,7 @@ import type {
   SignInWithOAuthCredentials,
   SignInWithPasswordCredentials
 } from '@supabase/supabase-js';
-import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient, getBootJwt } from '@/lib/supabaseClient';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 type OAuthSignInResponse = Awaited<ReturnType<SupabaseBrowserClient['auth']['signInWithOAuth']>>;
@@ -31,11 +31,47 @@ export const useSupabaseAuth = (): UseSupabaseAuthReturn => {
   useEffect(() => {
     let active = true;
 
+    const bootJwt = getBootJwt();
+
+    const decodeJwt = (token: string): { exp?: number } => {
+      try {
+        const payload = token.split('.')[1];
+        if (!payload) return {};
+        const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = atob(normalized.padEnd(normalized.length + (4 - (normalized.length % 4)) % 4, '='));
+        return JSON.parse(decoded);
+      } catch (error) {
+        console.warn('[useSupabaseAuth] Failed to decode boot JWT', error);
+        return {};
+      }
+    };
+
     const bootstrap = async () => {
       try {
         const { data } = await supabase.auth.getSession();
         if (!active) return;
-        setSession(data.session ?? null);
+        let nextSession = data.session ?? null;
+
+        if (!nextSession && bootJwt) {
+          const { data: userData } = await supabase.auth.getUser(bootJwt);
+          if (userData?.user) {
+            const claims = decodeJwt(bootJwt);
+            const now = Math.floor(Date.now() / 1000);
+            const exp = typeof claims.exp === 'number' ? claims.exp : now + 3600;
+            nextSession = {
+              access_token: bootJwt,
+              token_type: 'bearer',
+              expires_at: exp,
+              expires_in: Math.max(0, exp - now),
+              refresh_token: bootJwt,
+              provider_refresh_token: null,
+              provider_token: null,
+              user: userData.user,
+            } as Session;
+          }
+        }
+
+        setSession(nextSession);
       } finally {
         if (active) {
           setLoading(false);

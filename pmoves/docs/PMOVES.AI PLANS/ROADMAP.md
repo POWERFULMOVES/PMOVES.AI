@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-10-26_
+_Last updated: 2025-11-06_
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -19,7 +19,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 | --- | --- | --- |
 | ✅ | ComfyUI ↔ MinIO Presign microservice | `services/presign/api.py` provides presigned PUT/GET/POST helpers for MinIO/S3. |
 | ✅ | Render Webhook (Comfy → Supabase Studio) | `services/render-webhook/webhook.py` inserts submissions into `studio_board` with optional auto-approval. |
-| 🚧 | Publisher (Jellyfin) | `services/publisher/publisher.py` consumes approval events and refreshes Jellyfin; optional dependency guards and envelope fallback landed, but richer metadata handling and error reporting are still pending. |
+| 🚧 | Publisher (Jellyfin) | `services/publisher/publisher.py` consumes approval events and refreshes Jellyfin; dependency guards and envelope fallback landed; richer metadata/error reporting and auto‑link fallback are documented and partially scripted. |
 | ✅ | Publisher telemetry & ROI rollups | `/metrics` feeds from `services/publisher/publisher.py` and `services/publisher-discord/main.py` expose turnaround/latency/cost telemetry, with Supabase rollups powering the ROI dashboards documented in `pmoves/docs/TELEMETRY_ROI.md`. |
 | ✅ | PDF/MinIO ingestion | `services/pdf-ingest/app.py` pulls PDFs from MinIO, extracts text, forwards chunks, and emits ingest events. |
 | ✅ | PMOVES.YT geometry smoke hardening | `services/pmoves-yt/yt.py` now signs Supabase requests with the service-role key and falls back to direct pack lookups so `make smoke` stays green. |
@@ -30,7 +30,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 
 **Outstanding to close M2:**
 
-- publisher metadata/envelope polish — namespace-aware filenames, dependency guards, and fallback envelopes merged; monitor adoption and backfill historic assets if needed
+- publisher metadata/envelope polish — namespace-aware filenames, dependency guards, fallback envelopes merged; monitor adoption and backfill historic assets if needed
 - Supabase approval dashboards (studio board + videos) now live under `pmoves/ui/app/dashboard/*`; follow the usage notes in [SESSION_IMPLEMENTATION_PLAN.md](SESSION_IMPLEMENTATION_PLAN.md#4-supabase-approval-dashboards-studio-board--videos) when routing reviewers
 - add published-event Discord embeds via `content.published.v1`; execution plan staged in `SESSION_IMPLEMENTATION_PLAN.md`
 - wire Supabase ROI dashboards to the new publisher telemetry rollups; document interpretation guidance alongside ROI reporting (**see `docs/TELEMETRY_ROI.md` for the latest walkthrough**).
@@ -38,11 +38,31 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log the validation timestamp (see operational reminders captured in the implementation plan)
 - integrate Wger + Firefly flows: set secrets, import flows, run smokes, and verify upserts/events
 - CHIT EvoSwarm loop: enable controller, confirm `geometry.swarm.meta.v1` events; ensure pack selection by producers and pack_id persisted in constellation meta (gateway v2)
+- PMOVES.YT SABR handling: prefer Invidious when needed; add Whisper transcript fallback in pipeline; update smokes accordingly.
 - [ ] CI TODO — surface `make lint-packs` as the pack manifest linter prior to publish, blocking `kb.pack.published.v1` unless manifests validate.
 - [ ] CI TODO — retrieval-eval persona gate must succeed (`persona.publish.request.v1` → `persona.published.v1`) with thresholds persisted to `pmoves_core.persona_eval_gates`.
 - [x] v2 realtime DNS fallback (host‑gateway derivation) — 2025‑10‑19
 - [x] v2‑GPU default Qwen reranker + env overrides — 2025‑10‑19
 - [x] Meili lexical enabled by default via pmoves/.env.local — 2025‑10‑19
+
+### Stabilization Sprint (Nov 6 → Nov 12, 2025)
+
+Goals
+- Unify object storage on Supabase Storage (S3) across services and smokes.
+- Ensure all core stacks start cleanly after host restarts (Docker Desktop/WSL).
+- Make smoketests deterministic and fast (reduce SABR/external flakiness).
+- Restore observability parity (Loki/Grafana dashboards for API latencies/errors).
+
+Done
+- Storage unified; presign/render-webhook validated against Supabase S3.
+- Invidious stabilized on host 3005; companion/HMAC keys stamped.
+- Hi‑RAG v2 CPU/GPU up; core smoke PASS.
+
+Planned
+- Loki config upgrade to 3.1.x; hook to Grafana alerts; verify `/ready` 200.
+- pmoves.yt: force offline transcript provider during smoke; broaden fallback; add stable IDs.
+- Reranker: re‑enable GPU rerank and add test coverage.
+- Document `/hirag/admin/stats` and Supabase‑only storage in service docs and SMOKETESTS.md.
 
 ### Stability & Release Hardening Initiative (Prep)
 
@@ -78,6 +98,6 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - ✅ Render webhook — live handler in `services/render-webhook`
 - ✅ Hi‑RAG reranker toggle + evaluation suite update — implemented (parameter sweeps still optional)
 - 🚧 Jellyfin refresh + rich Discord embeds — waiting on publisher metadata polish and Discord wiring
-- ✅ Roadmap/NEXT_STEPS — aligned with repo state
+- ✅ Roadmap/NEXT_STEPS — aligned with repo state (unified REST + single‑env + agent health)
 - ✅ TensorZero gateway integration for LangExtract — gateway profile, Crush auto-detection, and observability metadata tags routed through `LANGEXTRACT_PROVIDER=tensorzero`.
 - ✅ LangExtract Workers AI option + docs/env wiring — 2025-10-23

@@ -61,6 +61,63 @@ BEGIN
 END
 $YT_TABLE$;
 
+-- Backfill new columns when upgrading from earlier schema revisions
+DO $YT_UPGRADE$
+DECLARE
+  has_vector boolean := EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'vector'
+  );
+BEGIN
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists title text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists description text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists channel text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists channel_id text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists channel_url text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists channel_thumbnail text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists channel_tags text[]';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists namespace text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists channel_metadata jsonb default ''{}''::jsonb';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists url text';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists published_at timestamptz';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists duration double precision';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists transcript text';
+  IF has_vector THEN
+    EXECUTE 'alter table if exists youtube_transcripts
+               add column if not exists embedding_st vector(384)';
+    EXECUTE 'alter table if exists youtube_transcripts
+               add column if not exists embedding_gemma vector(768)';
+    EXECUTE 'alter table if exists youtube_transcripts
+               add column if not exists embedding_qwen vector(2560)';
+  ELSE
+    EXECUTE 'alter table if exists youtube_transcripts
+               add column if not exists embedding_st float4[]';
+    EXECUTE 'alter table if exists youtube_transcripts
+               add column if not exists embedding_gemma float4[]';
+    EXECUTE 'alter table if exists youtube_transcripts
+               add column if not exists embedding_qwen float4[]';
+  END IF;
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists meta jsonb default ''{}''::jsonb';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists created_at timestamptz default timezone(''utc'', now())';
+  EXECUTE 'alter table if exists youtube_transcripts
+             add column if not exists updated_at timestamptz default timezone(''utc'', now())';
+END
+$YT_UPGRADE$;
+
 -- Maintain updated_at automatically
 create or replace function set_youtube_transcripts_updated_at()
 returns trigger

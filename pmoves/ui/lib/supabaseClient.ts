@@ -25,6 +25,9 @@ const ensureAnonKey = (): string => {
   return key;
 };
 
+const resolveBootJwt = (): string | undefined =>
+  process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
+
 const ensureServiceRoleKey = (): string => {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) {
@@ -40,13 +43,29 @@ let cachedRestUrl: string | null = null;
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
 
-export const createSupabaseBrowserClient = (): TypedSupabaseClient =>
-  createClient<Database>(ensureUrl(), ensureAnonKey(), {
+export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
+  const bootJwt = resolveBootJwt();
+  const client = createClient<Database>(ensureUrl(), ensureAnonKey(), {
     auth: {
-      autoRefreshToken: true,
-      persistSession: true,
+      autoRefreshToken: !bootJwt,
+      persistSession: !bootJwt,
     },
+    global: bootJwt
+      ? {
+          headers: {
+            Authorization: `Bearer ${bootJwt}`,
+          },
+        }
+      : undefined,
   });
+  if (typeof window !== 'undefined') {
+    (window as any).__PMOVES_SUPABASE_BOOT = {
+      hasBootJwt: Boolean(bootJwt),
+      authorization: bootJwt ? `Bearer ${bootJwt}` : undefined,
+    };
+  }
+  return client;
+};
 
 export const getSupabaseBrowserClient = (): TypedSupabaseClient => {
   if (!cachedBrowserClient) {
@@ -73,13 +92,43 @@ export const createSupabaseServerClient = (
 ): TypedSupabaseClient => {
   const { serviceRole = false } = options;
   const key = serviceRole ? ensureServiceRoleKey() : ensureAnonKey();
+  const bootJwt = !serviceRole ? resolveBootJwt() : undefined;
   return createClient<Database>(ensureUrl(), key, {
     auth: {
-      autoRefreshToken: !serviceRole,
+      autoRefreshToken: serviceRole ? false : !bootJwt,
       persistSession: false,
     },
+    global: bootJwt
+      ? {
+          headers: {
+            Authorization: `Bearer ${bootJwt}`,
+          },
+        }
+      : undefined,
   });
 };
 
 export const createSupabaseServiceRoleClient = (): TypedSupabaseClient =>
   createSupabaseServerClient({ serviceRole: true });
+
+export const getBootJwt = (): string | undefined => resolveBootJwt();
+
+export const hasBootJwt = (): boolean => Boolean(resolveBootJwt());
+
+export const getBootUser = async (client: TypedSupabaseClient) => {
+  const bootJwt = resolveBootJwt();
+  if (!bootJwt) {
+    return null;
+  }
+  try {
+    const { data, error } = await client.auth.getUser(bootJwt);
+    if (error) {
+      console.warn('[supabaseClient] Failed to fetch boot user via JWT', error);
+      return null;
+    }
+    return data.user ?? null;
+  } catch (err) {
+    console.warn('[supabaseClient] Unexpected error when fetching boot user', err);
+    return null;
+  }
+};

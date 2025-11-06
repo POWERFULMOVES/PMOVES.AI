@@ -63,6 +63,7 @@ Outputs live in `pmoves/data/consciousness/Constellation-Harvest-Regularization/
    - `make smoke-geometry`
    - `make smoke-geometry-db`
    - Geometry UI via `make web-geometry`
+   - Ensure `HIRAG_URL`/`HIRAG_GPU_URL` point at `http://hi-rag-gateway-v2-gpu:8086` (host port 8087) so CGPs hydrate the GPU ShapeStore; if only the CPU gateway is running, set `HIRAG_CPU_URL=http://hi-rag-gateway-v2:8086` and rerun the checks.
 4. Record constellation IDs & anchors in CHIT docs so demos can reference them.
 
 ---

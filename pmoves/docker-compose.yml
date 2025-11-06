@@ -32,6 +32,22 @@ services:
     ports: ["3010:3000"]
     profiles: ["orchestration","workers","supabase-local"]
     networks: [pmoves]
+
+  # Optional: PostgREST against Supabase CLI database (host.docker.internal:65432)
+  # Use profile 'supabase-cli-rest' and set POSTGREST_URL=http://localhost:3011 for console fallbacks.
+  postgrest-cli:
+    image: postgrest/postgrest:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - PGRST_DB_URI=postgres://${SUPABASE_DB_USER:-postgres}:${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:${SUPABASE_DB_PORT:-65432}/${SUPABASE_DB_NAME:-postgres}
+      - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
+      - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
+      - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
+      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
+    ports: ["3011:3000"]
+    profiles: ["supabase-cli-rest"]
+    networks: [pmoves]
   qdrant:
     image: qdrant/qdrant:v1.10.0
     restart: unless-stopped
@@ -392,7 +408,11 @@ services:
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
-      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
@@ -408,7 +428,7 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports: ["8086:8086"]
+    ports: ["${HIRAG_V2_HOST_PORT:-8086}:8086"]
     profiles: ["workers","gateway"]
     depends_on:
       qdrant:
@@ -423,7 +443,7 @@ services:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
       args:
-        - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu121}
+        - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu128}
         - TORCH_SKIP_CUDA=0
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
@@ -473,9 +493,10 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
       args:
-        TORCH_CUDA: ${TORCH_CUDA_VERSION:-cu126}
+        TORCH_CUDA: ${TORCH_CUDA_VERSION:-cu128}
         TORCH_VERSION: ${TORCH_VERSION:-2.9.0}
         TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
+    runtime: nvidia
     restart: unless-stopped
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
@@ -514,14 +535,20 @@ services:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - CUDA_VISIBLE_DEVICES=
+      - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+    gpus: all
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
               count: ${GPU_COUNT:-all}
-    ports: ["8087:8086"]
+    ports: ["${HIRAG_V2_GPU_HOST_PORT:-8087}:8086"]
     profiles: ["gpu"]
     depends_on:
       qdrant:
@@ -550,14 +577,14 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - PORT=8080
+      - PORT=80
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
       - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
       - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     depends_on: [nats]
-    ports: ["8080:8080"]
+    ports: ["8080:80"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
@@ -576,6 +603,7 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8091
+      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
@@ -619,13 +647,11 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://jellyfin:8096}
-      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
-      - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
-      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
+      JELLYFIN_URL: ${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
+      SUPA_REST_URL: ${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
     ports: ["8093:8093"]
     profiles: ["orchestration"]
-    networks: [pmoves]
+    networks: [pmoves, cataclysm]
 
   pmoves-ollama:
     image: ${PMOVES_OLLAMA_IMAGE:-pmoves/ollama:0.12.6}
@@ -694,6 +720,7 @@ services:
         condition: service_started
     ports: ["4000:4000"]
     profiles: ["tensorzero"]
+    networks: [pmoves]
   invidious-db:
     image: postgres:14
     restart: unless-stopped
@@ -754,7 +781,7 @@ services:
         hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
         invidious_companion:
           - private_url: "http://invidious-companion:8282"
-            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8282}"
+            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}"
         invidious_companion_key: "${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}"
         statistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}
         use_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}
@@ -830,6 +857,16 @@ services:
       - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
     profiles: ["cloudflare"]
     networks: [pmoves]
+
+  invidious-companion-proxy:
+    build: ./services/invidious-companion-proxy
+    restart: unless-stopped
+    depends_on:
+      invidious-companion:
+        condition: service_started
+    ports: ["8281:80"]
+    profiles: ["invidious"]
+    networks: [pmoves]
 volumes:
   neo4j-data: {}
   minio-data: {}
@@ -843,3 +880,6 @@ networks:
   pmoves:
     external: true
     name: pmoves-net
+  cataclysm:
+    external: true
+    name: cataclysm-net

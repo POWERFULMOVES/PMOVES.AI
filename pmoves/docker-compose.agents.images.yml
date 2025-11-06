@@ -1,0 +1,7 @@
+services:
+  agent-zero:
+    image: ${AGENT_ZERO_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-agent-zero:pmoves-latest}
+    build: null
+  archon:
+    image: ${ARCHON_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-archon:pmoves-latest}
+    build: null

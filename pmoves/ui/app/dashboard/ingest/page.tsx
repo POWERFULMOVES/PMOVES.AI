@@ -6,6 +6,11 @@ import DashboardNavigation from '../../../components/DashboardNavigation';
 import { UploadDropzone } from '../../../components/UploadDropzone';
 import { callPresignService } from '../../../lib/presign';
 import type { Database } from '../../../lib/database.types';
+import {
+  createSupabaseServerClient,
+  getBootUser,
+  hasBootJwt,
+} from '@/lib/supabaseClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,14 +100,20 @@ async function fetchRecentUploads(
 }
 
 export default async function IngestDashboardPage() {
-  const cookieStore = cookies();
-  const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let supabase: SupabaseClient<Database, 'public'> = createSupabaseServerClient();
+  let user = hasBootJwt() ? await getBootUser(supabase) : null;
 
   if (!user) {
-    redirect(`/login?next=/dashboard/ingest`);
+    const cookieStore = cookies();
+    const cookieClient = createServerComponentClient<Database>({ cookies: () => cookieStore });
+    const {
+      data: { user: cookieUser },
+    } = await cookieClient.auth.getUser();
+    if (!cookieUser) {
+      redirect(`/login?next=/dashboard/ingest`);
+    }
+    supabase = cookieClient as SupabaseClient<Database, 'public'>;
+    user = cookieUser;
   }
 
   const uploads = await fetchRecentUploads(

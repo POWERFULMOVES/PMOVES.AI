@@ -28,11 +28,13 @@ This guide covers preflight wiring, starting the core stack, and running the loc
 
     - `PRESIGN_SHARED_SECRET`
     - `RENDER_WEBHOOK_SHARED_SECRET`
-    - Supabase REST endpoints (compose defaults):
+    - Supabase REST endpoints:
 
-        - `SUPA_REST_URL=http://postgrest:3000` (smoke harness + curl snippets)
-        - `SUPA_REST_INTERNAL_URL=http://postgrest:3000` (compose services)
-        - Override both with the Supabase CLI values (`http://127.0.0.1:54321/rest/v1`, `http://api.supabase.internal:8000/rest/v1`) if you run the CLI stack instead of Docker compose.
+        - CLI stack (default):
+            - `SUPA_REST_URL=http://host.docker.internal:65421/rest/v1`
+            - `SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1`
+        - Compose PostgREST fallback: `http://postgrest:3000` for both variables if you bring up the bundled PostgREST service instead of the CLI.
+        - Geometry bus: set `HIRAG_URL` / `HIRAG_GPU_URL` to `http://hi-rag-gateway-v2-gpu:8086` when the GPU gateway is running so pmoves.yt and smoketests update the same ShapeStore cache (host port 8087). Keep `HIRAG_CPU_URL=http://hi-rag-gateway-v2:8086` as the fallback for CPU-only bring-up.
 
     - After the Supabase CLI stack is online, run `make bootstrap-data` to apply Supabase SQL (including `supabase/initdb/12_geometry_fixture.sql`), seed Neo4j, and load the demo Qdrant/Meili corpus. Re-run individual layers with `make supabase-bootstrap`, `make neo4j-bootstrap`, or `make seed-data` if you only need one.
 
@@ -348,6 +350,16 @@ Optional
 
   - `curl -X POST http://localhost:8077/yt/summarize -H 'content-type: application/json' -d '{"video_id":"<id>","style":"short"}' | jq`
 
+## YouTube → Jellyfin Playback
+
+- Prereqs: confirm `make up`, `make up-yt`, and `make up-invidious` are running (Hi-RAG gateways, pmoves.yt, and the Invidious fallback must be healthy). Once those services show `Up` in `docker compose -p pmoves ps`, proceed.
+- `make yt-jellyfin-smoke`
+  - Uses `YT_URL` (default `https://www.youtube.com/watch?v=2Vv-BfVoq4g`) to run the full pmoves.yt ingest/emit path.
+  - Confirms Supabase REST access works whether the CLI stack is exposing port 65421 or PostgREST is running on 3010.
+  - Calls `jellyfin-smoke` afterward to fetch a playback URL from the Jellyfin bridge, validating timestamped streaming.
+- If the default clip is geo-restricted (`yt_dlp returned no info`), rerun with `make yt-jellyfin-smoke YT_URL=<alternate_public_video>`.
+- When `/shape/point/.../jump` returns 404, tail `docker compose -p pmoves logs hi-rag-gateway-v2` to confirm `/geometry/event` ingestion and verify the gateway has Supabase REST credentials (`SUPA_REST_URL` or the pmoves PostgREST service) so points enter the shape store.
+
 ## Preflight + Health Checks
 
 Run a quick preflight (tools, ports, missing .env keys) and full retro report with HTTP health:
@@ -381,6 +393,7 @@ HTTP endpoints checked:
 ## Jellyfin Bridge
 
 - Optional: set `JELLYFIN_URL` and `JELLYFIN_API_KEY` in `.env` to enable live checks.
+- Shortcut: `make yt-jellyfin-smoke` ingests a sample clip via pmoves.yt before running the playback check.
 - Link a video: `curl -X POST http://localhost:8093/jellyfin/link -H 'content-type: application/json' -d '{"video_id":"<id>","jellyfin_item_id":"<jf_id>"}'`
 - Get playback URL: `curl -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d '{"video_id":"<id>","t":42}'`
   - Expect a URL pointing at Jellyfin web with start time.

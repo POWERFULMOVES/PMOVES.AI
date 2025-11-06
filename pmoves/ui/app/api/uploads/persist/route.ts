@@ -54,12 +54,8 @@ export async function POST(request: NextRequest) {
     const supabaseAuth = createSupabaseRouteHandlerClient(() => cookieStore);
     const {
       data: { session },
-      error: sessionError,
     } = await supabaseAuth.auth.getSession();
-
-    if (sessionError || !session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const bootJwt = process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
 
     const body = await request.json();
     const uploadId = body.uploadId as string | undefined;
@@ -79,11 +75,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'uploadId, bucket, and key are required' }, { status: 400 });
     }
 
-    if (ownerId && ownerId !== session.user.id) {
-      return NextResponse.json({ error: 'Owner mismatch' }, { status: 403 });
+    const effectiveUserId = session?.user?.id || ownerId;
+    if (!session && bootJwt && !effectiveUserId) {
+      return NextResponse.json({ error: 'ownerId is required when using boot JWT' }, { status: 400 });
     }
 
-    const { data: uploadEvent, error: uploadError } = await supabaseAuth
+    const readClient = session ? supabaseAuth : getServiceSupabaseClient();
+    const { data: uploadEvent, error: uploadError } = await readClient
       .from('upload_events')
       .select('bucket, object_key, owner_id, meta')
       .eq('upload_id' as any, uploadId as any)
@@ -93,7 +91,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Upload event not found' }, { status: 404 });
     }
 
-    if (uploadEvent.owner_id !== session.user.id) {
+    if (effectiveUserId && uploadEvent.owner_id !== effectiveUserId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -102,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     const namespace = resolveNamespace(uploadEvent.meta as Record<string, unknown> | null, requestedNamespace);
-    const expectedPrefix = `${namespace}/users/${session.user.id}/uploads/${uploadId}/`;
+    const expectedPrefix = `${namespace}/users/${effectiveUserId}/uploads/${uploadId}/`;
     if (!uploadEvent.object_key.startsWith(expectedPrefix)) {
       return NextResponse.json({ error: 'Object key outside authorised prefix' }, { status: 403 });
     }
@@ -124,7 +122,7 @@ export async function POST(request: NextRequest) {
       content_type: contentType,
       presigned_get: presignedGet.url,
       author,
-      owner_id: session.user.id,
+      owner_id: effectiveUserId,
     };
 
     const supabase = getServiceSupabaseClient();
@@ -190,7 +188,7 @@ export async function POST(request: NextRequest) {
       content_type: contentType,
       presigned_get: presignedGet.url,
       author,
-      owner_id: session.user.id,
+      owner_id: effectiveUserId,
     };
 
     const videoResult = await supabase
@@ -237,7 +235,7 @@ export async function POST(request: NextRequest) {
       .update({
         status: 'complete',
         progress: 100,
-        owner_id: session.user.id,
+        owner_id: effectiveUserId,
         meta: {
           namespace,
           tags,
@@ -247,7 +245,7 @@ export async function POST(request: NextRequest) {
           presigned_get: presignedGet.url,
           ingest: 'ui-dropzone',
           author,
-          owner_id: session.user.id,
+        owner_id: effectiveUserId,
         },
       })
       .eq('upload_id', uploadId);

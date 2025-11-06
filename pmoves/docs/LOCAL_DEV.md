@@ -5,8 +5,8 @@ Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md
 
 Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of setup scripts, Make targets, and Supabase workflows that pair with the service and port notes below.
 
-## First Run
-- `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, and executes the 12-step smoke harness so every integration ships with branded defaults out of the gate. See [FIRST_RUN.md](FIRST_RUN.md) for the full sequence and seeded resources.
+- `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, provisions the Supabase boot operator, and executes the 12-step smoke harness so every integration ships with branded defaults. See [FIRST_RUN.md](FIRST_RUN.md) for the full sequence and seeded resources.
+- `make supabase-boot-user` — manually reprovision (or rotate) the Supabase operator and refresh `env.shared`/`.env.local` with the latest password + JWT. Use this after changing Supabase domains or when you intentionally rotate credentials.
 - Optional provisioning bundle: `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` produces the same env overlays and stages the provisioning artifacts under `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS` before you run the stack locally or on a VPS.
 
 ## Services and Ports
@@ -19,8 +19,10 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - presign: 8088 -> 8080 (internal name `presign`)
 - hi-rag-gateway (v1, CPU): 8089 -> 8086 (internal name `hi-rag-gateway`)
 - hi-rag-gateway-gpu (v1, GPU): 8090 -> 8086 (internal name `hi-rag-gateway-gpu`)
-- hi-rag-gateway-v2 (CPU): 8086 (internal name `hi-rag-gateway-v2`)
-- hi-rag-gateway-v2-gpu (GPU): 8087 -> 8086 (internal name `hi-rag-gateway-v2-gpu`)
+- hi-rag-gateway-v2 (CPU): `${HIRAG_V2_HOST_PORT:-8086}` → 8086 (internal name `hi-rag-gateway-v2`)
+- hi-rag-gateway-v2-gpu (GPU): `${HIRAG_V2_GPU_HOST_PORT:-8087}` → 8086 (internal name `hi-rag-gateway-v2-gpu`)
+  - Tip: when local tools already bind to 8086/8087 (e.g., legacy uvicorn processes), set `HIRAG_V2_HOST_PORT` / `HIRAG_V2_GPU_HOST_PORT` in `.env.local` (or the shell) before running `make up` to remap the published ports (for example `18086` / `18087`).
+- Embedding defaults: the v2 gateways now pull embeddings from TensorZero (`http://tensorzero-gateway:3000`) which proxies Ollama’s `embeddinggemma` family. `make -C pmoves up-tensorzero` now starts ClickHouse, the gateway/UI, **and** the bundled `pmoves-ollama` sidecar so `embeddinggemma:latest`/`300m` respond immediately. On hardware where Ollama cannot run (Jetson, low-memory VPS) point `TENSORZERO_BASE_URL` at a remote gateway or leave `EMBEDDING_BACKEND` unset so services fall back to sentence-transformers. citeturn0search0turn0search2
 - retrieval-eval: 8090 (internal name `retrieval-eval`)
 - render-webhook: 8085 (internal name `render-webhook`)
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
@@ -29,10 +31,16 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - channel-monitor: 8097 (internal name `channel-monitor`) – watches YouTube channels and queues new videos for pmoves-yt ingestion.
   - Tune yt-dlp via env: `YT_ARCHIVE_DIR` + `YT_ENABLE_DOWNLOAD_ARCHIVE` manage archive files, `YT_SUBTITLE_LANGS`/`YT_SUBTITLE_AUTO` pull captions, `YT_POSTPROCESSORS_JSON` overrides post-processing (defaults embed metadata + thumbnails).
 
-Optional TensorZero gateway profile (`docker compose --profile tensorzero up tensorzero-clickhouse tensorzero-gateway tensorzero-ui`):
+Optional TensorZero gateway profile (`make -C pmoves up-tensorzero` or `docker compose --profile tensorzero up tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama`):
 - tensorzero-clickhouse: 8123 (internal name `tensorzero-clickhouse`)
 - tensorzero-gateway: 3030 -> 3000 (internal name `tensorzero-gateway`)
 - tensorzero-ui: 4000 (internal name `tensorzero-ui`)
+- pmoves-ollama: 11434 (internal name `pmoves-ollama`) — optional; skip and point `TENSORZERO_BASE_URL` at a remote gateway when Ollama runs on another host or you’re deploying to Jetson-class hardware.
+
+Remote inference quick switch:
+- To use a remote TensorZero instead of the local one, set `TENSORZERO_BASE_URL=http://<remote>:3000` before `make up` (or place it in `.env.local`).
+- hi-rag v2 will automatically send embedding requests to that URL when `EMBEDDING_BACKEND=tensorzero` is set (default in the gateway).
+- You can keep the local `pmoves-ollama` running or stop it via `docker stop pmoves-pmoves-ollama-1`; the gateway will prefer the configured backend.
 
 ### Supabase runtime modes
 - **Supabase CLI stack (`make supa-start`)** — launches the official Supabase Docker bundle (Postgres, auth, storage, Realtime, Studio) managed by the CLI. Requires the `supabase` binary in your `PATH`; monitor with `make supa-status` and shut down via `make supa-stop`.
@@ -51,8 +59,8 @@ External bundles (via `make up-external`):
 | --- | --- | --- | --- |
 | Supabase Studio | http://127.0.0.1:65433 | `make -C pmoves supa-start` *(CLI-managed)* | Requires the Supabase CLI stack; confirm status with `make -C pmoves supa-status`. |
 | Notebook Workbench (Next.js) | http://localhost:3000/notebook-workbench | `npm run dev` in `pmoves/ui` | Lint + env validation via `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"`. |
-| Agent Zero Admin (FastAPI docs) | http://localhost:8080/docs | `make -C pmoves up` | Useful for manual message dispatch debugging; requires a valid `OPENAI_API_KEY` for full functionality. |
-| TensorZero Playground | http://localhost:4000 | `make -C pmoves up-tensorzero` | Gateway API at http://localhost:3030; ensure `OPENAI_API_KEY` or compatible provider is configured. |
+| Agent Zero Admin (FastAPI docs) | http://localhost:8080/docs | `make -C pmoves up` | Useful for manual message dispatch debugging; default UI badge probes `/healthz` (override with `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH`). |
+| TensorZero Playground | http://localhost:4000 | `make -C pmoves up-tensorzero` | Brings up ClickHouse, gateway/UI, and `pmoves-ollama`. Gateway API at http://localhost:3030; set `TENSORZERO_BASE_URL` to a remote gateway if Ollama runs elsewhere. |
 | Firefly Finance | http://localhost:8082 | `make -C pmoves up-external-firefly` | Set `FIREFLY_APP_KEY`/`FIREFLY_ACCESS_TOKEN` in `pmoves/env.shared` before first login. |
 | Wger Coach Portal | http://localhost:8000 | `make -C pmoves up-external-wger` | Auto-applies brand defaults; admin credentials live in `pmoves/env.shared`. |
 | Jellyfin Media Hub | http://localhost:8096 | `make -C pmoves up-external-jellyfin` | First boot runs schema migrations; mark libraries inside the UI after media folders are populated. |
@@ -88,12 +96,71 @@ Quick start:
 - Windows without Make: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1`
 - With Make: `make env-setup` (runs `python3 -m pmoves.tools.secrets_sync generate` under the hood) to produce `.env.generated` / `env.shared.generated` from `pmoves/chit/secrets_manifest.yaml`, then run `make bootstrap` to capture Supabase CLI endpoints (including Realtime) before `make env-check`. When you populate Supabase values, use the live keys surfaced by `make supa-status` (`sb_publishable_…` / `sb_secret_…`) so Archon, Agent Zero, and other agents load the correct service role credentials.
 - UI scripts: every `npm run` command under `pmoves/ui` now shells through `node scripts/with-env.mjs …`, which layers `env.shared`, `env.shared.generated`, `.env.generated`, `.env.local`, and `pmoves/ui/.env.local`. Keep the canonical secrets in `pmoves/env.shared` and machine-specific overrides in `.env.local`; the UI inherits them automatically.
+
+### Console dev helpers
+- Start the console on port 3001 (auto-loads env and boot JWT):
+  - `make -C pmoves ui-dev-start`
+- Stop and view logs:
+  - `make -C pmoves ui-dev-stop`
+  - `make -C pmoves ui-dev-logs`
+- Auto-auth: the console skips /login when `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` is present. Generate/update it with `make -C pmoves supabase-boot-user`, then restart the console.
+
+### Agent UIs (headless MCP with console wrappers)
+- Archon page: `http://localhost:3001/dashboard/archon` — Health/Info, prompts editor link, and a button to open the native API.
+- Agent Zero page: `http://localhost:3001/dashboard/agent-zero` — Health/Info, MCP connection details, and a button to open the native UI/API.
+
+You can customize the badge probe paths if your forks expose different health endpoints:
+
+- `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` (default `/healthz`, fallbacks: `/api/health` → `/`).
+- `NEXT_PUBLIC_ARCHON_HEALTH_PATH` (default `/healthz`, fallbacks: `/api/health` → `/`).
+
+See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Personas page: `http://localhost:3001/dashboard/personas` — Lists personas from `pmoves_core.personas`.
+
+### Use published Agent UI images
+- You can run Agents from prebuilt images (includes native UIs) instead of local builds:
+  - Set/confirm in `pmoves/env.shared`:
+    - `AGENT_ZERO_IMAGE=ghcr.io/cataclysm-studios-inc/pmoves-agent-zero:pmoves-latest`
+    - `ARCHON_IMAGE=ghcr.io/cataclysm-studios-inc/pmoves-archon:pmoves-latest`
+  - Start with images: `make -C pmoves up-agents-published`
+- To pin versions, change the tags above (e.g., `:v0.9.6`).
+- If you maintain your own registry, point the variables at your GHCR/ECR tags.
+
+### Use your forks (integrations-workspace)
+You can build and run Agent Zero and Archon directly from your forks without modifying this repo:
+
+1) Clone your forks into the workspace directory (default `../integrations-workspace` relative to `pmoves/`):
+```
+make -C pmoves agents-integrations-clone
+```
+This clones:
+- https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git → `$(INTEGRATIONS_WORKSPACE)/PMOVES-Agent-Zero`
+- https://github.com/POWERFULMOVES/PMOVES-Archon.git → `$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon`
+
+2) Build and start agents from your forks:
+```
+make -C pmoves build-agents-integrations
+make -C pmoves up-agents-integrations
+```
+
+3) Update later:
+```
+make -C pmoves agents-integrations-pull
+make -C pmoves build-agents-integrations
+make -C pmoves up-agents-integrations
+```
+
+Notes:
+- Override the workspace path with `INTEGRATIONS_WORKSPACE=/path/to/integrations-workspace`.
+- Ports and env remain the same (Agent Zero on 8080, Archon on 8091); the override compose file only swaps the build contexts.
+
+If your fork’s internal port differs, adjust `AGENT_ZERO_EXTRA_ARGS` / `ARCHON_SERVER_PORT` or update the compose mapping. The console reads `NEXT_PUBLIC_AGENT_ZERO_URL` / `NEXT_PUBLIC_ARCHON_URL`.
 - Docker Compose now reads the same set in order: `env.shared.generated` (CHIT secrets) → `env.shared` (branded defaults) → `.env.generated` (local secret bundles) → `.env.local` (per-machine overrides). The root `.env` file is no longer sourced; keep any host-specific tweaks in `.env.local` instead of editing `.env`.
 - Supabase CLI remains the default backend for both local laptops and self-hosted VPS installs; `env.shared` ships with the CLI ports/keys, and `make supa-status` → `make env-setup` keeps `.env.local` aligned with the CLI stack unless you explicitly run `make supa-use-remote`.
 - No Make? `python3 -m pmoves.tools.onboarding_helper generate` produces the same env files and reports any missing CHIT labels before you bring up containers.
 - Configure Crush with `python3 -m pmoves.tools.mini_cli crush setup` so your local Crush CLI session understands PMOVES context paths, providers, and MCP stubs.
   - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
-- TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces. Pull the Ollama backing model once (`ollama pull embeddinggemma:300m`) so the gateway's default `gemma_embed_local` route succeeds.
+- TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). `make -C pmoves up-tensorzero` now starts ClickHouse, the gateway/UI, and `pmoves-ollama`, so the default `gemma_embed_local` route works without manual pulls. If you deploy on hardware that cannot run Ollama (Jetson, remote inference nodes), skip the sidecar and point `TENSORZERO_BASE_URL` at a remote gateway instead. Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces.
   - Advanced toggles: `TENSORZERO_MODEL` overrides the default chat backend, `TENSORZERO_TIMEOUT_SECONDS` adjusts request timeouts, and `TENSORZERO_STATIC_TAGS` (JSON or `key=value,key2=value2`) forwards deployment metadata as `tensorzero::tags`.
 
 ### UI Workspace (Next.js + Supabase Platform Kit)
@@ -275,7 +342,7 @@ OpenAI-compatible presets:
 - VPS deployment: sync the same variables into your secret manager (Docker Swarm, Fly.io, Coolify). Document the base URL helper in `.env` so ops teams can rotate tokens without rediscovering the Cloudflare path.
 
 ## Start
-- `make up` (data + workers, v2 CPU on :8086, v2 GPU on :8087 when available)
+- `make up` (data + workers, v2 CPU on :${HIRAG_V2_HOST_PORT:-8086}, v2 GPU on :${HIRAG_V2_GPU_HOST_PORT:-8087} when available)
 - `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090 when available)
 - Legacy gateway: `make up-legacy`
 - Seed demo data (Qdrant/Meili): `make seed-data`
@@ -293,7 +360,7 @@ OpenAI-compatible presets:
 - Live/offline toggle: `NOTEBOOK_SYNC_MODE` (`live` or `offline`) controls whether the worker processes updates at all.
 - Source filter: `NOTEBOOK_SYNC_SOURCES` (comma list of `notebooks`, `notes`, `sources`) limits which resources feed LangExtract.
 - Cursor storage: `NOTEBOOK_SYNC_DB_PATH` (default `/data/notebook_sync.db` mounted via the `notebook-sync-data` volume).
-- Extract worker routing: set `EMBEDDING_BACKEND=tensorzero` to call the TensorZero gateway for chunk embeddings (uses `TENSORZERO_BASE_URL` + `TENSORZERO_EMBED_MODEL`, defaults to `gemma_embed_local`, which proxies to Ollama's `embeddinggemma:300m`). Leave unset for local `sentence-transformers`.
+- Extract worker routing: set `EMBEDDING_BACKEND=tensorzero` to call the TensorZero gateway for chunk embeddings (uses `TENSORZERO_BASE_URL` + `TENSORZERO_EMBED_MODEL`, defaults to `tensorzero::embedding_model_name::gemma_embed_local`, which proxies to Ollama's `embeddinggemma:300m`). Leave unset for local `sentence-transformers`.
 
 ### Mindmap + Open Notebook integration
 
@@ -375,7 +442,7 @@ OpenAI-compatible presets:
 
 - Presign: `curl http://localhost:8088/healthz`
 - Webhook: `curl http://localhost:8085/healthz`
-- Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
+- Hi‑RAG v2 stats: `curl http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/admin/stats` (or `${HIRAG_V2_HOST_PORT:-8086}` for CPU-only bring-up)
 - Mindmap API (Neo4j-backed): `curl http://localhost:8086/mindmap/<constellation_id>?offset=0&limit=50` (after `make mindmap-seed` the demo ID is `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111`). Responses now include `media_url`, timestamps, Notebook payloads, and pagination metadata (`total`, `returned`, `remaining`, `has_more`).
 - Retrieval‑Eval UI: `http://localhost:8090`
 - PostgREST: `http://localhost:3010`
@@ -476,3 +543,12 @@ Minimal venv (only tools helpers):
 - Linux/macOS: `make venv-min`
 
 Tip (Windows): If `make` is missing, `make setup` installs GNU Make via Chocolatey when available and then installs Python requirements across services using the preferred package manager.
+### Personas REST fallback (PostgREST)
+
+If the Supabase CLI REST host (65421) does not expose `pmoves_core`, the console personas page can query a PostgREST instance directly using profile headers.
+
+- Start the CLI-bound PostgREST: `docker compose -p pmoves up -d postgrest-cli` (publishes `http://localhost:3011`).
+- Set `POSTGREST_URL=http://localhost:3011` in `pmoves/env.shared` and run `make -C pmoves env-setup`.
+- Reload `/dashboard/personas`.
+
+Alternatively, run the compose PostgREST on `http://localhost:3010` and set `POSTGREST_URL` accordingly.
