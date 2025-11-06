@@ -21,7 +21,8 @@ What’s wired by default
   - hi-rag-gateway-v2-gpu: http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/healthz
   - presign: http://localhost:8088/healthz
   - archon: http://localhost:8091/healthz
-  - channel-monitor: http://localhost:8097/healthz
+- channel-monitor: http://localhost:8097/healthz
+- deepresearch: http://localhost:8098/healthz
   - jellyfin overlay: http://localhost:9096
   - tensorzero UI: http://localhost:4000
   - n8n: http://localhost:5678
@@ -38,6 +39,7 @@ Env knobs
 
 Notes
 - On Docker Desktop for Windows/macOS, cAdvisor’s kernel mounts can be limited. If cAdvisor reports unhealthy or fails to start, it will auto-retry; you can also temporarily comment out the service or run only on Linux hosts. The rest of the monitoring stack (Prometheus, Grafana, Blackbox, Loki/Promtail) works cross‑platform.
+- DeepResearch health is a lightweight FastAPI endpoint inside the worker (port `8098`); it reports `nats_connected` and returns 200 if the process is live.
 
 Linking Agent Zero / Archon traces (future)
 - Both services can emit OpenTelemetry (OTLP). When you enable an OTLP collector, set:

@@ -259,6 +259,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from nats.aio.client import Client as NATS
+from fastapi import FastAPI
+import uvicorn
 from nats.aio.msg import Msg
 
 from services.common.events import envelope
@@ -579,6 +581,24 @@ async def main() -> None:
     nc = NATS()
     await nc.connect(servers=[nats_url])
     LOGGER.info("DeepResearch worker connected to NATS at %s", nats_url)
+
+    # Lightweight health server (optional blackbox probe)
+    app = FastAPI(title="DeepResearch Health")
+
+    @app.get("/healthz")
+    async def healthz():  # type: ignore[override]
+        return {
+            "status": "ok",
+            "nats_connected": bool(nc.is_connected),
+        }
+
+    async def _serve_health():
+        port = int(os.getenv("DEEPRESEARCH_HEALTH_PORT", "8098"))
+        config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
+
+    asyncio.create_task(_serve_health())
 
     async def cb(msg: Msg) -> None:
         await _handle_request(msg, runner, publisher, nc)

@@ -651,8 +651,26 @@ services:
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
       - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
     depends_on: [nats]
     profiles: ["agents"]
+    ports: ["8098:8098"]
+    networks: [pmoves]
+
+  supaserch:
+    build:
+      context: ./services
+      dockerfile: supaserch/Dockerfile
+    image: ${SUPASERCH_IMAGE:-}
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+    ports: ["${SUPASERCH_HOST_PORT:-8099}:8099"]
+    profiles: ["agents","workers"]
     networks: [pmoves]
 
   publisher-discord:

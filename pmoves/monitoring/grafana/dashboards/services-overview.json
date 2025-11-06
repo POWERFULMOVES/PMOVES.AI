@@ -42,9 +42,25 @@
       ]
     },
     {
+      "type": "stat",
+      "title": "Up: DeepResearch",
+      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 },
+      "targets": [
+        { "expr": "probe_success{job=\"deepresearch\",instance=\"http://host.docker.internal:8098/healthz\"}" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Up: SupaSerch",
+      "gridPos": { "x": 18, "y": 4, "w": 6, "h": 4 },
+      "targets": [
+        { "expr": "probe_success{job=\"supaserch\",instance=\"http://host.docker.internal:8099/healthz\"}" }
+      ]
+    },
+    {
       "type": "graph",
       "title": "HTTP Probe Duration",
-      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "gridPos": { "x": 6, "y": 4, "w": 12, "h": 8 },
       "targets": [
         { "expr": "probe_duration_seconds{job=\"blackbox_http\"}", "legendFormat": "{{instance}}" }
       ]

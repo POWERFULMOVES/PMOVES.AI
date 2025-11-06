@@ -76,6 +76,17 @@ Next 48 hours
 - [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
 - [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
 - [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI, aligning with the prep checklist captured in `SESSION_IMPLEMENTATION_PLAN.md` and ensuring persona publish gating thresholds stay versioned.
+
+### 3b. PMOVES‑SUPASERCH (Branded, Multimodal Deep Research)
+
+- [x] Scaffold service + image (`pmoves-supaserch`) with `/healthz` and CI entries.
+- [ ] Wire NATS subjects `supaserch.request.v1`/`supaserch.result.v1` and broker orchestration to:
+  - DeepResearch worker (OpenRouter/local) for planning/execution
+  - Archon/Agent Zero via MCP for codegen/crawling/tool use
+  - CHIT geometry bus for CGP emissions; persist in Supabase
+- [ ] Add OpenAPI + metrics; expand Grafana dashboard panels
+- [ ] Integrate SupaSerch into the Console (links + status)
+- [ ] Harden continuous‑run profile for VM nodes (restart policy, network access, backpressure)
   - Notes: Qwen default on GPU path is in place; sweeps should compare Qwen vs BGE vs Cohere/Azure on the real datasets under `services/retrieval-eval/datasets/` and publish artifacts.
 
 ### 4. PMOVES.YT High-Priority Lane
