@@ -570,6 +570,8 @@ class AgentZeroController:
     ) -> None:
         """Continuously fetch batches from a JetStream pull subscription."""
         batch_size = 10
+        consecutive_unavailable = 0
+        fallback_threshold = int(os.environ.get("AGENTZERO_JS_UNAVAILABLE_THRESHOLD", "3"))
         while True:
             try:
                 messages = await sub.fetch(batch=batch_size, timeout=1)
@@ -584,6 +586,19 @@ class AgentZeroController:
                     durable,
                     exc,
                 )
+                # If JetStream is temporarily unavailable, fall back to core NATS after a few tries.
+                if type(exc).__name__ == "ServiceUnavailableError":
+                    consecutive_unavailable += 1
+                    if consecutive_unavailable >= fallback_threshold:
+                        try:
+                            logger.warning(
+                                "Falling back to core NATS subscription for %s after repeated ServiceUnavailable",
+                                subject,
+                            )
+                            await self._fallback_to_core_nats()
+                        except Exception:
+                            logger.exception("Fallback to core NATS failed")
+                        return
                 await asyncio.sleep(1)
                 continue
 
@@ -637,6 +652,29 @@ class AgentZeroController:
             self._metrics["acked"][subject] += 1
 
         return handler
+
+    async def _fallback_to_core_nats(self) -> None:
+        """Tear down JetStream pull subscriptions and re-subscribe using core NATS queue subs.
+
+        This keeps Agent Zero functional when JetStream is temporarily unavailable.
+        """
+        if not self._nc:
+            return
+        # Cancel pull tasks and unsubscribe from JS
+        for task in self._pull_tasks:
+            task.cancel()
+        if self._pull_tasks:
+            await asyncio.gather(*self._pull_tasks, return_exceptions=True)
+        self._pull_tasks.clear()
+        for sub in self._subscriptions:
+            try:
+                await sub.unsubscribe()
+            except Exception:
+                pass
+        self._subscriptions.clear()
+        # Disable JS for this controller and create core subscriptions
+        self.settings.use_jetstream = False
+        await self._create_subscriptions()
 
 
 controller = AgentZeroController()

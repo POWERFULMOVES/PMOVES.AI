@@ -376,7 +376,7 @@ services:
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
-      - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://pmoves:pmoves@postgres:5432/pmoves}
+      # CHANNEL_MONITOR_DATABASE_URL is provided via env_file (env.shared)
       - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     volumes:
       - ./config:/app/config
@@ -582,8 +582,11 @@ services:
       - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
       - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=8081 --host=0.0.0.0}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
+      - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
     depends_on: [nats]
-    ports: ["8080:8080","8081:8081"]
+    # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
+    # and keep 8080 mapped for the API when enabled by the runtime.
+    ports: ["8080:8080","8081:80"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
@@ -635,7 +638,7 @@ services:
       context: ./services
       dockerfile: deepresearch/Dockerfile
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
@@ -655,6 +658,8 @@ services:
     depends_on: [nats]
     profiles: ["agents"]
     ports: ["8098:8098"]
+    volumes:
+      - ./contracts:/app/contracts:ro
     networks: [pmoves]
 
   supaserch:
@@ -671,6 +676,33 @@ services:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
     ports: ["${SUPASERCH_HOST_PORT:-8099}:8099"]
     profiles: ["agents","workers"]
+    networks: [pmoves]
+
+  # NATS echo subscribers for diagnostics
+  nats-echo-req:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves]
+
+  nats-echo-res:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
     networks: [pmoves]
 
   publisher-discord:
