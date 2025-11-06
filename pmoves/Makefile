@@ -483,7 +483,7 @@ up-jellyfin:
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
 .PHONY: up-agents
 up-agents:
-	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
+	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 
 .PHONY: up-agents-published
 up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images (no local builds)

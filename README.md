@@ -80,6 +80,7 @@ This single command orchestrates the full onboarding sequence: environment promp
 **Orchestration & knowledge**
 - `pmoves/services/agent-zero/` — MCP bridge + decision engine (ingests Supabase + CHIT events).
 - `pmoves/services/archon/` — Agent builder/knowledge management with Supabase CLI realtime + NATS clients.
+- `pmoves/services/deepresearch/` — Tongyi DeepResearch bridge with OpenRouter/local modes plus Open Notebook mirroring.
 - `pmoves/services/n8n/` — Workflow orchestrator; health/finance webhooks emit CGPs via hi-rag v2.
 
 **External integrations (pmoves-net)**

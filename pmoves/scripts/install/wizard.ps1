@@ -1,8 +1,35 @@
 $ErrorActionPreference = "Stop"
 Write-Host "PMOVES First-Run Wizard (PowerShell)"
 
-$envFile = ".env.local"
-if (-not (Test-Path $envFile)) { Copy-Item ".env.example" $envFile }
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$pmovesRoot = Resolve-Path (Join-Path $scriptDir "..\..")
+$envFile = Join-Path $pmovesRoot ".env.local"
+$baseEnv = Join-Path $pmovesRoot ".env.example"
+
+if (-not (Test-Path $baseEnv)) {
+  throw "Missing base env template at $baseEnv"
+}
+
+if (-not (Test-Path $envFile)) {
+  Copy-Item $baseEnv $envFile
+}
+
+function Invoke-Make {
+  param(
+    [Parameter(Mandatory=$true, Position=0)]
+    [string]$Target
+  )
+  Push-Location $pmovesRoot
+  try {
+    & make $Target
+    $code = $LASTEXITCODE
+    if ($code -ne 0) {
+      throw "make $Target exited with code $code"
+    }
+  } finally {
+    Pop-Location
+  }
+}
 
 $mode = Read-Host "Stack mode: [1] Full  [2] Minimal (no n8n/yt/comfy)"
 $extS = Read-Host "Use external Supabase? (y/N)"
@@ -24,11 +51,11 @@ if ($durl) {
   (Get-Content $envFile) -replace '^DISCORD_WEBHOOK_URL=.*', ("DISCORD_WEBHOOK_URL="+$durl) | Set-Content $envFile
 }
 
-if ($gpu -eq 'y') { & make up-gpu } else { & make up }
+if ($gpu -eq 'y') { try { Invoke-Make -Target 'up-gpu' } catch {} } else { try { Invoke-Make -Target 'up' } catch {} }
 if ($mode -eq '1') {
-  try { & make up-n8n } catch {}
-  try { & make up-yt } catch {}
-  try { & make up-comfy } catch {}
+  try { Invoke-Make -Target 'up-n8n' } catch {}
+  try { Invoke-Make -Target 'up-yt' } catch {}
+  try { Invoke-Make -Target 'up-comfy' } catch {}
 }
-try { & make flight-check } catch {}
+try { Invoke-Make -Target 'flight-check' } catch {}
 Write-Host "Wizard complete."

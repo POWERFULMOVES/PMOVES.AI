@@ -131,9 +131,19 @@ export default async function IngestDashboardPage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
       <DashboardNavigation active="ingest" />
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold text-slate-900">Ingestion dashboard</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Cooperative Ingestion Bay</h1>
         <p className="text-sm text-slate-600">
-          Upload new creative assets and monitor ingestion progress across Supabase and MinIO.
+          Drop the assets that fuel our cooperative empowerment story—DARKXSIDE counts on each upload to arm the crew with fresh media.
+          {' '}Lock in bucket and row-level guardrails with the{' '}
+          <a
+            className="underline"
+            href="https://github.com/Cataclysm-Studios-Inc/PMOVES.AI/blob/main/pmoves/docs/PMOVES.AI%20PLANS/SUPABASE_RLS_HARDENING_CHECKLIST.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Supabase RLS hardening checklist
+          </a>{' '}
+          before inviting collaborators to ingest alongside you.
         </p>
       </header>
 
@@ -159,13 +169,13 @@ export default async function IngestDashboardPage() {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Recent uploads</h2>
-          <p className="text-xs text-slate-500">Showing the last {uploads.length} records from Supabase.</p>
+          <h2 className="text-lg font-semibold text-brand-ink">Recent uploads</h2>
+          <p className="text-xs text-brand-subtle">Showing the last {uploads.length} records from Supabase.</p>
         </div>
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="overflow-hidden rounded-lg border border-brand-border bg-brand-inverse">
+          <table className="min-w-full divide-y divide-brand-border">
+            <thead className="bg-brand-surface-muted">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-brand-muted">
                 <th className="px-4 py-3">File</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Progress</th>
@@ -174,20 +184,20 @@ export default async function IngestDashboardPage() {
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 bg-white text-sm text-slate-700">
+            <tbody className="divide-y divide-brand-border bg-brand-inverse text-sm text-brand-ink">
               {uploads.map((upload) => (
                 <tr key={upload.id}>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-900">{upload.filename || upload.object_key}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="font-medium text-brand-ink">{upload.filename || upload.object_key}</div>
+                    <div className="text-xs text-brand-subtle">
                       {upload.bucket}/{upload.object_key}
                     </div>
                     {upload.error_message && (
-                      <div className="mt-1 text-xs text-rose-600">{upload.error_message}</div>
+                      <div className="mt-1 text-xs text-brand-crimson">{upload.error_message}</div>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                    <span className="rounded bg-brand-surface-muted px-2 py-1 text-xs font-medium text-brand-muted">
                       {upload.status || 'unknown'}
                     </span>
                   </td>
@@ -202,19 +212,19 @@ export default async function IngestDashboardPage() {
                         href={upload.presignedGetUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs font-medium text-slate-700 hover:underline"
+                        className="text-xs font-medium text-brand-ink hover:text-brand-ink-strong hover:underline"
                       >
                         Open asset
                       </a>
                     ) : (
-                      <span className="text-xs text-slate-400">No link</span>
+                      <span className="text-xs text-brand-subtle">No link</span>
                     )}
                   </td>
                 </tr>
               ))}
               {uploads.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-500">
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-brand-muted">
                     No uploads have been recorded yet.
                   </td>
                 </tr>

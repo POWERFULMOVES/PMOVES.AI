@@ -3,8 +3,22 @@ set -euo pipefail
 
 echo "PMOVES First-Run Wizard (bash)"
 
-ENV_FILE=".env.local"
-cp -n .env.example "$ENV_FILE" || true
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PMOVES_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+ENV_FILE="${PMOVES_ROOT}/.env.local"
+BASE_ENV="${PMOVES_ROOT}/.env.example"
+
+if [ ! -f "$BASE_ENV" ]; then
+  echo "Missing base env template at $BASE_ENV" >&2
+  exit 1
+fi
+
+mkdir -p "${PMOVES_ROOT}/scripts/install"
+cp -n "$BASE_ENV" "$ENV_FILE" || true
+
+run_make() {
+  (cd "$PMOVES_ROOT" && make "$@")
+}
 
 read -r -p "Stack mode: [1] Full  [2] Minimal (no n8n/yt/comfy)  > " MODE
 read -r -p "Use external Supabase? (y/N) > " EXT_S
@@ -28,17 +42,17 @@ fi
 
 echo "Starting stack…"
 if [ "${GPU:-n}" = y ]; then
-  make up-gpu
+  run_make up-gpu || true
 else
-  make up
+  run_make up || true
 fi
 
 if [ "${MODE:-1}" = "1" ]; then
-  make up-n8n || true
-  make up-yt || true
-  make up-comfy || true
+  run_make up-n8n || true
+  run_make up-yt || true
+  run_make up-comfy || true
 fi
 
 echo "Running flight-check…"
-make flight-check || true
+run_make flight-check || true
 echo "Wizard complete."

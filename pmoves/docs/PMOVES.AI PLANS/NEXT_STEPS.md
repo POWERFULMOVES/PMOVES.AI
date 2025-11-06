@@ -1,11 +1,12 @@
 
 # PMOVES v5 • NEXT_STEPS
-_Last updated: 2025-10-26_
+_Last updated: 2025-10-27_
 
 ## Immediate
 
 ### 1. Finish the M2 Automation Loop
 
+- [ ] Load DeepResearch OpenRouter + Notebook credentials, run a `research.deepresearch.request.v1` smoke, and log the resulting Notebook source id in `SESSION_IMPLEMENTATION_PLAN.md`.
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
 - [ ] Health/Finance integrations — set Wger/Firefly secrets, import n8n flows, run smokes; confirm `health_*` and `finance_*` tables receive upserts and events (`health.metrics.updated.v1`, `finance.transactions.ingested.v1`).
 - [ ] CHIT EvoSwarm — enable controller and confirm `geometry.swarm.meta.v1` events; ensure producers prefer latest active packs and `pack_id` is visible in CGP meta and persisted in gateway v2 constellation meta.

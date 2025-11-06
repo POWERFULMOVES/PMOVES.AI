@@ -15,6 +15,7 @@ Implemented (compose-managed)
 - [media-audio](media-audio/README.md)
 - [media-video](media-video/README.md)
 - [mesh-agent](mesh-agent/README.md)
+- [deepresearch](deepresearch/README.md)
 - [pdf-ingest](pdf-ingest/README.md)
 - [pmoves-yt](pmoves-yt/README.md)
 - [presign](presign/README.md)
@@ -42,4 +43,4 @@ External Integrations (self-hosted stacks)
 Notes
 - Legacy directories kept for history: `agent_zero/` (underscore variant), `analysis-echo/`.
 - For environment setup and CI expectations, see the consolidated docs in [PMOVES.AI PLANS](../PMOVES.AI%20PLANS/README_DOCS_INDEX.md).
- - CHIT/Geometry Bus is first‑class: each service page now indicates whether and how it exposes, publishes to, consumes, or defers CHIT interactions.
+- CHIT/Geometry Bus is first‑class: each service page now indicates whether and how it exposes, publishes to, consumes, or defers CHIT interactions.
