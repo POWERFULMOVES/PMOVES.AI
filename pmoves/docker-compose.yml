@@ -57,6 +57,7 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.8
     restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MEILI_ENV=production
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-master_key}
@@ -66,8 +67,8 @@ services:
   neo4j:
     image: neo4j:5.22
     restart: unless-stopped
+    env_file: [.env.generated]
     environment:
-      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
       - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     ports: ["7474:7474","7687:7687"]
     volumes:
@@ -103,9 +104,7 @@ services:
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
       - SENTENCE_MODEL=all-MiniLM-L6-v2
       - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
-      - NEO4J_URL=${NEO4J_URL}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
       - GRAPH_BOOST=${GRAPH_BOOST}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
@@ -186,7 +185,9 @@ services:
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
-      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
+      # Use unified Supabase REST by default (env_file values are not interpolated at compose time)
+      - SUPA_REST_URL=http://host.docker.internal:65421/rest/v1
+      - SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1
     ports: ["8083:8083"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -319,7 +320,11 @@ services:
     profiles: ["workers","orchestration"]
     networks: [pmoves]
   pmoves-yt:
-    build: ./services/pmoves-yt
+    image: ${PMOVES_YT_IMAGE:-}
+    build:
+      context: ./services/pmoves-yt
+      args:
+        - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
@@ -416,16 +421,14 @@ services:
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
-      - NEO4J_URL=${NEO4J_URL}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
       - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports: ["${HIRAG_V2_HOST_PORT:-8086}:8086"]
@@ -452,9 +455,7 @@ services:
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
       - SENTENCE_MODEL=all-MiniLM-L6-v2
       - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
-      - NEO4J_URL=${NEO4J_URL}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
       - GRAPH_BOOST=${GRAPH_BOOST}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
@@ -518,9 +519,7 @@ services:
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
-      - NEO4J_URL=${NEO4J_URL}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
       - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - CHIT_DECODE_TEXT=${CHIT_DECODE_TEXT:-true}
@@ -534,7 +533,7 @@ services:
       - PGDATABASE=${POSTGRES_DB:-pmoves}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
@@ -577,14 +576,14 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - PORT=80
+      - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
+      - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:8081}
       - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
-      - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80}
+      - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=8081 --host=0.0.0.0}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     depends_on: [nats]
-    ports: ["8080:80"]
+    ports: ["8080:8080","8081:8081"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
@@ -592,6 +591,7 @@ services:
       - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
       - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
       - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
+      - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
     profiles: ["agents"]
     networks: [pmoves]
 
@@ -606,12 +606,15 @@ services:
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
     depends_on:
       - nats
     ports: ["8091:8091"]
     profiles: ["agents"]
-    networks: [pmoves]
+    networks:
+      pmoves:
+        aliases:
+          - archon-server
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -743,6 +746,7 @@ services:
   invidious-companion:
     image: quay.io/invidious/invidious-companion:latest
     restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       PORT: 8282
       HOST: 0.0.0.0
@@ -766,6 +770,7 @@ services:
   invidious:
     image: quay.io/invidious/invidious:latest
     restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       INVIDIOUS_CONFIG: |
         db:

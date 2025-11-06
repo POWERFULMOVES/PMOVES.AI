@@ -22,8 +22,17 @@ This guide aggregates the entry points that keep local environments consistent a
 - `make bootstrap` → interactive secret capture (still writes overrides to `env.shared`, which now layers on top of the generated secrets for Supabase, provider tokens, Wger/Firefly/Open Notebook, Discord/Jellyfin). Re-run after `supabase start --network-id pmoves-net` or whenever external credentials change. Supports `BOOTSTRAP_FLAGS="--service supabase"` and `--accept-defaults` for targeted updates.
 - `make supabase-boot-user` → idempotently provisions the Supabase operator account (used by the UI and automation), rotates the password/JWT, and upserts the env values into `env.shared`, `.env.local`, and `pmoves/.env.local`. `make first-run` invokes this automatically; rerun the target whenever you need to rotate credentials manually.
 - `make docker-login-ghcr` → convenience wrapper for `docker login ghcr.io`. Reads `DOCKER_USERNAME` / `DOCKER_PASS` from your environment and keeps credentials out of interactive command history. Run this before any `docker buildx build --push` or `docker pull` against GHCR.
+- `python3 -m pmoves.tools.mini_cli tailscale authkey` → prompts for a self-hosted Tailnet auth key (hidden input), writes it into `pmoves/env.shared` (`TAILSCALE_AUTHKEY`) and, by default, stores a copy at `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/tailscale/tailscale_authkey.txt` for remote provisioning bundles. The helper now attempts to run `tailscale lock sign` automatically when Tailnet Lock is enabled so the stored key arrives pre-signed for locked tailnets (override with `--no-sign` if you are collecting the key on a non-signing workstation). Capture the disablement secrets shown during `tailscale lock init` and store them in an offline password vault; you need one of those secrets to disable Tailnet Lock later.
+- `scripts/tailscale_brand_init.sh` → idempotent wrapper that loads the auth key from `TAILSCALE_AUTHKEY` or `TAILSCALE_AUTHKEY_FILE`, optionally signs it again on the provisioning host (`TAILSCALE_SIGN_AUTHKEY=true|false|auto`), starts `tailscaled` when a systemd unit is present, calls `scripts/tailscale_brand_up.sh`, and drops a sentinel file (`$HOME/.config/pmoves/tailnet-initialized` by default). Set `TAILSCALE_FORCE_REAUTH=true` to ignore the sentinel and re-run the join flow, or point `TAILSCALE_INIT_SENTINEL` at a persistent path for multi-user hosts. The helper keeps the provisioning bundle in sync with any newly signed key so remote installs stay unattended.
+- `scripts/tailscale_brand_up.sh` → joins the tailnet using the brand defaults in `env.shared` (`TAILSCALE_TAGS`, `TAILSCALE_ADVERTISE_ROUTES`, etc.). Run the mini CLI helper first so `TAILSCALE_AUTHKEY` is pre-signed and the script can call `tailscale up` without an interactive login (it will warn if the key is missing). Set `TAILSCALE_LOGIN_SERVER=https://<headscale-host>` when you operate a self-hosted coordination plane.
 - `make supabase-bootstrap` → replays `supabase/initdb/*.sql`, `supabase/migrations/*.sql`, and `db/v5_12_grounded_personas.sql` into the Supabase CLI Postgres container. Run it once after `make supa-start` (and again whenever schema changes land) to keep the local CLI stack in sync.
-- UI ingestion security: the Next.js dashboard now requires a Supabase session. `upload_events` rows are stamped with `owner_id` and the UI only presigns keys in `namespace/users/<owner-id>/uploads/…`. Anonymous or cross-user presign attempts will fail with `401/403`.
+- UI ingestion security: the Next.js dashboard prefers a boot‑JWT (no cookie session) and falls back to login. `upload_events` rows are stamped with `owner_id` and the UI only presigns keys in `namespace/users/<owner-id>/uploads/…`. Anonymous or cross-user presign attempts will fail with `401/403`. If your boot‑JWT expires, rotate it with `make -C pmoves supabase-boot-user` or call `pmoves/tools/create_supabase_boot_user.py` directly and restart the UI dev server.
+
+
+- Single‑file env mode: set `SINGLE_ENV_MODE=1` (default) to make both Compose and the UI launcher read only `pmoves/env.shared` (plus `env.shared.generated`). This avoids override conflicts from scattered `.env.local` files. To opt out, export `SINGLE_ENV_MODE=0`.
+
+- Jellyfin host media mounts: list Windows/SMB or host folders in `pmoves/jellyfin.hosts` (one per line: `<host_path>[:<label>[:ro|rw]]`), then generate an override with `make -C pmoves jellyfin-hosts-generate` and start a single Jellyfin with `make -C pmoves up-jellyfin-single`. Folders are mounted under `/media/host/<label>` inside the container.
+- Agents UIs one‑click: `make -C pmoves up-agents-ui` starts Agent Zero API, Archon API, and the Archon UI using published images. Use `up-agents-integrations` to build from your forks.
 - `python3 -m pmoves.tools.onboarding_helper status` → summarize manifest coverage and highlight missing CGP labels before generating env files (`… generate` writes the files directly).
 
 ### TensorZero & Ollama
@@ -122,3 +131,11 @@ When provisioning remote hosts, ensure these directories map to persistent stora
 ## Verification & Smokes
 - `make smoke-wger` → runs HTTP checks against `http://localhost:8000` and `/static/images/logos/logo-font.svg` through the nginx sidecar so Wger matches the upstream static-serving deployment guidance.citeturn0search0
 - `make smoke-firefly` → pings the Firefly III UI (`http://localhost:8082` by default) and `/api/v1/about` using `FIREFLY_ACCESS_TOKEN`. Use `FIREFLY_ROOT_URL`/`FIREFLY_PORT` overrides if you reverse-proxy the finance stack.
+
+## Script env loader (avoid sourcing errors)
+
+Use the unified loader for any local script that needs project env:
+
+- `source pmoves/scripts/with-env.sh` — loads `env.shared.generated → env.shared → .env.generated → .env.local`, trims stray spaces around `=`, and safely quotes values (handles JSON, spaces, and `!`).
+
+This replaces ad‑hoc `set -a; . pmoves/env.shared; set +a` patterns and prevents failures like `command not found` from lines such as `VAR= value` or unquoted JSON.

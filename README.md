@@ -5,7 +5,7 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 
 ## Key Directories
 - **`CATACLYSM_STUDIOS_INC/`** – Provisioning bundles and infrastructure automations for homelab and field hardware, including unattended OS installs, Jetson bootstrap scripts, and ready-to-run Docker stacks that mirror the production mesh topology.
-- **`docs/`** – High-level strategy, architecture, and integration guides for the overall PMOVES ecosystem, such as system overviews, multi-agent coordination notes, and archival research digests.
+- **`docs/`** – High-level strategy, architecture, and integration guides for the overall PMOVES ecosystem, such as system overviews, multi-agent coordination notes, and archival research digests. See also `pmoves/docs/ENVIRONMENT_POLICY.md` for the single‑file environment policy and Jellyfin host‑mount instructions.
 - **`pmoves/`** – The primary application stack with docker-compose definitions, service code, datasets, Supabase schema, and in-depth runbooks for daily operations and advanced workflows.
 - **`pmoves/contracts/solidity/`** – Hardhat workspace prototyping Food-USD / GroToken governance flows with automated tests that model staking, quadratic voting, and group-buy execution.
 - **`pmoves/ui/`** – Next.js + Supabase Platform Kit workspace for the upcoming web UI; reuses `pmoves/.env.local` so frontend hooks can target the same Supabase CLI stack.
@@ -24,6 +24,7 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - [Codex + Copilot Review Workflow](docs/COPILOT_REVIEW_WORKFLOW.md) – How to combine the Codex CLI reviewer with GitHub Copilot’s PR assistant, including token setup and evidence logging expectations.
 - [Archon Updates for PMOVES](pmoves/docs/archonupdateforpmoves.md) – What changed in the October 2025 Archon bundle, how to wire the Supabase CLI stack, and the MCP/NATS expectations.
 - [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) – Command catalog for starting, stopping, and tailoring compose profiles (core data plane, media analyzers, Supabase modes, and agent bundles).
+ - [Single‑User (Owner) Mode](pmoves/docs/SECURITY_SINGLE_USER.md) – Personal‑first operation without login prompts; boot‑JWT auto‑auth, owner chip in the UI, and security notes.
 
 ## Dashboards & UIs (local defaults)
 - Supabase Studio: http://127.0.0.1:65433 (CLI stack) — created by `make supa-start`.

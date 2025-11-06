@@ -1,14 +1,20 @@
 # CI: Build and Publish Integration Images (GHCR)
 
-This repo includes a GitHub Actions workflow that builds and publishes Docker images for key integrations (Agent Zero, Archon) to GHCR on demand and nightly.
+This repo includes a GitHub Actions workflow that builds and publishes Docker images for key integrations (Agent Zero, Archon, Archon UI, Open Notebook, Jellyfin, Firefly III, Wger, PMOVES.YT) to GHCR on demand and nightly.
 
 ## Workflow
 
 - File: `.github/workflows/integrations-ghcr.yml`
 - Triggers: manual (workflow_dispatch) and nightly (cron).
-- Matrix builds:
+- Matrix builds (excerpt):
   - `agent-zero` → `ghcr.io/<NAMESPACE>/pmoves-agent-zero:pmoves-latest`
   - `archon` → `ghcr.io/<NAMESPACE>/pmoves-archon:pmoves-latest`
+  - `archon-ui` → `ghcr.io/<NAMESPACE>/pmoves-archon-ui:pmoves-latest`
+  - `open-notebook` → `ghcr.io/<NAMESPACE>/pmoves-open-notebook:pmoves-latest`
+  - `jellyfin` → `ghcr.io/<NAMESPACE>/pmoves-jellyfin:pmoves-latest`
+  - `firefly-iii` → `ghcr.io/<NAMESPACE>/pmoves-firefly-iii:pmoves-latest`
+  - `wger` → `ghcr.io/<NAMESPACE>/pmoves-health-wger:pmoves-latest`
+  - `pmoves-yt` → `ghcr.io/<NAMESPACE>/pmoves-yt:pmoves-latest`
   - Additional tags: `YYYYMMDD-<sha7>` for reproducibility.
 
 ## Namespace and Permissions

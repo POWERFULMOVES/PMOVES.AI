@@ -32,6 +32,42 @@ jobs:
             context: .
             dockerfile: Dockerfile
             image_name: pmoves-archon
+          - name: archon-ui
+            git_url: https://github.com/POWERFULMOVES/PMOVES-Archon.git
+            ref: main
+            context: archon-ui-main
+            dockerfile: Dockerfile
+            image_name: pmoves-archon-ui
+          - name: open-notebook
+            git_url: https://github.com/lfnovo/open-notebook.git
+            ref: main
+            context: .
+            dockerfile: Dockerfile
+            image_name: pmoves-open-notebook
+          - name: wger
+            git_url: https://github.com/hunnibear/pmoves-health-wger.git
+            ref: main
+            context: .
+            dockerfile: Dockerfile
+            image_name: pmoves-health-wger
+          - name: firefly-iii
+            git_url: https://github.com/cataclysm-studios-inc/pmoves-firefly-iii.git
+            ref: main
+            context: .
+            dockerfile: Dockerfile
+            image_name: pmoves-firefly-iii
+          - name: jellyfin
+            git_url: https://github.com/cataclysm-studios-inc/pmoves-jellyfin.git
+            ref: main
+            context: .
+            dockerfile: Dockerfile
+            image_name: pmoves-jellyfin
+          - name: pmoves-yt
+            git_url: https://github.com/POWERFULMOVES/PMOVES.YT.git
+            ref: main
+            context: .
+            dockerfile: Dockerfile
+            image_name: pmoves-yt
           # To add other integrations, duplicate one of the entries above.
           # Example (commented):
           # - name: open-notebook
