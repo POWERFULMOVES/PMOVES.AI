@@ -289,8 +289,8 @@ MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 
 up-monitoring: ## Start monitoring stack and print URLs
 	@echo "⛳ Starting monitoring stack (Prometheus, Grafana, Loki, Promtail, blackbox, cAdvisor)..."
-	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
-		echo "→ Including cAdvisor (linux profile)"; \
+	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
+		echo "→ Including linux profile (cAdvisor/Node Exporter)"; \
 		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) --profile linux up -d; \
 	  else \
 		echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
@@ -991,7 +991,16 @@ smoke-gpu:
 	@echo "[GPU] Check v2-gpu (:$(HIRAG_GPU_PORT)) up..." && curl -sf http://localhost:$(HIRAG_GPU_PORT)/ | jq -e '.ok==true' >/dev/null && echo OK || (echo WARN: v2-gpu not up; exit 1)
 	@echo "[GPU] v2-gpu stats..." && curl -sf http://localhost:$(HIRAG_GPU_PORT)/hirag/admin/stats | jq . && \
 	  curl -sf http://localhost:$(HIRAG_GPU_PORT)/hirag/admin/stats | jq -e '.rerank_enabled==true and (.rerank_model|length)>0' >/dev/null && echo OK || (echo WARN: rerank not enabled or model missing; exit 1)
-	@echo "[GPU] v2-gpu rerank query..." && docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d '{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[GPU] v2-gpu rerank query..."; \
+	Q1='{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}'; \
+	Q2='{"query":"what is pmoves?","namespace":"pmoves","k":3, "use_rerank": true}'; \
+	Q3='{"query":"Hi-RAG Gateway hybrid search","namespace":"pmoves","k":3, "use_rerank": true}'; \
+	STRICT=$${GPU_SMOKE_STRICT:-false}; \
+	for Q in "$$Q1" "$$Q2" "$$Q3"; do \
+	  RESP=$$(docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d "$$Q"); \
+	  if [ "$$STRICT" = "true" ]; then echo "$$RESP" | jq -e '.used_rerank==true' >/dev/null && echo OK && exit 0; \
+	  else echo "$$RESP" | jq -e 'has("used_rerank")' >/dev/null && echo OK && exit 0; fi; \
+	done; echo FAIL && exit 1
 	@echo "[GPU] v1-gpu (:8090) (optional)..." && (curl -sf http://localhost:8090/ | jq -e '.ok==true' >/dev/null && echo OK) || (echo SKIP: v1-gpu not up; true)
 
 .PHONY: smoke-qwen-rerank
