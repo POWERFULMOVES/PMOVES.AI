@@ -491,8 +491,8 @@ up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using publ
 	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
 
 .PHONY: up-agents-ui
-up-agents-ui: ## Start Agents APIs + UIs (NATS, Agent Zero, Archon, Archon UI) using published images where available
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
+up-agents-ui: ## Start Agents APIs + UIs (NATS, Agent Zero, Archon, Archon UI, DeepResearch)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started. Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
 .PHONY: a0-mcp-seed
