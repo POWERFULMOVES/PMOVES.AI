@@ -36,6 +36,8 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
     class RetentionPolicy:  # type: ignore[no-redef]
         WORKQUEUE = "workqueue"
         WORK_QUEUE = "workqueue"
+        LIMITS = "limits"
+        INTEREST = "interest"
 
     @dataclass
     class ConsumerConfig:  # type: ignore[no-redef]

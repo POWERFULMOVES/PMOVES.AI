@@ -9,12 +9,25 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 import yaml
 
+from services.common.forms import (
+    DEFAULT_AGENT_FORM,
+    DEFAULT_AGENT_FORMS_DIR,
+    resolve_form_name,
+    resolve_forms_dir_path,
+)
+
 ARCHON_SERVER_URL = os.environ.get("ARCHON_SERVER_URL", os.environ.get("ARCHON_HTTP_URL", "http://localhost:8181")).rstrip("/")
 ARCHON_API_URL = os.environ.get("ARCHON_API_URL", f"{ARCHON_SERVER_URL}/api").rstrip("/")
 ARCHON_SOCKET_URL = os.environ.get("ARCHON_SOCKET_URL", ARCHON_SERVER_URL)
 ARCHON_API_TOKEN = os.environ.get("ARCHON_API_TOKEN")
-FORM_NAME = os.environ.get("ARCHON_FORM") or os.environ.get("AGENT_FORM") or "ARCHON"
-FORMS_DIR = Path(os.environ.get("ARCHON_FORMS_DIR", os.environ.get("AGENT_FORMS_DIR", "configs/agents/forms")))
+FORM_NAME = resolve_form_name(
+    prefer_keys=("ARCHON_FORM",),
+    fallback=DEFAULT_AGENT_FORM,
+)
+FORMS_DIR = resolve_forms_dir_path(
+    prefer_keys=("ARCHON_FORMS_DIR",),
+    fallback=DEFAULT_AGENT_FORMS_DIR,
+)
 DEFAULT_TIMEOUT = float(os.environ.get("ARCHON_HTTP_TIMEOUT", "45"))
 LONG_TIMEOUT = float(os.environ.get("ARCHON_LONG_HTTP_TIMEOUT", "180"))
 

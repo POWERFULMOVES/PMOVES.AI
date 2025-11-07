@@ -2,6 +2,8 @@
 
 Archon ships as a vendored upstream bundle (`pmoves/services/vendor/archon`) with extra tooling so it runs inside the PMOVES stack, talks to Supabase locally, and exposes MCP endpoints for Agent Zero and other clients.
 
+The container image used in CI is built from `services/archon/Dockerfile`. During the build we clone the POWERFULMOVES fork of Archon; override `ARCHON_GIT_REMOTE`/`ARCHON_GIT_REF` at build time if you need to point at a different fork or revision.
+
 ## Geometry Bus (CHIT) Integration
 
 - No direct CHIT endpoints. Archon operates over search/retrieval; CHIT packets are produced/consumed by the Hi‑RAG gateways.
@@ -24,6 +26,10 @@ Archon ships as a vendored upstream bundle (`pmoves/services/vendor/archon`) wit
 | `ARCHON_SERVER_PORT` | HTTP port for the Archon API/UI | `8090` |
 | `ARCHON_MCP_PORT` | MCP HTTP bridge port | `8051` |
 | `ARCHON_AGENTS_PORT` | Worker/agents port | `8052` |
+| `ARCHON_FORM` | Default MCP form/persona (falls back to `AGENT_FORM`) | `POWERFULMOVES` |
+| `ARCHON_FORMS_DIR` | Directory for Archon MCP form definitions | `configs/agents/forms` |
+| `ARCHON_GIT_REMOTE` (build arg) | Git remote that supplies the vendored Archon sources | `https://github.com/POWERFULMOVES/PMOVES-Archon.git` |
+| `ARCHON_GIT_REF` (build arg) | Branch or tag cloned from the remote | `main` |
 
 When the Supabase CLI stack is running, `make supa-use-local` writes the correct URL/keys into `.env.local`. The Archon wrapper patches upstream validation so HTTP Supabase URLs on the Docker network are treated as secure.
 

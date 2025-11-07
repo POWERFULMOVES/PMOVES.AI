@@ -9,9 +9,16 @@ from typing import Any, Dict, List, Optional
 import requests
 import yaml
 
+from services.common.forms import (
+    DEFAULT_AGENT_FORM,
+    DEFAULT_AGENT_FORMS_DIR,
+    resolve_form_name,
+    resolve_forms_dir_path,
+)
+
 GATEWAY_URL = os.environ.get("HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8086"))
-FORM_NAME = os.environ.get("AGENT_FORM", "POWERFULMOVES")
-FORMS_DIR = Path(os.environ.get("AGENT_FORMS_DIR", "configs/agents/forms"))
+FORM_NAME = resolve_form_name(fallback=DEFAULT_AGENT_FORM)
+FORMS_DIR = resolve_forms_dir_path(fallback=DEFAULT_AGENT_FORMS_DIR)
 KNOWLEDGE_BASE_DIR = Path(os.environ.get("AGENT_KNOWLEDGE_BASE_DIR", "runtime/knowledge"))
 MCP_RUNTIME_DIR = Path(os.environ.get("AGENT_MCP_RUNTIME_DIR", "runtime/mcp"))
 NOTEBOOK_API_URL = os.environ.get(

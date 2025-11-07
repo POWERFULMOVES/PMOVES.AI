@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import logging
@@ -19,10 +17,19 @@ try:
     _services_root = Path(__file__).resolve().parents[2]
     if str(_services_root) not in sys.path:
         sys.path.insert(0, str(_services_root))
+    _service_dir = Path(__file__).resolve().parent
+    if str(_service_dir) not in sys.path:
+        sys.path.insert(0, str(_service_dir))
 except Exception:
     pass
 
 from services.agent_zero.controller import AgentZeroController, ControllerSettings
+from services.common.forms import (
+    DEFAULT_AGENT_FORM,
+    DEFAULT_AGENT_FORMS_DIR,
+    resolve_form_name,
+    resolve_forms_dir,
+)
 
 import mcp_server
 
@@ -174,10 +181,10 @@ class AgentZeroServiceConfig(BaseModel):
         description="Indicates whether an Open Notebook API token is configured",
     )
     agent_form: str = Field(
-        default="POWERFULMOVES", description="Default MCP form name"
+        default=DEFAULT_AGENT_FORM, description="Default MCP form name"
     )
     agent_forms_dir: str = Field(
-        default="configs/agents/forms",
+        default=DEFAULT_AGENT_FORMS_DIR,
         description="Directory containing Agent Zero YAML form definitions",
     )
     knowledge_base_dir: str = Field(
@@ -211,8 +218,8 @@ def load_service_config() -> AgentZeroServiceConfig:
             os.environ.get("OPEN_NOTEBOOK_API_TOKEN")
             or os.environ.get("NOTEBOOK_API_TOKEN")
         ),
-        agent_form=os.environ.get("AGENT_FORM", "POWERFULMOVES"),
-        agent_forms_dir=os.environ.get("AGENT_FORMS_DIR", "configs/agents/forms"),
+        agent_form=resolve_form_name(),
+        agent_forms_dir=resolve_forms_dir(),
         knowledge_base_dir=os.environ.get(
             "AGENT_KNOWLEDGE_BASE_DIR", "runtime/knowledge"
         ),
@@ -593,8 +600,9 @@ async def on_startup() -> None:
             loop.add_signal_handler(
                 sig, lambda s=sig: asyncio.create_task(process_manager.stop())
             )
-        except NotImplementedError:  # pragma: no cover - platform specific
-            logger.warning("Signal handlers not supported on this platform")
+        except (NotImplementedError, RuntimeError, ValueError):
+            # Tests run event loops in worker threads where signal handlers are unsupported.
+            logger.debug("Skipping signal handler registration for %s", sig)
 
 
 @app.on_event("shutdown")
