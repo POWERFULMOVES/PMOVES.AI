@@ -105,3 +105,13 @@ air-gapped machines while keeping a cryptographically structured payload.
    etc.).
 5. Optionally encode the bundle via `make chit-encode-secrets` for secure
    hand-off.
+
+## 6. CI Secret Sync
+
+- `pmoves/config/ci_secrets_manifest.yaml` captures the subset of credentials
+   required by GitHub Actions (integration image builds, smoke harnesses, etc.).
+- Run `python pmoves/scripts/secrets_sync.py diff` to confirm local values match
+   across CHIT bundles, `env.shared`, and GitHub repository secrets.
+- To stage updates, generate an env file with `python pmoves/scripts/secrets_sync.py download`
+   and feed it to the GitHub CLI (`gh secret set --repo POWERFULMOVES/PMOVES.AI --env-file …`).
+- You can also push directly via `python pmoves/scripts/secrets_sync.py upload --include-optional`.

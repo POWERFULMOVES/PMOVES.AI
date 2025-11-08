@@ -8,7 +8,7 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
 - Triggers: manual (workflow_dispatch) and nightly (cron).
 - Matrix builds (excerpt):
   - `agent-zero` → `ghcr.io/<NAMESPACE>/pmoves-agent-zero:pmoves-latest`
-  - `archon` → `ghcr.io/<NAMESPACE>/pmoves-archon:pmoves-latest`
+  - `archon` → `ghcr.io/<NAMESPACE>/pmoves-archon:pmoves-latest` (builds from `pmoves/services/archon/Dockerfile`, which vendors the POWERFULMOVES Archon fork)
   - `archon-ui` → `ghcr.io/<NAMESPACE>/pmoves-archon-ui:pmoves-latest`
   - `open-notebook` → `ghcr.io/<NAMESPACE>/pmoves-open-notebook:pmoves-latest`
   - `jellyfin` → `ghcr.io/<NAMESPACE>/pmoves-jellyfin:pmoves-latest`
@@ -20,15 +20,22 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
 ## Namespace and Permissions
 
 - By default, images push under `ghcr.io/<repo_owner>`.
-- To push under a different org (e.g., `cataclysm-studios-inc`), add a repo secret `GHCR_NAMESPACE` with that org name and ensure the workflow’s `GITHUB_TOKEN` (or a PAT) has `packages:write` scope in that org.
+- To push under a different org (e.g., `cataclysm-studios-inc`), set the repository secret `CI_GHCR_NAMESPACE` (legacy `GHCR_NAMESPACE` is still honored) and ensure the workflow’s `GITHUB_TOKEN` (or a PAT) has `packages:write` scope in that org.
 
 ### Optional Docker Hub Push
 
 - If you also want to push to Docker Hub, add secrets:
-  - `DOCKERHUB_USERNAME`
-  - `DOCKERHUB_TOKEN` (recommended) or password
-  - Optional `DOCKERHUB_NAMESPACE` (defaults to `DOCKERHUB_USERNAME`)
+  - `CI_DOCKERHUB_USERNAME` (legacy `DOCKERHUB_USERNAME`)
+  - `CI_DOCKERHUB_TOKEN` (legacy `DOCKERHUB_TOKEN`)
+  - Optional `CI_DOCKERHUB_NAMESPACE` (legacy `DOCKERHUB_NAMESPACE`, defaults to the username value)
 - The workflow will log in and append Docker Hub tags alongside GHCR tags.
+
+### Secret Sync Helper
+
+- The manifest `pmoves/config/ci_secrets_manifest.yaml` tracks which runtime credentials map to CI secrets.
+- Use `python pmoves/scripts/secrets_sync.py diff` to verify local `env.shared` / CHIT bundles align with the manifest and that all required GitHub secrets exist.
+- Materialize an env file for manual updates with `python pmoves/scripts/secrets_sync.py download --output pmoves/tmp/ci-secrets.env`, then run `gh secret set --repo POWERFULMOVES/PMOVES.AI --env-file pmoves/tmp/ci-secrets.env`.
+- Prefer the helper to push changes directly: `python pmoves/scripts/secrets_sync.py upload --include-optional` (add `--dry-run` to preview). This relies on the GitHub CLI (`gh`) being authenticated for the repository.
 
 ## Extending to Other Integrations
 
