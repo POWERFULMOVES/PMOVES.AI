@@ -78,7 +78,6 @@ export default function VideosDashboardPage() {
     // Avoid hydration mismatches by resolving on client after mount
     setRestUrl(getSupabaseRestUrl());
   }, []);
-  // (moved below to ensure `refresh` is initialized before use)
 
   const [statusFilter, setStatusFilter] = useState<string>("needs-review");
   const [namespaceFilter, setNamespaceFilter] = useState<string>("all");
@@ -130,6 +129,7 @@ export default function VideosDashboardPage() {
     isFetchingMore,
     isInitialLoading,
     error,
+    replaceItems,
   } = useInfiniteSupabaseQuery<VideoRow>({
     client,
     table: "videos",
@@ -141,26 +141,97 @@ export default function VideosDashboardPage() {
     filters,
   });
 
-  // Live updates: refresh when videos table changes (insert/update/delete)
+  const matchesFilters = useCallback(
+    (row: VideoRow): boolean => {
+      if (namespaceFilter !== "all" && row.namespace !== namespaceFilter) {
+        return false;
+      }
+
+      const meta = isObject(row.meta) ? row.meta : {};
+      const status = (meta.approval_status || "pending").toLowerCase();
+      if (statusFilter === "needs-review") {
+        if (status !== "pending") {
+          return false;
+        }
+      } else if (statusFilter !== "all" && status !== statusFilter) {
+        return false;
+      }
+
+      const trimmed = searchTerm.trim();
+      if (!trimmed) {
+        return true;
+      }
+
+      const normalized = trimmed.toLowerCase();
+      if (/^[a-z0-9_-]{6,}$/.test(trimmed)) {
+        return (row.video_id || "").toLowerCase() === normalized;
+      }
+
+      return (row.title || "").toLowerCase().includes(normalized);
+    },
+    [namespaceFilter, searchTerm, statusFilter]
+  );
+
+  // Live updates: patch the current page when rows change instead of refetching
   useEffect(() => {
-    const chan = (client as any)
-      ?.channel?.("videos-realtime")
-      ?.on(
+    const channel = client
+      .channel("videos-realtime")
+      .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "videos" },
-        () => {
-          // Debounce to avoid bursts during batch updates
-          Promise.resolve().then(() => void refresh());
+        { event: "INSERT", schema: "public", table: "videos" },
+        (payload) => {
+          const next = payload?.new as VideoRow | null;
+          if (!next || !matchesFilters(next)) {
+            return;
+          }
+          replaceItems((current) => {
+            const without = current.filter((item) => item.id !== next.id);
+            const merged = [next, ...without];
+            merged.sort((a, b) => (b.id || 0) - (a.id || 0));
+            return merged;
+          });
         }
       )
-      ?.subscribe?.();
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "videos" },
+        (payload) => {
+          const next = payload?.new as VideoRow | null;
+          if (!next) {
+            return;
+          }
+          replaceItems((current) => {
+            const without = current.filter((item) => item.id !== next.id);
+            if (!matchesFilters(next)) {
+              return without;
+            }
+            const merged = [...without, next];
+            merged.sort((a, b) => (b.id || 0) - (a.id || 0));
+            return merged;
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "videos" },
+        (payload) => {
+          const previous = payload?.old as VideoRow | null;
+          if (!previous) {
+            return;
+          }
+          replaceItems((current) =>
+            current.filter((item) => item.id !== previous.id)
+          );
+        }
+      )
+      .subscribe();
 
     return () => {
       try {
-        chan?.unsubscribe?.();
+        channel.unsubscribe();
       } catch {}
     };
-  }, [client, refresh]);
+  }, [client, matchesFilters, replaceItems]);
 
   const namespaces = useMemo(() => {
     const set = new Set<string>();
@@ -233,19 +304,29 @@ export default function VideosDashboardPage() {
           throw mutationError;
         }
 
+        const nextRow: VideoRow = { ...row, meta: updatedMeta };
+        replaceItems((current) => {
+          const without = current.filter((item) => item.id !== row.id);
+          if (!matchesFilters(nextRow)) {
+            return without;
+          }
+          const next = [...without, nextRow];
+          next.sort((a, b) => (b.id || 0) - (a.id || 0));
+          return next;
+        });
+
         setActionMessage(
           `Video ${row.video_id || row.id} ${
             action === "approve" ? "approved" : "rejected"
           }.`
         );
-        await refresh();
       } catch (mutationErr: any) {
         setActionError(mutationErr?.message || String(mutationErr));
       } finally {
         setPendingAction(null);
       }
     },
-    [client, refresh, reviewer]
+    [client, matchesFilters, replaceItems, reviewer]
   );
 
   const handleClearFilters = useCallback(() => {
@@ -256,7 +337,6 @@ export default function VideosDashboardPage() {
   }, [refresh]);
 
   return (
-    <div className="space-y-6 p-6">
     <div className="p-6 space-y-6">
       <DashboardNavigation active="videos" />
       <header className="space-y-2">
@@ -295,10 +375,8 @@ export default function VideosDashboardPage() {
       </header>
 
       <section className="grid gap-4 md:grid-cols-4">
-        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+        <label className="flex flex-col gap-1 text-sm text-brand-ink" htmlFor="statusFilter">
           <span className="font-medium text-brand-ink">Status</span>
-        <label className="flex flex-col gap-1 text-sm" htmlFor="statusFilter">
-          <span className="font-medium">Status</span>
           <select
             id="statusFilter"
             name="statusFilter"
@@ -314,10 +392,8 @@ export default function VideosDashboardPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+        <label className="flex flex-col gap-1 text-sm text-brand-ink" htmlFor="namespaceFilter">
           <span className="font-medium text-brand-ink">Namespace</span>
-        <label className="flex flex-col gap-1 text-sm" htmlFor="namespaceFilter">
-          <span className="font-medium">Namespace</span>
           <select
             id="namespaceFilter"
             name="namespaceFilter"
@@ -334,10 +410,8 @@ export default function VideosDashboardPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+        <label className="flex flex-col gap-1 text-sm text-brand-ink" htmlFor="searchTerm">
           <span className="font-medium text-brand-ink">Search title or video id</span>
-        <label className="flex flex-col gap-1 text-sm" htmlFor="searchTerm">
-          <span className="font-medium">Search title or video id</span>
           <input
             id="searchTerm"
             name="searchTerm"
@@ -348,10 +422,8 @@ export default function VideosDashboardPage() {
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-sm text-brand-ink">
+        <label className="flex flex-col gap-1 text-sm text-brand-ink" htmlFor="reviewer">
           <span className="font-medium text-brand-ink">Reviewer</span>
-        <label className="flex flex-col gap-1 text-sm" htmlFor="reviewer">
-          <span className="font-medium">Reviewer</span>
           <input
             id="reviewer"
             name="reviewer"

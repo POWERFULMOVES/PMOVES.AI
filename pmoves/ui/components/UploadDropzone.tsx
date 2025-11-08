@@ -180,6 +180,7 @@ export function UploadDropzone({
             method: 'put',
             contentType: file.type,
             uploadId,
+            ownerId,
           });
 
           await createUploadEvent(uploadId, file, 'uploading', 1, { object_key: objectKey, author });

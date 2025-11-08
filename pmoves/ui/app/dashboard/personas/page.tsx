@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
+import DashboardNavigation from '../../../components/DashboardNavigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,12 +58,14 @@ async function loadPersonas(): Promise<{ data: Persona[]; error?: string }>
 export default async function PersonasPage() {
   const { data, error } = await loadPersonas();
   return (
-    <main className="mx-auto max-w-5xl p-6">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
+      <DashboardNavigation active="personas" />
+      <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-slate-900">Grounded Personas</h1>
-        <Link href="/" className="text-sm text-slate-600 hover:text-slate-900">
-          ← Back to console
-        </Link>
+        <p className="text-sm text-slate-600">
+          Review the seeded persona definitions available to the cooperative runtime. Use the Supabase runbooks to seed
+          additional personas before inviting collaborators.
+        </p>
       </header>
       {error && (
         <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -98,6 +100,6 @@ export default async function PersonasPage() {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }

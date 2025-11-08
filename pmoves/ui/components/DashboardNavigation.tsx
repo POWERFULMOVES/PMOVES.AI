@@ -7,11 +7,25 @@ const NAV_LINKS: Array<{ href: string; label: string; key: NavKey }> = [
   { href: '/dashboard/videos', label: 'Video reviews', key: 'videos' },
   { href: '/dashboard/monitor', label: 'Monitor', key: 'monitor' },
   { href: '/dashboard/notebook', label: 'Notebook', key: 'notebook' },
+  { href: '/dashboard/notebook/runtime', label: 'Notebook runtime', key: 'notebook-runtime' },
+  { href: '/notebook-workbench', label: 'Workbench', key: 'notebook-workbench' },
+  { href: '/dashboard/personas', label: 'Personas', key: 'personas' },
   { href: '/dashboard/chat', label: 'Chat', key: 'chat' },
   { href: '/dashboard/services', label: 'Services', key: 'services' },
+  { href: '/dashboard/chit', label: 'Chit live', key: 'chit' },
 ];
 
-export type NavKey = 'ingest' | 'videos' | 'monitor' | 'notebook' | 'chat' | 'services';
+export type NavKey =
+  | 'ingest'
+  | 'videos'
+  | 'monitor'
+  | 'notebook'
+  | 'notebook-runtime'
+  | 'notebook-workbench'
+  | 'personas'
+  | 'chat'
+  | 'services'
+  | 'chit';
 
 interface DashboardNavigationProps {
   active: NavKey;
