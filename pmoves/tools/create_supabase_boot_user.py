@@ -116,6 +116,31 @@ def _get_existing_user(env: Env, email: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _update_user(env: Env, user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update an existing Supabase user, tolerating versioned admin APIs."""
+
+    url = f"{env.service_url}/auth/v1/admin/users/{user_id}"
+    # Supabase <= 2024.05 accepted PATCH; newer builds switched to PUT only.
+    for method in ("PATCH", "PUT"):
+        resp = requests.request(
+            method,
+            url,
+            headers=_admin_headers(env),
+            json=payload,
+            timeout=10,
+        )
+        if resp.status_code == 405 and method == "PATCH":
+            # Older CLI stacks allow PATCH, newer ones require PUT.
+            continue
+        if resp.status_code >= 300:
+            raise SystemExit(
+                f"Failed to rotate password using {method} ({resp.status_code}): {resp.text}"
+            )
+        return resp.json()
+
+    raise SystemExit("Supabase admin API rejected both PATCH and PUT for user update.")
+
+
 def _ensure_user(env: Env, email: str, password: str, *, name: Optional[str], role: str, rotate: bool) -> Dict[str, Any]:
     existing = _get_existing_user(env, email)
     payload: Dict[str, Any] = {
@@ -141,17 +166,7 @@ def _ensure_user(env: Env, email: str, password: str, *, name: Optional[str], ro
         return resp.json()
 
     if rotate:
-        resp = requests.patch(
-            f"{env.service_url}/auth/v1/admin/users/{existing['id']}",
-            headers=_admin_headers(env),
-            json=payload,
-            timeout=10,
-        )
-        if resp.status_code >= 300:
-            raise SystemExit(
-                f"Failed to rotate password ({resp.status_code}): {resp.text}"
-            )
-        return resp.json()
+        return _update_user(env, existing["id"], payload)
 
     return existing
 

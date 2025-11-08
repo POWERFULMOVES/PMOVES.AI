@@ -1441,7 +1441,8 @@ supabase-boot-user:
 		echo "   • Supabase auth endpoint not reachable; run 'make supa-start' then 'make supabase-boot-user'."; \
 		exit 0; \
 	fi; \
-	if python pmoves/tools/create_supabase_boot_user.py "$$EMAIL" --name "$$NAME" --rotate-password --write-env env.shared --write-env .env.local --write-env pmoves/.env.local --json >/dev/null; then \
+	PYTHONPATH="$$PWD:$$PWD/..:$${PYTHONPATH:-}"; \
+	if PYTHONPATH="$$PYTHONPATH" $(PYTHON) -m pmoves.tools.create_supabase_boot_user "$$EMAIL" --name "$$NAME" --rotate-password --write-env env.shared --write-env .env.local --write-env ../.env.local --json >/dev/null; then \
 		echo "   • Supabase boot user ($$EMAIL) provisioned and env files updated."; \
 	else \
 		echo "   • Boot user automation failed; rerun 'make supabase-boot-user' after resolving errors."; \
