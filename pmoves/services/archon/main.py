@@ -437,6 +437,61 @@ def _patch_supabase_client() -> None:
 _patch_supabase_client()
 
 
+def _patch_mcp_status_response() -> None:
+    """Normalize MCP status responses when Docker is unavailable."""
+
+    try:
+        from server.api_routes import mcp_api  # type: ignore
+    except ImportError:  # pragma: no cover - vendor guard
+        LOGGER.debug("Skipping MCP status patch; vendor module missing")
+        return
+
+    original_get_container_status = getattr(mcp_api, "get_container_status", None)
+    if original_get_container_status is None:  # pragma: no cover - defensive guard
+        LOGGER.debug("Skipping MCP status patch; get_container_status missing")
+        return
+
+    def patched_get_container_status():  # type: ignore[override]
+        try:
+            status = original_get_container_status()
+        except Exception as exc:  # pragma: no cover - defensive fallback
+            message = str(exc)
+            lowered = message.lower()
+            if "filenotfounderror" in lowered or "permission denied" in lowered or "connection aborted" in lowered:
+                return {
+                    "status": "unavailable",
+                    "uptime": None,
+                    "logs": [],
+                    "container_status": "unavailable",
+                    "message": "Docker daemon unreachable. Mount /var/run/docker.sock or disable MCP container checks.",
+                    "details": message,
+                }
+            raise
+
+        if isinstance(status, dict):
+            error_text = status.get("error")
+            if error_text:
+                normalized = str(error_text).lower()
+                if "filenotfounderror" in normalized or "permission denied" in normalized or "connection aborted" in normalized:
+                    patched = dict(status)
+                    patched["status"] = "unavailable"
+                    patched["container_status"] = "unavailable"
+                    patched.setdefault("logs", [])
+                    patched["message"] = (
+                        "Docker daemon unreachable. Mount /var/run/docker.sock or disable MCP container checks."
+                    )
+                    patched["details"] = str(error_text)
+                    patched.pop("error", None)
+                    return patched
+
+        return status
+
+    mcp_api.get_container_status = patched_get_container_status  # type: ignore[assignment]
+
+
+_patch_mcp_status_response()
+
+
 def _ensure_env_defaults() -> dict[str, str]:
     """Populate default environment variables for Archon services."""
 

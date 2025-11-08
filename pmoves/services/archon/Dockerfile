@@ -42,6 +42,7 @@ RUN apt-get update \
     && corepack prepare pnpm@latest --activate \
     && rm -rf /var/lib/apt/lists/*
 
+ARG ARCHON_GIT_REMOTE=https://github.com/POWERFULMOVES/PMOVES-Archon.git
 ARG ARCHON_GIT_REF=main
 
 # Default configuration values (override at runtime)
@@ -77,7 +78,7 @@ ENV SUPABASE_URL=${SUPABASE_URL_DEFAULT} \
     ARCHON_VENDOR_ROOT=/app/vendor/archon
 
 # Pull the upstream Archon sources (vanilla build) to vendor path
-RUN git clone --depth 1 --branch "${ARCHON_GIT_REF}" https://github.com/coleam00/Archon.git /app/vendor/archon
+RUN git clone --depth 1 --single-branch --branch "${ARCHON_GIT_REF}" "${ARCHON_GIT_REMOTE}" /app/vendor/archon
 
 COPY services/archon/requirements.txt ./requirements.txt
 RUN pip install --upgrade pip \

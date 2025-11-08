@@ -22,6 +22,7 @@ mcp==1.12.2
 docker>=6.1.0
 playwright==1.49.0
 yt-dlp==2024.12.23
+tldextract>=5.1.2
 
 # Supabase/Postgres integration
 supabase==2.15.1

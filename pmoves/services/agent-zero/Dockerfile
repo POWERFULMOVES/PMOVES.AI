@@ -11,6 +11,7 @@ WORKDIR /app
 # System dependencies required by Agent Zero upstream runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        python3-dev \
         curl \
         ffmpeg \
         git \
@@ -22,14 +23,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY services/agent-zero/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir uv
-RUN uv pip install --system --no-cache-dir -r requirements.txt
+RUN uv pip install --system --break-system-packages --no-cache-dir -r requirements.txt
 
 # Copy vendored Agent Zero runtime assets
 COPY services/agent-zero/runtime ${AGENT_ZERO_HOME}/runtime
 RUN pip install --no-cache-dir -r /git/agent-zero/requirements.txt \
-    && pip install --no-cache-dir -r pmoves-requirements.txt
+    && pip install --no-cache-dir -r requirements.txt
 
 RUN chmod +x /ins/copy_A0.sh
 
