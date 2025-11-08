@@ -6,30 +6,32 @@ type Feature = {
   accent: string;
 };
 
+type LinkDef = { label: string; href: string; health?: string; optional?: boolean };
+
 const features: Feature[] = [
   {
     title: 'Cymatic Storyweaving',
     description:
       'Visualize resonance: sound-reactive plots show how data pulses across PMOVES, making invisible flows tangible for every collaborator.',
-    accent: 'var(--cataclysm-cyan)'
+    accent: 'var(--cataclysm-cyan)',
   },
   {
     title: 'Geometry Bus',
     description:
       'Align holographic schemas, blueprint automations, and choreograph supply chains with the geometry-first logic core of PMOVES.',
-    accent: 'var(--cataclysm-gold)'
+    accent: 'var(--cataclysm-gold)',
   },
   {
     title: 'Chit System',
     description:
       'Tokenize commitments, route resources, and surface accountability loops that let communities move with precision and care.',
-    accent: 'var(--cataclysm-ember)'
-  }
+    accent: 'var(--cataclysm-ember)',
+  },
 ];
 
-export default function HomePage() {
+function HeroSection() {
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-950 px-6 py-20 text-slate-100">
+    <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-950 px-6 py-20 text-slate-100">
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <div className="absolute inset-0 opacity-60 blur-3xl">
           <div className="absolute left-1/4 top-10 h-72 w-72 rounded-full bg-[var(--cataclysm-cyan)]/40 mix-blend-screen" />
@@ -106,7 +108,10 @@ export default function HomePage() {
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--cataclysm-slate)]">
           Cyan · Ember · Forest · Gold — the Cataclysm palette guiding every move.
         </p>
-type LinkDef = { label: string; href: string; health?: string; optional?: boolean };
+      </div>
+    </section>
+  );
+}
 
 async function probe(url?: string) {
   if (!url) return undefined;
@@ -118,33 +123,34 @@ async function probe(url?: string) {
   }
 }
 
-export default async function HomePage() {
-  const hasBootJwt = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT
-  );
-  const primaryHref = hasBootJwt ? '/dashboard/ingest' : '/login';
-  const primaryLabel = hasBootJwt ? 'Open dashboard' : 'Continue to login';
+function getDashboardLinks(): LinkDef[] {
   const gpuPort = process.env.HIRAG_V2_GPU_HOST_PORT || '8087';
-  const links: LinkDef[] = [
+  const agentZeroBase = (process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080').replace(/\/$/, '');
+  const archonBase = (process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091').replace(/\/$/, '');
+  const jellyfinBase = (process.env.NEXT_PUBLIC_JELLYFIN_URL || 'http://localhost:8096').replace(/\/$/, '');
+
+  return [
+    { label: 'Notebook dashboard', href: '/dashboard/notebook' },
+    { label: 'Notebook workbench', href: '/notebook-workbench', optional: true },
+    { label: 'Notebook runtime', href: '/dashboard/notebook/runtime', optional: true },
     { label: 'Personas', href: '/dashboard/personas' },
+    { label: 'Chit live', href: '/dashboard/chit', optional: true },
     {
       label: 'Agent Zero',
       href: '/dashboard/agent-zero',
       health: (() => {
-        const base = (process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080').replace(/\/$/, '');
         const custom = (process.env.NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH || '').trim();
-        if (custom) return base + (custom.startsWith('/') ? custom : '/' + custom);
-        return base + '/healthz';
+        if (!custom) return `${agentZeroBase}/healthz`;
+        return custom.startsWith('/') ? `${agentZeroBase}${custom}` : `${agentZeroBase}/${custom}`;
       })(),
     },
     {
       label: 'Archon',
       href: '/dashboard/archon',
       health: (() => {
-        const base = (process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091').replace(/\/$/, '');
         const custom = (process.env.NEXT_PUBLIC_ARCHON_HEALTH_PATH || '').trim();
-        if (custom) return base + (custom.startsWith('/') ? custom : '/' + custom);
-        return base + '/healthz';
+        if (!custom) return `${archonBase}/healthz`;
+        return custom.startsWith('/') ? `${archonBase}${custom}` : `${archonBase}/${custom}`;
       })(),
     },
     {
@@ -152,18 +158,52 @@ export default async function HomePage() {
       href: `http://localhost:${gpuPort}/geometry/`,
       health: `http://localhost:${gpuPort}/hirag/admin/stats`,
     },
-    { label: 'TensorZero UI (4000)', href: process.env.NEXT_PUBLIC_TENSORZERO_UI || 'http://localhost:4000', health: process.env.NEXT_PUBLIC_TENSORZERO_UI || 'http://localhost:4000' },
-    // Gateway root may not return 200; omit health to avoid false negatives
-    { label: 'TensorZero Gateway (3030)', href: process.env.NEXT_PUBLIC_TENSORZERO_GATEWAY || 'http://localhost:3030', optional: true },
-    { label: 'Jellyfin (8096)', href: process.env.NEXT_PUBLIC_JELLYFIN_URL || 'http://localhost:8096', health: (process.env.NEXT_PUBLIC_JELLYFIN_URL || 'http://localhost:8096').replace(/\/$/, '') + '/System/Info' },
-    { label: 'Open Notebook (8503)', href: process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_URL || 'http://localhost:8503', health: process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_URL || 'http://localhost:8503' },
-    { label: 'Supabase Studio (65433)', href: process.env.NEXT_PUBLIC_SUPABASE_STUDIO_URL || 'http://127.0.0.1:65433', health: process.env.NEXT_PUBLIC_SUPABASE_STUDIO_URL || 'http://127.0.0.1:65433' },
-    { label: 'Invidious (3000)', href: process.env.NEXT_PUBLIC_INVIDIOUS_URL || 'http://127.0.0.1:3000', health: process.env.NEXT_PUBLIC_INVIDIOUS_URL || 'http://127.0.0.1:3000' },
+    {
+      label: 'TensorZero UI (4000)',
+      href: process.env.NEXT_PUBLIC_TENSORZERO_UI || 'http://localhost:4000',
+      health: process.env.NEXT_PUBLIC_TENSORZERO_UI || 'http://localhost:4000',
+    },
+    {
+      label: 'TensorZero Gateway (3030)',
+      href: process.env.NEXT_PUBLIC_TENSORZERO_GATEWAY || 'http://localhost:3030',
+      optional: true,
+    },
+    {
+      label: 'Jellyfin (8096)',
+      href: jellyfinBase,
+      health: `${jellyfinBase}/System/Info`,
+    },
+    {
+      label: 'Open Notebook (8503)',
+      href: process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_URL || 'http://localhost:8503',
+      health: process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_URL || 'http://localhost:8503',
+    },
+    {
+      label: 'Supabase Studio (65433)',
+      href: process.env.NEXT_PUBLIC_SUPABASE_STUDIO_URL || 'http://127.0.0.1:65433',
+      health: process.env.NEXT_PUBLIC_SUPABASE_STUDIO_URL || 'http://127.0.0.1:65433',
+    },
+    {
+      label: 'Invidious (3000)',
+      href: process.env.NEXT_PUBLIC_INVIDIOUS_URL || 'http://127.0.0.1:3000',
+      health: process.env.NEXT_PUBLIC_INVIDIOUS_URL || 'http://127.0.0.1:3000',
+    },
   ];
+}
 
-  const statuses = await Promise.all(links.map(l => probe(l.health)));
+function OperatorConsole({
+  primaryHref,
+  primaryLabel,
+  links,
+  statuses,
+}: {
+  primaryHref: string;
+  primaryLabel: string;
+  links: LinkDef[];
+  statuses: Array<boolean | undefined>;
+}) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-slate-100 p-8 text-center">
+    <section className="flex min-h-screen flex-col items-center justify-center gap-8 bg-slate-100 p-8 text-center">
       <div className="space-y-3">
         <h1 className="text-3xl font-semibold text-slate-900">PMOVES Operator Console</h1>
         <p className="max-w-md text-sm text-slate-600">
@@ -186,30 +226,74 @@ export default async function HomePage() {
       </div>
       <div className="w-full max-w-5xl">
         <div className="mx-auto grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {links.map((l, idx) => {
-            const ok = statuses[idx];
-            const badge = l.health
-              ? ok === true
-                ? (<span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">healthy</span>)
-                : ok === false
-                  ? (<span className="ml-2 rounded bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">down</span>)
-                  : (<span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">n/a</span>)
-              : (<span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">link</span>);
+          {links.map((link, idx) => {
+            const health = link.health;
+            const status = statuses[idx];
+            const badge = health
+              ? status === true
+                ? (
+                    <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                      healthy
+                    </span>
+                  )
+                : status === false
+                  ? (
+                      <span className="ml-2 rounded bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                        down
+                      </span>
+                    )
+                  : (
+                      <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        n/a
+                      </span>
+                    )
+              : (
+                  <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                    link
+                  </span>
+                );
             return (
               <a
-                key={l.href}
-                href={l.href}
-                target={l.href.startsWith('http') ? '_blank' : undefined}
-                rel={l.href.startsWith('http') ? 'noreferrer' : undefined}
+                key={`${link.label}_${link.href}`}
+                href={link.href}
+                target={link.href.startsWith('http') ? '_blank' : undefined}
+                rel={link.href.startsWith('http') ? 'noreferrer' : undefined}
                 className="rounded border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-800 shadow-sm hover:border-slate-300 hover:shadow"
               >
-                {l.label}
+                {link.label}
                 {badge}
+                {link.optional ? (
+                  <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    optional
+                  </span>
+                ) : null}
               </a>
             );
           })}
         </div>
       </div>
-    </main>
+    </section>
+  );
+}
+
+export default async function HomePage() {
+  const hasBootJwt = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT,
+  );
+  const primaryHref = hasBootJwt ? '/dashboard/ingest' : '/login';
+  const primaryLabel = hasBootJwt ? 'Open dashboard' : 'Continue to login';
+  const links = getDashboardLinks();
+  const statuses = await Promise.all(links.map((link) => probe(link.health)));
+
+  return (
+    <>
+      <HeroSection />
+      <OperatorConsole
+        primaryHref={primaryHref}
+        primaryLabel={primaryLabel}
+        links={links}
+        statuses={statuses}
+      />
+    </>
   );
 }

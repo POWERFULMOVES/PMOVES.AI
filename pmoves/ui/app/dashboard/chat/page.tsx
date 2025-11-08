@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
 
@@ -40,7 +41,14 @@ export default function ChatDashboardPage() {
           <div className="flex flex-col gap-3 max-h-[480px] overflow-auto">
             {msgs.map((m) => (
               <div key={m.id} className="flex items-start gap-3">
-                <img src={m.avatar_url || '/avatars/owner.png'} alt={m.agent || m.role} className="h-8 w-8 rounded-full border" />
+                <Image
+                  src={m.avatar_url || '/avatars/owner.svg'}
+                  alt={m.agent || m.role}
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 rounded-full border"
+                  sizes="32px"
+                />
                 <div>
                   <div className="text-xs text-neutral-500">{new Date(m.created_at).toLocaleString()} – {m.agent || m.role}</div>
                   <div className="text-sm whitespace-pre-wrap">{m.content}</div>
