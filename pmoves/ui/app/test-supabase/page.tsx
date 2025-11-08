@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { createSupabaseBrowserClient, hasBootJwt } from '@/lib/supabaseClient';
+import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 
 const SupabaseDiagnostics = () => {
   useEffect(() => {

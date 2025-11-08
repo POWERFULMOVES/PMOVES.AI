@@ -2,18 +2,22 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseProxyClient } from '@/lib/supabaseServer';
 
 const MARKETING_ROUTES = ['/community'];
-const PUBLIC_PATHS = new Set(['/', '/login', '/callback', ...MARKETING_ROUTES]);
+const PUBLIC_PATHS = new Set(['/', '/login', '/callback', '/icon.svg', '/favicon.ico', ...MARKETING_ROUTES]);
 const PUBLIC_PATH_PREFIXES = [...MARKETING_ROUTES];
-const PUBLIC_PATHS = new Set(['/', '/login', '/callback', '/icon.svg', '/favicon.ico']);
 
 const isPublicPath = (pathname: string) => {
   if (PUBLIC_PATHS.has(pathname)) {
     return true;
   }
+
   if (PUBLIC_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    return true;
+  }
+
   if (pathname.startsWith('/dashboard/services')) {
     return true;
   }
+
   return pathname.startsWith('/_next') || pathname.startsWith('/api/auth');
 };
 
