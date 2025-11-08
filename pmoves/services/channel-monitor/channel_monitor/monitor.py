@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import partial
 from typing import Any, Dict, Iterable, List, Optional, Set
 from uuid import UUID
+from urllib.parse import parse_qs, urlparse
 
 import asyncpg
 import httpx
@@ -15,6 +16,7 @@ from dateutil import parser as date_parser
 from yt_dlp import YoutubeDL
 
 from .config import ensure_config, save_config
+from .youtube_api import AccessToken, YouTubeAPIClient, YouTubeAPIError
 
 LOGGER = logging.getLogger("channel_monitor")
 
@@ -74,6 +76,60 @@ def _best_thumbnail(thumbnails: Any) -> Optional[str]:
     return None
 
 
+def _extract_playlist_id_from_url(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    query_ids = parse_qs(parsed.query).get("list")
+    if query_ids:
+        candidate = query_ids[0]
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    parts = [segment for segment in parsed.path.split("/") if segment]
+    for idx, segment in enumerate(parts):
+        if segment.lower() == "playlist" and idx + 1 < len(parts):
+            return parts[idx + 1]
+    return None
+
+
+def _extract_channel_id_from_url(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    parts = [segment for segment in parsed.path.split("/") if segment]
+    if not parts:
+        return None
+    if parts[0].lower() == "channel" and len(parts) > 1:
+        return parts[1]
+    if parts[0].startswith("UC"):
+        return parts[0]
+    if parts[0].startswith("@"):  # handle-based URLs; return handle for upstream resolution
+        return parts[0]
+    return None
+
+
+def _extract_channel_handle(channel: Dict[str, Any]) -> Optional[str]:
+    candidates = [
+        channel.get("channel_id"),
+        channel.get("source_identifier"),
+        channel.get("source_id"),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.startswith("@") and len(candidate) > 1:
+            return candidate
+    source_url = channel.get("source_url")
+    resolved = _extract_channel_id_from_url(source_url)
+    if isinstance(resolved, str) and resolved.startswith("@") and len(resolved) > 1:
+        return resolved
+    return None
+
+
 class ChannelMonitor:
     def __init__(
         self,
@@ -81,18 +137,41 @@ class ChannelMonitor:
         queue_url: str,
         database_url: str,
         namespace_default: str = "pmoves",
+        *,
+        google_client_id: Optional[str] = None,
+        google_client_secret: Optional[str] = None,
+        google_redirect_uri: Optional[str] = None,
+        google_scopes: Optional[List[str]] = None,
     ) -> None:
         self.config_path = config_path
         self.config = ensure_config(config_path)
         self.queue_url = queue_url
         self.database_url = database_url
         self.namespace_default = namespace_default
+        self.google_client_id = google_client_id
+        self.google_client_secret = google_client_secret
+        self.google_redirect_uri = google_redirect_uri
+        self._google_scopes = list(google_scopes or [])
 
         self._pool: Optional[asyncpg.Pool] = None
         self._tasks: List[asyncio.Task] = []
         self._processed_video_ids: Set[str] = set()
         self._shutdown = asyncio.Event()
         self._dynamic_channels: List[Dict[str, Any]] = []
+        self._youtube_client: Optional[YouTubeAPIClient] = None
+        self._token_cache: Dict[str, AccessToken] = {}
+        self._channel_handle_cache: Dict[str, str] = {}
+
+        if self.google_client_id and self.google_client_secret:
+            try:
+                self._youtube_client = YouTubeAPIClient(
+                    self.google_client_id,
+                    self.google_client_secret,
+                    redirect_uri=self.google_redirect_uri,
+                    default_scopes=self._google_scopes,
+                )
+            except Exception as exc:  # pragma: no cover - guardrails
+                LOGGER.error("Failed to initialize YouTube client: %s", exc)
 
     async def start(self) -> None:
         if self._pool is None:
@@ -100,6 +179,14 @@ class ChannelMonitor:
         await self._ensure_tables()
         await self._load_processed_videos()
         await self._load_user_sources()
+
+        if self._youtube_client:
+            LOGGER.info(
+                "YouTube API integration enabled (scopes=%s)",
+                ",".join(self._google_scopes) or "default",
+            )
+        else:
+            LOGGER.warning("YouTube API integration disabled; missing client credentials")
 
         if self.config["global_settings"].get("check_on_startup", True):
             await self.check_all_channels()
@@ -121,6 +208,11 @@ class ChannelMonitor:
         if self._pool:
             await self._pool.close()
             self._pool = None
+        if self._youtube_client:
+            try:
+                await self._youtube_client.aclose()
+            except Exception:  # pragma: no cover
+                LOGGER.debug("Suppressed YouTube client close error", exc_info=True)
 
     async def _channel_loop(self, channel: Dict[str, Any], interval_minutes: int) -> None:
         while not self._shutdown.is_set():
@@ -195,9 +287,22 @@ class ChannelMonitor:
         LOGGER.info("Checking channel %s", channel_name)
 
         videos: List[Dict[str, Any]] = []
-        if platform == "youtube":
-            if source_type == "playlist" and source_url:
-                videos = await self._fetch_youtube_flat(source_url, cookies_path, max_videos)
+        used_api = False
+        refresh_token = self._extract_refresh_token(channel)
+        if platform == "youtube" and refresh_token and self._youtube_client:
+            try:
+                videos = await self._fetch_via_youtube_api(channel, refresh_token, max_videos)
+                used_api = bool(videos)
+            except Exception as exc:  # pragma: no cover
+                LOGGER.exception("YouTube API fetch failed (%s): %s", channel_name, exc)
+                videos = []
+                used_api = False
+
+        if platform == "youtube" and (not used_api or not videos):
+            if source_type == "playlist":
+                playlist_target = source_url or channel.get("source_identifier") or channel_id
+                if playlist_target:
+                    videos = await self._fetch_youtube_flat(playlist_target, cookies_path, max_videos)
             elif source_url:
                 videos = await self._fetch_youtube_flat(source_url, cookies_path, max_videos)
             else:
@@ -209,8 +314,10 @@ class ChannelMonitor:
         elif platform == "soundcloud" and source_url:
             videos = await self._fetch_soundcloud(source_url, cookies_path, max_videos)
         else:
-            LOGGER.warning("Unsupported platform %s for channel %s", platform, channel_name)
-            return 0
+            if platform not in {"youtube", "soundcloud"}:
+                LOGGER.warning("Unsupported platform %s for channel %s", platform, channel_name)
+            if not videos:
+                return 0
 
         filters = channel.get("filters", {})
         filtered = self._apply_filters(videos, filters)
@@ -297,11 +404,6 @@ class ChannelMonitor:
                 }
             )
         return results
-
-    async def _fetch_via_api(self, channel_id: str) -> List[Dict[str, Any]]:
-        # Placeholder for future YouTube API integration.
-        LOGGER.warning("YouTube API fetch not configured; falling back to RSS for %s", channel_id)
-        return await self._fetch_via_rss(channel_id)
 
     def _apply_filters(self, videos: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         filtered: List[Dict[str, Any]] = []
@@ -435,6 +537,65 @@ class ChannelMonitor:
                         extra_metadata={"queue_status_code": getattr(resp, "status_code", None)},
                     )
 
+    async def _get_access_token(self, refresh_token: str) -> AccessToken:
+        cached = self._token_cache.get(refresh_token)
+        if cached and cached.expires_at > utcnow():
+            return cached
+        if not self._youtube_client:
+            raise RuntimeError("YouTube client not configured")
+        token = await self._youtube_client.refresh_access_token(
+            refresh_token,
+            scope=self._google_scopes or None,
+        )
+        if not token.token:
+            raise YouTubeAPIError("Missing access_token from refresh response")
+        safety_margin = timedelta(seconds=60)
+        cached_expiry = token.expires_at - safety_margin
+        if cached_expiry <= utcnow():
+            cached_expiry = token.expires_at
+        cached_token = AccessToken(
+            token=token.token,
+            expires_at=cached_expiry,
+            scope=token.scope,
+            token_type=token.token_type,
+        )
+        self._token_cache[refresh_token] = cached_token
+        await self._update_user_token_expiry(refresh_token, token.expires_at)
+        return cached_token
+
+    async def _resolve_channel_handle_via_api(self, access_token: str, handle: str) -> Optional[str]:
+        if not self._youtube_client:
+            return None
+        normalized = handle if handle.startswith("@") else f"@{handle}"
+        cached = self._channel_handle_cache.get(normalized)
+        if cached:
+            return cached
+        try:
+            resolved = await self._youtube_client.resolve_channel_handle(access_token, normalized)
+        except YouTubeAPIError as exc:
+            LOGGER.warning("Failed to resolve YouTube handle %s via API: %s", handle, exc)
+            return None
+        if resolved:
+            self._channel_handle_cache[normalized] = resolved
+        return resolved
+
+    async def _update_user_token_expiry(self, refresh_token: str, expires_at: datetime) -> None:
+        if not self._pool:
+            return
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE pmoves.user_tokens
+                    SET expires_at = $1
+                    WHERE refresh_token = $2
+                    """,
+                    expires_at,
+                    refresh_token,
+                )
+        except Exception:  # pragma: no cover
+            LOGGER.debug("Failed to persist token expiry for refresh token", exc_info=True)
+
     def _build_yt_options(self, channel: Dict[str, Any]) -> Dict[str, Any]:
         merged: Dict[str, Any] = {}
         global_opts = self.config.get("global_settings", {}).get("yt_options") or {}
@@ -472,6 +633,68 @@ class ChannelMonitor:
             None,
             partial(self._yt_dlp_extract, url, cookies_path, max_items, platform="soundcloud"),
         )
+
+    async def _fetch_via_youtube_api(
+        self,
+        channel: Dict[str, Any],
+        refresh_token: str,
+        max_items: int,
+    ) -> List[Dict[str, Any]]:
+        if not self._youtube_client:
+            return []
+        token = await self._get_access_token(refresh_token)
+        if not token.token:
+            LOGGER.warning("Access token missing after refresh for channel %s", channel.get("channel_name"))
+            return []
+
+        source_type = channel.get("source_type", "channel").lower()
+        videos: List[Dict[str, Any]] = []
+
+        if source_type == "playlist":
+            playlist_id = self._resolve_playlist_id(channel)
+            if not playlist_id:
+                LOGGER.warning("No playlist identifier for channel %s", channel.get("channel_name"))
+                return []
+            videos = await self._youtube_client.fetch_playlist_videos(
+                token.token,
+                playlist_id,
+                max_items=max_items,
+            )
+        else:
+            channel_identifier = self._resolve_channel_id_for_api(channel)
+            if (not channel_identifier or channel_identifier.startswith("@")) and token.token:
+                handle = _extract_channel_handle(channel)
+                if handle:
+                    resolved = await self._resolve_channel_handle_via_api(token.token, handle)
+                    if resolved:
+                        channel_identifier = resolved
+                        channel.setdefault("channel_id", resolved)
+                        channel.setdefault("source_identifier", resolved)
+                        LOGGER.info("Resolved YouTube handle %s to channel ID %s", handle, resolved)
+            if not channel_identifier:
+                LOGGER.warning("No channel identifier for API fetch (%s)", channel.get("channel_name"))
+                return []
+            videos = await self._youtube_client.fetch_channel_recent_videos(
+                token.token,
+                channel_identifier,
+                max_items=max_items,
+            )
+
+        normalized: List[Dict[str, Any]] = []
+        for video in videos:
+            video_id = video.get("video_id")
+            if not video_id:
+                continue
+            item = dict(video)
+            item["published"] = self._ensure_datetime(
+                item.get("published") or item.get("published_raw")
+            )
+            if not item.get("author"):
+                channel_info = item.get("channel") or {}
+                if isinstance(channel_info, dict):
+                    item["author"] = channel_info.get("name")
+            normalized.append(item)
+        return normalized
 
     @staticmethod
     def _yt_dlp_extract(
@@ -844,6 +1067,58 @@ class ChannelMonitor:
             ]
         return entry
 
+    def _extract_refresh_token(self, channel: Dict[str, Any]) -> Optional[str]:
+        yt_options = channel.get("yt_options") or {}
+        token = yt_options.get("oauth_refresh_token")
+        if not token:
+            token = channel.get("oauth_refresh_token")
+        return token
+
+    def _resolve_playlist_id(self, channel: Dict[str, Any]) -> Optional[str]:
+        playlist_id = (
+            channel.get("playlist_id")
+            or channel.get("source_identifier")
+            or channel.get("source_id")
+        )
+        if isinstance(playlist_id, str) and playlist_id:
+            return playlist_id
+        source_url = channel.get("source_url")
+        return _extract_playlist_id_from_url(source_url)
+
+    def _resolve_channel_id_for_api(self, channel: Dict[str, Any]) -> Optional[str]:
+        candidate = (
+            channel.get("channel_id")
+            or channel.get("source_identifier")
+            or channel.get("source_id")
+        )
+        if isinstance(candidate, str) and candidate.startswith("@"):  # YouTube handle, unsupported directly
+            return None
+        if isinstance(candidate, str) and candidate:
+            return candidate
+        source_url = channel.get("source_url")
+        resolved = _extract_channel_id_from_url(source_url)
+        if isinstance(resolved, str) and resolved.startswith("@"):  # handle still unsupported
+            return None
+        return resolved
+
+    @staticmethod
+    def _ensure_datetime(value: Any) -> datetime:
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value.astimezone(timezone.utc)
+        if isinstance(value, str):
+            try:
+                parsed = date_parser.parse(value)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                else:
+                    parsed = parsed.astimezone(timezone.utc)
+                return parsed
+            except (ValueError, TypeError):
+                pass
+        return utcnow()
+
     async def _update_user_source_status(self, channel: Dict[str, Any], discovered: int) -> None:
         user_source_id = channel.get("user_source_id")
         if not user_source_id or not self._pool:
@@ -867,8 +1142,14 @@ class ChannelMonitor:
         refresh_token = payload["refresh_token"]
         scope = payload.get("scope") or []
         if isinstance(scope, str):
-            scope = [scope]
+            scope = [token for token in scope.replace(",", " ").split() if token]
         expires_at = payload.get("expires_at")
+        expires_in = payload.get("expires_in")
+        if expires_in and not expires_at:
+            try:
+                expires_at = utcnow() + timedelta(seconds=int(expires_in))
+            except (ValueError, TypeError):
+                expires_at = None
 
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -888,6 +1169,7 @@ class ChannelMonitor:
                 refresh_token,
                 expires_at,
             )
+        self._token_cache.clear()
         await self._load_user_sources()
         return row["id"]
 

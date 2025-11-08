@@ -9,10 +9,17 @@ from typing import Any, Dict, List
 from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from fastapi.responses import PlainTextResponse
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 from .config import config_path_from_env, ensure_config, save_config
 from .monitor import ChannelMonitor
+
+
+def _parse_scopes(value: str | None) -> list[str]:
+    if not value:
+        return []
+    tokens = value.replace(",", " ").split()
+    return [token for token in tokens if token]
 
 logging.basicConfig(level=os.getenv("CHANNEL_MONITOR_LOG_LEVEL", "INFO"))
 LOGGER = logging.getLogger("channel_monitor")
@@ -26,12 +33,20 @@ DATABASE_URL = os.getenv(
 )
 DEFAULT_NAMESPACE = os.getenv("CHANNEL_MONITOR_NAMESPACE", "pmoves")
 STATUS_SECRET = os.getenv("CHANNEL_MONITOR_SECRET")
+GOOGLE_CLIENT_ID = os.getenv("CHANNEL_MONITOR_GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("CHANNEL_MONITOR_GOOGLE_REDIRECT_URI")
+GOOGLE_SCOPES = _parse_scopes(os.getenv("CHANNEL_MONITOR_GOOGLE_SCOPES"))
 
 monitor = ChannelMonitor(
     config_path=CONFIG_PATH,
     queue_url=QUEUE_URL,
     database_url=DATABASE_URL,
     namespace_default=DEFAULT_NAMESPACE,
+    google_client_id=GOOGLE_CLIENT_ID,
+    google_client_secret=GOOGLE_CLIENT_SECRET,
+    google_redirect_uri=GOOGLE_REDIRECT_URI,
+    google_scopes=GOOGLE_SCOPES or None,
 )
 
 app = FastAPI(
@@ -73,6 +88,17 @@ class OAuthTokenRequest(BaseModel):
     refresh_token: str = Field(..., description="OAuth refresh token")
     scope: List[str] = Field(default_factory=list)
     expires_at: datetime | None = Field(None, description="Token expiry timestamp (UTC)")
+    expires_in: int | None = Field(None, description="Seconds until token expiry (if expires_at missing)")
+
+    @validator("scope", pre=True)
+    def _normalize_scope(cls, value):  # type: ignore[no-untyped-def]
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [token for token in value.replace(",", " ").split() if token]
+        if isinstance(value, list):
+            return [token for token in value if isinstance(token, str)]
+        raise ValueError("scope must be a string or list of strings")
 
 
 class UserSourceRequest(BaseModel):
