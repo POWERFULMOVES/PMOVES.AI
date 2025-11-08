@@ -68,12 +68,12 @@ async def main() -> int:
     try:
         result = await asyncio.wait_for(fut, timeout=args.timeout)
     except asyncio.TimeoutError:
-        await nc.unsubscribe(sub)
+        await sub.unsubscribe()
         await nc.drain()
         print("✖ deepresearch-smoke: timed out waiting for result", file=sys.stderr)
         return 2
 
-    await nc.unsubscribe(sub)
+    await sub.unsubscribe()
     await nc.drain()
 
     payload = result.get("payload") or {}

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
   // Ensure bucket exists
   try {
-    const b = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001'}/api/uploads/presign`, { method: 'OPTIONS' });
+    await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001'}/api/uploads/presign`, { method: 'OPTIONS' });
     // OPTIONS noop to warm middleware; ignored
   } catch {}
   try {

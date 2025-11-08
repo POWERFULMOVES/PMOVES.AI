@@ -17,14 +17,13 @@ function ownerFromJwt(): string | null {
 export async function POST(req: NextRequest) {
   const supabase = getServiceSupabaseClient();
   const body = await req.json().catch(() => ({}));
-  let { content, role, agent, avatar_url, ownerId } = body as any;
-  if (!ownerId) ownerId = ownerFromJwt();
-  if (!ownerId) return NextResponse.json({ error: 'ownerId missing' }, { status: 400 });
+  const { content, role = 'user', agent, avatar_url, ownerId } = body as any;
+  const owner = ownerId ?? ownerFromJwt();
+  if (!owner) return NextResponse.json({ error: 'ownerId missing' }, { status: 400 });
   if (!content || typeof content !== 'string') return NextResponse.json({ error: 'content required' }, { status: 400 });
-  role = role || 'user';
   const { data, error } = await supabase
     .from('chat_messages')
-    .insert([{ owner_id: ownerId, content, role, agent, avatar_url }])
+    .insert([{ owner_id: owner, content, role, agent, avatar_url }])
     .select('id,role,agent,avatar_url,content,created_at')
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
