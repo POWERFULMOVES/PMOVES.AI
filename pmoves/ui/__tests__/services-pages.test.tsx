@@ -23,7 +23,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 describe('Services dashboards', () => {
-  const mockedNotFound = notFound as jest.Mock;
+  const mockedNotFound = jest.mocked(notFound);
 
   beforeEach(() => {
     mockedNotFound.mockClear();

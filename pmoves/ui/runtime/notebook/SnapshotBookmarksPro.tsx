@@ -2,6 +2,7 @@
 
 import React, { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import type { Database } from "@/lib/database.types";
 
 type SnapshotBookmark = {
   id: string;
@@ -10,6 +11,8 @@ type SnapshotBookmark = {
   tags?: string[] | null;
   position?: number | null;
 };
+
+type SnapshotRow = Pick<Database["public"]["Tables"]["snapshots"]["Row"], "id" | "name" | "at" | "tags" | "position">;
 
 export function SnapshotBookmarksPro({ threadId, onPick }: { threadId: string; onPick: (iso: string) => void }) {
   const [items, setItems] = useState<SnapshotBookmark[]>([]);
@@ -27,7 +30,16 @@ export function SnapshotBookmarksPro({ threadId, onPick }: { threadId: string; o
       .order("position", { ascending: true })
       .order("created_at", { ascending: false });
     startTransition(() => {
-      setItems((data as SnapshotBookmark[]) || []);
+      const rows = (data as SnapshotRow[] | null) ?? [];
+      setItems(
+        rows.map((row) => ({
+          id: row.id,
+          name: row.name ?? "",
+          at: row.at,
+          tags: row.tags ?? null,
+          position: row.position ?? null,
+        }))
+      );
     });
   }, [threadId]);
 

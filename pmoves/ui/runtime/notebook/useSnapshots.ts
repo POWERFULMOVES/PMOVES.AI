@@ -45,7 +45,14 @@ export function useSnapshots(threadId: string): UseSnapshotsResult {
         setLoading(false);
         return;
       }
-      setTicks((data as SnapshotTick[]) || []);
+      const rows = data ?? [];
+      setTicks(
+        rows.map((row) => ({
+          tick: row.tick,
+          source: row.source ?? "",
+          id: row.id,
+        }))
+      );
       setLoading(false);
     },
     [threadId]
@@ -59,7 +66,21 @@ export function useSnapshots(threadId: string): UseSnapshotsResult {
         p_at: atISO,
       });
       if (rpcError) throw rpcError;
-      return (data as SnapshotView[]) || [];
+      const rows = data ?? [];
+      return rows.map((row) => ({
+        message_id: row.message_id,
+        view_id: row.view_id,
+        block_id: row.block_id,
+        archetype: row.archetype,
+        variant: row.variant,
+        seed: row.seed,
+        layout: row.layout,
+        style: row.style,
+        locked: row.locked,
+        visible: row.visible,
+        z: row.z,
+        created_at: row.created_at,
+      }));
     },
     [threadId]
   );

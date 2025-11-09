@@ -98,7 +98,6 @@ export function ComicBubble({
       <path d={pathD} fill={fill} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dash} />
       <foreignObject x="-110" y="-90" width="220" height="180">
         <div
-          xmlns="http://www.w3.org/1999/xhtml"
           style={{
             display: "flex",
             alignItems: "center",

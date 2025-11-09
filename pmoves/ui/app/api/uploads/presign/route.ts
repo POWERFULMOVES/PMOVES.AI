@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const bootJwt = process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
 
     // When running with a boot JWT (no browser cookie session), switch to service-role client
-    const readClient = session ? supabase : getServiceSupabaseClient();
+    const readClient = (session ? supabase : getServiceSupabaseClient()) as ReturnType<typeof getServiceSupabaseClient>;
     const userId = session?.user?.id || (body.ownerId as string | undefined);
 
     if (!session && bootJwt && !userId) {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const { data: eventRow, error: eventError } = await readClient
       .from('upload_events')
       .select('bucket, object_key, owner_id, meta')
-      .eq('upload_id' as any, uploadId as any)
+      .eq('upload_id', uploadId)
       .single<UploadEventSelection>();
 
     if (eventError || !eventRow) {

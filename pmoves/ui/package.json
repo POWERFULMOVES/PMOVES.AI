@@ -8,7 +8,9 @@
     "build": "node scripts/with-env.mjs next build",
     "start": "node scripts/with-env.mjs next start",
     "lint": "node scripts/with-env.mjs eslint . --ext ts,tsx,js,jsx --max-warnings=0",
+    "typecheck": "node scripts/with-env.mjs tsc --noEmit",
     "test": "node scripts/with-env.mjs jest",
+    "smoke:upload-events": "node scripts/with-env.mjs jest upload-events-table.test.tsx",
     "test:e2e": "node scripts/with-env.mjs playwright test"
   },
   "dependencies": {

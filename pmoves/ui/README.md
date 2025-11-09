@@ -112,11 +112,23 @@ Run the full suite before publishing changes:
 
 ```bash
 npm run lint
+npm run typecheck
 npm run test
 npm run test:e2e
+npm run smoke:upload-events
 ```
 
 The Jest coverage exercises the services index/detail routes and Notebook Workbench helpers. The Playwright run boots the dev server and validates that the integration list, markdown pages, and workbench surface load successfully.
+
+### Upload events diagnostics
+
+The dashboard uses Supabase Realtime to keep the upload history fresh. The `UploadEventsTable` component now emits structured metrics for:
+
+- Fetch success/error counts with duration tracking.
+- Row removal (manual deletes) and smoke-clear cycles.
+- Skipped fetches when an owner ID is unavailable.
+
+The metrics helper writes to the browser console (`[metric] uploadEvents.…`) so keep the DevTools console open during ingest troubleshooting. The dedicated Jest spec `__tests__/upload-events-table.test.tsx` exercises all flows, while `npm run smoke:upload-events` runs only that suite for quick validation after UI or Supabase schema changes.
 
 ## Related PMOVES UIs
 

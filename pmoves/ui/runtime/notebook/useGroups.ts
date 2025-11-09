@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import type { Database } from "@/lib/database.types";
 
 export type ViewGroup = { id: string; thread_id: string; name: string; constraints?: any; created_at: string };
 export type ViewGroupAction = {
@@ -12,6 +13,27 @@ export type ViewGroupAction = {
   applied_to_message_ids: string[];
   created_at: string;
 };
+
+type ViewGroupRow = Database["public"]["Tables"]["view_groups"]["Row"];
+type ViewGroupMemberRow = Database["public"]["Tables"]["view_group_members"]["Row"];
+type ViewGroupActionRow = Database["public"]["Tables"]["view_group_actions"]["Row"];
+
+const toViewGroup = (row: ViewGroupRow): ViewGroup => ({
+  id: row.id,
+  thread_id: row.thread_id,
+  name: row.name,
+  constraints: row.constraints,
+  created_at: row.created_at,
+});
+
+const toViewGroupAction = (row: ViewGroupActionRow): ViewGroupAction => ({
+  id: row.id,
+  group_id: row.group_id,
+  action: row.action,
+  params: row.params,
+  applied_to_message_ids: row.applied_to_message_ids || [],
+  created_at: row.created_at,
+});
 
 type UseGroupsResult = {
   groups: ViewGroup[];
@@ -48,9 +70,10 @@ export function useGroups(threadId: string): UseGroupsResult {
         if (alive) setError(groupError.message);
         return;
       }
-      const groupRows = (groupData as ViewGroup[]) || [];
-      setGroups(groupRows);
-      const groupIds = groupRows.map((group) => group.id);
+      const groupRows = (groupData as ViewGroupRow[] | null) ?? [];
+      const mappedGroups = groupRows.map(toViewGroup);
+      setGroups(mappedGroups);
+      const groupIds = mappedGroups.map((group) => group.id);
 
       if (groupIds.length) {
         const { data: memberData } = await supabase
@@ -58,7 +81,7 @@ export function useGroups(threadId: string): UseGroupsResult {
           .select("group_id,message_id")
           .in("group_id", groupIds);
         const memberMap: Record<string, string[]> = {};
-        (memberData as Array<{ group_id: string; message_id: string }> | null)?.forEach((row) => {
+        (memberData as ViewGroupMemberRow[] | null)?.forEach((row) => {
           (memberMap[row.group_id] ||= []).push(row.message_id);
         });
         setMembers(memberMap);
@@ -70,8 +93,8 @@ export function useGroups(threadId: string): UseGroupsResult {
           .order("created_at", { ascending: true });
 
         const actionMap: Record<string, ViewGroupAction[]> = {};
-        (actionData as ViewGroupAction[] | null)?.forEach((action) => {
-          (actionMap[action.group_id] ||= []).push(action);
+        (actionData as ViewGroupActionRow[] | null)?.forEach((action) => {
+          (actionMap[action.group_id] ||= []).push(toViewGroupAction(action));
         });
         setActions(actionMap);
       }
@@ -79,12 +102,12 @@ export function useGroups(threadId: string): UseGroupsResult {
 
       const channel = supabase.channel(`groups:${threadId}`);
       channel.on("postgres_changes", { event: "*", schema: "public", table: "view_groups" }, (payload) => {
-        const next = payload.new as ViewGroup;
-        if (next?.thread_id !== threadId) return;
+        const nextRow = payload.new as ViewGroupRow | null;
+        if (nextRow && nextRow.thread_id !== threadId) return;
         setGroups((current) => {
-          if (payload.eventType === "INSERT") return [...current, next];
-          if (payload.eventType === "UPDATE") {
-            return current.map((group) => (group.id === next.id ? next : group));
+          if (payload.eventType === "INSERT" && nextRow) return [...current, toViewGroup(nextRow)];
+          if (payload.eventType === "UPDATE" && nextRow) {
+            return current.map((group) => (group.id === nextRow.id ? toViewGroup(nextRow) : group));
           }
           if (payload.eventType === "DELETE") {
             return current.filter((group) => group.id !== (payload.old as any)?.id);
@@ -106,12 +129,12 @@ export function useGroups(threadId: string): UseGroupsResult {
         });
       });
       channel.on("postgres_changes", { event: "*", schema: "public", table: "view_group_actions" }, (payload) => {
-        const next = payload.new as ViewGroupAction;
+        const next = payload.new as ViewGroupActionRow | null;
         const groupId = next?.group_id || (payload.old as any)?.group_id;
         if (!groupId) return;
         setActions((current) => {
           const list = (current[groupId] || []).slice();
-          if (payload.eventType === "INSERT") list.push(next);
+          if (payload.eventType === "INSERT" && next) list.push(toViewGroupAction(next));
           return { ...current, [groupId]: list };
         });
       });
@@ -132,7 +155,7 @@ export function useGroups(threadId: string): UseGroupsResult {
       .select("*")
       .single();
     if (insertError) throw insertError;
-    return data as ViewGroup;
+    return toViewGroup(data as ViewGroupRow);
   }
 
   async function renameGroup(id: string, name: string) {

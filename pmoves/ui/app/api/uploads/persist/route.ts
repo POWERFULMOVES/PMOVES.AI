@@ -80,11 +80,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'ownerId is required when using boot JWT' }, { status: 400 });
     }
 
-    const readClient = session ? supabaseAuth : getServiceSupabaseClient();
+    const readClient = (session ? supabaseAuth : getServiceSupabaseClient()) as ReturnType<typeof getServiceSupabaseClient>;
     const { data: uploadEvent, error: uploadError } = await readClient
       .from('upload_events')
       .select('bucket, object_key, owner_id, meta')
-      .eq('upload_id' as any, uploadId as any)
+      .eq('upload_id', uploadId)
       .single<UploadEventSelection>();
 
     if (uploadError || !uploadEvent) {
@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
             ingest: 'ui-dropzone',
             status: transcriptText ? 'available' : 'pending',
             author,
-            owner_id: session.user.id,
+            owner_id: effectiveUserId ?? session?.user?.id ?? null,
           },
         },
         { onConflict: 'video_id' }
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
           presigned_get: presignedGet.url,
           ingest: 'ui-dropzone',
           author,
-        owner_id: effectiveUserId,
+          owner_id: effectiveUserId,
         },
       })
       .eq('upload_id', uploadId);

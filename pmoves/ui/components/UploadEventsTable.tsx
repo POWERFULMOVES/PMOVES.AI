@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Database } from "../lib/database.types";
+import { trackUiEvent, trackUiMetric } from "../lib/metrics";
 import { getBrowserSupabaseClient } from "../lib/supabaseBrowser";
 
 interface UploadEventsTableProps {
@@ -15,6 +16,8 @@ type ActionState = {
   message: string | null;
   error: string | null;
 };
+
+const createEmptyRows = (): UploadEventRow[] => [];
 
 const formatBytes = (bytes: number | null) => {
   if (bytes === null || bytes === undefined || Number.isNaN(bytes)) return "—";
@@ -93,10 +96,12 @@ export default function UploadEventsTable({ ownerId, limit = 20 }: UploadEventsT
 
   const fetchRows = useCallback(async () => {
     if (!ownerId) {
-      setRows([]);
+      trackUiEvent("uploadEvents.fetch.skipped", { reason: "missing-owner" });
+      setRows(createEmptyRows());
       setLoading(false);
       return;
     }
+    const started = Date.now();
     setLoading(true);
     setError(null);
     const { data, error: fetchError } = await supabase
@@ -107,9 +112,20 @@ export default function UploadEventsTable({ ownerId, limit = 20 }: UploadEventsT
       .limit(limit);
     if (fetchError) {
       setError(fetchError.message || "Failed to load uploads");
-      setRows([]);
+      setRows(createEmptyRows());
+      trackUiMetric("uploadEvents.fetch.error", {
+        ownerId,
+        message: fetchError.message ?? "unknown-error",
+        durationMs: Date.now() - started,
+      });
     } else {
-      setRows(Array.isArray(data) ? data : []);
+      const nextRows: UploadEventRow[] = Array.isArray(data) ? (data as UploadEventRow[]) : createEmptyRows();
+      setRows(nextRows);
+      trackUiMetric("uploadEvents.fetch.success", {
+        ownerId,
+        count: nextRows.length,
+        durationMs: Date.now() - started,
+      });
     }
     setLoading(false);
   }, [limit, ownerId, supabase]);
@@ -154,21 +170,34 @@ export default function UploadEventsTable({ ownerId, limit = 20 }: UploadEventsT
 
   const handleDelete = useCallback(
     async (id: number) => {
+      const started = Date.now();
       setActionState({ message: null, error: null });
       const { error: deleteError } = await supabase.from("upload_events").delete().eq("id", id);
       if (deleteError) {
         setActionState({ message: null, error: deleteError.message || "Failed to delete row" });
+        trackUiMetric("uploadEvents.delete.error", {
+          ownerId,
+          rowId: id,
+          message: deleteError.message ?? "unknown-error",
+          durationMs: Date.now() - started,
+        });
       } else {
         setActionState({ message: "Upload entry removed.", error: null });
+        trackUiMetric("uploadEvents.delete.success", {
+          ownerId,
+          rowId: id,
+          durationMs: Date.now() - started,
+        });
         void fetchRows();
       }
     },
-    [fetchRows, supabase]
+    [fetchRows, ownerId, supabase]
   );
 
   const handleClearSmoke = useCallback(async () => {
     if (!ownerId) return;
     setClearing(true);
+    const started = Date.now();
     setActionState({ message: null, error: null });
     const { error: deleteError } = await supabase
       .from("upload_events")
@@ -177,8 +206,17 @@ export default function UploadEventsTable({ ownerId, limit = 20 }: UploadEventsT
       .contains("meta", { ingest: "ui-smoke" });
     if (deleteError) {
       setActionState({ message: null, error: deleteError.message || "Failed to clear smoke rows" });
+      trackUiMetric("uploadEvents.clearSmoke.error", {
+        ownerId,
+        message: deleteError.message ?? "unknown-error",
+        durationMs: Date.now() - started,
+      });
     } else {
       setActionState({ message: "Cleared smoke test entries.", error: null });
+      trackUiMetric("uploadEvents.clearSmoke.success", {
+        ownerId,
+        durationMs: Date.now() - started,
+      });
     }
     setClearing(false);
   }, [ownerId, supabase]);

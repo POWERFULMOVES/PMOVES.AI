@@ -2,17 +2,40 @@ name: Build and publish integration images to GHCR
 
 on:
   workflow_dispatch:
+    inputs:
+      integration:
+        description: 'Integration to build (all runs the full matrix)'
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - agent-zero
+          - archon
+          - archon-ui
+          - open-notebook
+          - wger
+          - firefly-iii
+          - jellyfin
+          - pmoves-yt
+          - deepresearch
+          - supaserch
+      push_to_dockerhub:
+        description: 'Set to true to push to Docker Hub when secrets are present'
+        required: true
+        default: false
+        type: boolean
   schedule:
     - cron: '17 7 * * *'
 
 env:
   REGISTRY: ghcr.io
-  GHCR_NAMESPACE: ${{ secrets.CI_GHCR_NAMESPACE || secrets.GHCR_NAMESPACE || github.repository_owner }}
 
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || matrix.name == inputs.integration }}
     permissions:
       contents: read
       packages: write
@@ -111,7 +134,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Optional login to Docker Hub
-        if: ${{ (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN) }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.push_to_dockerhub == true && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) || (github.event_name != 'workflow_dispatch' && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) }}
         uses: docker/login-action@v3
         with:
           registry: docker.io
@@ -123,15 +146,17 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
+          INCLUDE_DOCKERHUB: ${{ (github.event_name != 'workflow_dispatch' && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) || (github.event_name == 'workflow_dispatch' && inputs.push_to_dockerhub == true && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) }}
         run: |
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
           echo "date_tag=${DATE_TAG}" >> $GITHUB_OUTPUT
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
-          GHCR_NS=${{ env.GHCR_NAMESPACE }}
+          GHCR_NS="${{ secrets.CI_GHCR_NAMESPACE }}"
+          if [ -z "$GHCR_NS" ]; then GHCR_NS="${{ secrets.GHCR_NAMESPACE }}"; fi
           if [ -z "$GHCR_NS" ]; then GHCR_NS=${{ github.repository_owner }}; fi
           TAGS="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest\n${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
-          if [ -n "$DOCKERHUB_USERNAME" ]; then
+          if [ "$INCLUDE_DOCKERHUB" = "true" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
             DH_NS=${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}
             TAGS="$TAGS\ndocker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
           fi

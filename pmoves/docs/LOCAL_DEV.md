@@ -202,6 +202,7 @@ If your fork’s internal port differs, adjust `AGENT_ZERO_EXTRA_ARGS` / `ARCHON
 - Smoketest: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<thread_uuid>"` after UI changes to lint the bundle and confirm Supabase connectivity.
 - Edge auth proxy: `pmoves/ui/proxy.ts` enforces session checks for all non-public routes using the Supabase auth helper. Update its `PUBLIC_PATHS` set when adding new unauthenticated pages.
 - Security expectations: the ingestion dashboard now requires a Supabase-authenticated session. `upload_events` rows are stamped with `owner_id`, and the UI only presigns objects under `namespace/users/<owner-id>/uploads/<uuid>/`. Anonymous callers can no longer generate presigned GETs or mutate upload metadata.
+- Upload event instrumentation: the console now logs `[metric] uploadEvents...` entries to the browser console for fetches, deletes, and smoke clears. Run `npm run typecheck` before committing UI changes and `npm run smoke:upload-events` to execute the focused Jest suite that validates the Supabase contract and metric hooks.
 
 ### Crush CLI Integration
 
