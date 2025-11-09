@@ -23,18 +23,9 @@ try:
 except Exception:
     pass
 
-from services.agent_zero.controller import AgentZeroController, ControllerSettings
-from services.common.forms import (
-    DEFAULT_AGENT_FORM,
-    DEFAULT_AGENT_FORMS_DIR,
-    resolve_form_name,
-    resolve_forms_dir,
-)
-
-import mcp_server
-
 logger = logging.getLogger("pmoves.agent_zero.service")
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+VENICE_DEFAULT_OPENAI_BASE = "https://api.venice.ai/api/v1"
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +38,48 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _prefer_venice_openai() -> None:
+    venice_key = os.environ.get("VENICE_API_KEY")
+    if not venice_key:
+        return
+
+    venice_base = os.environ.get("VENICE_OPENAI_BASE", VENICE_DEFAULT_OPENAI_BASE)
+    targets = (
+        "OPENAI_COMPATIBLE_BASE_URL_LLM",
+        "OPENAI_COMPATIBLE_BASE_URL_EMBEDDING",
+        "OPENAI_COMPATIBLE_BASE_URL_TTS",
+        "OPENAI_COMPATIBLE_BASE_URL_STT",
+    )
+
+    os.environ["OPENAI_API_BASE"] = venice_base
+    os.environ["OPENAI_COMPATIBLE_BASE_URL"] = venice_base
+    os.putenv("OPENAI_API_BASE", venice_base)
+    os.putenv("OPENAI_COMPATIBLE_BASE_URL", venice_base)
+
+    for target in targets:
+        os.environ[target] = venice_base
+        os.putenv(target, venice_base)
+
+    os.environ.setdefault("OPENAI_API_KEY", venice_key)
+    logger.info(
+        "Venice OpenAI endpoint active: %s",
+        os.environ.get("OPENAI_COMPATIBLE_BASE_URL"),
+    )
+
+
+_prefer_venice_openai()
+
+from services.agent_zero.controller import AgentZeroController, ControllerSettings
+from services.common.forms import (
+    DEFAULT_AGENT_FORM,
+    DEFAULT_AGENT_FORMS_DIR,
+    resolve_form_name,
+    resolve_forms_dir,
+)
+
+import mcp_server
 
 
 @dataclass
@@ -544,6 +577,9 @@ class MCPExecuteResponse(BaseModel):
 
 
 service_config = load_service_config()
+# Re-apply Venice overrides after configuration load, as some helpers may
+# populate default OpenAI-compatible URLs while constructing the config.
+_prefer_venice_openai()
 runtime_config = AgentZeroRuntimeConfig()
 client = AgentZeroClient(runtime_config)
 process_manager = AgentZeroProcessManager(runtime_config, client)

@@ -24,12 +24,12 @@ except Exception:
     pass
 
 from services.common.events import envelope
-from .orchestrator import ArchonOrchestrator
 
 logger = logging.getLogger("archon.main")
 
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 PORT = int(os.environ.get("PORT", 8090))
+VENICE_DEFAULT_OPENAI_BASE = "https://api.venice.ai/api/v1"
 
 
 def _strip_rest_suffix(url: str) -> str:
@@ -94,6 +94,39 @@ def _ensure_supabase_env() -> None:
 
 
 _ensure_supabase_env()
+
+
+def _prefer_venice_openai() -> None:
+    venice_key = os.environ.get("VENICE_API_KEY")
+    if not venice_key:
+        return
+
+    venice_base = os.environ.get("VENICE_OPENAI_BASE", VENICE_DEFAULT_OPENAI_BASE)
+    targets = (
+        "OPENAI_COMPATIBLE_BASE_URL_LLM",
+        "OPENAI_COMPATIBLE_BASE_URL_EMBEDDING",
+        "OPENAI_COMPATIBLE_BASE_URL_TTS",
+        "OPENAI_COMPATIBLE_BASE_URL_STT",
+    )
+
+    os.environ["OPENAI_API_BASE"] = venice_base
+    os.environ["OPENAI_COMPATIBLE_BASE_URL"] = venice_base
+    os.putenv("OPENAI_API_BASE", venice_base)
+    os.putenv("OPENAI_COMPATIBLE_BASE_URL", venice_base)
+
+    for target in targets:
+        os.environ[target] = venice_base
+        os.putenv(target, venice_base)
+
+    os.environ.setdefault("OPENAI_API_KEY", venice_key)
+    logger.info(
+        "Venice OpenAI endpoint active: %s", os.environ.get("OPENAI_COMPATIBLE_BASE_URL")
+    )
+
+
+_prefer_venice_openai()
+
+from .orchestrator import ArchonOrchestrator
 
 
 class CrawlJob(BaseModel):
@@ -540,6 +573,10 @@ def _import_archon_app():
 
 app = _import_archon_app()
 
+# Re-apply Venice overrides after the vendored app loads, since upstream imports
+# may mutate OpenAI-compatible environment variables.
+_prefer_venice_openai()
+
 
 @app.get("/healthz")
 async def _pmoves_healthcheck():
@@ -720,6 +757,7 @@ def _prepare_agents_app() -> str:
                         agents_module.logger.info("Set credential: %s", key)
 
                 agents_module.AGENT_CREDENTIALS = credentials
+                _prefer_venice_openai()
                 agents_module.logger.info(
                     "Successfully fetched %s credentials from server",
                     len(credentials),
