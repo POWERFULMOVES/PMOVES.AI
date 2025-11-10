@@ -11,6 +11,7 @@ Owner: @POWERFULMOVES  • Agents: @AGENTS
 - DeepResearch
   - In-network NATS smoke target (`make -C pmoves deepresearch-smoke-in-net`) returns status=success.
   - Echo subscribers stabilized (URL normalization, retries, no empty args).
+  - Core `make smoke` now runs `deepresearch-smoke` automatically when OpenRouter + Notebook credentials are present and logs a skip hint otherwise.
 - GPU Smokes
   - Relaxed default passes; strict mode available via `GPU_SMOKE_STRICT=true`.
 - Monitoring

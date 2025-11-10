@@ -553,6 +553,89 @@ supaserch-health: ## Check SupaSerch health endpoint (200 expected)
 	if [ "$$code" != "200" ]; then echo "✖ supaserch /healthz => $$code" && exit 1; fi; \
 	echo "✔ supaserch /healthz 200"
 
+
+.PHONY: supaserch-smoke
+supaserch-smoke: ## Publish SupaSerch request via NATS and verify HTTP fallback responds
+	@echo "→ Publishing SupaSerch smoke request on supaserch.request.v1"
+	@bash -c '$(LOAD_ENV_SHARED) python3 - <<"PY"'
+import asyncio
+import json
+import os
+import sys
+import uuid
+import urllib.request
+from urllib.error import URLError, HTTPError
+
+from nats.aio.client import Client as NATS
+
+
+async def publish_and_wait() -> dict[str, object]:
+    request_id = f"supaserch-smoke-{uuid.uuid4().hex[:8]}"
+    nc = NATS()
+    url = os.getenv("NATS_URL", "nats://localhost:4222")
+    await nc.connect(url)
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future | None = loop.create_future()
+
+    async def handler(msg):
+        nonlocal future
+        try:
+            data = json.loads(msg.data.decode("utf-8"))
+        except json.JSONDecodeError:
+            return
+        if data.get("request_id") != request_id:
+            return
+        if future and not future.done():
+            future.set_result(data)
+
+    sid = await nc.subscribe("supaserch.result.v1", cb=handler)
+    payload = {
+        "request_id": request_id,
+        "query": "supaserch smoke verification",
+        "correlation_id": request_id,
+        "trigger": "make supaserch-smoke",
+    }
+    await nc.publish("supaserch.request.v1", json.dumps(payload).encode("utf-8"))
+    await nc.flush()
+    try:
+        result = await asyncio.wait_for(future, timeout=10)
+    except asyncio.TimeoutError:
+        print("✖ Did not receive supaserch.result.v1 within 10s")
+        await nc.unsubscribe(sid)
+        await nc.drain()
+        sys.exit(1)
+    await nc.unsubscribe(sid)
+    await nc.drain()
+    fallback = result.get("fallback", {}) if isinstance(result, dict) else {}
+    if fallback.get("status") != "ok":
+        print("✖ NATS fallback status not ok:", json.dumps(fallback))
+        sys.exit(1)
+    via = fallback.get("via", "unknown")
+    latency = fallback.get("latency_ms", 0)
+    print(f"✔ NATS round-trip complete (via {via}, latency {latency} ms)")
+    return result
+
+
+result = asyncio.run(publish_and_wait())
+host_port = os.getenv("SUPASERCH_HOST_PORT", os.getenv("SUPASERCH_PORT", "8099"))
+http_url = f"http://localhost:{host_port}/v1/search?q=supaserch+smoke+http"
+try:
+    with urllib.request.urlopen(http_url, timeout=8) as resp:
+        body = json.loads(resp.read().decode("utf-8"))
+except (HTTPError, URLError, TimeoutError) as exc:
+    print(f"✖ HTTP fallback request failed: {exc}")
+    sys.exit(1)
+
+fallback = body.get("fallback", {}) if isinstance(body, dict) else {}
+if fallback.get("status") != "ok":
+    print("✖ HTTP fallback status not ok:", json.dumps(fallback))
+    sys.exit(1)
+
+via = fallback.get("via", "unknown")
+latency = fallback.get("latency_ms", 0)
+print(f"✔ HTTP fallback responded (via {via}, latency {latency} ms)")
+PY'
+
 .PHONY: build-push-supaserch
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
 	@ctx=$$(pwd); \
@@ -806,6 +889,7 @@ env-setup:
 	PYTHONPATH=.. python3 -m pmoves.tools.secrets_sync generate
 	- pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_setup.ps1
 	- bash scripts/env_setup.sh || true
+	@PYTHONPATH=.. python3 -m pmoves.tools.check_required_secrets --file "$(ENV_SHARED_FILE)" || true
 
 env-check:
 	- pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1
@@ -944,24 +1028,24 @@ discord-ping-ps:
 .PHONY: smoke
 smoke:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke tests" && exit 1)
-	@echo "[1/12] Qdrant ready..." && curl -sf http://localhost:6333/readyz >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[2/12] Meilisearch ready..." && curl -sf http://localhost:7700/health >/dev/null && echo OK || (echo WARN: skipping; true)
-	@echo "[3/12] Neo4j UI..." && curl -sf http://localhost:7474 >/dev/null && echo OK || (echo WARN: UI not reachable; true)
-	@echo "[4/12] presign health..." && curl -sf http://localhost:8088/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[5/12] render-webhook health..." && curl -sf http://localhost:8085/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[1/15] Qdrant ready..." && curl -sf http://localhost:6333/readyz >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[2/15] Meilisearch ready..." && curl -sf http://localhost:7700/health >/dev/null && echo OK || (echo WARN: skipping; true)
+	@echo "[3/15] Neo4j UI..." && curl -sf http://localhost:7474 >/dev/null && echo OK || (echo WARN: UI not reachable; true)
+	@echo "[4/15] presign health..." && curl -sf http://localhost:8088/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[5/15] render-webhook health..." && curl -sf http://localhost:8085/healthz >/dev/null && echo OK || (echo FAIL && exit 1)
 	# Auto-detect PostgREST: prefer localhost:3000 when compose PostgREST is up, else use SUPA_REST_URL or CLI fallback
 	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; else echo "$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}"; fi )"; \
 	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
 	 SERVICE_KEY="$${SUPABASE_SERVICE_ROLE_KEY:-$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}}"; \
-	 echo "[6/12] PostgREST reachable..." && curl -sf "$${REST_BASE}/it_errors?select=id&limit=1" -H "apikey: $$APIKEY" >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[7/12] Insert via render-webhook..." && curl -sf -X POST http://localhost:8085/comfy/webhook \
+	 echo "[6/15] PostgREST reachable..." && curl -sf "$${REST_BASE}/it_errors?select=id&limit=1" -H "apikey: $$APIKEY" >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[7/15] Insert via render-webhook..." && curl -sf -X POST http://localhost:8085/comfy/webhook \
 	 -H "Content-Type: application/json" \
 	 -H "Authorization: Bearer $${RENDER_WEBHOOK_SHARED_SECRET:-change_me}" \
 	 -d '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","presigned_get":null,"title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@REST_BASE="$$( if curl -sf http://localhost:3010 >/dev/null 2>&1; then echo http://localhost:3010; else echo "$${SUPA_REST_URL:-http://127.0.0.1:65421/rest/v1}"; fi )"; \
 	 APIKEY="$${SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}"; \
-	 echo "[8/12] Verify studio_board row..." && curl -sf "$${REST_BASE}/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[9/12] Hi-RAG v2 query + rerank status..." && \
+	 echo "[8/15] Verify studio_board row..." && curl -sf "$${REST_BASE}/studio_board?order=id.desc&limit=1" -H "apikey: $$APIKEY" | jq -e '.[0].title != null' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[9/15] Hi-RAG v2 query + rerank status..." && \
 	HPORT=""; for p in $(HIRAG_GPU_PORT) $(HIRAG_CPU_PORT); do \
 	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then HPORT=$$p; break; fi; \
 	done; \
@@ -970,7 +1054,7 @@ smoke:
 	curl -sf localhost:$$HPORT/hirag/query -H 'content-type: application/json' -d '{"query":"what is pmoves?","namespace":"pmoves","k":3,"alpha":0.7}' | jq -e '.hits != null' >/dev/null && \
 	curl -sf localhost:$$HPORT/hirag/admin/rerank-status | jq -e '.enabled != null and (.topn|type) == "number" and (.k|type) == "number"' >/dev/null && \
 	echo OK || (echo FAIL && exit 1)
-	@echo "[10/12] Agent Zero health..." && curl -sf http://localhost:8080/healthz | jq -e '.nats.connected == true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[10/15] Agent Zero health..." && curl -sf http://localhost:8080/healthz | jq -e '.nats.connected == true' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@CID=$$(uuidgen | tr 'A-Z' 'a-z' | cut -d- -f1); \
 	 POINT_ID="p.smoke.$${CID}"; \
 	 CONST_ID="c.smoke.$${CID}"; \
@@ -982,11 +1066,16 @@ smoke:
 	  if curl -sf localhost:$$p/healthz >/dev/null 2>&1 || curl -sf localhost:$$p/hirag/query -H 'content-type: application/json' -d '{"query":"ping","k":1}' >/dev/null 2>&1; then GHPORT=$$p; break; fi; \
 	done; \
 	if [ -z "$$GHPORT" ]; then echo "FAIL: geometry gateway not reachable on $(HIRAG_GPU_PORT) or $(HIRAG_CPU_PORT)"; rm -f $$TMP; exit 1; fi; \
-	 echo "[11/12] Geometry event ingest..." && curl -sf http://localhost:$$GHPORT/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
-	 echo "[12/14] Geometry jump & calibration..." && curl -sf "http://localhost:$$GHPORT/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && curl -sf http://localhost:$$GHPORT/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
+	 echo "[11/15] Geometry event ingest..." && curl -sf http://localhost:$$GHPORT/geometry/event -H 'content-type: application/json' -d @$${TMP} >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
+	 echo "[12/15] Geometry jump & calibration..." && curl -sf "http://localhost:$$GHPORT/shape/point/$${POINT_ID}/jump" | jq -e --arg ref "$$REF_ID" '.locator.ref_id == $$ref' >/dev/null && curl -sf http://localhost:$$GHPORT/geometry/calibration/report -H 'content-type: application/json' -d "$$(jq -c '.data' $$TMP)" | jq -e '.constellations != null' >/dev/null && echo OK || { echo FAIL; rm -f $$TMP; exit 1; }; \
 
-	@echo "[13/14] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
-	@echo "[14/14] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
+	@echo "[13/15] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
+	@echo "[14/15] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
+	@if [ -n "$$OPENROUTER_API_KEY" ] && [ -n "$$OPEN_NOTEBOOK_API_TOKEN" ] && [ -n "$$DEEPRESEARCH_NOTEBOOK_ID" ]; then \
+	        echo "[15/15] DeepResearch smoke..." && $(MAKE) deepresearch-smoke || exit 1; \
+	  else \
+	        echo "[15/15] DeepResearch smoke... SKIP (set OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_TOKEN, DEEPRESEARCH_NOTEBOOK_ID)"; \
+	fi
 
 .PHONY: channel-monitor-up
 channel-monitor-up:
