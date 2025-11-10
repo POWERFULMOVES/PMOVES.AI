@@ -609,7 +609,8 @@ services:
       - PORT=8091
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      # Prefer in-network PostgREST to avoid host DNS/route flaps when CLI stack restarts
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
       # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
     depends_on:
       - nats

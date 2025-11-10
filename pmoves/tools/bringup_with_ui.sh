@@ -75,9 +75,10 @@ fi
 echo "⛳ Start external stacks"
 make up-external || true
 
-echo "⛳ Start yt + invidious"
+echo "⛳ Start yt + invidious + channel-monitor"
 make up-yt || true
 make up-invidious || true
+make channel-monitor-up || true
 
 echo "⛳ Start optional media analyzers + tensorzero + n8n + Jellyfin AI"
 make up-media || true
@@ -140,7 +141,10 @@ else
   wait_http "http://localhost:8097/healthz" $WAIT_T_SHORT || true
   wait_http "http://localhost:8097/api/monitor/status" $WAIT_T_SHORT || true
   wait_http "${YTB}/yt/docs/catalog" $WAIT_T_SHORT || true
-  wait_http "http://localhost:3001" $WAIT_T_LONG || true
+  if ! wait_http "http://localhost:3001" $WAIT_T_LONG; then \
+    echo "⚠ Console UI not responding on :3001; recent dev log:"; \
+    tail -n 80 ui/.pmoves_ui_dev.log 2>/dev/null || true; \
+  fi
   wait_http "http://localhost:5678" $WAIT_T_SHORT || true
   wait_http "http://localhost:4000" $WAIT_T_SHORT || true
   wait_http "http://localhost:3000" $WAIT_T_SHORT || true
