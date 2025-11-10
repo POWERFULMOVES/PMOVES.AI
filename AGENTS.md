@@ -47,6 +47,35 @@ Quick Links (local default)
 - Console (Archon UI): http://localhost:3737  • Archon API: http://localhost:8091/healthz
 - Grafana: http://localhost:3002 • Prometheus: http://localhost:9090
 
+## What Should Be Running Now
+- Supabase CLI stack (REST on 65421) — check: `make -C pmoves supa-status`.
+- Hi‑RAG v2 CPU/GPU — `curl http://localhost:8086/hirag/admin/stats` and `:8087` return 200.
+- Invidious on 127.0.0.1:3005 — `curl http://127.0.0.1:3005/api/v1/stats` 200.
+- Channel Monitor on :8097 — `GET /healthz`, `GET /api/monitor/status`, `GET /api/monitor/stats` all 200.
+- Archon API/UI — API `GET http://localhost:8091/healthz` 200; UI on http://localhost:3737.
+- Monitoring — Prometheus http://localhost:9090, Grafana http://localhost:3002; cAdvisor present when `MON_INCLUDE_CADVISOR=true`.
+- Agent Zero UI — http://localhost:8081 (headless API still usable without UI).
+- Optional stacks: n8n http://localhost:5678, Jellyfin http://localhost:8096, Notebook http://localhost:8503.
+
+Quick checks
+- `make -C pmoves smoke` (core), `make -C pmoves smoke-gpu` (rerank when re‑enabled).
+- `make -C pmoves monitoring-report` summarises service probes and recent errors.
+
+## Latest Stabilization Changes (Nov 6, 2025)
+- Agent Zero UI fixed: UI now binds to port 80 in‑container and host 8081→80 maps cleanly. If you still see ERR_EMPTY_RESPONSE, restart the container: `docker compose -p pmoves up -d agent-zero`.
+- Agent Zero JetStream fallback: when JetStream briefly returns ServiceUnavailable, Agent Zero automatically falls back to core NATS queue subscriptions (threshold via `AGENTZERO_JS_UNAVAILABLE_THRESHOLD`, default 3; compose sets 1 for local bring‑up).
+- DeepResearch smokes: added in‑network NATS smoke (`make -C pmoves deepresearch-smoke-in-net`) and hardened echo subscribers.
+- GPU smokes: more robust and support strict mode. Default (relaxed) passes on any response with `used_rerank`; strict requires `used_rerank==true` (set `GPU_SMOKE_STRICT=true`).
+- Monitoring: optional Node Exporter toggle — `MON_INCLUDE_NODE_EXPORTER=true make -C pmoves up-monitoring` (Linux only). cAdvisor remains enabled by default on Linux.
+
+## Next Steps (Shortlist)
+- Rerank strict by default once model/runtime is pinned on the GPU node; keep relaxed mode for CI.
+- Loki readiness: finalize `/ready` 200 and wire alerts in Grafana.
+- Real Data Bring‑Up: complete repo indexing, flip strict geometry jump default, widen retrieval tests.
+- SupaSerch wiring: add NATS subjects (`supaserch.request.v1`/`result.v1`) and Prometheus metrics; console tile + health badge.
+- n8n polish: verify API key layer and add a “Public API ready” probe in monitoring.
+- GHCR pinning: ensure DeepResearch/SupaSerch stable tags are pinned in `pmoves/env.shared`.
+
 Decisions
 - Single‑env: Supabase-only object storage; standalone MinIO is stopped by default.
 - YouTube ingest: Force offline transcription provider during smoke when SABR is detected.

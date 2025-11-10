@@ -376,7 +376,7 @@ services:
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
-      - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://pmoves:pmoves@postgres:5432/pmoves}
+      # CHANNEL_MONITOR_DATABASE_URL is provided via env_file (env.shared)
       - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     volumes:
       - ./config:/app/config
@@ -578,12 +578,15 @@ services:
     environment:
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:8081}
+      - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
       - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
-      - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=8081 --host=0.0.0.0}
+      - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
+      - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
     depends_on: [nats]
-    ports: ["8080:8080","8081:8081"]
+    # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
+    # and keep 8080 mapped for the API when enabled by the runtime.
+    ports: ["8080:8080","8081:80"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
@@ -634,8 +637,9 @@ services:
     build:
       context: ./services
       dockerfile: deepresearch/Dockerfile
+    image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
@@ -651,8 +655,55 @@ services:
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
       - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
     depends_on: [nats]
     profiles: ["agents"]
+    ports: ["8098:8098"]
+    volumes:
+      - ./contracts:/app/contracts:ro
+    networks: [pmoves]
+
+  supaserch:
+    build:
+      context: ./services
+      dockerfile: supaserch/Dockerfile
+    image: ${SUPASERCH_IMAGE:-}
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+    ports: ["${SUPASERCH_HOST_PORT:-8099}:8099"]
+    profiles: ["agents","workers"]
+    networks: [pmoves]
+
+  # NATS echo subscribers for diagnostics
+  nats-echo-req:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves]
+
+  nats-echo-res:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
     networks: [pmoves]
 
   publisher-discord:

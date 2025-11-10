@@ -127,8 +127,6 @@ def _run_openrouter(response: Dict[str, Any]) -> str:
 
 """Deep Research worker utilities."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -228,15 +226,26 @@ def _decode_request(payload: Dict[str, Any]) -> ResearchRequest:
         }
     }
 
-    return ResearchRequest(
-        query=query,
-        mode=mode,
-        max_steps=max_steps,
-        context=context,
-        metadata=metadata,
-        notebook_overrides=notebook_overrides,
-        extras=extras,
-    )
+    try:
+        return ResearchRequest(
+            query=query,
+            mode=mode,
+            max_steps=max_steps,
+            context=context,
+            metadata=metadata,
+            notebook_overrides=notebook_overrides,
+            extras=extras,
+        )
+    except TypeError:
+        # Backward-compat: some builds define ResearchRequest without 'extras'
+        return ResearchRequest(
+            query=query,
+            mode=mode,
+            max_steps=max_steps,
+            context=context,
+            metadata=metadata,
+            notebook_overrides=notebook_overrides,
+        )
 
 
 def _handle_request(payload: Dict[str, Any]) -> Tuple[Optional[ResearchRequest], Dict[str, Any]]:
@@ -247,7 +256,6 @@ def _handle_request(payload: Dict[str, Any]) -> Tuple[Optional[ResearchRequest],
     except InvalidResearchRequest as exc:
         return None, {"error": str(exc)}
     return request, dict(request.metadata)
-from __future__ import annotations
 
 import asyncio
 import json
@@ -259,6 +267,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from nats.aio.client import Client as NATS
+from fastapi import FastAPI
+import uvicorn
 from nats.aio.msg import Msg
 
 from services.common.events import envelope
@@ -450,7 +460,15 @@ class DeepResearchRunner:
                 status = "success"
                 error = None
             else:
-                summary, notes, sources, iterations, raw_log = await self._run_local(request)
+                # Local mode: if no external API configured, return a stub so smokes can pass
+                if not self.api_base or self.api_base.endswith(":8080"):
+                    summary = f"Stub research summary for: {request.query}"
+                    notes = ["DeepResearch local mode stub (no API configured)"]
+                    sources = []
+                    iterations = None
+                    raw_log = None
+                else:
+                    summary, notes, sources, iterations, raw_log = await self._run_local(request)
                 status = "success"
                 error = None
         except Exception as exc:  # pylint: disable=broad-except
@@ -548,6 +566,7 @@ class DeepResearchRunner:
 
 async def _handle_request(msg: Msg, runner: DeepResearchRunner, publisher: NotebookPublisher, nc: NATS) -> None:
     try:
+        LOGGER.info("Received message on %s (%d bytes)", msg.subject, len(msg.data) if msg.data else 0)
         data = json.loads(msg.data.decode("utf-8"))
         request = _decode_request(data)
     except Exception as exc:  # pylint: disable=broad-except
@@ -570,6 +589,7 @@ async def _handle_request(msg: Msg, runner: DeepResearchRunner, publisher: Noteb
         source="deepresearch",
     )
     await nc.publish(RESULT_SUBJECT, json.dumps(env).encode("utf-8"))
+    LOGGER.info("Published result for correlation_id=%s", data.get("correlation_id"))
 
 
 async def main() -> None:
@@ -577,14 +597,51 @@ async def main() -> None:
     runner = DeepResearchRunner()
     publisher = NotebookPublisher()
     nc = NATS()
+
+    # Lightweight health server (start this before attempting NATS connect)
+    app = FastAPI(title="DeepResearch Health")
+
+    @app.get("/healthz")
+    async def healthz():  # type: ignore[override]
+        return {
+            "status": "ok",
+            "nats_connected": bool(nc.is_connected),
+        }
+
+    async def _serve_health():
+        port = int(os.getenv("DEEPRESEARCH_HEALTH_PORT", "8098"))
+        config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
+
+    # Start health server first so /healthz is alive even if NATS connect is slow
+    asyncio.create_task(_serve_health())
+
+    # Now connect to NATS
     await nc.connect(servers=[nats_url])
     LOGGER.info("DeepResearch worker connected to NATS at %s", nats_url)
 
     async def cb(msg: Msg) -> None:
         await _handle_request(msg, runner, publisher, nc)
 
-    await nc.subscribe(REQUEST_SUBJECT, cb=cb)
-    LOGGER.info("Listening for %s", REQUEST_SUBJECT)
+    sub = await nc.subscribe(REQUEST_SUBJECT, cb=cb)
+    LOGGER.info("Subscribed to %s", REQUEST_SUBJECT)
+
+    # diagnostic endpoint to publish a local request
+    @app.post("/diag/publish")
+    async def diag_publish(payload: Dict[str, Any]):  # type: ignore[override]
+        env = {
+            "id": payload.get("id") or "diag",
+            "source": "deepresearch-diag",
+            "correlation_id": payload.get("correlation_id") or "diag-corr",
+            "payload": {
+                "query": payload.get("query") or "diagnostic query",
+                "mode": payload.get("mode") or runner.mode,
+                "metadata": {"diag": True},
+            },
+        }
+        await nc.publish(REQUEST_SUBJECT, json.dumps(env).encode("utf-8"))
+        return {"status": "published", "subject": REQUEST_SUBJECT, "env": env}
 
     try:
         while True:

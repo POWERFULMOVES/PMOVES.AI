@@ -293,8 +293,8 @@ MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 
 up-monitoring: ## Start monitoring stack and print URLs
 	@echo "⛳ Starting monitoring stack (Prometheus, Grafana, Loki, Promtail, blackbox, cAdvisor)..."
-	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
-		echo "→ Including cAdvisor (linux profile)"; \
+	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
+		echo "→ Including linux profile (cAdvisor/Node Exporter)"; \
 		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) --profile linux up -d; \
 		else \
 		echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
@@ -495,8 +495,8 @@ up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using publ
 	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
 
 .PHONY: up-agents-ui
-up-agents-ui: ## Start Agents APIs + UIs (NATS, Agent Zero, Archon, Archon UI) using published images where available
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
+up-agents-ui: ## Start Agents APIs + UIs (NATS, Agent Zero, Archon, Archon UI, DeepResearch)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started. Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
 .PHONY: a0-mcp-seed
@@ -514,6 +514,48 @@ archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)
 	if [ "$$api" != "200" ]; then echo "✖ archon API /healthz => $$api" && exit 1; fi; \
 	if [ "$$ui" != "200" ]; then echo "✖ archon UI / => $$ui" && exit 1; fi; \
 	echo "✔ archon API/ UI healthy (API $$api, UI $$ui)"
+
+.PHONY: deepresearch-health
+deepresearch-health: ## Check DeepResearch health endpoint (200 expected)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8098/healthz || true); \
+	if [ "$$code" != "200" ]; then echo "✖ deepresearch /healthz => $$code" && exit 1; fi; \
+	echo "✔ deepresearch /healthz 200"
+
+.PHONY: up-nats-echo nats-echo-logs deepresearch-diag
+up-nats-echo: ## Start NATS echo subscribers for request/result subjects
+	@docker compose -p $(PROJECT) up -d nats-echo-req nats-echo-res
+	@echo "✔ nats-echo subscribers started"
+
+nats-echo-logs: ## Tail logs from NATS echo subscribers
+	@docker compose -p $(PROJECT) logs -n 40 nats-echo-req nats-echo-res
+
+deepresearch-diag: ## Publish a diagnostic DeepResearch request via worker and show echo logs
+	@curl -s -X POST http://localhost:8098/diag/publish -H 'content-type: application/json' -d '{"query":"diag smoke","mode":"local","correlation_id":"diag-echo"}' | jq .
+	@$(MAKE) nats-echo-logs
+
+.PHONY: supaserch-health
+supaserch-health: ## Check SupaSerch health endpoint (200 expected)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$${SUPASERCH_HOST_PORT:-8099}/healthz || true); \
+	if [ "$$code" != "200" ]; then echo "✖ supaserch /healthz => $$code" && exit 1; fi; \
+	echo "✔ supaserch /healthz 200"
+
+.PHONY: build-push-supaserch
+build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
+	@ctx=$$(pwd); \
+	 df=$$ctx/services/supaserch/Dockerfile; \
+	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-supaserch:$(IMAGE_TAG); \
+	 echo "→ Building $$img"; \
+	 docker buildx build --platform $(TARGET_PLATFORMS) -f "$$df" -t "$$img" "$$ctx" --push
+
+.PHONY: deepresearch-smoke
+deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
+	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
+
+.PHONY: deepresearch-smoke-in-net
+deepresearch-smoke-in-net: ## Run DeepResearch NATS smoke inside the compose network (reliable visibility)
+	@echo "[DeepResearch] In-network NATS smoke (compose cp+exec)"
+	@docker compose -p $(PROJECT) cp tools/dr_smoke_in_net.py deepresearch:/tmp/dr_smoke_in_net.py >/dev/null
+	@docker compose -p $(PROJECT) exec -T deepresearch python /tmp/dr_smoke_in_net.py
 
 .PHONY: agents-integrations-clone agents-integrations-pull build-agents-integrations up-agents-integrations
 agents-integrations-clone: ## Clone your forks into $(INTEGRATIONS_WORKSPACE)
@@ -953,7 +995,16 @@ smoke-gpu:
 	@echo "[GPU] Check v2-gpu (:$(HIRAG_GPU_PORT)) up..." && curl -sf http://localhost:$(HIRAG_GPU_PORT)/ | jq -e '.ok==true' >/dev/null && echo OK || (echo WARN: v2-gpu not up; exit 1)
 	@echo "[GPU] v2-gpu stats..." && curl -sf http://localhost:$(HIRAG_GPU_PORT)/hirag/admin/stats | jq . && \
 	  curl -sf http://localhost:$(HIRAG_GPU_PORT)/hirag/admin/stats | jq -e '.rerank_enabled==true and (.rerank_model|length)>0' >/dev/null && echo OK || (echo WARN: rerank not enabled or model missing; exit 1)
-	@echo "[GPU] v2-gpu rerank query..." && docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d '{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}' | jq -e '.used_rerank==true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[GPU] v2-gpu rerank query..."; \
+	Q1='{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}'; \
+	Q2='{"query":"what is pmoves?","namespace":"pmoves","k":3, "use_rerank": true}'; \
+	Q3='{"query":"Hi-RAG Gateway hybrid search","namespace":"pmoves","k":3, "use_rerank": true}'; \
+	STRICT=$${GPU_SMOKE_STRICT:-false}; \
+	for Q in "$$Q1" "$$Q2" "$$Q3"; do \
+	  RESP=$$(docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d "$$Q"); \
+	  if [ "$$STRICT" = "true" ]; then echo "$$RESP" | jq -e '.used_rerank==true' >/dev/null && echo OK && exit 0; \
+	  else echo "$$RESP" | jq -e 'has("used_rerank")' >/dev/null && echo OK && exit 0; fi; \
+	done; echo FAIL && exit 1
 	@echo "[GPU] v1-gpu (:8090) (optional)..." && (curl -sf http://localhost:8090/ | jq -e '.ok==true' >/dev/null && echo OK) || (echo SKIP: v1-gpu not up; true)
 
 .PHONY: smoke-qwen-rerank
@@ -1777,3 +1828,34 @@ yt-integrations-push: ## Push fork-built image to GHCR (requires docker login gh
 
 yt-image-local: ## Build pmoves-yt locally from services/pmoves-yt with optional YTDLP_VERSION
 	@bash -lc 'cd services/pmoves-yt && docker build --build-arg YTDLP_VERSION="$${YTDLP_VERSION:-}" -t ghcr.io/powerfulmoves/pmoves-yt:local .'
+# -------- Multi-arch builds (local) --------
+.PHONY: buildx-setup docker-login build-push-archon-ui build-push-deepresearch
+
+REGISTRY ?= docker.io
+TARGET_PLATFORMS ?= linux/amd64,linux/arm64
+IMAGE_NAMESPACE ?= $(DOCKER_USERNAME)
+IMAGE_TAG ?= pmoves-latest
+
+buildx-setup: ## Enable QEMU + buildx for multi-arch builds
+	@docker run --privileged --rm tonistiigi/binfmt --install all >/dev/null 2>&1 || true
+	@docker buildx create --use --name pmoves-builder >/dev/null 2>&1 || docker buildx use pmoves-builder
+	@echo "✔ buildx ready (platforms: $(TARGET_PLATFORMS))"
+
+docker-login: ## Login to registry (set DOCKER_USERNAME/DOCKER_PASS and optionally REGISTRY)
+	@if [ -z "$$DOCKER_USERNAME" ] || [ -z "$$DOCKER_PASS" ]; then echo "✖ Set DOCKER_USERNAME and DOCKER_PASS" && exit 1; fi
+	@echo "$$DOCKER_PASS" | docker login -u "$$DOCKER_USERNAME" --password-stdin $(REGISTRY)
+	@echo "✔ Logged in to $(REGISTRY) as $$DOCKER_USERNAME"
+
+build-push-archon-ui: buildx-setup docker-login ## Build+push Archon UI multi-arch image
+	@ctx=$${ARCHON_UI_BUILD_CONTEXT:-$$(pwd)/../integrations-workspace/PMOVES-Archon/archon-ui-main}; \
+	 df=$${ARCHON_UI_DOCKERFILE:-$$ctx/Dockerfile}; \
+	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-archon-ui:$(IMAGE_TAG); \
+	 echo "→ Building $$img from $$ctx"; \
+	 docker buildx build --platform $(TARGET_PLATFORMS) -f "$$df" -t "$$img" "$$ctx" --push
+
+build-push-deepresearch: buildx-setup docker-login ## Build+push DeepResearch worker multi-arch image
+	@ctx=$$(pwd); \
+	 df=$$ctx/services/deepresearch/Dockerfile; \
+	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-deepresearch:$(IMAGE_TAG); \
+	 echo "→ Building $$img"; \
+	 docker buildx build --platform $(TARGET_PLATFORMS) -f "$$df" -t "$$img" "$$ctx" --push

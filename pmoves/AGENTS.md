@@ -50,6 +50,19 @@
 - Jellyfin: server 8096 OK; bridge 8093 OK.
 - Monitoring: Prometheus/Grafana OK; Loki config upgrade pending.
 
+## What Should Be Running Now
+- Supabase REST (CLI stack) on 65421 — `make -C pmoves supa-status` should show healthy services.
+- Hi‑RAG v2 CPU/GPU — `curl http://localhost:8086/hirag/admin/stats` and `:8087/…` return JSON.
+- Channel Monitor — `GET /healthz`, `GET /api/monitor/status`, `GET /api/monitor/stats` → 200.
+- Archon API/UI — `GET http://localhost:8091/healthz` 200; UI at http://localhost:3737.
+- Monitoring — Prometheus :9090, Grafana :3002, Blackbox :9115 (cAdvisor when `MON_INCLUDE_CADVISOR=true`).
+- Invidious :3005 (127.0.0.1 bind), Jellyfin :8096, Notebook :8503.
+
+### Quick verification commands
+- `make -C pmoves smoke` and `make -C pmoves smoke-gpu` (rerank toggled via env).
+- `make -C pmoves up-monitoring && make -C pmoves monitoring-report`.
+- `curl -s http://localhost:8097/api/monitor/status ; echo`.
+
 ### Operator quick links
 - Supabase Studio: http://127.0.0.1:65433  • REST: http://127.0.0.1:65421/rest/v1
 - Hi‑RAG v2 GPU: http://localhost:8087/hirag/admin/stats

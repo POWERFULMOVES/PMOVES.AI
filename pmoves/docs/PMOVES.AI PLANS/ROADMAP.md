@@ -5,6 +5,15 @@ _Last updated: 2025-11-06_
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
 ## Milestones
+
+- Stabilization Sprint (Nov 2025)
+  - Single‑env consolidation complete; Supabase REST (public, pmoves_core, pmoves_kb) is source of truth.
+  - Monitoring stack shipped (Prometheus, Grafana, Blackbox; cAdvisor optional).
+  - Channel Monitor GET probes added; Grafana dashboard updated with tiles for Archon, Channel Monitor, DeepResearch, SupaSerch.
+  - YouTube ingest hardened (SABR detection broadened; offline transcript fallback). Continue pinning yt‑dlp and fallback heuristics.
+  - Next: finalize Loki readiness, re‑enable GPU rerank smokes, complete Real Data Bring‑Up and enforce strict geometry jump.
+  - Agent Zero: UI port fix (80 in‑container); JetStream auto‑fallback to core NATS for resilience.
+  - DeepResearch: in‑network NATS smoke and diagnostics; echo reliability improved.
 ### M1 — Core Retrieval & Data Plane ✅
 
 - Hybrid **Hi‑RAG Gateway v2** (vector+lexical alpha, warm Neo4j dict, optional Meili, admin stats) — implemented
