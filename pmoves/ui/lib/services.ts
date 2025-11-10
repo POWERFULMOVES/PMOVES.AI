@@ -7,6 +7,13 @@ export interface ServiceDefinition {
 
 export const INTEGRATION_SERVICES: ServiceDefinition[] = [
   {
+    slug: 'supaserch',
+    title: 'SupaSerch',
+    summary:
+      'Multimodal research orchestrator combining DeepResearch, Archon/Agent Zero tooling, and Supabase/Qdrant indices.',
+    docPath: '../docs/services/supaserch/README.md',
+  },
+  {
     slug: 'open-notebook',
     title: 'Open Notebook',
     summary:

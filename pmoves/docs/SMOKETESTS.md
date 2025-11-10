@@ -27,6 +27,8 @@ This guide covers preflight wiring, starting the core stack, and running the loc
    - Supabase REST endpoints:
    - `SUPA_REST_URL=http://127.0.0.1:65421/rest/v1` (host-side smoke harness + curl snippets)
      - `SUPA_REST_INTERNAL_URL=http://api.supabase.internal:8000/rest/v1` (compose services targeting the Supabase CLI stack)
+   - `OPENROUTER_API_KEY` (required for DeepResearch OpenRouter mode)
+   - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_PASSWORD`, `DEEPRESEARCH_NOTEBOOK_ID` for Notebook mirroring / DeepResearch sync
    - After the CLI stack is running, execute `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smokes. Re-run components individually with `make supabase-bootstrap`, `make neo4j-bootstrap`, or `make seed-data` if you only need one layer.
 4. External integrations: copy tokens into `pmoves/.env.local` so the health/finance automations can run without errors.
    - `WGER_API_TOKEN`, `WGER_BASE_URL=http://cataclysm-wger:8000`
@@ -63,6 +65,10 @@ Useful health checks:
 ### Optional GPU smoke
 - Start with `make up-gpu`, then re-run health checks.
 - Media/video services should log detection of GPU/VAAPI where available.
+- `make -C pmoves smoke-gpu` now defaults to `GPU_SMOKE_STRICT=true` and asserts each sample query returns `"used_rerank": true`.
+  - If the first run reports `used_rerank=false`, confirm the Qwen weights exist at `/models/qwen/Qwen3-Reranker-4B` on the GPU
+    node and that the path is bind-mounted into the container (`RERANK_MODEL_PATH`). The initial download from HuggingFace can
+    take a few minutes; rerun the smoke once the cache is hydrated.
 
 ### Discord Publisher (content.published.v1)
 
@@ -136,7 +142,7 @@ Choose one:
 - macOS/Linux: `make smoke` (requires `jq`)
 - Windows (no `jq` required): `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1`
 
-Checks (14):
+Checks (15):
 1. Qdrant ready (`6333`)
 2. Meilisearch health (`7700`, warning only)
 3. Neo4j UI reachable (`7474`, warning only)
@@ -151,8 +157,19 @@ Checks (14):
 12. Confirm ShapeStore locator + calibration via `/shape/point/{id}/jump` + `/geometry/calibration/report`
 13. Convert the sample health summary into CGP via `tools/events_to_cgp.py`
 14. Convert the sample finance summary into CGP via `tools/events_to_cgp.py`
+15. DeepResearch NATS smoke (`make deepresearch-smoke`) — publishes a `research.deepresearch.request.v1` job, waits for the `...result.v1` payload, and asserts Notebook mirroring when `OPENROUTER_API_KEY`, `OPEN_NOTEBOOK_API_TOKEN`, and `DEEPRESEARCH_NOTEBOOK_ID` are present (skips otherwise)
 
-### 5b) Personas
+### 5b) SupaSerch multimodal bridge
+
+`make supaserch-smoke` validates the NATS wiring and HTTP fallback for SupaSerch:
+
+1. Publishes a labelled request on `supaserch.request.v1` via NATS.
+2. Waits for `supaserch.result.v1` and asserts the fallback stage reports `status: ok`.
+3. Calls `http://localhost:${SUPASERCH_HOST_PORT:-8099}/v1/search?q=…` to confirm the HTTP surface returns the same fallback metadata.
+
+The command prints the fallback latency and which transport (`via`) served the response. The default fallback hits the SupaSerch `/healthz` endpoint, but you can set `SUPASERCH_HTTP_FALLBACK_URL` to a search API (use `{query}` or `{encoded_query}` placeholders) before running the smoke to exercise external providers.
+
+### 5c) Personas
 
 Run `make smoke-personas` to assert the v5.12 persona library is present in the Supabase CLI database (expects at least one row such as `Archon v1.0`). If this fails, run `make supabase-bootstrap` and retry.
 
@@ -181,7 +198,7 @@ Prereqs: Supabase CLI stack online (`make supa-start`), env synced via `make env
 
 See `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` for extended workflows and troubleshooting tips.
 
-### 5b) Workflow Automations
+### 5d) Workflow Automations
 Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
 1. Import/activate domain flows (shipped in repo):
    - `pmoves/n8n/flows/health_weekly_to_cgp.webhook.json`

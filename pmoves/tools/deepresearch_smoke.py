@@ -15,6 +15,8 @@ except Exception as exc:  # pragma: no cover
     print("nats-py is required: pip install nats-py", file=sys.stderr)
     raise
 
+from pmoves.services.deepresearch.worker import NotebookPublisher
+
 
 REQUEST_SUBJECT = "research.deepresearch.request.v1"
 RESULT_SUBJECT = "research.deepresearch.result.v1"
@@ -50,6 +52,8 @@ async def main() -> int:
     corr_id = envelope["correlation_id"]
 
     fut: asyncio.Future[Dict[str, Any]] = asyncio.get_running_loop().create_future()
+    publisher = NotebookPublisher()
+    notebook_config = publisher.resolve_config()
 
     async def cb(msg):
         try:
@@ -80,8 +84,44 @@ async def main() -> int:
     status = payload.get("status") or "unknown"
     duration_ms = payload.get("duration_ms")
     took = (time.time() - started) * 1000.0
+
+    notebook_state = "skipped"
+    if notebook_config.enabled:
+        metadata = payload.get("metadata") if isinstance(payload, dict) else None
+        notebook_meta = metadata.get("notebook") if isinstance(metadata, dict) else None
+        entry_id = None
+        error_text = None
+        if isinstance(notebook_meta, dict):
+            entry_id = notebook_meta.get("entry_id")
+            error_text = notebook_meta.get("error")
+        if entry_id is None and isinstance(payload, dict):
+            extra_entry = payload.get("notebook_entry_id")
+            if isinstance(extra_entry, str) and extra_entry.strip():
+                entry_id = extra_entry.strip()
+
+        if entry_id:
+            notebook_state = f"entry:{entry_id}"
+        elif error_text:
+            print(
+                f"✖ deepresearch-smoke: Notebook publish error -> {error_text}",
+                file=sys.stderr,
+            )
+            return 3
+        else:
+            print(
+                "✖ deepresearch-smoke: Notebook metadata missing entry_id despite configuration",
+                file=sys.stderr,
+            )
+            return 3
+
     print(
-        f"✔ deepresearch-smoke: result status={status} duration_ms={duration_ms} (waited {took:.0f}ms)"
+        "✔ deepresearch-smoke: result status={status} duration_ms={duration_ms} "
+        "(waited {waited:.0f}ms, notebook={notebook})".format(
+            status=status,
+            duration_ms=duration_ms,
+            waited=took,
+            notebook=notebook_state,
+        )
     )
     return 0
 

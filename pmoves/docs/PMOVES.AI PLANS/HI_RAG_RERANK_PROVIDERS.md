@@ -1,7 +1,7 @@
 # Hi‑RAG Reranker Providers
 
 Set `RERANK_PROVIDER` to choose a reranker:
-- `flag` (default): FlagEmbedding with `RERANK_MODEL` (CPU default `BAAI/bge-reranker-base`, GPU profile defaults to `Qwen/Qwen3-Reranker-4B`)
+- `flag` (default): FlagEmbedding with `RERANK_MODEL` (default `Qwen/Qwen3-Reranker-4B`)
 - `qwen`: Sentence-Transformers `CrossEncoder` with `QWEN_RERANK_MODEL` (e.g., `Qwen/Qwen3-Reranker-4B`)
 - `cohere`: Cohere API (`COHERE_API_KEY`, `COHERE_RERANK_MODEL`)
 - `azure`: Azure OpenAI chat scoring (`AZURE_OPENAI_*`)
