@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-11-06_
+_Last updated: 2025-11-07_
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -10,8 +10,9 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - Single‑env consolidation complete; Supabase REST (public, pmoves_core, pmoves_kb) is source of truth.
   - Monitoring stack shipped (Prometheus, Grafana, Blackbox; cAdvisor optional).
   - Channel Monitor GET probes added; Grafana dashboard updated with tiles for Archon, Channel Monitor, DeepResearch, SupaSerch.
+  - SupaSerch FastAPI worker now consumes/publishes `supaserch.request.v1`/`supaserch.result.v1`, exports Prometheus counters, and has a dedicated smoke harness plus Console quick links.
   - YouTube ingest hardened (SABR detection broadened; offline transcript fallback). Continue pinning yt‑dlp and fallback heuristics.
-  - Next: finalize Loki readiness, re‑enable GPU rerank smokes, complete Real Data Bring‑Up and enforce strict geometry jump.
+  - Next: finalize Loki readiness, deepen SupaSerch orchestration, complete Real Data Bring‑Up, and enforce strict geometry jump.
   - Agent Zero: UI port fix (80 in‑container); JetStream auto‑fallback to core NATS for resilience.
   - DeepResearch: in‑network NATS smoke and diagnostics; echo reliability improved.
 ### M1 — Core Retrieval & Data Plane ✅
@@ -69,11 +70,13 @@ Done
 - Storage unified; presign/render-webhook validated against Supabase S3.
 - Invidious stabilized on host 3005; companion/HMAC keys stamped.
 - Hi‑RAG v2 CPU/GPU up; core smoke PASS.
+- GPU rerank smoke defaults to strict mode with Qwen3 4B pinned; `make smoke-gpu` asserts rerank telemetry.
+- SupaSerch monitoring + smoke target shipped; `/metrics` feeds Prometheus and Services Overview quick links.
 
 Planned
 - Loki config upgrade to 3.1.x; hook to Grafana alerts; verify `/ready` 200.
 - pmoves.yt: force offline transcript provider during smoke; broaden fallback; add stable IDs.
-- Reranker: re‑enable GPU rerank and add test coverage.
+- SupaSerch orchestration: integrate DeepResearch/Archon execution paths and emit geometry packets downstream.
 - Document `/hirag/admin/stats` and Supabase‑only storage in service docs and SMOKETESTS.md.
 
 ### Stability & Release Hardening Initiative (Prep)

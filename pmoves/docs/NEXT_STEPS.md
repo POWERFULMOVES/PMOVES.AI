@@ -1,19 +1,20 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-11-06_
+_Last updated: 2025-11-07_
 
-## Stabilization Sprint — Running Baseline (Nov 6, 2025)
+## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
 - Hi‑RAG v2 CPU/GPU healthy; health path `/hirag/admin/stats`.
 - Channel Monitor GETs available: `/healthz`, `/api/monitor/status`, `/api/monitor/stats`.
 - Monitoring: Prometheus, Grafana, Blackbox up; cAdvisor gated by `MON_INCLUDE_CADVISOR`.
 - Archon API/UI up; Agent Zero UI up; NATS echo diagnostics available.
 
-### Latest changes (Nov 6)
+### Latest changes (Nov 7)
 - Agent Zero: UI port alignment (80 in‑container; host 8081→80), JetStream auto‑fallback to core NATS on repeated ServiceUnavailable.
 - DeepResearch: in‑network NATS smoke added; echo subscribers hardened.
-- GPU smokes: strict/relaxed modes; relaxed is default for local CI.
+- SupaSerch: FastAPI worker now bridges `supaserch.request.v1` → `supaserch.result.v1`, exposes Prometheus metrics, and ships `make supaserch-smoke` plus Console quick links.
+- GPU smokes: strict rerank validation is the default (`GPU_SMOKE_STRICT=true`) with Qwen3 4B pinned in `env.shared.example`; smoke harness asserts rerank stats.
 - Monitoring: Node Exporter toggle added (Linux only), cAdvisor remains default.
 
 ## Immediate
@@ -32,7 +33,7 @@ _Last updated: 2025-11-06_
 - Jellyfin single instance verified (8096) with mounts; smokes pass (verify + enhanced). Bridge auto‑link fallback documented.
 - PMOVES.YT: SABR/nsig causes intermittent `/yt/emit` 404 even after captions fetch; two fixes queued below.
 
-## Stabilization Sprint — Status and Plan (Nov 6, 2025)
+## Stabilization Sprint — Status and Plan (Nov 7, 2025)
 
 Completed
 - Switched object storage to Supabase Storage only; stopped standalone MinIO. Presign/render-webhook recreated and validated.
@@ -44,17 +45,18 @@ Completed
 Next 48 hours
 - [ ] Loki: finalize config for 3.1.x and confirm `/ready` 200; wire into Grafana dashboard set.
 - [ ] YT emit: set `YT_TRANSCRIPT_PROVIDER=qwen2-audio` during smoke; broaden SABR fallback and add a stable test ID list.
-- [ ] GPU rerank: re‑enable and add a targeted integration smoke (batch==1 guarded path); capture stats in evidence.
+- [ ] SupaSerch orchestration: begin wiring DeepResearch/Archon execution so the NATS result payload includes first-pass artifacts.
 - [ ] Document Hi‑RAG health path (`/hirag/admin/stats`) in service README and smoketest docs.
 - [ ] Update docs index with Supabase‑only storage policy and presign health check.
 - [ ] Real Data Bring‑Up: run `make -C pmoves seed-repo-docs index-repo-docs`, then set `YT_SMOKE_STRICT_JUMP=true` by default.
 
 ### Next commit targets
-- [ ] Re‑enable GPU strict smokes by default on the GPU node (pin reranker/runtime).
-- [ ] SupaSerch NATS subjects + metrics; console health badge.
+- [x] Re‑enable GPU strict smokes by default on the GPU node (pin reranker/runtime).
+- [x] SupaSerch NATS subjects + metrics; console health badge.
+- [x] Pin GHCR images (`DEEPRESEARCH_IMAGE`, `SUPASERCH_IMAGE`) in `pmoves/env.shared`.
 - [ ] Loki `/ready` 200 and basic alerting in Grafana.
 - [ ] n8n: assert `N8N_API_AUTH_ACTIVE=true` and add monitoring probe.
-- [ ] Pin GHCR images (`DEEPRESEARCH_IMAGE`, `SUPASERCH_IMAGE`) in `pmoves/env.shared`.
+- [ ] SupaSerch orchestration: persist aggregated results (DeepResearch, Archon, geometry) into Supabase and publish telemetry panels.
 
 ### 1. Finish the M2 Automation Loop
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
@@ -101,14 +103,15 @@ Next 48 hours
 ### 3b. PMOVES‑SUPASERCH (Branded, Multimodal Deep Research)
 
 - [x] Scaffold service + image (`pmoves-supaserch`) with `/healthz` and CI entries.
-- [ ] Wire NATS subjects `supaserch.request.v1`/`supaserch.result.v1` and broker orchestration to:
+- [x] Wire NATS subjects `supaserch.request.v1`/`supaserch.result.v1` and broker orchestration to:
   - DeepResearch worker (OpenRouter/local) for planning/execution
   - Archon/Agent Zero via MCP for codegen/crawling/tool use
   - CHIT geometry bus for CGP emissions; persist in Supabase
-- [ ] Add OpenAPI + metrics; expand Grafana dashboard panels
-- [ ] Integrate SupaSerch into the Console (links + status)
+- [x] Add OpenAPI + metrics; expand Grafana dashboard panels
+- [x] Integrate SupaSerch into the Console (links + status)
 - [ ] Harden continuous‑run profile for VM nodes (restart policy, network access, backpressure)
   - Notes: Qwen default on GPU path is in place; sweeps should compare Qwen vs BGE vs Cohere/Azure on the real datasets under `services/retrieval-eval/datasets/` and publish artifacts.
+- [ ] SupaSerch orchestration: persist DeepResearch/Archon outputs into Supabase, emit geometry packets, and document Prometheus expectations for the extended stages.
 
 ### 4. PMOVES.YT High-Priority Lane
 - [x] Add multi-model `youtube_transcripts` schema columns (MiniLM/Gemma/Qwen) and adapter config knobs (2025-10-23).
