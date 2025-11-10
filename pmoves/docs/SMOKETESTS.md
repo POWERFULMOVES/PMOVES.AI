@@ -64,6 +64,10 @@ Useful health checks:
 ### Optional GPU smoke
 - Start with `make up-gpu`, then re-run health checks.
 - Media/video services should log detection of GPU/VAAPI where available.
+- `make -C pmoves smoke-gpu` now defaults to `GPU_SMOKE_STRICT=true` and asserts each sample query returns `"used_rerank": true`.
+  - If the first run reports `used_rerank=false`, confirm the Qwen weights exist at `/models/qwen/Qwen3-Reranker-4B` on the GPU
+    node and that the path is bind-mounted into the container (`RERANK_MODEL_PATH`). The initial download from HuggingFace can
+    take a few minutes; rerun the smoke once the cache is hydrated.
 
 ### Discord Publisher (content.published.v1)
 

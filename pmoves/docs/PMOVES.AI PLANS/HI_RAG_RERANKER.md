@@ -1,11 +1,12 @@
 # Hi‑RAG Reranker (v2) + Eval Sweeps
 
 ## Gateway v2
-New service `hi-rag-gateway-v2` adds an **optional rerank stage** (default on) using `BAAI/bge-reranker-base` via FlagEmbedding.
+New service `hi-rag-gateway-v2` adds an **optional rerank stage** (default on) using `Qwen/Qwen3-Reranker-4B` via FlagEmbedding.
 Environment:
 ```
 RERANK_ENABLE=true
-RERANK_MODEL=BAAI/bge-reranker-base
+RERANK_MODEL=Qwen/Qwen3-Reranker-4B
+RERANK_MODEL_PATH=/models/qwen/Qwen3-Reranker-4B
 RERANK_TOPN=50
 RERANK_K=10
 ```

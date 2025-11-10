@@ -1104,12 +1104,18 @@ smoke-gpu:
 	Q1='{"query":"gpu validation","namespace":"pmoves","k":3, "use_rerank": true}'; \
 	Q2='{"query":"what is pmoves?","namespace":"pmoves","k":3, "use_rerank": true}'; \
 	Q3='{"query":"Hi-RAG Gateway hybrid search","namespace":"pmoves","k":3, "use_rerank": true}'; \
-	STRICT=$${GPU_SMOKE_STRICT:-false}; \
-	for Q in "$$Q1" "$$Q2" "$$Q3"; do \
-	  RESP=$$(docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d "$$Q"); \
-	  if [ "$$STRICT" = "true" ]; then echo "$$RESP" | jq -e '.used_rerank==true' >/dev/null && echo OK && exit 0; \
-	  else echo "$$RESP" | jq -e 'has("used_rerank")' >/dev/null && echo OK && exit 0; fi; \
-	done; echo FAIL && exit 1
+        STRICT=$${GPU_SMOKE_STRICT:-true}; \
+        PASS=false; \
+        for Q in "$$Q1" "$$Q2" "$$Q3"; do \
+          RESP=$$(docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d "$$Q"); \
+          if [ "$$STRICT" = "true" ]; then \
+            if echo "$$RESP" | jq -e '.used_rerank==true' >/dev/null; then PASS=true; break; fi; \
+          else \
+            if echo "$$RESP" | jq -e '.used_rerank==true' >/dev/null 2>&1; then PASS=true; break; fi; \
+            if echo "$$RESP" | jq -e 'has("used_rerank")' >/dev/null 2>&1; then PASS=true; break; fi; \
+          fi; \
+        done; \
+        if [ "$$PASS" = "true" ]; then echo OK; else echo FAIL; exit 1; fi
 	@echo "[GPU] v1-gpu (:8090) (optional)..." && (curl -sf http://localhost:8090/ | jq -e '.ok==true' >/dev/null && echo OK) || (echo SKIP: v1-gpu not up; true)
 
 .PHONY: smoke-qwen-rerank
