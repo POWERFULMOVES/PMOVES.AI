@@ -44,6 +44,7 @@ RUN apt-get update \
 
 ARG ARCHON_GIT_REMOTE=https://github.com/POWERFULMOVES/PMOVES-Archon.git
 ARG ARCHON_GIT_REF=main
+ARG USE_LOCAL_VENDOR=0
 
 # Default configuration values (override at runtime)
 ARG SUPABASE_URL_DEFAULT=https://your-project.supabase.co
@@ -77,8 +78,16 @@ ENV SUPABASE_URL=${SUPABASE_URL_DEFAULT} \
     ARCHON_UI_STATIC_DIR=/app/static/archon-ui \
     ARCHON_VENDOR_ROOT=/app/vendor/archon
 
-# Pull the upstream Archon sources (vanilla build) to vendor path
-RUN git clone --depth 1 --single-branch --branch "${ARCHON_GIT_REF}" "${ARCHON_GIT_REMOTE}" /app/vendor/archon
+# Bring in upstream Archon sources to vendor path
+# Prefer local submodule when USE_LOCAL_VENDOR=1; otherwise clone from remote.
+RUN if [ "${USE_LOCAL_VENDOR}" = "1" ]; then \
+      echo "→ Using local submodule vendor at /app/vendor/archon"; \
+      mkdir -p /app/vendor; \
+      cp -R ./integrations/archon /app/vendor/archon; \
+    else \
+      echo "→ Cloning vendor ${ARCHON_GIT_REMOTE}@${ARCHON_GIT_REF}"; \
+      git clone --depth 1 --single-branch --branch "${ARCHON_GIT_REF}" "${ARCHON_GIT_REMOTE}" /app/vendor/archon; \
+    fi
 
 COPY services/archon/requirements.txt ./requirements.txt
 RUN pip install --upgrade pip \

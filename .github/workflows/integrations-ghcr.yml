@@ -174,3 +174,43 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Install Syft (SBOM)
+        uses: anchore/sbom-action/download-syft@v0.17.7
+
+      - name: Generate SBOMs (CycloneDX)
+        id: sbom
+        run: |
+          set -euo pipefail
+          TAG_PRIMARY=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          syft packages "$TAG_PRIMARY" -o cyclonedx-json > sbom.cdx.json
+          echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-sbom
+          path: ${{ steps.sbom.outputs.sbom_path }}
+
+      - name: Trivy vulnerability scan (HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}:pmoves-latest
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.6.0
+      - name: Cosign sign (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: 'true'
+        run: |
+          set -euo pipefail
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "Signing $tag"
+            cosign sign --yes "$tag"
+          done < <(echo "${{ steps.meta.outputs.tags }}")

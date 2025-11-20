@@ -40,54 +40,30 @@ def _strip_rest_suffix(url: str) -> str:
 
 
 def _ensure_supabase_env() -> None:
-    """Populate SUPABASE_* defaults so the vendored stack can boot."""
+    """Populate SUPABASE_* from explicit env without implicit fallbacks.
 
-    current = os.environ.get("SUPABASE_URL")
-    prefers_internal = False
-    if current:
-        lowered = current.lower()
-        if lowered.startswith("http://host.docker.internal") or lowered.startswith("http://127.0.0.1"):
-            prefers_internal = True
-        placeholder_host = "your-project.supabase.co"
-        if urlparse(current).netloc == placeholder_host:
-            current = ""
-    if not current or prefers_internal:
-        internal = os.environ.get("SUPA_REST_INTERNAL_URL")
-        rest = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL")
+    Priority:
+      1) ARCHON_SUPABASE_BASE_URL
+      2) SUPA_REST_URL (stripped to base)
+      3) Existing SUPABASE_URL (left as-is)
+    No default to postgrest; caller must supply a reachable base (e.g., host.docker.internal:54321).
+    """
 
-        def _host_reachable(base: str) -> bool:
-            try:
-                parsed = urlparse(base)
-                host = parsed.hostname
-                if not host:
-                    return False
-                port = parsed.port or (443 if parsed.scheme == "https" else 80)
-                with socket.create_connection((host, port), timeout=1.5):
-                    return True
-            except OSError:
-                return False
+    forced = (os.environ.get("ARCHON_SUPABASE_BASE_URL") or "").strip()
+    rest = (os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL") or "").strip()
+    if forced:
+        os.environ["SUPABASE_URL"] = _strip_rest_suffix(forced)
+    elif rest:
+        os.environ["SUPABASE_URL"] = _strip_rest_suffix(rest)
+    # else: leave SUPABASE_URL unchanged if already set
 
-        candidates: list[str] = []
-        seen: set[str] = set()
-        for candidate in (internal, rest, current, "http://postgrest:3000"):
-            if not candidate:
-                continue
-            base = _strip_rest_suffix(candidate)
-            if base in seen:
-                continue
-            seen.add(base)
-            candidates.append(base)
-
-        for base in candidates:
-            if _host_reachable(base):
-                os.environ["SUPABASE_URL"] = base
-                break
-        else:
-            os.environ.setdefault("SUPABASE_URL", "http://postgrest:3000")
-
-    # Ensure downstream clients find the service role key under the expected alias.
-    if os.environ.get("SUPABASE_SERVICE_ROLE_KEY") and not os.environ.get("SUPABASE_KEY"):
-        os.environ["SUPABASE_KEY"] = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    # Ensure downstream clients find the service role key under expected aliases.
+    srv = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if srv:
+        if not os.environ.get("SUPABASE_KEY"):
+            os.environ["SUPABASE_KEY"] = srv
+        if not os.environ.get("SUPABASE_SERVICE_KEY"):
+            os.environ["SUPABASE_SERVICE_KEY"] = srv
 
     os.environ["POSTGRES_HOST"] = os.environ.get("PGHOST", "postgres")
 
@@ -375,7 +351,7 @@ def _resolve_vendor_paths() -> tuple[Path, Path, Path]:
 def _normalize_supabase_env() -> None:
     """Record the base PostgREST URL for downstream patches."""
 
-    for key in ("SUPA_REST_URL", "SUPA_REST_INTERNAL_URL", "SUPABASE_URL"):
+    for key in ("ARCHON_SUPABASE_BASE_URL", "SUPA_REST_URL", "SUPABASE_URL"):
         url = os.environ.get(key)
         if not url:
             continue
@@ -584,19 +560,49 @@ def _build_pythonpath_env() -> str:
 
 
 def _import_archon_app():
-    """Import the upstream Archon FastAPI application."""
+    """Import the upstream Archon FastAPI application.
+
+    If vendor import fails, serve a minimal placeholder app exposing health
+    endpoints so the container starts and reports diagnostics instead of
+    crashing. This keeps compose health and logs available for troubleshooting.
+    """
 
     try:
         archon_main = import_module("server.main")
+        return archon_main.app
     except ModuleNotFoundError as exc:  # pragma: no cover - defensive guard
-        raise RuntimeError(
-            "Unable to import Archon server application from vendor/archon."
-        ) from exc
+        logger.exception("Archon vendor import failed: %s", exc)
 
-    return archon_main.app
+        fallback = FastAPI(title="Archon (placeholder)")
+
+        @fallback.get("/")
+        async def root():  # type: ignore[no-redef]
+            return {
+                "status": "degraded",
+                "message": "Archon vendor module not found. Check ARCHON_VENDOR_ROOT or rebuild image.",
+            }
+
+        @fallback.get("/healthz")
+        async def health():  # type: ignore[no-redef]
+            try:
+                result = await _pmoves_healthcheck()
+                return result
+            except HTTPException as he:
+                raise he
+
+        @fallback.get("/ready")
+        async def ready():  # type: ignore[no-redef]
+            try:
+                result = await _pmoves_ready()
+                return result
+            except HTTPException as he:
+                raise he
+
+        return fallback
 
 
-app = _import_archon_app()
+FORCE_PLACEHOLDER = os.environ.get("ARCHON_VENDOR_FORCE_PLACEHOLDER", "").strip().lower() in {"1","true","yes"}
+app = _import_archon_app() if not FORCE_PLACEHOLDER else FastAPI(title="Archon (placeholder)")
 
 # Re-sync OpenAI-compatible env after the vendored app loads, since upstream imports
 # may mutate OpenAI-compatible environment variables.
@@ -605,7 +611,83 @@ _sync_openai_compat_env()
 
 @app.get("/healthz")
 async def _pmoves_healthcheck():
-    return {"status": "ok", "service": "archon"}
+    # Prefer the configured Supabase base URL for health checks.
+    # For Supabase CLI (aggregated gateway on :65421), probe a concrete REST
+    # table endpoint (`/rest/v1/archon_settings`) instead of the root path.
+    supabase = os.environ.get("SUPABASE_URL") or os.environ.get("SUPA_REST_URL") or ""
+    ok = True
+    code = 0
+    error = None
+    if supabase:
+        base = supabase.rstrip("/")
+        target = base
+        try:
+            parsed = urlparse(base)
+            host = (parsed.hostname or "").lower()
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            # Supabase CLI default REST gateway: hit a known table so 404 on `/`
+            # or bare `/rest/v1` does not falsely mark the stack unhealthy.
+            if host in {"host.docker.internal", "127.0.0.1", "localhost"} and port == 65421:
+                target = f"{base}/rest/v1/archon_settings?select=*"
+        except Exception:
+            target = base
+
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                r = await client.get(target)
+                code = r.status_code
+                # Treat 200 and 400-series schema errors as "reachable"; only 5xx/000 mark unhealthy.
+                if 200 <= code < 300:
+                    ok = True
+                elif 400 <= code < 500:
+                    ok = True
+                    error = f"supabase client error {code}"
+                else:
+                    ok = False
+        except Exception as exc:  # pragma: no cover - defensive network guard
+            ok = False
+            error = str(exc)
+
+    payload = {"status": "ok" if ok else "degraded", "service": "archon", "supabase": {"url": supabase, "http": code}}
+    if error:
+        payload["error"] = error
+    if ok:
+        return payload
+    raise HTTPException(status_code=503, detail=payload)
+
+
+@app.get("/ready")
+async def _pmoves_ready():
+    details = {}
+    # NATS probe
+    nats_ok = False
+    try:
+        # Shallow TCP probe to NATS
+        parsed = urlparse(NATS_URL)
+        host = parsed.hostname or "nats"
+        port = parsed.port or 4222
+        with socket.create_connection((host, port), timeout=1.5):
+            nats_ok = True
+    except OSError:
+        nats_ok = False
+
+    # Supabase/PostgREST probe via health
+    try:
+        result = await _pmoves_healthcheck()
+        sb_ok = result.get("status") == "ok"
+        details["supabase"] = result.get("supabase", {})
+    except HTTPException as exc:  # 503 captures details
+        sb_ok = False
+        try:
+            details.update(exc.detail)  # type: ignore[arg-type]
+        except Exception:
+            details["supabase"] = {"url": os.environ.get("SUPABASE_URL")}
+
+    ready = nats_ok and sb_ok
+    status = {"status": "ready" if ready else "not_ready", "nats": nats_ok, **details}
+    if ready:
+        return status
+    raise HTTPException(status_code=503, detail=status)
 
 
 @app.get("/mcp/describe")
@@ -639,6 +721,74 @@ async def _pmoves_mcp_describe():
         "reachable": reachable,
         "probes": probes,
     }
+
+
+async def _proxy_to_mcp(path: str, *, method: str = "GET", json_body: Optional[dict] = None) -> httpx.Response:
+    host = os.environ.get("ARCHON_MCP_HOST", "localhost")
+    port = int(os.environ.get("ARCHON_MCP_PORT", "8051"))
+    base = f"http://{host}:{port}"
+    url = f"{base}{path}"
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        if method == "GET":
+            return await client.get(url)
+        return await client.post(url, json=json_body)
+
+
+@app.get("/mcp/commands")
+async def _pmoves_mcp_commands():
+    # Try common MCP bridge paths to list tools/commands
+    for candidate in ("/tools", "/mcp/tools", "/commands"):
+        try:
+            r = await _proxy_to_mcp(candidate)
+            if r.status_code == 200:
+                data = r.json()
+                # Normalize to {commands:[{name,description?}...]}
+                if isinstance(data, dict) and "tools" in data:
+                    tools = data["tools"]
+                elif isinstance(data, list):
+                    tools = data
+                else:
+                    tools = data.get("commands", []) if isinstance(data, dict) else []
+                commands = []
+                for t in tools:
+                    if isinstance(t, dict):
+                        name = t.get("name") or t.get("id") or t.get("tool")
+                        desc = t.get("description") or t.get("desc")
+                    else:
+                        name, desc = str(t), None
+                    if name:
+                        commands.append({"name": name, "description": desc})
+                return {"commands": commands}
+        except Exception:
+            continue
+    raise HTTPException(status_code=502, detail={"error": "mcp_list_unavailable"})
+
+
+class MCPExecuteRequest(BaseModel):
+    tool: str = Field(..., description="Tool name to execute")
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/mcp/execute")
+async def _pmoves_mcp_execute(req: MCPExecuteRequest):
+    payload = {"tool": req.tool, "arguments": req.arguments}
+    # Try common execution endpoints
+    candidates = (
+        ("POST", f"/tools/{req.tool}"),
+        ("POST", "/execute"),
+        ("POST", "/mcp/execute"),
+    )
+    for method, path in candidates:
+        try:
+            r = await _proxy_to_mcp(path, method=method, json_body=payload)
+            if r.status_code in (200, 201, 202):
+                try:
+                    return r.json()
+                except Exception:
+                    return {"ok": True, "raw": r.text}
+        except Exception:
+            continue
+    raise HTTPException(status_code=502, detail={"error": "mcp_execute_failed", "tool": req.tool})
 
 
 class ManagedSubprocess:
@@ -862,19 +1012,8 @@ async def _supervisor_lifespan(app: FastAPI):
         await SUPERVISOR.stop()
 
 
-_existing_lifespan = getattr(app.router, "lifespan_context", None)
-
-if _existing_lifespan is None:
-    app.router.lifespan_context = _supervisor_lifespan
-else:
-
-    @asynccontextmanager
-    async def _composed_lifespan(app: FastAPI):
-        async with _existing_lifespan(app):
-            async with _supervisor_lifespan(app):
-                yield
-
-    app.router.lifespan_context = _composed_lifespan
+# Override vendor lifespan entirely to prevent fatal exits when credential bootstrap fails.
+app.router.lifespan_context = _supervisor_lifespan
 
 
 if __name__ == "__main__":

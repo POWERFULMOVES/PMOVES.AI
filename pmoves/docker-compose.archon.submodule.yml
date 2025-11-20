@@ -1,0 +1,8 @@
+services:
+  archon:
+    build:
+      context: ..
+      dockerfile: ./pmoves/services/archon/Dockerfile
+      args:
+        - USE_LOCAL_VENDOR=1
+    # When using submodule build, vendor clone args are not used.
