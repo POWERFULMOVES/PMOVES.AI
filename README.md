@@ -45,6 +45,11 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
   - `SUPABASE_BOOT_USER_EMAIL`, `SUPABASE_BOOT_USER_PASSWORD`, `SUPABASE_BOOT_USER_JWT`.
   - The PMOVES UI auto‑authenticates with `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` so most routes won’t prompt for a password. If you need to log in manually, use the email/password above from your env files.
 - Jellyfin uses the LinuxServer image defaults. After first boot, confirm the admin user and API key in `pmoves/env.jellyfin-ai` or via the Jellyfin UI (Settings → Dashboard). Update `JELLYFIN_API_KEY` and `JELLYFIN_USER_ID` in `pmoves/env.shared` if you rotate.
+- Wger and Firefly are brought up with PMOVES‑branded defaults sourced from `pmoves/env.shared` (see `pmoves/docs/FIRST_RUN.md` “Seeded & Branded Defaults” for the exact initial usernames and emails).
+- Open Notebook’s UI password also serves as its API bearer token; keep `OPEN_NOTEBOOK_API_TOKEN` identical to `OPEN_NOTEBOOK_PASSWORD` so CLI helpers and agents work against the same branded login (see `pmoves/docs/services/open-notebook/README.md`).
+- For a full list of seeded branded logins and where they come from, see:
+  - `pmoves/docs/FIRST_RUN.md` (Seeded & Branded Defaults)
+  - `docs/SECRETS.md` (Secret Management Playbook)
 
 - **Creator bundle:** see [`pmoves/creator/`](pmoves/creator/README.md) for installers, tutorials, and ComfyUI workflows supporting WAN Animate, Qwen Image Edit+, and VibeVoice TTS. Key guides include:
   - [WAN Animate 2.2 Tutorial](pmoves/creator/tutorials/wan_animate_2.2_tutorial.md)

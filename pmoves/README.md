@@ -119,6 +119,8 @@ Agents Profile
   - `SUPABASE_BOOT_USER_EMAIL`, `SUPABASE_BOOT_USER_PASSWORD`, `SUPABASE_BOOT_USER_JWT`.
   - The console auto‑auths via `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT`; to sign in manually, copy the email/password from your env files.
 - Jellyfin admin/API: confirm user and key in the Jellyfin UI; keep `JELLYFIN_API_KEY` and `JELLYFIN_USER_ID` in sync in `pmoves/env.shared` or `pmoves/env.jellyfin-ai` if rotated.
+- Wger and Firefly are started with PMOVES‑branded defaults driven by `WGER_BRAND_*` and related envs in `pmoves/env.shared`; the full set of seeded values is listed in `pmoves/docs/FIRST_RUN.md` under “Seeded & Branded Defaults”.
+- Open Notebook’s branded login is configured via `OPEN_NOTEBOOK_PASSWORD`; keep `OPEN_NOTEBOOK_API_TOKEN` in lockstep so agents and CLI helpers reuse the same secret (see `pmoves/docs/services/open-notebook/README.md`).
 
 Supabase (Full)
 - Recommended: Supabase CLI (see `docs/SUPABASE_FULL.md`). Or use `docker-compose.supabase.yml` with `./scripts/pmoves.ps1 up-fullsupabase`.
