@@ -61,6 +61,23 @@ your own before or after `make first-run`.
   - Confirm the admin user and API key in the Jellyfin UI and keep these env
     values in sync when you rotate.
 
+- **Invidious**
+  - UI at `http://127.0.0.1:3000` (when `make -C pmoves up-invidious` is used).
+  - Defaults follow the upstream image:
+    - Admin user: `kemal`
+    - Password: the default set by the container on first boot (rotate immediately; see upstream Invidious docs).
+  - PMOVES env:
+    - `INVIDIOUS_BASE_URL`, `INVIDIOUS_COMPANION_URL`, `INVIDIOUS_COMPANION_PUBLIC_URL`
+    - Database credentials seeded with:
+      - `INVIDIOUS_PG_DB`
+      - `INVIDIOUS_PG_USER`
+      - `INVIDIOUS_PG_PASSWORD`
+    - HMAC/companion keys:
+      - `INVIDIOUS_HMAC_KEY`
+      - `INVIDIOUS_COMPANION_KEY`
+  - When you rotate keys or credentials, update `pmoves/env.shared` and rerun
+    `make env-setup` before restarting the Invidious stack.
+
 - **Open Notebook**
   - UI at `http://localhost:8503` (Streamlit + SurrealDB).
   - Initial branded login:
@@ -99,4 +116,3 @@ Whenever you rotate any of the branded credentials above:
    `make -C pmoves up-agents`).
 4. If CI or remote deployments rely on the same keys, update the corresponding
    GitHub/vault secrets and use `pmoves/tools/secrets_sync.py` to validate.
-
