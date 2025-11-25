@@ -26,6 +26,7 @@ read -r -p "Use external Neo4j?    (y/N) > " EXT_N
 read -r -p "Use external Meili?     (y/N) > " EXT_M
 read -r -p "Use external Qdrant?    (y/N) > " EXT_Q
 read -r -p "Enable GPU profile now? (y/N) > " GPU
+read -r -p "Enable Glancer add-on?  (y/N) > " GLANCER
 
 echo "Configuring $ENV_FILE…"
 sed -i.bak "s/^EXTERNAL_SUPABASE=.*/EXTERNAL_SUPABASE=$([ "${EXT_S:-n}" = y ] && echo true || echo false)/" "$ENV_FILE"
@@ -38,6 +39,17 @@ echo "Optional Discord webhook (for publisher):"
 read -r -p "DISCORD_WEBHOOK_URL (empty to skip): " DURL
 if [ -n "$DURL" ]; then
   awk -v v="$DURL" '/^DISCORD_WEBHOOK_URL=/{ $0="DISCORD_WEBHOOK_URL="v }1' "$ENV_FILE" > "$ENV_FILE.tmp" && mv "$ENV_FILE.tmp" "$ENV_FILE"
+fi
+
+if [ "${GLANCER:-n}" = y ]; then
+  GLANCER_PATCH="${PMOVES_ROOT}/../pmoves_provisioning_addon_bundle/addons/install_glancer.sh"
+  if [ -x "$GLANCER_PATCH" ]; then
+    (cd "${PMOVES_ROOT}/.." && "$GLANCER_PATCH") || true
+  elif [ -f "$GLANCER_PATCH" ]; then
+    (cd "${PMOVES_ROOT}/.." && bash "$GLANCER_PATCH") || true
+  else
+    echo "Glancer installer not found at $GLANCER_PATCH; skipping." >&2
+  fi
 fi
 
 echo "Starting stack…"
