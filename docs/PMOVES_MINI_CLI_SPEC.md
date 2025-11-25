@@ -33,9 +33,16 @@ Core:
 
 Global options include `--profile`, `--non-interactive`, and `--manifest PATH`.
 
+`status` should surface optional add-ons too: when Glancer is staged via the
+bootstrap flag, it reads `provisioning-manifest.json` from the bundle root,
+checks for the Glancer compose assets, and reports container state/health when
+Docker is available.
+
 `bootstrap` wraps `pmoves.scripts.bootstrap_env` and stages the provisioning PR
 pack (defaulting to `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/`) so remote bring-up
-bundles are ready immediately after secrets populate.
+bundles are ready immediately after secrets populate. Use `--with-glancer` to stage
+the Glancer add-on (compose + env template) and record it in the provisioning
+manifest for downstream automation.
 
 # 3. Architecture Overview
 

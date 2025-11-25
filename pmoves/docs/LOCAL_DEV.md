@@ -7,7 +7,7 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 
 - `make first-run` — prompts for missing secrets, launches the Supabase CLI stack, starts core/agent/external services, applies Supabase + Neo4j migrations, seeds the Qdrant/Meili demo corpus, provisions the Supabase boot operator, and executes the 12-step smoke harness so every integration ships with branded defaults. See [FIRST_RUN.md](FIRST_RUN.md) for the full sequence and seeded resources.
 - `make supabase-boot-user` — manually reprovision (or rotate) the Supabase operator and refresh `env.shared`/`.env.local` with the latest password + JWT. Use this after changing Supabase domains or when you intentionally rotate credentials.
-- Optional provisioning bundle: `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` produces the same env overlays and stages the provisioning artifacts under `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS` before you run the stack locally or on a VPS.
+- Optional provisioning bundle: `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` produces the same env overlays and stages the provisioning artifacts under `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS` before you run the stack locally or on a VPS. Pass `--with-glancer` to include the Glancer compose add-on and record it in `provisioning-manifest.json`; verify the add-on later with `python3 -m pmoves.tools.mini_cli status` (the status check reports whether the Glancer container is staged and healthy when Docker is available).
 
 ## Services and Ports
 - qdrant: 6333 (internal name `qdrant`)
