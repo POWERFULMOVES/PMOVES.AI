@@ -62,3 +62,4 @@ temp*.mp4
 # PMOVES UI dev artifacts
 pmoves/ui/.pmoves_ui_dev.pid
 pmoves/ui/.pmoves_ui_dev.log
+docs/notes.md
