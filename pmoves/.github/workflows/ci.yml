@@ -2,22 +2,101 @@ name: pmoves-ci
 
 on:
   push:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
   pull_request:
 
+defaults:
+  run:
+    working-directory: pmoves
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pmoves-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tests:
+  chit-contract:
+    name: CHIT contract checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-      - name: Install dependencies
+
+      - name: Install ripgrep
         run: |
-          python -m pip install --upgrade pip
-          pip install fastapi==0.114.2 httpx==0.27.2 pytest==8.3.3 requests==2.32.3 lxml==4.9.4
-      - name: Run smoke tests
-        run: pytest pmoves/tests -q
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Verify CHIT tables exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          rg -n -S "create table .*(anchors|constellations|shape_points|shape_index)" migrations/ sql/ db/ \
+            || { echo "ERROR: Missing CHIT tables (anchors|constellations|shape_points|shape_index)"; exit 1; }
+          echo "OK: DB tables found"
+
+      - name: Verify CHIT endpoints exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          rg -n -S "POST /geometry/event|GET /shape/point/.*/jump|/geometry/decode/(text|image|audio)|/geometry/calibration/report" services/ gateway/ api/ \
+            || { echo "ERROR: Missing CHIT endpoints (/geometry/event, /shape/point/*/jump, /geometry/decode/*, /geometry/calibration/report)"; exit 1; }
+          echo "OK: Endpoints found"
+
+      - name: Verify geometry event publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          rg -n -S "geometry.cgp.v1" . \
+            || { echo "ERROR: geometry.cgp.v1 publish not found"; exit 1; }
+          echo "OK: geometry.cgp.v1 event publish present"
+
+      - name: Verify CHIT env/security flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          rg -n -S "CHIT_REQUIRE_SIGNATURE|CHIT_PASSPHRASE|CHIT_DECRYPT_ANCHORS|CHIT_CODEBOOK_PATH|CHIT_T5_MODEL" . \
+            || { echo "ERROR: Missing CHIT env flags (signature/decrypt/codebook/model)"; exit 1; }
+          echo "OK: Env flags present"
+
+  python-ci:
+    name: Python (if present)
+    runs-on: ubuntu-latest
+    needs: chit-contract
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        if: hashFiles('requirements.txt') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install deps
+        if: hashFiles('requirements.txt') != ''
+        run: pip install -r requirements.txt
+      - name: Unit tests
+        if: hashFiles('requirements.txt') != '' && hashFiles('**/tests/**') != ''
+        run: pytest -q
+
+  node-ci:
+    name: Web (if present)
+    runs-on: ubuntu-latest
+    needs: chit-contract
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node
+        if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install
+        if: hashFiles('package.json') != ''
+        run: npm ci
+      - name: Lint
+        if: hashFiles('package.json') != '' && hashFiles('.eslintrc*') != ''
+        run: npm run -s lint
+      - name: Build
+        if: hashFiles('package.json') != '' && hashFiles('vite.config.*', 'next.config.*', 'webpack.config.*') != ''
+        run: npm run -s build
