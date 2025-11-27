@@ -4,15 +4,16 @@ The 2025.10.7 gateway release moved ClickHouse settings under `gateway.observabi
 
 ## Current status (local bundles)
 - Observability is **disabled by default** so the gateway can start without ClickHouse credentials. ClickHouse still runs alongside the gateway profile (`make -C pmoves up-tensorzero`) so metrics can be enabled later.
-- Enable observability only after the `gateway.observability.clickhouse` block is present in `pmoves/tensorzero/config/tensorzero.toml` and credentials are supplied.
+- The `gateway.observability.clickhouse` table now ships populated with PMOVES defaults that match the self-hosted ClickHouse launched by the profile (URL/user/password/database all `tensorzero` against `http://tensorzero-clickhouse:8123`). Override the env vars if you point the gateway at a remote ClickHouse.
+- Enable observability by supplying credentials (or relying on the bundled defaults) and flipping `observability.enabled` to `true` in `pmoves/tensorzero/config/tensorzero.toml`.
 
 ## Enabling metrics
 1. Copy the example block below into `pmoves/tensorzero/config/tensorzero.toml` (or uncomment it if already present).
-2. Populate the secrets in your environment (recommended):
-   - `TENSORZERO_OBS_CLICKHOUSE_URL` (e.g., `http://tensorzero-clickhouse:8123`)
-   - `TENSORZERO_OBS_CLICKHOUSE_DATABASE` (default `default`)
-   - `TENSORZERO_OBS_CLICKHOUSE_USERNAME` (default `default`)
-   - `TENSORZERO_OBS_CLICKHOUSE_PASSWORD`
+2. Populate the secrets in your environment (the bundled profile pre-populates PMOVES defaults in `env.shared.example`; override as needed for remote ClickHouse):
+   - `TENSORZERO_OBS_CLICKHOUSE_URL` (default `http://tensorzero-clickhouse:8123`)
+   - `TENSORZERO_OBS_CLICKHOUSE_DB` (default `tensorzero`)
+   - `TENSORZERO_OBS_CLICKHOUSE_USER` (default `tensorzero`)
+   - `TENSORZERO_OBS_CLICKHOUSE_PASSWORD` (default `tensorzero`)
 3. Flip `observability.enabled` to `true` and restart: `make -C pmoves up-tensorzero`.
 
 ```toml
@@ -21,12 +22,12 @@ observability.enabled = true
 
 [gateway.observability.clickhouse]
 url = "env::TENSORZERO_OBS_CLICKHOUSE_URL"
-database = "env::TENSORZERO_OBS_CLICKHOUSE_DATABASE"
-username = "env::TENSORZERO_OBS_CLICKHOUSE_USERNAME"
+database = "env::TENSORZERO_OBS_CLICKHOUSE_DB"
+username = "env::TENSORZERO_OBS_CLICKHOUSE_USER"
 password = "env::TENSORZERO_OBS_CLICKHOUSE_PASSWORD"
 ```
 
-If you prefer hard-coded values for local-only testing, replace the `env::` entries with static strings (e.g., `url = "http://tensorzero-clickhouse:8123"`, `database = "default"`).
+If you prefer hard-coded values for local-only testing, replace the `env::` entries with static strings (e.g., `url = "http://tensorzero-clickhouse:8123"`, `database = "tensorzero"`).
 
 ## Verification steps
 - Run `curl http://127.0.0.1:8123/ping` to confirm ClickHouse is reachable.
