@@ -20,6 +20,10 @@ This addon drops into the root of your **PMOVES.AI** repo to enable:
    git apply addons/patches/docs_LOCAL_DEV.md.diff || true
    git apply addons/patches/docs_MAKE_TARGETS.md.diff || true
    git apply addons/patches/docs_SMOKETESTS.md.diff || true
+   # Glancer (optional profile + env keys)
+   bash addons/install_glancer.sh
+   # or
+   pwsh -File addons/install_glancer.ps1
    ```
 3) **Onboard**:
    ```sh
@@ -46,3 +50,11 @@ curl -fsSL https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/pmoves
 sudo bash pmoves-bootstrap.sh
 ```
 (You can also run the included `pmoves/scripts/proxmox/pmoves-bootstrap.sh` directly inside the guest.)
+
+---
+
+## Glancer option
+- **Patch + fetch/build:** run `bash addons/install_glancer.sh` (or `pwsh -File addons/install_glancer.ps1`) from the repository root to inject the Glancer compose profile, append env defaults, clone the source (`GLANCER_REPO_URL` / `GLANCER_REF` overrideable), and build the image (`GLANCER_IMAGE`, defaults to `pmoves-glancer:local`).
+- **Env keys added:** `GLANCER_IMAGE`, `GLANCER_PORT`, `GLANCER_PUBLIC_BASE_URL`, `GLANCER_BASIC_AUTH_USER`, `GLANCER_BASIC_AUTH_PASSWORD`, `GLANCER_HEALTH_PATH` (all appended to `.env.example` / `env.shared.example`).
+- **Bring-up:** `docker compose -f pmoves/docker-compose.yml --profile glancer up -d glancer` after the patch runs.
+- **Health / smoke:** expect HTTP 200 on `${GLANCER_PUBLIC_BASE_URL:-http://localhost:9105}${GLANCER_HEALTH_PATH:-/healthz}`. Quick check: `curl -fsSL http://localhost:9105/healthz` (or adjust port/path to match your overrides). The compose healthcheck mirrors the same probe.
