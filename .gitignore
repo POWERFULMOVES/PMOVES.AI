@@ -17,7 +17,7 @@ Thumbs.db
 *:[Zz]one.Identifier
 # Logs
 *.log
-/pmoves/data/agent-zero/logs/log_*.html
+/pmoves/data/agent-zero/logs/
 /pmoves/data/consciousness/
 # Local data caches (safety)
 *.tmp
@@ -34,6 +34,10 @@ testkeys.md
 /pmoves/.env.local
 /pmoves/env.jellyfin-ai
 /pmoves/jellyfin-ai/
+# Tooling binaries
+/actionlint
+# Root env scratch (not used by stack, keep untracked)
+/.env
 # Next.js UI build artifacts
 /pmoves/ui/.next
 /pmoves/ui/node_modules
@@ -62,3 +66,4 @@ temp*.mp4
 # PMOVES UI dev artifacts
 pmoves/ui/.pmoves_ui_dev.pid
 pmoves/ui/.pmoves_ui_dev.log
+docs/notes.md

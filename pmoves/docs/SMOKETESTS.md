@@ -280,7 +280,40 @@ Persona film automation combines the creative flows above with Supabase tables (
 2. Confirm n8n emits the geometry packets and that Supabase audit tables capture the creative assets.
 3. Geometry UI avatars animate the resulting constellations (`make -C pmoves web-geometry`) once avatar metadata is present.
 
-## 6) Geometry Bus (CHIT) — Extended Deep Dive
+## 6) “All Services Up, Then Tests” (Archon + Agents Flow)
+
+Use this when you want the full stack online (including Archon and agent UIs) before running the core smokes.
+
+1. **Ensure everything is down**
+   - From the repo root: `make -C pmoves down`
+
+2. **Start Supabase CLI stack and stamp credentials**
+   - `make -C pmoves supa-start`
+   - `make -C pmoves supabase-boot-user` (updates `pmoves/.env.local` and `env.shared` with anon/service keys)
+
+3. **Verify key environment values in `pmoves/.env.local`**
+   - `SUPABASE_URL=http://host.docker.internal:65421`
+   - `NEXT_PUBLIC_SUPABASE_URL=http://host.docker.internal:65421`
+   - `SUPA_REST_URL=http://host.docker.internal:65421/rest/v1`
+   - `ARCHON_SUPABASE_BASE_URL=http://host.docker.internal:65421`
+   - `SUPABASE_SERVICE_ROLE_KEY=sb_secret_...`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...`
+
+4. **Bring everything up (core, agents, externals, monitoring, UIs)**
+   - `make -C pmoves bringup-with-ui PARALLEL=1 WAIT_T_LONG=300`
+   - This target wires the Supabase CLI stack, core services, agents (including Archon via the submodule), optional externals, UI bundles, and waits for key health endpoints.
+
+5. **Run the headless agent/GPU smokes**
+   - `make -C pmoves agents-headless-smoke`
+   - `make -C pmoves smoke-gpu`
+
+6. **If Archon health still flaps**
+   - Confirm `ARCHON_SUPABASE_BASE_URL` and `SUPA_REST_URL` in `pmoves/.env.local` point at the active Supabase CLI REST host.
+   - Optionally re-up just the agents: `make -C pmoves up-agents` and rerun `make -C pmoves agents-headless-smoke`.
+
+For remote/self‑hosted Supabase (VPS), set `ARCHON_SUPABASE_BASE_URL`, `SUPA_REST_URL`, `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to your HTTPS endpoint and repeat steps 4–5.
+
+## 7) Geometry Bus (CHIT) — Extended Deep Dive
 
 ### Mindmap Graph (Neo4j)
 1. Seed demo nodes for `/mindmap`: `make mindmap-seed` (requires the `neo4j` service running).
@@ -288,7 +321,7 @@ Persona film automation combines the creative flows above with Supabase tables (
    - Expected: JSON payload with `items` containing the `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111` constellation points/media.
    - If you see `Neo4j unavailable`, confirm the container is healthy and `NEO4J_PASSWORD` matches the password you supplied when first starting the container.
 
-## 6) Geometry Bus (CHIT) — End-to-end
+## 8) Geometry Bus (CHIT) — End-to-end
 
 1. Create minimal CGP payload `cgp.json`:
    ```json

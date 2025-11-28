@@ -21,14 +21,13 @@ _Last updated: 2025-11-03_
 The command exits non-zero if any step fails, making it safe to re-run after fixing issues (idempotent operations such as seeds simply noop when state already matches).
 
 ## Seeded & Branded Defaults
-- **Supabase CLI**: core schema, demo tables, and Supabase Studio at `http://127.0.0.1:65433`.
-- **Neo4j**: CHIT mindmap fixture (`/neo4j/cypher/010_chit_geometry_fixture.cypher`) plus seeded personas/aliases.
-- **Qdrant / Meilisearch**: hi-rag demo corpus (`pmoves/services/hi-rag-gateway-v2/scripts/seed_local.py`).
-- **Wger**: branded PMOVES health portal with admin credentials from `env.shared` (UI at `http://localhost:8000`).
-- **Firefly III**: finance automation defaults and API tokens (`http://localhost:8082`).
-- **Jellyfin**: media bridge and default libraries (`http://localhost:8096` internal, overlay on `http://localhost:9096` when AI stack enabled).
-- **Open Notebook**: Streamlit UI (`http://localhost:8503`) with password/token synced to bricks in `env.shared`.
-- **Agent Zero / Archon**: live NATS connection and Supabase credentials enabling full mesh operations out of the box.
+
+This section has been extracted into a dedicated document:
+
+- [`SEEDED_BRANDED_DEFAULTS.md`](SEEDED_BRANDED_DEFAULTS.md)
+
+Refer there for the authoritative list of initial logins, URLs, and branded
+settings applied by `make first-run`.
 
 ## After First Run
 - **UI workspace** — `npm install && npm run dev` in `pmoves/ui`. The launcher automatically layers the same env files used by `make first-run`.

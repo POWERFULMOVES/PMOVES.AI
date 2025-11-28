@@ -28,6 +28,14 @@ The Supabase entries should report `env.shared=ok` and `.env` / `.env.local`
 `sb_secret_` (service role). Use `make supa-status` to display the current
 values after a rotation.
 
+Quick start (single-env)
+```bash
+cp pmoves/env.shared.example pmoves/env.shared   # fill real values from vault/hand-off
+make env-setup                                   # syncs .env, .env.local, generated files
+make env-check                                   # optional sanity
+./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev  # mirror to GH Secrets
+```
+
 ---
 
 ## 2. Extending Secrets to All Services
@@ -115,3 +123,74 @@ air-gapped machines while keeping a cryptographically structured payload.
 - To stage updates, generate an env file with `python pmoves/scripts/secrets_sync.py download`
    and feed it to the GitHub CLI (`gh secret set --repo POWERFULMOVES/PMOVES.AI --env-file …`).
 - You can also push directly via `python pmoves/scripts/secrets_sync.py upload --include-optional`.
+
+### Shortcut: push env.shared to GitHub secrets
+Use `pmoves/tools/push-gh-secrets.sh` to send keys from `pmoves/env.shared` to GitHub Secrets without UI clicks:
+
+```bash
+./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev
+# or target a subset / specific manifest
+./pmoves/tools/push-gh-secrets.sh --only SUPABASE_SERVICE_ROLE_KEY,SUPABASE_JWT_SECRET
+./pmoves/tools/push-gh-secrets.sh --manifest pmoves/chit/secrets_manifest.yaml
+```
+
+Flags: `--env` selects a GitHub Actions environment (Dev/Prod), `--only` filters keys, `--dry-run` prints without pushing. Ensure `gh auth login` first.
+
+---
+
+## 7. Provider API Keys & TensorZero
+
+Beyond Supabase, PMOVES uses a number of model and integration providers. These
+all follow the same pattern:
+
+- **Local**: define the key in `pmoves/env.shared` (using `env.shared.example` as reference).
+- **CI / Docker**: mirror the key as a GitHub secret (or vault export) with the
+  same logical name.
+- **Rotation**: rotate at the provider console, update `env.shared`, run
+  `make env-setup`, then update GitHub secrets via the `secrets_sync` helper.
+
+Key mappings (non‑exhaustive):
+
+| Provider | Env vars | Rotation source |
+| --- | --- | --- |
+| OpenAI | `OPENAI_API_KEY`, `OPENAI_API_BASE` | https://platform.openai.com/api-keys |
+| Groq | `GROQ_API_KEY` | https://console.groq.com/keys |
+| Anthropic | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys |
+| Google / Gemini | `GEMINI_API_KEY`, `GOOGLE_API_KEY` | https://aistudio.google.com/app/apikey |
+| Mistral | `MISTRAL_API_KEY` | https://console.mistral.ai/api-keys |
+| DeepSeek | `DEEPSEEK_API_KEY` | https://platform.deepseek.com/api-keys |
+| OpenRouter | `OPENROUTER_API_KEY` | https://openrouter.ai/keys |
+| xAI | `XAI_API_KEY` | https://console.x.ai |
+| ElevenLabs | `ELEVENLABS_API_KEY` | https://elevenlabs.io/app/api-keys |
+| Voyage | `VOYAGE_API_KEY` | Voyage console |
+| Cohere | `COHERE_API_KEY` | https://dashboard.cohere.com/api-keys |
+| Fireworks | `FIREWORKS_AI_API_KEY` | https://fireworks.ai/console/api-keys |
+| Perplexity | `PERPLEXITYAI_API_KEY` | https://www.perplexity.ai/settings/api |
+| Together | `TOGETHER_AI_API_KEY` | https://api.together.ai/settings/api-keys |
+| Cloudflare Workers AI | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | https://dash.cloudflare.com/profile/api-tokens |
+
+### TensorZero & OpenAI-compatible routing
+
+TensorZero is configured via:
+
+- `TENSORZERO_BASE_URL` / `TENSORZERO_API_KEY`
+- `TENSORZERO_MODEL` / `TENSORZERO_EMBED_MODEL`
+
+Agent Zero’s supervisor normalises OpenAI‑compatible endpoints using these
+values:
+
+- If `OPENAI_COMPATIBLE_BASE_URL` / `OPENAI_API_BASE` are empty, it derives a
+  base URL from `TENSORZERO_BASE_URL` and populates the OpenAI‑compatible envs.
+- If `OPENAI_API_KEY` is empty but `TENSORZERO_API_KEY` is present, it copies
+  the TensorZero key into `OPENAI_API_KEY` so standard OpenAI clients work out
+  of the box.
+
+When rotating TensorZero credentials:
+
+1. Rotate the API key at your TensorZero deployment.
+2. Update `TENSORZERO_BASE_URL` / `TENSORZERO_API_KEY` in `pmoves/env.shared`.
+3. Run `make env-setup && make env-check`.
+4. Update any CI secrets that mirror these values.
+
+This keeps Agent Zero, Archon, and downstream workers in sync with the new
+TensorZero configuration while preserving the single‑env contract.

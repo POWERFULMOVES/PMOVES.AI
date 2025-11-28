@@ -122,13 +122,43 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	  $(MAKE) monitoring-report || true; \
 	  echo "→ yt-dlp catalog smoke"; \
 	  $(MAKE) yt-docs-catalog-smoke || true; \
+	  echo "→ Archon smoke"; \
+	  $(MAKE) archon-smoke || true; \
+	  echo "→ Archon REST policy probe"; \
+	  $(MAKE) archon-rest-policy-smoke || true; \
 	  echo "→ Core smoke"; \
 	  $(MAKE) smoke || true; \
 	  echo "→ GPU smoke (relaxed)"; \
 	  $(MAKE) smoke-gpu || true; \
 	  echo "→ Channel monitor smoke"; \
 	  $(MAKE) channel-monitor-smoke || true; \
+	  echo "→ Agents headless smoke"; \
+	  $(MAKE) agents-headless-smoke || true; \
+	  echo "→ Archon MCP evidence"; \
+	  $(MAKE) archon-mcp-evidence || true; \
 	  echo "✔ Verify-all sequence executed. Review console + Grafana."
+
+.PHONY: archon-mcp-evidence
+archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence under pmoves/docs/logs/
+	@mkdir -p pmoves/docs/logs
+	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
+	  echo "→ Archon MCP describe"; \
+	  curl -sf http://localhost:8091/mcp/describe | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_describe.json; \
+	  echo "→ Archon MCP commands"; \
+	  curl -sf http://localhost:8091/mcp/commands | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json; \
+	  tool=$$(jq -r 'first(.commands[] | select(.name=="form.get").name) // .commands[0].name' pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json); \
+	  echo "→ Archon MCP execute $$tool"; \
+	  curl -sS -X POST http://localhost:8091/mcp/execute -H 'content-type: application/json' -d "{\"tool\":\"$$tool\",\"arguments\":{}}" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_execute.json; \
+	  echo "✔ Evidence saved under pmoves/docs/logs/ with stamp $$STAMP"
+
+.PHONY: archon-submodule-extract
+archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARCHON_SUBMODULE_REPO=Org/Repo)
+	@if [ -z "$$ARCHON_SUBMODULE_REPO" ]; then echo "Usage: make archon-submodule-extract ARCHON_SUBMODULE_REPO=Org/Repo" && exit 2; fi; \
+	bash pmoves/tools/submodules/extract_to_submodule.sh services/archon "$$ARCHON_SUBMODULE_REPO" pmoves/integrations/archon
+
+.PHONY: up-archon-submodule
+up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml up -d archon
 
 .PHONY: loki-ready
 loki-ready: ## Check Loki readiness endpoint (/ready)
@@ -327,6 +357,20 @@ up-workers:
 # YouTube ingest + whisper stack
 up-yt:
 	docker compose -p $(PROJECT) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+
+.PHONY: up-yt-published
+up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
+
+.PHONY: up-agents-hardened up-yt-hardened
+up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+	@echo "✔ Agents started (hardened overrides applied)."
+
+up-yt-hardened: ## Start YT stack with hardened security options (published images)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@echo "✔ PMOVES.YT started (hardened overrides applied)."
 
 # Optional media analyzers (video+audio)
 up-media:
@@ -560,8 +604,13 @@ up-jellyfin:
 
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
 .PHONY: up-agents
-up-agents:
-	docker compose -p $(PROJECT) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+up-agents: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+
+.PHONY: agents-headless-smoke
+agents-headless-smoke: ## Check Agent Zero and Archon headless services
+	@$(MAKE) health-agent-zero
+	@$(MAKE) archon-headless-smoke
 
 .PHONY: up-agents-published
 up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images (no local builds)
@@ -569,9 +618,9 @@ up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using publ
 	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
 
 .PHONY: up-agents-ui
-up-agents-ui: ## Start Agents APIs + UIs (NATS, Agent Zero, Archon, Archon UI, DeepResearch)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
-	@echo "✔ Agents (APIs + UIs) started. Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
+up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use PUBLISHED_AGENTS=1 for images)
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml -f docker-compose.archon-ui.submodule.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
+	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
 .PHONY: a0-mcp-seed
 a0-mcp-seed: ## Write A0_MCP_SERVERS into Agent Zero runtime (data/agent-zero/runtime/mcp/servers.env)
@@ -588,6 +637,92 @@ archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)
 	if [ "$$api" != "200" ]; then echo "✖ archon API /healthz => $$api" && exit 1; fi; \
 	if [ "$$ui" != "200" ]; then echo "✖ archon UI / => $$ui" && exit 1; fi; \
 	echo "✔ archon API/ UI healthy (API $$api, UI $$ui)"
+
+.PHONY: archon-smoke
+archon-smoke: ## Combined Archon smoke: /healthz 200 and Supabase CLI REST reachable
+	@bash -lc 'api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); \
+	rest="http://127.0.0.1:65421/rest/v1"; \
+	if [ -f pmoves/.env.local ]; then \
+	  val=$$(grep -m1 '^SUPA_REST_URL=' pmoves/.env.local | cut -d= -f2-); [ -n "$$val" ] && rest="$$val"; \
+	fi; \
+	pg=$$(curl -s -o /dev/null -w "%{http_code}" "$$rest" || true); \
+	if [ "$$api" != "200" ]; then echo "✖ archon /healthz => $$api" && exit 1; fi; \
+	if [ "$$pg" != "200" ]; then echo "✖ Supabase REST => $$pg (URL: $$rest)" && exit 1; fi; \
+	echo "✔ archon /healthz 200 and Supabase REST $$rest OK"'
+
+.PHONY: archon-rest-policy-smoke
+archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
+	@bash -lc 'url="http://127.0.0.1:65421/rest/v1"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth=""; \
+	if [ -f pmoves/.env.local ]; then \
+	  v=$$(grep -m1 '^SUPA_REST_URL=' pmoves/.env.local | cut -d= -f2-); [ -n "$$v" ] && url="$$v"; \
+	  a=$$(grep -m1 '^SUPABASE_ANON_KEY=' pmoves/.env.local | cut -d= -f2-); [ -n "$$a" ] && auth="$$a"; \
+	fi; \
+	hdr=""; [ -n "$$auth" ] && hdr="-H Authorization: Bearer $$auth"; echo "→ REST policy probe $$url/$$table"; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" $$hdr "$$url/$$table" || true); \
+	if [ "$$code" = "200" ]; then echo "✔ $$table accessible (200)"; \
+	elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; \
+	elif [ -z "$$code" ] || [ "$$code" = "000" ] || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
+	else echo "↷ REST probe HTTP $$code"; fi'
+
+.PHONY: archon-headless-smoke
+archon-headless-smoke: ## Verify Archon headless services: /ready 200 and MCP bridge responds
+	@bash -lc 'set -e; \
+	  ready=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/ready || true); \
+	  if [ "$$ready" != "200" ]; then \
+	    detail=$$(curl -s http://localhost:8091/healthz || echo ""); \
+	    code=$$(printf "%s\n" "$$detail" | jq -r ".detail.supabase.http // empty" 2>/dev/null || echo ""); \
+	    url=$$(printf "%s\n" "$$detail" | jq -r ".detail.supabase.url // empty" 2>/dev/null || echo ""); \
+	    if [ "$$ready" = "503" ] && [ "$$code" = "404" ] && printf "%s\n" "$$url" | grep -q "host.docker.internal:65421"; then \
+	      echo "↷ archon /ready 503 (Supabase CLI root 404) — treating as soft-ok"; \
+	    else \
+	      echo "✖ archon /ready => $$ready (supabase.http=$$code url=$$url)"; exit 1; \
+	    fi; \
+	  fi; \
+	  echo "→ Probing MCP bridge via /mcp/describe"; \
+	  desc=$$(curl -fsS http://localhost:8091/mcp/describe); \
+	  reach=$$(printf "%s\n" "$$desc" | jq -r ".reachable"); \
+	  if [ "$$reach" != "true" ]; then echo "✖ MCP bridge not reachable"; exit 1; fi; \
+	  echo "→ Checking Archon /healthz status"; \
+	  code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); \
+	  if command -v jq >/dev/null 2>&1; then \
+	    status=$$(curl -sf http://localhost:8091/healthz | jq -r ".status // \"\"" || echo ""); \
+	    if [ "$$status" != "ok" ]; then echo "↷ Archon /healthz reports '\''$$status'\'' (proceeding with MCP checks)."; fi; \
+	  else \
+	    if [ "$$code" != "200" ]; then echo "↷ Archon /healthz $$code (proceeding)."; fi; \
+	  fi; \
+	  echo "→ Listing MCP commands via /mcp/commands"; \
+	  cmds_json=$$(curl -s http://localhost:8091/mcp/commands 2>/dev/null || true); \
+	  if [ -z "$$cmds_json" ]; then \
+	    echo "↷ /mcp/commands not available (soft-ok; describe reachable)"; \
+	    echo "✔ archon headless health OK"; \
+	    exit 0; \
+	  fi; \
+	  cmds_count=$$(printf "%s\n" "$$cmds_json" | jq ".commands | length" 2>/dev/null || echo ""); \
+	  if [ -z "$$cmds_count" ]; then \
+	    echo "↷ /mcp/commands response not parseable (soft-ok; describe reachable)"; \
+	    echo "✔ archon headless health OK"; \
+	    exit 0; \
+	  fi; \
+	  if [ "$$cmds_count" = "0" ]; then \
+	    echo "↷ no MCP commands advertised (soft-ok for now)"; \
+	    echo "✔ archon headless health OK"; \
+	    exit 0; \
+	  fi; \
+	  echo "→ Attempting form.get if available (or first tool)"; \
+	  tool=$$(printf "%s\n" "$$cmds_json" | jq -r "first(.commands[] | select(.name==\"form.get\").name) // .commands[0].name"); \
+	  http_code=$$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8091/mcp/execute -H "content-type: application/json" -d "{\\\"tool\\\":\\\"$$tool\\\",\\\"arguments\\\":{}}" 2>/dev/null || true); \
+	  if [ "$$http_code" != "200" ]; then \
+	    echo "↷ MCP execute $$tool => $$http_code (soft-ok; bridge reachable)"; \
+	  else \
+	    echo "✔ archon MCP command executed: $$tool"; \
+	  fi; \
+	  echo "✔ archon headless health OK"; \
+	'
+
+.PHONY: archon-rebuild
+archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)
+	@docker compose build --no-cache archon
+	@echo "✔ Archon image rebuilt"
 
 .PHONY: deepresearch-health
 deepresearch-health: ## Check DeepResearch health endpoint (200 expected)
@@ -1244,24 +1379,28 @@ eval-jsonl:
 .PHONY: smoke-presign-put
 smoke-presign-put:
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
+	@echo "Ensuring MinIO is running..."
+	@docker compose -p $(PROJECT) up -d minio >/dev/null 2>&1 || true
 	@echo "Generating presign PUT and uploading a small text file..."
 	@URL=$$(curl -s -X POST http://localhost:8088/presign/put \
 	  -H 'content-type: application/json' \
 	  -H "Authorization: Bearer $${PRESIGN_SHARED_SECRET:-change_me}" \
 	  -d '{"bucket":"outputs","key":"hello.txt","content_type":"text/plain","expires":300}' ) && \
-	  echo $$URL | jq -r '.url' | xargs -I {} sh -c "echo 'hello pmoves' | curl -s -X PUT -H 'Content-Type: text/plain' --data-binary @- '{}' >/dev/null" && echo OK || (echo FAIL && exit 1)
+	  raw_url=$$(echo "$$URL" | jq -r '.url'); \
+	  host_url=$$(printf '%s\n' "$$raw_url" | sed 's#^http://[^:/]*:9000/#http://localhost:9000/#'); \
+	  echo 'hello pmoves' | curl -s -X PUT -H 'Content-Type: text/plain' --data-binary @- "$$host_url" >/dev/null && echo OK || (echo FAIL && exit 1)
 
 .PHONY: smoke-pdf
 smoke-pdf:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-pdf" && exit 1)
-	@test -f pmoves/datasets/sample.pdf || (echo "datasets/sample.pdf missing" && exit 1)
+	@test -f ../pmoves/datasets/sample.pdf || (echo "datasets/sample.pdf missing" && exit 1)
 	@echo "[1/4] Create presign URL for sample.pdf" && \
 	URL=$$(curl -s -X POST http://localhost:8088/presign/put \
 	  -H 'content-type: application/json' \
 	  -H "Authorization: Bearer $${PRESIGN_SHARED_SECRET:-change_me}" \
 	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","content_type":"application/pdf","expires":300}' ) && echo OK || (echo FAIL && exit 1)
 	@echo "[2/4] Upload sample.pdf to MinIO" && \
-	echo "$$URL" | jq -r .url | xargs -I {} curl -s -X PUT -H 'Content-Type: application/pdf' --data-binary @pmoves/datasets/sample.pdf '{}' >/dev/null && echo OK || (echo FAIL && exit 1)
+	echo "$$URL" | jq -r .url | xargs -I {} curl -s -X PUT -H 'Content-Type: application/pdf' --data-binary @../pmoves/datasets/sample.pdf '{}' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[3/4] Trigger pdf-ingest" && \
 	curl -sf http://localhost:8092/pdf/ingest -H 'content-type: application/json' \
 	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","namespace":"pmoves","title":"Sample PDF","publish_events":false}' \
@@ -1575,53 +1714,7 @@ first-run: ensure-env-shared ## One-shot env bootstrap, seed data, start full st
 
 .PHONY: supabase-boot-user
 supabase-boot-user:
-	@set -euo pipefail; \
-	EMAIL="$${SUPABASE_BOOT_USER_EMAIL:-}"; \
-	if [ -z "$$EMAIL" ]; then \
-		for file in env.shared env.shared.generated .env .env.local pmoves/.env.local; do \
-			if [ -f $$file ]; then \
-				VAL=$$(grep -m1 '^SUPABASE_BOOT_USER_EMAIL=' $$file | cut -d= -f2-); \
-				if [ -n "$$VAL" ]; then EMAIL="$$VAL"; break; fi; \
-			fi; \
-		done; \
-		fi; \
-	if [ -z "$$EMAIL" ]; then EMAIL="operator@pmoves.local"; fi; \
-	NAME="$${SUPABASE_BOOT_USER_NAME:-PMOVES Operator}"; \
-	URL="$${SUPABASE_SERVICE_URL:-$${SUPABASE_URL:-$${NEXT_PUBLIC_SUPABASE_URL:-http://127.0.0.1:54321}}}"; \
-	SERVICE_KEY="$${SUPABASE_SERVICE_ROLE_KEY:-}"; \
-	if [ -z "$$SERVICE_KEY" ]; then \
-		for file in env.shared env.shared.generated .env .env.local pmoves/.env.local; do \
-			if [ -f $$file ]; then \
-				VAL=$$(grep -m1 '^SUPABASE_SERVICE_ROLE_KEY=' $$file | cut -d= -f2-); \
-				if [ -n "$$VAL" ]; then SERVICE_KEY="$$VAL"; break; fi; \
-			fi; \
-		done; \
-		fi; \
-	URL="$${URL%/}"; \
-	if [ -z "$$URL" ]; then \
-		echo "   • Supabase URL not detected; skipping boot user automation."; \
-		exit 0; \
-		fi; \
-	echo "   • Waiting for Supabase auth endpoint at $$URL..."; \
-	READY=0; \
-	for attempt in $$(seq 1 30); do \
-		if [ -n "$$SERVICE_KEY" ]; then \
-			if curl -sf -H "apikey: $$SERVICE_KEY" -H "Authorization: Bearer $$SERVICE_KEY" "$$URL/auth/v1/settings" >/dev/null 2>&1; then READY=1; break; fi; \
-		else \
-			if curl -sf "$$URL/auth/v1/health" >/dev/null 2>&1; then READY=1; break; fi; \
-		fi; \
-		sleep 1; \
-	done; \
-	if [ "$$READY" -ne 1 ]; then \
-		echo "   • Supabase auth endpoint not reachable; run 'make supa-start' then 'make supabase-boot-user'."; \
-		exit 0; \
-		fi; \
-	if python pmoves/tools/create_supabase_boot_user.py "$$EMAIL" --name "$$NAME" --rotate-password --write-env env.shared --write-env .env.local --write-env pmoves/.env.local --json >/dev/null; then \
-		echo "   • Supabase boot user ($$EMAIL) provisioned and env files updated."; \
-		else \
-		echo "   • Boot user automation failed; rerun 'make supabase-boot-user' after resolving errors."; \
-		exit 0; \
-	fi
+	@bash tools/supabase_boot_user.sh
 
 .PHONY: docker-login-ghcr
 docker-login-ghcr:
@@ -1899,9 +1992,40 @@ health-publisher-discord:
 	curl -sf http://localhost:8094/healthz | jq .
 
 .PHONY: health-agent-zero
-health-agent-zero:
-	@echo "Checking Agent Zero on http://localhost:8080/healthz" && \
-	curl -sf http://localhost:8080/healthz | jq .
+health-agent-zero: ## Check Agent Zero supervisor health and MCP surface
+	@bash -lc 'base=$${AGENT_ZERO_BASE_URL:-http://localhost:8080}; \
+	echo "→ Agent Zero base: $$base"; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" "$$base/healthz" || true); \
+	if [ "$$code" != "200" ]; then echo "✖ agent-zero /healthz => $$code" && exit 1; fi; \
+	echo "✔ agent-zero /healthz 200"; \
+	echo "→ Fetching /config/environment"; \
+	env_json=$$(curl -fsS "$$base/config/environment" || true); \
+	if [ -z "$$env_json" ]; then echo "✖ agent-zero /config/environment returned empty response" && exit 1; fi; \
+	if command -v jq >/dev/null 2>&1; then \
+	  form=$$(printf "%s\n" "$$env_json" | jq -r ".agent_form // empty"); \
+	  echo "  default form: $${form:-<unknown>}"; \
+	else \
+	  echo "  (jq not available; skipping structured environment inspection)"; \
+	fi; \
+	echo "→ Listing MCP commands via /mcp/commands"; \
+	cmds_json=$$(curl -fsS "$$base/mcp/commands" || true); \
+	if [ -z "$$cmds_json" ]; then echo "✖ agent-zero /mcp/commands returned empty response" && exit 1; fi; \
+	if command -v jq >/dev/null 2>&1; then \
+	  count=$$(printf "%s\n" "$$cmds_json" | jq ".commands | length"); \
+	  if [ "$$count" = "0" ]; then echo "✖ no MCP commands advertised by agent-zero" && exit 1; fi; \
+	else \
+	  echo "  (jq not available; skipping MCP command count check)"; \
+	fi; \
+	echo "→ Executing MCP form.get via a0-mcp-exec-smoke"; \
+	$(MAKE) a0-mcp-exec-smoke >/dev/null; \
+	echo "✔ agent-zero health and MCP surface OK"'
+
+.PHONY: a0-mcp-smoke a0-mcp-exec-smoke
+a0-mcp-smoke: ## List MCP commands exposed by Agent Zero
+	@curl -sf http://localhost:8080/mcp/commands | jq '.commands | length as $n | {count:$n, samples:(.[:5])}'
+
+a0-mcp-exec-smoke: ## Execute a trivial MCP call (form.get)
+	@curl -sf -X POST http://localhost:8080/mcp/execute -H 'content-type: application/json' -d '{"cmd":"form.get"}' | jq -e '.result.form != null' >/dev/null && echo "✔ a0 mcp form.get OK" || (echo "✖ a0 mcp form.get failed" && exit 1)
 
 .PHONY: health-jellyfin-bridge
 health-jellyfin-bridge:

@@ -33,6 +33,20 @@ services:
     profiles: ["orchestration","workers","supabase-local"]
     networks: [pmoves]
 
+  postgrest-health:
+    image: curlimages/curl:8.6.0
+    restart: unless-stopped
+    command: ["tail","-f","/dev/null"]
+    depends_on: [postgrest]
+    profiles: ["orchestration","workers","supabase-local"]
+    networks: [pmoves]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://postgrest:3000/ >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
   # Optional: PostgREST against Supabase CLI database (host.docker.internal:65432)
   # Use profile 'supabase-cli-rest' and set POSTGREST_URL=http://localhost:3011 for console fallbacks.
   postgrest-cli:
@@ -603,17 +617,28 @@ services:
     build:
       context: .
       dockerfile: ./services/archon/Dockerfile
+      args:
+        - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
+        - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8091
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
+      - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
+      - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
+      - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
+      - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      # Prefer in-network PostgREST to avoid host DNS/route flaps when CLI stack restarts
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      # Prefer Supabase CLI REST (host) for single-env and remote overrides
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:65421}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
     depends_on:
-      - nats
+      nats:
+        condition: service_started
+    command: ["python","-c","import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')"]
     ports: ["8091:8091","8051:8051","8052:8052"]
     profiles: ["agents"]
     networks:
@@ -622,6 +647,12 @@ services:
           - archon-server
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
   mesh-agent:
     build: ./services/mesh-agent

@@ -29,6 +29,9 @@
 - For Open Notebook bring-up, populate `OPEN_NOTEBOOK_SURREAL_URL` / `OPEN_NOTEBOOK_SURREAL_ADDRESS` (or use the legacy `SURREAL_*` aliases) before running `make notebook-up` so the UI can reach SurrealDB.
 - Branded deployments reuse the Open Notebook password as the API bearer token; keep `OPEN_NOTEBOOK_API_TOKEN` in lockstep with `OPEN_NOTEBOOK_PASSWORD` so CLI helpers and agents authenticate cleanly.
 - Prefer local inference? Start the `ollama` service (or another provider) and set `OLLAMA_API_BASE` before running `make notebook-seed-models` so Notebook seeds its catalog with in-cluster models instead of calling external APIs.
+- Secrets handling: never store credentials in tracked files. Use GitHub Actions secrets (and environment-scoped secrets for prod vs dev), Docker/compose secrets via `*_FILE` envs, and a shared vault for human access. For onboarding steps and approved secret names, see `docs/SECRETS_ONBOARDING.md`.
+- Single-env + branded defaults: integrations share one environment bundle. Keep branded login defaults/API tokens in GitHub secrets and the team vault; avoid committing real secrets in `pmoves/env.shared` (use rotation + secrets for production values).
+- Quick start (local): `cp pmoves/env.shared.example pmoves/env.shared`, fill values, `make env-setup`, `make env-check`, then `./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev` to mirror into GitHub Secrets.
 
 ## Stabilization Status (Nov 6, 2025)
 - Storage: Switched to Supabase Storage (S3-compatible) only. All services read `MINIO_*` from `pmoves/env.shared` pointing at `http://host.docker.internal:65421/storage/v1/s3`.
@@ -89,6 +92,7 @@ Next Actions
 
 ## Testing & Validation
 - Before running checks, review `pmoves/docs/SMOKETESTS.md` for the current 12-step smoke harness flow and optional follow-on targets.
+- For full-stack agents/Archon runs, use the “All Services Up, Then Tests (Archon + Agents Flow)” checklist in `pmoves/docs/SMOKETESTS.md` together with the Archon notes in `docs/PMOVES.AI-Edition-Hardened.md` and `pmoves/docs/services/archon/README.md`.
 - Notebook Workbench: run `make -C pmoves notebook-workbench-smoke ARGS="--thread=<uuid>"` after UI/runtime changes to lint the bundle and confirm Supabase connectivity (see `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md`).
 - Hi-RAG gateway: run `make -C pmoves smoke-gpu` after reranker or embedding changes. The target now proxies the test query through `docker compose exec` so FlagEmbedding/Qwen rerankers that only accept batch size 1 still return `"used_rerank": true` (first run downloads the 4B checkpoint).
 - Use `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` and `pmoves/docs/LOCAL_DEV.md` to confirm environment scripts, Make targets, and Supabase CLI expectations.

@@ -160,6 +160,15 @@ OpenAI-compatible presets:
   - Full mode adds a Docker services panel (state/health) when compose is up
   - Extra themes: `--theme neon` (blue/purple neon), `--theme galaxy` (deep space blue/purple), `--theme cb` (colorblind-safe)
 
+For a detailed view of which env keys are still missing before first bring‑up,
+run:
+
+- `make env-check` — uses `scripts/env_check.sh` / `env_check.ps1` to compare
+  `pmoves/env.shared` against `pmoves/env.shared.example` and highlight unset
+  variables. Combine this with the branded defaults map in
+  `pmoves/docs/SEEDED_BRANDED_DEFAULTS.md` and the rotation guidance in
+  `docs/SECRETS.md` when onboarding a new machine or rotating credentials.
+
 ### Windows/WSL smoke script
 
 - Purpose: fast confidence check for local Docker stacks without requiring GNU Make.

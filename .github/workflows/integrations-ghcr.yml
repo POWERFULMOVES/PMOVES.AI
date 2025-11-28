@@ -30,15 +30,21 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  # Standard secret names (documented in docs/SECRETS_ONBOARDING.md)
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
+  GHCR_PASSWORD: ${{ secrets.GH_PAT_PUBLISH || secrets.GITHUB_TOKEN }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.CI_DOCKERHUB_USERNAME }}
+  DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
 
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || matrix.name == inputs.integration }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' }}
     permissions:
       contents: read
       packages: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -114,39 +120,49 @@ jobs:
 
     steps:
       - name: Checkout (stub)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         uses: actions/checkout@v4
 
       - name: Clone integration repo
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         run: |
           git clone --depth=1 --branch "${{ matrix.ref }}" "${{ matrix.git_url }}" integration-src
 
       - name: Set up QEMU
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         uses: docker/setup-buildx-action@v3
 
+      - name: Install Cosign
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: sigstore/cosign-installer@v3.4.0
+
       - name: Log in to GHCR
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_PASSWORD }}
 
       - name: Optional login to Docker Hub
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.push_to_dockerhub == true && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) || (github.event_name != 'workflow_dispatch' && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.push_to_dockerhub == true && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD && (inputs.integration == 'all' || inputs.integration == matrix.name)) || (github.event_name != 'workflow_dispatch' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD) }}
         uses: docker/login-action@v3
         with:
           registry: docker.io
-          username: ${{ secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_PASSWORD }}
 
       - name: Compute tags
         id: meta
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
-          INCLUDE_DOCKERHUB: ${{ (github.event_name != 'workflow_dispatch' && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) || (github.event_name == 'workflow_dispatch' && inputs.push_to_dockerhub == true && (secrets.CI_DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME) && (secrets.CI_DOCKERHUB_TOKEN || secrets.DOCKERHUB_TOKEN)) }}
+          INCLUDE_DOCKERHUB: ${{ (github.event_name != 'workflow_dispatch' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD) || (github.event_name == 'workflow_dispatch' && inputs.push_to_dockerhub == true && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD) }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         run: |
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
@@ -165,6 +181,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Build and push (multi-arch)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         uses: docker/build-push-action@v6
         with:
           context: integration-src/${{ matrix.context }}
@@ -174,3 +191,77 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Cosign sign GHCR tags (keyless)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          set -euo pipefail
+          echo "$TAGS" | tr '\n' '\0' | while IFS= read -r -d '' tag; do
+            case "$tag" in
+              ghcr.io/*|docker.io/*)
+                cosign sign --yes "$tag" ;;
+              *) ;; # skip other registries
+            esac
+          done
+
+      - name: Install Syft (SBOM)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: anchore/sbom-action/download-syft@v0.17.7
+
+      - name: Generate SBOMs (CycloneDX)
+        id: sbom
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        run: |
+          set -euo pipefail
+          TAG_PRIMARY=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          syft packages "$TAG_PRIMARY" -o cyclonedx-json > sbom.cdx.json
+          echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
+
+      - name: Upload SBOM artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-sbom
+          path: ${{ steps.sbom.outputs.sbom_path }}
+
+      - name: Trivy vulnerability scan (HIGH/CRITICAL)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}:pmoves-latest
+          format: table
+          exit-code: '1'
+
+      - name: Cosign verify GHCR tags (keyless)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          set -euo pipefail
+          echo "$TAGS" | tr '\n' '\0' | while IFS= read -r -d '' tag; do
+            case "$tag" in
+              ghcr.io/*|docker.io/*)
+                cosign verify "$tag" ;; 
+              *) ;; # skip other registries
+            esac
+          done
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.6.0
+      - name: Cosign sign (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: 'true'
+        run: |
+          set -euo pipefail
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "Signing $tag"
+            cosign sign --yes "$tag"
+          done < <(echo "${{ steps.meta.outputs.tags }}")

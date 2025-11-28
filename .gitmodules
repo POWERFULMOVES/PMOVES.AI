@@ -1,0 +1,3 @@
+[submodule "pmoves/integrations/archon"]
+	path = pmoves/integrations/archon
+	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
