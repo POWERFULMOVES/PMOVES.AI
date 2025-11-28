@@ -7,6 +7,12 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
+    secrets:
+      - supabase_service_role_key
+      - supabase_jwt_secret
+    environment:
+      SUPABASE_SERVICE_ROLE_KEY_FILE: /run/secrets/supabase_service_role_key
+      SUPABASE_JWT_SECRET_FILE: /run/secrets/supabase_jwt_secret
   pmoves-yt:
     user: "1000:1000"
     # yt-dlp writes temp files; keep FS read-only with a tmpfs for /tmp
@@ -24,3 +30,9 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
+
+secrets:
+  supabase_service_role_key:
+    file: ${SUPABASE_SERVICE_ROLE_KEY_FILE:-/run/secrets/supabase_service_role_key}
+  supabase_jwt_secret:
+    file: ${SUPABASE_JWT_SECRET_FILE:-/run/secrets/supabase_jwt_secret}

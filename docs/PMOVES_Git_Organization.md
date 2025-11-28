@@ -84,6 +84,11 @@ runs-on: self-hosted
 ### Security & Dependencies
 - [Dependabot configuration template](https://github.com/POWERFULMOVES/PMOVES.AI/new/main?dependabot_template=1&filename=.github%2Fdependabot.yml)
 
+### Secrets & Package Publishing (Org Standard)
+- Store credentials only in GitHub Secrets (org/repo/env scope) and the team vault; never in tracked files.
+- Standard secret names: `GH_PAT_PUBLISH`, `GHCR_USERNAME`, `DOCKERHUB_PAT`, `DOCKERHUB_USERNAME`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `YOUTUBE_API_KEY`, `GOOGLE_OAUTH_CLIENT_SECRET`, `DISCORD_WEBHOOK` (add more as needed; keep them documented in `docs/SECRETS_ONBOARDING.md`).
+- Image publishing: workflows should `docker/login-action` to GHCR and Docker Hub using the secrets above, then `docker/build-push-action` with SBOM+provenance and signed tags.
+
 ---
 
 ## PMOVES Project Repositories

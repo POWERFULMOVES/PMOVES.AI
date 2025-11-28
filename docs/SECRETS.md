@@ -28,6 +28,14 @@ The Supabase entries should report `env.shared=ok` and `.env` / `.env.local`
 `sb_secret_` (service role). Use `make supa-status` to display the current
 values after a rotation.
 
+Quick start (single-env)
+```bash
+cp pmoves/env.shared.example pmoves/env.shared   # fill real values from vault/hand-off
+make env-setup                                   # syncs .env, .env.local, generated files
+make env-check                                   # optional sanity
+./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev  # mirror to GH Secrets
+```
+
 ---
 
 ## 2. Extending Secrets to All Services
@@ -115,6 +123,18 @@ air-gapped machines while keeping a cryptographically structured payload.
 - To stage updates, generate an env file with `python pmoves/scripts/secrets_sync.py download`
    and feed it to the GitHub CLI (`gh secret set --repo POWERFULMOVES/PMOVES.AI --env-file …`).
 - You can also push directly via `python pmoves/scripts/secrets_sync.py upload --include-optional`.
+
+### Shortcut: push env.shared to GitHub secrets
+Use `pmoves/tools/push-gh-secrets.sh` to send keys from `pmoves/env.shared` to GitHub Secrets without UI clicks:
+
+```bash
+./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev
+# or target a subset / specific manifest
+./pmoves/tools/push-gh-secrets.sh --only SUPABASE_SERVICE_ROLE_KEY,SUPABASE_JWT_SECRET
+./pmoves/tools/push-gh-secrets.sh --manifest pmoves/chit/secrets_manifest.yaml
+```
+
+Flags: `--env` selects a GitHub Actions environment (Dev/Prod), `--only` filters keys, `--dry-run` prints without pushing. Ensure `gh auth login` first.
 
 ---
 

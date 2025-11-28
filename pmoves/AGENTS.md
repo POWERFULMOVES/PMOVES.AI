@@ -85,6 +85,12 @@
   ```
 - JetStream drift can surface as `nats: JetStream.Error cannot create queue subscription…` in the Agent Zero container logs. Rebuild with `docker compose build agent-zero && docker compose up -d agent-zero` so the pull-subscribe controller code ships and the consumer metadata is recreated automatically.
 
+### Secrets handling (everyone)
+- Never commit secrets. Keep personal scratch in ignored files only, and store shared credentials in GitHub Actions secrets (with environment scoping for dev/prod), Docker/compose secrets via `*_FILE` envs, and the team vault for human retrieval.
+- Approved secret names and onboarding steps live in `docs/SECRETS_ONBOARDING.md`.
+- Single-env + branded defaults: integrations run against one environment bundle. Keep branded login defaults/API tokens in GitHub secrets and the vault; avoid committing real secrets in `pmoves/env.shared` (rotate and load through secrets for production values).
+- Quick start (local): `cp pmoves/env.shared.example pmoves/env.shared`, fill values, `make env-setup`, `make env-check`, then `./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev` to mirror into GitHub Secrets.
+
 #### Health badges and custom endpoints
 
 The console Quick Links probe Agent Zero and Archon using `/healthz` by default. If your forks expose different health endpoints, set:
