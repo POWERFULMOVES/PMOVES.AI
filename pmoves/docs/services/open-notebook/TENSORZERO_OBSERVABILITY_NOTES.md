@@ -15,6 +15,9 @@ The 2025.10.7 gateway release moved ClickHouse settings under `gateway.observabi
    - `TENSORZERO_OBS_CLICKHOUSE_USER` (default `tensorzero`)
    - `TENSORZERO_OBS_CLICKHOUSE_PASSWORD` (default `tensorzero`)
 3. Flip `observability.enabled` to `true` and restart: `make -C pmoves up-tensorzero`.
+1. Update `pmoves/tensorzero/config/tensorzero.toml` with the new `gateway.observability.clickhouse.*` block from the official docs.
+2. Add credentials via env vars (`TENSORZERO_CLICKHOUSE_URL`, etc.) as documented upstream.
+3. Rebuild/restart the gateway profile: `make up-tensorzero`.
 
 ```toml
 [gateway]
