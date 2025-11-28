@@ -13,9 +13,9 @@ services:
     image: clickhouse/clickhouse-server:24
     restart: unless-stopped
     environment:
-      - CLICKHOUSE_DB=${TENSORZERO_OBS_CLICKHOUSE_DB:-tensorzero}
-      - CLICKHOUSE_USER=${TENSORZERO_OBS_CLICKHOUSE_USER:-tz}
-      - CLICKHOUSE_PASSWORD=${TENSORZERO_OBS_CLICKHOUSE_PASSWORD:-changeme}
+      - CLICKHOUSE_DB=${TENSORZERO_CLICKHOUSE_DB:-tensorzero}
+      - CLICKHOUSE_USER=${TENSORZERO_CLICKHOUSE_USER:-tz}
+      - CLICKHOUSE_PASSWORD=${TENSORZERO_CLICKHOUSE_PASSWORD:-changeme}
     volumes:
       - clickhouse-data:/var/lib/clickhouse
     ports: ["8123:8123"]

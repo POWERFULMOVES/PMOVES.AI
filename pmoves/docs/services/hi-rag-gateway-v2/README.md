@@ -13,7 +13,7 @@ Compose
 
 Environment (selected)
 - Core: `QDRANT_URL`, `QDRANT_COLLECTION`, `SENTENCE_MODEL`, `INDEXER_NAMESPACE`, `ALPHA`
-- Rerank: `RERANK_ENABLE`, `RERANK_MODEL`, `RERANK_TOPN`, `RERANK_K`, `RERANK_FUSION`, `RERANK_PROVIDER`, `TENSORZERO_RERANK_FUNCTION`, `TENSORZERO_RERANK_TIMEOUT`
+- Rerank: `RERANK_ENABLE`, `RERANK_MODEL`, `RERANK_MODEL_PATH`, `RERANK_USE_FP16`, `RERANK_TOPN`, `RERANK_K`, `RERANK_FUSION`, `RERANK_PROVIDER`, `TENSORZERO_RERANK_FUNCTION`, `TENSORZERO_RERANK_TIMEOUT`
 - Search: `USE_MEILI`, `MEILI_URL`, `MEILI_API_KEY`
 - Graph: `NEO4J_URL`, `NEO4J_USER`, `NEO4J_PASSWORD`, `GRAPH_BOOST`, `ENTITY_CACHE_TTL`, `ENTITY_CACHE_MAX`, `NEO4J_DICT_REFRESH_SEC`, `NEO4J_DICT_LIMIT`
 - Optional: `USE_OLLAMA_EMBED`, `OLLAMA_URL`, `TAILSCALE_ONLY`, `TAILSCALE_CIDRS`
@@ -31,7 +31,7 @@ Realtime
 
 Defaults
 - Meilisearch lexical: enabled by default for v2‑GPU (compose sets `USE_MEILI=true`). CPU v2 honors `USE_MEILI` from env.
-- v2‑GPU reranker default: `RERANK_MODEL=Qwen/Qwen3-Reranker-4B` (overridable with env).
+- v2‑GPU reranker default: `RERANK_MODEL=Qwen/Qwen3-Reranker-4B` with a bind-mounted snapshot at `/models/qwen/Qwen3-Reranker-4B` (`RERANK_MODEL_PATH`).
 - CUDA compatibility: Blackwell‑class GPUs (e.g., RTX 5090) require PyTorch wheels built with CUDA 12.8+ (`cu128`). The GPU compose target now defaults to `TORCH_CUDA_VERSION=cu128` and installs `torch==2.9.0` with those kernels. Rebuild the image (`docker compose build hi-rag-gateway-v2-gpu`) after pulling these changes so the container picks up the new runtime.
 - Set `RERANK_PROVIDER=tensorzero` to route rerank scoring through the TensorZero gateway. Responses report `rerank_provider` so smokes can verify which backend was used.
 - Query hits now surface a `persona` object (when chunk payloads include persona metadata) for downstream UI/agent awareness.
@@ -63,6 +63,12 @@ Make targets
 - `make up-gpu-gateways` — ensures v2‑GPU is up (soft‑starts qdrant/neo4j if needed).
 - `make recreate-v2` / `make recreate-v2-gpu` — force‑recreate containers (no deps).
 - `make smoke` / `make smoke-gpu` / `make smoke-qwen-rerank` — core smokes. `smoke-gpu` now runs the rerank query from inside the GPU container so FlagEmbedding/Qwen models that reject batch sizes >1 are re-run sequentially (expect the first run to download the 4B checkpoint).
+
+## GPU reranker troubleshooting
+
+- **Warm the cache:** ensure the GPU host exposes the checkpoint under `/models/qwen/Qwen3-Reranker-4B` before starting the container. The first run fetches ~5 GB from HuggingFace; subsequent runs reuse the bind mount instantly.
+- **Confirm env layering:** `RERANK_MODEL_PATH` and `RERANK_USE_FP16` ship via `env.shared` → compose. Check `/hirag/admin/stats` for `model_resolved` and `use_fp16_effective` when debugging false negatives.
+- **Smoke harness:** `make -C pmoves smoke-gpu` now defaults to strict mode (`GPU_SMOKE_STRICT=true`) and requires `"used_rerank": true`. If the check fails, restart the container after the model finishes downloading or rerun `make models-sync PROFILE=archon HOST=<gpu-host>` to rewrite the pinned env entries.
 
 Ops Quicklinks
 - Reranker guide: [HI_RAG_RERANKER](../../PMOVES.AI%20PLANS/HI_RAG_RERANKER.md)

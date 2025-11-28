@@ -37,6 +37,7 @@ $extN = Read-Host "Use external Neo4j?    (y/N)"
 $extM = Read-Host "Use external Meili?     (y/N)"
 $extQ = Read-Host "Use external Qdrant?    (y/N)"
 $gpu  = Read-Host "Enable GPU profile now? (y/N)"
+$glancer = Read-Host "Enable Glancer add-on?  (y/N)"
 
 (Get-Content $envFile) |
   ForEach-Object {
@@ -49,6 +50,15 @@ $gpu  = Read-Host "Enable GPU profile now? (y/N)"
 $durl = Read-Host "DISCORD_WEBHOOK_URL (empty to skip)"
 if ($durl) {
   (Get-Content $envFile) -replace '^DISCORD_WEBHOOK_URL=.*', ("DISCORD_WEBHOOK_URL="+$durl) | Set-Content $envFile
+}
+
+if ($glancer -eq 'y') {
+  $glancerScript = Join-Path $pmovesRoot "..\pmoves_provisioning_addon_bundle\addons\install_glancer.ps1"
+  if (Test-Path $glancerScript) {
+    try { & $glancerScript } catch {}
+  } else {
+    Write-Warning "Glancer installer not found at $glancerScript; skipping."
+  }
 }
 
 if ($gpu -eq 'y') { try { Invoke-Make -Target 'up-gpu' } catch {} } else { try { Invoke-Make -Target 'up' } catch {} }

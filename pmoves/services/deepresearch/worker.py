@@ -335,6 +335,17 @@ class ResearchResult:
         return payload
 
 
+@dataclass(slots=True, frozen=True)
+class NotebookPublishConfig:
+    enabled: bool
+    base_url: str
+    token: str
+    notebook_id: str
+    title_prefix: str
+    embed: bool
+    async_processing: bool
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -353,26 +364,29 @@ class NotebookPublisher:
         self.embed = _env_bool("DEEPRESEARCH_NOTEBOOK_EMBED", True)
         self.async_processing = _env_bool("DEEPRESEARCH_NOTEBOOK_ASYNC", True)
 
-    def _merge_overrides(self, overrides: Dict[str, Any]) -> Dict[str, Any]:
+    def _merge_overrides(self, overrides: Dict[str, Any]) -> NotebookPublishConfig:
         if not overrides:
             overrides = {}
         notebook_id = str(overrides.get("notebook_id") or self.notebook_id or "").strip()
         title_prefix = overrides.get("title_prefix", self.title_prefix)
         embed = overrides.get("embed")
         async_processing = overrides.get("async_processing")
-        return {
-            "enabled": bool(self.base_url and self.api_token and notebook_id),
-            "base_url": self.base_url,
-            "token": self.api_token,
-            "notebook_id": notebook_id,
-            "title_prefix": title_prefix or "",
-            "embed": self.embed if embed is None else bool(embed),
-            "async_processing": self.async_processing if async_processing is None else bool(async_processing),
-        }
+        return NotebookPublishConfig(
+            enabled=bool(self.base_url and self.api_token and notebook_id),
+            base_url=self.base_url,
+            token=self.api_token,
+            notebook_id=notebook_id,
+            title_prefix=title_prefix or "",
+            embed=self.embed if embed is None else bool(embed),
+            async_processing=self.async_processing if async_processing is None else bool(async_processing),
+        )
+
+    def resolve_config(self, overrides: Optional[Dict[str, Any]] = None) -> NotebookPublishConfig:
+        return self._merge_overrides(overrides or {})
 
     async def publish(self, result: ResearchResult, overrides: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
-        config = self._merge_overrides(overrides)
-        if not config["enabled"]:
+        config = self.resolve_config(overrides)
+        if not config.enabled:
             return None, None
 
         if not result.summary and not result.notes:
@@ -380,8 +394,8 @@ class NotebookPublisher:
             return None, None
 
         title = result.summary.split("\n", 1)[0][:160] if result.summary else result.query[:160]
-        if config["title_prefix"]:
-            title = f"{config['title_prefix']} · {title}"
+        if config.title_prefix:
+            title = f"{config.title_prefix} · {title}"
 
         sections: List[str] = []
         if result.summary:
@@ -411,19 +425,19 @@ class NotebookPublisher:
         body = "\n\n".join(section for section in sections if section)
 
         headers = {
-            "Authorization": f"Bearer {config['token']}",
+            "Authorization": f"Bearer {config.token}",
             "Accept": "application/json",
         }
         payload = {
             "type": "text",
             "title": title,
-            "notebooks": [config["notebook_id"]],
+            "notebooks": [config.notebook_id],
             "content": body,
-            "embed": config["embed"],
-            "async_processing": config["async_processing"],
+            "embed": config.embed,
+            "async_processing": config.async_processing,
         }
         try:
-            async with httpx.AsyncClient(base_url=config["base_url"], headers=headers, timeout=30.0) as client:
+            async with httpx.AsyncClient(base_url=config.base_url, headers=headers, timeout=30.0) as client:
                 response = await client.post("/api/sources/json", json=payload)
                 response.raise_for_status()
                 data = response.json()

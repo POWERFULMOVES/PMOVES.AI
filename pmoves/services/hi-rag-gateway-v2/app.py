@@ -62,8 +62,40 @@ def _parse_positive_int(name: str, default: int) -> int:
     return value
 
 
+def _parse_optional_bool(name: str) -> Optional[bool]:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return None
+    val = str(raw).strip().lower()
+    truthy = {"1", "true", "yes", "y", "on"}
+    falsy = {"0", "false", "no", "n", "off"}
+    if val in truthy:
+        return True
+    if val in falsy:
+        return False
+    _RERANK_CONFIG_WARNINGS.append(
+        f"{name} value {raw!r} not recognised; ignoring override"
+    )
+    return None
+
+
 RERANK_ENABLE = _parse_bool("RERANK_ENABLE", True)
-RERANK_MODEL = (os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base") or "BAAI/bge-reranker-base").strip()
+_default_rerank_model = "Qwen/Qwen3-Reranker-4B"
+RERANK_MODEL = (os.environ.get("RERANK_MODEL", _default_rerank_model) or _default_rerank_model).strip()
+# Optional local model snapshot path (bind-mounted inside the GPU container).
+_rerank_model_path_raw = (os.environ.get("RERANK_MODEL_PATH") or "").strip()
+if _rerank_model_path_raw:
+    _rerank_model_path = Path(_rerank_model_path_raw)
+    if _rerank_model_path.exists():
+        RERANK_MODEL_PATH = str(_rerank_model_path)
+    else:
+        RERANK_MODEL_PATH = None
+        _RERANK_CONFIG_ERRORS.append(
+            f"RERANK_MODEL_PATH {_rerank_model_path_raw!r} not found; falling back to hub id"
+        )
+else:
+    RERANK_MODEL_PATH = None
+RERANK_MODEL_RESOLVED = RERANK_MODEL_PATH or RERANK_MODEL
 # Optional label override for reporting (does not force reload)
 _rerank_model_label = os.environ.get("RERANK_MODEL_LABEL")
 RERANK_TOPN = _parse_positive_int("RERANK_TOPN", 50)
@@ -86,6 +118,7 @@ if RERANK_K > RERANK_TOPN:
     )
     RERANK_K = RERANK_TOPN
 
+RERANK_USE_FP16_OVERRIDE = _parse_optional_bool("RERANK_USE_FP16")
 
 # lazy-init reranker to reduce cold start time; declared early for diagnostics
 _reranker = None
@@ -95,13 +128,17 @@ def get_rerank_status() -> Dict[str, Any]:
     return {
         "enabled": RERANK_ENABLE,
         "model": RERANK_MODEL,
+        "model_resolved": RERANK_MODEL_RESOLVED,
         "model_label": _rerank_model_label,
+        "model_path": RERANK_MODEL_PATH,
         "provider": RERANK_PROVIDER,
         "topn": RERANK_TOPN,
         "k": RERANK_K,
         "fusion": RERANK_FUSION,
         "device": "cuda" if DEVICE == "cuda" else "cpu",
         "cuda_available": _CUDA_AVAILABLE,
+        "use_fp16_requested": RERANK_USE_FP16_OVERRIDE,
+        "use_fp16_effective": _RERANK_FP16_EFFECTIVE,
         "loaded": bool(_reranker),
         "errors": list(_RERANK_CONFIG_ERRORS),
         "warnings": list(_RERANK_CONFIG_WARNINGS),
@@ -119,6 +156,9 @@ MEILI_API_KEY = os.environ.get("MEILI_API_KEY","master_key")
 _USE_CUDA_ENV = os.environ.get("USE_CUDA", "true").lower() == "true"
 _CUDA_AVAILABLE = torch.cuda.is_available()
 DEVICE = "cuda" if _USE_CUDA_ENV and _CUDA_AVAILABLE else "cpu"
+_RERANK_FP16_EFFECTIVE = (
+    RERANK_USE_FP16_OVERRIDE if RERANK_USE_FP16_OVERRIDE is not None else DEVICE == "cuda"
+)
 
 _RERANK_STATUS_CACHE = get_rerank_status()
 
@@ -1426,8 +1466,8 @@ def _get_reranker():
     if not RERANK_ENABLE:
         return None
     try:
-        use_fp16 = DEVICE == "cuda"
-        _reranker = FlagReranker(RERANK_MODEL, use_fp16=use_fp16)
+        use_fp16 = _RERANK_FP16_EFFECTIVE
+        _reranker = FlagReranker(RERANK_MODEL_RESOLVED, use_fp16=use_fp16)
         if DEVICE == "cuda" and hasattr(_reranker, "model"):
             _reranker.model = _reranker.model.to("cuda")  # type: ignore[attr-defined]
         return _reranker

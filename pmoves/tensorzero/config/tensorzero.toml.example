@@ -4,6 +4,12 @@
 [gateway]
 observability.enabled = false
 
+[gateway.observability.clickhouse]
+url = "env::TENSORZERO_OBS_CLICKHOUSE_URL"
+database = "env::TENSORZERO_OBS_CLICKHOUSE_DB"
+username = "env::TENSORZERO_OBS_CLICKHOUSE_USER"
+password = "env::TENSORZERO_OBS_CLICKHOUSE_PASSWORD"
+
 [functions.langextract]
 type = "chat"
 # Optional global timeout (seconds) for gateway requests.

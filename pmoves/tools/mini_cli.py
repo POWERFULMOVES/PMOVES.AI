@@ -9,8 +9,9 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 try:
     import typer
@@ -31,6 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROVISIONING_DEST = REPO_ROOT / "CATACLYSM_STUDIOS_INC" / "PMOVES-PROVISIONS"
 ENV_SHARED = REPO_ROOT / "pmoves" / "env.shared"
 CANONICAL_PROVISIONING_SOURCE = DEFAULT_PROVISIONING_DEST
+PROVISIONING_MANIFEST_FILENAME = "provisioning-manifest.json"
 
 PROVISIONING_BUNDLE_FILES: dict[Path, Path] = {
     Path("README_APPLY.txt"): REPO_ROOT / "docs" / "provisioning" / "README_APPLY.txt",
@@ -57,6 +59,24 @@ PROVISIONING_BUNDLE_DIRS: tuple[str, ...] = (
     "ventoy",
     "windows",
 )
+
+GLANCER_BUNDLE_FILES: Dict[Path, Path] = {
+    Path("addons/glancer/README.md"): REPO_ROOT
+    / "pmoves"
+    / "provisioning"
+    / "glancer"
+    / "README.md",
+    Path("addons/glancer/docker-compose.glancer.yml"): REPO_ROOT
+    / "pmoves"
+    / "provisioning"
+    / "glancer"
+    / "docker-compose.glancer.yml",
+    Path("addons/glancer/glancer.env.example"): REPO_ROOT
+    / "pmoves"
+    / "provisioning"
+    / "glancer"
+    / "glancer.env.example",
+}
 
 
 app = typer.Typer(help="PMOVES mini CLI (alpha)")
@@ -124,7 +144,29 @@ def _resolve_path(path: Path) -> Path:
     return Path.cwd() / expanded
 
 
-def _stage_provisioning_bundle(destination: Path) -> None:
+def _stage_addon_assets(destination: Path, assets: Dict[Path, Path], label: str) -> list[str]:
+    staged: list[str] = []
+    for relative_path, source in assets.items():
+        if not source.exists():
+            raise FileNotFoundError(f"{label} source missing: {source}")
+        target = destination / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        staged.append(str(relative_path))
+    return staged
+
+
+def _write_provisioning_manifest(destination: Path, addons: Dict[str, dict]) -> None:
+    manifest = {
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "source": str(CANONICAL_PROVISIONING_SOURCE),
+        "addons": addons,
+    }
+    manifest_path = destination / PROVISIONING_MANIFEST_FILENAME
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
+def _stage_provisioning_bundle(destination: Path, include_glancer: bool = False) -> None:
     for relative_path, source in PROVISIONING_BUNDLE_FILES.items():
         if not source.exists():
             raise FileNotFoundError(f"Provisioning source missing: {source}")
@@ -134,21 +176,31 @@ def _stage_provisioning_bundle(destination: Path) -> None:
 
     canonical_root = CANONICAL_PROVISIONING_SOURCE.resolve()
     destination_root = destination.resolve()
-    if destination_root == canonical_root:
-        return
+    staged_addons: Dict[str, dict] = {}
 
-    readme_source = CANONICAL_PROVISIONING_SOURCE / "README.md"
-    if readme_source.exists():
-        shutil.copy2(readme_source, destination / "README.md")
+    if include_glancer:
+        staged = _stage_addon_assets(destination, GLANCER_BUNDLE_FILES, "Glancer")
+        staged_addons["glancer"] = {
+            "staged": True,
+            "assets": staged,
+            "source": str((REPO_ROOT / "pmoves" / "provisioning" / "glancer").resolve()),
+        }
 
-    for relative_dir in PROVISIONING_BUNDLE_DIRS:
-        source_dir = CANONICAL_PROVISIONING_SOURCE / relative_dir
-        if not source_dir.exists():
-            continue
-        target_dir = destination / relative_dir
-        if target_dir.exists():
-            shutil.rmtree(target_dir)
-        shutil.copytree(source_dir, target_dir)
+    if destination_root != canonical_root:
+        readme_source = CANONICAL_PROVISIONING_SOURCE / "README.md"
+        if readme_source.exists():
+            shutil.copy2(readme_source, destination / "README.md")
+
+        for relative_dir in PROVISIONING_BUNDLE_DIRS:
+            source_dir = CANONICAL_PROVISIONING_SOURCE / relative_dir
+            if not source_dir.exists():
+                continue
+            target_dir = destination / relative_dir
+            if target_dir.exists():
+                shutil.rmtree(target_dir)
+            shutil.copytree(source_dir, target_dir)
+
+    _write_provisioning_manifest(destination, staged_addons)
 
 
 def _update_env_value(env_path: Path, key: str, value: str) -> None:
@@ -189,6 +241,55 @@ def _mask_value(value: str, visible: int = 4) -> str:
     if len(value) <= visible:
         return "*" * len(value)
     return value[:visible] + "*" * (len(value) - visible)
+
+
+def _load_provisioning_manifest(staging_root: Path) -> dict:
+    manifest_path = staging_root / PROVISIONING_MANIFEST_FILENAME
+    if not manifest_path.exists():
+        return {}
+
+    try:
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _glancer_status(staging_root: Path) -> str:
+    manifest = _load_provisioning_manifest(staging_root)
+    glancer_manifest = manifest.get("addons", {}).get("glancer") or {}
+    compose_file = staging_root / "addons" / "glancer" / "docker-compose.glancer.yml"
+
+    requested = bool(glancer_manifest.get("staged")) or compose_file.exists()
+    if not requested:
+        return "not requested"
+
+    if not compose_file.exists():
+        return "requested but compose assets are missing"
+
+    if not _docker_available():
+        return "staged (docker CLI unavailable for health check)"
+
+    cmd = ["docker", "compose", "-f", str(compose_file), "ps", "--format", "json", "glancer"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip()
+        reason = stderr or "glancer service is not running"
+        return f"compose not running ({reason})"
+
+    try:
+        services = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError:
+        services = []
+
+    if not services:
+        return "staged (glancer container not started)"
+
+    service = services[0]
+    state = (service.get("State") or "").lower()
+    health = (service.get("Health") or service.get("HealthStatus") or "").lower()
+    if health:
+        return f"{state or 'unknown'} ({health})"
+    return state or "unknown"
 
 
 @app.command(help="Run onboarding helper (status or generate).")
@@ -235,6 +336,11 @@ def bootstrap(
         "-o",
         help="Destination directory for the provisioning bundle.",
     ),
+    with_glancer: bool = typer.Option(
+        False,
+        "--with-glancer/--without-glancer",
+        help="Include Glancer assets and overrides in the provisioning pack.",
+    ),
 ) -> None:
     args: List[str] = []
     if registry is not None:
@@ -252,7 +358,7 @@ def bootstrap(
     destination = _resolve_path(output)
     try:
         destination.mkdir(parents=True, exist_ok=True)
-        _stage_provisioning_bundle(destination)
+        _stage_provisioning_bundle(destination, include_glancer=with_glancer)
     except FileNotFoundError as exc:  # pragma: no cover - error path
         typer.echo(f"Failed to stage provisioning bundle: {exc}")
         raise typer.Exit(1)
@@ -415,6 +521,9 @@ def status(
         typer.echo(f"Provisioning bundle: ready ({wizard})")
     else:
         typer.echo(f"Provisioning bundle: missing (expected {wizard})")
+
+    glancer_status = _glancer_status(staging_root)
+    typer.echo(f"Glancer: {glancer_status}")
     raise typer.Exit(exit_code)
 
 

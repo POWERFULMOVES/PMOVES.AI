@@ -378,6 +378,8 @@ function getDashboardLinks(): LinkDef[] {
   const agentZeroBase = (process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080').replace(/\/$/, '');
   const archonBase = (process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091').replace(/\/$/, '');
   const jellyfinBase = (process.env.NEXT_PUBLIC_JELLYFIN_URL || 'http://localhost:8096').replace(/\/$/, '');
+  const supaserchPort = process.env.SUPASERCH_HOST_PORT || process.env.SUPASERCH_PORT || '8099';
+  const supaserchBase = (process.env.NEXT_PUBLIC_SUPASERCH_URL || `http://localhost:${supaserchPort}`).replace(/\/$/, '');
 
   return [
     { label: 'Notebook dashboard', href: '/dashboard/notebook' },
@@ -402,6 +404,17 @@ function getDashboardLinks(): LinkDef[] {
         if (!custom) return `${archonBase}/healthz`;
         return custom.startsWith('/') ? `${archonBase}${custom}` : `${archonBase}/${custom}`;
       })(),
+    },
+    {
+      label: 'SupaSerch',
+      href: '/dashboard/services/supaserch',
+      health: `${supaserchBase}/healthz`,
+    },
+    {
+      label: 'SupaSerch metrics',
+      href: `${supaserchBase}/metrics`,
+      optional: true,
+      health: `${supaserchBase}/metrics`,
     },
     {
       label: 'Hi‑RAG Geometry (GPU)',
