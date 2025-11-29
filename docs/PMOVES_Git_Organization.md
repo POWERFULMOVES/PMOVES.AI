@@ -3,6 +3,7 @@
 This document provides a comprehensive guide to PMOVES.AI's GitHub organization, infrastructure setup, and related resources.
 
 ## Table of Contents
+- [Contributor Guidance](#contributor-guidance)
 - [GitHub Actions Self-Hosted Runner Setup](#github-actions-self-hosted-runner-setup)
 - [GitHub Documentation Resources](#github-documentation-resources)
 - [PMOVES Project Repositories](#pmoves-project-repositories)
@@ -10,7 +11,11 @@ This document provides a comprehensive guide to PMOVES.AI's GitHub organization,
 - [Video Resources & Tutorials](#video-resources--tutorials)
 - [Team & Collaboration](#team--collaboration)
 
----
+--- 
+
+## Contributor Guidance
+- Operational/stabilization rules live in the root `AGENTS.md`; service-level coding norms for the `pmoves/` subtree live in `pmoves/AGENTS.md`. Read both before opening PRs and keep edits in sync.
+- Submodules are the source of truth for hardened integrations (Archon, Agent Zero, PMOVES.YT, etc.). Pin the intended branch/ref in `.gitmodules`, align with `docs/PMOVES.AI-Edition-Hardened.md`, and note any temporary divergence in PR notes.
 
 ## GitHub Actions Self-Hosted Runner Setup
 

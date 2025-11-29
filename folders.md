@@ -1,4 +1,5 @@
 Directory structure:
+> Contributor guidance: see `AGENTS.md` (repo-wide operations) and `pmoves/AGENTS.md` (pmoves subtree) for expectations, CI gates, and bring-up sequences. Keep those documents in sync when you change structure or workflows documented below.
 └── powerfulmoves-pmoves.ai/
     ├── CATACLYSM_STUDIOS_INC/
     │   └── PMOVES-PROVISIONS/

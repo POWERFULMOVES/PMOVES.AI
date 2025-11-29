@@ -1,9 +1,10 @@
-PMOVES.AI Edition — Hardened Integrations, Images, and CI/CD
+PMOVES.AI Edition - Hardened Integrations, Images, and CI/CD
 
 Overview
-- Goal: treat each external integration as a first‑class, hardened submodule with a pinned image in GHCR, reproducible builds, and CI parity with PMOVES.AI.
+- Goal: treat each external integration as a first-class, hardened submodule with a pinned image in GHCR, reproducible builds, and CI parity with PMOVES.AI.
 - Scope: Archon, Agent Zero, PMOVES.YT, Channel Monitor, Invidious stack, Jellyfin bridge/AI overlay, Notebook/Surreal, DeepResearch, SupaSerch, TensorZero, and core data services (Qdrant, Meili, Neo4j, MinIO, Supabase REST/PostgREST).
 - Deliverables: submodule layout, image catalog, hardening baseline, MCP catalog notes, migration plan, and verification gates.
+- Companion guidance: follow root `AGENTS.md` for stabilization/CI expectations and `pmoves/AGENTS.md` for pmoves subtree coding norms. Keep any hardening-related edits reflected across these docs.
 
 Inventory (as of Nov 11, 2025)
 - Local‑build services (compose `build:`):
