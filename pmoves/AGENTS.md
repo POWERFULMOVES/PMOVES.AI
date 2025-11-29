@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+> Scope note: This file focuses on the `pmoves/` application subtree (services, contracts, compose). For org-wide operational practices, stabilization status, and CI gates, read the root `AGENTS.md`. Keep changes aligned between both guides when updating contributor expectations.
+
 ## Project Structure & Module Organization
 - `services/`: Python microservices (FastAPI workers, utilities). Examples: `agent-zero/`, `hi-rag-gateway/`, `retrieval-eval/`, `graph-linker/`, `publisher/`.
 - `contracts/`: Event contracts (`schemas/`) and `topics.json` mapping topics → schema paths.
