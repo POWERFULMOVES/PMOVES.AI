@@ -1,0 +1,76 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pmoves/services/publisher/**'
+      - 'pmoves/services/publisher-discord/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/common/**'
+      - 'pmoves/libs/**'
+      - 'pmoves/tests/**'
+      - '.github/workflows/python-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pmoves/services/publisher/**'
+      - 'pmoves/services/publisher-discord/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/common/**'
+      - 'pmoves/libs/**'
+      - 'pmoves/tests/**'
+      - '.github/workflows/python-tests.yml'
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11']
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+
+          requirements = [
+              pathlib.Path("pmoves/services/publisher/requirements.txt"),
+              pathlib.Path("pmoves/services/pmoves-yt/requirements.txt"),
+              pathlib.Path("pmoves/services/publisher-discord/requirements.txt"),
+          ]
+
+          packages = {"pytest"}
+          skip = {"supabase"}
+
+          for path in requirements:
+              with path.open() as handle:
+                  for raw in handle:
+                      line = raw.strip()
+                      if not line or line.startswith("#"):
+                          continue
+                      name = line.split("==")[0]
+                      if name in skip:
+                          continue
+                      packages.add(line)
+
+          # Re-add skipped packages without version pins so we still install them.
+          packages.update(skip)
+
+          subprocess.check_call([sys.executable, "-m", "pip", "install", *sorted(packages)])
+          PY
+      - name: Run tests (publisher + yt + discord)
+        run: |
+          pytest -q pmoves/services/publisher/tests pmoves/services/pmoves-yt/tests pmoves/services/publisher-discord/tests

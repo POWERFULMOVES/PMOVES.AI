@@ -1,0 +1,37 @@
+name: Webhook Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Render-webhook base URL (e.g., http://localhost:8085)"
+        required: false
+      token:
+        description: "Bearer token for Authorization header"
+        required: false
+      live:
+        description: "Set to true to send a real POST"
+        required: false
+        default: "false"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Dry-run or Live webhook test
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          TOKEN: ${{ inputs.token }}
+        run: |
+          cd pmoves
+          if [ "${{ inputs.live }}" = "true" ]; then \
+            python tools/smoke_webhook.py --live; \
+          else \
+            python tools/smoke_webhook.py; \
+          fi
+

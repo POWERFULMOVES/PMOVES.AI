@@ -1,0 +1,86 @@
+{
+  "name": "Health Wger Sync (stub)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "url": "={{$json.WGER_BASE_URL || $env.WGER_BASE_URL || 'http://cataclysm-wger:8000'}}/api/v2/workoutlog/",
+        "options": {
+          "headers": {
+            "Authorization": "=Token {{$env.WGER_API_TOKEN}}"
+          }
+        }
+      },
+      "id": "WgerFetch",
+      "name": "Fetch Workout Logs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Map Wger items to PMOVES health_workouts upsert shape\nconst items = $json.results || [];\nreturn items.map(i => ({ json: {\n  namespace: 'pmoves',\n  source: 'wger',\n  external_id: String(i.id),\n  observed_at: i.date || new Date().toISOString(),\n  summary: i.comment || null,\n  metrics: { reps: i.reps, weight: i.weight, duration: i.duration },\n  raw: i\n}}));"
+      },
+      "id": "MapToUpsert",
+      "name": "Map → upsert rows",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [560, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "url": "={{$env.SUPA_REST_URL}}/health_workouts",
+        "options": {
+          "headers": {
+            "apikey": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}",
+            "Authorization": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+          }
+        },
+        "sendBody": true,
+        "jsonParameters": true,
+        "specifyBody": "json",
+        "body": "={{$json}}"
+      },
+      "id": "UpsertSupabase",
+      "name": "Upsert Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [840, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "url": "={{$env.AGENT_ZERO_BASE_URL || 'http://agent-zero:8080'}}/events/publish",
+        "sendBody": true,
+        "jsonParameters": true,
+        "specifyBody": "json",
+        "body": {
+          "topic": "health.metrics.updated.v1",
+          "source": "wger-sync",
+          "payload": "={{$json}}"
+        }
+      },
+      "id": "PublishEvent",
+      "name": "Publish Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 200]
+    }
+  ],
+  "connections": {
+    "Fetch Workout Logs": {
+      "main": [ [ { "node": "Map → upsert rows", "type": "main", "index": 0 } ] ]
+    },
+    "Map → upsert rows": {
+      "main": [ [ { "node": "Upsert Supabase", "type": "main", "index": 0 } ] ]
+    },
+    "Upsert Supabase": {
+      "main": [ [ { "node": "Publish Event", "type": "main", "index": 0 } ] ]
+    }
+  }
+}
+

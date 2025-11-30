@@ -1,0 +1,35 @@
+{
+  "title": "Loki Readiness Failing",
+  "condition": "C",
+  "data": [
+    {
+      "refId": "A",
+      "relativeTimeRange": { "from": 300, "to": 0 },
+      "datasourceUid": "prometheus",
+      "model": {
+        "expr": "probe_success{job=\"blackbox\", instance=\"http://loki:3100/ready\"}",
+        "interval": "",
+        "legendFormat": "ready",
+        "refId": "A"
+      }
+    }
+  ],
+  "noDataState": "NoData",
+  "execErrState": "Error",
+  "for": "5m",
+  "labels": { "severity": "warning" },
+  "annotations": {
+    "summary": "Loki readiness probe failing",
+    "description": "probe_success is 0 for 5 minutes for http://loki:3100/ready"
+  },
+  "conditions": [
+    {
+      "evaluator": { "params": [0.5], "type": "lt" },
+      "operator": { "type": "and" },
+      "query": { "params": ["A"] },
+      "reducer": { "type": "last" },
+      "type": "query"
+    }
+  ]
+}
+

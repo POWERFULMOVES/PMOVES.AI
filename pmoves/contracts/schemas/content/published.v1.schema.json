@@ -14,14 +14,36 @@
     "published_path": {
       "type": "string"
     },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "public_url": {
       "type": "string"
     },
     "jellyfin_item_id": {
       "type": "string"
     },
+    "jellyfin_public_url": {
+      "type": "string"
+    },
     "namespace": {
       "type": "string"
+    },
+    "thumbnail_url": {
+      "type": "string"
+    },
+    "duration": {
+      "type": "number",
+      "minimum": 0
     },
     "meta": {
       "type": "object"

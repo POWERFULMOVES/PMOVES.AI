@@ -104,3 +104,12 @@ Constellation-Harvest-Regularization/
 - **n8n Compatible:** Integrates with your existing automation
 
 This database will significantly enhance your RAG system's ability to answer questions about consciousness, AI development, and theoretical frameworks - perfect for the PMOVES.AI knowledge base!
+# Consciousness Harvest (Context)
+
+For the up-to-date execution guide aligned with the Supabase CLI + Geometry Bus architecture, see:
+
+```
+pmoves/docs/PMOVESCHIT/PMOVES-CONCHexecution_guide.md
+```
+
+This context file remains as a pointer for legacy references and architecture diagrams.

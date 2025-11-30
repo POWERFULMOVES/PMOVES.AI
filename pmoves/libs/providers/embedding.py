@@ -3,8 +3,15 @@ from typing import List
 
 # Priority (local-first): ollama -> openai-compatible (LM Studio, vLLM, NVIDIA NIM) -> HuggingFace -> sentence-transformers
 
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama:11434")
-OLLAMA_EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+TENSORZERO_BASE = os.environ.get("TENSORZERO_BASE_URL", "")
+TENSORZERO_API_KEY = os.environ.get("TENSORZERO_API_KEY", "")
+TENSORZERO_EMBED_MODEL = os.environ.get(
+    "TENSORZERO_EMBED_MODEL",
+    "tensorzero::embedding_model_name::gemma_embed_local",
+)
+
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://pmoves-ollama:11434")
+OLLAMA_EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "embeddinggemma:300m")
 
 OA_BASE = os.environ.get("OPENAI_COMPAT_BASE_URL")  # e.g., http://localhost:1234/v1 for LM Studio; http://vllm:8000/v1
 OA_KEY = os.environ.get("OPENAI_COMPAT_API_KEY", "")
@@ -16,6 +23,38 @@ HF_EMBED_MODEL = os.environ.get("HF_EMBED_MODEL", "sentence-transformers/all-Min
 ST_MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
 
 _st_model = None
+
+def _tensorzero_openai_base() -> str:
+    if not TENSORZERO_BASE:
+        return ""
+    base = TENSORZERO_BASE.rstrip("/")
+    if base.endswith("/openai"):
+        return base
+    return f"{base}/openai"
+
+
+def _embed_tensorzero(text: str):
+    base = _tensorzero_openai_base()
+    if not base:
+        return None
+    try:
+        headers = {"Content-Type": "application/json"}
+        if TENSORZERO_API_KEY:
+            headers["Authorization"] = f"Bearer {TENSORZERO_API_KEY}"
+        resp = requests.post(
+            f"{base}/v1/embeddings",
+            json={"model": TENSORZERO_EMBED_MODEL, "input": text},
+            headers=headers,
+            timeout=30,
+        )
+        if resp.ok:
+            data = resp.json() or {}
+            arr = (data.get("data") or [{}])[0].get("embedding")
+            if arr:
+                return arr
+    except Exception:
+        pass
+    return None
 
 def _embed_ollama(text: str):
     try:
@@ -67,9 +106,9 @@ def _embed_sentence_transformers(text: str):
 
 def embed_text(text: str) -> List[float]:
     return (
-        _embed_ollama(text)
+        _embed_tensorzero(text)
+        or _embed_ollama(text)
         or _embed_openai_compat(text)
         or _embed_hf(text)
         or _embed_sentence_transformers(text)
     )
-

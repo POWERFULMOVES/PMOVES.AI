@@ -1,4 +1,5 @@
 # Smoke Tests
+Note: Related cross-links in pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
 
 This guide covers preflight wiring, starting the core stack, and running the local smoke tests. Use it as a quick readiness checklist before deeper testing.
 
@@ -17,49 +18,310 @@ This guide covers preflight wiring, starting the core stack, and running the loc
      - `cp .env.example .env`
      - `cat env.presign.additions env.render_webhook.additions >> .env`
      - Optional: `cat env.hirag.reranker.additions env.hirag.reranker.providers.additions >> .env`
-2. Set shared secrets (change these):
+2. Start the Supabase CLI stack **before** running bootstrap or compose:
+   - `supabase start --network-id pmoves-net` (or `make supa-start` once `supabase/config.toml` exists)
+   - This keeps Supabase REST + Realtime available so `make bootstrap` can pull fresh anon/service keys and websocket endpoints. (Default path is unified REST on port 65421; a separate PostgREST container is optional.)
+3. Set shared secrets (change these):
    - `PRESIGN_SHARED_SECRET`
    - `RENDER_WEBHOOK_SHARED_SECRET`
-3. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.
+   - Supabase REST endpoints:
+   - `SUPA_REST_URL=http://127.0.0.1:65421/rest/v1` (host-side smoke harness + curl snippets)
+     - `SUPA_REST_INTERNAL_URL=http://api.supabase.internal:8000/rest/v1` (compose services targeting the Supabase CLI stack)
+   - `OPENROUTER_API_KEY` (required for DeepResearch OpenRouter mode)
+   - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_PASSWORD`, `DEEPRESEARCH_NOTEBOOK_ID` for Notebook mirroring / DeepResearch sync
+   - After the CLI stack is running, execute `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smokes. Re-run components individually with `make supabase-bootstrap`, `make neo4j-bootstrap`, or `make seed-data` if you only need one layer.
+4. External integrations: copy tokens into `pmoves/.env.local` so the health/finance automations can run without errors.
+   - `WGER_API_TOKEN`, `WGER_BASE_URL=http://cataclysm-wger:8000`
+   - `FIREFLY_ACCESS_TOKEN`, `FIREFLY_BASE_URL=http://cataclysm-firefly:8080`
+  - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055`
+   - `JELLYFIN_API_KEY`, `JELLYFIN_URL=http://cataclysm-jellyfin:8096`
+- Override ports before `make -C pmoves up-external` if your host is already using `8000`, `8080`, `8096`, or `8503` (for example, `export FIREFLY_PORT=8082` keeps Firefly off Agent Zero’s 8080 binding). See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for per-service bring-up notes.
+5. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.
 
 ## 2) Preflight (Recommended)
-- Cross‑platform: `make flight-check`
+- Cross‑platform: `make flight-check` (checks Docker, Supabase CLI + Realtime websocket, external integration env, and geometry migrations)
 - Windows direct script: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1`
 
 This checks tool availability, common ports, `.env` keys vs `.env.example`, and validates `contracts/topics.json`.
 
+Optional secret bundle:
+- `make chit-encode-secrets` — snapshot `env.shared` into `pmoves/data/chit/env.cgp.json` using the CHIT CGP v0.1 format. Confirm round-trip with `make chit-decode-secrets ARGS="--out /tmp/env.from.chit"`. This ensures the encoder/decoder pair remain compatible with the docs in `pmoves/docs/PMOVESCHIT/`.
+
 ## 3) Start Core Stack
-- Start data + workers profile (v2 gateway):
+- Start data + workers profile (v2 gateway) after the Supabase CLI stack is online:
   - `make up`
-- Wait ~15–30s for services to become ready.
+- Wait ~15–30s for services to become ready. If you see `service missing` errors (Neo4j, Realtime, etc.), confirm the CLI stack is running and that `make up-external` completed successfully for Wger/Firefly/Open Notebook/Jellyfin.
+- TensorZero/Ollama embeddings: for hi‑rag v2 smokes run `make -C pmoves up-tensorzero` (starts ClickHouse, gateway/UI, and `pmoves-ollama`). The sidecar automatically serves `embeddinggemma:latest`/`300m`; if you host embeddings elsewhere, point `TENSORZERO_BASE_URL` at that gateway before running smoketests. The gateway exposes an OpenAI-compatible `/v1/embeddings` endpoint that smokes hit before falling back to CPU sentence-transformers. citeturn0search0turn0search2
 
 Useful health checks:
 - Presign: `curl http://localhost:8088/healthz`
 - Render Webhook: `curl http://localhost:8085/healthz`
-- PostgREST: `curl http://localhost:3000`
-- Hi‑RAG v2 stats: `curl http://localhost:8087/hirag/admin/stats`
+- PostgREST (optional fallback): `curl http://localhost:3010`
+- Hi‑RAG v2 stats: `curl http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/admin/stats` (CPU fallback: `${HIRAG_V2_HOST_PORT:-8086}`)
+  - When `8086`/`8087` are already bound (for example by legacy uvicorn services), export `HIRAG_V2_HOST_PORT` / `HIRAG_V2_GPU_HOST_PORT` before running `make up` (e.g., `18086` / `18087`) so the high-RAG gateways bind to free ports.
+ - Loki readiness: `curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/ready` (expects `200`), or run `make -C pmoves loki-ready`.
+- Discord Publisher: `curl http://localhost:8092/healthz`
+
+### Optional GPU smoke
+- Start with `make up-gpu`, then re-run health checks.
+- Media/video services should log detection of GPU/VAAPI where available.
+- `make -C pmoves smoke-gpu` now defaults to `GPU_SMOKE_STRICT=true` and asserts each sample query returns `"used_rerank": true`.
+  - If the first run reports `used_rerank=false`, confirm the Qwen weights exist at `/models/qwen/Qwen3-Reranker-4B` on the GPU
+    node and that the path is bind-mounted into the container (`RERANK_MODEL_PATH`). The initial download from HuggingFace can
+    take a few minutes; rerun the smoke once the cache is hydrated.
+
+### Discord Publisher (content.published.v1)
+
+Verify Discord wiring by emitting a `content.published.v1` event after the stack is up:
+
+```bash
+python - <<'PY'
+import asyncio, json, os
+from nats.aio.client import Client as NATS
+
+async def main():
+    nc = NATS()
+    await nc.connect(os.getenv("NATS_URL", "nats://localhost:4222"))
+    await nc.publish(
+        "content.published.v1",
+        json.dumps(
+            {
+                "topic": "content.published.v1",
+                "payload": {
+                    "title": "Smoke Story",
+                    "namespace": "smoke-test",
+                    "published_path": "smoke/story.md",
+                    "public_url": "https://example.org/smoke-story",
+                    "tags": ["demo", "smoke"],
+                    "cover_art": {
+                        "thumbnails": [
+                            {"url": "https://placehold.co/640x360.png", "width": 640, "height": 360}
+                        ]
+                    },
+                },
+            }
+        ).encode("utf-8"),
+    )
+    await nc.flush()
+    await nc.drain()
+
+asyncio.run(main())
+PY
+```
+
+Expected: the Discord channel receives a rich embed with the Smoke Story title, namespace, published path, thumbnail, and tags.
+
+- If the payload includes `duration`, the embed shows it as `H:MM:SS` (e.g., `0:05:32`).
+- A `thumbnail_url` on the payload or its `meta` block overrides auto-selected cover art thumbnails.
+- Jellyfin items emit deep links that append `&startTime=<seconds>` when timestamps (`start_time`, `start`, `t`) are present.
+- Tags are quoted ( `` `tag` `` ) and capped at the first twelve entries so Discord renders them cleanly.
+- When a summary is present alongside other description content, the remainder appears in a `Summary` field (truncated to Discord's limits) so operators can confirm spillover handling.
+
+Remove `public_url` from the payload if you want to confirm the local-path fallback formatting.
 
 ## 4) Seed Demo Data (Optional but helpful)
-- `make seed-data` (loads small sample docs into Qdrant/Meilisearch)
+- `make seed-data` (loads small sample docs into Qdrant/Meilisearch; already invoked by `make bootstrap-data`)
 - Alternatively: `make load-jsonl FILE=$(pwd)/datasets/queries_demo.jsonl`
 
 ## 5) Run Smoke Tests
+
+### Real Data Bring-Up
+
+See `pmoves/docs/REAL_DATA_BRINGUP.md` for ingesting the PMOVES repository and enabling strict geometry jump validation.
+
+### Console (UI)
+
+- Start dev server: `make -C pmoves ui-dev-start` (http://localhost:3001)
+- Stop dev server: `make -C pmoves ui-dev-stop`
+- Realtime videos smoke: `make -C pmoves ui-videos-realtime-smoke` — inserts a dummy `public.videos` row via Supabase REST and prints UI/REST links. With the console open at `/dashboard/videos`, you should see the new row appear automatically via Supabase Realtime.
+  - Cleanup inserted rows: `make -C pmoves ui-videos-realtime-clean` (removes `video_id` like `ui-smoke-%` and rows with `meta.inserted_by=ui-videos-realtime-smoke`).
+  - E2E (Playwright): `make -C pmoves ui-playwright-setup && make -C pmoves ui-videos-realtime-e2e` — auto-inserts a row and asserts it appears in the UI.
+
+### 5a) Core Stack
 Choose one:
 - macOS/Linux: `make smoke` (requires `jq`)
 - Windows (no `jq` required): `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1`
 
-What the smoke covers:
-1) Qdrant ready (6333)
-2) Meilisearch health (7700, warned if missing)
-3) Neo4j UI reachable (7474, warned if not)
-4) Presign health (8088)
-5) Render Webhook health (8085)
-6) PostgREST reachable (3000)
-7) Insert a demo row via Render Webhook
-8) Verify a `studio_board` row exists via PostgREST
-9) Run a Hi-RAG v2 query (8087)
+Checks (15):
+1. Qdrant ready (`6333`)
+2. Meilisearch health (`7700`, warning only)
+3. Neo4j UI reachable (`7474`, warning only)
+4. Presign health (`8088`)
+5. Render Webhook health (`8085`)
+6. PostgREST reachable (`3000`)
+7. Insert a demo row via Render Webhook
+8. Verify a `studio_board` row exists via PostgREST
+9. Run Hi-RAG v2 stats + query (`${HIRAG_V2_GPU_HOST_PORT:-8087}` preferred, `${HIRAG_V2_CPU_HOST_PORT:-8086}` fallback): detect via `/hirag/admin/stats` (then `/healthz`/`/hirag/query` if needed, `HIRAG_SMOKE_TIMEOUT` seconds), then assert `/hirag/admin/rerank-status` reports numeric `topn`/`k`
+10. Agent Zero `/healthz` reports JetStream controller running
+11. POST a generated `geometry.cgp.v1` packet to `/geometry/event`
+12. Confirm ShapeStore locator + calibration via `/shape/point/{id}/jump` + `/geometry/calibration/report`
+13. Convert the sample health summary into CGP via `tools/events_to_cgp.py`
+14. Convert the sample finance summary into CGP via `tools/events_to_cgp.py`
+15. DeepResearch NATS smoke (`make deepresearch-smoke`) — publishes a `research.deepresearch.request.v1` job, waits for the `...result.v1` payload, and asserts Notebook mirroring when `OPENROUTER_API_KEY`, `OPEN_NOTEBOOK_API_TOKEN`, and `DEEPRESEARCH_NOTEBOOK_ID` are present (skips otherwise)
 
-## 6) Geometry Bus (CHIT) — End-to-end
+### 5b) SupaSerch multimodal bridge
+
+`make supaserch-smoke` validates the NATS wiring and HTTP fallback for SupaSerch:
+
+1. Publishes a labelled request on `supaserch.request.v1` via NATS.
+2. Waits for `supaserch.result.v1` and asserts the fallback stage reports `status: ok`.
+3. Calls `http://localhost:${SUPASERCH_HOST_PORT:-8099}/v1/search?q=…` to confirm the HTTP surface returns the same fallback metadata.
+
+The command prints the fallback latency and which transport (`via`) served the response. The default fallback hits the SupaSerch `/healthz` endpoint, but you can set `SUPASERCH_HTTP_FALLBACK_URL` to a search API (use `{query}` or `{encoded_query}` placeholders) before running the smoke to exercise external providers.
+
+### 5c) Personas
+
+Run `make smoke-personas` to assert the v5.12 persona library is present in the Supabase CLI database (expects at least one row such as `Archon v1.0`). If this fails, run `make supabase-bootstrap` and retry.
+
+### UI Dropzone smoke
+
+The Dropzone UI rides on the Supabase presign + render webhook path. Once the core stack is live:
+
+1. `cd pmoves/ui && pnpm install` (or `npm install`) then run `pnpm dev`.
+2. Open `http://localhost:3001/dashboard/ingest` (console UI) and upload a small test file to the default bucket.
+3. Watch Supabase for:
+   - `upload_events` row progressing from `preparing → uploading → persisting → complete`.
+   - `studio_board` insert with `meta.presigned_get` populated from the render webhook proxy.
+   - Matching `videos` and `transcripts` rows keyed by the Dropzone `upload_id`.
+4. Follow the “Open asset” link in the Recent uploads table to verify the MinIO-signed URL streams the object.
+5. When smoke-complete, archive or delete the object from MinIO to keep the bucket tidy.
+
+### Notebook Workbench smoke
+
+Prereqs: Supabase CLI stack online (`make supa-start`), env synced via `make env-setup`, and at least one thread in `chat_messages`.
+
+1. Run the consolidated target: `make notebook-workbench-smoke ARGS="--thread=<thread_uuid>"`.
+   - Step 1 lints the Next.js bundle (`npm --prefix ui run lint`).
+   - Step 2 loads Supabase env vars from `env.shared`/`.env.local` and hits the REST endpoint for the supplied thread ID.
+2. Review the output; non-zero exit codes signal missing env vars or REST connectivity issues. Capture the console log in PR evidence when validating UI/runtime changes.
+3. Optional manual check: `npm run dev` inside `pmoves/ui` and visit `http://localhost:4482/notebook-workbench` to interactively confirm layout edits, group management, and snapshot persistence.
+
+See `pmoves/docs/UI_NOTEBOOK_WORKBENCH.md` for extended workflows and troubleshooting tips.
+
+### 5d) Workflow Automations
+Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
+1. Import/activate domain flows (shipped in repo):
+   - `pmoves/n8n/flows/health_weekly_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/finance_monthly_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/wger_sync_to_supabase.json`
+   - `pmoves/n8n/flows/firefly_sync_to_supabase.json`
+2. Trigger health/finance CGP webhooks (IDs shown in n8n after activation):
+   ```bash
+   curl -X POST http://localhost:5678/webhook/<health-workflow-id>/webhook/health-cgp \
+     -H 'content-type: application/json' -d '{}'
+   curl -X POST http://localhost:5678/webhook/<finance-workflow-id>/webhook/finance-cgp \
+     -H 'content-type: application/json' -d '{}'
+   ```
+   Expect: `{"ok":true}` from n8n and CGP packets landing in Supabase via hi-rag gateway.
+3. Run the sync helpers directly when testing credentials:
+   - `make -C pmoves demo-health-cgp` (requires `WGER_API_TOKEN`)
+   - `make -C pmoves demo-finance-cgp` (requires `FIREFLY_ACCESS_TOKEN`)
+   Watch Supabase tables (`health_workouts`, `health_weekly_summaries`, `finance_transactions`, `finance_monthly_summaries`) and MinIO asset paths for inserts.
+4. Notebook sync smoke: `make -C pmoves up-open-notebook` (if using the local add-on) and ensure `OPEN_NOTEBOOK_API_*` envs resolve. Run `make -C pmoves notebook-seed-models` once `env.shared` includes your token + provider keys so `/api/models/providers` reports the enabled backends. `docker logs pmoves-notebook-sync-1` should show successful Supabase writes.
+
+### 5c) Firefly Finance API Smoke
+- Run `make smoke-firefly` (defaults to `http://localhost:8082`). The helper waits for the nginx front-end to answer and then calls `/api/v1/about` with `FIREFLY_ACCESS_TOKEN` (pulled from your shell or `pmoves/env.shared`). Expect a JSON payload showing the Firefly version and API version; failures usually mean the container could not finish migrations or the access token is missing. Override the host with `FIREFLY_ROOT_URL`.
+- Populate demo data (optional but recommended before running the n8n sync):
+  ```bash
+  make -C pmoves firefly-seed-sample    # uses pmoves/data/firefly/sample_transactions.json
+  ```
+  Re-run with `DRY_RUN=1 make -C pmoves firefly-seed-sample` to preview API calls without mutating Firefly. After n8n sync completes, confirm the mirrored rows in Supabase:
+  ```bash
+  curl -sS "$SUPA_REST_URL/finance_transactions?source=eq.firefly" \
+    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+    | jq 'map({occurred_at, category, amount, description})'
+  ```
+  Expect both revenue and expense rows for each of the 5-year projection categories (`AI-Enhanced Local Service Business`, `Sustainable Energy AI Consulting`, `Community Token Pre-Order System`, `Creative Content + Token Rewards`). The canonical external IDs should match the fixture (`pmoves-ai-services-year1`, `pmoves-ai-services-year5`, `pmoves-ai-services-ops-year1`, `pmoves-energy-consulting-year1`, `pmoves-energy-consulting-rnd`, `pmoves-community-token-preorders`, `pmoves-community-adoption-grants`, `pmoves-creative-rewards-year3`, `pmoves-creative-production-costs`).
+
+### 5d) Wger Static Proxy Smoke
+- Ensure `make up-external-wger` (or `make up-external`) is running so both `cataclysm-wger` and `cataclysm-wger-nginx`
+  containers are online. The nginx sidecar mirrors the upstream production guidance where Django writes the static
+  bundle and nginx serves `/static` and `/media` from shared volumes.citeturn0search0
+- Run `make smoke-wger` (defaults `WGER_ROOT_URL=http://localhost:8000`). The target:
+  1. Performs an HTTP GET to confirm the proxy forwards requests to Gunicorn.
+  2. Fetches `/static/images/logos/logo-font.svg` to ensure collectstatic artifacts are mounted correctly.
+- The bring-up target now calls `scripts/wger_brand_defaults.sh`, which sets the Django `Site` record, admin email, and seed gym name using the `WGER_BRAND_*` variables. Override those env vars (for example, `WGER_BRAND_GYM_NAME="PMOVES Wellness Studio"`) before running `make up-external-wger` if you need different first-login branding.
+- If the static check fails, recreate the containers with
+  `docker compose -p pmoves -f docker-compose.external.yml up -d --force-recreate wger` to rerun `collectstatic`. Volume
+  permission errors are the next suspect—verify `/home/wger/static` is owned by UID 1000 inside the Django container,
+  matching the upstream deployment reference.citeturn0search0
+
+### 5e) Creative Automations
+Prereqs: tutorials installed (`pmoves/creator/tutorials/`), Supabase CLI stack running, `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
+1. Import/activate the creative webhook flows:
+   - `pmoves/n8n/flows/wan_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/qwen_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/vibevoice_to_cgp.webhook.json`
+2. Trigger WAN Animate after ComfyUI uploads the render:
+   ```bash
+   curl -X POST http://localhost:5678/webhook/wan-to-cgp \
+     -H 'content-type: application/json' \
+     -d '{
+       "title":"Persona teaser",
+       "namespace":"pmoves.art.darkxside",
+       "persona":"darkxside",
+       "workflow":"wan-animate-2.2",
+       "asset_url":"s3://outputs/comfy/wan/darkxside-teaser.mp4",
+       "reference_image":"s3://assets/personas/darkxside.png",
+       "reference_motion":"s3://assets/reference/teaser-source.mp4",
+       "prompt":"neo-noir alleyway reveal",
+       "tags":["workflow:wan-animate","medium:video"],
+       "duration_sec":12.5,
+       "fps":30
+     }'
+   ```
+   Expect: Supabase `studio_board` row (status `submitted` unless auto_approve=true) with creative metadata and a `geometry.cgp.v1` packet posted to hi-rag v2.
+3. Trigger Qwen Image Edit+ and VibeVoice runs with analogous payloads (`/webhook/qwen-to-cgp`, `/webhook/vibevoice-to-cgp`). Include `asset_url`, `prompt`/`script`, persona tags, and any reference assets. Confirm MinIO/Supabase paths match the tutorial outputs and that geometry constellations land with `workflow:qwen-image-edit-plus` / `workflow:vibevoice-tts` tags.
+4. Geometry UI (`make -C pmoves web-geometry`): filter constellations by namespace/persona to verify the render, edit, and audio clips appear with the correct metadata and jump links.
+
+### 5e) Persona Film End-to-End (next milestone)
+Persona film automation combines the creative flows above with Supabase tables (`persona_avatar`, `geometry_cgp_packets`) seeded with WAN outputs and audio narration. With the `persona_avatar` table now available (migration `2025-10-20_persona_avatar.sql`), the remaining work is wiring the UI + automation glue:
+1. Chain WAN + VibeVoice requests (steps above) with matching `persona` and `namespace`.
+2. Confirm n8n emits the geometry packets and that Supabase audit tables capture the creative assets.
+3. Geometry UI avatars animate the resulting constellations (`make -C pmoves web-geometry`) once avatar metadata is present.
+
+## 6) “All Services Up, Then Tests” (Archon + Agents Flow)
+
+Use this when you want the full stack online (including Archon and agent UIs) before running the core smokes.
+
+1. **Ensure everything is down**
+   - From the repo root: `make -C pmoves down`
+
+2. **Start Supabase CLI stack and stamp credentials**
+   - `make -C pmoves supa-start`
+   - `make -C pmoves supabase-boot-user` (updates `pmoves/.env.local` and `env.shared` with anon/service keys)
+
+3. **Verify key environment values in `pmoves/.env.local`**
+   - `SUPABASE_URL=http://host.docker.internal:65421`
+   - `NEXT_PUBLIC_SUPABASE_URL=http://host.docker.internal:65421`
+   - `SUPA_REST_URL=http://host.docker.internal:65421/rest/v1`
+   - `ARCHON_SUPABASE_BASE_URL=http://host.docker.internal:65421`
+   - `SUPABASE_SERVICE_ROLE_KEY=sb_secret_...`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...`
+
+4. **Bring everything up (core, agents, externals, monitoring, UIs)**
+   - `make -C pmoves bringup-with-ui PARALLEL=1 WAIT_T_LONG=300`
+   - This target wires the Supabase CLI stack, core services, agents (including Archon via the submodule), optional externals, UI bundles, and waits for key health endpoints.
+
+5. **Run the headless agent/GPU smokes**
+   - `make -C pmoves agents-headless-smoke`
+   - `make -C pmoves smoke-gpu`
+
+6. **If Archon health still flaps**
+   - Confirm `ARCHON_SUPABASE_BASE_URL` and `SUPA_REST_URL` in `pmoves/.env.local` point at the active Supabase CLI REST host.
+   - Optionally re-up just the agents: `make -C pmoves up-agents` and rerun `make -C pmoves agents-headless-smoke`.
+
+For remote/self‑hosted Supabase (VPS), set `ARCHON_SUPABASE_BASE_URL`, `SUPA_REST_URL`, `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to your HTTPS endpoint and repeat steps 4–5.
+
+## 7) Geometry Bus (CHIT) — Extended Deep Dive
+
+### Mindmap Graph (Neo4j)
+1. Seed demo nodes for `/mindmap`: `make mindmap-seed` (requires the `neo4j` service running).
+2. Fetch the seeded constellation: `make mindmap-smoke`.
+   - Expected: JSON payload with `items` containing the `8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111` constellation points/media.
+   - If you see `Neo4j unavailable`, confirm the container is healthy and `NEO4J_PASSWORD` matches the password you supplied when first starting the container.
+
+## 8) Geometry Bus (CHIT) — End-to-end
 
 1. Create minimal CGP payload `cgp.json`:
    ```json
@@ -130,19 +392,76 @@ What the smoke covers:
      -d @cgp.json
    ```
 
-Expected: 200s; locator shows `{ "modality":"video","ref_id":"yt123","t":12.5,"frame":300 }`.
+   Expected: 200s; locator shows `{ "modality":"video","ref_id":"yt123","t":12.5,"frame":300 }`.
+
+7. Mind-map query (requires `make neo4j-bootstrap`):
+   ```bash
+   python docs/pmoves_chit_all_in_one/pmoves_all_in_one/pmoves_chit_graph_plus_mindmap/scripts/mindmap_query.py \
+     --base http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087} \
+     --cid <constellation_id>
+   ```
+   Substitute `<constellation_id>` with one of the seeded IDs (e.g., from the CSV). A JSON payload with `items` confirms Neo4j has the CHIT alias graph available.
 
 ## 7) Live Geometry UI + WebRTC
 
-1. Start v2 GPU gateway or v2 gateway (serves UI):
-   - `docker compose --profile gpu up -d hi-rag-gateway-v2-gpu` (GPU) or `docker compose --profile workers up -d hi-rag-gateway-v2`
-2. Open http://localhost:8087/geometry/
+1. Start v2 gateways: `make up` (v2 CPU on :${HIRAG_V2_HOST_PORT:-8086}, v2 GPU on :${HIRAG_V2_GPU_HOST_PORT:-8087} when available). Open http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (GPU) or http://localhost:${HIRAG_V2_HOST_PORT:-8086}/geometry/ (CPU)
+2. Start v1 gateways if needed: `make up-legacy-both` (v1 CPU on :8089, v1 GPU on :8090)
 3. Click Connect (room `public`). Post a CGP (make smoke-geometry) and watch points animate.
 4. Open the page in a second browser window; both connect to `public` room. Use Share Shape to send a `shape-hello` on the DataChannel.
 5. Click “Send Current CGP” to share the last geometry over the DataChannel; add a passphrase to sign the CGP capsule.
 6. Toggle “Encrypt anchors” and set a passphrase to AES‑GCM encrypt constellation anchors client‑side before sending; the receiving gateway can decrypt if `CHIT_DECRYPT_ANCHORS=true`.
 
-## 8) Mesh Handshake (NATS)
+## 8) Health/Finance → CGP Demo (New)
+
+Use the mapper helper to turn summary events into CGPs and post them to the gateway.
+
+1. Ensure the v2 gateway is running on `:${HIRAG_V2_HOST_PORT:-8086}` or set `HIRAG_URL` to `http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}` for GPU.
+2. Health weekly summary:
+   ```bash
+   make -C pmoves demo-health-cgp
+   ```
+   Expected: HTTP 200 from `/geometry/event`. Open the geometry UI and look for constellations `health.adh.*` and `health.load.*`.
+3. Finance monthly summary:
+   ```bash
+   make -C pmoves demo-finance-cgp
+   ```
+   Expected: HTTP 200 and constellations per category (e.g., `fin.Housing.<YYYY-MM>`). Use jump/labels to inspect spectra.
+
+### 8.1) n8n Webhook Variant (real data)
+
+1. Start n8n: `make -C pmoves up-n8n`
+2. Import flows (already in repo):
+   - `pmoves/n8n/flows/health_weekly_to_cgp.webhook.json`
+   - `pmoves/n8n/flows/finance_monthly_to_cgp.webhook.json`
+   Use the n8n UI or Public API (`/api/v1/workflows`) with `X-N8N-API-KEY`.
+3. Activate both flows in the UI (toggle Active). Production webhooks register only when the workflow is active.
+4. Trigger:
+   - Health: `curl -X POST http://localhost:5678/webhook/health-cgp -H 'content-type: application/json' -d '{}'`
+   - Finance: `curl -X POST http://localhost:5678/webhook/finance-cgp -H 'content-type: application/json' -d '{}'`
+5. Expect: `{"ok":true}` from the flow and `{"ok":true}` from `/geometry/event`. Verify persistence via PostgREST as above.
+
+### Optional: Persist CGPs to Postgres
+
+Enable gateway persistence and verify rows via PostgREST:
+
+1. Set env for `hi-rag-gateway-v2` and recreate:
+   ```bash
+   export CHIT_PERSIST_DB=true \
+     PGHOST=postgrest PGUSER=postgres PGPASSWORD=postgres PGDATABASE=postgres
+   make -C pmoves recreate-v2
+   ```
+2. Re-run the demo mappers (steps above).
+3. Verify tables via PostgREST:
+   ```bash
+   curl -s "http://localhost:3010/constellations?order=created_at.desc&limit=5" | jq '.[].summary'
+   curl -s "http://localhost:3010/shape_points?order=created_at.desc&limit=5" | jq '.[].id'
+   ```
+### Quick DB smoke (Supabase)
+
+### Quick DB smoke (Supabase)
+- `make smoke-geometry-db` — verifies the seeded demo constellation is reachable via PostgREST (`constellations`, `shape_points`, and `shape_index`). Ensure `SUPABASE_REST_URL` or `SUPA_REST_URL` is exported; defaults to `http://localhost:3010`.
+ 
+ ## 8) Mesh Handshake (NATS)
 
 1. Start mesh: `make mesh-up` (starts NATS + mesh-agent).
 2. In the UI, click “Send Signed CGP → Mesh”. This calls the gateway, which publishes to `mesh.shape.handshake.v1`.
@@ -163,18 +482,43 @@ Optional smoke targets:
 - `make smoke-presign-put` — end‑to‑end presign PUT and upload
 - `make smoke-rerank` — query with `use_rerank=true` (provider optional)
 - `make smoke-langextract` — extract chunks from XML via `langextract` and load
+- `make smoke-archon` — hit `http://localhost:8091/healthz` and ensure Archon reports `status: "ok"` (requires NATS + Supabase CLI stack)
+- `make smoke-hirag-v1` — query v1 gateway (auto-detects 8090→8089)
+- `make harvest-consciousness` — scaffold consciousness corpus, generate processed artifacts, and (if Supabase CLI is installed) apply schema; follow with the Selenium scrape + geometry publish steps below.
+- `make ingest-consciousness-yt` — search YouTube for each consciousness chunk, invoke pmoves-yt ingest/emit, and record video mappings (`processed-for-rag/supabase-import/consciousness-video-sources.json`).
+
+Consciousness follow-up:
+1. `pwsh -File pmoves/data/consciousness/Constellation-Harvest-Regularization/scripts/selenium-scraper.ps1` (run on a host with PowerShell + Chrome).
+2. Apply schema:
+   ```bash
+   supabase status --output env > supabase/.tmp_env && source supabase/.tmp_env
+   psql "$${SUPABASE_DB_URL}" -f pmoves/data/consciousness/Constellation-Harvest-Regularization/processed-for-rag/supabase-import/consciousness-schema.sql
+   ```
+   *(Compose runtime)* `docker compose -p pmoves exec postgres psql -U pmoves -d pmoves -f pmoves/data/.../consciousness-schema.sql`
+3. Import `processed-for-rag/supabase-import/n8n-workflow.json` into n8n and process `embeddings-ready/consciousness-chunks.jsonl`.
+4. `make -C pmoves ingest-consciousness-yt` (after `make -C pmoves up-yt`) to download authoritative interviews and emit CGPs for each chunk.
+5. Publish geometry sample via `make mesh-handshake FILE=pmoves/data/consciousness/Constellation-Harvest-Regularization/processed-for-rag/supabase-import/consciousness-geometry-sample.json`.
+6. Record evidence (chunk counts, Supabase rows, geometry IDs, video IDs) in `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`.
 
 ## Troubleshooting
 - Port in use: change the host port in `docker-compose.yml` or stop the conflicting process.
 - Qdrant not ready: `docker compose logs -f qdrant` and retry after a few seconds.
 - 401 from Render Webhook: ensure `Authorization: Bearer $RENDER_WEBHOOK_SHARED_SECRET` matches `.env`.
 - PostgREST errors: confirm `postgres` is up and `/supabase/initdb` scripts finished; check `docker compose logs -f postgres postgrest`.
+- Agents health badge shows “down” but API responds on a different path: set console overrides
+  - `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH=/your/health`
+  - `NEXT_PUBLIC_ARCHON_HEALTH_PATH=/your/health`
+  See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Personas page “Invalid schema: pmoves_core”:
+  - Start the PostgREST bound to Supabase CLI DB: `docker compose -p pmoves up -d postgrest-cli` (publishes `http://localhost:3011`).
+  - Set `POSTGREST_URL=http://localhost:3011` in `pmoves/env.shared` and run `make -C pmoves env-setup`.
+  - Reload `/dashboard/personas`.
 - Rerank disabled: if providers are unreachable, set `RERANK_ENABLE=false` or configure provider keys in `.env`.
 
 ## Log Triage
 - List services and status: `docker compose ps`
 - Tail recent logs for core services:
-  - `docker compose logs --since 15m presign render-webhook postgrest hi-rag-gateway-v2`
+  - `docker compose logs --since 15m presign render-webhook postgrest hi-rag-gateway hi-rag-gateway-gpu hi-rag-gateway-v2 hi-rag-gateway-v2-gpu`
   - `docker compose logs -f render-webhook` (follow live)
   - Shortcut: `make logs-core` (follow) or `make logs-core-15m`
 - Common signals:
@@ -197,12 +541,28 @@ Steps
 - What it checks:
   - /yt/info yields a valid `video_id`
   - /yt/ingest downloads, extracts audio, transcribes (faster-whisper)
-  - /yt/emit segments transcript into chunks and posts them to /hirag/upsert-batch; emits CGP to /geometry/event
-  - /shape/point/p:yt:<id>:0/jump returns a valid video locator
+- /yt/emit segments transcript into chunks and posts them to /hirag/upsert-batch; emits CGP to /geometry/event
+- /shape/point/p:yt:<id>:0/jump returns a valid video locator
+- Re-runs skip `/yt/ingest` when the clip already exists in Supabase, avoiding repeated downloads.
+- Geometry verification targets the GPU gateway on `http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}` (the instance pmoves-yt uses), falling back to the CPU gateway only if the GPU service is offline.
+- When the Qwen/FlagEmbedding reranker complains about `batch sizes > 1`, the harness now replays the request inside the GPU container with single-pair batches. Expect the first run to stream the 4B checkpoint (1–2 minutes) and subsequent runs to return `"used_rerank": true` without error spam.
 
 Optional
 - Summarize with Gemma (Ollama default):
   - `curl -X POST http://localhost:8077/yt/summarize -H 'content-type: application/json' -d '{"video_id":"<id>","style":"short"}' | jq`
+
+## YouTube → Jellyfin Playback
+
+- Prereqs: run `make up` (Hi-RAG gateways), `make up-yt` (pmoves.yt + ffmpeg-whisper), `make up-invidious` (Invidious + companion fallback), **and** `make up-jellyfin` (bridge API). The smoketest targets the Jellyfin AI overlay on `http://localhost:9096`; keep `JELLYFIN_API_KEY` in sync and drop a seed asset with `python scripts/seed_jellyfin_media.py` on fresh machines so the bridge always has at least one item to link. Wait for the services to report `Up` in `docker compose -p pmoves ps` before starting the smoke.
+- Start the YouTube channel monitor so new uploads keep flowing through the ingest pipeline:
+  - `make channel-monitor-up` (or include the profile flags `docker compose -p pmoves --profile yt --profile data --profile workers up -d channel-monitor` when running manually)
+  - `make channel-monitor-smoke` to kick an immediate poll and surface stats.
+- `make yt-jellyfin-smoke`
+  - Uses `YT_URL` (default `https://www.youtube.com/watch?v=2Vv-BfVoq4g`) to run the full pmoves.yt ingest/emit path.
+  - Confirms `videos` rows were written via Supabase REST (works with the CLI stack on port 65421 or PostgREST on 3010).
+  - Calls `jellyfin-smoke` afterward to request a playback URL from the Jellyfin bridge, ensuring the item can stream with a timestamped link. The target now attempts `/jellyfin/map-by-title` first and, if no match is found, automatically links the video to the newest Jellyfin library item before requesting `/jellyfin/playback-url`.
+- Some videos return `yt_dlp returned no info` in restricted regions. Override with `make yt-jellyfin-smoke YT_URL=<alternate_clip>` (any accessible public YouTube video) if that happens.
+- Geometry is routed to the GPU gateway first (`http://hi-rag-gateway-v2-gpu:8086` / host port `${HIRAG_V2_GPU_HOST_PORT:-8087}`). Keep `HIRAG_URL` / `HIRAG_GPU_URL` aligned in `env.shared` / `.env.local` so pmoves.yt publishes CGPs to the same service the smoketest queries. If the GPU port is healthy but still returns 404, the harness now automatically retries against the CPU gateway on host port `${HIRAG_V2_HOST_PORT:-8086}` before failing. Tail `docker compose -p pmoves logs hi-rag-gateway-v2*` when both ports miss to confirm `/geometry/event` deliveries are landing.
 
 ## Preflight + Health Checks
 
@@ -233,13 +593,24 @@ HTTP endpoints checked:
 
 ## Jellyfin Bridge
 
-- Optional: set `JELLYFIN_URL` and `JELLYFIN_API_KEY` in `.env` to enable live checks.
+- Optional: set `JELLYFIN_URL` (host overlay `http://localhost:9096`) and `JELLYFIN_API_KEY` in `.env` to enable live checks.
+- Shortcut: `make yt-jellyfin-smoke` ingests a sample YouTube video via pmoves.yt and then runs the playback smoke for you.
 - Link a video: `curl -X POST http://localhost:8093/jellyfin/link -H 'content-type: application/json' -d '{"video_id":"<id>","jellyfin_item_id":"<jf_id>"}'`
 - Get playback URL: `curl -X POST http://localhost:8093/jellyfin/playback-url -H 'content-type: application/json' -d '{"video_id":"<id>","t":42}'`
+- Fallback behaviour: when `/jellyfin/map-by-title` cannot locate a Jellyfin item, the bridge now returns 200 after wiring the request to the newest library item so smoke runs still produce a valid playback URL.
   - Expect a URL pointing at Jellyfin web with start time.
 - Auto-linking (optional): set `JELLYFIN_AUTOLINK=true` and (optionally) `AUTOLINK_INTERVAL_SEC=60` to periodically map recent videos by title.
 - Search: `curl 'http://localhost:8093/jellyfin/search?query=<title>'`
 - Map by title: `curl -X POST http://localhost:8093/jellyfin/map-by-title -H 'content-type: application/json' -d '{"video_id":"<id>","title":"<title>"}'`
+
+## Content Publisher
+
+- The publisher listens on `content.publish.approved.v1` and stages media as `<MEDIA_LIBRARY_PATH>/<namespace>/<slug>.<ext>`.
+- Outgoing `content.published.v1` envelopes now include the source `description`, `tags`, and merged `meta` fields, plus optional
+  `public_url`/`jellyfin_item_id` whenever Jellyfin confirms a library refresh.
+- Configure `MEDIA_LIBRARY_PUBLIC_BASE_URL` to advertise HTTP paths for the downloaded artifacts.
+- Regression coverage now includes a unit test that simulates a MinIO download failure and asserts the publisher emits the
+  `content.publish.failed.v1` envelope with merged metadata and audit context (`test_handle_download_failed_emits_failure_envelope`).
 
 ## Playlist/Channel Ingestion
 
@@ -247,3 +618,39 @@ HTTP endpoints checked:
   - Starts a `yt_jobs` playlist job (max_videos=3)
   - Polls `yt_items` until at least one item is present
   - Picks the first completed (or first available) `video_id`, emits chunks+CGP, and verifies geometry jump
+### 5c) Agents UIs (optional)
+
+- Start published Agent APIs + UIs in one call:
+
+```bash
+make -C pmoves up-agents-ui
+```
+
+Expected:
+- Agent Zero API health OK at `${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}${NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH:-/healthz}`.
+- Archon API health OK at `${NEXT_PUBLIC_ARCHON_URL:-http://localhost:8091}${NEXT_PUBLIC_ARCHON_HEALTH_PATH:-/healthz}`.
+- Archon UI reachable at `${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}`.
+
+If you use forks instead of published images:
+
+```bash
+make -C pmoves agents-integrations-clone
+make -C pmoves build-agents-integrations
+make -C pmoves up-agents-integrations
+```
+
+Additional agent smokes:
+
+```bash
+# MCP bridge reachability on :8051 (HTTP code printed; 404 acceptable)
+make -C pmoves archon-mcp-smoke
+
+# Verify Archon API/ UI endpoints return 200
+make -C pmoves archon-ui-smoke
+
+# DeepResearch health (worker)
+make -C pmoves deepresearch-health
+
+# DeepResearch NATS smoke (requires worker running)
+make -C pmoves deepresearch-smoke
+```

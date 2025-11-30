@@ -1,0 +1,33 @@
+id: laptop-4090
+name: "Laptop – i9 + RTX 4090"
+description: >
+  Mobile workstation with RTX 4090 laptop GPU and 64GB RAM. Suitable for Ollama
+  medium models, Whisper-large, and selective service bring-up.
+hardware:
+  cpu:
+    vendor: Intel
+    model: Core i9 (13th gen+)
+    cores: 16
+    threads: 24
+  gpu:
+    type: nvidia
+    models: ["RTX 4090 Laptop"]
+    memory_gb: 16
+  ram_gb: 64
+  tags: [laptop, cuda, mobile]
+compose_overrides:
+  - docker-compose.gpu.yml
+model_bundles:
+  - ollama-medium
+  - whisper-large
+mcp:
+  - docker
+  - compose
+messaging:
+  telegram: true
+  discord: true
+  whatsapp: optional
+  webrtc: true
+notes:
+  - Enable NVIDIA Optimus/Hybrid mode; ensure driver exposes CUDA.
+  - Favor lower-power Ollama models when on battery.

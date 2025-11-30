@@ -1,0 +1,11 @@
+<clickhouse>
+  <users>
+    <tensorzero>
+      <password></password>
+      <profile>default</profile>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+    </tensorzero>
+  </users>
+</clickhouse>

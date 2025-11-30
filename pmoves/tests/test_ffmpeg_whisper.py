@@ -94,7 +94,9 @@ def test_transcribe_falls_back_when_forward_fails(monkeypatch, transcribe_client
     assert inserted["rows"], "insert_segments should receive rows on forward failure"
     assert inserted["rows"][0]["video_id"] == "vid-123"
     assert forwarded["payload"]["video_id"] == "vid-123"
+    assert forwarded["payload"]["provider"] == "faster-whisper"
     assert body["text"] == "hello world"
+    assert body["provider"] == "faster-whisper"
 
 
 def test_transcribe_skips_insert_when_forward_succeeds(monkeypatch, transcribe_client):
@@ -112,3 +114,56 @@ def test_transcribe_skips_insert_when_forward_succeeds(monkeypatch, transcribe_c
     _post_transcribe(client)
 
     assert inserted is False, "insert_segments should not be called when forward succeeds"
+
+
+def test_provider_override(monkeypatch, transcribe_client):
+    server, client = transcribe_client
+
+    inserted: Dict[str, Any] = {}
+
+    monkeypatch.setattr(server, "_forward_to_audio_service", lambda payload: False)
+    monkeypatch.setattr(server, "MEDIA_AUDIO_URL", "https://media-audio.example/ingest")
+    monkeypatch.setattr(server, "insert_segments", lambda rows: inserted.setdefault("rows", rows))
+    monkeypatch.setattr(
+        server,
+        "_run_whisperx",
+        lambda *args, **kwargs: {
+            "text": "hello world",
+            "language": "en",
+            "segments": [{"id": 0, "start": 0.0, "end": 1.0, "text": "hello world", "speaker": None}],
+            "word_segments": None,
+            "speakers": {},
+            "device": "cpu",
+            "model": "large-v3",
+        },
+    )
+
+    response = client.post(
+        "/transcribe",
+        json={
+            "bucket": "demo",
+            "key": "clip.mp4",
+            "video_id": "vid-123",
+            "provider": "whisper",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["provider"] == "whisper"
+
+
+def test_invalid_provider_returns_400(transcribe_client):
+    _, client = transcribe_client
+
+    response = client.post(
+        "/transcribe",
+        json={
+            "bucket": "demo",
+            "key": "clip.mp4",
+            "video_id": "vid-123",
+            "provider": "unsupported",
+        },
+    )
+
+    assert response.status_code == 400

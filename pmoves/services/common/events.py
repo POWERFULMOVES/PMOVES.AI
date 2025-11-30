@@ -1,7 +1,22 @@
 import json, os, uuid, datetime
 from jsonschema import validate
 
-CONTRACTS_DIR = os.environ.get("PMOVES_CONTRACTS_DIR", "/app/contracts")
+def _contracts_dir() -> str:
+    # Priority: explicit env, /app/contracts, repo-relative pmoves/contracts
+    env_dir = os.environ.get("PMOVES_CONTRACTS_DIR")
+    if env_dir and os.path.isdir(env_dir):
+        return env_dir
+    app_dir = "/app/contracts"
+    if os.path.isdir(app_dir):
+        return app_dir
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.normpath(os.path.join(here, "..", "..", "contracts"))
+    if os.path.isdir(repo_dir):
+        return repo_dir
+    # Fallback to /app/contracts; json loads will raise clearly if missing
+    return app_dir
+
+CONTRACTS_DIR = _contracts_dir()
 
 def load_schema(topic: str):
     topics = json.loads(open(os.path.join(CONTRACTS_DIR, "topics.json")).read())
@@ -35,7 +50,6 @@ async def publish(topic: str, payload: dict, *, correlation_id: str | None = Non
     env = envelope(topic, payload, correlation_id=correlation_id, parent_id=parent_id, source=source)
     nc = NATS()
     await nc.connect(servers=[NATS_URL])
-    await nc.publish(topic.encode(), json.dumps(env).encode())
+    await nc.publish(topic, json.dumps(env).encode())
     await nc.close()
     return env
-

@@ -1,0 +1,299 @@
+{
+  "name": "PMOVES.YT - YouTube RAG Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "youtube-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_trigger",
+      "name": "Webhook - YouTube URL",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "pmoves-yt-ingest"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pmoves-yt:8077/yt/ingest",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.body.url }}"
+            },
+            {
+              "name": "namespace",
+              "value": "={{ $json.body.namespace || 'pmoves' }}"
+            },
+            {
+              "name": "bucket",
+              "value": "={{ $json.body.bucket || 'assets' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "pmoves_yt_ingest",
+      "name": "PMOVES.YT - Full Ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract structured video metadata from ingest response\nconst response = ($input.all()[0] || {}).json || {};\nconst videoMeta = response.video || {};\nconst webhookPayload = ($item(0).$node['Webhook - YouTube URL'] || {}).json || {};\nconst body = webhookPayload.body || {};\nconst videoId = videoMeta.video_id || videoMeta.id || response.video_id || body.video_id || body.id || '';\nconst namespace = videoMeta.namespace || response.namespace || body.namespace || 'pmoves';\nconst title = videoMeta.title || response.title || body.title || videoId;\nconst video = { ...videoMeta };\nif (!video.video_id && videoId) video.video_id = videoId;\nif (!video.id && videoId) video.id = videoId;\nif (!video.namespace && namespace) video.namespace = namespace;\nif (!video.title && title) video.title = title;\nreturn {\n  video,\n  video_id: videoId,\n  title,\n  namespace,\n  transcript_ready: (response.transcript && response.transcript.ok) || response.ok || false,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "extract_video_id",
+      "name": "Extract Video ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pmoves-yt:8077/yt/emit",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "video_id",
+              "value": "={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}"
+            },
+            {
+              "name": "namespace",
+              "value": "={{ ($json.video && $json.video.namespace) || $json.namespace }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "emit_to_hirag",
+      "name": "PMOVES.YT - Emit to Hi-RAG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://pmoves-yt:8077/yt/summarize",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "video_id",
+              "value": "={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}"
+            },
+            {
+              "name": "style",
+              "value": "long"
+            },
+            {
+              "name": "provider",
+              "value": "ollama"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "generate_summary",
+      "name": "PMOVES.YT - Generate Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        900,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://jellyfin-bridge:8093/jellyfin/map-by-title",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "video_id",
+              "value": "={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "auto_map_jellyfin",
+      "name": "Auto-Map to Jellyfin (Optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1120,
+        300
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  video_id: ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id,\n  namespace: ($json.video && $json.video.namespace) || $json.namespace,\n  title: ($json.video && $json.video.title) || $json.title,\n  video: $json.video || null,\n  transcript_ready: $json.transcript_ready || false,\n  chunks_indexed: $('emit_to_hirag').item.json.chunks,\n  summary_generated: $('generate_summary').item.json.ok,\n  jellyfin_mapped: $('auto_map_jellyfin').item.json.ok || false,\n  jellyfin_item_id: $('auto_map_jellyfin').item.json.mapped?.jellyfin_item_id || null,\n  message: 'YouTube video successfully ingested and indexed'\n}) }}"
+      },
+      "id": "webhook_response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.discord_webhook_url || $env.DISCORD_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=\ud83c\udfa5 **YouTube Video Indexed**\\n\\n**Title:** {{ ($json.video && $json.video.title) || $json.title }}\\n**Namespace:** {{ ($json.video && $json.video.namespace) || $json.namespace }}\\n**Video ID:** `{{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }}`\\n**Chunks:** {{ $('emit_to_hirag').item.json.chunks }}\\n**Summary:** {{ $('generate_summary').item.json.ok ? '\u2705 Generated' : '\u274c Failed' }}\\n**Jellyfin:** {{ $('auto_map_jellyfin').item.json.ok ? '\u2705 Mapped to ' + $('auto_map_jellyfin').item.json.mapped.name : '\u26a0\ufe0f Not mapped' }}\\n\\n[Watch on YouTube](https://youtube.com/watch?v={{ ($json.video && ($json.video.video_id || $json.video.id)) || $json.video_id }})"
+            }
+          ]
+        }
+      },
+      "id": "discord_notification",
+      "name": "Discord Notification (Optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1340,
+        480
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "webhook_trigger": {
+      "main": [
+        [
+          {
+            "node": "pmoves_yt_ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pmoves_yt_ingest": {
+      "main": [
+        [
+          {
+            "node": "extract_video_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract_video_id": {
+      "main": [
+        [
+          {
+            "node": "emit_to_hirag",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "generate_summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "emit_to_hirag": {
+      "main": [
+        [
+          {
+            "node": "auto_map_jellyfin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "auto_map_jellyfin": {
+      "main": [
+        [
+          {
+            "node": "webhook_response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "discord_notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "timezone": "America/New_York",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "youtube",
+      "name": "YouTube"
+    },
+    {
+      "id": "rag",
+      "name": "RAG"
+    },
+    {
+      "id": "pmoves",
+      "name": "PMOVES"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-17T23:00:00.000Z",
+  "versionId": "1"
+}

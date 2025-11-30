@@ -1,0 +1,303 @@
+# TensorZero gateway config (chat + embeddings). Model keys double as UI aliases.
+
+[gateway]
+# Observability is disabled by default; the ClickHouse block is pre-populated
+# for the bundled PMOVES ClickHouse. See
+# pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md for
+# opt-in steps and env overrides.
+observability.enabled = false
+
+[gateway.observability.clickhouse]
+# PMOVES-branded defaults assume the bundled ClickHouse instance from
+# `make -C pmoves up-tensorzero` (see env.shared.example for values).
+url = "env::TENSORZERO_OBS_CLICKHOUSE_URL"
+database = "env::TENSORZERO_OBS_CLICKHOUSE_DB"
+username = "env::TENSORZERO_OBS_CLICKHOUSE_USER"
+password = "env::TENSORZERO_OBS_CLICKHOUSE_PASSWORD"
+
+# --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
+
+[models.agent_zero_qwen14b_local]
+routing = ["ollama_local"]
+
+[models.agent_zero_qwen14b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen:14b"
+api_key_location = "none"
+
+[models.agent_zero_mistral7b_local]
+routing = ["ollama_local"]
+
+[models.agent_zero_mistral7b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "mistral:7b-instruct"
+api_key_location = "none"
+
+[models.agent_zero_phi3_mini_local]
+routing = ["ollama_local"]
+
+[models.agent_zero_phi3_mini_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "phi3:3.8b-mini-128k-instruct"
+api_key_location = "none"
+
+[models.agent_zero_mistral7b_edge]
+routing = ["ollama_edge"]
+
+[models.agent_zero_mistral7b_edge.providers.ollama_edge]
+type = "openai"
+api_base = "http://jetson-ollama:11434/v1"
+model_name = "mistral:7b-instruct"
+api_key_location = "none"
+
+[models.agent_zero_phi3_mini_edge]
+routing = ["ollama_edge"]
+
+[models.agent_zero_phi3_mini_edge.providers.ollama_edge]
+type = "openai"
+api_base = "http://jetson-ollama:11434/v1"
+model_name = "phi3:3.8b-mini-128k-instruct"
+api_key_location = "none"
+
+[models.langextract_qwen7b_local]
+routing = ["ollama_local"]
+
+[models.langextract_qwen7b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen:7b"
+api_key_location = "none"
+
+[models.chat_ollama_llama3]
+routing = ["ollama_local"]
+
+[models.chat_ollama_llama3.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "llama3.1"
+api_key_location = "none"
+
+# --- Chat models: Cloud and hosted backbones -------------------------------
+
+[models.chat_openai_platform]
+routing = ["openai_platform"]
+
+[models.chat_openai_platform.providers.openai_platform]
+type = "openai"
+api_base = "https://api.openai.com/v1"
+model_name = "gpt-4o-mini"
+api_key_location = "env::OPENAI_API_KEY"
+
+[models.chat_moonshot]
+routing = ["moonshot_primary"]
+
+[models.chat_moonshot.providers.moonshot_primary]
+type = "openai"
+api_base = "https://api.moonshot.ai/v1"
+model_name = "moonshot-v1-32k"
+api_key_location = "env::MOONSHOT_API_KEY"
+
+[models.chat_openrouter]
+routing = ["openrouter_primary"]
+
+[models.chat_openrouter.providers.openrouter_primary]
+type = "openai"
+api_base = "https://openrouter.ai/api/v1"
+model_name = "anthropic/claude-3.5-sonnet"
+api_key_location = "env::OPENROUTER_API_KEY"
+
+[models.chat_venice]
+routing = ["venice_primary"]
+
+[models.chat_venice.providers.venice_primary]
+type = "openai"
+api_base = "https://api.venice.ai/api/v1"
+model_name = "venice/gpt-4o-mini"
+api_key_location = "env::VENICE_API_KEY"
+
+[models.chat_together]
+routing = ["together_primary"]
+
+[models.chat_together.providers.together_primary]
+type = "openai"
+api_base = "https://api.together.xyz/v1"
+model_name = "meta-llama/Meta-Llama-3.1-70B-Instruct"
+api_key_location = "env::TOGETHER_AI_API_KEY"
+
+[models.chat_cloudflare_gpt_oss]
+routing = ["cloudflare_workers"]
+
+[models.chat_cloudflare_gpt_oss.providers.cloudflare_workers]
+type = "openai"
+api_base = "https://api.cloudflare.com/client/v4/accounts/fe5ef93f1ffc7070b2218b96f8b256f5/ai/run/openai"
+model_name = "@cf/openai/gpt-oss-20b"
+api_key_location = "env::CLOUDFLARE_API_TOKEN"
+
+# --- Embedding models ------------------------------------------------------
+
+[embedding_models.gemma_embed_local]
+routing = ["ollama_local_embedding"]
+
+[embedding_models.gemma_embed_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "embeddinggemma:300m"
+api_key_location = "none"
+
+[embedding_models.archon_nomic_embed_local]
+routing = ["ollama_local_embedding"]
+
+[embedding_models.archon_nomic_embed_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "nomic-embed-text"
+api_key_location = "none"
+
+[embedding_models.archon_bge_large_together]
+routing = ["together_embed_primary"]
+
+[embedding_models.archon_bge_large_together.providers.together_embed_primary]
+type = "openai"
+api_base = "https://api.together.xyz/v1"
+model_name = "BAAI/bge-large-en-v1.5"
+api_key_location = "env::TOGETHER_AI_API_KEY"
+
+[embedding_models.archon_e5_large_together]
+routing = ["together_embed_primary"]
+
+[embedding_models.archon_e5_large_together.providers.together_embed_primary]
+type = "openai"
+api_base = "https://api.together.xyz/v1"
+model_name = "intfloat/e5-large-v2"
+api_key_location = "env::TOGETHER_AI_API_KEY"
+
+[embedding_models.openai_text_embedding_small]
+routing = ["openai_embed_primary"]
+
+[embedding_models.openai_text_embedding_small.providers.openai_embed_primary]
+type = "openai"
+api_base = "https://api.openai.com/v1"
+model_name = "text-embedding-3-small"
+api_key_location = "env::OPENAI_API_KEY"
+
+[embedding_models.openrouter_embedding]
+routing = ["openrouter_embed_primary"]
+
+[embedding_models.openrouter_embedding.providers.openrouter_embed_primary]
+type = "openai"
+api_base = "https://openrouter.ai/api/v1"
+model_name = "voyage/multilingual-2"
+api_key_location = "env::OPENROUTER_API_KEY"
+
+[embedding_models.venice_embedding]
+routing = ["venice_embed_primary"]
+
+[embedding_models.venice_embedding.providers.venice_embed_primary]
+type = "openai"
+api_base = "https://api.venice.ai/api/v1"
+model_name = "venice/embedding-gemma-300m"
+api_key_location = "env::VENICE_API_KEY"
+
+[embedding_models.together_embedding]
+routing = ["together_embed_primary"]
+
+[embedding_models.together_embedding.providers.together_embed_primary]
+type = "openai"
+api_base = "https://api.together.xyz/v1"
+model_name = "togethercomputer/text-embedding-20-light"
+api_key_location = "env::TOGETHER_AI_API_KEY"
+
+# --- Functions -------------------------------------------------------------
+
+[functions.agent_zero]
+type = "chat"
+
+[functions.agent_zero.variants.local_qwen14b]
+type = "chat_completion"
+model = "agent_zero_qwen14b_local"
+
+[functions.agent_zero.variants.local_mistral7b]
+type = "chat_completion"
+model = "agent_zero_mistral7b_local"
+
+[functions.agent_zero.variants.local_phi3_mini]
+type = "chat_completion"
+model = "agent_zero_phi3_mini_local"
+
+[functions.agent_zero.variants.edge_mistral7b]
+type = "chat_completion"
+model = "agent_zero_mistral7b_edge"
+
+[functions.agent_zero.variants.edge_phi3_mini]
+type = "chat_completion"
+model = "agent_zero_phi3_mini_edge"
+
+[functions.agent_zero.variants.hosted_openai]
+type = "chat_completion"
+model = "chat_openai_platform"
+
+[functions.agent_zero.variants.hosted_moonshot]
+type = "chat_completion"
+model = "chat_moonshot"
+
+[functions.agent_zero.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.agent_zero.variants.hosted_venice]
+type = "chat_completion"
+model = "chat_venice"
+
+[functions.agent_zero.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
+
+[functions.agent_zero.variants.hosted_gpt_oss]
+type = "chat_completion"
+model = "chat_cloudflare_gpt_oss"
+
+[functions.langextract]
+type = "chat"
+
+[functions.langextract.variants.langextract_local_qwen7b]
+type = "chat_completion"
+model = "langextract_qwen7b_local"
+
+[functions.langextract.variants.langextract_local_phi3]
+type = "chat_completion"
+model = "agent_zero_phi3_mini_local"
+
+[functions.langextract.variants.langextract_edge_mistral7b]
+type = "chat_completion"
+model = "agent_zero_mistral7b_edge"
+
+[functions.langextract.variants.langextract_edge_phi3]
+type = "chat_completion"
+model = "agent_zero_phi3_mini_edge"
+
+[functions.langextract.variants.langextract_openai]
+type = "chat_completion"
+model = "chat_openai_platform"
+
+[functions.langextract.variants.langextract_moonshot]
+type = "chat_completion"
+model = "chat_moonshot"
+
+[functions.langextract.variants.langextract_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.langextract.variants.langextract_venice]
+type = "chat_completion"
+model = "chat_venice"
+
+[functions.langextract.variants.langextract_together]
+type = "chat_completion"
+model = "chat_together"
+
+[functions.langextract.variants.langextract_gpt_oss]
+type = "chat_completion"
+model = "chat_cloudflare_gpt_oss"

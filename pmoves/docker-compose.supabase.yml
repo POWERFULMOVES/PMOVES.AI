@@ -6,6 +6,7 @@ services:
       GOTRUE_SITE_URL: ${GOTRUE_SITE_URL:-http://localhost:3000}
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${GOTRUE_API_EXTERNAL_URL:-http://localhost:9999}
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_LOG_LEVEL: info
       GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_jwt_secret}
@@ -25,7 +26,9 @@ services:
       DB_NAME: ${POSTGRES_DB:-pmoves}
       DB_USER: ${POSTGRES_USER:-pmoves}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-pmoves}
+      APP_NAME: ${SUPABASE_REALTIME_APP_NAME:-realtime}
       PORT: 4000
+      RLIMIT_NOFILE: ${SUPABASE_RLIMIT_NOFILE:-1048576}
       SECRET_KEY_BASE: ${SUPABASE_REALTIME_SECRET:-dev_realtime_secret}
       JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_jwt_secret}
     ports: ["4000:4000"]
@@ -51,13 +54,13 @@ services:
     networks: [pmoves]
 
   studio:
-    image: supabase/studio:20240806-7fae9fa
+    image: supabase/studio:latest
     restart: unless-stopped
     environment:
       STUDIO_PG_META_URL: http://postgrest:3000
       SUPABASE_URL: http://localhost:9999
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-dev_anon_key}
-    ports: ["54323:3000"]
+    ports: ["${SUPABASE_STUDIO_PORT:-54323}:3000"]
     # Avoid cross-file depends_on to prevent invalid compose project errors.
     networks: [pmoves]
 

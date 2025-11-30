@@ -1,0 +1,19 @@
+{
+  "name": "Health Wger Sync → Supabase (hourly)",
+  "settings": {},
+  "active": false,
+  "nodes": [
+    {"parameters": {"triggerTimes": [{"item": {"mode": "everyHour"}}]}, "id": "cron", "name": "Schedule", "type": "n8n-nodes-base.cron", "typeVersion": 1, "position": [ -320, 120 ]},
+    {"parameters": {"url": "={{ $env.WGER_BASE_URL }}/api/v2/workoutlog/", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "Authorization", "value": "=Token {{$env.WGER_API_TOKEN}}"}]}, "options": {"timeout": 30}}, "id": "fetch", "name": "Fetch Wger Logs", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [ -40, 120 ]},
+    {"parameters": {"batchSize": 1, "options": {}}, "id": "split", "name": "Split", "type": "n8n-nodes-base.splitInBatches", "typeVersion": 1, "position": [ 180, 120 ]},
+    {"parameters": {"functionCode": "const item = ($json.results && Array.isArray($json.results)) ? $json.results[0] : $json; const id = item.id || item.pk || item.uuid || undefined; const dt = item.date || item.performed_at || item.timestamp || new Date().toISOString(); const duration = item.duration || (item.meta && item.meta.duration_min) || null; const load = item.load || (item.meta && item.meta.load) || null; const row = { namespace: 'pmoves', source: 'wger', external_id: String(id||''), observed_at: new Date(dt).toISOString(), metrics: {} }; if (duration!=null) row.metrics.duration_min = duration; if (load!=null) row.metrics.load = load; return [{ json: row }];"}, "id": "map", "name": "Map → health_workouts", "type": "n8n-nodes-base.function", "typeVersion": 2, "position": [ 420, 120 ]},
+    {"parameters": {"method": "POST", "url": "={{ $env.SUPA_REST_URL }}/health_workouts", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "content-type", "value": "application/json"}, {"name": "prefer", "value": "resolution=merge-duplicates"}, {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"}, {"name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}]}, "sendBody": true, "bodyParameters": {"parameters": []}, "body": "={{ JSON.stringify($json) }}", "options": {"timeout": 30}}, "id": "upsert", "name": "Upsert → Supabase", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [ 700, 120 ]}
+  ],
+  "connections": {
+    "Schedule": {"main": [[{"node":"Fetch Wger Logs", "type": "main", "index": 0}]]},
+    "Fetch Wger Logs": {"main": [[{"node":"Split", "type": "main", "index": 0}]]},
+    "Split": {"main": [[{"node":"Map → health_workouts", "type": "main", "index": 0}]]},
+    "Map → health_workouts": {"main": [[{"node":"Upsert → Supabase", "type": "main", "index": 0}]]}
+  }
+}
+

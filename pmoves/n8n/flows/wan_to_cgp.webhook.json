@@ -1,0 +1,162 @@
+{
+  "name": "WAN Animate \u2192 CGP (webhook)",
+  "settings": {},
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "wan-to-cgp",
+        "options": {
+          "responseData": "{\"ok\":true}"
+        },
+        "httpMethod": "POST"
+      },
+      "id": "wh_wan",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const body = $json;\nconst required = body.asset_url || body.presigned_get || body.s3_uri;\nif (!required) {\n  throw new Error('asset_url (or presigned_get / s3_uri) is required');\n}\nconst now = new Date().toISOString();\nconst namespace = body.namespace || 'pmoves.art';\nconst persona = body.persona || body.author || 'unknown';\nconst workflow = body.workflow || 'wan-animate-2.2';\nconst title = body.title || (body.key ? body.key.split('/').pop() : 'wan-clip');\nconst slug = (body.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'wan-clip';\nconst tags = Array.isArray(body.tags) ? [...body.tags] : [];\nif (!tags.includes(`workflow:${workflow}`)) tags.push(`workflow:${workflow}`);\nif (persona && !tags.includes(`persona:${persona}`)) tags.push(`persona:${persona}`);\nconst autoApprove = Boolean(body.auto_approve);\nconst studioRow = {\n  title,\n  namespace,\n  content_url: body.asset_url || body.presigned_get || body.s3_uri,\n  status: autoApprove ? 'approved' : 'submitted',\n  meta: {\n    author: body.author || persona,\n    tags,\n    persona,\n    workflow,\n    presigned_get: body.presigned_get,\n    bucket: body.bucket,\n    key: body.key,\n    prompt: body.prompt,\n    negative_prompt: body.negative_prompt,\n    reference_image: body.reference_image,\n    reference_motion: body.reference_motion,\n    duration_sec: body.duration_sec,\n    fps: body.fps,\n    notes: body.notes,\n    source: 'comfyui',\n    webhook: true\n  }\n};\nconst points = [\n  {\n    id: `asset:${slug}`,\n    modality: 'video',\n    ref_id: studioRow.content_url,\n    proj: 1.0,\n    summary: title\n  }\n];\nif (body.reference_image) {\n  points.push({\n    id: `ref-image:${slug}`,\n    modality: 'image',\n    ref_id: body.reference_image,\n    proj: 0.6,\n    summary: 'reference image'\n  });\n}\nif (body.reference_motion) {\n  points.push({\n    id: `ref-motion:${slug}`,\n    modality: 'video',\n    ref_id: body.reference_motion,\n    proj: 0.7,\n    summary: 'motion reference'\n  });\n}\nconst clamp01 = (v, fallback) => {\n  if (typeof v !== 'number' || Number.isNaN(v)) return fallback;\n  return Math.max(0, Math.min(1, v));\n};\nconst spectrum = [\n  clamp01(body.motion_score, 0.85),\n  clamp01(body.fidelity_score, 0.75)\n];\nconst constellation = {\n  id: `wan.${workflow}.${slug}`,\n  summary: body.prompt || title,\n  spectrum,\n  points,\n  meta: {\n    namespace,\n    persona,\n    workflow,\n    tags,\n    duration_sec: body.duration_sec,\n    fps: body.fps\n  }\n};\nconst cgp = {\n  spec: 'chit.cgp.v0.1',\n  summary: `WAN Animate render \u2192 ${title}`,\n  created_at: now,\n  super_nodes: [\n    {\n      id: `creative:${namespace}`,\n      label: namespace,\n      summary: body.notes || '',\n      constellations: [constellation]\n    }\n  ],\n  meta: {\n    source: 'comfy.wan.animate.v2',\n    persona,\n    tags,\n    namespace,\n    workflow,\n    studio_board_title: title\n  }\n};\nreturn [{ json: { studio_row: studioRow, cgp_envelope: { type: 'geometry.cgp.v1', data: cgp } } }];"
+      },
+      "id": "build_records",
+      "name": "Prepare Records",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPA_REST_URL }}/studio_board",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "prefer",
+              "value": "return=representation"
+            },
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": "={{ JSON.stringify($json.studio_row) }}",
+        "options": {
+          "timeout": 30
+        }
+      },
+      "id": "insert_studio",
+      "name": "Insert studio_board",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        740,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const envelope = $node[\"Prepare Records\"].json.cgp_envelope;\nconst rows = Array.isArray($json) ? $json : [$json];\nlet record = null;\nfor (const r of rows) {\n  if (r && typeof r === 'object' && !Array.isArray(r) && 'id' in r) {\n    record = r;\n    break;\n  }\n  if (Array.isArray(r)) {\n    const inner = r.find(x => x && typeof x === 'object' && 'id' in x);\n    if (inner) {\n      record = inner;\n      break;\n    }\n  }\n}\nif (record && record.id) {\n  envelope.data.meta = envelope.data.meta || {};\n  envelope.data.meta.studio_board_id = record.id;\n}\nreturn [{ json: envelope }];"
+      },
+      "id": "assemble_cgp",
+      "name": "Assemble CGP envelope",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        980,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://hi-rag-gateway-v2:8086/geometry/event",
+        "sendBody": true,
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30,
+          "bodyContentType": "json"
+        },
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      "id": "post_cgp",
+      "name": "POST CGP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1220,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Records": {
+      "main": [
+        [
+          {
+            "node": "Insert studio_board",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert studio_board": {
+      "main": [
+        [
+          {
+            "node": "Assemble CGP envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble CGP envelope": {
+      "main": [
+        [
+          {
+            "node": "POST CGP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

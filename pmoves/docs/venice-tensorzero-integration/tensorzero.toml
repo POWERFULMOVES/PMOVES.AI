@@ -1,0 +1,46 @@
+# TensorZero gateway config (OpenAI-compatible)
+[gateway]
+listen = "0.0.0.0:3000"
+
+# Observability (ClickHouse)
+[gateway.observability]
+enabled = true
+# Connection details now come from environment variables:
+#   TENSORZERO_CLICKHOUSE_URL
+#   TENSORZERO_CLICKHOUSE_USER
+#   TENSORZERO_CLICKHOUSE_PASSWORD
+
+# --- Providers ---
+[providers.local_ollama]
+type     = "openai_compat"
+base_url = "http://ollama:11434/v1"
+
+[providers.local_vllm]
+type     = "openai_compat"
+base_url = "http://vllm:8000/v1"
+
+[providers.local_llamacpp]
+type     = "openai_compat"
+base_url = "http://llamacpp:8080/v1"
+
+[providers.venice]
+type     = "openai_compat"
+base_url = "https://api.venice.ai/api/v1"
+api_key  = "${VENICE_API_KEY}"
+
+[providers.huggingface_endpoint]
+type      = "openai_compat"
+base_url  = "${HUGGINGFACE_ENDPOINT_BASE}"
+api_key   = "${HUGGINGFACE_API_TOKEN}"
+auth_type = "bearer"
+# Example: https://api-inference.huggingface.co/v1 (or your custom Inference Endpoint URL)
+
+# --- Routing examples ---
+[routes.chat.default]
+primary  = "local_vllm"
+fallback = ["local_ollama","venice","huggingface_endpoint"]
+
+[routes.embeddings.default]
+primary  = "local_ollama"
+model    = "embedding-gemma-300m"
+fallback = ["venice"]

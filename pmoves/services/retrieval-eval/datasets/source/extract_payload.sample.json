@@ -1,0 +1,29 @@
+{
+  "source": "seed_local",
+  "chunks": [
+    {
+      "doc_id": "pmoves_intro",
+      "section_id": "intro-1",
+      "chunk_id": "pmoves_intro-intro-1",
+      "namespace": "pmoves",
+      "text": "PMOVES is a modular orchestration mesh for AI services, built with FastAPI and Docker Compose.",
+      "kind": "summary"
+    },
+    {
+      "doc_id": "pmoves_intro",
+      "section_id": "intro-2",
+      "chunk_id": "pmoves_intro-intro-2",
+      "namespace": "pmoves",
+      "text": "It integrates retrieval systems like Qdrant and Meilisearch, and supports Supabase for content workflows.",
+      "kind": "summary"
+    },
+    {
+      "doc_id": "pmoves_intro",
+      "section_id": "intro-3",
+      "chunk_id": "pmoves_intro-intro-3",
+      "namespace": "pmoves",
+      "text": "The Hi-RAG Gateway provides hybrid search with optional reranking and Neo4j entity boosts.",
+      "kind": "summary"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: node
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+
+  - job_name: blackbox_http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://host.docker.internal:8086/hirag/healthz  # hi-rag v2 CPU
+          - http://host.docker.internal:8087/hirag/healthz  # hi-rag v2 GPU
+          - http://host.docker.internal:8088/healthz        # presign
+          - http://host.docker.internal:8091/healthz        # archon
+          - http://host.docker.internal:8097/healthz            # channel monitor
+          - http://host.docker.internal:9096                # jellyfin overlay
+          - http://host.docker.internal:4000                # tensorzero playground
+          - http://host.docker.internal:5678                # n8n
+          - http://host.docker.internal:65421/rest/v1       # supabase rest
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: channel_monitor
+    static_configs:
+      - targets: ["channel-monitor:8097"]
+
+  - job_name: deepresearch
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://host.docker.internal:8098/healthz  # deepresearch worker health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: supaserch
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://host.docker.internal:${SUPASERCH_HOST_PORT:-8099}/healthz
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115

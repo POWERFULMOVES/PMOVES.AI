@@ -1,0 +1,69 @@
+# Root ignores
+# Python virtual environments
+.venv/
+venv/
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+# Windows alternate stream metadata
+*:[Zz]one.Identifier
+# Logs
+*.log
+/pmoves/data/agent-zero/logs/
+/pmoves/data/consciousness/
+# Local data caches (safety)
+*.tmp
+*.temp
+.docker-nocreds/
+.docker-config/
+integrations-workspace/
+testkeys.md
+.tmp_*
+/.cache/
+# dotenv: keep local env files out of the repo
+# Tracked examples like pmoves/.env.example should remain in the repo
+/pmoves/.env
+/pmoves/.env.local
+/pmoves/env.jellyfin-ai
+/pmoves/jellyfin-ai/
+# Tooling binaries
+/actionlint
+# Root env scratch (not used by stack, keep untracked)
+/.env
+# Next.js UI build artifacts
+/pmoves/ui/.next
+/pmoves/ui/node_modules
+/pmoves/ui/out
+# Local exports: keep operator-only dumps out of the repo
+/pmoves/docs/coolify/
+.clinerules/byterover-rules.md
+.kilocode/rules/byterover-rules.md
+.roo/rules/byterover-rules.md
+.windsurf/rules/byterover-rules.md
+.cursor/rules/byterover-rules.mdc
+.kiro/steering/byterover-rules.md
+.qoder/rules/byterover-rules.md
+.augment/rules/byterover-rules.md
+# JavaScript workspaces
+node_modules/
+pmoves/ui/.next/
+pmoves/ui/out/
+# Playwright caches & temp artifacts
+playwright-browsers/
+playwright-deps/
+pmoves/ui/test-results/
+*.deb
+temp*.mp4
+/data/
+# PMOVES UI dev artifacts
+pmoves/ui/.pmoves_ui_dev.pid
+pmoves/ui/.pmoves_ui_dev.log
+docs/notes.md

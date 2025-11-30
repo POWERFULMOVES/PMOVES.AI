@@ -1,0 +1,164 @@
+{
+  "name": "Finance Monthly \u2192 CGP (webhook)",
+  "settings": {},
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "finance-cgp",
+        "options": {
+          "responseData": "{\"ok\":true}"
+        },
+        "httpMethod": "POST"
+      },
+      "id": "wh_fin",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://postgrest:3000/finance_transactions",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "order",
+              "value": "occurred_at.asc"
+            },
+            {
+              "name": "limit",
+              "value": "1000"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30
+        }
+      },
+      "id": "fetch_fin",
+      "name": "Fetch finance_transactions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        520,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Aggregate monthly by category from PostgREST rows\nconst rows = Array.isArray(items[0].json) ? items[0].json : [];\nif(rows.length===0){return [{json:{topic:'finance.monthly.summary.v1', payload:{namespace:'pmoves', month:new Date().toISOString().substring(0,7), currency:'USD', totals:{income:0,spend:0,savings:0}, by_category:[]}}}];}\nconst month = (rows[0].occurred_at||rows[0].occurred||'').substring(0,7) || new Date().toISOString().substring(0,7);\nconst byCat = new Map(); let spendTotal = 0;\nfor(const r of rows){ const cat = r.category || (r.meta && r.meta.category) || 'Uncategorized'; const amt = Number(r.amount || (r.meta && r.meta.amount) || 0); spendTotal += Math.max(0,amt); const prev = byCat.get(cat)||{spend:0,count:0}; byCat.set(cat,{spend: prev.spend + Math.max(0,amt), count: prev.count+1}); }\nconst cats = [...byCat.entries()].map(([category, v])=>({category, spend: +v.spend.toFixed(2)}));\nconst payload = { namespace: 'pmoves', month, currency: 'USD', totals: { income: 0, spend: +spendTotal.toFixed(2), savings: null }, by_category: cats, tags: ['firefly','finance'] };\nreturn [{ json: { topic: 'finance.monthly.summary.v1', payload } }];"
+      },
+      "id": "agg_fin",
+      "name": "Aggregate \u2192 summary",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        780,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Map to CGP\nconst evt=$json; const p=evt.payload; const ns=p.namespace||'pmoves'; const month=p.month; const cats=p.by_category||[]; const spendVals=cats.map(c=>c.spend||0); const lo=spendVals.length?Math.min(...spendVals):0; const hi=spendVals.length?Math.max(...spendVals):1; const norm=(v)=>{ if(v==null)return null; if(hi===lo)return 0; let x=(v-lo)/(hi-lo); return Math.max(0,Math.min(1,x)); }; const consts=cats.map(c=>({ id:`fin.${c.category}.${month}`, summary:`${c.category} spend`, spectrum:[norm(c.spend)||0], points:[{id:`${month}:${c.category}:spend`, modality:'metric', proj:norm(c.spend)||0, summary:`$${(c.spend||0).toFixed(2)}`}], meta:{namespace:ns, month, category:c.category} })); const cgp={ spec:'chit.cgp.v0.1', summary:`finance monthly summary (${month})`, super_nodes:[{ id:`finance:${ns}`, label:ns, summary:p.notes||'', constellations: consts }], meta:{ source:'finance.monthly.summary.v1', currency:p.currency, tags:p.tags||[] } }; return [{ json: { type:'geometry.cgp.v1', data:cgp } }];"
+      },
+      "id": "map_fin",
+      "name": "Map \u2192 CGP",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://hi-rag-gateway-v2:8086/geometry/event",
+        "sendBody": true,
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30,
+          "bodyContentType": "json"
+        },
+        "method": "POST",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      "id": "post_fin",
+      "name": "POST CGP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1300,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch finance_transactions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch finance_transactions": {
+      "main": [
+        [
+          {
+            "node": "Aggregate \u2192 summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate \u2192 summary": {
+      "main": [
+        [
+          {
+            "node": "Map \u2192 CGP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map \u2192 CGP": {
+      "main": [
+        [
+          {
+            "node": "POST CGP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

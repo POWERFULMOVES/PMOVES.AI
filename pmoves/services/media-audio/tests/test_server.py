@@ -3,9 +3,11 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
-import soundfile as sf
+
+np = pytest.importorskip("numpy")
+sf = pytest.importorskip("soundfile")
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 SERVER_PATH = Path(__file__).resolve().parents[1] / "server.py"
@@ -24,7 +26,7 @@ app = server.app
 processor = server.processor
 
 
-def _build_process_result() -> ProcessResult:
+def _build_process_result(namespace: str = "pmoves") -> ProcessResult:
     segments = [
         {
             "id": 0,
@@ -40,6 +42,7 @@ def _build_process_result() -> ProcessResult:
     ]
     segment_rows = [
         {
+            "namespace": namespace,
             "video_id": "vid-123",
             "ts_start": 0.0,
             "ts_end": 1.0,
@@ -54,6 +57,7 @@ def _build_process_result() -> ProcessResult:
     ]
     emotions = [
         {
+            "namespace": namespace,
             "video_id": "vid-123",
             "ts_seconds": 0.0,
             "label": "happy",
@@ -78,7 +82,7 @@ def _build_process_result() -> ProcessResult:
         emotions=emotions,
         features=features,
         video_id="vid-123",
-        namespace="pmoves",
+        namespace=namespace,
         audio_uri="http://minio/bucket/audio.wav",
     )
 
@@ -89,7 +93,7 @@ def test_process_endpoint_combines_results(monkeypatch):
     recorded_segments = []
     recorded_emotions = []
 
-    monkeypatch.setattr(processor, "process", lambda request: _build_process_result())
+    monkeypatch.setattr(processor, "process", lambda request: _build_process_result("custom-space"))
     monkeypatch.setattr(server, "insert_segments", lambda rows: recorded_segments.extend(rows))
     monkeypatch.setattr(server, "insert_emotions", lambda rows: recorded_emotions.extend(rows))
 
@@ -100,14 +104,16 @@ def test_process_endpoint_combines_results(monkeypatch):
 
     response = client.post(
         "/process",
-        json={"bucket": "bucket", "key": "audio.wav", "video_id": "vid-123"},
+        json={"bucket": "bucket", "key": "audio.wav", "video_id": "vid-123", "namespace": "custom-space"},
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["transcript"]["text"] == "hello world"
-    assert recorded_segments and recorded_segments[0]["meta"]["speaker"] == "SPEAKER_00"
-    assert recorded_emotions and recorded_emotions[0]["label"] == "happy"
+    assert recorded_segments and recorded_segments[0]["namespace"] == "custom-space"
+    assert recorded_segments[0]["meta"]["speaker"] == "SPEAKER_00"
+    assert recorded_emotions and recorded_emotions[0]["namespace"] == "custom-space"
+    assert recorded_emotions[0]["label"] == "happy"
     assert data["event"]["payload"]["features"]["global"]["rms"] == 0.1
 
 
@@ -153,4 +159,5 @@ def test_audio_processor_process_uses_waveform(monkeypatch, tmp_path):
     assert result.features["global"]["duration"] == pytest.approx(1.0, rel=1e-2)
     assert result.features["by_segment"]["0"]["speaker"] == "SPEAKER_00"
     assert result.emotions == []
+    assert result.segment_rows and result.segment_rows[0]["namespace"] == "pmoves"
 

@@ -21,12 +21,40 @@ This stack integrates:
 
 ### Installation
 
+
 1. **Clone/Download the configuration files**
+2. **Ensure the shared Docker network exists** (needed to reach the PMOVES Supabase stack):
+   ```bash
+   docker network create pmoves-net 2>/dev/null || true
+   ```
+
+3. **Run the setup script:**
+
+1. **Clone/Download the configuration files**
+   - If you're running this stack without the core PMOVES services, create the shared network first:
+     ```bash
+     docker network create pmoves-net
+     ```
+     (Safe to rerun; Docker will reuse the network if it already exists.)
 2. **Run the setup script:**
+
    ```bash
    chmod +x setup.sh
    ./setup.sh
    ```
+
+
+4. **Configure environment variables:**
+   ```bash
+   cp .env.template .env
+   # Edit .env with your actual credentials
+   ```
+
+5. **Start the stack:**
+   ```bash
+   docker-compose up -d
+   ```
+
 
 3. **Configure environment variables:**
    ```bash
@@ -38,6 +66,7 @@ This stack integrates:
    ```bash
    docker-compose up -d
    ```
+
 
 ## 📁 Directory Structure
 
@@ -72,17 +101,70 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_KEY=your-service-role-key
 
+
 # Security
 JWT_SECRET=your-jwt-secret-here
 NEO4J_PASSWORD=mediapassword123
+JELLYFIN_USERNAME=your-jellyfin-username
+JELLYFIN_PASSWORD=your-jellyfin-password
+# Optionally set an API key instead of credentials
+JELLYFIN_API_KEY=
+# JELLYFIN_USER_ID=00000000000000000000000000000000
 
-# AI Configuration  
+# Supabase storage target for automated backups
+SUPABASE_JELLYFIN_BACKUP_BUCKET=jellyfin-backups
+SUPABASE_JELLYFIN_BACKUP_PREFIX=jellyfin
+
+# Security
+JWT_SECRET=your-jwt-secret-here
+NEO4J_PASSWORD=mediapassword123
+JELLYFIN_USERNAME=your-jellyfin-username
+JELLYFIN_PASSWORD=your-jellyfin-password
+# Optional: provide a Jellyfin API key instead of username/password
+JELLYFIN_API_KEY=
+
+
+# AI Configuration
 OPENAI_API_KEY=your-openai-key-if-needed
 HUGGINGFACE_TOKEN=your-hf-token-if-needed
 
 # YouTube API (for content creation)
 YOUTUBE_API_KEY=your-youtube-api-key
 ```
+
+`JELLYFIN_USERNAME` and `JELLYFIN_PASSWORD` (or the optional `JELLYFIN_API_KEY`) are consumed by the audio processor to securely
+authenticate against your Jellyfin server. Populate these secrets through your provisioning workflow so containers can access the
+media library without prompting for manual credentials.
+
+### 🔒 Backup & Restore Runbook
+
+The provisioning bundle ships with `scripts/jellyfin_backup.sh`, a helper that wraps Jellyfin 10.11's `/Backup/Create` and `/Backup/Restore` endpoints. It creates on-disk archives, mirrors them into `<stack-root>/backups/`, and (when Supabase credentials are present) uploads the artifact to Supabase Storage.
+
+**Manual backup**
+
+```bash
+cd CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai
+scripts/jellyfin_backup.sh backup \
+  --stack-root /path/to/docker-stacks/jellyfin-ai \
+  --bundle-dir /path/to/docker-stacks/jellyfin-ai/backups \
+  --upload
+```
+
+* Authenticates with `JELLYFIN_API_KEY` or the username/password pair defined in `.env`.
+* Persists the generated archive under `<stack-root>/backups/` alongside the provisioning bundle.
+* Uploads to Supabase when `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and the bucket/prefix variables are populated.
+
+**Restore workflow**
+
+```bash
+scripts/jellyfin_backup.sh restore \
+  --stack-root /path/to/docker-stacks/jellyfin-ai \
+  --archive backups/jellyfin-backup-<timestamp>.zip
+```
+
+The restore action copies the selected archive into Jellyfin's backup directory (usually `jellyfin/config/data/backups/`) and issues `/Backup/Restore`, which schedules a Jellyfin restart to apply the snapshot.
+
+> **Automation hooks** – The Ubuntu autoinstall bundle and Jetson post-install helper call `jellyfin_backup.sh` before restarting Docker, ensuring a fresh archive is captured whenever the stack is reprovisioned. Override `JELLYFIN_STACK_ROOT`, `JELLYFIN_ARCHIVE_DIR`, or the Supabase bucket variables if your deployment lives outside the default folder layout.
 
 ### Supabase Setup
 
@@ -91,7 +173,7 @@ YOUTUBE_API_KEY=your-youtube-api-key
    ```sql
    -- Use supabase-setup.sql content
    ```
-3. Update your .env file with the project credentials
+3. Update your .env file with the project credentials, including Jellyfin credentials or an API key.
 
 ### Neo4j Configuration
 
@@ -335,6 +417,15 @@ NEO4J_dbms_memory_pagecache_size=2G
 # Monitor cache hit rates
 docker exec -it redis redis-cli info stats
 ```
+
+## 🎮 Recommended Clients
+
+**Kodi Jellyfin Add-on:**
+- Install Kodi on desktops or TV devices and add the [official Jellyfin plug-in](https://kodi.wiki/view/Add-on:Jellyfin) for a resilient UI that avoids browser-specific regressions such as the `scrollBehavior` crash seen in Chromium.
+- Configure the plug-in with the API gateway endpoint or direct Jellyfin URL (`http://localhost:8096` inside the LAN) and supply the standard credentials or API key defined in `.env` so playback works without extra prompts.
+- Enable sync for watched status and artwork within the add-on to keep Kodi in step with Supabase metadata updates flowing through the PMOVES automation loop.
+- Document the installation outcome in `pmoves/jellyfin-ai/FINAL_STATUS.md` when rolling out to new environments so the roadmap stays aligned with supported clients.
+- Follow the rebuild + provisioning checklist in `pmoves/jellyfin-ai/KODI_CLIENT.md` when replacing the Jellyfin stack or imaging new Kodi devices; the guide covers backups, container teardown, and the pre-seeded `settings.xml` used by our provisioning scripts.
 
 ## 📚 Additional Resources
 

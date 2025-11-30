@@ -1,34 +1,41 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
-ARG TORCH_CUDA=cu121
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+ARG TORCH_CUDA=cu128
+ARG TORCH_VERSION=2.9.0
+ARG TORCHAUDIO_VERSION=2.9.0
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential git curl && \
-    rm -rf /var/lib/apt/lists/*
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app:/app/libs \
+    PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+    LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-pip \
+        build-essential git curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    python3 -m pip install --upgrade pip
 
 WORKDIR /app
 
 # Install torch/torchaudio with CUDA wheels, then laion-clap and service deps
-RUN python -m pip install --upgrade pip
-
-# Torch wheels by CUDA variant
-RUN pip install --index-url https://download.pytorch.org/whl/${TORCH_CUDA} \
-      torch==2.4.0 torchaudio==2.4.0
+RUN python3 -m pip install --index-url https://download.pytorch.org/whl/${TORCH_CUDA} \
+      torch==${TORCH_VERSION} torchaudio==${TORCHAUDIO_VERSION}
 
 # Base requirements
 COPY services/hi-rag-gateway-v2/requirements.txt /app/requirements.txt
-RUN pip install -r /app/requirements.txt
+RUN python3 -m pip install -r /app/requirements.txt
 
 # CLAP (uses torch)
-RUN pip install laion-clap==1.1.4
+RUN python3 -m pip install laion-clap==1.1.4
 
+COPY libs /app/libs
 COPY services/hi-rag-gateway-v2 /app/
 COPY services/common /app/services/common
 
 ENV HIRAG_HTTP_PORT=8086
 EXPOSE 8086
 
-CMD ["python", "app.py"]
-
+ENTRYPOINT ["/opt/nvidia/nvidia_entrypoint.sh"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]

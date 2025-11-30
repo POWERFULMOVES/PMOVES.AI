@@ -1,0 +1,11 @@
+fastapi==0.112.1
+uvicorn[standard]==0.30.6
+httpx==0.28.1
+feedparser==6.0.11
+yt-dlp[default]==2024.10.07
+curl-cffi==0.7.1
+asyncpg==0.29.0
+apscheduler==3.10.4
+pydantic==2.8.2
+python-dateutil==2.9.0.post0
+prometheus-client==0.20.0

@@ -1,0 +1,151 @@
+# External Integrations Bring‑Up (Wger, Firefly III, Open Notebook, Jellyfin)
+
+This guide links the official integration repos and explains how to run them alongside PMOVES on the shared `cataclysm-net` so n8n flows and services can talk to them directly.
+
+## Repos
+- Wger (Health): https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
+- Firefly III (Finance): https://github.com/POWERFULMOVES/pmoves-firefly-iii.git
+- Open Notebook: https://github.com/POWERFULMOVES/Pmoves-open-notebook.git
+- Jellyfin: https://github.com/POWERFULMOVES/PMOVES-jellyfin.git
+
+## Network
+Ensure the shared network exists so external stacks can attach:
+```bash
+docker network create cataclysm-net || true
+```
+
+## Wger (Health)
+The PMOVES compose bundle now wraps the upstream Django container with the official nginx static
+proxy recommended by the Wger project, so you no longer need to maintain a separate clone just to
+host the UI.citeturn0search0
+
+1) Bring the stack up from the PMOVES workspace:
+```bash
+DOCKER_CONFIG=$PWD/.docker-nocreds \
+  docker compose -p pmoves -f docker-compose.external.yml up -d wger wger-nginx
+```
+   - This recreates the `cataclysm-wger` Django service and the `cataclysm-wger-nginx` proxy, sharing
+     volumes for `/static` and `/media`.
+   - The UI remains available at `http://localhost:8000`, which the proxy forwards to Django.
+   - Override `WGER_IMAGE` if you publish a custom GHCR image (defaults to `ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest`).
+2) Configure PMOVES -> Wger integration secrets in `pmoves/env.shared`:
+```
+WGER_BASE_URL=http://cataclysm-wger:8000
+WGER_API_TOKEN=<your-token>
+```
+3) Branding helper: `make up-external-wger` automatically runs `scripts/wger_brand_defaults.sh`, which
+   waits for Django migrations (including `django_site`) to finish and then updates the `Site` record,
+   default admin profile, and gym seed entries. Adjust the copy via
+   `WGER_SITE_URL`, `WGER_FROM_EMAIL`, and the `WGER_BRAND_*` variables (for example,
+   `WGER_BRAND_GYM_NAME="PMOVES Wellness Lab"`). Re-run `make wger-brand-defaults` whenever you wipe the SQLite volume or want to refresh the welcome copy. The upstream bootstrap still resets the `admin`
+   account to `adminadmin`, so change it right after first login or pre-set the `WGER_BRAND_ADMIN_*`
+   credentials before bringing the stack up. Reference the upstream guidance in the [official Wger documentation](https://wger.readthedocs.io/en/latest/) when tailoring additional fixtures.
+4) n8n flow: import `pmoves/n8n/flows/wger_sync_to_supabase.json`, activate, and trigger a test run
+   to confirm Supabase receives payloads.
+
+## Firefly III (Finance)
+1) Build/pull the PMOVES-tagged image (`ghcr.io/cataclysm-studios-inc/pmoves-firefly-iii:pmoves-latest`) or override `FIREFLY_IMAGE` if you maintain a fork. The default external compose bundle already points at the PMOVES-tagged image, so `make up-external-firefly` handles the container lifecycle.
+2) Base URL and token
+- In `pmoves/env.shared`:
+```
+FIREFLY_BASE_URL=http://cataclysm-firefly:8080
+FIREFLY_ACCESS_TOKEN=<your-access-token>
+FIREFLY_PORT=8082
+```
+ - Host port override: Firefly defaults to host port 8080, which clashes with Agent Zero’s API. `FIREFLY_PORT` (set to `8082` above) keeps the services side-by-side; adjust if 8082 is unavailable on your workstation.
+3) n8n flow: import `pmoves/n8n/flows/firefly_sync_to_supabase.json` then activate.
+4) Health check: run `make smoke-firefly` (uses `FIREFLY_ACCESS_TOKEN` and hits `/api/v1/about`) before wiring n8n so you know the finance stack finished migrations.
+
+## Open Notebook
+1) Clone and run:
+```bash
+cd ..
+git clone https://github.com/POWERFULMOVES/Pmoves-open-notebook.git
+cd Pmoves-open-notebook
+docker network create cataclysm-net || true
+docker compose up -d
+```
+2) In `pmoves/env.shared`:
+```
+OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055
+OPEN_NOTEBOOK_API_TOKEN=<token>
+OPEN_NOTEBOOK_PASSWORD=<optional-password-if-used>
+# Provider keys (only add the ones you have)
+OPENAI_API_KEY=<openai>
+GROQ_API_KEY=<groq>
+ANTHROPIC_API_KEY=<anthropic>
+GEMINI_API_KEY=<gemini>
+```
+3) PMOVES Make target: `make up-open-notebook` (uses a local add‑on) as an alternative.
+4) Seed models/defaults once the container is running:
+```bash
+make -C pmoves notebook-seed-models
+curl -s http://localhost:5055/api/models/providers | jq '.available'
+```
+   - The curl should list your enabled providers (`["openai","groq",...]`). If it is empty, double-check your env exports.
+   - For sessions where you keep provider credentials in `testkeys.md`, load them into the environment first:
+     ```bash
+     set -a
+     source testkeys.md
+     set +a
+     ```
+
+## Jellyfin
+> Jellyfin 10.11 ships 64-bit only. Confirm target nodes are x86_64 or aarch64 (`inventory/nodes.yaml`) and retire any legacy 32-bit Raspberry Pi hosts. Run `make manifest-audit` before upgrade windows to surface unsupported inventory rows and plan replacements (Pi 5 8GB, Jetson Orin Nano, or x86 mini PCs).
+
+1) Clone and run:
+```bash
+cd ..
+git clone https://github.com/POWERFULMOVES/PMOVES-jellyfin.git
+cd PMOVES-jellyfin
+docker network create cataclysm-net || true
+docker compose up -d
+```
+2) Back in the PMOVES workspace:
+```bash
+make -C pmoves jellyfin-folders
+```
+   - Creates `pmoves/data/jellyfin/{config,cache,transcode,media/...}` which the compose file bind-mounts to `/config`,
+     `/cache`, `/transcodes`, and `/media`. Drop files into the Movies/TV/etc. subfolders or edit the compose file to add
+     additional host paths.
+3) In `pmoves/env.shared` configure the Jellyfin bridge + publisher:
+```
+JELLYFIN_URL=http://cataclysm-jellyfin:8096
+JELLYFIN_API_KEY=<key>
+JELLYFIN_USER_ID=<optional>
+JELLYFIN_PUBLISHED_URL=http://localhost:8096   # or your tailscale/base URL
+JELLYFIN_STACK_SERVICE=jellyfin                 # jellyfin|jellyfin-vaapi|jellyfin-nvenc
+JELLYFIN_SERVICE_HOST=jellyfin
+JELLYFIN_HWACCEL_MODE=software                 # software|vaapi|nvenc
+JELLYFIN_ENABLE_HDR=1
+JELLYFIN_PREFER_AV1=1
+JELLYFIN_DRM_RENDER_NODE=/dev/dri/renderD128   # override for multi-GPU hosts
+JELLYFIN_VAAPI_DEVICE=/dev/dri/renderD128
+JELLYFIN_NVIDIA_GPUS=all
+JELLYFIN_NVIDIA_VISIBLE_DEVICES=all
+JELLYFIN_NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+```
+   - Enable Intel/AMD VAAPI by running `COMPOSE_PROFILES=jellyfin-ai,jellyfin-ai-vaapi docker compose -f pmoves/docker-compose.jellyfin-ai.yml up -d` and overriding `JELLYFIN_STACK_SERVICE=jellyfin-vaapi` plus any custom `/dev/dri` nodes. This mounts the render device into the Jellyfin container and forwards the same hardware mode to the audio processor/API gateway.
+   - Enable NVIDIA NVENC by running `COMPOSE_PROFILES=jellyfin-ai,jellyfin-ai-nvenc docker compose -f pmoves/docker-compose.jellyfin-ai.yml up -d` with `JELLYFIN_STACK_SERVICE=jellyfin-nvenc` and the appropriate `JELLYFIN_NVIDIA_VISIBLE_DEVICES` or `JELLYFIN_NVIDIA_GPUS` values. The FFmpeg 7.1 toolchain inside the audio processor already exposes HDR tone mapping, SVT-AV1, and NVENC so metadata-rich transcodes stay GPU accelerated.
+4) Plugins and clients:
+   - Server dashboard → Plugins → Catalog → install **Kodi Sync Queue** (stable repo) so Jellyfin pushes updates to Kodi.citeturn1search1
+   - If the catalog is empty, add `https://repo.jellyfin.org/releases/plugin/manifest-stable.json` under Repositories.citeturn1search1
+   - On Kodi devices install **Jellyfin for Kodi** from the official add-on store, sign in with the same base URL/API key,
+     and enable auto-sync.citeturn1search1
+
+## n8n Public API (import + run)
+- API base: `http://localhost:5678/api/v1` with header `X-N8N-API-KEY: $N8N_API_KEY`.
+- Import a flow:
+```bash
+curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" \
+  -H 'content-type: application/json' \
+  -d @pmoves/n8n/flows/wger_sync_to_supabase.json \
+  http://localhost:5678/api/v1/workflows
+```
+- Activate via UI (toggle Active). Some builds don’t support activation via API.
+
+## Health checks
+- Wger UI: http://localhost:8000 (adjust per repo compose)
+- Firefly III UI: http://localhost:8080
+- Open Notebook UI: http://localhost:8503 (if using PMOVES add‑on) or repo default
+- Jellyfin: http://localhost:8096

@@ -7,7 +7,7 @@ This repository now includes automation helpers to support collaboration as more
 2. Target the default branch (usually `main`).
 3. Require pull requests before merging and block direct pushes.
 4. Require at least one approving review and dismiss stale approvals on new commits.
-5. Add the `CHIT Contract Check` workflow as a required status check so it must succeed before merges.
+5. Add the `CHIT Contract Check` workflow as a required status check so it must succeed before merges. (The workflow now triggers automatically when Supabase SQL, init scripts, or geometry service code change. For docs-only PRs, dispatch it manually from the Actions tab if you still need a green check.)
 6. (Optional) Restrict who can push to the protected branch to trusted maintainers only.
 
 ## 2. Automatic Reviewer Assignment

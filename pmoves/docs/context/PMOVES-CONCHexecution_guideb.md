@@ -1,3 +1,4 @@
+
 # Complete Execution Guide
 ## Downloading & Processing Consciousness Theories Database
 
@@ -104,3 +105,8 @@ Constellation-Harvest-Regularization/
 - **n8n Compatible:** Integrates with your existing automation
 
 This database will significantly enhance your RAG system's ability to answer questions about consciousness, AI development, and theoretical frameworks - perfect for the PMOVES.AI knowledge base!
+
+# Consciousness Harvest (Context Appendix)
+
+Legacy links should redirect to `pmoves/docs/PMOVESCHIT/PMOVES-CONCHexecution_guide.md`, which contains the full PMOVES-aware workflow.
+

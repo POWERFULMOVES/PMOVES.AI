@@ -1,0 +1,279 @@
+
+# PMOVES v5 • NEXT_STEPS
+_Last updated: 2025-10-27_
+
+## Immediate
+
+### 1. Finish the M2 Automation Loop
+
+- [ ] Load DeepResearch OpenRouter + Notebook credentials, run a `research.deepresearch.request.v1` smoke, and log the resulting Notebook source id in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
+- [ ] Health/Finance integrations — set Wger/Firefly secrets, import n8n flows, run smokes; confirm `health_*` and `finance_*` tables receive upserts and events (`health.metrics.updated.v1`, `finance.transactions.ingested.v1`).
+- [ ] CHIT EvoSwarm — enable controller and confirm `geometry.swarm.meta.v1` events; ensure producers prefer latest active packs and `pack_id` is visible in CGP meta and persisted in gateway v2 constellation meta.
+- [ ] n8n Public API — set `N8N_API_KEY` (compose env) to allow workflow auto-import; otherwise import `pmoves/n8n/flows/*.json` via UI.
+- [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
+- [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
+- [x] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; use `make jellyfin-verify` before publisher smokes (2025-10-13). Re-ran on 2025-10-14 after populating `JELLYFIN_USER_ID=c26d57363bad4318a37c0bf8673c389c`.
+- [x] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
+  - 2025-10-14: Agent Zero realtime listener (`python pmoves/tools/realtime_listener.py --topics content.published.v1 --max 1`) captured enriched payload, and `publisher-discord` delivered the Jellyfin-enriched embed to the mock webhook (see `docker logs mock-discord`).
+- [ ] Record step-by-step evidence in `SESSION_IMPLEMENTATION_PLAN.md` while executing the operational reminders list.
+
+### 2. Jellyfin Publisher Reliability
+
+- [x] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
+- [ ] Expand error/reporting hooks so failures surface with actionable messages (Jellyfin HTTP errors, dependency mismatches, asset gaps).
+- [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields. Use `make demo-content-published` to emit a sample `content.published.v1` envelope and inspect the Discord embed plus Agent Zero realtime listener output (`python pmoves/tools/realtime_listener.py`) for `thumbnail_url`, `duration`, and Jellyfin deep links.
+- [ ] Roll out Kodi clients using `pmoves/jellyfin-ai/KODI_CLIENT.md` and capture the handshake evidence plus rebuilt stack notes in `pmoves/jellyfin-ai/FINAL_STATUS.md`.
+
+### 3. Graph & Retrieval Enhancements (Kickoff M3)
+
+- [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
+- [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
+- [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI, aligning with the prep checklist captured in `SESSION_IMPLEMENTATION_PLAN.md` and ensuring persona publish gating thresholds stay versioned.
+
+### 4. PMOVES.YT High-Priority Lane
+
+- [ ] Design and document the resilient download module (resume, retries, rate limiting, playlist/channel ingestion, bounded worker pool).
+- [ ] Specify multipart upload + checksum verification approach for MinIO, including lifecycle/retention tag configuration.
+- [x] Enumerate metadata enrichment requirements (duration, channel, tags, provenance) and map them to Supabase schema updates (pmoves-yt now upserts `youtube_transcripts` with enriched metadata + Notebook sync helper).
+- [x] Register the `transcripts.video_id → videos.video_id` foreign key (migration `2025-10-26_transcripts_video_fk.sql`) and document the Notebook sync dependency (2025-10-26).
+- [ ] Draft the faster-whisper GPU migration plan (language auto-detect, diarization flags, partial transcript updates) and confirm smoke expectations defined in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Document Gemma integration paths: Ollama (`gemma2:9b-instruct`) and HF Transformers (`google/gemma-2-9b-it`), including feature toggles and embedding backstops.
+- [ ] Define API hardening, observability, and security tasks (validation, OpenAPI, health/readiness probes, metrics, signed URL enforcement, optional content filters).
+
+### 5. Platform Operations & Tooling
+
+- [x] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
+- [x] Publish consolidated local tooling reference covering env scripts, Make targets, Supabase modes, and smoke workflows (`pmoves/docs/LOCAL_TOOLING_REFERENCE.md`), and link it from the root README.
+- [x] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits (see `pmoves/docs/SUPABASE_RLS_HARDENING_CHECKLIST.md`, 2025-10-14).
+- [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
+- [x] Harden Archon Supabase bootstrap: extended the client shim to cover `get_supabase_client()`, granted `public.archon_prompts` access to service/auth roles, and confirmed prompt load succeeds during `make up` (2025-10-18).
+- [x] TensorZero gateway integration for LangExtract — compose profile, Crush auto-detect, and metadata forwarding documented in `LOCAL_DEV.md`/`LOCAL_TOOLING_REFERENCE.md`.
+- [x] Add Cloudflare tunnel profile + Make helpers for WAN validation (2025-10-23).
+- [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
+
+### 6. Grounded Personas & Packs Launch
+
+- [ ] Apply `db/v5_12_grounded_personas.sql` plus geometry support migrations (`db/v5_12_geometry_rls.sql`, `db/v5_12_geometry_realtime.sql`); log analyze/vacuum runs and chosen embedding dimension in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Update `.env` with reranker (`HIRAG_RERANK_ENABLED`), publisher (Discord/Jellyfin), and geometry toggles; capture restart evidence for gateway, workers, and geometry services.
+- [ ] Seed baseline YAML manifests (`personas/archon@1.0.yaml`, `packs/pmoves-architecture@1.0.yaml`) and record publish commands plus resulting IDs in the runbook.
+- [ ] Wire the retrieval-eval harness as a persona publish gate; store dataset locations, metric thresholds, and last-run results in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Exercise the creator pipeline end-to-end (presign → webhook → approval → index → publish) and document emitted events (`kb.ingest.asset.created.v1`, `kb.pack.published.v1`, `persona.published.v1`, `content.published.v1`).
+- [ ] Confirm geometry bus emissions (`geometry.cgp.v1`) populate the ShapeStore cache and note verification steps (API/CLI) in the runbook.
+  - ✅ Baseline guardrail: the local smoke tests now ingest a signed CGP, assert the `/shape/point/{id}/jump` locator, and hit `/geometry/calibration/report`; failures will block `make smoke`.
+  - 2025-10-18: pmoves-yt `/yt/smoke/seed-pack` now authenticates via the Supabase service-role header and carries a direct Supabase fallback for builder packs, restoring 13/13 smoke coverage.
+  - Still needed: seed Supabase tables + Neo4j entities so ShapeStore warm-up stops warning about missing labels/keys, and capture the runbook evidence.
+- [ ] Draft a CI-oriented pack manifest linter (selectors, age, size limits) and reference the proposal in `pmoves/docs/ROADMAP.md` once scoped.
+
+## n8n Flow Operations
+
+- **Importing**
+
+  1. Open n8n → _Workflows_ → _Import from File_ and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
+  2. Rename the flows if desired and keep them inactive until credentials are configured.
+- **Required environment**
+
+  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
+  - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
+  - `AGENT_ZERO_BASE_URL` – Agent Zero events endpoint base (defaults to `http://agent-zero:8080`).
+  - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.
+  - `DISCORD_WEBHOOK_URL` – Discord channel webhook (flows post embeds here).
+  - `DISCORD_WEBHOOK_USERNAME` – optional override for the Discord display name.
+- **Manual verification checklist**
+
+  1. Insert a `studio_board` row with `status='approved'`, `content_url='s3://...'`, and confirm `meta.publish_event_sent_at` is null.
+  2. Trigger the approval poller (activate or execute once) and confirm Agent Zero logs a `content.publish.approved.v1` event.
+  3. Verify Supabase row updates to `status='published'` with `meta.publish_event_sent_at` timestamp.
+  4. POST a `content.published.v1` envelope to the webhook (`/webhook/pmoves/content-published`) and confirm Discord receives an embed (title, path, artifact, optional thumbnail).
+  5. Deactivate flows after testing or leave active with schedules confirmed.
+
+## Backlog Snapshot
+
+### Jellyfin & Discord Polish
+
+- [x] Jellyfin library refresh automation (cron/webhook).
+- [ ] Discord rich embeds (cover art, duration, deep links) wired to `content.published.v1`.
+  - Note: publisher now renders optional `thumbnail_url`, `duration`, and Jellyfin deep links when `jellyfin_item_id` and base URL are available. Validate in Discord using `make demo-content-published`.
+- [ ] (Optional) Discord follow-up buttons (approve/reject) for moderation workflows.
+
+### Retrieval & Graph
+
+- [~] Hi‑RAG reranker toggle (bge‑rerank‑base) + eval sweep — toggle + eval scripts done; labeled sweeps/CI pending.
+- [ ] Neo4j alias seeding and enrichment pipelines.
+- [ ] Pack manifest linter for selectors/age/size guardrails (tie into CI once Grounded Personas launch stabilizes).
+
+### Tooling & Docs
+
+- [x] ComfyUI ↔ MinIO presign endpoint — implemented; example notebook pending.
+- [ ] Windows/WSL polish: smoke script + helper commands.
+- [ ] (Optional) Draft ComfyUI ↔ MinIO presign notebook walk-through for inclusion in `docs/`.
+- [x] Local CI checklist published (`docs/LOCAL_CI_CHECKS.md`) with pytest/CHIT/SQL/env preflight expectations before every PR.
+- [x] Publish local CI checklist (`docs/LOCAL_CI_CHECKS.md`) and gate PRs on the pytest/grep/env preflight routine.
+- [x] Document LangExtract Workers AI option (env vars, local/VPS instructions) — 2025-10-23.
+
+### PMOVES.YT Enhancements (Detailed)
+
+- [ ] Robust downloads: resume support, retry with exponential backoff, per-domain rate limiting, playlist/channel ingestion, and concurrent worker pool with bounded memory.
+- [ ] Storage: multipart uploads to MinIO for large files; checksum verification; lifecycle and retention tags.
+- [ ] Metadata: enrich `videos` with duration, channel, tags; track ingest provenance and versioning in `meta`.
+- [x] Transcripts: switch `ffmpeg-whisper` to `faster-whisper` GPU path; language auto-detect and diarization flags; partial updates for long videos.
+- [ ] Events/NATS: standardize `ingest.*` topics and dead-letter queue; idempotent handlers using `s3_base_prefix`.
+- [ ] Gemma integration (summaries) with Ollama/HF options and embedding fallbacks.
+- [ ] API hardening: request validation, structured errors, OpenAPI docs, health/readiness probes.
+- [ ] Observability: structured logs, Prometheus metrics (download time, upload time, transcript latency), and S3 object sizes.
+- [ ] Security: signed URLs only; optional content filters; domain allowlist.
+
+## Later
+
+- [ ] Office docs conversion lane (LibreOffice headless → PDF).
+- [ ] OCR: image ingestion with text extraction + tagging.
+- [ ] CI: retrieval‑eval in GitHub Actions with artifacts.
+- [ ] Proxmox templates and cluster notes.
+- [ ] (Optional) Infrastructure-as-code starter kit for hybrid GPU + Jetson deployments.
+
+## Next Session Focus
+
+- [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1` — reference activation notes in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] media-audio: insert `emotions` into Supabase and emit `analysis.audio.v1`.
+- [x] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop); confirm GPU smoke path documented in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] CLIP embeddings on keyframes (optional; desktop on by default, Jetson off).
+- [ ] n8n flows: end-to-end ingest → transcribe → extract → index → notify.
+- [ ] Jellyfin refresh hook + Discord rich embeds (cover art, duration, link) with validation evidence logged in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Supabase RLS hardening pass (non-dev).
+- [ ] Qwen2-Audio provider (desktop-only toggle) for advanced audio QA/summarization.
+- [ ] PMOVES.YT: wire Gemma summaries (Ollama by default), add `/yt/summarize` and `/yt/chapters` endpoints; add smoke target `make yt-smoke URL=...`.
+
+---
+
+> Archived snapshot (2025-09-08): [NEXT_STEPS_2025-09-08](archive/NEXT_STEPS_2025-09-08.md)
+
+<!-- markdownlint-disable -->
+# PMOVES v5 • NEXT_STEPS
+
+_Last updated: 2025-09-26 (geometry cache sync)_
+
+_Last updated: 2025-10-05_
+
+
+## Immediate
+
+### 1. Finish the M2 Automation Loop
+- [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
+- [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
+- [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
+- [ ] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; note any dependency gaps that require new guardrails.
+- [ ] Validate that enriched publisher metadata propagates into Agent Zero and Discord events; schedule a backfill for legacy records if fields are missing.
+- [ ] Hit the publisher and publisher-discord `/metrics` endpoints and capture the turnaround/latency summary for the runbook.
+- [ ] Confirm Supabase `publisher_metrics_rollup` and `publisher_discord_metrics` rows are created with engagement + cost payloads and link the ROI dashboard query.
+- [ ] Record step-by-step evidence in `SESSION_IMPLEMENTATION_PLAN.md` while executing the operational reminders list.
+
+### 2. Jellyfin Publisher Reliability
+- [x] Add a scheduled refresh or webhook trigger so Jellyfin libraries update after publisher runs; include cron/webhook settings in `services/publisher/README.md`.
+- [ ] Expand error/reporting hooks so failures surface with actionable messages (Jellyfin HTTP errors, dependency mismatches, asset gaps).
+- [ ] Backfill historic Jellyfin entries with enriched metadata and confirm downstream consumers (Agent Zero, Discord) render the new fields.
+- [ ] Plot baseline ROI visuals (turnaround vs engagement vs cost) using the Supabase rollup tables and incorporate the guidance captured in `TELEMETRY_ROI.md` into the dashboard notes.
+
+### 3. Graph & Retrieval Enhancements (Kickoff M3)
+- [ ] Seed Neo4j with the brand alias dictionary (DARKXSIDE, POWERFULMOVES, plus pending community submissions) and record Cypher script locations (draft plan in `SESSION_IMPLEMENTATION_PLAN.md`).
+- [ ] Outline relation-extraction passes from captions/notes to candidate graph edges; define success metrics and owner in the project tracker.
+- [ ] Prepare reranker parameter sweep plan (datasets, toggles, artifact storage) for integration into CI, aligning with the prep checklist captured in `SESSION_IMPLEMENTATION_PLAN.md` and ensuring persona publish gating thresholds stay versioned.
+
+### 4. PMOVES.YT High-Priority Lane
+- [ ] Design and document the resilient download module (resume, retries, rate limiting, playlist/channel ingestion, bounded worker pool).
+- [ ] Specify multipart upload + checksum verification approach for MinIO, including lifecycle/retention tag configuration.
+- [x] Enumerate metadata enrichment requirements (duration, channel, tags, provenance) and map them to Supabase schema updates (pmoves-yt now upserts `youtube_transcripts` with enriched metadata + Notebook sync helper).
+- [ ] Draft the faster-whisper GPU migration plan (language auto-detect, diarization flags, partial transcript updates) and confirm smoke expectations defined in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Document Gemma integration paths: Ollama (`gemma2:9b-instruct`) and HF Transformers (`google/gemma-2-9b-it`), including feature toggles and embedding backstops.
+- [ ] Define API hardening, observability, and security tasks (validation, OpenAPI, health/readiness probes, metrics, signed URL enforcement, optional content filters).
+
+### 5. Platform Operations & Tooling
+- [x] Publish Windows/WSL smoke scripts (`scripts/smoke.ps1`) with instructions in `pmoves/docs/LOCAL_DEV.md`.
+- [x] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits (see `pmoves/docs/SUPABASE_RLS_HARDENING_CHECKLIST.md`, 2025-10-14).
+- [x] Normalize Supabase CLI endpoints for containers (`SUPA_REST_INTERNAL_URL`) so render-webhook, extract-worker, and geometry bus stay online after stack restarts; smoke harness verified on 2025-10-12. Added `make bootstrap-data` as the one-shot hook for Supabase SQL, Neo4j seeds, and Qdrant demo vectors so DB and mind-map seeds refresh each time.
+- [x] Seeded `public.archon_prompts` via `supabase/initdb/09_archon_prompts.sql` + `10_archon_prompts_seed.sql` and mirrored CHIT geometry tables in `11_chit_geometry.sql` so Archon local stacks stay aligned with migrations (2025-10-13). Extended the geometry demo with `supabase/initdb/12_geometry_fixture.sql` plus `neo4j/cypher/010_chit_geometry_fixture.cypher` and the follow-on smoke check `011_chit_geometry_smoke.cypher`; the new `make bootstrap-data` target chains `supabase-bootstrap`/`neo4j-bootstrap` so the curated CHIT constellation and demo vectors replay automatically (2025-10-20).
+- [x] Unified env + secrets onboarding with `python -m pmoves.scripts.bootstrap_env` / `make bootstrap` and added `make preflight` guard before stack start (2025-10-14).
+- [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
+- [x] Documented the `SUPA_REST_URL=http://localhost:3010` override for local smoke runs and logged the 13/13 harness evidence in `SESSION_IMPLEMENTATION_PLAN.md` (2025-10-18).
+- [x] Added Cloudflare tunnel profile + Make helpers for WAN validation (2025-10-23).
+- [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
+
+### 6. Grounded Personas & Packs Launch
+- [ ] Apply `db/v5_12_grounded_personas.sql` plus geometry support migrations (`db/v5_12_geometry_rls.sql`, `db/v5_12_geometry_realtime.sql`); log analyze/vacuum runs and chosen embedding dimension in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Update `.env` with reranker (`HIRAG_RERANK_ENABLED`), publisher (Discord/Jellyfin), and geometry toggles; capture restart evidence for gateway, workers, and geometry services.
+- [ ] Seed baseline YAML manifests (`personas/archon@1.0.yaml`, `packs/pmoves-architecture@1.0.yaml`) and record publish commands plus resulting IDs in the runbook.
+- [ ] Wire the retrieval-eval harness as a persona publish gate; store dataset locations, metric thresholds, and last-run results in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Exercise the creator pipeline end-to-end (presign → webhook → approval → index → publish) and document emitted events (`kb.ingest.asset.created.v1`, `kb.pack.published.v1`, `persona.published.v1`, `content.published.v1`).
+- [ ] Confirm geometry bus emissions (`geometry.cgp.v1`) populate the ShapeStore cache.
+  - Watch the `hi-rag-gateway-v2` startup logs for `ShapeStore warmed with … Supabase constellations` once the Supabase tables are seeded.
+  - Hit `$SUPA_REST_URL/geometry_cgp_packets?select=created_at&order=created_at.desc&limit=5` (or the fallback `constellations` query if the packets view is absent) to verify PostgREST is returning the rows used for cache warm-up.
+  - Use `python pmoves/tools/realtime_listener.py` (or the `/geometry/` UI) to confirm realtime `geometry.cgp.v1` broadcasts continue to refresh the cache after boot.
+- [ ] Draft a CI-oriented pack manifest linter (selectors, age, size limits) and reference the proposal in `pmoves/docs/ROADMAP.md` once scoped.
+
+## n8n Flow Operations
+- **Importing**
+  1. Open n8n → *Workflows* → *Import from File* and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
+  2. Rename the flows if desired and keep them inactive until credentials are configured.
+- **Required environment**
+  - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
+  - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
+  - `AGENT_ZERO_BASE_URL` – Agent Zero events endpoint base (defaults to `http://agent-zero:8080`).
+  - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.
+  - `DISCORD_WEBHOOK_URL` – Discord channel webhook (flows post embeds here).
+  - `DISCORD_WEBHOOK_USERNAME` – optional override for the Discord display name.
+- **Manual verification checklist**
+  1. Insert a `studio_board` row with `status='approved'`, `content_url='s3://...'`, and confirm `meta.publish_event_sent_at` is null.
+  2. Trigger the approval poller (activate or execute once) and confirm Agent Zero logs a `content.publish.approved.v1` event.
+  3. Verify Supabase row updates to `status='published'` with `meta.publish_event_sent_at` timestamp.
+  4. POST a `content.published.v1` envelope to the webhook (`/webhook/pmoves/content-published`) and confirm Discord receives an embed (title, path, artifact, optional thumbnail).
+  5. Deactivate flows after testing or leave active with schedules confirmed.
+
+## Backlog Snapshot
+
+### Jellyfin & Discord Polish
+- [x] Jellyfin library refresh automation (cron/webhook).
+- [ ] Discord rich embeds (cover art, duration, deep links) wired to `content.published.v1`.
+- [ ] (Optional) Discord follow-up buttons (approve/reject) for moderation workflows.
+
+### Retrieval & Graph
+- [~] Hi‑RAG reranker toggle (bge‑rerank‑base) + eval sweep — toggle + eval scripts done; labeled sweeps/CI pending.
+- [ ] Neo4j alias seeding and enrichment pipelines.
+- [ ] Pack manifest linter for selectors/age/size guardrails (tie into CI once Grounded Personas launch stabilizes).
+
+### Tooling & Docs
+- [x] ComfyUI ↔ MinIO presign endpoint — implemented; example notebook pending.
+- [ ] Windows/WSL polish: smoke script + helper commands.
+- [ ] (Optional) Draft ComfyUI ↔ MinIO presign notebook walk-through for inclusion in `docs/`.
+
+### PMOVES.YT Enhancements (Detailed)
+- [ ] Robust downloads: resume support, retry with exponential backoff, per-domain rate limiting, playlist/channel ingestion, and concurrent worker pool with bounded memory.
+- [ ] Storage: multipart uploads to MinIO for large files; checksum verification; lifecycle and retention tags.
+- [ ] Metadata: enrich `videos` with duration, channel, tags; track ingest provenance and versioning in `meta`.
+- [ ] Transcripts: switch `ffmpeg-whisper` to `faster-whisper` GPU path; language auto-detect and diarization flags; partial updates for long videos.
+- [ ] Events/NATS: standardize `ingest.*` topics and dead-letter queue; idempotent handlers using `s3_base_prefix`.
+- [ ] Gemma integration (summaries) with Ollama/HF options and embedding fallbacks.
+- [ ] API hardening: request validation, structured errors, OpenAPI docs, health/readiness probes.
+- [ ] Observability: structured logs, Prometheus metrics (download time, upload time, transcript latency), and S3 object sizes.
+- [ ] Security: signed URLs only; optional content filters; domain allowlist.
+
+## Later
+- [ ] Office docs conversion lane (LibreOffice headless → PDF).
+- [ ] OCR: image ingestion with text extraction + tagging.
+- [ ] CI: retrieval‑eval in GitHub Actions with artifacts.
+- [ ] Proxmox templates and cluster notes.
+- [ ] (Optional) Infrastructure-as-code starter kit for hybrid GPU + Jetson deployments.
+
+## Next Session Focus
+- [ ] media-video: insert `detections`/`segments` into Supabase and emit `analysis.entities.v1` — reference activation notes in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] media-audio: insert `emotions` into Supabase and emit `analysis.audio.v1`.
+- [ ] ffmpeg-whisper: switch to `faster-whisper` with GPU auto-detect (Jetson/desktop); confirm GPU smoke path documented in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] CLIP embeddings on keyframes (optional; desktop on by default, Jetson off).
+- [ ] n8n flows: end-to-end ingest → transcribe → extract → index → notify.
+- [ ] Jellyfin refresh hook + Discord rich embeds (cover art, duration, link) with validation evidence logged in `SESSION_IMPLEMENTATION_PLAN.md`.
+- [ ] Supabase RLS hardening pass (non-dev).
+- [ ] Qwen2-Audio provider (desktop-only toggle) for advanced audio QA/summarization.
+- [ ] PMOVES.YT: wire Gemma summaries (Ollama by default), add `/yt/summarize` and `/yt/chapters` endpoints; add smoke target `make yt-smoke URL=...`.
+
+---
+
+> Archived snapshot (2025-09-08): [NEXT_STEPS_2025-09-08](archive/NEXT_STEPS_2025-09-08.md)
+<!-- markdownlint-enable -->

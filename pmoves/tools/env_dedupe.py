@@ -6,7 +6,7 @@ Deduplicate keys in a .env file:
 - Writes a backup .env.bak
 
 Run:
-  python tools/env_dedupe.py                 # operates on .env in repo root
+  python tools/env_dedupe.py                 # operates on .env.local in repo root
   python tools/env_dedupe.py --input path --output path
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ import argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_IN = ROOT / ".env"
+DEFAULT_IN = ROOT / ".env.local"
 DEFAULT_OUT = DEFAULT_IN
 
 

@@ -23,8 +23,17 @@ do $$ begin
   create role anon noinherit;
 exception when duplicate_object then null; end $$;
 
-grant usage on schema public to anon;
-grant select, insert, update, delete on table studio_board to anon;
+do $$ begin
+  create role authenticated noinherit;
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create role service_role noinherit bypassrls;
+exception when duplicate_object then null; end $$;
+
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on table studio_board to anon, authenticated, service_role;
+grant usage, select on sequence studio_board_id_seq to anon, authenticated, service_role;
 
 alter table studio_board enable row level security;
 do $$ begin

@@ -7,7 +7,13 @@ from .base import BaseProvider
 ERROR_TAGS = {"error","exception","stacktrace","stack","code","message","service","host","timestamp","time","severity","level"}
 
 class RuleProvider(BaseProvider):
-    def extract_text(self, document: str, namespace: str, doc_id: str) -> Dict[str, Any]:
+    def extract_text(
+        self,
+        document: str,
+        namespace: str,
+        doc_id: str,
+        metadata: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         chunks: List[Dict[str, Any]] = []
         # split paragraphs by blank lines
         paras = re.split(r"\n\s*\n+", document or "")
@@ -41,7 +47,13 @@ class RuleProvider(BaseProvider):
                     })
         return {"chunks": chunks, "errors": []}
 
-    def extract_xml(self, xml: str, namespace: str, doc_id: str) -> Dict[str, Any]:
+    def extract_xml(
+        self,
+        xml: str,
+        namespace: str,
+        doc_id: str,
+        metadata: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         parser = etree.XMLParser(recover=True)
         root = etree.fromstring((xml or '').encode('utf-8'), parser=parser)
         chunks: List[Dict[str,Any]] = []

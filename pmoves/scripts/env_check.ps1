@@ -179,6 +179,15 @@ Write-Host "Contracts:" -ForegroundColor Yellow
 "contracts/topics.json: " + ($(if($topics.valid){'valid'} elseif($topics.exists){'invalid'} else {'missing'}))
 if ($topics.valid -and $topics.keys -and -not $Quick) {
   "topics keys: {0}" -f (($topics.keys -join ', ')) | Write-Host
+  # Ensure summary topics are present
+  $need = @('health.weekly.summary.v1','finance.monthly.summary.v1')
+  foreach ($t in $need) {
+    try {
+      $raw = Get-Content -Raw -Path 'contracts/topics.json' -Encoding UTF8
+      $obj = $raw | ConvertFrom-Json -AsHashtable
+      if (-not ($obj.topics.ContainsKey($t))) { Write-Host ("WARN: missing topic: {0}" -f $t) -ForegroundColor DarkYellow }
+    } catch {}
+  }
 }
 
 ""
@@ -199,6 +208,13 @@ if (-not $result.compose.present) {
 }
 if (-not $cmdResults['jq'].present) {
   Write-Host "Note: jq is recommended for Makefile smoke tests." -ForegroundColor DarkYellow
+}
+
+# Mapper helper presence
+if (Test-Path 'tools/events_to_cgp.py') {
+  Write-Host "events_to_cgp.py:   present" -ForegroundColor Green
+} else {
+  Write-Host "events_to_cgp.py:   missing" -ForegroundColor DarkYellow
 }
 
 Write-Host "\nDone." -ForegroundColor Green

@@ -45,20 +45,59 @@ TOOLS = [
     ("make", ["make", "--version"]),
 ]
 
-PORTS = [6333, 7474, 7700, 8088, 8085, 3000, 8087, 8084, 8077, 8078, 8092, 8093]
+PORTS = sorted({
+    3000,
+    4222,
+    5432,
+    6333,
+    7474,
+    7687,
+    7700,
+    8077,
+    8078,
+    8079,
+    8080,
+    8082,
+    8083,
+    8084,
+    8085,
+    8086,
+    8087,
+    8088,
+    8090,
+    8091,
+    8092,
+    8093,
+    8094,
+    9000,
+    9001,
+})
 PORT_MAP = {
+    3000: "postgrest",
+    4222: "nats",
+    5432: "postgres",
     6333: "qdrant",
     7474: "neo4j-ui",
+    7687: "neo4j-bolt",
     7700: "meilisearch",
-    8088: "presign",
-    8085: "render-webhook",
-    3000: "postgrest",
-    8087: "hi-rag-gateway-v2",
-    8084: "langextract",
     8077: "pmoves-yt",
     8078: "ffmpeg-whisper",
-    8092: "publisher-discord",
+    8079: "media-video",
+    8080: "agent-zero",
+    8082: "media-audio",
+    8083: "extract-worker",
+    8084: "langextract",
+    8085: "render-webhook",
+    8086: "hi-rag-gateway-v2",
+    8087: "hi-rag-gateway-v2-gpu",
+    8088: "presign",
+    8090: "retrieval-eval",
+    8091: "archon",
+    8092: "pdf-ingest",
     8093: "jellyfin-bridge",
+    8094: "publisher-discord",
+    9000: "minio-s3",
+    9001: "minio-console",
 }
 
 ENV_FILES = [ROOT / ".env", ROOT / ".env.example"]
@@ -67,14 +106,21 @@ CONTRACTS = ROOT / "contracts" / "topics.json"
 HTTP_HEALTH = [
     ("qdrant", "http://localhost:6333/ready", "json_ok_or_200"),
     ("meilisearch", "http://localhost:7700/health", "json_ok_or_200"),
-    ("postgrest", "http://localhost:3000", "http_200"),
+    ("postgrest", "http://localhost:3010", "http_200"),
     ("neo4j-ui", "http://localhost:7474", "http_200"),
+    ("agent-zero", "http://localhost:8080/healthz", "ok_true"),
+    ("extract-worker", "http://localhost:8083/healthz", "ok_true"),
+    ("media-audio", "http://localhost:8082/healthz", "ok_true"),
+    ("media-video", "http://localhost:8079/healthz", "ok_true"),
     ("presign", "http://localhost:8088/healthz", "ok_true"),
     ("render-webhook", "http://localhost:8085/healthz", "ok_true"),
-    ("hi-rag-gateway-v2", "http://localhost:8087/", "ok_true"),
+    ("hi-rag-gateway-v2", "http://localhost:8086/", "ok_true"),
     ("pmoves-yt", "http://localhost:8077/healthz", "ok_true"),
     ("ffmpeg-whisper", "http://localhost:8078/healthz", "ok_true"),
-    ("publisher-discord", "http://localhost:8092/healthz", "ok_true"),
+    ("retrieval-eval", "http://localhost:8090/", "ok_true"),
+    ("archon", "http://localhost:8091/healthz", "ok_true"),
+    ("pdf-ingest", "http://localhost:8092/healthz", "ok_true"),
+    ("publisher-discord", "http://localhost:8094/healthz", "ok_true"),
     ("jellyfin-bridge", "http://localhost:8093/healthz", "ok_true"),
 ]
 
@@ -111,7 +157,7 @@ THEMES = {
     },
 }
 
-RETRO_SUB = Text("> initial diagnostic boot sequence", style="bold cyan")
+RETRO_SUB = Text("> PMOVES initial diagnostic boot sequence", style="bold cyan")
 
 
 def run_cmd(args: list[str]) -> tuple[bool, str]:
@@ -178,8 +224,8 @@ def retro_header(theme: str = "green"):
 
 PMOVES_BANNER = """
 ██████╗ ███╗   ███╗ ██████╗ ██╗   ██╗███████╗███████╗
-██╔══██╗████╗ ████║██╔═══██╗██║   ██║██╔════╝██╔════╝
-██████╔╝██╔████╔██║██║   ██║██║   ██║█████╗  ███████╗
+██╔══██╗████╗ ████║██╔════╝ ██║   ██║██╔════╝██╔════╝
+██████╔╝██╔████╔██║██║  ███╗██║   ██║█████╗  ███████╗
 ██╔══██╗██║╚██╔╝██║██║   ██║██║   ██║██╔══╝  ╚════██║
 ██████╔╝██║ ╚═╝ ██║╚██████╔╝╚██████╔╝███████╗███████║
 ╚═════╝ ╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
@@ -245,24 +291,42 @@ def check_compose():
 
 def parse_compose_ps_json() -> list[dict]:
     """Try docker compose ps --format json; fallback to docker ps."""
-    ok, out = run_cmd(["docker", "compose", "ps", "--format", "json"])
-    if ok:
+    def _run_json_lines(cmd: list[str]) -> list[dict]:
         try:
-            return json.loads(out)
+            cp = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        except Exception:
+            return []
+        if cp.returncode != 0:
+            return []
+        raw = (cp.stdout or cp.stderr or "").strip()
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+            # Ensure the result is iterable over dict rows
+            if isinstance(data, dict):
+                return [data]
+            if isinstance(data, list):
+                return [item for item in data if isinstance(item, dict)]
         except Exception:
             pass
-    # Fallback: docker ps --format "{{json .}}" per line
-    ok, out = run_cmd(["docker", "ps", "--format", "{{json .}}"])
-    if ok and out:
-        lines = out.splitlines()
-        items = []
-        for ln in lines:
+        items: list[dict] = []
+        for ln in raw.splitlines():
+            line = ln.strip()
+            if not line:
+                continue
             try:
-                items.append(json.loads(ln))
+                parsed = json.loads(line)
+                if isinstance(parsed, dict):
+                    items.append(parsed)
             except Exception:
-                pass
+                continue
         return items
-    return []
+
+    rows = _run_json_lines(["docker", "compose", "ps", "--format", "json"])
+    if rows:
+        return rows
+    return _run_json_lines(["docker", "ps", "--format", "{{json .}}"])
 
 
 def docker_container_health(container_name: str) -> str | None:
@@ -292,12 +356,19 @@ def check_docker_services():
         name = item.get("Name") or item.get("Names") or item.get("Service") or "?"
         state = item.get("State") or item.get("Status") or "?"
         health = docker_container_health(name)
-        table.add_row(name, state, health or "-")
+        row_style = None
+        if isinstance(state, str):
+            lowered = state.lower()
+            if not (lowered.startswith("up") or lowered == "running"):
+                row_style = "red"
+        else:
+            row_style = "red"
+        table.add_row(name, state, health or "-", style=row_style)
     console.print(Panel(table, title="docker services", border_style="green"))
 
 
 def check_repo_shape():
-    wanted = ["services", "contracts", "schemas", "supabase", "neo4j", "n8n", "comfyui", "datasets", "docs"]
+    wanted = ["services", "contracts", "schemas", "supabase", "neo4j", "n8n", "comfyui", "datasets", "docs", "tools"]
     table = Table(box=box.SIMPLE)
     table.add_column("path", style="magenta")
     table.add_column("exists")
@@ -305,6 +376,10 @@ def check_repo_shape():
         exists = (ROOT / d).exists()
         table.add_row(d, "yes" if exists else "no")
     console.print(table)
+    # Mapper helper presence
+    mapper = ROOT / "pmoves" / "tools" / "events_to_cgp.py"
+    status = "present" if mapper.exists() else "missing"
+    console.print(Panel(f"events_to_cgp.py: {status}", border_style=("green" if mapper.exists() else "red")))
 
 
 def check_contracts():
@@ -312,8 +387,35 @@ def check_contracts():
         console.print(Panel("contracts/topics.json: missing", border_style="red"))
         return
     try:
-        json.loads(CONTRACTS.read_text(encoding="utf-8"))
+        data = json.loads(CONTRACTS.read_text(encoding="utf-8"))
         console.print(Panel("contracts/topics.json: valid", border_style="green"))
+        # Extra: verify new summary topics are present and schemas exist
+        expect = {
+            "health.weekly.summary.v1": "schemas/health/weekly.summary.v1.schema.json",
+            "finance.monthly.summary.v1": "schemas/finance/monthly.summary.v1.schema.json",
+        }
+        missing: list[str] = []
+        bad_schema: list[str] = []
+        topics = data.get("topics", {}) if isinstance(data, dict) else {}
+        for t, spath in expect.items():
+            if t not in topics:
+                missing.append(t)
+                continue
+            schema_rel = topics.get(t, {}).get("schema") or spath
+            sp = CONTRACTS.parent / schema_rel
+            if not sp.exists():
+                bad_schema.append(f"{t} → {schema_rel}")
+        lines: list[str] = []
+        if missing:
+            lines.append("missing topics:")
+            lines.extend([f"- {t}" for t in missing])
+        if bad_schema:
+            lines.append("missing schema files:")
+            lines.extend([f"- {row}" for row in bad_schema])
+        if lines:
+            console.print(Panel("\n".join(lines), border_style="yellow", title="contracts: summary topics"))
+        else:
+            console.print(Panel("summary topics present (health/finance)", border_style="green", title="contracts"))
     except Exception as e:
         console.print(Panel(f"contracts/topics.json: invalid ({e})", border_style="red"))
 
@@ -371,9 +473,12 @@ def check_http():
             if kind == "ok_true":
                 try:
                     j = json.loads(body)
-                    ok = bool(j.get("ok")) and code == 200
+                    status_flag = j.get("ok")
+                    if status_flag is None:
+                        status_flag = str(j.get("status", "")).lower() == "ok"
+                    ok = bool(status_flag) and code == 200
                 except Exception:
-                    ok = False
+                    ok = code == 200
             elif kind == "json_ok_or_200":
                 if code == 200:
                     ok = True

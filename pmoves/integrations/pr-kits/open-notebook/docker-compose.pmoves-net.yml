@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  open-notebook:
+    image: ghcr.io/POWERFULMOVES/Pmoves-open-notebook:main
+    restart: unless-stopped
+    networks: [pmoves-net]
+    ports:
+      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"    # UI
+      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"  # API
+networks:
+  pmoves-net:
+    external: true

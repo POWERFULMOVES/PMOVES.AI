@@ -1,0 +1,60 @@
+services:
+  n8n:
+    build:
+      context: .
+      dockerfile: compose/n8n/Dockerfile
+    image: pmoves/n8n:1.115.3-sqlite
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_HOST=localhost
+      - N8N_DEFAULT_TIMEZONE=${TZ:-America/New_York}
+      - WEBHOOK_URL=http://localhost:5678
+      - GENERIC_TIMEZONE=${TZ:-America/New_York}
+      - TZ=${TZ:-America/New_York}
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_RUNNERS_MODE=external
+      - N8N_RUNNERS_PAYLOAD_MODE=filesystem
+      - N8N_PUBLIC_API_ENABLED=true
+      # Public API auth (n8n >= 1.0)
+      - N8N_API_AUTH_ACTIVE=true
+      # External integrations for sync flows
+      - WGER_BASE_URL=${WGER_BASE_URL:-http://cataclysm-wger:8000}
+      - FIREFLY_BASE_URL=${FIREFLY_BASE_URL:-http://cataclysm-firefly:8080}
+      - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
+      - N8N_NATIVE_PYTHON_RUNNER=true
+      # Supabase REST — n8n reaches host via host.docker.internal
+      - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_URL:-${SUPABASE_REST_URL:-http://host.docker.internal:65421/rest/v1}}
+      # Agent Zero in same compose project (service name)
+      - AGENT_ZERO_BASE_URL=${AGENT_ZERO_BASE_URL:-http://agent-zero:8080}
+      # Discord webhook for echo publisher
+      - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
+      - N8N_LOG_LEVEL=debug
+    ports: ["5678:5678"]
+    networks: [cataclysm]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n-data:/home/node/.n8n
+  n8n-runners:
+    image: n8nio/runners:1.115.3
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+      - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
+    networks: [cataclysm]
+    depends_on:
+      - n8n
+    volumes:
+      - n8n-data:/home/node/.n8n
+networks:
+  cataclysm:
+    external: true
+    name: cataclysm-net
+volumes:
+  n8n-data: {}

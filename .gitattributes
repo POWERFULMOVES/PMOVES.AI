@@ -1,0 +1,18 @@
+# Normalize line endings and enforce sensible defaults per file type
+
+* text=auto
+
+# Unix line endings for code, configs, docs
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf
+
+# Windows line endings for PowerShell and batch scripts
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+

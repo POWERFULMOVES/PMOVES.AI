@@ -1,0 +1,10 @@
+id: compose
+name: Docker Compose MCP
+required_commands:
+  - docker
+  - docker-compose
+setup_instructions:
+  - Ensure Docker MCP toolkit is installed.
+  - Configure Compose project mapping in ~/.pmoves/mcp/compose.json.
+health_check:
+  command: ["docker", "compose", "ps"]

@@ -1,0 +1,50 @@
+{
+  "name": "pmoves-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/with-env.mjs next dev -p 4482",
+    "dev:3001": "PORT=3001 node scripts/with-env.mjs next dev -p 3001",
+    "build": "node scripts/with-env.mjs next build",
+    "start": "node scripts/with-env.mjs next start",
+    "lint": "node scripts/with-env.mjs eslint . --ext ts,tsx,js,jsx --max-warnings=0",
+    "typecheck": "node scripts/with-env.mjs tsc --noEmit",
+    "test": "node scripts/with-env.mjs jest",
+    "smoke:upload-events": "node scripts/with-env.mjs jest upload-events-table.test.tsx",
+    "test:e2e": "node scripts/with-env.mjs playwright test"
+  },
+  "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "jose": "^5.9.3",
+    "next": "16.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-dropzone": "14.2.3",
+    "react-markdown": "^9.0.3",
+    "remark-gfm": "^4.0.0",
+    "toml": "3.0.0",
+    "uuid": "9.0.1",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.0",
+    "@testing-library/user-event": "14.6.1",
+    "@types/jest": "29.5.12",
+    "@types/node": "20.14.2",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/uuid": "9.0.7",
+    "autoprefixer": "10.4.17",
+    "eslint": "9.38.0",
+    "eslint-config-next": "16.0.0",
+    "jest": "29.7.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "postcss": "8.4.33",
+    "tailwindcss": "3.4.3",
+    "typescript": "5.4.5"
+  }
+}

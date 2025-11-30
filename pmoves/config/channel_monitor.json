@@ -1,0 +1,201 @@
+{
+  "channels": [
+    {
+      "channel_id": "UC_x5XG1OV2P6uZZ5FSM9Ttw",
+      "channel_name": "Google Developers",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@GoogleDevelopers",
+      "enabled": false,
+      "check_interval_minutes": 60,
+      "auto_process": true,
+      "filters": {
+        "min_duration_seconds": 60,
+        "max_age_days": 30,
+        "exclude_keywords": [
+          "#shorts"
+        ],
+        "title_keywords": []
+      },
+      "priority": 1,
+      "namespace": "pmoves",
+      "tags": [
+        "tech"
+      ],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/google-developers.archive",
+        "subtitle_langs": [
+          "en"
+        ],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@DARKSXIDE",
+      "channel_name": "DARKSXIDE (Channel)",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@DARKSXIDE",
+      "enabled": true,
+      "check_interval_minutes": 60,
+      "auto_process": true,
+      "filters": {
+        "min_duration_seconds": 60,
+        "max_age_days": 30,
+        "exclude_keywords": [
+          "#shorts"
+        ],
+        "title_keywords": []
+      },
+      "priority": 1,
+      "namespace": "pmoves.darkxside",
+      "tags": [
+        "darkxside",
+        "music",
+        "ai",
+        "art",
+        "science",
+        "consciousness"
+      ],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": "/app/config/cookies/darkxside.youtube.cookies.txt",
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/darkxside/channel.archive",
+        "subtitle_langs": [
+          "en"
+        ],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:playlists:@DARKSXIDE",
+      "channel_name": "DARKSXIDE (Playlists)",
+      "platform": "youtube",
+      "source_type": "playlist",
+      "source_url": "https://www.youtube.com/@DARKSXIDE/playlists",
+      "enabled": true,
+      "check_interval_minutes": 60,
+      "auto_process": true,
+      "filters": {
+        "min_duration_seconds": 60,
+        "max_age_days": 30,
+        "exclude_keywords": [
+          "#shorts"
+        ],
+        "title_keywords": []
+      },
+      "priority": 1,
+      "namespace": "pmoves.darkxside",
+      "tags": [
+        "darkxside",
+        "tutorials"
+      ],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": "/app/config/cookies/darkxside.youtube.cookies.txt",
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/darkxside/playlists.archive",
+        "subtitle_langs": [
+          "en"
+        ],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:playlist:PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8",
+      "channel_name": "DARKSXIDE Mix Series",
+      "platform": "youtube",
+      "source_type": "playlist",
+      "source_url": "https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8",
+      "enabled": true,
+      "check_interval_minutes": 60,
+      "auto_process": true,
+      "filters": {
+        "min_duration_seconds": 60,
+        "max_age_days": 30,
+        "exclude_keywords": [
+          "#shorts"
+        ],
+        "title_keywords": []
+      },
+      "priority": 1,
+      "namespace": "pmoves.darkxside",
+      "tags": [
+        "darkxside",
+        "mix"
+      ],
+      "format": "best",
+      "media_type": "video",
+      "cookies_path": "/app/config/cookies/darkxside.youtube.cookies.txt",
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/darkxside/mixseries.archive",
+        "subtitle_langs": [
+          "en"
+        ],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "soundcloud:darkxside",
+      "channel_name": "DARKSXIDE SoundCloud",
+      "platform": "soundcloud",
+      "source_type": "user",
+      "source_url": "https://soundcloud.com/darkxside",
+      "enabled": false,
+      "auto_process": true,
+      "namespace": "pmoves.darkxside.audio",
+      "tags": [
+        "darkxside",
+        "soundcloud",
+        "audio"
+      ],
+      "media_type": "audio",
+      "format": "bestaudio/best",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/darkxside/soundcloud.archive",
+        "postprocessors": [
+          {
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192"
+          }
+        ],
+        "write_info_json": true
+      }
+    }
+  ],
+  "global_settings": {
+    "max_videos_per_check": 10,
+    "use_rss_feed": true,
+    "use_youtube_api": false,
+    "youtube_api_key": "",
+    "check_on_startup": true,
+    "notification_webhook": "",
+    "batch_processing": true,
+    "batch_size": 5,
+    "yt_options": {
+      "write_info_json": true,
+      "extractor_args": {
+        "youtube": {
+          "player_client": [
+            "web_safari"
+          ]
+        },
+        "youtubepot-bgutilhttp": {
+          "base_url": [
+            "http://bgutil-pot-provider:4416"
+          ]
+        }
+      }
+    }
+  },
+  "monitoring_schedule": {
+    "enabled": true,
+    "interval_minutes": 30
+  }
+}

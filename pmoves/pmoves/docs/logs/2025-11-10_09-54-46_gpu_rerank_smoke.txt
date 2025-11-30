@@ -1,0 +1,23 @@
+make[1]: Entering directory '/home/pmoves/PMOVES.AI/pmoves'
+[GPU] Check v2-gpu (:8087) up...
+OK
+[GPU] v2-gpu stats...
+{
+  "rerank_enabled": true,
+  "rerank_model": "Qwen/Qwen3-Reranker-4B",
+  "rerank_loaded": true,
+  "cuda": false,
+  "use_meili": false,
+  "graph": {
+    "boost": 0.15,
+    "types": 0,
+    "last_refresh": 1762786480.9301975
+  },
+  "alpha": 0.7,
+  "collection": "pmoves_chunks"
+}
+OK
+[GPU] v2-gpu rerank query...
+FAIL
+make[1]: *** [Makefile:1043: smoke-gpu] Error 1
+make[1]: Leaving directory '/home/pmoves/PMOVES.AI/pmoves'

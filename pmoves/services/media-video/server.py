@@ -428,6 +428,7 @@ def detect(body: Dict[str, Any] = Body(...)):
 
         rows = [
             {
+                'namespace': ns,
                 'video_id': d.get('video_id'),
                 'ts_seconds': d.get('ts_seconds'),
                 'label': d.get('label'),
@@ -447,6 +448,7 @@ def detect(body: Dict[str, Any] = Body(...)):
 
         scene_rows = [
             {
+                'namespace': ns,
                 'video_id': s.get('video_id'),
                 'label': s.get('label'),
                 'score': s.get('score'),
@@ -463,6 +465,7 @@ def detect(body: Dict[str, Any] = Body(...)):
 
         emotion_rows = [
             {
+                'namespace': ns,
                 'video_id': m.get('video_id'),
                 'ts_seconds': m.get('ts_seconds'),
                 'label': m.get('label'),

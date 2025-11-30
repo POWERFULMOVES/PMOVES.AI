@@ -1,0 +1,33 @@
+name: Env Preflight
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pmoves/.env*'
+      - 'pmoves/scripts/env_check.ps1'
+      - 'pmoves/docs/LOCAL_DEV.md'
+      - 'pmoves/docs/LOCAL_TOOLING_REFERENCE.md'
+      - '.github/workflows/env-preflight.yml'
+  workflow_dispatch: {}
+
+jobs:
+  preflight:
+    name: Preflight (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run PowerShell preflight (quick)
+        shell: pwsh
+        working-directory: pmoves
+        run: |
+          Write-Host "Running env preflight..."
+          pwsh -NoProfile -File scripts/env_check.ps1 -Quick
+
+      - name: Ensure templates present
+        shell: bash
+        run: |
+          test -f pmoves/.env.example || { echo ".env.example missing"; exit 1; }
+          test -f pmoves/.env.local.example || echo "warn: .env.local.example missing (optional)"

@@ -13,7 +13,13 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+from services.common.geometry_params import get_decoder_pack
+from services.common.hrm_sidecar import HrmDecoderController
 from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import CrossEncoder  # for optional rerank
+except Exception:
+    CrossEncoder = None  # lazy error if rerank requested
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 
@@ -37,6 +43,14 @@ MEILI_API_KEY = os.environ.get("MEILI_API_KEY","master_key")
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","true").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","true").lower()=="true"
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
+TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIES", "").split(",") if c.strip()]
+NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE", "pmoves")
+
+# --- Optional Reranking (GPU preferred, CPU fallback) ---
+RERANK_ENABLE = os.environ.get("RERANK_ENABLE", "false").lower() == "true"
+RERANK_MODEL = os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base")
+RERANK_TOPN = int(os.environ.get("RERANK_TOPN", "50"))
+RERANK_K = int(os.environ.get("RERANK_K", "10"))
 
 app = FastAPI(title="PMOVES Hi-RAG Gateway")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -65,6 +79,8 @@ except Exception as e:
     logger.exception("Failed to initialize ShapeStore: %s", e)
     shape_store = None
 
+_hrm_controller = HrmDecoderController(get_decoder_pack)
+
 # --- CHIT security and decode flags ---
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower() == "true"
 CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
@@ -81,6 +97,8 @@ _clip_model = None
 _clip_lock = threading.Lock()
 _clap_model = None
 _clap_lock = threading.Lock()
+_cross_encoder = None
+_cross_lock = threading.Lock()
 
 def _load_codebook(path: str):
     import os
@@ -168,6 +186,30 @@ def _get_clap_model():
                     raise HTTPException(500, f"CLAP model load error: {e}")
     return _clap_model
 
+
+def _get_cross_encoder():
+    global _cross_encoder
+    if not RERANK_ENABLE:
+        return None
+    if CrossEncoder is None:
+        raise HTTPException(500, "Rerank requested but CrossEncoder not available; check sentence-transformers install")
+    if _cross_encoder is None:
+        with _cross_lock:
+            if _cross_encoder is None:
+                try:
+                    # Auto-select CUDA if available
+                    device = "cuda"
+                    try:
+                        import torch  # type: ignore
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                    except Exception:
+                        device = "cpu"
+                    _cross_encoder = CrossEncoder(RERANK_MODEL, device=device)
+                except Exception as e:
+                    logger.exception("Failed to load CrossEncoder %s", RERANK_MODEL)
+                    raise HTTPException(500, f"Reranker load error: {e}")
+    return _cross_encoder
+
 def hybrid_score(vec_score: float, lex_score: float, alpha: float=0.7) -> float:
     return alpha*vec_score + (1.0-alpha)*lex_score
 
@@ -201,8 +243,15 @@ def refresh_warm_dictionary():
     try:
         tmp = {}
         with driver.session() as s:
-            recs = s.run("MATCH (e:Entity) RETURN e.value AS v, coalesce(e.type,'UNK') AS t LIMIT $lim",
-                         lim=NEO4J_DICT_LIMIT)
+            recs = s.run(
+                (
+                    "MATCH (e:Entity) "
+                    "WITH e, CASE WHEN 'type' IN keys(e) THEN e.type ELSE 'UNK' END AS typ "
+                    "RETURN e.value AS v, typ AS t "
+                    "LIMIT $lim"
+                ),
+                lim=NEO4J_DICT_LIMIT,
+            )
             for r in recs:
                 v = r["v"]; t = (r["t"] or "UNK").upper()
                 if not v: continue
@@ -257,11 +306,50 @@ def meili_lexical(query, namespace, limit):
         logger.exception("meili lexical error")
         return {}
 
+def _parse_trusted_proxies(raw_entries):
+    networks = []
+    for raw in raw_entries:
+        entry = raw.strip()
+        if not entry:
+            continue
+        try:
+            if "/" in entry:
+                networks.append(ipaddress.ip_network(entry, strict=False))
+            else:
+                ip_obj = ipaddress.ip_address(entry)
+                cidr = "32" if isinstance(ip_obj, ipaddress.IPv4Address) else "128"
+                networks.append(ipaddress.ip_network(f"{ip_obj}/{cidr}", strict=False))
+        except ValueError:
+            logger.warning("Ignoring invalid trusted proxy entry: %s", entry)
+    return networks
+
+
+_TRUSTED_PROXY_NETWORKS = _parse_trusted_proxies(TRUSTED_PROXY_SOURCES)
+
+
+def _trusted_proxy(host: Optional[str]) -> bool:
+    if not host or not _TRUSTED_PROXY_NETWORKS:
+        return False
+    try:
+        ip_obj = ipaddress.ip_address(host)
+    except ValueError:
+        logger.debug("Request client host is not a valid IP: %s", host)
+        return False
+    return any(ip_obj in network for network in _TRUSTED_PROXY_NETWORKS)
+
+
 def _client_ip(request: Request) -> str:
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+    peer_ip = request.client.host if request.client else None
+    if peer_ip and _trusted_proxy(peer_ip):
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            candidate = xff.split(",")[0].strip()
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                logger.debug("Ignoring invalid X-Forwarded-For entry: %s", candidate)
+    return peer_ip or "127.0.0.1"
 
 def _ip_in_cidrs(ip: str, cidrs):
     import ipaddress
@@ -278,45 +366,91 @@ def _ip_in_cidrs(ip: str, cidrs):
         return False
     return False
 
-def require_tailscale(request: Request):
-    if not TAILSCALE_ONLY:
+def _tailscale_required(admin_only: bool) -> bool:
+    if TAILSCALE_ONLY:
+        return True
+    if admin_only:
+        return TAILSCALE_ADMIN_ONLY
+    return False
+
+
+def _tailscale_violation_detail(admin_only: bool) -> str:
+    return (
+        "Admin endpoints restricted to Tailscale network"
+        if admin_only
+        else "Service restricted to Tailscale network"
+    )
+
+
+def _tailscale_ip_allowed(ip: str, admin_only: bool) -> bool:
+    if not _tailscale_required(admin_only):
+        return True
+    return _ip_in_cidrs(ip, TAILSCALE_CIDRS)
+
+
+def require_tailscale(request: Request, admin_only: bool = False):
+    if not _tailscale_required(admin_only):
         return
     ip = _client_ip(request)
-    if not _ip_in_cidrs(ip, TAILSCALE_CIDRS):
-        raise HTTPException(status_code=403, detail="Admin restricted to Tailscale network")
+    if not _tailscale_ip_allowed(ip, admin_only):
+        raise HTTPException(status_code=403, detail=_tailscale_violation_detail(admin_only))
+
+
+def require_admin_tailscale(request: Request):
+    return require_tailscale(request, admin_only=True)
 
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
     emb = embed_query(query)
     cond = Filter(must=[FieldCondition(key="namespace", match=MatchValue(value=namespace))])
+    topn = max(16, k)
+    if RERANK_ENABLE:
+        topn = max(RERANK_TOPN, k)
     try:
-        sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=max(16,k), query_filter=cond, with_payload=True, with_vectors=False)
+        sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=topn, query_filter=cond, with_payload=True, with_vectors=False)
     except Exception as e:
         logger.exception("Qdrant search error")
         raise HTTPException(503, f"Qdrant search error: {e}")
+
     gterms = set([t.lower() for t in graph_terms(query, entity_types=entity_types)]) if driver is not None and GRAPH_BOOST > 0 else set()
     meili_scores = meili_lexical(query, namespace, k) if USE_MEILI else {}
-    results = []
+    prelim = []
     for p in sr:
-        txt = p.payload.get("text","")
+        txt = p.payload.get("text", "")
         lex = float(meili_scores.get(p.payload.get('chunk_id'), 0.0)) if USE_MEILI else (fuzz.token_set_ratio(query, txt)/100.0)
-        vec = float(p.score) if isinstance(p.score, (int,float)) else 0.0
+        vec = float(p.score) if isinstance(p.score, (int, float)) else 0.0
         g_hit = any(term in txt.lower() for term in gterms)
         score = hybrid_score(vec, lex, alpha) + (graph_boost if g_hit else 0.0)
-        results.append({
+        prelim.append({
             "doc_id": p.payload.get("doc_id"),
             "section_id": p.payload.get("section_id"),
             "chunk_id": p.payload.get("chunk_id"),
             "text": txt,
-            "score": score,
+            "score": float(score),
             "namespace": p.payload.get("namespace"),
             "graph_match": bool(g_hit)
         })
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:k]
 
-from fastapi import Depends
+    # Optional rerank using cross-encoder
+    if RERANK_ENABLE and prelim:
+        ce = _get_cross_encoder()
+        try:
+            pairs = [(query, r["text"] or "") for r in prelim]
+            rr = ce.predict(pairs)
+            for r, s in zip(prelim, rr):
+                r["rerank_score"] = float(s)
+            prelim.sort(key=lambda x: x.get("rerank_score", x.get("score", 0.0)), reverse=True)
+            return prelim[:max(k, RERANK_K)]
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("Rerank error; falling back to preliminary scores")
+            # fall through to sort by prelim score
+
+    prelim.sort(key=lambda x: x["score"], reverse=True)
+    return prelim[:k]
+
 @app.post("/hirag/query")
-def http_query(body: dict):
+def http_query(body: dict, _=Depends(require_tailscale)):
     # validate payload
     try:
         q = body.get("query", "")
@@ -347,7 +481,7 @@ def http_query(body: dict):
         raise HTTPException(status_code=500, detail=f"Query failed: {e}")
 
 @app.get("/hirag/admin/stats")
-def hirag_admin_stats(_=Depends(require_tailscale)):
+def hirag_admin_stats(_=Depends(require_admin_tailscale)):
     return {
         "entity_cache": {"keys": len(_cache_entities), "ttl": ENTITY_CACHE_TTL, "max": ENTITY_CACHE_MAX},
         "warm_dictionary": {"types": len(_warm_entities), "entries": int(sum(len(s) for s in _warm_entities.values())), "last_refresh": _warm_last},
@@ -355,18 +489,18 @@ def hirag_admin_stats(_=Depends(require_tailscale)):
     }
 
 @app.post("/hirag/admin/refresh")
-def hirag_admin_refresh(_=Depends(require_tailscale)):
+def hirag_admin_refresh(_=Depends(require_admin_tailscale)):
     refresh_warm_dictionary()
     return {"ok": True, "entries": int(sum(len(s) for s in _warm_entities.values()))}
 
 @app.post("/hirag/admin/cache/clear")
-def hirag_admin_cache_clear(_=Depends(require_tailscale)):
+def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
     _cache_entities.clear(); _cache_order.clear()
     return {"ok": True}
 
 # ---------------- Geometry Bus minimal stub ----------------
 @app.get("/shape/point/{point_id}/jump")
-def shape_point_jump(point_id: str):
+def shape_point_jump(point_id: str, _=Depends(require_tailscale)):
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     loc = shape_store.jump_locator(point_id)
@@ -376,7 +510,7 @@ def shape_point_jump(point_id: str):
 
 
 @app.post("/geometry/event")
-def geometry_event(body: Dict[str, Any]):
+def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
     """Accept geometry.cgp.v1 events. Body example:
     {"type":"geometry.cgp.v1", "data": { ... CGP ... }}
     """
@@ -408,7 +542,7 @@ def geometry_event(body: Dict[str, Any]):
 
 
 @app.post("/geometry/decode/text")
-def geometry_decode_text(body: Dict[str, Any]):
+def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_TEXT:
         raise HTTPException(501, "text decoder disabled")
     # mode: "learned" | "geometry"
@@ -420,6 +554,12 @@ def geometry_decode_text(body: Dict[str, Any]):
         const = shape_store.get_constellation(const_id) if shape_store else None
         if not const:
             raise HTTPException(404, f"constellation '{const_id}' not found")
+    else:
+        const = None
+    namespace = str(
+        body.get("namespace")
+        or (const.get("namespace") if isinstance(const, dict) and const.get("namespace") else NAMESPACE_DEFAULT)
+    )
     if mode == "learned":
         # lazy import transformers
         try:
@@ -439,7 +579,9 @@ def geometry_decode_text(body: Dict[str, Any]):
             raise HTTPException(400, "no codebook or constellation text available")
         nlp = pipeline("summarization", model=os.environ.get("CHIT_T5_MODEL","t5-small"))
         out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
-        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+        summary = out[0].get("summary_text", "")
+        summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
+        return {"mode": mode, "summary": summary, "used": len(texts), "hrm": hrm_info, "namespace": namespace}
     else:
         # geometry-only: return top-k point snippets ordered by confidence/proj
         pts = []
@@ -458,7 +600,8 @@ def geometry_decode_text(body: Dict[str, Any]):
             if sp:
                 pts.append({"id": sp.id, "proj": sp.proj, "conf": sp.conf})
         pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
-        return {"mode": mode, "points": pts[:k]}
+        hrm_info = _hrm_controller.status(namespace)
+        return {"mode": mode, "points": pts[:k], "hrm": hrm_info, "namespace": namespace}
 
 
 def _js_divergence(p: List[float], q: List[float]) -> float:
@@ -485,7 +628,7 @@ def _wasserstein_1d(p: List[float], q: List[float]) -> float:
 
 
 @app.post("/geometry/calibration/report")
-def geometry_calibration_report(body: Dict[str, Any]):
+def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
     data = body.get("data")
     const_ids = body.get("constellation_ids") or []
     report = []
@@ -515,7 +658,7 @@ def geometry_calibration_report(body: Dict[str, Any]):
 
 
 @app.post("/geometry/decode/image")
-def geometry_decode_image(body: Dict[str, Any]):
+def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_IMAGE:
         raise HTTPException(501, "image decoder disabled")
     try:
@@ -558,7 +701,7 @@ def geometry_decode_image(body: Dict[str, Any]):
 
 
 @app.post("/geometry/decode/audio")
-def geometry_decode_audio(body: Dict[str, Any]):
+def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
     if not CHIT_DECODE_AUDIO:
         raise HTTPException(501, "audio decoder disabled")
     try:
@@ -591,7 +734,7 @@ def geometry_decode_audio(body: Dict[str, Any]):
         raise HTTPException(500, f"audio decode error: {e}")
 
 @app.get("/")
-def index():
+def index(_=Depends(require_tailscale)):
     return {"ok": True, "hint": "POST /hirag/query"}
 
 if __name__ == "__main__":

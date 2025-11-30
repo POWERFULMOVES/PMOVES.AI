@@ -19,14 +19,11 @@
     "agentzero.task.v1": {
       "schema": "schemas/agentzero/task.v1.schema.json"
     },
-    "ingest.transcript.ready.v1": {
-      "schema": "schemas/ingest/transcript-ready.v1.schema.json"
+    "analysis.audio.v1": {
+      "schema": "schemas/analysis/audio.v1.schema.json"
     },
-    "ingest.file.added.v1": {
-      "schema": "schemas/ingest/file-added.v1.schema.json"
-    },
-    "ingest.document.ready.v1": {
-      "schema": "schemas/ingest/document-ready.v1.schema.json"
+    "analysis.entities.v1": {
+      "schema": "schemas/analysis/entities.v1.schema.json"
     },
     "analysis.extract_topics.request.v1": {
       "schema": "schemas/analysis/extract-topics.request.v1.schema.json"
@@ -34,17 +31,29 @@
     "analysis.extract_topics.result.v1": {
       "schema": "schemas/analysis/extract-topics.result.v1.schema.json"
     },
-    "analysis.entities.v1": {
-      "schema": "schemas/analysis/entities.v1.schema.json"
+    "archon.crawl.request.v1": {
+      "schema": "schemas/archon/crawl.request.v1.schema.json"
     },
-    "analysis.audio.v1": {
-      "schema": "schemas/analysis/audio.v1.schema.json"
+    "archon.crawl.result.v1": {
+      "schema": "schemas/archon/crawl.result.v1.schema.json"
     },
-    "gen.text.request.v1": {
-      "schema": "schemas/gen/text.request.v1.schema.json"
+    "archon.task.update.v1": {
+      "schema": "schemas/archon/task.update.v1.schema.json"
     },
-    "gen.text.result.v1": {
-      "schema": "schemas/gen/text.result.v1.schema.json"
+    "content.publish.approved.v1": {
+      "schema": "schemas/content/publish.approved.v1.schema.json"
+    },
+    "content.publish.failed.v1": {
+      "schema": "schemas/content/publish.failed.v1.schema.json"
+    },
+    "content.published.v1": {
+      "schema": "schemas/content/published.v1.schema.json"
+    },
+    "finance.monthly.summary.v1": {
+      "schema": "schemas/finance/monthly.summary.v1.schema.json"
+    },
+    "finance.transactions.ingested.v1": {
+      "schema": "schemas/finance/transactions.ingested.v1.schema.json"
     },
     "gen.image.request.v1": {
       "schema": "schemas/gen/image.request.v1.schema.json"
@@ -52,11 +61,32 @@
     "gen.image.result.v1": {
       "schema": "schemas/gen/image.result.v1.schema.json"
     },
-    "kb.upsert.request.v1": {
-      "schema": "schemas/kb/upsert.request.v1.schema.json"
+    "gen.text.request.v1": {
+      "schema": "schemas/gen/text.request.v1.schema.json"
     },
-    "kb.upsert.result.v1": {
-      "schema": "schemas/kb/upsert.result.v1.schema.json"
+    "gen.text.result.v1": {
+      "schema": "schemas/gen/text.result.v1.schema.json"
+    },
+    "geometry.cgp.v1": {
+      "schema": "schemas/geometry/cgp.v1.schema.json"
+    },
+    "geometry.swarm.meta.v1": {
+      "schema": "schemas/geometry/swarm.meta.v1.schema.json"
+    },
+    "health.metrics.updated.v1": {
+      "schema": "schemas/health/metrics.updated.v1.schema.json"
+    },
+    "health.weekly.summary.v1": {
+      "schema": "schemas/health/weekly.summary.v1.schema.json"
+    },
+    "ingest.document.ready.v1": {
+      "schema": "schemas/ingest/document-ready.v1.schema.json"
+    },
+    "ingest.file.added.v1": {
+      "schema": "schemas/ingest/file-added.v1.schema.json"
+    },
+    "ingest.transcript.ready.v1": {
+      "schema": "schemas/ingest/transcript-ready.v1.schema.json"
     },
     "kb.search.request.v1": {
       "schema": "schemas/kb/search.request.v1.schema.json"
@@ -64,14 +94,26 @@
     "kb.search.result.v1": {
       "schema": "schemas/kb/search.result.v1.schema.json"
     },
-    "content.publish.approved.v1": {
-      "schema": "schemas/content/publish.approved.v1.schema.json"
+    "kb.upsert.request.v1": {
+      "schema": "schemas/kb/upsert.request.v1.schema.json"
     },
-    "content.published.v1": {
-      "schema": "schemas/content/published.v1.schema.json"
+    "kb.upsert.result.v1": {
+      "schema": "schemas/kb/upsert.result.v1.schema.json"
     },
-    "geometry.cgp.v1": {
-      "schema": "schemas/geometry/cgp.v1.schema.json"
+    "persona.publish.failed.v1": {
+      "schema": "schemas/persona/publish.failed.v1.schema.json"
+    },
+    "persona.publish.request.v1": {
+      "schema": "schemas/persona/publish.request.v1.schema.json"
+    },
+    "persona.published.v1": {
+      "schema": "schemas/persona/published.v1.schema.json"
+    },
+    "research.deepresearch.request.v1": {
+      "schema": "schemas/research/deepresearch.request.v1.schema.json"
+    },
+    "research.deepresearch.result.v1": {
+      "schema": "schemas/research/deepresearch.result.v1.schema.json"
     }
   }
 }

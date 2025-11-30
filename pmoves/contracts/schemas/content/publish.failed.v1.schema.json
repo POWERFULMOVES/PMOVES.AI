@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content Publish Failed",
+  "type": "object",
+  "required": [
+    "stage",
+    "reason",
+    "retryable",
+    "outcome"
+  ],
+  "properties": {
+    "stage": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["fatal", "partial"]
+    },
+    "artifact_uri": {
+      "type": "string"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "publish_event_id": {
+      "type": "string"
+    },
+    "public_url": {
+      "type": "string"
+    },
+    "jellyfin_public_url": {
+      "type": "string"
+    },
+    "jellyfin_item_id": {
+      "type": "string"
+    },
+    "details": {
+      "type": "object"
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

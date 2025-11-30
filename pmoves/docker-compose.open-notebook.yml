@@ -1,0 +1,65 @@
+services:
+  open-notebook:
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:v1-latest}
+    # v1-latest tracks the 1.x Next.js build from the integration workspace fork; override OPEN_NOTEBOOK_IMAGE to pin a custom tag.
+    container_name: cataclysm-open-notebook
+    restart: unless-stopped
+    env_file:
+      - env.shared.generated
+      - env.shared
+      - .env.generated
+      - .env
+      - .env.local
+    environment:
+      SURREAL_URL: ${OPEN_NOTEBOOK_SURREAL_URL:-ws://localhost:8000/rpc}
+      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-localhost}
+      API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
+      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OLLAMA_API_BASE: ${OLLAMA_API_BASE:-}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
+      OPENAI_COMPATIBLE_BASE_URL_LLM: ${OPENAI_COMPATIBLE_BASE_URL_LLM:-}
+      OPENAI_COMPATIBLE_BASE_URL_EMBEDDING: ${OPENAI_COMPATIBLE_BASE_URL_EMBEDDING:-}
+      OPENAI_COMPATIBLE_BASE_URL_STT: ${OPENAI_COMPATIBLE_BASE_URL_STT:-}
+      OPENAI_COMPATIBLE_BASE_URL_TTS: ${OPENAI_COMPATIBLE_BASE_URL_TTS:-}
+      VERTEX_PROJECT: ${VERTEX_PROJECT:-}
+      VERTEX_LOCATION: ${VERTEX_LOCATION:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      MINDMAP_BASE: ${MINDMAP_BASE:-http://hi-rag-gateway-v2:8086}
+      MINDMAP_CONSTELLATION_ID: ${MINDMAP_CONSTELLATION_ID:-8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111}
+    ports:
+      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
+      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"
+    volumes:
+      - ./data/open-notebook/notebook_data:/app/data
+    networks:
+      cataclysm:
+        aliases:
+          - cataclysm-open-notebook
+      pmoves:
+        aliases:
+          - cataclysm-open-notebook
+          - open-notebook
+networks:
+  cataclysm:
+    external: true
+    name: cataclysm-net
+  pmoves:
+    external: true
+    name: pmoves-net

@@ -9,10 +9,15 @@ const neo4j = require('neo4j-driver');
 const Redis = require('redis');
 const axios = require('axios');
 const WebSocket = require('ws');
+const fs = require('fs/promises');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Honor reverse proxy headers so rate limiting sees real client IPs.
+app.set('trust proxy', true);
 
 // Security middleware
 app.use(helmet());
@@ -50,7 +55,202 @@ const redisClient = Redis.createClient({
   url: process.env.REDIS_URL || 'redis://redis:6379'
 });
 
-redisClient.connect();
+redisClient.connect().catch((err) => {
+  console.error('Redis connection error:', err);
+});
+
+const MIGRATION_RESULTS_KEY = process.env.MIGRATION_RESULTS_KEY || 'jellyfin:migration:runs';
+const MIGRATION_RESULTS_PATH = process.env.MIGRATION_RESULTS_PATH;
+const BRIDGE_LOG_PATH = process.env.BRIDGE_LOG_PATH;
+const PUBLISHER_LOG_PATH = process.env.PUBLISHER_LOG_PATH;
+const BRIDGE_LOG_KEY = process.env.BRIDGE_LOG_KEY || 'logs:jellyfin-bridge';
+const PUBLISHER_LOG_KEY = process.env.PUBLISHER_LOG_KEY || 'logs:publisher';
+const LOG_EXCERPT_LINES = parseInt(process.env.LOG_EXCERPT_LINES || '200', 10);
+
+async function readJsonFile(filePath) {
+  if (!filePath) return null;
+  try {
+    const resolved = path.resolve(filePath);
+    const raw = await fs.readFile(resolved, 'utf8');
+    return JSON.parse(raw);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    console.error('Failed to read migration results file:', error);
+    throw error;
+  }
+}
+
+async function safeRedisListFetch(key, start = 0, end = -1) {
+  if (!redisClient?.isOpen) return [];
+  try {
+    return await redisClient.lRange(key, start, end);
+  } catch (error) {
+    console.warn(`Redis read failed for key ${key}:`, error.message);
+    return [];
+  }
+}
+
+function normalizeMigrationResult(payload) {
+  if (!payload) return null;
+
+  if (Array.isArray(payload)) {
+    return normalizeMigrationResult(payload[0]);
+  }
+
+  if (payload?.runs && Array.isArray(payload.runs)) {
+    const sorted = [...payload.runs].sort((a, b) => {
+      const aTime = new Date(a.completed_at || a.created_at || a.timestamp || 0).getTime();
+      const bTime = new Date(b.completed_at || b.created_at || b.timestamp || 0).getTime();
+      return bTime - aTime;
+    });
+    return normalizeMigrationResult(sorted[0]);
+  }
+
+  return payload;
+}
+
+function deriveChecklist(migrationResult) {
+  if (!migrationResult) {
+    return [
+      {
+        id: 'supabase-migrations',
+        label: 'Supabase migrations applied',
+        completed: false,
+        detail: 'Awaiting latest migration run.'
+      },
+      {
+        id: 'neo4j-sync',
+        label: 'Neo4j media graph refreshed',
+        completed: false
+      },
+      {
+        id: 'bridge-health',
+        label: 'Jellyfin bridge responding',
+        completed: false
+      },
+      {
+        id: 'publisher-health',
+        label: 'Publisher webhooks draining queue',
+        completed: false
+      }
+    ];
+  }
+
+  if (Array.isArray(migrationResult.checklist)) {
+    return migrationResult.checklist.map((item, index) => ({
+      id: item.id || `check-${index}`,
+      label: item.label || item.name || `Check ${index + 1}`,
+      completed: item.completed ?? item.status === 'ok' ?? false,
+      detail: item.detail || item.notes || null
+    }));
+  }
+
+  const checklist = [];
+  const supabaseStatus = migrationResult.supabase?.status || migrationResult.supabase_status;
+  const neo4jStatus = migrationResult.neo4j?.status || migrationResult.neo4j_status;
+  const bridgeStatus = migrationResult.bridge?.status || migrationResult.bridge_status;
+  const publisherStatus = migrationResult.publisher?.status || migrationResult.publisher_status;
+
+  checklist.push({
+    id: 'supabase-migrations',
+    label: 'Supabase migrations applied',
+    completed: (supabaseStatus || '').toLowerCase() === 'ok'
+  });
+  checklist.push({
+    id: 'neo4j-sync',
+    label: 'Neo4j media graph refreshed',
+    completed: (neo4jStatus || '').toLowerCase() === 'ok'
+  });
+  checklist.push({
+    id: 'bridge-health',
+    label: 'Jellyfin bridge responding',
+    completed: (bridgeStatus || '').toLowerCase() === 'ok'
+  });
+  checklist.push({
+    id: 'publisher-health',
+    label: 'Publisher webhooks draining queue',
+    completed: (publisherStatus || '').toLowerCase() === 'ok'
+  });
+
+  return checklist;
+}
+
+function deriveWebhookLatency(migrationResult) {
+  if (!migrationResult) return null;
+
+  if (migrationResult.metrics?.webhookLatency) {
+    return migrationResult.metrics.webhookLatency;
+  }
+
+  if (migrationResult.webhookLatency) {
+    return migrationResult.webhookLatency;
+  }
+
+  const latencyFields = ['webhook_latency_ms', 'webhook_latency'];
+  for (const field of latencyFields) {
+    if (field in migrationResult) {
+      return {
+        averageMs: Number(migrationResult[field]) || null
+      };
+    }
+  }
+
+  return null;
+}
+
+async function fetchLatestMigrationResult() {
+  const [redisEntry] = await safeRedisListFetch(MIGRATION_RESULTS_KEY, 0, 0);
+
+  if (redisEntry) {
+    try {
+      const parsed = JSON.parse(redisEntry);
+      return normalizeMigrationResult(parsed);
+    } catch (error) {
+      console.warn('Failed to parse migration result from Redis:', error.message);
+    }
+  }
+
+  const filePayload = await readJsonFile(MIGRATION_RESULTS_PATH);
+  if (filePayload) {
+    return normalizeMigrationResult(filePayload);
+  }
+
+  return null;
+}
+
+async function tailFile(filePath, lines) {
+  if (!filePath) return null;
+  try {
+    const resolved = path.resolve(filePath);
+    const contents = await fs.readFile(resolved, 'utf8');
+    const entries = contents.split(/\r?\n/).filter(Boolean);
+    return entries.slice(-lines);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    console.error(`Failed to read log file at ${filePath}:`, error);
+    throw error;
+  }
+}
+
+async function getLogExcerpt(options = {}, lines = LOG_EXCERPT_LINES) {
+  const { filePath, redisKey } = options;
+  const redisEntries = redisKey ? await safeRedisListFetch(redisKey, 0, lines - 1) : [];
+
+  if (redisEntries.length) {
+    return { source: 'redis', entries: redisEntries };
+  }
+
+  const fileEntries = await tailFile(filePath, lines);
+  if (fileEntries && fileEntries.length) {
+    return { source: 'file', entries: fileEntries };
+  }
+
+  return { source: redisEntries.length ? 'redis' : 'file', entries: [] };
+}
 
 // WebSocket server for real-time updates
 const wss = new WebSocket.Server({ port: 3002 });
@@ -278,6 +478,51 @@ app.get('/api/analytics', async (req, res) => {
   } catch (error) {
     console.error('Error getting analytics:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/migrations/latest', async (req, res) => {
+  try {
+    const migrationResult = await fetchLatestMigrationResult();
+    const checklist = deriveChecklist(migrationResult);
+    const webhookLatency = deriveWebhookLatency(migrationResult);
+
+    res.json({
+      run: migrationResult,
+      checklist,
+      webhookLatency,
+      source: migrationResult ? 'available' : 'unavailable'
+    });
+  } catch (error) {
+    console.error('Error fetching migration results:', error);
+    res.status(500).json({ error: 'Failed to load migration results' });
+  }
+});
+
+app.get('/api/logs/:service', async (req, res) => {
+  const { service } = req.params;
+  const lines = parseInt(req.query.lines, 10) || LOG_EXCERPT_LINES;
+
+  const config = {
+    bridge: { filePath: BRIDGE_LOG_PATH, redisKey: BRIDGE_LOG_KEY },
+    publisher: { filePath: PUBLISHER_LOG_PATH, redisKey: PUBLISHER_LOG_KEY }
+  }[service];
+
+  if (!config) {
+    return res.status(404).json({ error: 'Unknown log service requested' });
+  }
+
+  try {
+    const excerpt = await getLogExcerpt(config, lines);
+    res.json({
+      service,
+      lines,
+      entries: excerpt.entries,
+      source: excerpt.source
+    });
+  } catch (error) {
+    console.error(`Error fetching ${service} logs:`, error);
+    res.status(500).json({ error: `Failed to load ${service} logs` });
   }
 });
 

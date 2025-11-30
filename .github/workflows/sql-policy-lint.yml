@@ -1,0 +1,59 @@
+name: SQL Policy Lint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pmoves/supabase/sql/**'
+      - 'pmoves/supabase/migrations/**'
+      - '.github/workflows/sql-policy-lint.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pmoves/supabase/sql/**'
+      - 'pmoves/supabase/migrations/**'
+      - '.github/workflows/sql-policy-lint.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Grep for unsafe policy patterns
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(pmoves/supabase/sql/*.sql pmoves/supabase/migrations/*.sql)
+          allowlist=(
+            "pmoves/supabase/sql/006_media_analysis.sql"
+            "pmoves/supabase/migrations/2025-09-08_geometry_bus_rls.sql"
+            "pmoves/supabase/migrations/2025-09-09_pmoves_yt_jobs.sql"
+            "pmoves/supabase/migrations/2025-09-10_media_analysis_rls.sql"
+          )
+          echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
+          # Fail on blanket USING true or explicit anon grants outside dev
+          bad=0
+          for f in "${files[@]}"; do
+            skip=false
+            for allowed in "${allowlist[@]}"; do
+              if [[ "$f" == "$allowed" ]]; then
+                skip=true
+                break
+              fi
+            done
+            if $skip; then
+              echo "Skipping allowlisted policy file: $f"
+              continue
+            fi
+            if grep -Eqi '\bUSING\s*\(?\s*true\s*\)?' "$f"; then
+              echo "Unsafe blanket policy in: $f"; bad=1
+            fi
+            if grep -Eqi 'to\s+anon\b' "$f"; then
+              echo "Policy grants to anon found in: $f"; bad=1
+            fi
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "Found unsafe policy patterns. See pmoves/docs/SUPABASE_RLS_CHECKLIST.md"; exit 1
+          fi
+          echo "No unsafe patterns found."

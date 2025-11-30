@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15
+    image: ankane/pgvector
     restart: unless-stopped
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-pmoves}
@@ -10,49 +10,89 @@ services:
     volumes:
       - supabase-data:/var/lib/postgresql/data
       - ./supabase/initdb:/docker-entrypoint-initdb.d:ro
-    profiles: ["data","orchestration"]
+    profiles: ["data","orchestration","supabase-local"]
     networks: [pmoves]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgrest:
     image: postgrest/postgrest:latest
     restart: unless-stopped
     depends_on: [postgres]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
       - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
-      - PGRST_SERVER_PORT=3000
-    ports: ["3000:3000"]
-    profiles: ["orchestration","workers"]
+      - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
+      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
+    ports: ["3010:3000"]
+    profiles: ["orchestration","workers","supabase-local"]
+    networks: [pmoves]
+
+  postgrest-health:
+    image: curlimages/curl:8.6.0
+    restart: unless-stopped
+    command: ["tail","-f","/dev/null"]
+    depends_on: [postgrest]
+    profiles: ["orchestration","workers","supabase-local"]
+    networks: [pmoves]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://postgrest:3000/ >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  # Optional: PostgREST against Supabase CLI database (host.docker.internal:65432)
+  # Use profile 'supabase-cli-rest' and set POSTGREST_URL=http://localhost:3011 for console fallbacks.
+  postgrest-cli:
+    image: postgrest/postgrest:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - PGRST_DB_URI=postgres://${SUPABASE_DB_USER:-postgres}:${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:${SUPABASE_DB_PORT:-65432}/${SUPABASE_DB_NAME:-postgres}
+      - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
+      - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
+      - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
+      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
+    ports: ["3011:3000"]
+    profiles: ["supabase-cli-rest"]
     networks: [pmoves]
   qdrant:
     image: qdrant/qdrant:v1.10.0
     restart: unless-stopped
     ports: ["6333:6333"]
-    profiles: ["data"]
+    profiles: ["data","qdrant-local"]
     networks: [pmoves]
   meilisearch:
     image: getmeili/meilisearch:v1.8
     restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MEILI_ENV=production
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-master_key}
     ports: ["7700:7700"]
-    profiles: ["data"]
+    profiles: ["data","meili-local"]
     networks: [pmoves]
   neo4j:
     image: neo4j:5.22
     restart: unless-stopped
+    env_file: [.env.generated]
     environment:
-      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+      - NEO4J_AUTH=${NEO4J_AUTH}
+      - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     ports: ["7474:7474","7687:7687"]
     volumes:
       - neo4j-data:/data
       - ./neo4j/cypher:/cypher:ro
-    profiles: ["data"]
+    profiles: ["data","neo4j-local"]
     networks: [pmoves]
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u $NEO4J_USER -p $NEO4J_PASSWORD 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "auth=\"$$NEO4J_AUTH\"; user=\"$${auth%%/*}\"; pass=\"$${auth#*/}\"; /var/lib/neo4j/bin/cypher-shell -a bolt://localhost:7687 -u \"$$user\" -p \"$$pass\" 'RETURN 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -66,20 +106,20 @@ services:
     ports: ["9000:9000","9001:9001"]
     volumes:
       - minio-data:/data
-    profiles: ["data"]
+    profiles: ["data","orchestration","workers","agents"]
     networks: [pmoves]
   hi-rag-gateway:
-    build: ./services/hi-rag-gateway
+    build:
+      context: ./services
+      dockerfile: hi-rag-gateway/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
       - SENTENCE_MODEL=all-MiniLM-L6-v2
       - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
-      - NEO4J_URL=${NEO4J_URL}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
       - GRAPH_BOOST=${GRAPH_BOOST}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
@@ -91,21 +131,23 @@ services:
       - TAILSCALE_ONLY=${TAILSCALE_ONLY}
       - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
-    ports: ["8086:8086"]
+    ports: ["8089:8086"]
     profiles: ["legacy"]
     depends_on:
       qdrant:
         condition: service_started
+        required: false
       neo4j:
         condition: service_healthy
+        required: false
     networks: [pmoves]
   retrieval-eval:
     build: ./services/retrieval-eval
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
-      - EVAL_HTTP_PORT=${EVAL_HTTP_PORT}
+      - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
     depends_on: [hi-rag-gateway-v2]
     ports: ["8090:8090"]
     volumes:
@@ -119,7 +161,7 @@ services:
   presign:
     build: ./services/presign
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -135,9 +177,9 @@ services:
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - RENDER_WEBHOOK_SHARED_SECRET=${RENDER_WEBHOOK_SHARED_SECRET}
       - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
@@ -145,19 +187,22 @@ services:
     profiles: ["orchestration","workers"]
     networks: [pmoves]
     extra_hosts:
+      - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
 
   extract-worker:
     build: ./services/extract-worker
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      # Use unified Supabase REST by default (env_file values are not interpolated at compose time)
+      - SUPA_REST_URL=http://host.docker.internal:65421/rest/v1
+      - SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1
     ports: ["8083:8083"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
@@ -168,7 +213,7 @@ services:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
     restart: unless-stopped
-    env_file: [.env]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -192,15 +237,40 @@ services:
       context: .
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     ports: ["8084:8084"]
     profiles: ["workers","orchestration"]
     networks: [pmoves]
 
-  ffmpeg-whisper:
-    build: ./services/ffmpeg-whisper
+  notebook-sync:
+    build: ./services/notebook-sync
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
+      - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+      - NOTEBOOK_SYNC_INTERVAL_SECONDS=${NOTEBOOK_SYNC_INTERVAL_SECONDS:-300}
+      - NOTEBOOK_SYNC_NAMESPACE=${NOTEBOOK_SYNC_NAMESPACE:-open-notebook}
+      - NOTEBOOK_SYNC_DB_PATH=${NOTEBOOK_SYNC_DB_PATH:-/data/notebook_sync.db}
+      - LANGEXTRACT_URL=${LANGEXTRACT_URL:-http://langextract:8084}
+      - EXTRACT_WORKER_URL=${EXTRACT_WORKER_URL:-http://extract-worker:8083}
+    depends_on:
+      langextract:
+        condition: service_started
+      extract-worker:
+        condition: service_started
+    ports: ["8095:8095"]
+    profiles: ["workers","orchestration"]
+    volumes:
+      - notebook-sync-data:/data
+    networks: [pmoves]
+
+  ffmpeg-whisper:
+    build:
+      context: ..
+      dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -208,11 +278,14 @@ services:
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - USE_CUDA=${USE_CUDA:-true}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
     deploy:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
+            - driver: nvidia
+              capabilities: [compute,utility]
               count: ${GPU_COUNT:-all}
     ports: ["8078:8078"]
     profiles: ["workers","orchestration","agents"]
@@ -221,7 +294,7 @@ services:
   media-video:
     build: ./services/media-video
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -244,7 +317,7 @@ services:
   media-audio:
     build: ./services/media-audio
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -262,9 +335,13 @@ services:
     profiles: ["workers","orchestration"]
     networks: [pmoves]
   pmoves-yt:
-    build: ./services/pmoves-yt
+    image: ${PMOVES_YT_IMAGE:-}
+    build:
+      context: ./services/pmoves-yt
+      args:
+        - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -272,11 +349,61 @@ services:
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - YT_BUCKET=${YT_BUCKET:-assets}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-    depends_on: [minio]
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
+      - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
+      - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
+      - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
+      - BGUTIL_DISABLE_INNERTUBE=${BGUTIL_DISABLE_INNERTUBE:-1}
+      - CHANNEL_MONITOR_STATUS_URL=${CHANNEL_MONITOR_STATUS_URL:-http://channel-monitor:8097/api/monitor/status}
+      - YT_TRANSCRIPT_PROVIDER=${YT_TRANSCRIPT_PROVIDER:-faster-whisper}
+      - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
+      - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
+    volumes:
+      - ./config:/app/config
+    depends_on:
+      minio:
+        condition: service_started
+      # bgutil-pot-provider is optional and may be excluded when compose is
+      # invoked with profiles that don't include the 'yt' provider. Remove
+      # the hard dependency so `make up` with different profiles doesn't
+      # fail with an "undefined service" error. The image/service is still
+      # defined below and can be enabled via profiles when needed.
     ports: ["8077:8077"]
     profiles: ["orchestration","workers","agents"]
+    networks: [pmoves]
+
+  bgutil-pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
+    restart: unless-stopped
+    environment:
+      - PORT=4416
+    depends_on: [minio]
+    profiles: ["orchestration","yt"]
+    networks: [pmoves]
+
+  channel-monitor:
+    build: ./services/channel-monitor
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
+      - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
+      # CHANNEL_MONITOR_DATABASE_URL is provided via env_file (env.shared)
+      - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+    volumes:
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pmoves-yt:
+        condition: service_started
+      bgutil-pot-provider:
+        condition: service_started
+    ports: ["8097:8097"]
+    profiles: ["orchestration","yt"]
     networks: [pmoves]
 
   # Optional: experimental v2 gateway with rerank providers
@@ -285,7 +412,7 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -297,23 +424,30 @@ services:
       - RERANK_TOPN=${RERANK_TOPN:-50}
       - RERANK_K=${RERANK_K:-10}
       - RERANK_FUSION=${RERANK_FUSION:-mul}
-      - USE_MEILI=${USE_MEILI:-false}
+      - USE_MEILI=true
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
-      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
-      - NEO4J_URL=${NEO4J_URL}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
       - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
-    ports: ["8087:8086"]
-    profiles: ["workers"]
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
+      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports: ["${HIRAG_V2_HOST_PORT:-8086}:8086"]
+    profiles: ["workers","gateway"]
     depends_on:
       qdrant:
         condition: service_started
@@ -321,28 +455,86 @@ services:
         condition: service_healthy
     networks: [pmoves]
 
+  # GPU-enabled variant of legacy v1 gateway (optional)
+  hi-rag-gateway-gpu:
+    build:
+      context: ./services
+      dockerfile: hi-rag-gateway/Dockerfile
+      args:
+        - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu128}
+        - TORCH_SKIP_CUDA=0
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION}
+      - SENTENCE_MODEL=all-MiniLM-L6-v2
+      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
+      - GRAPH_BOOST=${GRAPH_BOOST}
+      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
+      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
+      - USE_MEILI=${USE_MEILI}
+      - MEILI_URL=http://meilisearch:7700
+      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC}
+      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT}
+      - TAILSCALE_ONLY=${TAILSCALE_ONLY}
+      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
+      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
+      - RERANK_ENABLE=${RERANK_ENABLE:-true}
+      - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
+      - RERANK_TOPN=${RERANK_TOPN:-50}
+      - RERANK_K=${RERANK_K:-10}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              count: ${GPU_COUNT:-all}
+    ports: ["8090:8086"]
+    profiles: ["gpu","legacy"]
+    depends_on:
+      qdrant:
+        condition: service_started
+        required: false
+      neo4j:
+        condition: service_healthy
+        required: false
+    networks: [pmoves]
+
   # GPU-enabled variant of v2 gateway with CLAP/torch installed
   hi-rag-gateway-v2-gpu:
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
+      args:
+        TORCH_CUDA: ${TORCH_CUDA_VERSION:-cu128}
+        TORCH_VERSION: ${TORCH_VERSION:-2.9.0}
+        TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
+    runtime: nvidia
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - ALPHA=${ALPHA:-0.7}
-      - USE_MEILI=${USE_MEILI:-false}
+      # Reranker: default to Qwen on GPU build
+      - RERANK_ENABLE=${RERANK_ENABLE:-true}
+      - RERANK_MODEL=Qwen/Qwen3-Reranker-4B
+      - RERANK_TOPN=${RERANK_TOPN:-50}
+      - RERANK_K=${RERANK_K:-10}
+      - RERANK_FUSION=${RERANK_FUSION:-mul}
+      - USE_MEILI=${USE_MEILI:-true}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
-      - NEO4J_URL=${NEO4J_URL}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # NEO4J_* injected via env_file to avoid compose-time expansion
       - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - CHIT_DECODE_TEXT=${CHIT_DECODE_TEXT:-true}
@@ -354,64 +546,118 @@ services:
       - PGUSER=${POSTGRES_USER:-pmoves}
       - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
       - PGDATABASE=${POSTGRES_DB:-pmoves}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
+      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
+      - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+    gpus: all
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
               count: ${GPU_COUNT:-all}
-    ports: ["8087:8086"]
+    ports: ["${HIRAG_V2_GPU_HOST_PORT:-8087}:8086"]
     profiles: ["gpu"]
     depends_on:
       qdrant:
         condition: service_started
+        required: false
       neo4j:
         condition: service_healthy
+        required: false
     networks: [pmoves]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
+    command: ["-js"]
     restart: unless-stopped
     ports: ["4222:4222"]
     profiles: ["agents"]
     networks: [pmoves]
 
   agent-zero:
-    build: ./services/agent-zero
+    build:
+      context: .
+      dockerfile: ./services/agent-zero/Dockerfile
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
+      - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
+      - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+      - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
+      - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
     depends_on: [nats]
-    ports: ["8080:8080"]
+    # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
+    # and keep 8080 mapped for the API when enabled by the runtime.
+    ports: ["8080:8080","8081:80"]
     volumes:
       # Default host directories keep Agent Zero runtime data between restarts.
       # Override AGENT_ZERO_*_DIR env vars in your shell to point at different host paths.
-      - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/app/runtime/memory
-      - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/app/runtime/knowledge
-      - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/app/runtime/instruments
-      - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/app/logs
+      - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/a0/memory
+      - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
+      - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
+      - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
+      - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
     profiles: ["agents"]
     networks: [pmoves]
 
   archon:
-    build: ./services/archon
+    build:
+      context: .
+      dockerfile: ./services/archon/Dockerfile
+      args:
+        - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
+        - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - PORT=8091
+      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
+      - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
+      - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
+      - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
+      - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-    depends_on: [nats]
-    ports: ["8091:8091"]
+      # Prefer Supabase CLI REST (host) for single-env and remote overrides
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:65421}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
+    depends_on:
+      nats:
+        condition: service_started
+    command: ["python","-c","import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')"]
+    ports: ["8091:8091","8051:8051","8052:8052"]
     profiles: ["agents"]
-    networks: [pmoves]
+    networks:
+      pmoves:
+        aliases:
+          - archon-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
@@ -420,35 +666,335 @@ services:
     profiles: ["agents"]
     networks: [pmoves]
 
-  publisher-discord:
-    build: ./services/publisher-discord
+  deepresearch:
+    build:
+      context: ./services
+      dockerfile: deepresearch/Dockerfile
+    image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
+      - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
+      - DEEPRESEARCH_API_BASE=${DEEPRESEARCH_API_BASE:-http://deepresearch-local:8080}
+      - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
+      - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
+      - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
+      - DEEPRESEARCH_NOTEBOOK_ID=${DEEPRESEARCH_NOTEBOOK_ID}
+      - DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX=${DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX}
+      - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
+      - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
+      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
+      - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
+    depends_on: [nats]
+    profiles: ["agents"]
+    ports: ["8098:8098"]
+    volumes:
+      - ./contracts:/app/contracts:ro
+    networks: [pmoves]
+
+  supaserch:
+    build:
+      context: ./services
+      dockerfile: supaserch/Dockerfile
+    image: ${SUPASERCH_IMAGE:-}
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+    ports: ["${SUPASERCH_HOST_PORT:-8099}:8099"]
+    profiles: ["agents","workers"]
+    networks: [pmoves]
+
+  # NATS echo subscribers for diagnostics
+  nats-echo-req:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves]
+
+  nats-echo-res:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves]
+
+  publisher-discord:
+    build:
+      context: .
+      dockerfile: ./services/publisher-discord/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on: [nats]
-    ports: ["8092:8092"]
+    ports: ["8094:8092"]
     profiles: ["orchestration","agents"]
     networks: [pmoves]
 
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
-    env_file: [.env, .env.local]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - JELLYFIN_URL=${JELLYFIN_URL}
-      - JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
-      - JELLYFIN_USER_ID=${JELLYFIN_USER_ID}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      JELLYFIN_URL: ${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
+      SUPA_REST_URL: ${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
     ports: ["8093:8093"]
     profiles: ["orchestration"]
+    networks: [pmoves, cataclysm]
+
+  pmoves-ollama:
+    image: ${PMOVES_OLLAMA_IMAGE:-pmoves/ollama:0.12.6}
+    restart: unless-stopped
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_MODELS=/root/.ollama/models
+    volumes:
+      - pmoves-ollama-models:/root/.ollama/models
+    profiles: ["tensorzero"]
+    networks: [pmoves]
+
+  tensorzero-clickhouse:
+    image: clickhouse/clickhouse-server:24.12-alpine
+    restart: unless-stopped
+    environment:
+      - CLICKHOUSE_USER=${TENSORZERO_CLICKHOUSE_USER:-tensorzero}
+      - CLICKHOUSE_PASSWORD=${TENSORZERO_CLICKHOUSE_PASSWORD:-tensorzero}
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ports: ["8123:8123"]
+    volumes:
+      - tensorzero-clickhouse-data:/var/lib/clickhouse
+      - ./tensorzero/clickhouse/users.xml:/etc/clickhouse-server/users.d/notebook.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping"]
+      start_period: 30s
+      interval: 5s
+      timeout: 2s
+      retries: 5
+    profiles: ["tensorzero"]
+    networks: [pmoves]
+
+  tensorzero-gateway:
+    image: tensorzero/gateway:latest
+    restart: unless-stopped
+    command: ["--config-file", "/app/config/tensorzero.toml"]
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+    ports: ["3030:3000"]
+    profiles: ["tensorzero"]
+    networks: [pmoves]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  tensorzero-ui:
+    image: tensorzero/ui:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
+    volumes:
+      - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+      tensorzero-gateway:
+        condition: service_started
+    ports: ["4000:4000"]
+    profiles: ["tensorzero"]
+    networks: [pmoves]
+  invidious-db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${INVIDIOUS_PG_DB:-invidious}
+      POSTGRES_USER: ${INVIDIOUS_PG_USER:-kemal}
+      POSTGRES_PASSWORD: ${INVIDIOUS_PG_PASSWORD:-kemal}
+    volumes:
+      - invidious-postgres-data:/var/lib/postgresql/data
+      - ./services/invidious/config/sql:/config/sql:ro
+      - ./services/invidious/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    profiles: ["invidious"]
+    networks: [pmoves]
+
+  invidious-companion:
+    image: quay.io/invidious/invidious-companion:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      PORT: 8282
+      HOST: 0.0.0.0
+      SERVER_SECRET_KEY: ${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}
+      CACHE_DIRECTORY: /var/tmp/youtubei.js
+      SERVER_BASE_URL: ${INVIDIOUS_COMPANION_PUBLIC_URL:-}
+      YOUTUBE_API_KEY: ${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
+      YOUTUBEI_CLIENT: ${INVIDIOUS_COMPANION_YOUTUBEI_CLIENT:-IOS}
+      YOUTUBEI_API_BASE: ${INVIDIOUS_COMPANION_CA_URL:-https://www.youtube.com}
+    volumes:
+      - invidious-companion-cache:/var/tmp/youtubei.js
+    ports:
+      - "${INVIDIOUS_COMPANION_LISTEN:-127.0.0.1:8282}:8282"
+    # The upstream image does not ship common shell utilities (wget/curl),
+    # so docker-level health checks misreport the service as unhealthy even
+    # when the /healthz endpoint is serving 200s. Rely on the invidious smoke
+    # target for runtime verification instead.
+    profiles: ["invidious"]
+    networks: [pmoves]
+
+  invidious:
+    image: quay.io/invidious/invidious:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      INVIDIOUS_CONFIG: |
+        db:
+          dbname: ${INVIDIOUS_PG_DB:-invidious}
+          user: ${INVIDIOUS_PG_USER:-kemal}
+          password: ${INVIDIOUS_PG_PASSWORD:-kemal}
+          host: invidious-db
+          port: 5432
+          check_tables: true
+        domain: ${INVIDIOUS_DOMAIN:-}
+        external_port: ${INVIDIOUS_EXTERNAL_PORT:-3000}
+        https_only: ${INVIDIOUS_HTTPS_ONLY:-false}
+        hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
+        invidious_companion:
+          - private_url: "http://invidious-companion:8282"
+            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}"
+        invidious_companion_key: "${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}"
+        statistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}
+        use_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}
+        redirector:
+          use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}
+          redirector_url: "${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}"
+    ports:
+      - "${INVIDIOUS_BIND:-127.0.0.1:3000}:3000"
+    depends_on:
+      invidious-db:
+        condition: service_healthy
+      invidious-companion:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/trending >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    profiles: ["invidious"]
+    networks: [pmoves]
+
+  grayjay-plugin-host:
+    build: ./services/grayjay-plugin-host
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
+      - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
+      - GRAYJAY_PLUGIN_REGISTRY_TITLE=${GRAYJAY_PLUGIN_REGISTRY_TITLE:-PMOVES Plugin Registry}
+      - GRAYJAY_JELLYFIN_PLUGIN_NAME=${GRAYJAY_JELLYFIN_PLUGIN_NAME:-PMOVES Jellyfin}
+      - GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION=${GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION:-Self-hosted Jellyfin connector for PMOVES}
+      - GRAYJAY_JELLYFIN_PLUGIN_ID=${GRAYJAY_JELLYFIN_PLUGIN_ID:-pmoves-jellyfin}
+    ports: ["9096:8080"]
+    profiles: ["grayjay"]
+    networks: [pmoves]
+
+  grayjay-server:
+    image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
+      - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
+      - GRAYJAY_SERVER_PORT=${GRAYJAY_SERVER_PORT:-9095}
+    ports: ["9095:9095"]
+    depends_on:
+      grayjay-plugin-host:
+        condition: service_started
+    profiles: ["grayjay"]
+    networks: [pmoves]
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.8.0
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ -n "$$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+          exec cloudflared tunnel --no-autoupdate run;
+        elif [ -n "$$CLOUDFLARE_TUNNEL_NAME" ]; then
+          exec cloudflared tunnel --no-autoupdate run "$$CLOUDFLARE_TUNNEL_NAME";
+        else
+          echo "Set CLOUDFLARE_TUNNEL_TOKEN or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.";
+          exit 1;
+        fi
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+      - CLOUDFLARE_TUNNEL_NAME=${CLOUDFLARE_TUNNEL_NAME:-}
+    volumes:
+      - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
+    profiles: ["cloudflare"]
+    networks: [pmoves]
+
+  invidious-companion-proxy:
+    build: ./services/invidious-companion-proxy
+    restart: unless-stopped
+    depends_on:
+      invidious-companion:
+        condition: service_started
+    ports: ["8281:80"]
+    profiles: ["invidious"]
     networks: [pmoves]
 volumes:
   neo4j-data: {}
   minio-data: {}
   supabase-data: {}
+  notebook-sync-data: {}
+  tensorzero-clickhouse-data: {}
+  invidious-postgres-data: {}
+  invidious-companion-cache: {}
+  pmoves-ollama-models: {}
 networks:
   pmoves:
+    external: true
     name: pmoves-net
+  cataclysm:
+    external: true
+    name: cataclysm-net

@@ -1,12 +1,16 @@
 # Core
 .env
 .env.*
+.env *
 .env.local
 .env.supa.remote
+env.shared
+env.shared.*
 supa.md
 # But keep templates checked in
 !.env.*.example
 !.env.local.example
+!env.shared.example
 *.log
 .last_logs.txt
 
@@ -36,3 +40,7 @@ tools/bin/
 neo4j/data/
 minio-data/
 supabase-data/
+data/jellyfin/
+data/open-notebook/
+data/chit/
+cloudflared/

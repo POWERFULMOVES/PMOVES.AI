@@ -19,9 +19,32 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+class JellyfinAuthError(Exception):
+    """Raised when Jellyfin authentication fails."""
+
+
+def _build_auth_payload(username: str, password: str) -> Dict[str, str]:
+    """Construct the Jellyfin authentication payload with client metadata."""
+    device_name = os.getenv("JELLYFIN_CLIENT_DEVICE", "pmoves-jellyfin-audio-processor")
+    device_id = os.getenv("JELLYFIN_CLIENT_DEVICE_ID", device_name)
+    return {
+        "Username": username,
+        "Pw": password,
+        "App": os.getenv("JELLYFIN_CLIENT_APP", "PMOVES Audio Processor"),
+        "Device": device_name,
+        "DeviceId": device_id,
+        "DeviceName": device_name,
+        "Version": os.getenv("JELLYFIN_CLIENT_VERSION", "0.0.0"),
+    }
+
+
 class MediaProcessor:
     def __init__(self):
         self.jellyfin_url = os.getenv("JELLYFIN_URL", "http://jellyfin:8096")
+        self.jellyfin_username = os.getenv("JELLYFIN_USERNAME")
+        self.jellyfin_password = os.getenv("JELLYFIN_PASSWORD")
+        self.jellyfin_api_key = os.getenv("JELLYFIN_API_KEY")
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
         self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
@@ -30,8 +53,9 @@ class MediaProcessor:
         self.qwen_url = os.getenv("QWEN_AUDIO_URL", "http://qwen-audio:8000")
 
         # Initialize clients
+        self.supabase: Optional[Client] = None
         if self.supabase_url and self.supabase_key:
-            self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+            self.supabase = create_client(self.supabase_url, self.supabase_key)
 
         self.neo4j_driver = GraphDatabase.driver(
             self.neo4j_uri,
@@ -40,34 +64,194 @@ class MediaProcessor:
 
         self.redis_client = redis.Redis(host='redis', port=6379, db=0)
 
+
+class MediaProcessor:
+    def __init__(self):
+
+        self.jellyfin_url = os.getenv("JELLYFIN_URL", "http://jellyfin:8096")
+        self.supabase_url = os.getenv("SUPABASE_URL")
+        self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+        self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "mediapassword123")
+        self.qwen_url = os.getenv("QWEN_AUDIO_URL", "http://qwen-audio:8000")
+
+
+        # Initialize clients
+        self.supabase: Optional[Client] = None
+        if self.supabase_url and self.supabase_key:
+            self.supabase = create_client(self.supabase_url, self.supabase_key)
+
+        self.jellyfin_url = os.getenv("JELLYFIN_URL", "http://jellyfin:8096")
+        self.jellyfin_username = os.getenv("JELLYFIN_USERNAME")
+        self.jellyfin_password = os.getenv("JELLYFIN_PASSWORD")
+        self.jellyfin_api_key = os.getenv("JELLYFIN_API_KEY")
+        self.supabase_url = os.getenv("SUPABASE_URL")
+        self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+        self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "mediapassword123")
+        self.qwen_url = os.getenv("QWEN_AUDIO_URL", "http://qwen-audio:8000")
+        self._jellyfin_headers: Optional[Dict[str, str]] = None
+
+
+        # Initialize clients
+        self.supabase: Optional[Client] = None
+        if self.supabase_url and self.supabase_key:
+            self.supabase = create_client(self.supabase_url, self.supabase_key)
+
+
+        self.neo4j_driver = GraphDatabase.driver(
+            self.neo4j_uri,
+
+            auth=(self.neo4j_user, self.neo4j_password)
+        )
+
+        self.redis_client = redis.Redis(host='redis', port=6379, db=0)
+
+
+    async def _build_jellyfin_headers(self, client: httpx.AsyncClient) -> Dict[str, str]:
+        """Create headers for authenticated Jellyfin requests."""
+        if self.jellyfin_api_key:
+            return {"X-Emby-Token": self.jellyfin_api_key}
+
+        if not self.jellyfin_username or not self.jellyfin_password:
+            raise JellyfinAuthError(
+                "Jellyfin credentials are not configured. Set JELLYFIN_USERNAME and "
+                "JELLYFIN_PASSWORD or provide JELLYFIN_API_KEY."
+            )
+
+        try:
+            auth_response = await client.post(
+                f"{self.jellyfin_url}/Users/AuthenticateByName",
+                json=_build_auth_payload(self.jellyfin_username, self.jellyfin_password)
+            )
+        except httpx.HTTPError as exc:
+            raise JellyfinAuthError(f"Failed to reach Jellyfin for authentication: {exc}") from exc
+
+        if auth_response.status_code != 200:
+            detail = self._extract_error_detail(auth_response)
+            raise JellyfinAuthError(
+                f"Jellyfin authentication failed ({auth_response.status_code}): {detail}"
+            )
+
+        token = auth_response.json().get("AccessToken")
+        if not token:
+            raise JellyfinAuthError("Jellyfin authentication response did not include an access token.")
+
+        return {"X-Emby-Token": token}
+
+    @staticmethod
+    def _extract_error_detail(response: httpx.Response) -> str:
+        """Attempt to extract a helpful error message from a Jellyfin response."""
+        try:
+            payload = response.json()
+            if isinstance(payload, dict):
+                message = payload.get("ErrorMessage") or payload.get("Message")
+                if message:
+                    return message
+        except ValueError:
+            pass
+
+        return response.text or "Unknown error"
+
     async def get_jellyfin_library(self) -> List[Dict]:
         """Fetch media library from Jellyfin"""
         try:
             async with httpx.AsyncClient() as client:
-                # First, get API key or authenticate
-                auth_response = await client.post(
-                    f"{self.jellyfin_url}/Users/AuthenticateByName",
-                    json={"Username": "admin", "Pw": ""}  # Configure proper auth
+                headers = await self._build_jellyfin_headers(client)
+
+                items_response = await client.get(
+                    f"{self.jellyfin_url}/Items",
+                    headers=headers,
+                    params={"Recursive": True, "IncludeItemTypes": "Audio"}
                 )
 
-                if auth_response.status_code == 200:
-                    token = auth_response.json()["AccessToken"]
-                    headers = {"Authorization": f"MediaBrowser Token={token}"}
+                if items_response.status_code == 200:
+                    return items_response.json().get("Items", [])
 
-                    # Get all items
-                    items_response = await client.get(
-                        f"{self.jellyfin_url}/Items",
-                        headers=headers,
-                        params={"Recursive": True, "IncludeItemTypes": "Audio"}
-                    )
+                logger.error(
+                    "Failed to fetch Jellyfin library (%s): %s",
+                    items_response.status_code,
+                    self._extract_error_detail(items_response)
+                )
 
-                    if items_response.status_code == 200:
-                        return items_response.json()["Items"]
+        except JellyfinAuthError as auth_error:
+            logger.error(str(auth_error))
+        except Exception as e:
+            logger.error(f"Error fetching Jellyfin library: {e}")
+
+        return []
+
+    async def _get_jellyfin_headers(self, client: httpx.AsyncClient) -> Optional[Dict[str, str]]:
+        """Authenticate with Jellyfin and return auth headers."""
+        if self._jellyfin_headers:
+            return self._jellyfin_headers
+
+        if self.jellyfin_api_key:
+            self._jellyfin_headers = {"X-MediaBrowser-Token": self.jellyfin_api_key}
+            return self._jellyfin_headers
+
+        if not self.jellyfin_username or not self.jellyfin_password:
+            logger.error(
+                "Jellyfin credentials are not configured. Set JELLYFIN_USERNAME and JELLYFIN_PASSWORD or provide JELLYFIN_API_KEY."
+            )
+            return None
+
+        try:
+            auth_response = await client.post(
+                f"{self.jellyfin_url}/Users/AuthenticateByName",
+                json=_build_auth_payload(self.jellyfin_username, self.jellyfin_password)
+            )
+
+            if auth_response.status_code == 200:
+                data = auth_response.json()
+                token = data.get("AccessToken")
+                if not token:
+                    logger.error("Jellyfin authentication succeeded but no access token was returned.")
+                    return None
+
+                self._jellyfin_headers = {"X-MediaBrowser-Token": token}
+                return self._jellyfin_headers
+
+            logger.error(
+                "Failed to authenticate with Jellyfin (status %s): %s",
+                auth_response.status_code,
+                auth_response.text
+            )
+        except Exception as exc:
+            logger.error(f"Error authenticating with Jellyfin: {exc}")
+
+        return None
+
+    async def get_jellyfin_library(self) -> List[Dict]:
+        """Fetch media library from Jellyfin"""
+        try:
+            async with httpx.AsyncClient() as client:
+                headers = await self._get_jellyfin_headers(client)
+                if not headers:
+                    return []
+
+                items_response = await client.get(
+                    f"{self.jellyfin_url}/Items",
+                    headers=headers,
+                    params={"Recursive": True, "IncludeItemTypes": "Audio"}
+                )
+
+                if items_response.status_code == 200:
+                    return items_response.json().get("Items", [])
+
+                logger.error(
+                    "Failed to fetch Jellyfin items (status %s): %s",
+                    items_response.status_code,
+                    items_response.text
+                )
 
         except Exception as e:
             logger.error(f"Error fetching Jellyfin library: {e}")
 
         return []
+
 
     async def analyze_audio_with_qwen(self, audio_path: str) -> Dict:
         """Send audio to Qwen for analysis"""
@@ -175,6 +359,7 @@ class MediaProcessor:
         """Store data in Supabase"""
         try:
             if not self.supabase:
+                logger.info("Supabase client not configured; skipping Supabase storage.")
                 return
 
             # Store in media table

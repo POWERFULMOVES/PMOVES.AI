@@ -1,12 +1,20 @@
 # PMOVES v5 • Documentation Index
 _Last updated: 2025-08-29_
 
+_Last updated: 2025-11-12_
+
+## Organization & Infrastructure
+- **Git Organization Guide** — [`../../docs/PMOVES_Git_Organization.md`](../../docs/PMOVES_Git_Organization.md) - Complete GitHub organization setup and infrastructure guide
+- **Repository Index** — [`../../docs/PMOVES_Repository_Index.md`](../../docs/PMOVES_Repository_Index.md) - Comprehensive index of all PMOVES repositories and their relationships
+
+## Core Documentation
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
 - **Hi‑RAG Reranker Providers** — `HI_RAG_RERANK_PROVIDERS.md`
 - **Qwen (CUDA Torch) Notes** — `HIRAG_QWEN_CUDA_NOTES.md`
 - **Retrieval Eval Guide** — `RETRIEVAL_EVAL_GUIDE.md`
 - **Publisher Enrichments** — `CREATOR_PIPELINE.md` (see “Publisher enrichments” section)
+- **Publisher Enrichments** — `CREATOR_PIPELINE.md` (see "Publisher enrichments" section)
 - **Render Completion Webhook** — `RENDER_COMPLETION_WEBHOOK.md`
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md`
 - **Smoke Tests** — `SMOKETESTS.md`
@@ -14,6 +22,11 @@ _Last updated: 2025-08-29_
 
 ## Link Validation Checklist
 
+### Organization & Infrastructure
+- [x] [`../../docs/PMOVES_Git_Organization.md`](../../docs/PMOVES_Git_Organization.md)
+- [x] [`../../docs/PMOVES_Repository_Index.md`](../../docs/PMOVES_Repository_Index.md)
+
+### Core Documentation
 - [x] `CREATOR_PIPELINE.md`
 - [x] `COMFYUI_END_TO_END.md`
 - [x] `HI_RAG_RERANK_PROVIDERS.md`

@@ -1,0 +1,14 @@
+# List host or network paths to mount into Jellyfin (one per line).
+# Format: <host_path>[:<library_label>[:ro|rw]]
+# Notes:
+# - Windows drive paths are normalized to WSL mounts (e.g., D:\ -> /mnt/d).
+# - UNC paths are normalized to docker format (e.g., \\SERVER\Share -> //SERVER/Share).
+
+# Whole D: drive (read-write). Label will appear under /media/host/<label> in the container.
+D:\:WindowsD:rw
+
+# SMB/UNC host root. Replace with a concrete share if needed (e.g., \\PMOVES-Z890\Media).
+\\PMOVES-Z890\Media:PMOVES_Z890_Media:rw
+
+# Mapped network drive Z:\ pointing to \\PMOVES-Z890\Media
+Z:\:WindowsZ:rw

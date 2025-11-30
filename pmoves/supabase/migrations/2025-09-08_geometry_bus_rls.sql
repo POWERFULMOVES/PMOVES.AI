@@ -5,7 +5,7 @@
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pmoves_ui') THEN
-    CREATE ROLE pmoves_ui NOPRIVILEGE;
+    CREATE ROLE pmoves_ui;
   END IF;
 END$$;
 
@@ -19,10 +19,13 @@ ALTER TABLE public.shape_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shape_index ENABLE ROW LEVEL SECURITY;
 
 -- Permissive read policies (dev). Tighten for prod (e.g., tenant/namespace scoping).
+DROP POLICY IF EXISTS read_anchors_all ON public.anchors;
 CREATE POLICY read_anchors_all ON public.anchors FOR SELECT USING (true);
+DROP POLICY IF EXISTS read_constellations_all ON public.constellations;
 CREATE POLICY read_constellations_all ON public.constellations FOR SELECT USING (true);
+DROP POLICY IF EXISTS read_shape_points_all ON public.shape_points;
 CREATE POLICY read_shape_points_all ON public.shape_points FOR SELECT USING (true);
+DROP POLICY IF EXISTS read_shape_index_all ON public.shape_index;
 CREATE POLICY read_shape_index_all ON public.shape_index FOR SELECT USING (true);
 
 -- No write policies: inserts/updates/deletes require service role (bypass RLS)
-

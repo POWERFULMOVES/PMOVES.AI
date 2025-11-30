@@ -5,6 +5,10 @@ responsible for orchestrating Whisper-based transcription/alignment,
 Pyannote-powered diarisation, and emotion/feature extraction before persisting
 results into Supabase and emitting `analysis.audio.v1` envelopes over NATS.
 
+## Geometry Bus (CHIT) Integration
+
+- No direct CHIT endpoints. Outputs can be used by other services to construct CGPs when desired.
+
 ## Environment variables
 
 | Variable | Description |
@@ -51,4 +55,3 @@ pytest services/media-audio/tests -q
 The test suite includes a fixture that demonstrates the orchestration contract
 between the transcription and audio services, ensuring that transcripts are
 merged with emotions/features before persistence and event emission.
-

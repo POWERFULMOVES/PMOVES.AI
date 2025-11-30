@@ -62,3 +62,6 @@
 	path = PMOVES-Tailscale
 	url = https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
 	ignore = all
+[submodule "pmoves/integrations/archon"]
+	path = pmoves/integrations/archon
+	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git

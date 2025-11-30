@@ -1,76 +1,80 @@
-
-"""Whisper transcription service with WhisperX diarisation support."""
+"""FFmpeg transcription service with multi-provider support."""
 
 from __future__ import annotations
+
 import logging
 import os
 import shutil
 import subprocess
 import tempfile
-from typing import Any, Dict, List, Optional
+from functools import lru_cache
+from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
-import boto3
-import requests
 from fastapi import Body, FastAPI, HTTPException
 
-import logging
-import os, tempfile, shutil, subprocess
-from typing import Dict, Any, Optional
-
-from fastapi import FastAPI, Body, HTTPException
-
-try:  # pragma: no cover - exercised via tests with monkeypatching
+try:  # pragma: no cover - exercised in production
     import boto3
 except ImportError:  # pragma: no cover
     boto3 = None  # type: ignore
 
-try:  # pragma: no cover - exercised via tests with monkeypatching
+import requests
+
+try:  # pragma: no cover - exercised when optional dependency available
     from faster_whisper import WhisperModel
 except ImportError:  # pragma: no cover
     WhisperModel = None  # type: ignore
-import shutil as _shutil
 
+try:  # pragma: no cover - optional dependency
+    import torch
+except ImportError:  # pragma: no cover
+    torch = None  # type: ignore
 
 from services.common.supabase import insert_segments
+
+
+ProviderLiteral = Literal["faster-whisper", "whisper", "qwen2-audio"]
 
 
 logger = logging.getLogger(__name__)
 
 
-app = FastAPI(title="FFmpeg+WhisperX", version="3.0.0")
+app = FastAPI(title="FFmpeg+Whisper", version="4.0.0")
 
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID") or "minioadmin"
 MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY") or "minioadmin"
-
 MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() == "true"
 
 MEDIA_AUDIO_URL = os.environ.get("MEDIA_AUDIO_URL")
 PYANNOTE_AUTH_TOKEN = os.environ.get("PYANNOTE_AUTH_TOKEN")
 
-MINIO_SECURE = (os.environ.get("MINIO_SECURE","false").lower() == "true")
-MEDIA_AUDIO_URL = os.environ.get("MEDIA_AUDIO_URL")
 
-
-logger = logging.getLogger(__name__)
-
-
-def _coerce_timeout(value: Optional[str]) -> float:
+def _coerce_timeout(value: Optional[str], default: float) -> float:
     if not value:
-        return 10.0
+        return default
     try:
         return float(value)
-    except ValueError:
-        logger.warning("Invalid MEDIA_AUDIO_TIMEOUT value '%s'; using default", value)
-        return 10.0
+    except ValueError:  # pragma: no cover - defensive guard
+        logger.warning("Invalid timeout value '%s'; falling back to %s", value, default)
+        return default
 
 
-MEDIA_AUDIO_TIMEOUT = _coerce_timeout(os.environ.get("MEDIA_AUDIO_TIMEOUT"))
+MEDIA_AUDIO_TIMEOUT = _coerce_timeout(os.environ.get("MEDIA_AUDIO_TIMEOUT"), 120.0)
+
+
+DEFAULT_PROVIDER = os.environ.get("FFW_PROVIDER", "faster-whisper").lower()
+SUPPORTED_PROVIDERS: Tuple[ProviderLiteral, ...] = ("faster-whisper", "whisper", "qwen2-audio")
+if DEFAULT_PROVIDER not in SUPPORTED_PROVIDERS:
+    DEFAULT_PROVIDER = "faster-whisper"
+
+DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+QWEN2_AUDIO_MODEL = os.environ.get("QWEN2_AUDIO_MODEL", "Qwen/Qwen2-Audio-7B-Instruct")
+QWEN2_AUDIO_MAX_NEW_TOKENS = int(os.environ.get("QWEN2_AUDIO_MAX_NEW_TOKENS", "512"))
 
 
 def s3_client():
-    if boto3 is None:  # pragma: no cover - real runtime will have boto3
+    if boto3 is None:  # pragma: no cover - real runtime installs boto3
         raise RuntimeError("boto3 is required but not installed")
     endpoint_url = MINIO_ENDPOINT if "://" in MINIO_ENDPOINT else f"{'https' if MINIO_SECURE else 'http'}://{MINIO_ENDPOINT}"
     return boto3.client(
@@ -82,22 +86,38 @@ def s3_client():
 
 
 @app.get("/healthz")
-def healthz():
+def healthz() -> Dict[str, bool]:
     return {"ok": True}
 
 
+def _detect_cuda_available() -> bool:
+    forced = os.environ.get("USE_CUDA")
+    if forced:
+        if forced.lower() == "true":
+            return True
+        if forced.lower() == "false":
+            return False
+    if torch is not None and hasattr(torch, "cuda"):
+        try:  # pragma: no cover - hardware dependent
+            if torch.cuda.is_available():
+                return True
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("torch.cuda.is_available() raised", exc_info=True)
+    return shutil.which("nvidia-smi") is not None
+
+
 def _select_device() -> str:
-    device = os.environ.get("WHISPER_DEVICE")
-    if device:
-        return device
-    if os.environ.get("USE_CUDA", "false").lower() == "true":
-        return "cuda"
-    if shutil.which("nvidia-smi"):
-        return "cuda"
-    return "cpu"
+    explicit = os.environ.get("WHISPER_DEVICE")
+    if explicit:
+        return explicit
+    return "cuda" if _detect_cuda_available() else "cpu"
 
 
-def _ffmpeg_extract_wav(src: str, dst: str, sample_rate: int = 16000) -> None:
+def _compute_type(device: str) -> str:
+    return os.environ.get("WHISPER_COMPUTE_TYPE") or ("float16" if device.startswith("cuda") else "int8")
+
+
+def ffmpeg_extract_audio(src: str, dst: str, sample_rate: int = 16000) -> None:
     cmd = [
         "ffmpeg",
         "-y",
@@ -137,7 +157,7 @@ def _clean_word(word: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _summarise_speakers(segments: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _summarise_speakers(segments: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     summary: Dict[str, Dict[str, Any]] = {}
     for seg in segments:
         speaker = seg.get("speaker")
@@ -158,11 +178,11 @@ def _summarise_speakers(segments: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def _run_whisperx(audio_path: str, *, language: Optional[str], model_name: str, diarize: bool) -> Dict[str, Any]:
     device = _select_device()
-    compute_type = os.environ.get("WHISPER_COMPUTE_TYPE") or ("float16" if device == "cuda" else "int8")
-    try:
+    compute_type = _compute_type(device)
+    try:  # pragma: no cover - optional dependency
         import whisperx  # type: ignore
-    except ImportError as exc:  # pragma: no cover - depends on deployment
-        raise HTTPException(500, "whisperx package is required") from exc
+    except ImportError as exc:  # pragma: no cover
+        raise HTTPException(500, "whisperx package is required for provider=whisper") from exc
 
     logger.info("loading WhisperX model %s on %s", model_name, device)
     model = whisperx.load_model(model_name, device=device, compute_type=compute_type)
@@ -186,29 +206,119 @@ def _run_whisperx(audio_path: str, *, language: Optional[str], model_name: str, 
         "segments": segments,
         "word_segments": words,
         "speakers": _summarise_speakers(segments),
+        "device": device,
+        "model": model_name,
     }
 
 
-def _forward_to_audio_service(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    if not MEDIA_AUDIO_URL:
-        return None
-    url = MEDIA_AUDIO_URL.rstrip("/") + "/ingest-transcript"
-    timeout = float(os.environ.get("MEDIA_AUDIO_TIMEOUT", "120"))
-    try:
-        resp = requests.post(url, json=payload, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as exc:  # pragma: no cover - network conditions
-        logger.warning("unable to forward transcript to media-audio: %s", exc)
-        return None
+@lru_cache(maxsize=4)
+def _load_faster_whisper(model_name: str, device: str, compute_type: str):
+    if WhisperModel is None:
+        raise HTTPException(500, "faster-whisper backend not available")
+    logger.info("loading faster-whisper model %s (device=%s, compute_type=%s)", model_name, device, compute_type)
+    return WhisperModel(model_name, device=device, compute_type=compute_type)
+
+
+def _run_faster_whisper(audio_path: str, *, language: Optional[str], model_name: str) -> Dict[str, Any]:
+    device = _select_device()
+    compute_type = _compute_type(device)
+    model = _load_faster_whisper(model_name, device, compute_type)
+    segments_iter, info = model.transcribe(audio_path, language=language)
+
+    segments: List[Dict[str, Any]] = []
+    text_parts: List[str] = []
+    for idx, seg in enumerate(segments_iter):
+        start = float(getattr(seg, "start", 0.0) or 0.0)
+        end = float(getattr(seg, "end", 0.0) or 0.0)
+        text = (getattr(seg, "text", "") or "").strip()
+        segments.append({"id": idx, "start": start, "end": end, "text": text, "speaker": None})
+        text_parts.append(text)
+
+    text = "".join(text_parts).strip()
+    language_out = getattr(info, "language", None) or language
+    return {
+        "text": text,
+        "language": language_out,
+        "segments": segments,
+        "word_segments": None,
+        "speakers": _summarise_speakers(segments),
+        "device": device,
+        "model": model_name,
+    }
+
+
+@lru_cache(maxsize=2)
+def _load_qwen2_audio(model_name: str, device: str, dtype_name: str):
+    if torch is None:  # pragma: no cover - optional dependency
+        raise HTTPException(500, "torch is required for provider=qwen2-audio")
+    try:  # pragma: no cover - optional dependency
+        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+    except ImportError as exc:  # pragma: no cover
+        raise HTTPException(500, "transformers is required for provider=qwen2-audio") from exc
+
+    dtype = getattr(torch, dtype_name)
+    processor = AutoProcessor.from_pretrained(model_name)
+    model = AutoModelForSpeechSeq2Seq.from_pretrained(model_name, torch_dtype=dtype, low_cpu_mem_usage=True)
+    model.to(device)
+    model.eval()
+    return processor, model
+
+
+def _run_qwen2_audio(audio_path: str, *, language: Optional[str], model_name: str) -> Dict[str, Any]:
+    if torch is None:  # pragma: no cover - optional dependency
+        raise HTTPException(500, "torch is required for provider=qwen2-audio")
+    try:  # pragma: no cover - optional dependency
+        import torchaudio
+    except ImportError as exc:  # pragma: no cover
+        raise HTTPException(500, "torchaudio is required for provider=qwen2-audio") from exc
+
+    device = _select_device()
+    dtype_name = "float16" if device.startswith("cuda") else "float32"
+    processor, model = _load_qwen2_audio(model_name, device, dtype_name)
+
+    waveform, sample_rate = torchaudio.load(audio_path)
+    if waveform.dim() > 1 and waveform.size(0) > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    if sample_rate != 16000:
+        waveform = torchaudio.functional.resample(waveform, sample_rate, 16000)
+        sample_rate = 16000
+
+    inputs = processor(waveform.squeeze().numpy(), sampling_rate=sample_rate, return_tensors="pt")
+    input_features = inputs["input_features"].to(device)
+
+    with torch.inference_mode():  # pragma: no cover - heavy path
+        generated = model.generate(input_features, max_new_tokens=QWEN2_AUDIO_MAX_NEW_TOKENS)
+
+    text = processor.batch_decode(generated, skip_special_tokens=True)[0].strip()
+    duration = float(waveform.shape[-1] / sample_rate) if sample_rate else 0.0
+
+    segments = [
+        {
+            "id": 0,
+            "start": 0.0,
+            "end": duration,
+            "text": text,
+            "speaker": None,
+        }
+    ]
+
+    return {
+        "text": text,
+        "language": language or "auto",
+        "segments": segments,
+        "word_segments": None,
+        "speakers": _summarise_speakers(segments),
+        "device": device,
+        "model": model_name,
+    }
 
 
 def _prepare_segment_rows(
     video_id: Optional[str],
     audio_uri: Optional[str],
-    segments: List[Dict[str, Any]],
+    segments: Iterable[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    rows = []
+    rows: List[Dict[str, Any]] = []
     for seg in segments:
         rows.append(
             {
@@ -232,33 +342,13 @@ def _build_s3_uri(bucket: str, key: str) -> str:
     return f"{scheme}://{endpoint}/{bucket}/{key}"
 
 
-@app.post("/transcribe")
-def transcribe(body: Dict[str, Any] = Body(...)):
-    bucket = body.get("bucket")
-    key = body.get("key")
-    video_id = body.get("video_id")
-    namespace = body.get("namespace")
-
 def _forward_to_audio_service(payload: Dict[str, Any]) -> bool:
-    """Forward transcription metadata to the media-audio service.
-
-    Returns True when forwarding succeeds, False otherwise. When forwarding is
-    disabled (MEDIA_AUDIO_URL unset) or encounters an error, False is returned
-    so the caller can fall back to inserting segments locally.
-    """
-
     if not MEDIA_AUDIO_URL:
         return False
 
     try:
-        import requests  # type: ignore
-    except ImportError:  # pragma: no cover - should not happen in production
-        logger.warning("requests is unavailable; skipping media-audio forwarding")
-        return False
-
-    try:
         resp = requests.post(MEDIA_AUDIO_URL, json=payload, timeout=MEDIA_AUDIO_TIMEOUT)
-    except Exception as exc:  # pragma: no cover - network failures are rare in tests
+    except Exception as exc:  # pragma: no cover - network failure depends on environment
         logger.warning("Failed to forward transcription to media-audio: %s", exc, exc_info=True)
         return False
 
@@ -273,40 +363,69 @@ def _forward_to_audio_service(payload: Dict[str, Any]) -> bool:
     return True
 
 
-@app.post('/transcribe')
-def transcribe(body: Dict[str,Any] = Body(...)):
-    bucket = body.get('bucket'); key = body.get('key'); vid = body.get('video_id')
+def _transcribe_with_provider(
+    provider: ProviderLiteral,
+    audio_path: str,
+    *,
+    language: Optional[str],
+    model_name: str,
+    diarize: bool,
+) -> Dict[str, Any]:
+    if provider == "faster-whisper":
+        return _run_faster_whisper(audio_path, language=language, model_name=model_name)
+    if provider == "whisper":
+        return _run_whisperx(audio_path, language=language, model_name=model_name, diarize=diarize)
+    if provider == "qwen2-audio":
+        model = model_name or QWEN2_AUDIO_MODEL
+        return _run_qwen2_audio(audio_path, language=language, model_name=model)
+    raise HTTPException(400, f"Unsupported provider '{provider}'")
+
+
+@app.post("/transcribe")
+def transcribe(body: Dict[str, Any] = Body(...)):
+    bucket = body.get("bucket")
+    key = body.get("key")
+    video_id = body.get("video_id")
+    namespace = body.get("namespace")
 
     if not bucket or not key:
         raise HTTPException(400, "bucket and key required")
 
+    provider = (body.get("provider") or DEFAULT_PROVIDER).lower()
+    if provider not in SUPPORTED_PROVIDERS:
+        raise HTTPException(400, f"provider must be one of {', '.join(SUPPORTED_PROVIDERS)}")
+
     language = body.get("language")
-    model_name = body.get("whisper_model") or os.environ.get("WHISPER_MODEL", "large-v3")
-    diarize = body.get("diarize", True)
+    model_name = body.get("whisper_model") or DEFAULT_WHISPER_MODEL
+    diarize = bool(body.get("diarize", True))
     out_audio_key = body.get("out_audio_key")
 
     tmpdir = tempfile.mkdtemp(prefix="ffw-")
     client = s3_client()
+    forwarded: Optional[bool] = None
+
     try:
         source_path = os.path.join(tmpdir, "source")
         with open(source_path, "wb") as fh:
             client.download_fileobj(bucket, key, fh)
 
-        wav_path = os.path.join(tmpdir, "audio.wav")
-        _ffmpeg_extract_wav(source_path, wav_path)
+        audio_path = os.path.join(tmpdir, "audio.wav")
+        ffmpeg_extract_audio(source_path, audio_path)
 
         if out_audio_key:
-
-            client.upload_file(wav_path, bucket, out_audio_key)
+            client.upload_file(audio_path, bucket, out_audio_key)
             audio_uri = _build_s3_uri(bucket, out_audio_key)
         else:
             audio_uri = _build_s3_uri(bucket, key)
 
-        transcript = _run_whisperx(wav_path, language=language, model_name=model_name, diarize=diarize)
+        transcript = _transcribe_with_provider(
+            provider, audio_path, language=language, model_name=model_name, diarize=diarize
+        )
         transcript["audio_uri"] = audio_uri
+        transcript["provider"] = provider
 
         rows = _prepare_segment_rows(video_id, audio_uri, transcript.get("segments", []))
-        forwarded = None
+
         if MEDIA_AUDIO_URL:
             forward_payload = {
                 "bucket": bucket,
@@ -315,10 +434,13 @@ def transcribe(body: Dict[str,Any] = Body(...)):
                 "namespace": namespace,
                 "language": transcript.get("language") or language,
                 "whisper_model": model_name,
+                "provider": provider,
                 "diarize": diarize,
                 "transcript": transcript,
             }
             forwarded = _forward_to_audio_service(forward_payload)
+            if not forwarded:
+                insert_segments(rows)
         else:
             insert_segments(rows)
 
@@ -330,7 +452,10 @@ def transcribe(body: Dict[str,Any] = Body(...)):
             "word_segments": transcript.get("word_segments"),
             "speakers": transcript.get("speakers"),
             "audio_uri": audio_uri,
-            "model": model_name,
+            "s3_uri": audio_uri,
+            "model": transcript.get("model") or model_name,
+            "device": transcript.get("device"),
+            "provider": provider,
             "forwarded": forwarded,
         }
     except subprocess.CalledProcessError as exc:
@@ -340,61 +465,5 @@ def transcribe(body: Dict[str,Any] = Body(...)):
     except Exception as exc:
         logger.exception("transcription error")
         raise HTTPException(500, f"transcribe error: {exc}") from exc
-
-            s3.upload_file(audio_path, bucket, out_audio_key)
-            scheme = 'https' if MINIO_SECURE else 'http'
-            s3_uri = f"{scheme}://{MINIO_ENDPOINT}/{bucket}/{out_audio_key}"
-        # faster-whisper (ctranslate2). Uses CUDA if available.
-        device = _select_device()
-        compute_type = 'float16' if device == 'cuda' else 'int8'
-        if WhisperModel is None:
-            raise HTTPException(500, 'WhisperModel backend not available')
-        model = WhisperModel(model_name, device=device, compute_type=compute_type)
-        segments_iter, info = model.transcribe(audio_path, language=lang)
-        segs = []
-        text_parts = []
-        for seg in segments_iter:
-            try:
-                segs.append({
-                    'start': float(getattr(seg, 'start', 0.0) or 0.0),
-                    'end': float(getattr(seg, 'end', 0.0) or 0.0),
-                    'text': (getattr(seg, 'text', '') or '').strip()
-                })
-                text_parts.append((getattr(seg, 'text', '') or ''))
-            except Exception:
-                continue
-        text = ''.join(text_parts)
-        rows = [
-            {
-                'video_id': vid,
-                'ts_start': s['start'],
-                'ts_end': s['end'],
-                'uri': s3_uri,
-                'meta': {'text': s['text']}
-            }
-            for s in segs
-        ]
-        payload = {
-            'video_id': vid,
-            'segments': segs,
-            'rows': rows,
-            'bucket': bucket,
-            'key': key,
-            'audio_uri': s3_uri,
-            'language': getattr(info, 'language', None) or lang,
-            'text': text,
-        }
-        forwarded = _forward_to_audio_service(payload)
-        if not forwarded:
-            if MEDIA_AUDIO_URL:
-                logger.info("media-audio forwarding unavailable; inserting segments locally for video_id=%s", vid)
-            insert_segments(rows)
-        return {'ok': True, 'text': text, 'segments': segs, 'language': getattr(info, 'language', None) or lang, 's3_uri': s3_uri, 'device': device}
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(500, f"ffmpeg error: {e}")
-    except Exception as e:
-        raise HTTPException(500, f"transcribe error: {e}")
-
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
-

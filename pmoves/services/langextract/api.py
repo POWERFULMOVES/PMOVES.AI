@@ -15,7 +15,10 @@ def extract_text_endpoint(body: Dict[str, Any] = Body(...)):
     document = body.get('text') or ''
     namespace = body.get('namespace') or 'pmoves'
     doc_id = body.get('doc_id') or 'doc'
-    res = extract_text(document, namespace, doc_id)
+    metadata = body.get('observability') or body.get('metadata') or None
+    if metadata is not None and not isinstance(metadata, dict):
+        metadata = None
+    res = extract_text(document, namespace, doc_id, metadata=metadata)
     out = {"chunks": res.get('chunks', []), "errors": res.get('errors', []), "count": len(res.get('chunks', []))}
     _maybe_publish(out)
     return out
@@ -25,7 +28,10 @@ def extract_xml_endpoint(body: Dict[str, Any] = Body(...)):
     xml = body.get('xml') or ''
     namespace = body.get('namespace') or 'pmoves'
     doc_id = body.get('doc_id') or 'doc'
-    res = extract_xml(xml, namespace, doc_id)
+    metadata = body.get('observability') or body.get('metadata') or None
+    if metadata is not None and not isinstance(metadata, dict):
+        metadata = None
+    res = extract_xml(xml, namespace, doc_id, metadata=metadata)
     out = {"chunks": res.get('chunks', []), "errors": res.get('errors', []), "count": len(res.get('chunks', []))}
     _maybe_publish(out)
     return out
@@ -38,9 +44,25 @@ def extract_alias(body: Dict[str, Any] = Body(...)):
 @app.post("/extract/jsonl")
 def extract_jsonl(body: Dict[str, Any] = Body(...)):
     if 'xml' in body:
-        res = extract_xml(body.get('xml') or '', body.get('namespace') or 'pmoves', body.get('doc_id') or 'doc')
+        metadata = body.get('observability') or body.get('metadata') or None
+        if metadata is not None and not isinstance(metadata, dict):
+            metadata = None
+        res = extract_xml(
+            body.get('xml') or '',
+            body.get('namespace') or 'pmoves',
+            body.get('doc_id') or 'doc',
+            metadata=metadata,
+        )
     else:
-        res = extract_text(body.get('text') or '', body.get('namespace') or 'pmoves', body.get('doc_id') or 'doc')
+        metadata = body.get('observability') or body.get('metadata') or None
+        if metadata is not None and not isinstance(metadata, dict):
+            metadata = None
+        res = extract_text(
+            body.get('text') or '',
+            body.get('namespace') or 'pmoves',
+            body.get('doc_id') or 'doc',
+            metadata=metadata,
+        )
     out = {"chunks": res.get('chunks', []), "errors": res.get('errors', []), "count": len(res.get('chunks', []))}
     _maybe_publish(out)
     lines = [json.dumps(c, ensure_ascii=False) for c in out.get('chunks', [])]
