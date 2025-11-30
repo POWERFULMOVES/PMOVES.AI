@@ -1,6 +1,6 @@
 param(
-  [string]$Source = "supa.md",
-  [string]$Out = ".env.supa.remote"
+  [string]$Source = 'supa.md',
+  [string]$Out = '.env.supa.remote'
 )
 
 if (!(Test-Path $Source)) {
@@ -10,12 +10,14 @@ if (!(Test-Path $Source)) {
 
 $raw = Get-Content -Raw -Path $Source
 
-# Parse simple KEY=VALUE or KEY: VALUE formats, strip quotes
+# Parse KEY=VALUE or KEY: VALUE; strip surrounding quotes
 $map = @{}
-foreach ($line in ($raw -split "`r?`n")) {
-  if ($line -match "^\s*([A-Za-z0-9_]+)\s*[:=]\s*['\"]?(.*?)['\"]?\s*$") {
+foreach ($line in ($raw -split "`n")) {
+  $t = $line.Trim()
+  if ($t -eq '' -or $t.StartsWith('#')) { continue }
+  if ($t -match '^\s*([A-Za-z0-9_]+)\s*[:=]\s*(.+)$') {
     $k = $matches[1]
-    $v = $matches[2]
+    $v = $matches[2].Trim().Trim('"', "'")
     $map[$k] = $v
   }
 }
@@ -37,11 +39,11 @@ $lines = @(
   "GOTRUE_SITE_URL=$base",
   "SUPABASE_STORAGE_URL=$base/storage/v1",
   "SUPABASE_PUBLIC_STORAGE_BASE=$base/storage/v1",
+  "# Fill keys locally; do not commit",
   "SUPABASE_ANON_KEY=$anon",
   "SUPABASE_SERVICE_ROLE_KEY=$service",
   "SUPABASE_JWT_SECRET="
 )
 
-Set-Content -Path $Out -Value ($lines -join "`n")
+Set-Content -Path $Out -Value ($lines -join "`r`n")
 Write-Host "Wrote $Out from $Source"
-

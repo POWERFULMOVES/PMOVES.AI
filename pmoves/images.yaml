@@ -1,0 +1,121 @@
+# Image build matrix for PMOVES stack
+# Fields:
+# - name: logical service name
+# - repo: submodule path in this repo
+# - ref: branch/tag to build from (default: submodule commit)
+# - context: build context
+# - dockerfile: relative dockerfile path
+# - image: base image name (ghcr + dockerhub mirror assumed)
+
+images:
+  - name: pmoves-agent-zero
+    repo: PMOVES-Agent-Zero
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-agent-zero
+
+  - name: pmoves-archon
+    repo: PMOVES-Archon
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-archon
+
+  - name: pmoves-creator
+    repo: PMOVES-Creator
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-creator
+
+  - name: pmoves-hirag
+    repo: PMOVES-HiRAG
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-hirag
+
+  - name: pmoves-deep-serch
+    repo: PMOVES-Deep-Serch
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-deep-serch
+
+  - name: pmoves-yt
+    repo: PMOVES.YT
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-yt
+
+  - name: pmoves-jellyfin
+    repo: PMOVES-Jellyfin
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-jellyfin
+
+  - name: pmoves-jellyfin-ai-media-stack
+    repo: Pmoves-Jellyfin-AI-Media-Stack
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-jellyfin-ai-media-stack
+
+  - name: pmoves-wealth
+    repo: PMOVES-Wealth
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-wealth
+
+  - name: pmoves-tokenism-multi
+    repo: PMOVES-ToKenism-Multi
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-tokenism-multi
+
+  - name: pmoves-botz
+    repo: PMOVES-BoTZ
+    ref: heads/main
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-botz
+
+  - name: pmoves-dox
+    repo: PMOVES-DoX
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-dox
+
+  - name: pmoves-remote-view
+    repo: PMOVES-Remote-View
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-remote-view
+
+  - name: pmoves-tailscale
+    repo: PMOVES-Tailscale
+    ref: heads/main
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-tailscale
+
+  - name: pmoves-open-notebook
+    repo: PMOVES-Open-Notebook
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-open-notebook
+
+  - name: pmoves-health-wger
+    repo: Pmoves-Health-wger
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-health-wger

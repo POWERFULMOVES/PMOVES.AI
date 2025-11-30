@@ -1,0 +1,74 @@
+name: build-images-matrix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY_GHCR: ghcr.io/powerfulmoves
+  REGISTRY_DH: powerfulmoves
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Parse image matrix
+        id: matrix
+        run: |
+          python - <<'PY'
+import yaml, json, pathlib
+data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
+print(f"matrix={json.dumps(data['images'])}")
+PY
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login DockerHub (optional)
+        if: secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
+          file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY_GHCR }}/${{ matrix.name }}:edge
+            ${{ env.REGISTRY_GHCR }}/${{ matrix.name }}:${{ github.sha }}
+            ${{ env.REGISTRY_DH }}/${{ matrix.name }}:edge
+            ${{ env.REGISTRY_DH }}/${{ matrix.name }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=${{ matrix.name }}
+          cache-from: type=registry,ref=${{ env.REGISTRY_GHCR }}/${{ matrix.name }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY_GHCR }}/${{ matrix.name }}:buildcache,mode=max
+          provenance: true
+          sbom: true
+          build-args: |
+            IMAGE_REF=${{ matrix.ref }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(steps.matrix.outputs.matrix) }}

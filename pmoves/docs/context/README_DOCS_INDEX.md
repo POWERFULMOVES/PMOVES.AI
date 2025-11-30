@@ -1,4 +1,6 @@
 # PMOVES v5 • Documentation Index
+_Last updated: 2025-08-29_
+
 _Last updated: 2025-11-12_
 
 ## Organization & Infrastructure
@@ -11,6 +13,7 @@ _Last updated: 2025-11-12_
 - **Hi‑RAG Reranker Providers** — `HI_RAG_RERANK_PROVIDERS.md`
 - **Qwen (CUDA Torch) Notes** — `HIRAG_QWEN_CUDA_NOTES.md`
 - **Retrieval Eval Guide** — `RETRIEVAL_EVAL_GUIDE.md`
+- **Publisher Enrichments** — `CREATOR_PIPELINE.md` (see “Publisher enrichments” section)
 - **Publisher Enrichments** — `CREATOR_PIPELINE.md` (see "Publisher enrichments" section)
 - **Render Completion Webhook** — `RENDER_COMPLETION_WEBHOOK.md`
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md`

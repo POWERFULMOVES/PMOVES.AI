@@ -84,6 +84,8 @@ https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 
 https://github.com/POWERFULMOVES/PMOVES-Archon.git
 
+https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
+
 https://github.com/POWERFULMOVES/PMOVES-Deep-Serch.git
 
 https://github.com/POWERFULMOVES/PMOVES-HiRAG.git

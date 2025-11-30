@@ -1,3 +1,67 @@
+[submodule "PMOVES-ToKenism-Multi"]
+	path = PMOVES-ToKenism-Multi
+	url = https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git
+	ignore = all
+[submodule "PMOVES-Creator"]
+	path = PMOVES-Creator
+	url = https://github.com/POWERFULMOVES/PMOVES-Creator.git
+	ignore = all
+[submodule "PMOVES-Agent-Zero"]
+	path = PMOVES-Agent-Zero
+	url = https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
+	ignore = all
+[submodule "PMOVES-Archon"]
+	path = PMOVES-Archon
+	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
+	ignore = all
+[submodule "PMOVES-Deep-Serch"]
+	path = PMOVES-Deep-Serch
+	url = https://github.com/POWERFULMOVES/PMOVES-Deep-Serch.git
+	ignore = all
+[submodule "PMOVES-HiRAG"]
+	path = PMOVES-HiRAG
+	url = https://github.com/POWERFULMOVES/PMOVES-HiRAG.git
+	ignore = all
+[submodule "PMOVES.YT"]
+	path = PMOVES.YT
+	url = https://github.com/POWERFULMOVES/PMOVES.YT.git
+	ignore = all
+[submodule "PMOVES-Jellyfin"]
+	path = PMOVES-Jellyfin
+	url = https://github.com/POWERFULMOVES/PMOVES-Jellyfin.git
+	ignore = all
+[submodule "Pmoves-Jellyfin-AI-Media-Stack"]
+	path = Pmoves-Jellyfin-AI-Media-Stack
+	url = https://github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack.git
+	ignore = all
+[submodule "PMOVES-Open-Notebook"]
+	path = PMOVES-Open-Notebook
+	url = https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
+	ignore = all
+[submodule "Pmoves-Health-wger"]
+	path = Pmoves-Health-wger
+	url = https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
+	ignore = all
+[submodule "PMOVES-Wealth"]
+	path = PMOVES-Wealth
+	url = https://github.com/POWERFULMOVES/PMOVES-Wealth.git
+	ignore = all
+[submodule "PMOVES-BoTZ"]
+	path = PMOVES-BoTZ
+	url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
+	ignore = all
+[submodule "PMOVES-DoX"]
+	path = PMOVES-DoX
+	url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
+	ignore = all
+[submodule "PMOVES-Remote-View"]
+	path = PMOVES-Remote-View
+	url = https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
+	ignore = all
+[submodule "PMOVES-Tailscale"]
+	path = PMOVES-Tailscale
+	url = https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
+	ignore = all
 [submodule "pmoves/integrations/archon"]
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git

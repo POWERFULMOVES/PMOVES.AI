@@ -198,6 +198,7 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and
 ## Commit & Pull Request Guidelines
 - Prefer Conventional Commits (e.g., `feat(hi-rag): hybrid search option`).
 - PRs should include: clear description, linked issues, affected services, run/rollback notes, and screenshots for UI/flows (e.g., retrieval-eval dashboard).
+- When opening a PR, start from `STARTER_PR_BODY.md` (repo root) and adjust sections as needed.
 - Keep changes atomic; update docs/schemas when interfaces change.
 
 ## Security & Configuration Tips

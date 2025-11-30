@@ -115,6 +115,7 @@ runs-on: self-hosted
 | [PMOVES-Open-Notebook](https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git) | Notebook and documentation system |
 | [Pmoves-Health-wger](https://github.com/POWERFULMOVES/Pmoves-Health-wger.git) | Health and fitness integration |
 | [PMOVES-Wealth](https://github.com/POWERFULMOVES/PMOVES-Wealth.git) | Financial management tools |
+| [PMOVES-BoTZ](https://github.com/POWERFULMOVES/PMOVES-BoTZ.git) | Bot and automation toolkit |
 | [PMOVES-ToKenism-Multi](https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git) | Multi-token management system |
 | [PMOVES-DoX](https://github.com/POWERFULMOVES/PMOVES-DoX.git) | Documentation and knowledge management |
 
