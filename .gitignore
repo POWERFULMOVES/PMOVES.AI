@@ -2,6 +2,11 @@
 # Python virtual environments
 .venv/
 venv/
+.venv_*/
+**/.venv_*/
+# legacy local venvs under POWERFULMOVES (windows)
+POWERFULMOVES/.venv_pmoves_yt/
+POWERFULMOVES/.venv_yt/
 # Python cache and compiled files
 __pycache__/
 *.pyc
