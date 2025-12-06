@@ -86,7 +86,187 @@ LangExtract converts raw texts (docs, transcripts) into structured, grounded dat
 
 * **Tool-augmented Extraction:** In cases where absolute accuracy is needed (e.g. no hallucination tolerance), LangExtract can incorporate non-LLM tools. For example, use **regular expressions or spaCy** for preliminary entity tagging, then have the LLM validate and fill gaps. This reduces the burden on the model. If needed, **Fabric** (the open-source text augmentation framework) can be invoked – it has patterns like extract\_wisdom and analyze\_claims which essentially guide an LLM to extract key points or claims from text[\[48\]\[49\]](https://drive.google.com/file/d/1K74PjvOr8DeRii1n7lzMfwe0Hele8NPE). Under the hood, Fabric will call whichever LLM is configured (likely Agent Zero’s main model or a smaller one) and produce structured output. This keeps LangExtract’s outputs consistent and grounded (Fabric patterns emphasize citing source positions[\[50\]](https://drive.google.com/file/d/1K74PjvOr8DeRii1n7lzMfwe0Hele8NPE)).
 
-**Hardware:** LangExtract is often run on background jobs, so it can be assigned to less powerful hardware if needed. For instance, Jetson Orin can handle a 3–7B model extracting from a single document (with quantization) – since extraction can be done sequentially, even \~1 token/second generation is acceptable for a few pages of text. The Jetson Orin Nano Super’s 6-core CPU and 1024-core GPU can support models like Qwen2-Audio-7B in 4-bit for transcript tasks[\[51\]\[52\]](https://drive.google.com/file/d/1wlXTWX-JjLTLw-9Z4rlUM7UkA0-DvNPi). Indeed, **Qwen2-Audio-7B (Instruct)** is used for generating summaries and tags from audio transcripts in PMOVES[\[53\]\[52\]](https://drive.google.com/file/d/1wlXTWX-JjLTLw-9Z4rlUM7UkA0-DvNPi), showing that a 7B LLM in 4-bit can run on the Jetson (likely at \~1 token/sec). For higher throughput (e.g. batch processing many PDFs), offload to a PC GPU where dozens of extraction jobs can run in parallel across multiple model instances or use model concurrency features of vLLM.
+**Hardware:** LangExtract is often run on background jobs, so it can be assigned to less powerful hardware if needed. For instance, Jetson Orin can handle a 3–7B model extracting from a single document (with quantization) – since extraction can be done sequentially, even \~1 token/second generation is acceptable for a few pages of text. The Jetson Orin Nano Super's 6-core CPU and 1024-core GPU can support models like Qwen2-Audio-7B in 4-bit for transcript tasks[\[51\]\[52\]](https://drive.google.com/file/d/1wlXTWX-JjLTLw-9Z4rlUM7UkA0-DvNPi). Indeed, **Qwen2-Audio-7B (Instruct)** is used for generating summaries and tags from audio transcripts in PMOVES[\[53\]\[52\]](https://drive.google.com/file/d/1wlXTWX-JjLTLw-9Z4rlUM7UkA0-DvNPi), showing that a 7B LLM in 4-bit can run on the Jetson (likely at \~1 token/sec). For higher throughput (e.g. batch processing many PDFs), offload to a PC GPU where dozens of extraction jobs can run in parallel across multiple model instances or use model concurrency features of vLLM.
+
+## TensorZero Gateway – Unified Model Provider & Observability Hub
+
+TensorZero Gateway serves as PMOVES.AI's **centralized LLM orchestration and observability platform**, providing unified access to multiple model providers while maintaining comprehensive metrics collection and request tracing. Unlike traditional model provider SDKs that scatter observability concerns across application code, TensorZero consolidates all LLM interactions through a single gateway layer, enabling consistent monitoring, cost tracking, and performance optimization across the entire PMOVES ecosystem.
+
+### Architectural Role
+
+The gateway architecture addresses three critical challenges in production AI systems:
+
+**Provider Abstraction**: Services call a unified OpenAI-compatible API (`/v1/chat/completions`, `/v1/embeddings`) regardless of the underlying provider (OpenAI, Anthropic, Venice.ai, Together.ai, Ollama, Cloudflare Workers AI). This allows runtime model switching without code changes.
+
+**Centralized Observability**: All requests flow through TensorZero's ClickHouse-backed metrics pipeline, capturing token usage, latency distributions, error rates, and request/response payloads for debugging.
+
+**Configuration-Driven Routing**: Models are defined in TOML configuration (`tensorzero.toml`), enabling operators to add new model providers without redeploying services, implement failover routing, A/B test model variants, and set per-model rate limits.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PMOVES Service Layer                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ Agent    │  │ Hi-RAG   │  │ Archon   │  │ Extract  │       │
+│  │ Zero     │  │ Gateway  │  │          │  │ Worker   │       │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
+│       │             │             │             │              │
+│       └─────────────┴─────────────┴─────────────┘              │
+│                         │                                       │
+│              ┌──────────▼──────────┐                            │
+│              │  TensorZero Gateway │  Port 3030                 │
+│              │  (OpenAI-compatible)│                            │
+│              └──────────┬──────────┘                            │
+│                         │                                       │
+│       ┬─────────────────┼─────────────────┬                    │
+│       │                 │                 │                    │
+│  ┌────▼────┐      ┌────▼────┐      ┌────▼────┐                │
+│  │ OpenAI  │      │ Ollama  │      │ Venice  │                │
+│  │ API     │      │ Local   │      │ .ai     │   ...          │
+│  └─────────┘      └─────────┘      └─────────┘                │
+│                         │                                       │
+│              ┌──────────▼──────────┐                            │
+│              │ ClickHouse Database │  Port 8123                 │
+│              │ (Metrics Storage)   │                            │
+│              └──────────┬──────────┘                            │
+│                         │                                       │
+│              ┌──────────▼──────────┐                            │
+│              │  TensorZero UI      │  Port 4000                 │
+│              │  (Dashboard)        │                            │
+│              └─────────────────────┘                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Services integrate with TensorZero via environment variables like `TENSORZERO_BASE_URL=http://tensorzero-gateway:3000` and `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::gemma_embed_local`. The gateway integrates with PMOVES's observability stack (Prometheus, Grafana, Loki) and is launched via `make up-tensorzero`.
+
+### Recommended Model Configurations
+
+**Local Chat Models:**
+
+* **Qwen 14B** – Primary orchestration model for Agent Zero. Configuration: `model_name = "qwen:14b"` via Ollama at `http://pmoves-ollama:11434/v1`. Requires ~16GB VRAM, delivers 15-25 tokens/sec with 128k context window. Strong coding ability and multilingual support.
+
+* **Mistral 7B Instruct** – Balanced performance model. Configuration: `model_name = "mistral:7b-instruct"`. Requires ~8GB VRAM, delivers 30-50 tokens/sec with 32k context. Fast inference with good instruction following.
+
+* **Phi-3 Mini (3.8B)** – Edge deployment model for Jetson Orin. Configuration: `model_name = "phi3:3.8b-mini-128k-instruct"`. Requires ~4GB VRAM, delivers 10-20 tokens/sec with 128k context. Extremely low memory footprint for edge autonomy.
+
+**Cloud Chat Models:**
+
+* **OpenAI GPT-4o-mini** – Cost-efficient cloud model via `https://api.openai.com/v1` with `model_name = "gpt-4o-mini"`. $0.15/1M input tokens, ~500-1000ms first token latency. Best-in-class reasoning with multimodal support.
+
+* **Anthropic Claude 3.5 Sonnet** – Long context model via OpenRouter at `https://openrouter.ai/api/v1` with `model_name = "anthropic/claude-3.5-sonnet"`. 200k context window, ~$3/1M input tokens. Superior long-context handling and ethical reasoning.
+
+**Embedding Models:**
+
+* **Gemma Embed 300M** – Fast local embeddings via Ollama with `model_name = "embeddinggemma:300m"`. Generates 500-1000 embeddings/sec in 768 dimensions, requires ~1GB VRAM. Low latency with no API costs.
+
+* **Nomic Embed Text** – High-quality local embeddings via Ollama with `model_name = "nomic-embed-text"`. Generates 300-500 embeddings/sec in 768 dimensions, requires ~2GB VRAM. Strong semantic quality.
+
+* **OpenAI text-embedding-3-small** – Production cloud embeddings at $0.02/1M tokens with 1536 configurable dimensions. Best-in-class quality with low latency.
+
+### ClickHouse Observability
+
+TensorZero writes observability data to ClickHouse tables optimized for time-series queries. Key queries:
+
+**Token Usage by Model (Last 24h):**
+```sql
+SELECT
+    model,
+    SUM(input_tokens) as total_input,
+    SUM(output_tokens) as total_output
+FROM requests
+WHERE timestamp > now() - INTERVAL 1 DAY
+GROUP BY model
+ORDER BY total_input + total_output DESC;
+```
+
+**Latency Distribution (P50, P95, P99):**
+```sql
+SELECT
+    model,
+    quantile(0.50)(latency_ms) as p50,
+    quantile(0.95)(latency_ms) as p95,
+    quantile(0.99)(latency_ms) as p99
+FROM requests
+WHERE timestamp > now() - INTERVAL 1 HOUR
+GROUP BY model
+ORDER BY p95 DESC;
+```
+
+Observability is disabled by default (`observability.enabled = false`). To enable: set environment variables (`TENSORZERO_OBS_CLICKHOUSE_URL`, `TENSORZERO_OBS_CLICKHOUSE_DB`, `TENSORZERO_OBS_CLICKHOUSE_USER`, `TENSORZERO_OBS_CLICKHOUSE_PASSWORD`) and change `observability.enabled = true` in `tensorzero.toml`.
+
+### Hardware Deployment Matrix
+
+| Model                | Hardware              | VRAM Req | Tokens/sec | Context | Notes                    |
+|----------------------|-----------------------|----------|------------|---------|--------------------------|
+| Qwen 14B             | RTX 3090 (24GB)       | 16GB     | 15-25      | 128k    | Primary orchestration    |
+| Mistral 7B           | RTX 3090 (24GB)       | 8GB      | 30-50      | 32k     | Balanced perf/quality    |
+| Phi-3 Mini 3.8B      | Jetson Orin Nano (8GB)| 4GB      | 10-20      | 128k    | Edge deployment          |
+| Gemma Embed 300M     | RTX 3090 (24GB)       | 1GB      | 500-1000   | -       | Fast local embeddings    |
+| Nomic Embed Text     | RTX 3090 (24GB)       | 2GB      | 300-500    | -       | High quality local       |
+
+### Integration with PMOVES Services
+
+**Hi-RAG v2** uses TensorZero for optional embedding generation via `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::gemma_embed_local`. **Agent Zero** routes all LLM calls through TensorZero for observability with dynamic model selection via function variants. **Archon** uses TensorZero for prompt execution in agent workflows. **Extract Worker** can use TensorZero for embedding generation as an alternative to local `sentence-transformers`.
+
+### Configuration Patterns
+
+Models are declared in `pmoves/tensorzero/config/tensorzero.toml`:
+
+```toml
+[models.agent_zero_qwen14b_local]
+routing = ["ollama_local"]
+
+[models.agent_zero_qwen14b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen:14b"
+api_key_location = "none"
+```
+
+Environment variables from `env.shared.example`:
+```bash
+TENSORZERO_OBS_CLICKHOUSE_URL=http://tensorzero-clickhouse:8123
+TENSORZERO_OBS_CLICKHOUSE_DB=tensorzero
+TENSORZERO_OBS_CLICKHOUSE_USER=tensorzero
+TENSORZERO_OBS_CLICKHOUSE_PASSWORD=tensorzero
+```
+
+Services call TensorZero using OpenAI-compatible API:
+```python
+import requests
+
+response = requests.post(
+    "http://tensorzero-gateway:3000/v1/chat/completions",
+    json={
+        "model": "agent_zero_qwen14b_local",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "temperature": 0.7,
+        "max_tokens": 1000
+    }
+)
+```
+
+### Hyperparameters by Workload
+
+| Workload                      | Temperature | Max Tokens | Top-P | Notes                         |
+|-------------------------------|-------------|------------|-------|-------------------------------|
+| Agent Zero (creative)         | 0.7         | 1024       | 0.9   | Balanced creativity           |
+| LangExtract (deterministic)   | 0.1-0.2     | 512        | 0.95  | High precision                |
+| Summarization                 | 0.3-0.4     | 256        | 0.9   | Consistent summaries          |
+| Code generation               | 0.2         | 2048       | 0.95  | Accurate syntax               |
+
+### Monitoring Integration
+
+TensorZero exposes `/metrics` endpoint for Prometheus scraping. Key metrics include `tensorzero_requests_total{model, provider, status}`, `tensorzero_request_duration_seconds{model, quantile}`, and `tensorzero_token_usage{model, type}`. Grafana dashboards visualize request rate by model, latency heatmaps, and token usage over time. The TensorZero UI at port 4000 provides request inspection and usage analytics.
+
+### Troubleshooting
+
+**Gateway won't start:** Check ClickHouse connectivity with `curl http://localhost:8123/ping` and verify TOML configuration format matches new `[gateway.observability.clickhouse]` structure.
+
+**Observability not recording:** Verify `observability.enabled = true` in `tensorzero.toml` and check ClickHouse credentials match environment variables.
+
+**High latency:** Query ClickHouse for slow requests, check GPU utilization with `nvidia-smi`, reduce concurrent requests or use smaller models. Pre-warm models after stack startup to avoid cold start delays.
+
+For complete documentation see `.claude/context/tensorzero.md` and `pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md`.
 
 ## Publisher & Multi-Modal Services – Vision, Audio, TTS, and Output Generation
 

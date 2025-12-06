@@ -1,0 +1,50 @@
+# PMOVES.AI Deployment Environment Variables
+# Copy this file to .envrc and customize for your environment
+# If using direnv: `cp .envrc.example .envrc && direnv allow`
+
+# =============================================================================
+# Kubernetes Configuration
+# =============================================================================
+
+# AI Lab Cluster (Production AI research cluster with GPU support)
+export PMOVES_K8S_CONTEXT_AI_LAB=ai-lab
+export PMOVES_K8S_NS_AI_LAB=pmoves
+
+# KVM4 Gateway (Edge gateway for external access and load balancing)
+export PMOVES_K8S_CONTEXT_KVM4=kvm4
+export PMOVES_K8S_NS_KVM4=pmoves
+
+# Local Development (kind/k3d local Kubernetes cluster)
+export PMOVES_K8S_CONTEXT_LOCAL=kind-pmoves
+export PMOVES_K8S_NS_LOCAL=pmoves-dev
+
+# =============================================================================
+# Docker Compose Configuration
+# =============================================================================
+
+# Path to docker-compose.yml file
+export PMOVES_COMPOSE_FILE=/home/pmoves/PMOVES.AI/pmoves/docker-compose.yml
+
+# Docker Compose project name (used to prefix container/volume names)
+export PMOVES_COMPOSE_PROJECT=pmoves_local
+
+# =============================================================================
+# Usage Instructions
+# =============================================================================
+#
+# Kubernetes Deployment:
+#   ./deploy/scripts/deploy-k8s.sh apply --target ai-lab
+#   ./deploy/scripts/deploy-k8s.sh status --target kvm4
+#   ./deploy/scripts/deploy-k8s.sh delete --target local
+#
+# Docker Compose Deployment:
+#   ./deploy/scripts/deploy-compose.sh up
+#   ./deploy/scripts/deploy-compose.sh logs
+#   ./deploy/scripts/deploy-compose.sh down
+#
+# Pinokio (PBnJ):
+#   Install Pinokio from https://pinokio.computer
+#   Symlink: ln -s $(pwd)/pbnj/pinokio/api/pmoves-pbnj ~/pinokio/api/
+#   Restart Pinokio and launch PBnJ from dashboard
+#
+# =============================================================================

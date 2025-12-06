@@ -1,0 +1,15 @@
+{
+  "run": [
+    {
+      "method": "shell.run",
+      "params": {
+        "path": "{{local.root}}",
+        "cmd": [
+          "bash",
+          "deploy/scripts/deploy-compose.sh",
+          "logs"
+        ]
+      }
+    }
+  ]
+}
