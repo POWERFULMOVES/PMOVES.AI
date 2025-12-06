@@ -6,20 +6,81 @@ The video at `youtube.com/watch?v=3kgx0YxCriM` appears to be part of IndyDevDan'
 
 ---
 
+## CRITICAL DISTINCTION: Claude Code CLI vs Runtime Agent Infrastructure
+
+**After analyzing PMOVES.AI's existing architecture, this integration is fundamentally about developer tooling, NOT replacing production agent infrastructure.**
+
+### What PMOVES Already Has (DO NOT DUPLICATE)
+
+PMOVES.AI is a **mature, production-ready multi-agent system** with:
+
+- **Agent Zero** (port 8080/8081): Control-plane orchestrator with embedded agent runtime and MCP API (`/mcp/*`)
+- **NATS Message Bus** (port 4222): JetStream-enabled event broker for agent coordination
+- **Hi-RAG v2** (ports 8086/8087): Advanced hybrid RAG with cross-encoder reranking
+- **SupaSerch** (port 8099): Multimodal holographic deep research orchestrator
+- **DeepResearch** (port 8098): LLM-based research planner (Alibaba Tongyi)
+- **Comprehensive Monitoring**: Prometheus, Grafana, Loki, health endpoints on all services
+- **Media Pipeline**: YouTube ingestion, Whisper transcription, YOLO video analysis, embedding services
+- **Storage Stack**: Supabase (Postgres+pgvector), Qdrant, Neo4j, Meilisearch, MinIO
+- **ARCHON** (ports 3737/8091): Agent service with Supabase-backed prompt/form management
+
+**These systems already provide autonomous agent orchestration, RAG, search, monitoring, and event-driven coordination.**
+
+### What TAC Integration Actually Provides
+
+IndyDevDan's TAC framework is about **Claude Code CLI** as a **developer tool** that leverages the existing infrastructure:
+
+1. **`.claude/` Directory** - Context files so Claude Code CLI understands PMOVES architecture when developers use it interactively
+2. **Custom Commands** - Slash commands that call existing services (e.g., `/search:hirag`, `/agents:status`, `/health:check-all`)
+3. **Git Worktrees** - Enable multiple Claude Code CLI instances working on different features simultaneously
+4. **Hooks** - Publish Claude Code CLI actions to NATS for observability (not runtime agent hooks)
+5. **ARCHON Work Orders** - Automate Claude Code CLI execution from the agent system (agents can spawn Claude Code for development tasks)
+
+**TAC is for human developers using Claude Code CLI, not for autonomous agent runtime behavior.**
+
+### Integration Philosophy: Leverage, Don't Duplicate
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PMOVES Production Stack                      │
+│  Agent Zero + NATS + Hi-RAG + SupaSerch + Monitoring           │
+│              (Autonomous Runtime Agents)                        │
+└─────────────────────────────────────────────────────────────────┘
+                             ▲
+                             │ Uses via MCP API, NATS events
+                             │
+┌─────────────────────────────────────────────────────────────────┐
+│                 Claude Code CLI + TAC Patterns                  │
+│  .claude/ context + custom commands + hooks + worktrees        │
+│              (Developer Workflow Tooling)                       │
+└─────────────────────────────────────────────────────────────────┘
+                             ▲
+                             │ Used by
+                             │
+                      Human Developers
+```
+
+**The TAC integration makes Claude Code CLI aware of and able to interact with PMOVES's existing services.**
+
+---
+
 ## The Core Four framework defines modern agentic engineering
 
 IndyDevDan's foundational model for Claude-based development centers on four interdependent components: **Context** (the information environment), **Model** (the LLM being used), **Prompt** (the instruction), and **Tools** (external capabilities like MCP servers). This framework directly maps to PMOVES's existing architecture where Agent Zero provides the model orchestration, Archon manages context/knowledge, and the Flute layer handles multimodal prompt transformation.
 
-The **12 Leverage Points of Agentic Coding** from TAC Lesson 2 divide into two categories. In-agent leverage points include stdout for observable output, types for safety, tests for validation, architecture for structure, documentation for context, and context window management for efficiency. Through-agent leverage points encompass templates, AI Developer Workflows (ADWs), custom commands, hooks, sub-agents, and MCP servers—all of which PMOVES can implement.
+The **12 Leverage Points of Agentic Coding** from TAC Lesson 2 divide into two categories. In-agent leverage points include stdout for observable output, types for safety, tests for validation, architecture for structure, documentation for context, and context window management for efficiency. Through-agent leverage points encompass templates, AI Developer Workflows (ADWs), custom commands, hooks, sub-agents, and MCP servers.
 
-| Leverage Point | PMOVES Integration Target | Priority |
-|----------------|---------------------------|----------|
-| Templates | `.claude/` directory in agent-zero service | High |
-| ADWs | n8n workflows + Agent Zero event system | High |
-| Custom Commands | Agent Zero's `/commands` implementation | Medium |
-| Hooks | Pre/post tool validation in Flute layer | High |
-| Sub-agents | Agent Zero hierarchical subordinates | Already exists |
-| MCP Servers | ARCHON MCP + Supaserch + Hi-RAG gateway | Critical |
+**For PMOVES, the TAC integration focuses on Claude Code CLI tooling that leverages existing infrastructure:**
+
+| Leverage Point | PMOVES Integration Target | Priority | Status |
+|----------------|---------------------------|----------|---------|
+| Templates | `.claude/` directory at monorepo root | High | **Implement** |
+| Custom Commands | `.claude/commands/` slash commands calling existing services | High | **Implement** |
+| Hooks | Publish Claude Code CLI actions to NATS | Medium | **Implement** |
+| Context | `.claude/context/` documenting existing architecture | High | **Implement** |
+| Sub-agents | Agent Zero hierarchical subordinates | N/A | **Already exists** |
+| MCP Servers | Agent Zero MCP API + ARCHON + SupaSerch + Hi-RAG | N/A | **Already exists** |
+| ADWs | ARCHON Work Orders to automate Claude Code CLI | Low | **Future** |
 
 ---
 
@@ -144,220 +205,246 @@ subordinate = Agent(
 
 ---
 
-## Concrete integration architecture for PMOVES.AI
+## Refined Integration Architecture: Claude Code CLI Developer Tooling
 
-Based on the research, here's the recommended integration pattern:
+**This integration adds Claude Code CLI tooling that leverages PMOVES's existing production infrastructure.**
 
-### Phase 1: Claude hooks in Flute layer
+### Phase 1: Create `.claude/` directory structure for developer context
 
-Modify `services/flute-gateway/` to implement IndyDevDan's hook patterns:
-
-```python
-# flute-gateway/hooks/claude_hooks.py
-from typing import Callable, Any
-import nats
-
-class ClaudeHookManager:
-    def __init__(self, nats_client):
-        self.nc = nats_client
-        self.pre_hooks: list[Callable] = []
-        self.post_hooks: list[Callable] = []
-    
-    def register_pre_hook(self, hook: Callable):
-        """IndyDevDan pre-tool pattern for validation"""
-        self.pre_hooks.append(hook)
-    
-    async def execute_with_hooks(self, tool: str, params: dict) -> Any:
-        # Pre-validation (block dangerous ops)
-        for hook in self.pre_hooks:
-            if not await hook(tool, params):
-                raise SecurityException(f"Blocked: {tool}")
-        
-        result = await self.execute_tool(tool, params)
-        
-        # Post-logging for observability (stream to UI)
-        await self.nc.publish(
-            "agent.tool.executed.v1",
-            json.dumps({"tool": tool, "result": summarize(result)})
-        )
-        return result
-```
-
-### Phase 2: ARCHON MCP integration with Agent Zero
-
-Configure Agent Zero to use ARCHON as knowledge/task MCP:
-
-```json
-// agent-zero/config/mcp_servers.json
-{
-  "archon": {
-    "type": "http",
-    "url": "http://archon-mcp:8051",
-    "tools": [
-      "query_knowledge_base",
-      "get_project_tasks",
-      "update_task_status",
-      "search_documents"
-    ]
-  },
-  "supaserch": {
-    "type": "http", 
-    "url": "http://supaserch:8080",
-    "tools": ["semantic_search", "hybrid_search"]
-  },
-  "hirag": {
-    "type": "http",
-    "url": "http://hi-rag-gateway:8000",
-    "tools": ["retrieve_context", "rerank_results"]
-  }
-}
-```
-
-### Phase 3: Custom commands via `.claude/` directory
-
-Implement IndyDevDan's command structure in the PMOVES monorepo:
+Establish the `.claude/` directory at monorepo root with comprehensive PMOVES context:
 
 ```
-pmoves/
-├── .claude/
-│   ├── CLAUDE.md                    # Always-on instructions
-│   ├── commands/
-│   │   ├── pm/
-│   │   │   ├── create-task.md       # /pm:create-task
-│   │   │   └── sprint-plan.md       # /pm:sprint-plan
-│   │   ├── deploy/
-│   │   │   ├── staging.md           # /deploy:staging
-│   │   │   └── production.md        # /deploy:production
-│   │   └── test/
-│   │       └── integration.md       # /test:integration
+.claude/
+├── CLAUDE.md                           # Always-on context for Claude Code CLI
+│   ├── PMOVES Architecture Overview
+│   ├── Service Catalog (all ports, endpoints, health checks)
+│   ├── NATS Subject Catalog
+│   ├── Development Patterns
+│   └── Integration Points
+│
+├── commands/                           # Custom slash commands
 │   ├── agents/
-│   │   ├── code-reviewer.yaml       # Specialized reviewer agent
-│   │   ├── docs-writer.yaml         # Documentation agent
-│   │   └── security-auditor.yaml    # Security scanning agent
-│   └── context/
-│       ├── architecture.md          # PMOVES system overview
-│       └── patterns.md              # Coding conventions
+│   │   ├── status.md                   # /agents:status - Check Agent Zero health
+│   │   └── mcp-query.md                # /agents:mcp-query - Call Agent Zero MCP API
+│   ├── search/
+│   │   ├── hirag.md                    # /search:hirag - Query Hi-RAG v2
+│   │   ├── supaserch.md                # /search:supaserch - Holographic deep research
+│   │   └── deepresearch.md             # /search:deepresearch - LLM research planner
+│   ├── health/
+│   │   ├── check-all.md                # /health:check-all - Verify all /healthz
+│   │   └── metrics.md                  # /health:metrics - Query Prometheus
+│   └── deploy/
+│       ├── smoke-test.md               # /deploy:smoke-test - Run make verify-all
+│       └── services.md                 # /deploy:services - Docker compose status
+│
+└── context/                            # Reference documentation
+    ├── services-catalog.md             # Comprehensive service listing
+    ├── nats-subjects.md                # All NATS event subjects
+    ├── mcp-api.md                      # Agent Zero MCP API documentation
+    └── architecture-diagram.md         # System architecture ASCII diagrams
 ```
 
-### Phase 4: AI Developer Workflows (ADWs) via n8n
+**`.claude/CLAUDE.md` Example Content:**
 
-Transform IndyDevDan's ADW concept into n8n workflows:
+```markdown
+# PMOVES.AI Developer Context
 
-```yaml
-# n8n-workflows/adw-feature-pipeline.yaml
-name: "Feature Development ADW"
-trigger: 
-  event: "feature.requested.v1"
-  source: "nats://pmoves-nats:4222"
+## Architecture Overview
+PMOVES.AI is a multi-agent orchestration platform with autonomous agents,
+hybrid RAG, multimodal deep research, and comprehensive observability.
 
-steps:
-  - name: "Plan"
-    agent: "agent-zero"
-    prompt_template: ".claude/commands/pm/create-task.md"
-    
-  - name: "Implement"  
-    agent: "claude-worktree"
-    config:
-      worktree_branch: "feature/{{feature_id}}"
-      hooks: ["pre_tool_validate", "post_tool_log"]
-      
-  - name: "Review"
-    agent: "code-reviewer"
-    config:
-      prompt: ".claude/agents/code-reviewer.yaml"
-      
-  - name: "Test"
-    command: "moon run test --affected"
-    
-  - name: "Document"
-    agent: "docs-writer"
-    config:
-      prompt: ".claude/agents/docs-writer.yaml"
-      
-  - name: "Merge"
-    condition: "review.approved AND tests.passed"
-    action: "git merge {{worktree_branch}}"
+## Production Services (DO NOT DUPLICATE)
+- Agent Zero (8080/8081): Control-plane orchestrator with /mcp/* API
+- NATS (4222): JetStream event bus - all agent coordination
+- Hi-RAG v2 (8086/8087): Hybrid RAG with cross-encoder reranking
+- SupaSerch (8099): Multimodal holographic deep research
+- DeepResearch (8098): LLM-based research planner
+- Prometheus (9090): Metrics collection
+- Grafana (3000): Dashboard visualization
+
+## Common Development Tasks
+- Query knowledge: Use Hi-RAG v2 at http://localhost:8086/hirag/query
+- Check service health: All services expose /healthz endpoint
+- Publish events: NATS at nats://localhost:4222
+- View metrics: Prometheus at http://localhost:9090
+
+## NATS Event Subjects
+- research.deepresearch.request.v1 / .result.v1
+- supaserch.request.v1 / .result.v1
+- ingest.file.added.v1, ingest.transcript.ready.v1
+- agent.tool.executed.v1 (for observability)
+
+## Integration Pattern
+When developing features, leverage existing services via their APIs.
+Do not build new RAG, search, monitoring, or agent orchestration.
 ```
+
+### Phase 2: Implement custom commands that call existing services
+
+Create slash commands in `.claude/commands/` that interact with production services:
+
+**`.claude/commands/search/hirag.md`:**
+```markdown
+Query the Hi-RAG v2 hybrid retrieval system.
+
+Usage: /search:hirag <query>
+
+This command queries PMOVES's production Hi-RAG v2 service (port 8086) which
+combines vector search (Qdrant), knowledge graph (Neo4j), and full-text search
+(Meilisearch) with cross-encoder reranking.
+
+Implementation:
+1. Use Bash tool to execute: curl -X POST http://localhost:8086/hirag/query \
+   -H "Content-Type: application/json" \
+   -d '{"query": "<user_query>", "top_k": 10, "rerank": true}'
+2. Parse JSON response and present relevant context to user
+3. Include source references from response metadata
+```
+
+**`.claude/commands/health/check-all.md`:**
+```markdown
+Verify health of all PMOVES services.
+
+Usage: /health:check-all
+
+This command checks /healthz endpoints for all production services.
+
+Implementation:
+1. Run: make verify-all (uses existing Makefile target)
+2. Report status of each service:
+   - Agent Zero (8080), SupaSerch (8099), Hi-RAG v2 (8086/8087)
+   - DeepResearch (8098), PMOVES.YT (8077), Extract (8083)
+   - All other services listed in docs/PMOVES.AI Services and Integrations.md
+3. Highlight any failures with service name and port
+```
+
+**`.claude/commands/agents/status.md`:**
+```markdown
+Check Agent Zero orchestrator status.
+
+Usage: /agents:status
+
+Queries Agent Zero's health endpoint and MCP API status.
+
+Implementation:
+1. GET http://localhost:8080/healthz - Check supervisor + runtime health
+2. Report NATS connectivity status
+3. Show active subordinate agents if available via MCP API
+```
+
+### Phase 3: Optional hooks for Claude Code CLI observability
+
+Configure Claude Code CLI hooks to publish developer actions to NATS (optional for advanced observability):
+
+**`.claude/hooks/post-tool.sh`:**
+```bash
+#!/bin/bash
+# Post-tool hook: Publish Claude Code CLI tool execution to NATS
+
+TOOL_NAME=$1
+TOOL_RESULT=$2
+
+# Publish to NATS for observability (requires nats-cli installed)
+if command -v nats &> /dev/null; then
+    nats pub "claude.code.tool.executed.v1" \
+        "{\"tool\": \"$TOOL_NAME\", \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"user\": \"$(whoami)\"}"
+fi
+```
+
+**`.claude/hooks/pre-tool.sh`:**
+```bash
+#!/bin/bash
+# Pre-tool hook: Validate against dangerous operations
+
+TOOL_NAME=$1
+TOOL_PARAMS=$2
+
+# Block dangerous patterns
+BLOCKED_PATTERNS=(
+    "rm -rf /"
+    "DROP TABLE"
+    "supabase db reset"
+    "docker system prune -a"
+)
+
+for pattern in "${BLOCKED_PATTERNS[@]}"; do
+    if [[ "$TOOL_PARAMS" == *"$pattern"* ]]; then
+        echo "BLOCKED: Dangerous operation detected: $pattern"
+        exit 1
+    fi
+done
+
+exit 0
+```
+
+### Phase 4: Future - ARCHON Work Orders integration
+
+**Future enhancement:** Configure ARCHON Agent Work Orders to automate Claude Code CLI execution from the agent system:
+
+- Agents can spawn Claude Code CLI tasks via ARCHON Work Orders service
+- Work Orders execute in isolated git worktrees
+- Progress streamed to NATS for UI visibility
+- Results stored in ARCHON knowledge base
+
+This allows Agent Zero to delegate development tasks to Claude Code CLI programmatically.
 
 ---
 
-## Docker Compose modifications for unified orchestration
+## Implementation Priorities: Claude Code CLI Developer Tooling
 
-```yaml
-# docker-compose.claude-orchestration.yml
-services:
-  archon-server:
-    image: coleam00/archon-server:latest
-    ports:
-      - "8181:8181"
-    environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-    depends_on:
-      - supabase
-      - nats
+**Phase 1 (Immediate) - Core Context and Commands:**
 
-  archon-mcp:
-    image: coleam00/archon-mcp:latest
-    ports:
-      - "8051:8051"
-    environment:
-      - ARCHON_SERVER_URL=http://archon-server:8181
-    
-  archon-work-orders:
-    image: coleam00/archon-work-orders:latest
-    ports:
-      - "8053:8053"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # For worktree containers
-      - ./pmoves:/workspace
-    environment:
-      - CLAUDE_API_KEY=${ANTHROPIC_API_KEY}
-      - NATS_URL=nats://nats:4222
+1. **Create `.claude/CLAUDE.md`** - Comprehensive always-on context document
+   - PMOVES architecture overview
+   - Service catalog with ports and endpoints
+   - NATS subject catalog
+   - Development patterns and integration points
+   - **Goal:** Claude Code CLI understands PMOVES when developers use it
 
-  agent-zero:
-    image: agent0ai/agent-zero:latest
-    ports:
-      - "50001:80"
-    volumes:
-      - ./agent-zero-memory:/a0/memory
-      - ./.claude:/a0/.claude  # Mount IndyDevDan patterns
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - MCP_SERVERS_CONFIG=/a0/config/mcp_servers.json
+2. **Create `.claude/commands/`** - Slash commands for existing services
+   - `/search:hirag` - Query Hi-RAG v2
+   - `/health:check-all` - Verify all service health
+   - `/agents:status` - Check Agent Zero status
+   - `/deploy:smoke-test` - Run integration tests
+   - **Goal:** Developers can easily interact with production services
 
-  flute-gateway:
-    build: ./services/flute-gateway
-    ports:
-      - "8060:8060"
-    environment:
-      - NATS_URL=nats://nats:4222
-      - ENABLE_CLAUDE_HOOKS=true
-      - HOOK_CONFIG=/app/hooks/config.yaml
-```
+3. **Create `.claude/context/`** - Reference documentation
+   - `services-catalog.md` - Complete service listing
+   - `nats-subjects.md` - NATS event subject documentation
+   - `mcp-api.md` - Agent Zero MCP API reference
+   - **Goal:** Comprehensive reference for development
 
----
+**Phase 2 (Optional) - Advanced Features:**
 
-## Critical implementation recommendations
+4. **Configure hooks** (optional for observability)
+   - Pre-tool validation for dangerous operations
+   - Post-tool NATS publishing for developer action tracking
+   - **Goal:** Optional observability integration
 
-**Immediate priorities** for integrating IndyDevDan's methods:
+5. **Git worktree workflows** (optional for parallel development)
+   - Document worktree patterns for multiple Claude instances
+   - **Goal:** Enable parallel feature development
 
-1. **Create `.claude/` directory structure** in the PMOVES monorepo root with CLAUDE.md containing system context, architecture overview, and coding conventions
+6. **ARCHON Work Orders** (future enhancement)
+   - Allow Agent Zero to spawn Claude Code CLI tasks
+   - **Goal:** Agent-driven development automation
 
-2. **Implement Claude hooks in Flute** for pre-tool validation (security) and post-tool logging (observability to unified UI)
+**Key Principle: Leverage, Don't Duplicate**
 
-3. **Configure Agent Zero MCP clients** to connect to ARCHON (knowledge), Supaserch (search), and Hi-RAG (retrieval)
-
-4. **Enable ARCHON Agent Work Orders** service and wire it to NATS for progress streaming
-
-5. **Create specialized subordinate agent configs** following IndyDevDan's narrow-focus pattern—one for code review, one for documentation, one for security scanning
-
-**The meta-principle from IndyDevDan applies directly to PMOVES**: "Don't build your codebase—build your agent pipeline that builds your codebase." With Agent Zero as orchestrator, ARCHON as knowledge backbone, and IndyDevDan's hooks/ADW patterns for Claude, PMOVES can achieve genuine "Out of the Loop" operation where the system autonomously builds, tests, and deploys features while humans focus on high-level direction.
+The TAC integration provides developer tooling that leverages PMOVES's existing production infrastructure. Claude Code CLI becomes PMOVES-aware through `.claude/` context, enabling developers to efficiently build features that integrate with Agent Zero, Hi-RAG, SupaSerch, NATS, and other production services.
 
 ---
 
 ## Conclusion
 
-The synthesis of IndyDevDan's Tactical Agentic Coding patterns with ARCHON's project management backbone and Agent Zero's hierarchical execution creates a **complete orchestration stack** for PMOVES.AI. Key innovations include git worktrees for parallel Claude execution, hooks for safety and observability, ADWs for automated workflows, and MCP-based tool integration.
+The IndyDevDan TAC integration enhances PMOVES.AI by adding **Claude Code CLI developer tooling** that leverages the existing production infrastructure. This is NOT about replacing PMOVES's sophisticated autonomous agent orchestration (Agent Zero, NATS, Hi-RAG, SupaSerch)—those systems already provide production-ready multi-agent coordination.
 
-The implementation path is clear: start with `.claude/` directory structure and hooks, then wire ARCHON MCP to Agent Zero, then build ADW workflows in n8n. This transforms PMOVES from a collection of services into a self-improving system where Claude agents autonomously enhance the codebase under human supervision—exactly the vision IndyDevDan articulates as "Zero Touch Engineering."
+Instead, TAC integration focuses on **developer experience**: the `.claude/` directory makes Claude Code CLI PMOVES-aware, enabling developers to efficiently build features that integrate with production services. Custom slash commands provide direct access to Hi-RAG queries, Agent Zero status, health checks, and deployment workflows. Optional hooks enable NATS observability of developer actions.
+
+**The integration path is straightforward:**
+1. Create `.claude/CLAUDE.md` with PMOVES architecture context
+2. Implement `.claude/commands/` for service interaction
+3. Add `.claude/context/` reference documentation
+4. Optionally configure hooks for observability
+
+This transforms Claude Code CLI from a general-purpose coding assistant into a **PMOVES-native development tool** that understands and leverages the existing multi-agent orchestration stack. Developers gain instant access to production capabilities (RAG, research, monitoring) directly from their coding workflow—achieving the TAC vision of "leverage points" without duplicating existing infrastructure.
