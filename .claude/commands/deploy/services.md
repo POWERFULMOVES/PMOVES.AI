@@ -16,10 +16,11 @@ Execute the following steps:
 
 1. **Check running services:**
    ```bash
-   docker compose ps
+   cd pmoves && docker compose ps
    ```
 
    This shows all services defined in docker-compose.yml with their status.
+   Main compose file located at: `pmoves/docker-compose.yml`
 
 2. **Get detailed status with resources:**
    ```bash
