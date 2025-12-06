@@ -11,6 +11,11 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
+    # NOTE: This hostname is a placeholder for the base manifest.
+    # Each overlay (ai-lab/, kvm4/, local/) patches this value with the appropriate hostname:
+    #   - ai-lab: pmoves.lab.local
+    #   - kvm4: pmoves.kvm4.yourdomain.tld
+    #   - local: pmoves.localtest.me
     - host: pmoves.example.local
       http:
         paths:

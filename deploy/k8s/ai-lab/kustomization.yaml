@@ -3,7 +3,7 @@ kind: Kustomization
 
 # Pull in base manifests
 resources:
-  - ../../base
+  - ../base
 
 # Override image tag / registry for the AI lab cluster
 images:

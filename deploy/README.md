@@ -118,14 +118,42 @@ See `/pbnj/README.md` for Pinokio installation and usage.
 ## Prerequisites
 
 ### For Kubernetes Deployments
-- `kubectl` installed and configured
-- Valid kubeconfig with cluster access
-- Namespace permissions for target cluster
-- Kustomize (built into kubectl 1.14+)
+- **kubectl 1.14+** with built-in Kustomize support
+  ```bash
+  # Verify installation
+  kubectl version --client
+  kubectl kustomize --help
+  ```
+- **Valid kubeconfig** with cluster access
+  ```bash
+  # List available contexts
+  kubectl config get-contexts
+
+  # Test cluster connectivity
+  kubectl cluster-info
+  ```
+- **Namespace permissions** for target cluster (create, read, update, delete)
+- **Nginx Ingress Controller** installed in cluster
+  ```bash
+  # Verify ingress controller
+  kubectl get ingressclass
+  # Expected output should include 'nginx'
+  ```
+- **Environment variables configured** (see `.envrc.example`)
 
 ### For Docker Compose
-- Docker Engine 20.10+ or Docker Desktop
-- docker-compose v2 or `docker compose` plugin
+- **Docker Engine 20.10+** or Docker Desktop
+  ```bash
+  # Verify installation
+  docker version
+  docker compose version  # Note: v2 uses 'compose' not 'compose'
+  ```
+- **8GB+ RAM recommended** for full stack (all 29 services)
+- **docker-compose v2** or `docker compose` plugin
+  ```bash
+  # If using standalone docker-compose v1:
+  sudo apt-get install docker-compose-plugin  # Upgrade to v2
+  ```
 
 ## Usage Examples
 
