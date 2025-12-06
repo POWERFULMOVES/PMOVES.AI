@@ -14,6 +14,27 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 
 ## Production Services (DO NOT DUPLICATE - Use via APIs)
 
+### Core Infrastructure
+
+**TensorZero Gateway** [Port 3030] **[PRIMARY MODEL PROVIDER & OBSERVABILITY]**
+- Centralized LLM gateway for all model providers (OpenAI, Anthropic, Venice, Ollama)
+- ClickHouse-backed observability and metrics collection
+- Request/response logging, token tracking, latency metrics
+- UI dashboard at port 4000
+- API: `http://localhost:3030/v1/chat/completions` or `/v1/embeddings`
+- **Use for:** All LLM calls, embeddings, model provider routing, usage analytics
+- **See:** `.claude/context/tensorzero.md` for detailed documentation
+
+**TensorZero ClickHouse** [Port 8123]
+- Observability metrics storage for TensorZero
+- Stores request logs, token usage, latency data
+- Query: `curl http://localhost:8123/ping`
+
+**TensorZero UI** [Port 4000]
+- Metrics dashboard and admin interface
+- Request/response inspection, usage analytics
+- Access: `http://localhost:4000`
+
 ### Agent Coordination & Orchestration
 
 **Agent Zero** [Port 8080 API, 8081 UI]
@@ -197,6 +218,27 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - `claude.code.tool.executed.v1` - Claude CLI tool execution events
 
 ## Common Development Tasks
+
+### Call LLMs via TensorZero
+```bash
+curl -X POST http://localhost:3030/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "claude-sonnet-4-5", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+### Generate Embeddings via TensorZero
+```bash
+curl -X POST http://localhost:3030/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gemma_embed_local", "input": "Text to embed"}'
+```
+
+### Query TensorZero Metrics (ClickHouse)
+```bash
+docker exec -it tensorzero-clickhouse clickhouse-client \
+  --user tensorzero --password tensorzero \
+  --query "SELECT model, COUNT(*) FROM requests GROUP BY model"
+```
 
 ### Query Knowledge Base
 ```bash
