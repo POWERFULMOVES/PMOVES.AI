@@ -16,10 +16,11 @@ Execute the following steps:
 
 1. **Run the smoke test suite:**
    ```bash
-   make verify-all
+   cd pmoves && make verify-all
    ```
 
-   This target runs health checks for all deployed services and validates integration points.
+   This target runs comprehensive verification: bring-up checks, preflight validation,
+   monitoring report, and core/GPU smoke tests (located in `pmoves/Makefile`).
 
 2. **If make target doesn't exist, run manual verification:**
    ```bash

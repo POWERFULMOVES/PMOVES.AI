@@ -16,10 +16,10 @@ Execute the following steps:
 
 1. **Run the verification script:**
    ```bash
-   make verify-all
+   cd pmoves && make verify-all
    ```
 
-   This executes health checks for all services defined in the Makefile.
+   This executes comprehensive health checks for all services (located in `pmoves/Makefile`).
 
 2. **Alternative: Manual checks** (if make target not available):
    ```bash
