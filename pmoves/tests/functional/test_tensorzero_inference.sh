@@ -35,7 +35,7 @@ trap cleanup EXIT
 test_tensorzero_health() {
     log_info "Testing TensorZero health endpoint..."
 
-    if curl -sf "${TENSORZERO_URL}/health" > /dev/null 2>&1; then
+    if curl -sf --max-time 10 "${TENSORZERO_URL}/health" > /dev/null 2>&1; then
         log_info "✓ TensorZero health check passed"
         return 0
     else
@@ -47,7 +47,7 @@ test_tensorzero_health() {
 test_clickhouse_health() {
     log_info "Testing ClickHouse health..."
 
-    if curl -sf "${CLICKHOUSE_URL}/ping" > /dev/null 2>&1; then
+    if curl -sf --max-time 10 "${CLICKHOUSE_URL}/ping" > /dev/null 2>&1; then
         log_info "✓ ClickHouse health check passed"
         return 0
     else
@@ -62,10 +62,12 @@ test_chat_completions() {
     local episode_id="test-$(date +%s)-chat"
     local response
 
-    response=$(curl -sf -X POST "${TENSORZERO_URL}/v1/chat/completions" \
+    # Use a configured TensorZero model - chat_ollama_llama3 uses local Ollama
+    # Fallback models: agent_zero_qwen14b_local, qwen2_5_14b, chat_openrouter
+    response=$(curl -sf --max-time 30 -X POST "${TENSORZERO_URL}/v1/chat/completions" \
         -H "Content-Type: application/json" \
         -d "{
-            \"model\": \"claude-sonnet-4-5\",
+            \"model\": \"chat_ollama_llama3\",
             \"messages\": [{\"role\": \"user\", \"content\": \"Say 'test successful'\"}],
             \"max_tokens\": 50
         }" 2>&1) || {
@@ -92,7 +94,7 @@ test_inference_endpoint() {
     local episode_id="test-$(date +%s)-inference"
     local response
 
-    response=$(curl -sf -X POST "${TENSORZERO_URL}/inference" \
+    response=$(curl -sf --max-time 30 -X POST "${TENSORZERO_URL}/inference" \
         -H "Content-Type: application/json" \
         -d "{
             \"function_name\": \"agent_zero\",
@@ -123,10 +125,12 @@ test_embeddings() {
 
     local response
 
-    response=$(curl -sf -X POST "${TENSORZERO_URL}/v1/embeddings" \
+    # Use a configured TensorZero embedding model - gemma_embed_local uses local Ollama
+    # Fallback: archon_nomic_embed_local, openai_text_embedding_small (requires API key)
+    response=$(curl -sf --max-time 30 -X POST "${TENSORZERO_URL}/v1/embeddings" \
         -H "Content-Type: application/json" \
         -d "{
-            \"model\": \"text-embedding-3-small\",
+            \"model\": \"gemma_embed_local\",
             \"input\": \"Test embedding generation\"
         }" 2>&1) || {
         log_error "✗ Embeddings request failed"
@@ -151,7 +155,7 @@ test_metrics() {
 
     local response
 
-    response=$(curl -sf "${TENSORZERO_URL}/metrics" 2>&1) || {
+    response=$(curl -sf --max-time 10 "${TENSORZERO_URL}/metrics" 2>&1) || {
         log_warn "✗ Metrics endpoint failed (may not be exposed)"
         return 0  # Don't fail test
     }

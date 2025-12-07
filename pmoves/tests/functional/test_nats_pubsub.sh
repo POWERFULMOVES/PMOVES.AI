@@ -39,9 +39,10 @@ check_nats_cli() {
     log_info "Checking for NATS CLI..."
 
     if ! command -v nats &> /dev/null; then
-        log_error "✗ NATS CLI not found"
-        log_error "Install with: curl -sf https://binaries.nats.dev/nats-io/natscli/nats@latest | sh"
-        return 1
+        log_warn "✗ NATS CLI not found - skipping NATS tests"
+        log_warn "Install with: curl -sf https://binaries.nats.dev/nats-io/natscli/nats@latest | sh"
+        # Return special exit code to indicate skip (not failure)
+        return 2
     fi
 
     log_info "✓ NATS CLI available"
@@ -205,7 +206,15 @@ main() {
     local failed=0
 
     # Check prerequisites
-    check_nats_cli || exit 1
+    check_nats_cli
+    local cli_status=$?
+    if [ $cli_status -eq 2 ]; then
+        log_info "========================================="
+        log_info "NATS tests skipped (CLI not available)"
+        exit 0  # Exit success - tests skipped, not failed
+    elif [ $cli_status -ne 0 ]; then
+        exit 1
+    fi
 
     # Run tests
     test_nats_connection || ((failed++))
