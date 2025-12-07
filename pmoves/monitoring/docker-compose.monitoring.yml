@@ -11,7 +11,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
-    networks: [pmoves]
+    networks: [monitoring_tier]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -28,7 +28,7 @@ services:
       - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
       - ./grafana/provisioning:/etc/grafana/provisioning/dashboards:ro
-    networks: [pmoves]
+    networks: [monitoring_tier]
 
   loki:
     image: grafana/loki:3.1.1
@@ -38,7 +38,7 @@ services:
     volumes:
       - ./loki/local-config.yaml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
-    networks: [pmoves]
+    networks: [monitoring_tier]
 
   promtail:
     image: grafana/promtail:3.1.1
@@ -49,7 +49,7 @@ services:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./promtail/config.yml:/etc/promtail/config.yml:ro
-    networks: [pmoves]
+    networks: [monitoring_tier]
 
   blackbox:
     image: prom/blackbox-exporter:v0.25.0
@@ -57,7 +57,7 @@ services:
     ports: ["${BLACKBOX_HOST_PORT:-9115}:9115"]
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
-    networks: [pmoves]
+    networks: [monitoring_tier]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -84,7 +84,7 @@ services:
       - /var/lib/containerd/io.containerd.snapshotter.v1.overlayfs:/rootfs/var/lib/docker/image/overlayfs:ro
     ports:
       - "${CADVISOR_HOST_PORT:-9180}:8080"
-    networks: [pmoves]
+    networks: [monitoring_tier]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/metrics"]
       interval: 30s
@@ -94,9 +94,9 @@ services:
     profiles: ["linux"]
 
 networks:
-  pmoves:
+  monitoring_tier:
     external: true
-    name: pmoves-net
+    name: pmoves_monitoring
 
 volumes:
   prometheus-data: {}
