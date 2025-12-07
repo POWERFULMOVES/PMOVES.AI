@@ -206,6 +206,7 @@ main() {
     local failed=0
 
     # Check prerequisites
+    check_nats_cli || exit 1
     check_nats_cli
     local cli_status=$?
     if [ $cli_status -eq 2 ]; then
