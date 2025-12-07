@@ -18,7 +18,7 @@
     "redis": "^4.6.10",
     "multer": "^2.0.2",
     "express-rate-limit": "^7.1.5",
-    "jsonwebtoken": "^9.0.2",
+    "jsonwebtoken": "^9.0.3",
     "dotenv": "^16.3.1",
     "ws": "^8.14.2"
   },
