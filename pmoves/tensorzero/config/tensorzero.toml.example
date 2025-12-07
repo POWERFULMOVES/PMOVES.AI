@@ -2,13 +2,8 @@
 # Copy to pmoves/tensorzero/config/tensorzero.toml and adjust models/providers as needed.
 
 [gateway]
+# ClickHouse is configured via TENSORZERO_CLICKHOUSE_URL environment variable
 observability.enabled = false
-
-[gateway.observability.clickhouse]
-url = "env::TENSORZERO_OBS_CLICKHOUSE_URL"
-database = "env::TENSORZERO_OBS_CLICKHOUSE_DB"
-username = "env::TENSORZERO_OBS_CLICKHOUSE_USER"
-password = "env::TENSORZERO_OBS_CLICKHOUSE_PASSWORD"
 
 [functions.langextract]
 type = "chat"

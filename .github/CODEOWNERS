@@ -1,12 +1,23 @@
-# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
-# Update the handles below to match the real GitHub users or teams responsible for each area.
-# Entries lower in the file take precedence over the catch-all rule at the top.
+# PMOVES.AI Code Owners
+# These owners will be requested for review when someone opens a pull request.
 
-* @PowerfulMoves
+# Default owner for everything in the repo
+* @POWERFULMOVES
 
-# Domain ownership (override the wildcard as needed)
-pmoves/contracts/ @PowerfulMoves
-pmoves/services/ @PowerfulMoves
-pmoves/docs/ @PowerfulMoves
-CATACLYSM_STUDIOS_INC/ @PowerfulMoves
-pmoves_gateway_demo/ @PowerfulMoves
+# Security-critical configurations
+/.github/workflows/ @POWERFULMOVES
+/pmoves/docker-compose*.yml @POWERFULMOVES
+/deploy/ @POWERFULMOVES
+
+# Service Dockerfiles (security hardening)
+/pmoves/services/*/Dockerfile @POWERFULMOVES
+
+# Database schemas and migrations
+/supabase/migrations/ @POWERFULMOVES
+/supabase/initdb/ @POWERFULMOVES
+
+# Claude Code configuration
+/.claude/ @POWERFULMOVES
+
+# Documentation (informational - review optional)
+/docs/ @POWERFULMOVES
