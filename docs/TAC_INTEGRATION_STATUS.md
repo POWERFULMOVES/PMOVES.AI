@@ -43,7 +43,7 @@ Contains comprehensive PMOVES context loaded automatically by Claude Code CLI:
 
 **Status:** Fully implemented and maintained. This is the primary context file that makes Claude Code CLI PMOVES-aware.
 
-#### 2. Custom Slash Commands - ✅ IMPLEMENTED (14 commands)
+#### 2. Custom Slash Commands - ✅ IMPLEMENTED (21 commands)
 
 **Directory:** `.claude/commands/`
 
@@ -65,8 +65,15 @@ All commands provide quick access to production services:
 | `/botz:profile` | Hardware profile management (detect, list, apply) | ✅ Phase 2 |
 | `/botz:mcp` | MCP toolkit verification and diagnostics | ✅ Phase 2 |
 | `/botz:secrets` | CHIT encode/decode for secure credentials | ✅ Phase 2 |
+| `/github:pr-review` | Review pull request with AI assistance | ✅ Phase 3 |
+| `/github:issues` | List and triage GitHub issues | ✅ Phase 3 |
+| `/github:actions` | Check CI/CD workflow status | ✅ Phase 3 |
+| `/github:security` | Monitor Dependabot and security alerts | ✅ Phase 3 |
+| `/db:query` | Safe read-only Supabase queries via PostgREST | ✅ Phase 3 |
+| `/db:migrate` | Database migration management | ✅ Phase 3 |
+| `/db:backup` | Database backup create/list/restore | ✅ Phase 3 |
 
-**Status:** Full TAC command suite implemented across both phases.
+**Status:** Full TAC command suite implemented across all three phases.
 
 #### 3. Reference Documentation - ✅ IMPLEMENTED (7 context files)
 
@@ -850,18 +857,28 @@ PMOVES.AI has successfully integrated IndyDevDan's Tactical Agentic Coding frame
 
 ✅ **Phase 1 (Complete):**
 - Always-on context (`.claude/CLAUDE.md` - 2,500+ lines)
-- 7 custom slash commands covering agents, health, search, deployment
+- 10 custom slash commands covering agents, health, search, deployment
 - 7 comprehensive context files (73 KB total documentation)
 - Supporting files (README, settings, test script)
 
-✅ **Phase 2 (Hooks Complete, Worktrees Documented):**
+✅ **Phase 2 (Complete):**
+- 4 BoTZ commands via Mini CLI integration
+- 2 Agent Zero instruments (mini_cli, claude_code)
+- Archon MCP adapter for Agent Zero communication
 - Security validation hook with 11 blocked patterns
 - NATS observability hook with graceful fallback
-- Comprehensive hooks documentation (259 lines)
 - Git worktrees fully documented (11 KB guide)
 
-🔮 **Future Enhancement:**
+✅ **Phase 3 (Complete):**
+- 4 GitHub TAC commands (pr-review, issues, actions, security)
+- 3 Database TAC commands (query, migrate, backup)
+- 3 Kubernetes TAC commands (deploy, status, logs)
+- Total: 21 custom slash commands
+
+🔮 **Future Enhancement (Phase 4):**
 - ARCHON Work Orders integration (agent-driven Claude CLI automation)
+- Agent Zero Web UI Dashboard
+- Enhanced observability with Grafana dashboards
 
 **Key Capabilities:**
 
@@ -925,45 +942,63 @@ Developers gain instant access to production capabilities (RAG, research, monito
 
 ---
 
-## Phase 3 Roadmap (Proposed)
+## Phase 3: DevOps Commands - ✅ COMPLETE
 
-### High Priority
+### GitHub TAC Commands - ✅ IMPLEMENTED (4 commands)
 
-1. **GitHub TAC Commands**
-   - `/github:pr-review` - Review pull request with AI assistance
-   - `/github:issues` - List and triage issues
-   - `/github:actions` - Check CI/CD status
+**Directory:** `.claude/commands/github/`
 
-2. **Database TAC Commands**
-   - `/db:query` - Execute Supabase queries safely
-   - `/db:migrate` - Run database migrations
-   - `/db:backup` - Trigger database backups
+| Command | Purpose | Status |
+|---------|---------|--------|
+| `/github:pr-review` | Review pull request with AI assistance | ✅ Implemented |
+| `/github:issues` | List and triage GitHub issues | ✅ Implemented |
+| `/github:actions` | Check CI/CD workflow status | ✅ Implemented |
+| `/github:security` | Monitor Dependabot and security alerts | ✅ Implemented |
 
-3. **Kubernetes TAC Commands**
-   - `/k8s:deploy` - Deploy to Kubernetes cluster
-   - `/k8s:status` - Check deployment status
-   - `/k8s:logs` - Stream pod logs
+### Database TAC Commands - ✅ IMPLEMENTED (3 commands)
+
+**Directory:** `.claude/commands/db/`
+
+| Command | Purpose | Status |
+|---------|---------|--------|
+| `/db:query` | Safe read-only Supabase queries via PostgREST | ✅ Implemented |
+| `/db:migrate` | Database migration management with safety rules | ✅ Implemented |
+| `/db:backup` | Database backup create/list/restore operations | ✅ Implemented |
+
+### Kubernetes TAC Commands - ✅ IMPLEMENTED (3 commands)
+
+**Directory:** `.claude/commands/k8s/`
+
+| Command | Purpose | Status |
+|---------|---------|--------|
+| `/k8s:deploy` | Deploy services to Kubernetes with pre-flight checks | ✅ Implemented |
+| `/k8s:status` | Check cluster and service health status | ✅ Implemented |
+| `/k8s:logs` | Stream and search logs via kubectl and Loki | ✅ Implemented |
+
+---
+
+## Phase 4 Roadmap (Proposed)
 
 ### Medium Priority
 
-4. **Agent Zero Web UI Dashboard**
+1. **Agent Zero Web UI Dashboard**
    - Visual instrument management
    - Real-time NATS event viewer
    - Task queue visualization
 
-5. **Enhanced Observability**
+2. **Enhanced Observability**
    - NATS event streaming for TAC telemetry
    - Grafana dashboard for Claude CLI metrics
    - Cost tracking via TensorZero
 
 ### Low Priority
 
-6. **ARCHON Work Orders Integration**
+3. **ARCHON Work Orders Integration**
    - Agent-driven Claude CLI automation
    - Progress streaming to UI
    - Results stored in knowledge base
 
-7. **Multi-Agent Coordination**
+4. **Multi-Agent Coordination**
    - TAC commands for swarm orchestration
    - Cross-agent task delegation
    - Consensus-based decisions
