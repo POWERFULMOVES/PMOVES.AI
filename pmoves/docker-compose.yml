@@ -669,8 +669,8 @@ services:
 
   deepresearch:
     build:
-      context: ./services
-      dockerfile: deepresearch/Dockerfile
+      context: .
+      dockerfile: services/deepresearch/Dockerfile
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]

@@ -7,14 +7,16 @@ RUN apt-get update \
 RUN git clone https://github.com/Alibaba-NLP/DeepResearch.git /opt/DeepResearch \
     && cd /opt/DeepResearch \
     && git checkout 3f2845ffea03f198a84716a580e2cbb4145b0465
-COPY deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
+COPY services/deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/deepresearch-requirements.txt \
     && pip install --no-cache-dir -r /opt/DeepResearch/requirements.txt
-COPY deepresearch /app/services/deepresearch
-COPY common /app/services/common
-COPY __init__.py /app/services/__init__.py
+COPY services/deepresearch /app/services/deepresearch
+COPY services/common /app/services/common
+COPY services/__init__.py /app/services/__init__.py
+COPY contracts /app/contracts
 ENV PYTHONPATH=/app
+ENV PMOVES_CONTRACTS_DIR=/app/contracts
 
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \
