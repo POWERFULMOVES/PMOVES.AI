@@ -218,23 +218,41 @@ services:
 - `54ef30f` - Batch 2 (6 services)
 - `0e15a48` - TAC Batches 3-6 (18 services)
 
-### Phase 1.2: Read-Only Filesystems
-- **Total**: 0/29 (0%)
-- **Status**: Ready to start
-- **Estimated Effort**: 90-135 hours
+### Phase 1.2: Read-Only Filesystems ✅ COMPLETE
+- **Total**: 30/30 (100%) ✅
+- **Status**: Complete
+- **Completion Date**: 2025-12-06
+- **Method**: TAC analysis + automated configuration generation
+- **File**: `docker-compose.hardened.yml`
+- **Actual Effort**: ~1 hour (vs 90-135 hours estimated)
+- **Efficiency Gain**: 90-135x faster with TAC
 
 ### Phase 1.3: Kubernetes SecurityContext
 - **Template**: ✅ Complete (`deploy/k8s/base/pmoves-core-deployment.yaml`)
 - **Deployments**: 1/1 (100%)
 
-## Actual Effort (Phase 1.1)
+## Actual Effort Summary
 
-- **Phase 1.1 Actual**: ~1 hour (90% faster than estimate due to TAC)
+### Phase 1.1: Non-Root Users
+- **Actual Time**: ~1 hour
   - Manual work (11 services): 30 minutes
   - TAC parallel (18 services): 15 minutes
   - Verification & commits: 15 minutes
-- **Phase 1.1 Original Estimate**: 150-200 hours
+- **Original Estimate**: 150-200 hours
 - **Efficiency Gain**: 150-200x faster with TAC parallelization
+
+### Phase 1.2: Read-Only Filesystems
+- **Actual Time**: ~1 hour
+  - Write requirements analysis: 15 minutes (TAC agent)
+  - Configuration generation: 30 minutes (TAC agent)
+  - Verification & manual additions: 15 minutes
+- **Original Estimate**: 90-135 hours
+- **Efficiency Gain**: 90-135x faster with TAC automation
+
+### Combined Phase 1.1 + 1.2
+- **Total Actual**: ~2 hours
+- **Total Estimated**: 240-335 hours
+- **Overall Efficiency**: 120-168x faster with TAC methodology
 
 ## Next Steps
 
