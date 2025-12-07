@@ -143,3 +143,65 @@ Each of the above services and integrations is defined within the PMOVES.AI repo
 [\[156\]](https://github.com/POWERFULMOVES/PMOVES.AI/blob/45caf6783bb14f1f4e357c5465d7bfeb76730fb1/pmoves/docs/services/retrieval-eval/README.md#L5-L13) README.md
 
 [https://github.com/POWERFULMOVES/PMOVES.AI/blob/45caf6783bb14f1f4e357c5465d7bfeb76730fb1/pmoves/docs/services/retrieval-eval/README.md](https://github.com/POWERFULMOVES/PMOVES.AI/blob/45caf6783bb14f1f4e357c5465d7bfeb76730fb1/pmoves/docs/services/retrieval-eval/README.md)
+---
+
+## TAC Command Mapping (Claude Code CLI Integration)
+
+This section maps PMOVES services to their corresponding TAC (Tactical Agentic Coding) slash commands for Claude Code CLI.
+
+### Service → Command Reference
+
+| Service | Port | TAC Command | Purpose |
+|---------|------|-------------|---------|
+| **Agent Zero** | 8080 | `/agents:status` | Check orchestrator health |
+| **Agent Zero** | 8080 | `/agents:mcp-query` | Query MCP API |
+| **Hi-RAG v2** | 8086 | `/search:hirag` | Hybrid knowledge retrieval |
+| **SupaSerch** | 8099 | `/search:supaserch` | Multimodal research |
+| **DeepResearch** | 8098 | `/search:deepresearch` | LLM research planning |
+| **Prometheus** | 9090 | `/health:metrics` | Query service metrics |
+| **All Services** | - | `/health:check-all` | Verify all 55 services |
+| **Docker Compose** | - | `/deploy:services` | Check service status |
+| **Docker Compose** | - | `/deploy:up` | Start services |
+| **Test Suite** | - | `/deploy:smoke-test` | Run 75+ smoke tests |
+
+### Environment Management (BoTZ Commands)
+
+| Command | Purpose | Mini CLI Equivalent |
+|---------|---------|---------------------|
+| `/botz:init` | Environment onboarding | `mini_cli init` |
+| `/botz:profile` | Hardware profile mgmt | `mini_cli profile` |
+| `/botz:mcp` | MCP toolkit verification | `mini_cli mcp` |
+| `/botz:secrets` | CHIT encode/decode | `mini_cli secrets` |
+
+### Usage Examples
+
+```bash
+# Query knowledge base
+/search:hirag "How does TensorZero routing work?"
+
+# Check all service health
+/health:check-all
+
+# Run deployment tests
+/deploy:smoke-test
+
+# Manage hardware profiles
+/botz:profile list
+/botz:profile apply rtx-3090-ti
+```
+
+### Command Location
+
+All TAC commands are defined in `.claude/commands/`:
+- `.claude/commands/search/` - Knowledge retrieval
+- `.claude/commands/health/` - Service monitoring
+- `.claude/commands/agents/` - Agent coordination
+- `.claude/commands/deploy/` - Deployment operations
+- `.claude/commands/botz/` - Environment management
+
+### Related Documentation
+
+- **TAC Integration Status**: `docs/TAC_INTEGRATION_STATUS.md`
+- **Context Files**: `.claude/context/` (7 reference documents)
+- **Hooks**: `.claude/hooks/` (pre-tool security, post-tool observability)
+- **Mini CLI Spec**: `docs/PMOVES_MINI_CLI_SPEC.md`
