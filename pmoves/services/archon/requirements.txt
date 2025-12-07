@@ -31,7 +31,7 @@ python-jose[cryptography]>=3.3.0
 cryptography>=41.0.0
 
 # AI & MCP tooling
-openai==1.71.0
+openai==2.9.0
 
 # Document ingestion / knowledge-base tooling
 PyPDF2>=3.0.1
