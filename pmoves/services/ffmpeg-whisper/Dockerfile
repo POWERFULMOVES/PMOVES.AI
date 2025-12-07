@@ -72,11 +72,11 @@ COPY --from=ffmpeg-builder /usr/local /usr/local
 
 WORKDIR /app
 
-COPY ffmpeg-whisper/requirements.txt ./requirements.txt
+COPY pmoves/services/ffmpeg-whisper/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir uv && \
     uv pip install --system --no-cache-dir -r requirements.txt
 
-COPY . /app/services
+COPY pmoves/services /app/services
 
 ENV PYTHONPATH=/app
 

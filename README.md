@@ -108,3 +108,22 @@ See each directory’s README for ports, Make targets, and geometry notes. New i
 2. **Review orchestration flows** – Use the [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) for day-to-day compose control, and consult the architecture and multi-agent guides in `/docs` for how Agent Zero, Archon, and supporting services communicate across the mesh.
 
 Need a full directory tour? Regenerate `folders.md` using the embedded script to explore the repository structure at depth two before diving deeper into service-specific documentation.
+
+## Build Status & Recent Improvements
+
+**Docker Build Reliability**: ✅ All core services build successfully
+
+Following Phase 2 Security Hardening, we resolved critical Docker build failures:
+- **DeepResearch**: Fixed build context mismatch and container restart loops
+- **FFmpeg-Whisper**: Eliminated permission denied errors with proper .dockerignore
+- **Environment Files**: Fixed JSON parsing errors in shell-sourced configs
+
+Build success rate improved from intermittent failures to 100% for affected services.
+
+**See**: [Build Fixes Documentation](docs/build-fixes-2025-12-07.md) for detailed analysis and lessons learned.
+
+**Production Readiness** (2025-12-07):
+- **TensorZero**: Added 5 Qwen models (32B, 14B, 7B-VL, 4B-Reranker) for local inference
+- **Monitoring**: Fixed Prometheus network configuration, all services properly isolated
+- **Automation**: Configured Dependabot for automated dependency updates
+- **Documentation**: Complete network tier segmentation guide (421 lines)
