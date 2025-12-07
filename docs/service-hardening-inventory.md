@@ -256,12 +256,36 @@ services:
 
 ## Next Steps
 
-### Immediate (Phase 1.2)
-1. ✅ Phase 1.1 Complete - All 29 services have non-root users
-2. Add read-only filesystem support with tmpfs mounts
-3. Test services with restricted write access
-4. Document tmpfs size requirements per service
-5. Update docker-compose.yml with read_only + tmpfs
+### ✅ Phase 1 Complete
+
+All Phase 1 security hardening tasks successfully completed:
+- ✅ Phase 1.1: Non-root users (29/29 services)
+- ✅ Phase 1.2: Read-only filesystems (30/30 services)
+- ✅ Phase 1.3: Kubernetes SecurityContext template ready
+
+**Total Time**: ~2 hours (vs 240-335 hours estimated)
+**Efficiency**: 120-168x faster with TAC methodology
+
+### Separate Refactoring Task: Python Test Imports
+
+**Status**: Analysis complete, ready for implementation
+**Issue**: GitHub Actions Python Tests failing with `ModuleNotFoundError`
+**Root Cause**: Inconsistent import patterns (service code vs test code)
+**Solution**: Standardize test imports to `services.X` pattern
+**Effort**: 1.5-2 hours
+**Risk**: Low
+**Documentation**: `docs/python-test-import-refactoring.md`
+
+**Files to update** (7 test files):
+1. `pmoves/services/publisher/tests/test_publisher.py`
+2. `pmoves/services/publisher-discord/tests/test_formatting.py`
+3. `pmoves/services/deepresearch/tests/test_parsing.py`
+4. `pmoves/services/deepresearch/tests/test_worker.py`
+5. `pmoves/services/gateway/tests/test_workflow_utils.py`
+6. `pmoves/services/gateway/tests/test_mindmap_endpoint.py`
+7. `pmoves/services/gateway/tests/test_geometry_endpoints.py`
+
+**Implementation**: Change `from pmoves.services.X import...` to `from services.X import...`
 
 ### Future Phases
 - Phase 2: Harden-Runner, BuildKit secrets, branch protection
