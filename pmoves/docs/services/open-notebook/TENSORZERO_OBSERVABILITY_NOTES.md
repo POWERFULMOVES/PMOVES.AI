@@ -1,36 +1,58 @@
 # TensorZero Gateway Observability (ClickHouse)
 
-The 2025.10.7 gateway release moved ClickHouse settings under `gateway.observability.clickhouse`. The legacy `[clickhouse]` table no longer parses and results in `clickhouse: unknown field` during boot.
+**IMPORTANT:** As of TensorZero version 2025.11.6, ClickHouse configuration has been moved entirely to environment variables. The `[clickhouse]` and `[gateway.observability.clickhouse]` TOML sections are no longer valid and will cause configuration errors.
 
 ## Current status (local bundles)
-- Observability is **disabled by default** so the gateway can start without ClickHouse credentials. ClickHouse still runs alongside the gateway profile (`make -C pmoves up-tensorzero`) so metrics can be enabled later.
-- The `gateway.observability.clickhouse` table now ships populated with PMOVES defaults that match the self-hosted ClickHouse launched by the profile (URL/user/password/database all `tensorzero` against `http://tensorzero-clickhouse:8123`). Override the env vars if you point the gateway at a remote ClickHouse.
-- Enable observability by supplying credentials (or relying on the bundled defaults) and flipping `observability.enabled` to `true` in `pmoves/tensorzero/config/tensorzero.toml`.
+- Observability is **disabled by default** so the gateway can start without ClickHouse credentials.
+- ClickHouse still runs alongside the gateway profile (`make -C pmoves up-tensorzero`) so metrics can be enabled later.
+- ClickHouse connection is configured via the `TENSORZERO_CLICKHOUSE_URL` environment variable (not in tensorzero.toml).
+- Enable observability by setting `observability.enabled = true` in `pmoves/tensorzero/config/tensorzero.toml`.
 
 ## Enabling metrics
-1. The `[gateway.observability.clickhouse]` block already lives in `pmoves/tensorzero/config/tensorzero.toml` with PMOVES-branded defaults.
-2. Populate the secrets in your environment (the bundled profile pre-populates PMOVES defaults in `env.shared.example`; override as needed for remote ClickHouse):
-   - `TENSORZERO_OBS_CLICKHOUSE_URL` (default `http://tensorzero-clickhouse:8123`)
-   - `TENSORZERO_OBS_CLICKHOUSE_DB` (default `tensorzero`)
-   - `TENSORZERO_OBS_CLICKHOUSE_USER` (default `tensorzero`)
-   - `TENSORZERO_OBS_CLICKHOUSE_PASSWORD` (default `tensorzero`)
-3. Flip `observability.enabled` to `true` and restart: `make -C pmoves up-tensorzero`.
-1. Update `pmoves/tensorzero/config/tensorzero.toml` with the new `gateway.observability.clickhouse.*` block from the official docs.
-2. Add credentials via env vars (`TENSORZERO_CLICKHOUSE_URL`, etc.) as documented upstream.
-3. Rebuild/restart the gateway profile: `make up-tensorzero`.
 
+1. **Set the ClickHouse connection URL** via environment variable:
+   ```bash
+   # In docker-compose.yml or .env file:
+   TENSORZERO_CLICKHOUSE_URL=http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default
+   ```
+
+2. **Enable observability** in `pmoves/tensorzero/config/tensorzero.toml`:
+   ```toml
+   [gateway]
+   observability.enabled = true
+   ```
+
+3. **Restart the gateway**:
+   ```bash
+   make -C pmoves up-tensorzero
+   ```
+
+## Configuration format
+
+**Valid configuration (tensorzero.toml):**
 ```toml
 [gateway]
 observability.enabled = true
-
-[gateway.observability.clickhouse]
-url = "env::TENSORZERO_OBS_CLICKHOUSE_URL"
-database = "env::TENSORZERO_OBS_CLICKHOUSE_DB"
-username = "env::TENSORZERO_OBS_CLICKHOUSE_USER"
-password = "env::TENSORZERO_OBS_CLICKHOUSE_PASSWORD"
+# Optional: observability.async_writes = true
+# Optional: observability.batch_writes = { enabled = true, flush_interval_ms = 100 }
 ```
 
-If you prefer hard-coded values for local-only testing, replace the `env::` entries with static strings (e.g., `url = "http://tensorzero-clickhouse:8123"`, `database = "tensorzero"`).
+**ClickHouse connection (environment variable only):**
+```bash
+TENSORZERO_CLICKHOUSE_URL=http://username:password@hostname:port/database
+# Example for local development:
+TENSORZERO_CLICKHOUSE_URL=http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default
+```
+
+**INVALID configurations (will cause errors):**
+```toml
+# ❌ DO NOT USE - These sections are no longer valid:
+[clickhouse]  # Invalid in 2025.11.6+
+url = "..."
+
+[gateway.observability.clickhouse]  # Invalid in 2025.11.6+
+url = "..."
+```
 
 ## Verification steps
 - Run `curl http://127.0.0.1:8123/ping` to confirm ClickHouse is reachable.
