@@ -43,63 +43,63 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # CHIT table DDL only exists when migrations/sql/db are present (not all branches contain them)
-          table_paths=()
-          for p in migrations sql db; do
-            [[ -d "$p" ]] && table_paths+=("$p")
+
+          echo "=== Checking CHIT Database Tables ==="
+          # Check for CHIT tables in SQL files
+          if ! rg -ni --iglob '*.sql' 'create table.*\b(anchors|constellations|shape_points|shape_index)\b' pmoves/supabase/; then
+            echo "❌ Missing CHIT tables (anchors, constellations, shape_points, shape_index)"
+            exit 1
+          fi
+          echo "✅ Found CHIT table definitions"
+
+          echo "=== Checking CHIT API Endpoints ==="
+          # Check for POST /geometry/event endpoint (FastAPI decorator syntax)
+          if ! rg -n '@(router|app)\.post\(.*/geometry/event' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: POST /geometry/event"
+            exit 1
+          fi
+          echo "✅ Found POST /geometry/event"
+
+          # Check for GET /shape/point/{id}/jump endpoint
+          if ! rg -n '@(router|app)\.get\(.*/shape/point.*jump' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: GET /shape/point/{id}/jump"
+            exit 1
+          fi
+          echo "✅ Found GET /shape/point/{id}/jump"
+
+          # Check for /geometry/decode/* endpoints (text, image, audio)
+          if ! rg -n '@(router|app)\.post\(.*/geometry/decode/(text|image|audio)' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: POST /geometry/decode/*"
+            exit 1
+          fi
+          echo "✅ Found POST /geometry/decode/* endpoints"
+
+          # Check for /geometry/calibration/report endpoint
+          if ! rg -n '@(router|app)\.post\(.*/geometry/calibration/report' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: POST /geometry/calibration/report"
+            exit 1
+          fi
+          echo "✅ Found POST /geometry/calibration/report"
+
+          echo "=== Checking CHIT Event Publishing ==="
+          # Check for geometry.cgp.v1 event usage
+          if ! rg -n 'geometry\.cgp\.v1' pmoves/services/; then
+            echo "❌ Missing event publish: geometry.cgp.v1"
+            exit 1
+          fi
+          echo "✅ Found geometry.cgp.v1 event"
+
+          echo "=== Checking CHIT Environment Variables ==="
+          # Check for CHIT environment variable usage
+          for var in CHIT_REQUIRE_SIGNATURE CHIT_PASSPHRASE CHIT_DECRYPT_ANCHORS CHIT_CODEBOOK_PATH CHIT_T5_MODEL; do
+            if ! rg -n "$var" pmoves/services/; then
+              echo "❌ Missing CHIT environment variable: $var"
+              exit 1
+            fi
           done
-          if (( ${#table_paths[@]} )); then
-            rg -n "create table .*(anchors|constellations|shape_points|shape_index)" "${table_paths[@]}" || (echo "Missing CHIT tables" && exit 1)
-          else
-            echo "CHIT table check skipped (no migrations/sql/db present)"
-          fi
-          rg -n "POST /geometry/event|GET /shape/point/.*/jump|/geometry/decode/(text|image|audio)|/geometry/calibration/report" pmoves/services/ pmoves/gateway/ pmoves/api/ || (echo "Missing CHIT endpoints" && exit 1)
-          rg -n "geometry.cgp.v1" -S || (echo "Missing event publish 'geometry.cgp.v1'" && exit 1)
-          rg -n "CHIT_REQUIRE_SIGNATURE|CHIT_PASSPHRASE|CHIT_DECRYPT_ANCHORS|CHIT_CODEBOOK_PATH|CHIT_T5_MODEL" -S || (echo "Missing CHIT security/env flags" && exit 1)
-          PATTERN_TABLES_BASE='create table .*('
-          PATTERN_TABLES_SUFFIX='anchors|constellations|shape_points|shape_index)'
-          PATTERN_TABLES="${PATTERN_TABLES_BASE}${PATTERN_TABLES_SUFFIX}"
-          if ! rg -ni --iglob '*.sql' "$PATTERN_TABLES"; then
-            echo "Missing CHIT tables"
-            exit 1
-          fi
-          if ! rg -n 'POST /geometry/event' pmoves/services; then
-            echo "Missing CHIT endpoint POST /geometry/event"
-            exit 1
-          fi
-          if ! rg -n 'GET /shape/point/.*/jump' pmoves/services; then
-            echo "Missing CHIT endpoint GET /shape/point/.*/jump"
-            exit 1
-          fi
-          if ! rg -n '/geometry/decode/(text|image|audio)' pmoves/services; then
-            echo "Missing CHIT endpoint /geometry/decode/*"
-            exit 1
-          fi
-          if ! rg -n '/geometry/calibration/report' pmoves/services; then
-            echo "Missing CHIT endpoint /geometry/calibration/report"
-            exit 1
-          fi
-          if ! rg -n 'geometry.cgp.v1' -S; then
-            echo "Missing event publish geometry.cgp.v1"
-            exit 1
-          fi
-          if ! rg -n 'CHIT_REQUIRE_SIGNATURE' -S; then
-            echo "Missing CHIT_REQUIRE_SIGNATURE flag"
-            exit 1
-          fi
-          if ! rg -n 'CHIT_PASSPHRASE' -S; then
-            echo "Missing CHIT_PASSPHRASE flag"
-            exit 1
-          fi
-          if ! rg -n 'CHIT_DECRYPT_ANCHORS' -S; then
-            echo "Missing CHIT_DECRYPT_ANCHORS flag"
-            exit 1
-          fi
-          if ! rg -n 'CHIT_CODEBOOK_PATH' -S; then
-            echo "Missing CHIT_CODEBOOK_PATH flag"
-            exit 1
-          fi
-          if ! rg -n 'CHIT_T5_MODEL' -S; then
-            echo "Missing CHIT_T5_MODEL flag"
-            exit 1
-          fi
+          echo "✅ Found all CHIT environment variables"
+
+          echo ""
+          echo "======================================"
+          echo "✅ All CHIT contract checks passed!"
+          echo "======================================"
