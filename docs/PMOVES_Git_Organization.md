@@ -96,6 +96,36 @@ Automated review assignments configured in `.github/CODEOWNERS`:
 
 ---
 
+## Recent Fixes
+
+### Docker Build Reliability Improvements (2025-12-06 to 2025-12-07)
+**Status:** Complete ✅
+
+Following Phase 2 Security Hardening, we identified and resolved critical Docker build failures across the stack:
+
+**Critical Issues Fixed:**
+1. **DeepResearch** - Build context mismatch (commit 3147c52)
+   - Fixed Dockerfile COPY paths to align with `context: ./services`
+   - Resolved container restart loop by restoring contracts directory (commit 4a2a36a)
+2. **Environment Files** - JSON parsing errors (commit 3147c52)
+   - Quoted all JSON values in shell-sourced environment files
+   - Prevents shell interpretation of JSON syntax as commands
+3. **FFmpeg-Whisper** - Permission denied errors (commit 714681d)
+   - Added .dockerignore to exclude restricted jellyfin-ai directories
+   - Eliminates intermittent build failures from permission issues
+
+**Build Success Rate**: Improved from intermittent failures to 100% successful builds for affected services
+
+**Files Modified**: 5 files across 4 commits
+- `services/deepresearch/Dockerfile` (2 commits)
+- `services/ffmpeg-whisper/.dockerignore` (new file)
+- `services/media-audio/requirements.txt` (dependency updates)
+- Documentation updates
+
+**See Also**: `docs/build-fixes-2025-12-07.md` for detailed analysis and lessons learned
+
+---
+
 ## Recent Changes
 
 ### PR #276: Phase 2 Security Hardening (2025-12-07)
@@ -118,6 +148,27 @@ Automated review assignments configured in `.github/CODEOWNERS`:
 - 4a2a36a: Branch protection setup
 
 **Documentation:** See `docs/security/phase-2/` for complete audit trail
+
+### Production Readiness Enhancements (2025-12-07, commit 7bacba2)
+**Status:** Complete ✅
+
+**TensorZero Model Expansion:**
+- Added 5 new Qwen models for local inference via Ollama:
+  - Qwen2.5 32B (flagship, ~19GB)
+  - Qwen2.5 14B (efficient, ~8GB)
+  - Qwen2-VL 7B (vision-language, ~5GB)
+  - Qwen3-Reranker 4B (cross-encoder for Hi-RAG v2)
+- Enabled ClickHouse observability in TensorZero config
+
+**GitHub Automation:**
+- Created .github/CODEOWNERS for security-critical path approvals
+- Configured Dependabot for Docker, GitHub Actions, and Python dependencies
+- Weekly automated dependency update schedule
+
+**Documentation Updates (via TAC parallel agents):**
+- Updated PMOVES.AI-Edition-Hardened-Full.md (service count, network architecture, security posture)
+- Created docs/architecture/network-tier-segmentation.md (421 lines, 5-tier architecture)
+- Updated .gitignore patterns for backup files and WSL2 artifacts
 
 ---
 

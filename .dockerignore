@@ -2,3 +2,6 @@
 pmoves/jellyfin-ai/neo4j/import
 pmoves/jellyfin-ai/neo4j/import/*
 pmoves/jellyfin-ai/neo4j/import/**
+pmoves/jellyfin-ai/redis
+pmoves/jellyfin-ai/redis/*
+pmoves/jellyfin-ai/redis/**

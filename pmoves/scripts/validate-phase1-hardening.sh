@@ -36,7 +36,7 @@ FAILURES=0
 # 1. Check hardened config exists
 echo "1. Checking hardened configuration file..."
 if [ -f "$PMOVES_ROOT/docker-compose.hardened.yml" ]; then
-    SERVICE_COUNT=$(grep -c "^  [a-z]" "$PMOVES_ROOT/docker-compose.hardened.yml" || true)
+    SERVICE_COUNT=$(awk '/^services:/,/^secrets:/ {if (/^  [a-z]/) count++} END {print count}' "$PMOVES_ROOT/docker-compose.hardened.yml" || echo "0")
     if [ "$SERVICE_COUNT" -eq 30 ]; then
         print_pass "Hardened config exists with $SERVICE_COUNT services"
     else
