@@ -18,6 +18,14 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
