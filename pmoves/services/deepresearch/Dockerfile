@@ -13,4 +13,12 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /opt/DeepResearch/requirements.txt
 COPY deepresearch /app/services/deepresearch
 ENV PYTHONPATH=/app
+
+# Security: Run as non-root user
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app && \
+    chown -R pmoves:pmoves /opt/DeepResearch
+
+USER pmoves:pmoves
 CMD ["python", "-m", "services.deepresearch.worker"]

@@ -116,5 +116,12 @@ RUN if [ -d "$ARCHON_UI_DIR" ]; then \
         echo "Archon UI directory '$ARCHON_UI_DIR' not found. Skipping UI build."; \
     fi
 
+# Security: Run as non-root user
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
+
 EXPOSE 8090
 CMD ["python", "-m", "services.archon.main"]

@@ -40,4 +40,11 @@ COPY contracts /app/contracts
 # Copy PMOVES service implementation on top of the upstream runtime
 COPY services /app/services
 
+# Security: Run as non-root user
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
+
 CMD ["/bin/bash", "-lc", "/ins/copy_A0.sh && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true && /opt/venv-a0/bin/python services/agent-zero/main.py"]

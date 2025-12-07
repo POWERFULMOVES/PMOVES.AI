@@ -6,5 +6,12 @@ RUN pip install --no-cache-dir nats-py==2.8.0
 COPY nats-echo/nats_echo.py /app/nats_echo.py
 ENV NATS_URL=nats://nats:4222 \
     NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+
+# Security: Run as non-root user
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
 # Let the script read NATS_URL from the environment to avoid empty-arg edge cases.
 CMD ["python", "/app/nats_echo.py", "--subject", "${NATS_ECHO_SUBJECT}"]

@@ -80,6 +80,13 @@ COPY . /app/services
 
 ENV PYTHONPATH=/app
 
+# Security: Run as non-root user (GPU services need video group)
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves -G video --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
+
 EXPOSE 8078
 
 CMD ["uvicorn","services.ffmpeg-whisper.server:app","--host","0.0.0.0","--port","8078"]
