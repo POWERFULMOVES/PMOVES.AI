@@ -43,6 +43,14 @@ testkeys.md
 /actionlint
 # Root env scratch (not used by stack, keep untracked)
 /.env
+
+# Backup files (may contain credentials)
+*.backup*
+*-backup-*
+*.bak
+
+# WSL artifacts
+.wsl/
 # Next.js UI build artifacts
 /pmoves/ui/.next
 /pmoves/ui/node_modules
