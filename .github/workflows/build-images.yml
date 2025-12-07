@@ -12,8 +12,28 @@ env:
   REGISTRY_DH: powerfulmoves
 
 jobs:
-  build:
+  setup-matrix:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse image matrix
+        id: set-matrix
+        run: |
+          python - <<'PY'
+import yaml, json, pathlib
+data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
+print(f"matrix={json.dumps(data['images'])}")
+PY
+
+  build:
+    needs: setup-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     defaults:
       run:
         shell: bash
@@ -21,15 +41,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Parse image matrix
-        id: matrix
-        run: |
-          python - <<'PY'
-import yaml, json, pathlib
-data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
-print(f"matrix={json.dumps(data['images'])}")
-PY
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -69,6 +80,3 @@ PY
           sbom: true
           build-args: |
             IMAGE_REF=${{ matrix.ref }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(steps.matrix.outputs.matrix) }}
