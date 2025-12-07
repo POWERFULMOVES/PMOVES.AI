@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/deepresearch-requirements.txt \
     && pip install --no-cache-dir -r /opt/DeepResearch/requirements.txt
 COPY deepresearch /app/services/deepresearch
+COPY common /app/services/common
+COPY __init__.py /app/services/__init__.py
 ENV PYTHONPATH=/app
 
 # Security: Run as non-root user
