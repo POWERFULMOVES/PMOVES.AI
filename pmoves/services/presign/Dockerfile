@@ -5,5 +5,13 @@ RUN pip install --no-cache-dir --upgrade pip
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+
+# Security: Run as non-root user
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
+
 EXPOSE 8080
 CMD ["uvicorn","api:app","--host","0.0.0.0","--port","8080"]
