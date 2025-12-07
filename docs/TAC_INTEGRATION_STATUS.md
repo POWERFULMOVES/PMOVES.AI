@@ -43,7 +43,7 @@ Contains comprehensive PMOVES context loaded automatically by Claude Code CLI:
 
 **Status:** Fully implemented and maintained. This is the primary context file that makes Claude Code CLI PMOVES-aware.
 
-#### 2. Custom Slash Commands - ✅ IMPLEMENTED (7 commands)
+#### 2. Custom Slash Commands - ✅ IMPLEMENTED (14 commands)
 
 **Directory:** `.claude/commands/`
 
@@ -51,17 +51,22 @@ All commands provide quick access to production services:
 
 | Command | Purpose | Status |
 |---------|---------|--------|
-| `/agents:status` | Check Agent Zero orchestrator health & NATS connectivity | ✅ Implemented |
-| `/health:check-all` | Verify health of all PMOVES services via /healthz endpoints | ✅ Implemented |
-| `/search:hirag` | Query Hi-RAG v2 hybrid retrieval (Qdrant + Neo4j + Meilisearch) | ✅ Implemented |
-| `/search:supaserch` | Execute multimodal holographic deep research | ✅ Implemented |
-| `/deploy:smoke-test` | Run comprehensive integration smoke tests | ✅ Implemented |
-| `/deploy:up` | Start PMOVES services using docker compose | ✅ Implemented |
-| `/deploy:services` | Check Docker Compose service deployment status | ✅ Implemented |
+| `/agents:status` | Check Agent Zero orchestrator health & NATS connectivity | ✅ Phase 1 |
+| `/agents:mcp-query` | Query Agent Zero MCP API directly | ✅ Phase 1 |
+| `/health:check-all` | Verify health of all PMOVES services via /healthz endpoints | ✅ Phase 1 |
+| `/health:metrics` | Query Prometheus metrics with PromQL | ✅ Phase 1 |
+| `/search:hirag` | Query Hi-RAG v2 hybrid retrieval (Qdrant + Neo4j + Meilisearch) | ✅ Phase 1 |
+| `/search:supaserch` | Execute multimodal holographic deep research | ✅ Phase 1 |
+| `/search:deepresearch` | LLM-based research planner via DeepResearch | ✅ Phase 1 |
+| `/deploy:smoke-test` | Run comprehensive integration smoke tests | ✅ Phase 1 |
+| `/deploy:up` | Start PMOVES services using docker compose | ✅ Phase 1 |
+| `/deploy:services` | Check Docker Compose service deployment status | ✅ Phase 1 |
+| `/botz:init` | Environment onboarding helper via Mini CLI | ✅ Phase 2 |
+| `/botz:profile` | Hardware profile management (detect, list, apply) | ✅ Phase 2 |
+| `/botz:mcp` | MCP toolkit verification and diagnostics | ✅ Phase 2 |
+| `/botz:secrets` | CHIT encode/decode for secure credentials | ✅ Phase 2 |
 
-**Status:** Core commands fully implemented. Commands cover agent orchestration, health monitoring, knowledge retrieval, and deployment workflows.
-
-**Note:** The spec mentioned `/agents:mcp-query`, `/search:deepresearch`, and `/health:metrics` which are not yet implemented but covered by existing commands and `.claude/CLAUDE.md` context.
+**Status:** Full TAC command suite implemented across both phases.
 
 #### 3. Reference Documentation - ✅ IMPLEMENTED (7 context files)
 
@@ -91,7 +96,57 @@ Comprehensive reference documentation for detailed information:
 
 ---
 
-### Phase 2: Advanced Features - ✅ HOOKS COMPLETE, 📋 WORKTREES DOCUMENTED
+### Phase 2: Agent Integration - ✅ COMPLETE
+
+#### New BoTZ TAC Commands - ✅ IMPLEMENTED (4 commands)
+
+**Directory:** `.claude/commands/botz/`
+
+| Command | Purpose | Status |
+|---------|---------|--------|
+| `/botz:init` | Environment onboarding helper via Mini CLI | ✅ Implemented |
+| `/botz:profile` | Hardware profile management (detect, list, apply) | ✅ Implemented |
+| `/botz:mcp` | MCP toolkit verification and diagnostics | ✅ Implemented |
+| `/botz:secrets` | CHIT encode/decode for secure credentials | ✅ Implemented |
+
+#### Agent Zero Instruments - ✅ IMPLEMENTED (2 instruments)
+
+**Directory:** `pmoves/data/agent-zero/instruments/default/`
+
+| Instrument | Purpose | Status |
+|------------|---------|--------|
+| `mini_cli/` | Full programmatic access to Mini CLI (10+ command groups) | ✅ Implemented |
+| `claude_code/` | Execute TAC slash commands from Agent Zero | ✅ Implemented |
+
+**Context File:** `pmoves/data/agent-zero/context/pmoves_context.md`
+- 55 service catalog with ports and APIs
+- NATS subject reference
+- Integration patterns for Agent Zero
+
+#### Archon MCP Adapter - ✅ IMPLEMENTED
+
+**Directory:** `pmoves/integrations/archon/python/pmoves_mcp/`
+
+| Component | Purpose | Status |
+|-----------|---------|--------|
+| `claude_code_adapter.py` | Async MCP adapter using httpx | ✅ Implemented |
+| `__init__.py` | Package exports and tool registration | ✅ Implemented |
+
+**Features:**
+- `ClaudeCodeMCPAdapter` class for Agent Zero communication
+- `ARCHON_MCP_TOOLS` registration for Archon tool discovery
+- Integration prompt templates (`prompts/claude_code_integration.md`)
+
+#### Documentation Updates - ✅ IMPLEMENTED
+
+| Document | Content | Status |
+|----------|---------|--------|
+| `OPEN_SOURCE_MODELS_RECOMMENDATIONS.md` | Comprehensive model selection guide (347 lines) | ✅ Created |
+| `PMOVES.AI Services and Integrations.md` | TAC command mapping section added | ✅ Updated |
+
+---
+
+### Phase 2b: Advanced Features - ✅ HOOKS COMPLETE, 📋 WORKTREES DOCUMENTED
 
 #### 5. Hooks Configuration - ✅ IMPLEMENTED
 
@@ -864,6 +919,51 @@ Developers gain instant access to production capabilities (RAG, research, monito
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 2.0
 **Last Updated:** 2025-12-07
-**Status:** TAC Integration Complete (Phase 1 + Phase 2 Hooks)
+**Status:** TAC Integration Complete (Phase 1 + Phase 2 Agent Integration + Phase 2b Hooks)
+
+---
+
+## Phase 3 Roadmap (Proposed)
+
+### High Priority
+
+1. **GitHub TAC Commands**
+   - `/github:pr-review` - Review pull request with AI assistance
+   - `/github:issues` - List and triage issues
+   - `/github:actions` - Check CI/CD status
+
+2. **Database TAC Commands**
+   - `/db:query` - Execute Supabase queries safely
+   - `/db:migrate` - Run database migrations
+   - `/db:backup` - Trigger database backups
+
+3. **Kubernetes TAC Commands**
+   - `/k8s:deploy` - Deploy to Kubernetes cluster
+   - `/k8s:status` - Check deployment status
+   - `/k8s:logs` - Stream pod logs
+
+### Medium Priority
+
+4. **Agent Zero Web UI Dashboard**
+   - Visual instrument management
+   - Real-time NATS event viewer
+   - Task queue visualization
+
+5. **Enhanced Observability**
+   - NATS event streaming for TAC telemetry
+   - Grafana dashboard for Claude CLI metrics
+   - Cost tracking via TensorZero
+
+### Low Priority
+
+6. **ARCHON Work Orders Integration**
+   - Agent-driven Claude CLI automation
+   - Progress streaming to UI
+   - Results stored in knowledge base
+
+7. **Multi-Agent Coordination**
+   - TAC commands for swarm orchestration
+   - Cross-agent task delegation
+   - Consensus-based decisions
