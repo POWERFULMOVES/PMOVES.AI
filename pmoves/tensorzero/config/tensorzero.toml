@@ -1,11 +1,11 @@
 # TensorZero gateway config (chat + embeddings). Model keys double as UI aliases.
 
 [gateway]
-# Observability is disabled by default. To enable, set observability.enabled = true
+# Observability enabled for production monitoring and cost tracking
 # ClickHouse connection is configured via the TENSORZERO_CLICKHOUSE_URL environment variable.
 # See pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md for details.
 # Example: TENSORZERO_CLICKHOUSE_URL=http://user:pass@tensorzero-clickhouse:8123/default
-observability.enabled = false
+observability.enabled = true
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
 
@@ -70,6 +70,46 @@ routing = ["ollama_local"]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
 model_name = "llama3.1"
+api_key_location = "none"
+
+# Qwen2.5 32B - Flagship general-purpose model (from Open-Source Model Recommendations)
+[models.qwen2_5_32b]
+routing = ["ollama_local"]
+
+[models.qwen2_5_32b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2.5:32b"
+api_key_location = "none"
+
+# Qwen2.5 14B - Efficient alternative for resource-constrained environments
+[models.qwen2_5_14b]
+routing = ["ollama_local"]
+
+[models.qwen2_5_14b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2.5:14b"
+api_key_location = "none"
+
+# Qwen2-VL 7B - Multimodal vision-language model for image analysis
+[models.qwen2_vl_7b]
+routing = ["ollama_local"]
+
+[models.qwen2_vl_7b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2-vl:7b"
+api_key_location = "none"
+
+# Qwen3 Reranker 4B - Cross-encoder reranking for Hi-RAG v2
+[models.qwen3_reranker_4b]
+routing = ["ollama_local"]
+
+[models.qwen3_reranker_4b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-reranker:4b"
 api_key_location = "none"
 
 # --- Chat models: Cloud and hosted backbones -------------------------------

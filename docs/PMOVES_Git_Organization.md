@@ -4,6 +4,9 @@ This document provides a comprehensive guide to PMOVES.AI's GitHub organization,
 
 ## Table of Contents
 - [Contributor Guidance](#contributor-guidance)
+- [Security Roadmap](#security-roadmap)
+- [Branch Protection Rules](#branch-protection-rules)
+- [Recent Changes](#recent-changes)
 - [GitHub Actions Self-Hosted Runner Setup](#github-actions-self-hosted-runner-setup)
 - [GitHub Documentation Resources](#github-documentation-resources)
 - [PMOVES Project Repositories](#pmoves-project-repositories)
@@ -11,11 +14,112 @@ This document provides a comprehensive guide to PMOVES.AI's GitHub organization,
 - [Video Resources & Tutorials](#video-resources--tutorials)
 - [Team & Collaboration](#team--collaboration)
 
---- 
+---
 
 ## Contributor Guidance
 - Operational/stabilization rules live in the root `AGENTS.md`; service-level coding norms for the `pmoves/` subtree live in `pmoves/AGENTS.md`. Read both before opening PRs and keep edits in sync.
 - Submodules are the source of truth for hardened integrations (Archon, Agent Zero, PMOVES.YT, etc.). Pin the intended branch/ref in `.gitmodules`, align with `docs/PMOVES.AI-Edition-Hardened.md`, and note any temporary divergence in PR notes.
+
+---
+
+## Security Roadmap
+
+### Phase 1: Foundation - COMPLETE ✅
+**Completion Date:** 2025-11-15
+**Security Score:** 80/100
+
+**Achievements:**
+- GitHub Actions hardening with secure workflow patterns
+- Non-root baseline established (3/29 services migrated)
+- SecurityContext templates for pod security standards
+- Initial container security posture
+
+### Phase 2: Hardening - COMPLETE ✅
+**Completion Date:** 2025-12-07 (PR #276, commit 8bf936a)
+**Security Score:** 95/100 (+18.75% improvement)
+
+**Achievements:**
+- **BuildKit Secrets Migration:** Removed 4 HIGH-RISK secrets from Archon Dockerfile, migrated to BuildKit `--secret` pattern
+- **Network Tier Segmentation:** 5-tier isolation architecture across 45 services
+  - Tier 1: Public (Jellyfin, TensorZero UI)
+  - Tier 2: Gateway (TensorZero, Agent Zero)
+  - Tier 3: Application (Hi-RAG, Archon, PMOVES.YT)
+  - Tier 4: Data (Supabase, Qdrant, Neo4j, Meilisearch)
+  - Tier 5: Infrastructure (NATS, MinIO, Prometheus)
+- **Branch Protection:** Main branch protected with required PR reviews, status checks, signed commits, and linear history
+- **CODEOWNERS:** Automated review assignments for critical paths
+
+**Documentation:** 67KB of Phase 2 security guides and audit logs
+
+### Phase 3: Advanced Security - PLANNED
+**Target Completion:** Q1 2026
+**Target Security Score:** 98/100
+
+**Planned Initiatives:**
+- TLS termination with cert-manager
+- HashiCorp Vault integration for dynamic secrets
+- Automated secret rotation policies
+- mTLS between service tiers
+- Runtime security monitoring with Falco
+- SAST/DAST integration in CI/CD pipeline
+
+---
+
+## Branch Protection Rules
+
+### Main Branch Protection (Active since Phase 2)
+The `main` branch is protected with the following rules:
+
+**Required Before Merging:**
+- Pull request with at least 1 approval
+- Status checks must pass:
+  - CI tests
+  - `make verify` validation
+  - CodeQL security scanning
+- All conversations must be resolved
+- Linear history (no merge commits)
+- Commits must be GPG signed
+
+**Bypass Permissions:**
+- @powerfulmoves (repository owner)
+- @claudedev (automation bot)
+- @coderabbitai (review bot)
+
+### CODEOWNERS
+Automated review assignments configured in `.github/CODEOWNERS`:
+- `/pmoves/**` - Core services team
+- `/.github/**` - DevOps team
+- `/docs/**` - Documentation team
+- `/deploy/**` - Infrastructure team
+
+**Status:** Active and enforced since PR #276 (2025-12-07)
+
+---
+
+## Recent Changes
+
+### PR #276: Phase 2 Security Hardening (2025-12-07)
+**Status:** Merged to main (commit 8bf936a)
+
+**Changes:**
+- Fixed network isolation tier assignments for all 45 services
+- Container security fixes:
+  - TensorZero: Non-root user, read-only root filesystem
+  - DeepResearch: Fixed build context and environment variable syntax
+  - NATS: Proper health check configuration
+- Removed BuildKit secrets from tracked files
+- Implemented branch protection rules
+- Added CODEOWNERS for automated reviews
+
+**Key Commits:**
+- a15c045: Network tier segmentation fixes
+- 0811f96: TensorZero container hardening
+- cb47f06: DeepResearch build fixes
+- 4a2a36a: Branch protection setup
+
+**Documentation:** See `docs/security/phase-2/` for complete audit trail
+
+---
 
 ## GitHub Actions Self-Hosted Runner Setup
 

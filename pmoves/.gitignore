@@ -14,6 +14,14 @@ supa.md
 *.log
 .last_logs.txt
 
+# Backup files (may contain credentials)
+*.backup*
+*-backup-*
+*.bak
+
+# WSL artifacts
+.wsl/
+
 # Python
 __pycache__/
 *.py[cod]
