@@ -8,8 +8,8 @@ import pytest
 
 pytest.importorskip("fastapi")
 
-from pmoves.services.gateway.gateway.api import workflow
-from pmoves.services.gateway.gateway.api.workflow import (
+from services.gateway.gateway.api import workflow
+from services.gateway.gateway.api.workflow import (
     _build_cgp,
     _build_hirag_items,
     _chunk_segments,

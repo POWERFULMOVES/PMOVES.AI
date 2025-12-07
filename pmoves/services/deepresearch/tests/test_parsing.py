@@ -1,4 +1,4 @@
-from pmoves.services.deepresearch.parser import parse_model_output, prepare_result
+from services.deepresearch.parser import parse_model_output, prepare_result
 
 import pytest
 
@@ -64,9 +64,6 @@ def test_prepare_result_normalises_sources(sources, expected_urls):
     assert [item["url"] for item in result["sources"]] == expected_urls
     assert result["query"] == "who invented radar"
     assert result["reasoning"] == "Collected from encyclopaedias"
-from services.deepresearch.parser import parse_model_output, prepare_result
-
-
 def test_parse_model_output_from_code_block():
     raw = """```json\n{\n  \"summary\": \"Key findings\",\n  \"notes\": [\"Observation one\", \"Observation two\"],\n  \"sources\": [\n    {\n      \"title\": \"Doc\",\n      \"url\": \"https://example.com\",\n      \"confidence\": 0.82\n    }\n  ],\n  \"steps\": [\"Initial search\", {\"action\": \"visit\"}]\n}\n```"""
     parsed = parse_model_output(raw)

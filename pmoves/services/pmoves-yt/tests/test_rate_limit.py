@@ -11,7 +11,7 @@ for p in (str(ROOT), str(PM)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from pmoves.services.pmoves_yt import yt as ytmod  # noqa: E402
+from services.pmoves_yt import yt as ytmod  # noqa: E402
 
 
 @pytest.mark.asyncio
