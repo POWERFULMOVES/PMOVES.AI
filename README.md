@@ -11,6 +11,8 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - **`pmoves/ui/`** – Next.js + Supabase Platform Kit workspace for the upcoming web UI; reuses `pmoves/.env.local` so frontend hooks can target the same Supabase CLI stack.
 
 ## Essential Documentation
+- **[Claude Code CLI Integration](.claude/README.md)** – TAC integration with custom slash commands, security hooks, and PMOVES-aware context for AI-assisted development.
+- **[Testing Strategy](docs/testing/TESTING.md)** – Comprehensive testing guide covering smoke tests, functional tests, and end-to-end validation workflows.
 - [PMOVES Stack README](pmoves/README.md) – Quickstart environment setup, service inventory, and Codex bootstrap steps for running the orchestration mesh locally.
 - [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) – One-stop index for environment scripts, Make targets, Supabase workflows, smoke tests, and provisioning helpers.
 - [Supabase Service Guide](pmoves/docs/services/supabase/README.md) – CLI vs compose expectations, realtime wiring (`supabase start --network-id pmoves-net`), and how PMOVES consumes PostgREST/Realtime in both local and self-hosted deployments.
@@ -108,6 +110,100 @@ See each directory’s README for ports, Make targets, and geometry notes. New i
 2. **Review orchestration flows** – Use the [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) for day-to-day compose control, and consult the architecture and multi-agent guides in `/docs` for how Agent Zero, Archon, and supporting services communicate across the mesh.
 
 Need a full directory tour? Regenerate `folders.md` using the embedded script to explore the repository structure at depth two before diving deeper into service-specific documentation.
+
+## Developer Tools & Testing
+
+### Claude Code CLI Integration (TAC)
+
+PMOVES.AI integrates deeply with **Claude Code CLI** through the `.claude/` directory, providing context-aware development assistance:
+
+**Key Features:**
+- **Always-on context** (`.claude/CLAUDE.md`) - Makes Claude aware of PMOVES architecture, services, and patterns
+- **Custom slash commands** - Quick access to production services:
+  - `/health:check-all` - Verify all services are running
+  - `/search:hirag "query"` - Query Hi-RAG v2 knowledge base
+  - `/agents:status` - Check Agent Zero orchestration status
+  - `/deploy:smoke-test` - Run integration test suite
+- **Security hooks** - Pre-tool validation blocks dangerous operations (rm -rf /, DROP DATABASE, etc.)
+- **Observability hooks** - Post-tool events published to NATS (`claude.code.tool.executed.v1`)
+
+**Quick Start:**
+```bash
+# Use Claude Code CLI with PMOVES context
+claude
+
+# Try a custom command
+/health:check-all
+
+# Query knowledge base
+/search:hirag "How does Agent Zero work?"
+```
+
+**Learn more:** [.claude/README.md](.claude/README.md) | [Developer Context](.claude/CLAUDE.md)
+
+### Testing Infrastructure
+
+PMOVES.AI employs comprehensive testing from smoke tests to end-to-end workflows:
+
+**1. Smoke Tests** (30-60 seconds) - Quick health validation:
+```bash
+cd pmoves
+make verify-all          # Full smoke test suite
+make smoke               # Core services only
+make smoke-gpu           # GPU-enabled services
+make archon-smoke        # Archon agent services
+make deepresearch-smoke  # Research orchestration
+```
+
+**2. Functional Tests** (2-5 minutes) - Feature validation:
+```bash
+# Run all functional tests
+cd pmoves/tests
+./run-functional-tests.sh
+
+# Individual test categories
+./run-functional-tests.sh --category retrieval
+./run-functional-tests.sh --category agents
+./run-functional-tests.sh --category ingestion
+```
+
+**3. Integration Tests** - End-to-end workflows:
+```bash
+# NATS event flow validation
+make test-nats-flow
+
+# Media pipeline validation
+make test-media-pipeline
+
+# Agent coordination validation
+make test-agent-mesh
+```
+
+**Coverage Map:**
+- Service health endpoints (Qdrant, Neo4j, Meilisearch, Supabase)
+- Retrieval accuracy (Hi-RAG v2 reranking, embedding generation)
+- Agent coordination (Agent Zero MCP, Archon prompts, NATS routing)
+- Media processing (YouTube ingestion, Whisper transcription, YOLO analysis)
+- Observability (Prometheus metrics, Grafana dashboards, Loki logs)
+
+**Learn more:** [docs/testing/TESTING.md](docs/testing/TESTING.md) | [pmoves/tests/README.md](pmoves/tests/README.md)
+
+### Development Workflow
+
+**Typical developer flow:**
+1. **Environment setup** - `make first-run` or `make bootstrap`
+2. **Service verification** - `make verify-all` (smoke tests)
+3. **Development** - Use Claude Code CLI with custom commands
+4. **Testing** - `./run-functional-tests.sh` before commits
+5. **Monitoring** - Grafana dashboard at http://localhost:3000
+
+**Best practices:**
+- Use `/health:check-all` before starting work to verify service status
+- Leverage existing services (Hi-RAG, SupaSerch, Agent Zero) - don't duplicate
+- Publish events to NATS for async coordination
+- Follow observability patterns (expose `/healthz` and `/metrics`)
+- Run smoke tests after infrastructure changes
+- Use security hooks to prevent dangerous operations
 
 ## Build Status & Recent Improvements
 
