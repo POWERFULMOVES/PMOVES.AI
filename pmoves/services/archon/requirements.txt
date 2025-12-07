@@ -21,7 +21,7 @@ crawl4ai==0.6.2
 mcp==1.12.2
 docker>=6.1.0
 playwright==1.49.0
-yt-dlp==2024.12.23
+yt-dlp==2025.11.12
 tldextract>=5.1.2
 
 # Supabase/Postgres integration
