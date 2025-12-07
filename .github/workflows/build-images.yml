@@ -30,11 +30,11 @@ jobs:
       - name: Parse image matrix
         id: set-matrix
         run: |
-          python - <<'PY'
-import yaml, json, pathlib
-data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
-print(f"matrix={json.dumps(data['images'])}")
-PY
+          python3 - <<'EOF'
+          import yaml, json, pathlib
+          data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
+          print(f"matrix={json.dumps(data['images'])}")
+          EOF
 
   build:
     needs: setup-matrix
