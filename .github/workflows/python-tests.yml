@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'pmoves/__init__.py'
       - 'pmoves/services/__init__.py'
       - 'pmoves/services/publisher/**'
       - 'pmoves/services/publisher-discord/**'
@@ -11,10 +12,12 @@ on:
       - 'pmoves/services/common/**'
       - 'pmoves/libs/**'
       - 'pmoves/tests/**'
+      - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   pull_request:
     branches: [main]
     paths:
+      - 'pmoves/__init__.py'
       - 'pmoves/services/__init__.py'
       - 'pmoves/services/publisher/**'
       - 'pmoves/services/publisher-discord/**'
@@ -22,6 +25,7 @@ on:
       - 'pmoves/services/common/**'
       - 'pmoves/libs/**'
       - 'pmoves/tests/**'
+      - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   workflow_dispatch:
 
