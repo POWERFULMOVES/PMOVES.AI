@@ -126,6 +126,26 @@
     },
     "research.deepresearch.result.v1": {
       "schema": "schemas/research/deepresearch.result.v1.schema.json"
+    },
+    "agent.rl.trajectory.v1": {
+      "schema": "schemas/agent-rl/trajectory.v1.schema.json",
+      "description": "Multi-turn agent interaction trajectory for RL training"
+    },
+    "agent.rl.reward.v1": {
+      "schema": "schemas/agent-rl/reward.v1.schema.json",
+      "description": "Computed reward signal for trajectory evaluation"
+    },
+    "agent.rl.training.request.v1": {
+      "schema": "schemas/agent-rl/training.request.v1.schema.json",
+      "description": "Request to trigger RL training job"
+    },
+    "agent.rl.training.status.v1": {
+      "schema": "schemas/agent-rl/training.status.v1.schema.json",
+      "description": "Training progress and results updates"
+    },
+    "agent.rl.model.deployed.v1": {
+      "schema": "schemas/agent-rl/model.deployed.v1.schema.json",
+      "description": "New RL-trained model deployed to serving"
     }
   }
 }

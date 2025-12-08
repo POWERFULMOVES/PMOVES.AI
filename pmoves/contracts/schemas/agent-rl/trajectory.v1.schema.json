@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent RL Trajectory",
+  "description": "Multi-turn interaction sequence from agent execution for RL training",
+  "type": "object",
+  "required": [
+    "trajectory_id",
+    "session_id",
+    "agent_id",
+    "start_timestamp",
+    "end_timestamp",
+    "turns",
+    "task_context",
+    "metadata"
+  ],
+  "properties": {
+    "trajectory_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this trajectory"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Agent Zero session ID"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent identifier (main or subordinate)",
+      "examples": ["agent-zero-main", "subordinate-researcher-1"]
+    },
+    "subordinate_profile": {
+      "type": ["string", "null"],
+      "enum": ["researcher", "developer", "hacker", "rl-trainer", null],
+      "description": "Subordinate agent profile if applicable"
+    },
+    "start_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Trajectory start time (ISO 8601)"
+    },
+    "end_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Trajectory end time (ISO 8601)"
+    },
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Sequence of agent interaction turns",
+      "items": {
+        "type": "object",
+        "required": [
+          "turn_id",
+          "timestamp",
+          "observation",
+          "action",
+          "result"
+        ],
+        "properties": {
+          "turn_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Sequential turn number"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Turn timestamp (ISO 8601)"
+          },
+          "observation": {
+            "type": "object",
+            "required": ["type", "content"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["user_message", "tool_result", "subordinate_response", "system_message"],
+                "description": "Type of observation"
+              },
+              "content": {
+                "description": "Observation content (string or structured object)",
+                "oneOf": [
+                  {"type": "string"},
+                  {"type": "object"}
+                ]
+              },
+              "context": {
+                "type": "object",
+                "description": "Additional context for the observation",
+                "properties": {
+                  "memory_state": {
+                    "type": "object",
+                    "description": "Agent memory state snapshot"
+                  },
+                  "available_tools": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of tools available at this turn"
+                  },
+                  "subordinates_active": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Number of active subordinate agents"
+                  }
+                }
+              }
+            }
+          },
+          "thought_process": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Agent's reasoning thoughts before action"
+          },
+          "action": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["tool_call", "subordinate_call", "response", "memory_update"],
+                "description": "Type of action taken"
+              },
+              "tool_name": {
+                "type": "string",
+                "description": "Name of tool called (if type=tool_call)"
+              },
+              "tool_args": {
+                "type": "object",
+                "description": "Arguments passed to tool"
+              },
+              "raw_response": {
+                "type": "string",
+                "description": "Full LLM response including thoughts and action"
+              }
+            }
+          },
+          "result": {
+            "type": "object",
+            "required": ["success"],
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Whether the action succeeded"
+              },
+              "output": {
+                "description": "Tool execution result or response",
+                "oneOf": [
+                  {"type": "string"},
+                  {"type": "object"},
+                  {"type": "null"}
+                ]
+              },
+              "error": {
+                "type": ["string", "null"],
+                "description": "Error message if action failed"
+              },
+              "execution_time_ms": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Action execution time in milliseconds"
+              }
+            }
+          }
+        }
+      }
+    },
+    "task_context": {
+      "type": "object",
+      "required": ["task_id", "instructions"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "Original task identifier"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "User's original request"
+        },
+        "complexity_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Estimated task complexity (0=simple, 1=very complex)"
+        },
+        "domain": {
+          "type": "string",
+          "enum": ["coding", "research", "data_analysis", "general", "debugging", "writing"],
+          "description": "Task domain classification"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["model"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "LLM model used for this trajectory",
+          "examples": ["qwen2.5-32b-instruct", "agent-zero-rl-v2.3"]
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "description": "LLM sampling temperature"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total tokens used in trajectory"
+        },
+        "total_cost_usd": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Total cost in USD"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
