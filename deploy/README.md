@@ -14,9 +14,45 @@ deploy/
 │   ├── ai-lab/             # AI Lab cluster overlay
 │   ├── kvm4/               # KVM4 gateway overlay
 │   └── local/              # Local dev overlay
+├── runners/          # Self-hosted GitHub Actions runners
+│   ├── ailab/              # GPU runner installation
+│   ├── vps/                # VPS runner installation
+│   └── README.md           # Runner fleet documentation
+├── cloudflare/       # Cloudflare Workers CI/CD orchestration
+│   ├── worker.js           # GitHub webhook handler
+│   ├── wrangler.toml       # Workers configuration
+│   ├── README.md           # Detailed documentation
+│   └── QUICKSTART.md       # 10-minute setup guide
 ├── config/           # Configuration files (future)
-└── docs/             # Deployment documentation (future)
+└── HYBRID_RUNNER_STRATEGY.md  # CI/CD architecture guide
 ```
+
+## CI/CD Infrastructure
+
+PMOVES.AI uses a **hybrid runner strategy** combining self-hosted infrastructure with cloud runners and Cloudflare Workers orchestration.
+
+### Quick Links
+
+- **[Hybrid Runner Strategy](HYBRID_RUNNER_STRATEGY.md)** - Full architecture and decision matrix
+- **[Self-Hosted Runners](runners/README.md)** - AI Lab GPU + VPS fleet setup
+- **[Cloudflare Workers](cloudflare/README.md)** - Intelligent build routing and monitoring
+- **[Quick Start](cloudflare/QUICKSTART.md)** - 10-minute deployment guide
+
+### Runner Fleet Overview
+
+| Runner | Labels | Role | Hardware |
+|--------|--------|------|----------|
+| **AI Lab** | `self-hosted,ai-lab,gpu` | GPU builds (CUDA, Ollama) | RTX 5090/4090/3090Ti |
+| **cloudstartup** | `self-hosted,cloudstartup,staging` | Staging deploys | Hostinger VPS (8 vCPU) |
+| **kvm4** | `self-hosted,kvm4,production` | Production deploys | Hostinger VPS (8 vCPU) |
+| **kvm2** | `self-hosted,kvm2,backup` | Overflow/backup | Hostinger VPS (4 vCPU) |
+| **GitHub hosted** | `ubuntu-latest` | Lightweight tasks | Cloud (on-demand) |
+
+**Cost**: ~$35/month vs $300/month GitHub-hosted only (88% savings)
+
+See [HYBRID_RUNNER_STRATEGY.md](HYBRID_RUNNER_STRATEGY.md) for detailed routing logic and cost optimization.
+
+---
 
 ## Deployment Targets
 
