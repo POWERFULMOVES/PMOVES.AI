@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent RL Training Status",
+  "description": "Training progress and results broadcast from AgentGym-RL service",
+  "type": "object",
+  "required": [
+    "training_job_id",
+    "timestamp",
+    "status"
+  ],
+  "properties": {
+    "training_job_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the training request"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Status update timestamp (ISO 8601)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "running", "completed", "failed", "cancelled"],
+      "description": "Current training job status"
+    },
+    "progress": {
+      "type": "object",
+      "description": "Training progress information",
+      "properties": {
+        "current_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_epochs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "current_step": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_steps": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "percent_complete": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "eta_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated time to completion in seconds"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Training metrics",
+      "properties": {
+        "current": {
+          "type": "object",
+          "description": "Current epoch/step metrics",
+          "properties": {
+            "loss": {
+              "type": "number",
+              "description": "Training loss"
+            },
+            "reward_mean": {
+              "type": "number",
+              "description": "Mean reward on training data"
+            },
+            "reward_std": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Reward standard deviation"
+            },
+            "policy_entropy": {
+              "type": "number",
+              "description": "Policy entropy (exploration measure)"
+            },
+            "kl_divergence": {
+              "type": "number",
+              "minimum": 0,
+              "description": "KL divergence from base model"
+            },
+            "learning_rate": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Current learning rate"
+            }
+          }
+        },
+        "best": {
+          "type": "object",
+          "description": "Best metrics achieved so far",
+          "properties": {
+            "epoch": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reward_mean": {
+              "type": "number"
+            },
+            "checkpoint_path": {
+              "type": "string",
+              "description": "Path to best checkpoint"
+            }
+          }
+        }
+      }
+    },
+    "evaluation_results": {
+      "type": "object",
+      "description": "Evaluation results on holdout/benchmark data",
+      "properties": {
+        "holdout_reward": {
+          "type": "number",
+          "description": "Mean reward on holdout set"
+        },
+        "benchmark_scores": {
+          "type": "object",
+          "description": "Scores on benchmark tasks",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "improvement_over_baseline": {
+          "type": "number",
+          "description": "Performance improvement vs base model"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "description": "Training artifacts and outputs",
+      "properties": {
+        "final_checkpoint": {
+          "type": "string",
+          "description": "Path to final model checkpoint"
+        },
+        "tensorboard_logs": {
+          "type": "string",
+          "description": "Path to TensorBoard logs"
+        },
+        "training_curves": {
+          "type": "string",
+          "description": "Path to training curve visualizations"
+        },
+        "model_card": {
+          "type": "string",
+          "description": "Path to model card documentation"
+        }
+      }
+    },
+    "resource_usage": {
+      "type": "object",
+      "description": "Resource consumption statistics",
+      "properties": {
+        "gpu_hours": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total GPU hours consumed"
+        },
+        "cost_usd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated cost in USD"
+        },
+        "peak_memory_gb": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Peak GPU memory usage in GB"
+        },
+        "total_training_time_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total wall-clock training time"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "description": "Error information if status=failed",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["OOM", "CONVERGENCE", "DATA", "INFRA", "TIMEOUT", "UNKNOWN"],
+          "description": "Error category"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        },
+        "traceback": {
+          "type": "string",
+          "description": "Full error traceback"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "training_platform": {
+          "type": "string",
+          "description": "Training platform identifier",
+          "examples": ["agentgym-rl-v1", "trl-v0.9"]
+        },
+        "cuda_version": {
+          "type": "string",
+          "description": "CUDA version used"
+        },
+        "pytorch_version": {
+          "type": "string",
+          "description": "PyTorch version used"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,4 +1,4 @@
-name: Self-Hosted Builds
+name: Self-Hosted Builds (Hardened)
 
 on:
   push:
@@ -28,6 +28,11 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
 
+permissions:
+  contents: read
+  packages: write
+  security-events: write  # Required for uploading SARIF results
+
 jobs:
   # ============================================================================
   # GPU Builds - AI Lab Runner
@@ -41,6 +46,22 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'gpu-build')
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit  # Start with audit mode; migrate to 'block' after validating endpoints
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudflare.docker.com:443
+            nvidia.github.io:443
+            developer.download.nvidia.com:443
+            cuda.repo.nvidia.com:443
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -72,6 +93,26 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Scan Ollama CUDA with Trivy
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda-${{ github.sha }}
+          format: sarif
+          output: trivy-ollama-cuda.sarif
+          exit-code: '0'  # Don't fail initially; set to '1' after baseline established
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Upload Trivy results for Ollama CUDA
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-ollama-cuda.sarif
+          category: trivy-ollama-cuda
 
       - name: Build Hi-RAG GPU
         uses: docker/build-push-action@v5
@@ -84,6 +125,26 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Scan Hi-RAG GPU with Trivy
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu-${{ github.sha }}
+          format: sarif
+          output: trivy-hirag-gpu.sarif
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Upload Trivy results for Hi-RAG GPU
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-hirag-gpu.sarif
+          category: trivy-hirag-gpu
 
       - name: Test GPU inference
         run: |
@@ -107,6 +168,7 @@ jobs:
     name: CPU Services
     runs-on: [self-hosted, vps]
     strategy:
+      fail-fast: false
       matrix:
         service:
           - name: agent-zero
@@ -119,6 +181,25 @@ jobs:
             context: ./pmoves/services/publisher-discord
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudflare.docker.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            archive.ubuntu.com:80
+            archive.ubuntu.com:443
+            security.ubuntu.com:80
+            security.ubuntu.com:443
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -145,6 +226,27 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          provenance: true
+          sbom: true
+
+      - name: Scan ${{ matrix.service.name }} with Trivy
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
+          format: sarif
+          output: trivy-${{ matrix.service.name }}.sarif
+          exit-code: '0'  # Set to '1' after baseline vulnerabilities addressed
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: Upload Trivy results for ${{ matrix.service.name }}
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service.name }}.sarif
+          category: trivy-${{ matrix.service.name }}
 
   # ============================================================================
   # Contract Validation - Fast, any runner
@@ -154,6 +256,16 @@ jobs:
     runs-on: [self-hosted, vps]
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            registry.npmjs.org:443
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -198,6 +310,16 @@ jobs:
     environment: staging
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -225,6 +347,17 @@ jobs:
     environment: production
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            discord.com:443
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -262,6 +395,18 @@ jobs:
     if: needs.deploy-staging.result == 'success'
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            staging:3030
+            staging:8086
+            staging:4222
+
       - name: Checkout
         uses: actions/checkout@v4
 

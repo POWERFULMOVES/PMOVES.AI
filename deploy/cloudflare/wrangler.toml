@@ -1,0 +1,54 @@
+# Cloudflare Workers Configuration for PMOVES.AI
+# GitHub Actions webhook handler and deployment orchestrator
+
+name = "pmoves-ci-orchestrator"
+main = "worker.js"
+compatibility_date = "2025-12-08"
+workers_dev = true
+
+# Account ID (override with CLOUDFLARE_ACCOUNT_ID env var)
+# account_id = "your_account_id_here"
+
+# KV Namespace for build state tracking (create via: wrangler kv:namespace create "CI_STATE")
+[[kv_namespaces]]
+binding = "CI_STATE"
+id = "your_kv_namespace_id"
+preview_id = "your_preview_kv_namespace_id"
+
+# R2 Bucket for build artifacts (optional)
+# [[r2_buckets]]
+# binding = "BUILD_ARTIFACTS"
+# bucket_name = "pmoves-ci-artifacts"
+
+# Environment variables
+[vars]
+WEBHOOK_SECRET = ""  # GitHub webhook secret - set via wrangler secret
+DISCORD_WEBHOOK_URL = ""  # Discord notifications
+RUNNER_DISPATCH_MODE = "hybrid"  # hybrid | cloudflare-only | self-hosted-only
+
+# Production environment
+[env.production]
+name = "pmoves-ci-orchestrator-prod"
+vars = { RUNNER_DISPATCH_MODE = "hybrid" }
+
+# Staging environment
+[env.staging]
+name = "pmoves-ci-orchestrator-staging"
+vars = { RUNNER_DISPATCH_MODE = "cloudflare-only" }
+
+# Secrets to set via: wrangler secret put <NAME>
+# - WEBHOOK_SECRET: GitHub webhook secret for validating payloads
+# - GITHUB_TOKEN: GitHub PAT for triggering workflows
+# - CLOUDFLARE_API_TOKEN: For deploying via Workers API
+# - DISCORD_WEBHOOK_URL: Discord notification endpoint
+
+# Routes (configure after deployment)
+# routes = [
+#   { pattern = "ci.pmoves.ai/webhook", zone_name = "pmoves.ai" }
+# ]
+
+# Limits
+limits = { cpu_ms = 50 }
+
+# Compatibility flags
+compatibility_flags = []

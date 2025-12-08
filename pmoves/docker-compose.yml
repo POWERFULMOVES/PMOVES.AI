@@ -671,6 +671,54 @@ services:
       retries: 12
       start_period: 15s
 
+  archon-agent-work-orders:
+    build:
+      context: .
+      dockerfile: ./services/archon/Dockerfile
+      args:
+        - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
+        - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - PORT=8053
+      - AGENT_WORK_ORDERS_PORT=${AGENT_WORK_ORDERS_PORT:-8053}
+      - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://archon:8091}
+      - ARCHON_MCP_URL=${ARCHON_MCP_URL:-http://archon:8051}
+      - SERVICE_DISCOVERY_MODE=${SERVICE_DISCOVERY_MODE:-docker}
+      - CLAUDE_CLI_PATH=${CLAUDE_CLI_PATH:-claude}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - LOG_LEVEL=${AGENT_WORK_ORDERS_LOG_LEVEL:-INFO}
+      # Supabase connection (same as main Archon)
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      # Git configuration for worktrees
+      - GIT_WORKTREE_BASE=${GIT_WORKTREE_BASE:-/worktrees}
+    depends_on:
+      archon:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    command: ["python", "-m", "uvicorn", "src.agent_work_orders.server:app", "--host", "0.0.0.0", "--port", "8053"]
+    ports: ["8053:8053"]
+    volumes:
+      # Worktree storage for git operations
+      - archon-worktrees:/worktrees
+    profiles: ["agents", "work-orders"]
+    networks:
+      api_tier:
+      bus_tier:
+      data_tier:
+      monitoring_tier:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/healthz').getcode()==200 else sys.exit(1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped
@@ -1018,6 +1066,7 @@ volumes:
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
+  archon-worktrees: {}
 networks:
   # 5-Tier Network Architecture for Defense in Depth
   api_tier:

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent RL Reward Signal",
+  "description": "Computed reward signal for trajectory evaluation in RL training",
+  "type": "object",
+  "required": [
+    "reward_id",
+    "trajectory_id",
+    "session_id",
+    "timestamp",
+    "reward_components",
+    "total_reward",
+    "reward_type",
+    "metadata"
+  ],
+  "properties": {
+    "reward_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this reward signal"
+    },
+    "trajectory_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the evaluated trajectory"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Agent Zero session ID"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Reward computation timestamp (ISO 8601)"
+    },
+    "reward_components": {
+      "type": "object",
+      "description": "Individual reward components with scores and weights",
+      "properties": {
+        "task_completion": {
+          "$ref": "#/$defs/reward_component"
+        },
+        "efficiency": {
+          "$ref": "#/$defs/reward_component"
+        },
+        "code_quality": {
+          "$ref": "#/$defs/reward_component"
+        },
+        "user_feedback": {
+          "$ref": "#/$defs/reward_component"
+        },
+        "safety": {
+          "$ref": "#/$defs/reward_component"
+        },
+        "accuracy": {
+          "$ref": "#/$defs/reward_component"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/reward_component"
+      }
+    },
+    "total_reward": {
+      "type": "number",
+      "description": "Weighted sum of all reward components"
+    },
+    "reward_type": {
+      "type": "string",
+      "enum": ["dense", "sparse"],
+      "description": "Dense rewards for each turn, sparse rewards for final outcome"
+    },
+    "normalization": {
+      "type": "object",
+      "description": "Normalization parameters used",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["z-score", "min-max", "none"],
+          "description": "Normalization method applied"
+        },
+        "mean": {
+          "type": "number",
+          "description": "Mean of reward distribution (for z-score)"
+        },
+        "std": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Standard deviation of reward distribution (for z-score)"
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum value (for min-max)"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum value (for min-max)"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["evaluator", "evaluation_method"],
+      "properties": {
+        "evaluator": {
+          "type": "string",
+          "description": "Entity that computed the reward",
+          "examples": ["rl-trainer-subordinate", "user-feedback-api", "automated-evaluator"]
+        },
+        "evaluation_method": {
+          "type": "string",
+          "enum": ["automated", "human", "hybrid", "model-based"],
+          "description": "Method used to compute reward"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Confidence in reward accuracy (0=low, 1=high)"
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "reward_component": {
+      "type": "object",
+      "required": ["score", "weight", "source"],
+      "properties": {
+        "score": {
+          "type": "number",
+          "description": "Raw score for this component (before normalization)"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Weight in total reward calculation"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["automated", "human", "linter", "test_results", "benchmark"],
+          "description": "Source of this component score"
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Explanation for this score"
+        },
+        "raw_data": {
+          "type": "object",
+          "description": "Additional raw data used in scoring"
+        }
+      }
+    }
+  }
+}
