@@ -68,3 +68,6 @@
 [submodule "PMOVES-n8n"]
 	path = PMOVES-n8n
 	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
+[submodule "pmoves/vendor/agentgym-rl"]
+	path = pmoves/vendor/agentgym-rl
+	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
