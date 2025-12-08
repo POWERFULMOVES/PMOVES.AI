@@ -265,6 +265,22 @@ services:
       - notebook-sync-data:/data
     networks: [app_tier, monitoring_tier]
 
+  session-context-worker:
+    build:
+      context: .
+      dockerfile: services/session-context-worker/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HEALTH_PORT=8100
+    depends_on:
+      nats:
+        condition: service_started
+    ports: ["8100:8100"]
+    profiles: ["workers","orchestration"]
+    networks: [bus_tier, monitoring_tier]
+
   ffmpeg-whisper:
     build:
       context: ..
@@ -749,8 +765,10 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - CLAUDE_SESSION_CHANNEL_ID=${CLAUDE_SESSION_CHANNEL_ID}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
+      - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,claude.code.session.start.v1,claude.code.session.context.v1,claude.code.session.end.v1}
     depends_on: [nats]
     ports: ["8094:8092"]
     profiles: ["orchestration","agents"]
@@ -773,8 +791,16 @@ services:
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_MODELS=/root/.ollama/models
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
       - pmoves-ollama-models:/root/.ollama/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     profiles: ["tensorzero"]
     networks: [app_tier, api_tier]
 
