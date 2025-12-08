@@ -41,6 +41,7 @@ jobs:
             "pmoves/supabase/migrations/2025-10-18_geometry_swarm.sql"
             "pmoves/supabase/migrations/2025-10-18_health_finance.sql"
             "pmoves/supabase/migrations/2025-10-20_persona_avatar.sql"
+            "pmoves/supabase/migrations/2025-10-20_geometry_cgp_views.sql"
             "pmoves/supabase/migrations/2025-12-08_archon_work_orders.sql"
             "pmoves/supabase/migrations/2025-12-08_claude_sessions.sql"
           )
