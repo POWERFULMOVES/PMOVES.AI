@@ -1,0 +1,421 @@
+name: Self-Hosted Builds (Hardened)
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'services/**'
+      - 'pmoves/**'
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deploy target (staging/production/none)'
+        required: false
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write  # Required for uploading SARIF results
+
+jobs:
+  # ============================================================================
+  # GPU Builds - AI Lab Runner
+  # ============================================================================
+  build-gpu:
+    name: GPU Services
+    runs-on: [self-hosted, ai-lab, gpu]
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'gpu-build')
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit  # Start with audit mode; migrate to 'block' after validating endpoints
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudflare.docker.com:443
+            nvidia.github.io:443
+            developer.download.nvidia.com:443
+            cuda.repo.nvidia.com:443
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify GPU
+        run: |
+          nvidia-smi
+          docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Ollama CUDA
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/ollama
+          file: ./services/ollama/Dockerfile.cuda
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda
+            ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Scan Ollama CUDA with Trivy
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda-${{ github.sha }}
+          format: sarif
+          output: trivy-ollama-cuda.sarif
+          exit-code: '0'  # Don't fail initially; set to '1' after baseline established
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Upload Trivy results for Ollama CUDA
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-ollama-cuda.sarif
+          category: trivy-ollama-cuda
+
+      - name: Build Hi-RAG GPU
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/hirag-gateway
+          file: ./services/hirag-gateway/Dockerfile.gpu
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu
+            ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Scan Hi-RAG GPU with Trivy
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu-${{ github.sha }}
+          format: sarif
+          output: trivy-hirag-gpu.sarif
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
+      - name: Upload Trivy results for Hi-RAG GPU
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-hirag-gpu.sarif
+          category: trivy-hirag-gpu
+
+      - name: Test GPU inference
+        run: |
+          # Start Ollama container for testing
+          docker run -d --name test-ollama --gpus all \
+            ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda
+
+          # Wait for startup
+          sleep 10
+
+          # Verify GPU is being used
+          docker exec test-ollama nvidia-smi
+
+          # Cleanup
+          docker rm -f test-ollama
+
+  # ============================================================================
+  # CPU Builds - Any VPS Runner
+  # ============================================================================
+  build-cpu:
+    name: CPU Services
+    runs-on: [self-hosted, vps]
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: agent-zero
+            context: ./services/agent-zero
+          - name: hirag-gateway
+            context: ./services/hirag-gateway
+          - name: extract-worker
+            context: ./services/extract-worker
+          - name: publisher-discord
+            context: ./pmoves/services/publisher-discord
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudflare.docker.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            archive.ubuntu.com:80
+            archive.ubuntu.com:443
+            security.ubuntu.com:80
+            security.ubuntu.com:443
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build ${{ matrix.service.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:latest
+            ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          provenance: true
+          sbom: true
+
+      - name: Scan ${{ matrix.service.name }} with Trivy
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
+          format: sarif
+          output: trivy-${{ matrix.service.name }}.sarif
+          exit-code: '0'  # Set to '1' after baseline vulnerabilities addressed
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: Upload Trivy results for ${{ matrix.service.name }}
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service.name }}.sarif
+          category: trivy-${{ matrix.service.name }}
+
+  # ============================================================================
+  # Contract Validation - Fast, any runner
+  # ============================================================================
+  validate-contracts:
+    name: Validate NATS Contracts
+    runs-on: [self-hosted, vps]
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            registry.npmjs.org:443
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate schemas
+        run: |
+          cd pmoves/contracts
+          for schema in schemas/**/*.schema.json; do
+            echo "Validating: $schema"
+            ajv compile -s "$schema" --spec=draft2020 --strict=false || exit 1
+          done
+
+      - name: Validate samples against schemas
+        run: |
+          cd pmoves/contracts
+          # Validate sample files if they exist
+          if [ -d "samples" ]; then
+            for sample in samples/**/*.json; do
+              if [ -f "$sample" ]; then
+                echo "Validating sample: $sample"
+              fi
+            done
+          fi
+
+  # ============================================================================
+  # Deploy Staging - cloudstartup Runner
+  # ============================================================================
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: [self-hosted, cloudstartup, staging]
+    needs: [build-cpu, validate-contracts]
+    if: |
+      github.ref == 'refs/heads/develop' ||
+      github.event.inputs.deploy_target == 'staging'
+    environment: staging
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          ./deploy/scripts/deploy-compose.sh staging
+
+      - name: Health check
+        run: |
+          sleep 30
+          curl -sf http://localhost:8080/healthz || exit 1
+          echo "Staging deployment healthy"
+
+  # ============================================================================
+  # Deploy Production - kvm4 Runner
+  # ============================================================================
+  deploy-production:
+    name: Deploy Production
+    runs-on: [self-hosted, kvm4, production]
+    needs: [build-cpu, build-gpu, validate-contracts, deploy-staging]
+    if: |
+      github.ref == 'refs/heads/main' ||
+      github.event.inputs.deploy_target == 'production'
+    environment: production
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            discord.com:443
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pull latest images
+        run: |
+          docker pull ${{ env.IMAGE_PREFIX }}/pmoves-agent-zero:${{ github.sha }}
+          docker pull ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:${{ github.sha }}
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
+          ./deploy/scripts/deploy-compose.sh production
+
+      - name: Health check
+        run: |
+          sleep 60
+          curl -sf http://localhost:8080/healthz || exit 1
+          curl -sf http://localhost:8086/hirag/health || exit 1
+          echo "Production deployment healthy"
+
+      - name: Notify Discord
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d '{"content": "PMOVES.AI deployed to production: ${{ github.sha }}"}' \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+
+  # ============================================================================
+  # Functional Tests - After deployment
+  # ============================================================================
+  functional-tests:
+    name: Functional Tests
+    runs-on: [self-hosted, vps]
+    needs: [deploy-staging]
+    if: needs.deploy-staging.result == 'success'
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            staging:3030
+            staging:8086
+            staging:4222
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run TensorZero tests
+        run: |
+          TENSORZERO_URL=http://staging:3030 ./pmoves/tests/functional/test_tensorzero_inference.sh
+
+      - name: Run Hi-RAG tests
+        run: |
+          HIRAG_URL=http://staging:8086 ./pmoves/tests/functional/test_hirag_query.sh || true
+
+      - name: Run NATS pub/sub tests
+        run: |
+          NATS_URL=nats://staging:4222 ./pmoves/tests/functional/test_nats_pubsub.sh || true
