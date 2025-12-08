@@ -2,6 +2,8 @@
 
 Comprehensive guide to open-source model selection for PMOVES services, optimized for different deployment contexts.
 
+**Last Updated**: December 7, 2025
+
 ## Model Selection Philosophy
 
 PMOVES.AI prioritizes:
@@ -12,33 +14,70 @@ PMOVES.AI prioritizes:
 
 ---
 
+## December 2025 Model Landscape
+
+### Key Model Families Available Now
+
+| Family | Sizes | Context | Notes |
+|--------|-------|---------|-------|
+| **Qwen3** | 0.6B-235B | 40K-256K | Dense + MoE, thinking modes |
+| **Qwen3-Coder** | 30B, 480B | 256K (1M ext) | SWE-Bench SOTA, MoE |
+| **Qwen3-Embedding** | 0.6B, 4B, 8B | 32K | MTEB #1 (70.58), 100+ langs |
+| **Qwen3-VL** | 2B-235B | 256K (1M ext) | Vision-language, GUI agent |
+| **DeepSeek-R1** | 1.5B-671B | 128K-160K | Reasoning distills, MIT license |
+
+### Key Changes from Q1 2025
+
+| Area | Previous | Current (Dec 2025) | Notes |
+|------|----------|-------------------|-------|
+| **Primary LLM** | Qwen 2.5 32B | **Qwen3 30B** (MoE) | 3.3B active params, 256K ctx |
+| **Reasoning** | None | **DeepSeek-R1:32b** | Qwen2.5 distill, MIT license |
+| **Embeddings** | nomic-embed-text | **Qwen3-Embedding:4b** | MTEB #1, 32K context |
+| **Code** | Qwen2.5-Coder | **Qwen3-Coder:30b** | 256K ctx, MoE 3.3B active |
+| **Edge** | Phi-3 Mini | **Qwen3:4b** | 256K ctx, better quality |
+| **Vision** | LLaVA | **Qwen3-VL:8b** | GUI agent, 256K ctx |
+
+### Models to Watch
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| **Llama 4** | TBD 2025 | Meta's next iteration |
+| **DeepSeek-V4** | TBD | Next-gen MoE |
+| **Qwen3-235B** | Available | 235B total, 22B active (MoE) |
+
+---
+
 ## Model Categories by Use Case
 
 ### 1. General LLM / Chat Completion
 
-| Model | Parameters | VRAM Required | Best For |
-|-------|------------|---------------|----------|
-| **Qwen 2.5 32B** | 32B | 24-32GB | General reasoning, coding, analysis |
-| **Qwen 2.5 72B** | 72B | 48-80GB | Maximum quality, complex tasks |
-| **Llama 3.3 70B** | 70B | 48-80GB | Meta's latest, strong all-around |
-| **DeepSeek-R1 671B** | 671B | Cloud/Multi-GPU | Reasoning specialist |
-| **Mistral Large 2** | 123B | 80GB+ | Strong reasoning, multilingual |
-| **Command R+** | 104B | 64GB+ | Tool use, enterprise |
+| Model | Parameters | Active Params | VRAM (Q4) | Context | Best For |
+|-------|------------|---------------|-----------|---------|----------|
+| **qwen3:30b** | 30B | 3.3B (MoE) | 19GB | 256K | Primary orchestration |
+| **qwen3:32b** | 32B | 32B (dense) | 20GB | 128K | Dense alternative |
+| **qwen3:14b** | 14B | 14B | 9GB | 40K | Balanced perf/quality |
+| **qwen3:8b** | 8B | 8B | 5GB | 40K | Fast inference |
+| **qwen3:4b** | 4B | 4B | 2.5GB | 256K | Edge/Jetson |
+| **deepseek-r1:32b** | 32B | 32B | 20GB | 128K | Reasoning specialist |
+| **deepseek-r1:14b** | 14B | 14B | 9GB | 128K | Lighter reasoning |
 
-**PMOVES Default**: Qwen 2.5 32B (fits RTX 3090 Ti/4090)
+**PMOVES Default**: `qwen3:30b` (MoE - only 3.3B active, fits 24GB easily)
+**Reasoning Tasks**: `deepseek-r1:32b` (Qwen2.5 distill, MIT license)
 
 ### 2. Embeddings
 
-| Model | Dimensions | VRAM | Quality Score |
-|-------|------------|------|---------------|
-| **nomic-embed-text** | 768 | 2GB | Excellent |
-| **bge-large-en-v1.5** | 1024 | 2GB | MTEB leader |
-| **gemma-embed** | 768 | 2GB | Google quality |
-| **all-MiniLM-L6-v2** | 384 | 1GB | Fast, lightweight |
-| **e5-large-v2** | 1024 | 2GB | Strong multilingual |
+| Model | Dimensions | VRAM | MTEB Score | Context | Notes |
+|-------|------------|------|------------|---------|-------|
+| **qwen3-embedding:8b** | 32-4096 | 5-16GB | **70.58 (#1)** | 32K | MTEB leader, 100+ langs |
+| **qwen3-embedding:4b** | 32-2560 | 3-4GB | Excellent | 32K | Balanced quality/VRAM |
+| **qwen3-embedding:0.6b** | 32-1024 | 0.5GB | Good | 32K | Edge deployment |
+| **snowflake-arctic-embed2:568m** | 1024 | 1.2GB | Excellent | 8K | Fast, MRL compression |
+| **nomic-embed-text** | 64-768 | 0.5GB | 53.01 | 8K | Speed-optimized |
+| **all-minilm:l6-v2** | 384 | 43MB | Moderate | 512 | Ultra-fast, CPU OK |
 
-**PMOVES Default**: all-MiniLM-L6-v2 (Extract Worker)
-**PMOVES Hi-RAG**: nomic-embed-text or bge-large
+**PMOVES Default (Hi-RAG v2)**: `qwen3-embedding:4b` (MTEB #1 family, 32K context)
+**PMOVES Extract Worker**: `snowflake-arctic-embed2:568m` (100+ docs/sec, 1024d)
+**PMOVES Edge/Fallback**: `all-minilm:l6-v2` (CPU inference, 384d)
 
 ### 3. Reranking
 
@@ -88,58 +127,67 @@ PMOVES.AI prioritizes:
 
 ## Hardware Profile Mappings
 
-### RTX 3090 Ti (24GB VRAM)
+### RTX 5090 (32GB VRAM) - `workstation_5090`
+
+```yaml
+# Ollama model names (exact)
+model_bundles:
+  llm: qwen3:32b              # Dense, 128K ctx, FP16
+  llm_moe: qwen3:30b          # MoE 3.3B active, 256K ctx
+  reasoning: deepseek-r1:32b  # Qwen2.5 distill
+  embeddings: qwen3-embedding:4b  # MTEB #1, 32K ctx
+  code: qwen3-coder:30b       # 256K ctx, MoE
+  vision: qwen3-vl:8b         # GUI agent capable
+  whisper: faster-whisper-large-v3
+```
+
+### RTX 4090 (24GB VRAM) / RTX 3090 Ti (24GB) - `desktop_3090ti`
 
 ```yaml
 model_bundles:
-  llm: qwen2.5-32b-instruct-q4_k_m  # Quantized for 24GB
-  embeddings: nomic-embed-text
-  reranker: qwen-reranker-4b
-  vision: qwen2-vl-7b-instruct
+  llm: qwen3:30b              # MoE, only 3.3B active = fast
+  llm_fallback: qwen3:14b     # Dense fallback
+  reasoning: deepseek-r1:32b  # Fits in 24GB Q4
+  embeddings: qwen3-embedding:4b
+  code: qwen3-coder:30b       # MoE fits easily
+  vision: qwen3-vl:8b
   whisper: faster-whisper-medium
 ```
 
-### RTX 4090/5090 (24-32GB VRAM)
+### RTX 4090 Laptop (16GB VRAM) - `laptop_4090`
 
 ```yaml
 model_bundles:
-  llm: qwen2.5-32b-instruct  # Full precision
-  embeddings: bge-large-en-v1.5
-  reranker: qwen-reranker-4b
-  vision: qwen2-vl-7b-instruct
-  code: qwen2.5-coder-32b
-```
-
-### Dual GPU / 48GB+ VRAM
-
-```yaml
-model_bundles:
-  llm: llama-3.3-70b-instruct  # Or Qwen 72B
-  embeddings: bge-large-en-v1.5
-  reranker: qwen-reranker-4b
-  vision: llava-1.6-34b
-  code: deepseek-coder-v2-instruct
-```
-
-### Jetson AGX Orin (32GB unified)
-
-```yaml
-model_bundles:
-  llm: qwen2.5-7b-instruct  # Smaller for edge
-  embeddings: all-MiniLM-L6-v2
-  reranker: cross-encoder-ms-marco
-  vision: florence-2
+  llm: qwen3:14b              # Dense, good quality
+  llm_fast: qwen3:8b          # Quick responses
+  reasoning: deepseek-r1:14b  # Lighter reasoning
+  embeddings: qwen3-embedding:4b  # 3-4GB
+  code: qwen3-coder:30b       # MoE 3.3B active fits
+  vision: qwen3-vl:4b
   whisper: faster-whisper-small
 ```
 
-### CPU-Only Deployment
+### Jetson Orin Nano Super (8GB unified) - `jetson_orin`
 
 ```yaml
 model_bundles:
-  llm: qwen2.5-7b-instruct-q4_0  # Heavy quantization
-  embeddings: all-MiniLM-L6-v2
-  reranker: bge-reranker-base
-  vision: null  # Cloud fallback
+  llm: qwen3:4b               # 256K ctx, edge optimized
+  llm_tiny: qwen3:0.6b        # Ultra-light fallback
+  reasoning: deepseek-r1:1.5b # Runs on 8GB RAM
+  embeddings: qwen3-embedding:0.6b
+  vision: qwen3-vl:2b
+  whisper: faster-whisper-tiny
+```
+
+### CPU-Only Deployment - `minimal`
+
+```yaml
+model_bundles:
+  llm: qwen3:1.7b             # Light, 40K ctx
+  llm_tiny: qwen3:0.6b        # Minimal
+  reasoning: deepseek-r1:1.5b # CPU-capable
+  embeddings: all-minilm:l6-v2  # 43MB, instant
+  vision: null                # Cloud fallback
   whisper: faster-whisper-tiny
 ```
 
@@ -251,37 +299,70 @@ model = "nomic-embed-text"
 ## Model Pulling with Ollama
 
 ```bash
-# Core models for 24GB VRAM setup
-ollama pull qwen2.5:32b
-ollama pull nomic-embed-text
-ollama pull qwen2-vl:7b
+# December 2025 - Core models for 24GB VRAM setup (RTX 3090 Ti / 4090)
 
-# For reranking (via API, not Ollama native)
-# Use TensorZero routing to local reranker service
+# Primary LLM - Qwen3 MoE (30B total, 3.3B active)
+ollama pull qwen3:30b
 
-# Whisper models
-# Pulled by faster-whisper container automatically
+# Reasoning model - DeepSeek-R1 distill
+ollama pull deepseek-r1:32b
+
+# Embeddings - MTEB #1 (Qwen3-Embedding)
+ollama pull qwen3-embedding:4b
+
+# Code generation - 256K context
+ollama pull qwen3-coder:30b
+
+# Vision-language
+ollama pull qwen3-vl:8b
+
+# Fast fallback
+ollama pull qwen3:8b
+
+# Or use the seed script with profile detection:
+PMOVES_PROFILE=workstation_5090 ./pmoves/scripts/seed-local-models.sh
+```
+
+### Quick Reference - Ollama Model Names
+
+```bash
+# Chat/Reasoning
+qwen3:0.6b | qwen3:1.7b | qwen3:4b | qwen3:8b | qwen3:14b | qwen3:30b | qwen3:32b
+deepseek-r1:1.5b | deepseek-r1:7b | deepseek-r1:8b | deepseek-r1:14b | deepseek-r1:32b | deepseek-r1:70b
+
+# Embeddings (32K context, flexible dimensions)
+qwen3-embedding:0.6b | qwen3-embedding:4b | qwen3-embedding:8b
+
+# Code (256K context, MoE)
+qwen3-coder:30b | qwen3-coder:480b
+
+# Vision-Language (256K context)
+qwen3-vl:2b | qwen3-vl:4b | qwen3-vl:8b | qwen3-vl:30b | qwen3-vl:32b
 ```
 
 ---
 
 ## 2025 Model Landscape Updates
 
-### New Releases to Monitor
+### Released in 2025
 
 | Model | Release | Notes |
 |-------|---------|-------|
-| **Qwen 3** | Q1 2025 | Next-gen from Alibaba |
-| **Llama 4** | TBD 2025 | Meta's next iteration |
-| **GPT-5** | TBD 2025 | OpenAI flagship |
-| **Claude 4** | TBD 2025 | Anthropic next-gen |
-| **Gemini 2.5** | Q1 2025 | Google multimodal |
+| **Qwen3** | 2025 | 0.6B-235B, MoE + Dense, 256K ctx |
+| **Qwen3-Coder** | 2025 | 30B-480B MoE, SWE-Bench SOTA |
+| **Qwen3-Embedding** | 2025 | MTEB #1 (70.58), 32K ctx |
+| **Qwen3-VL** | 2025 | GUI agent, 256K-1M ctx |
+| **DeepSeek-R1** | Jan 2025 | 1.5B-671B, reasoning distills |
+| **DeepSeek-R1-0528** | May 2025 | Improved reasoning, Qwen3 8B base |
+| **Llama 3.3** | 2024-25 | 70B, strong all-around |
 
-### Emerging Architectures
+### Key Architectural Trends (Dec 2025)
 
-- **MoE (Mixture of Experts)**: DeepSeek-V3, Mixtral - efficient at scale
-- **Long Context**: Gemini 2M, Claude 200K - extended reasoning
-- **Reasoning Models**: DeepSeek-R1, o3 - chain-of-thought specialists
+- **MoE (Mixture of Experts)**: Qwen3-30B (3.3B active), Qwen3-235B (22B active) - massive quality, small footprint
+- **Long Context Native**: Qwen3 256K, expandable to 1M via YaRN
+- **Reasoning Distillation**: DeepSeek-R1 distills Qwen2.5/Llama3 with 800K reasoning samples
+- **Matryoshka Embeddings**: Qwen3-Embedding, Snowflake Arctic - flexible output dimensions
+- **Agentic Coding**: Qwen3-Coder trained with Agent RL on 20K parallel environments
 
 ---
 
@@ -339,9 +420,25 @@ python3 -m pmoves.tools.mini_cli profile apply rtx-3090-ti
 
 ## References
 
-- [Qwen 2.5 Technical Report](https://qwenlm.github.io/blog/qwen2.5/)
-- [Llama 3 Documentation](https://llama.meta.com/)
-- [DeepSeek R1 Paper](https://arxiv.org/abs/2501.12948)
-- [TensorZero Documentation](https://www.tensorzero.com/docs)
-- [Ollama Model Library](https://ollama.ai/library)
+### Model Documentation
+- [Qwen3: Think Deeper, Act Faster](https://qwenlm.github.io/blog/qwen3/)
+- [Qwen3-Coder: Agentic Coding](https://qwenlm.github.io/blog/qwen3-coder/)
+- [Qwen3-Embedding: Text Embedding & Reranking](https://qwenlm.github.io/blog/qwen3-embedding/)
+- [DeepSeek-R1 GitHub](https://github.com/deepseek-ai/DeepSeek-R1)
+- [Llama 3.3 Documentation](https://llama.meta.com/)
+
+### Ollama Libraries
+- [qwen3](https://ollama.com/library/qwen3) - 14.6M downloads
+- [qwen3-embedding](https://ollama.com/library/qwen3-embedding)
+- [qwen3-coder](https://ollama.com/library/qwen3-coder)
+- [qwen3-vl](https://ollama.com/library/qwen3-vl)
+- [deepseek-r1](https://ollama.com/library/deepseek-r1) - 73.7M downloads
+- [snowflake-arctic-embed2](https://ollama.com/library/snowflake-arctic-embed2)
+
+### Benchmarks
 - [MTEB Leaderboard](https://huggingface.co/spaces/mteb/leaderboard)
+- [SWE-Bench Verified](https://www.swebench.com/)
+
+### PMOVES Integration
+- [TensorZero Documentation](https://www.tensorzero.com/docs)
+- [PMOVES seed-local-models.sh](../pmoves/scripts/seed-local-models.sh)

@@ -48,12 +48,18 @@ DISCORD_PUBLISH_PREFIX = os.environ.get("DISCORD_PUBLISH_PREFIX", "Published: ")
 DISCORD_METRICS_TABLE = os.environ.get("DISCORD_METRICS_TABLE", "publisher_discord_metrics")
 DISCORD_METRICS_CONFLICT = os.environ.get("DISCORD_METRICS_CONFLICT", "published_event_id")
 
+# Claude session thread configuration
+CLAUDE_SESSION_CHANNEL_ID = os.environ.get("CLAUDE_SESSION_CHANNEL_ID", "")
+DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
 
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
 _webhook_counters = Counter()
 _telemetry_metrics = PublisherMetrics()
 logger = logging.getLogger("publisher_discord")
+
+# Track session_id -> thread_id mapping for Claude sessions
+_session_threads: Dict[str, str] = {}
 
 
 def _coerce_tags(raw: Any) -> Iterable[str]:
@@ -202,6 +208,24 @@ async def _handle_nats_message(msg):
     if not isinstance(payload, dict):
         payload = {"raw": msg.data.decode("utf-8", errors="ignore")}
 
+    # Handle Claude session events differently (use Discord Bot API with threads)
+    if name.startswith("claude.code.session."):
+        if name == "claude.code.session.start.v1":
+            await _handle_claude_session_start(payload)
+        elif name == "claude.code.session.context.v1":
+            await _handle_claude_session_context(payload)
+        elif name == "claude.code.session.end.v1":
+            await _handle_claude_session_end(payload)
+        logger.info(
+            "claude_session_event_processed",
+            extra={
+                "subject": name,
+                "session_id": payload.get("session_id"),
+            },
+        )
+        return
+
+    # Handle regular events (use webhook)
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
     published_at = datetime.datetime.now(datetime.timezone.utc)
     telemetry = compute_publish_telemetry(
@@ -356,6 +380,113 @@ async def metrics():
         "webhook": _webhook_snapshot(),
         "telemetry": _telemetry_metrics.summary(),
     }
+
+async def _create_discord_thread(channel_id: str, thread_name: str, message_content: Optional[str] = None, embeds: Optional[list] = None) -> Optional[str]:
+    """Create a new Discord thread in the specified channel. Returns thread_id or None on failure."""
+    if not DISCORD_BOT_TOKEN or not channel_id:
+        logger.warning("discord_thread_create_skipped", extra={"event": "discord_thread_create_skipped", "reason": "missing_bot_token_or_channel"})
+        return None
+
+    # First, post a message to the channel
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {}
+    if message_content:
+        payload["content"] = message_content
+    if embeds:
+        payload["embeds"] = embeds
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            # Create a message in the channel
+            r = await client.post(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                headers=headers,
+                json=payload
+            )
+            if r.status_code not in (200, 201):
+                logger.warning(
+                    "discord_message_create_failed",
+                    extra={"event": "discord_message_create_failed", "status": r.status_code, "body": r.text[:256]}
+                )
+                return None
+
+            message_data = r.json()
+            message_id = message_data.get("id")
+
+            if not message_id:
+                logger.warning("discord_message_no_id", extra={"event": "discord_message_no_id"})
+                return None
+
+            # Create a thread from the message
+            thread_payload = {"name": thread_name[:100], "auto_archive_duration": 1440}  # 24 hours
+            r = await client.post(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/threads",
+                headers=headers,
+                json=thread_payload
+            )
+
+            if r.status_code not in (200, 201):
+                logger.warning(
+                    "discord_thread_create_failed",
+                    extra={"event": "discord_thread_create_failed", "status": r.status_code, "body": r.text[:256]}
+                )
+                return None
+
+            thread_data = r.json()
+            thread_id = thread_data.get("id")
+
+            if thread_id:
+                logger.info("discord_thread_created", extra={"event": "discord_thread_created", "thread_id": thread_id, "name": thread_name})
+
+            return thread_id
+
+        except Exception as exc:
+            logger.warning("discord_thread_create_exception", extra={"event": "discord_thread_create_exception", "error": str(exc)})
+            return None
+
+
+async def _post_to_discord_thread(thread_id: str, content: Optional[str] = None, embeds: Optional[list] = None) -> bool:
+    """Post a message to an existing Discord thread."""
+    if not DISCORD_BOT_TOKEN or not thread_id:
+        logger.warning("discord_thread_post_skipped", extra={"event": "discord_thread_post_skipped", "reason": "missing_bot_token_or_thread_id"})
+        return False
+
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {}
+    if content:
+        payload["content"] = content
+    if embeds:
+        payload["embeds"] = embeds
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            r = await client.post(
+                f"https://discord.com/api/v10/channels/{thread_id}/messages",
+                headers=headers,
+                json=payload
+            )
+
+            if r.status_code in (200, 201):
+                return True
+
+            logger.warning(
+                "discord_thread_post_failed",
+                extra={"event": "discord_thread_post_failed", "status": r.status_code, "body": r.text[:256]}
+            )
+            return False
+
+        except Exception as exc:
+            logger.warning("discord_thread_post_exception", extra={"event": "discord_thread_post_exception", "error": str(exc)})
+            return False
+
 
 async def _post_discord(content: Optional[str], embeds: Optional[list] = None, retries: int = 3):
     if not DISCORD_WEBHOOK_URL:
@@ -585,6 +716,164 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     elif thumb:
         emb["thumbnail"] = {"url": thumb}
     return {"content": None, "embeds": [emb]}
+
+
+async def _handle_claude_session_start(payload: Dict[str, Any]) -> None:
+    """Handle claude.code.session.start.v1 event by creating a Discord thread."""
+    session_id = payload.get("session_id")
+    if not session_id or not CLAUDE_SESSION_CHANNEL_ID:
+        logger.debug("claude_session_start_skipped", extra={"session_id": session_id, "has_channel": bool(CLAUDE_SESSION_CHANNEL_ID)})
+        return
+
+    # Build thread name
+    branch = payload.get("branch") or "unknown"
+    initial_prompt = payload.get("initial_prompt") or ""
+    summary_preview = initial_prompt[:50] if initial_prompt else "New session"
+    thread_name = f"Claude: {branch} - {summary_preview}"
+
+    # Build embed for the initial message
+    emb = {
+        "title": f"Claude Session Started",
+        "color": 0x5865f2,  # Discord blurple
+        "fields": []
+    }
+
+    if payload.get("branch"):
+        emb["fields"].append({"name": "Branch", "value": f"`{payload['branch']}`", "inline": True})
+    if payload.get("worktree"):
+        emb["fields"].append({"name": "Worktree", "value": f"`{payload['worktree']}`", "inline": True})
+    if payload.get("repository"):
+        emb["fields"].append({"name": "Repository", "value": payload["repository"], "inline": True})
+    if payload.get("model"):
+        emb["fields"].append({"name": "Model", "value": payload["model"], "inline": True})
+    if payload.get("parent_session_id"):
+        emb["fields"].append({"name": "Resumed from", "value": f"`{payload['parent_session_id']}`", "inline": False})
+
+    if initial_prompt:
+        emb["description"] = initial_prompt[:1000]
+
+    emb["footer"] = {"text": f"Session ID: {session_id}"}
+    emb["timestamp"] = payload.get("timestamp")
+
+    # Create thread
+    thread_id = await _create_discord_thread(CLAUDE_SESSION_CHANNEL_ID, thread_name, embeds=[emb])
+
+    if thread_id:
+        _session_threads[session_id] = thread_id
+        logger.info("claude_session_thread_created", extra={"session_id": session_id, "thread_id": thread_id})
+
+
+async def _handle_claude_session_context(payload: Dict[str, Any]) -> None:
+    """Handle claude.code.session.context.v1 event by posting updates to the thread."""
+    session_id = payload.get("session_id")
+    if not session_id:
+        return
+
+    thread_id = _session_threads.get(session_id)
+    if not thread_id:
+        logger.debug("claude_context_no_thread", extra={"session_id": session_id})
+        return
+
+    context_type = payload.get("context_type", "update")
+
+    # Build embed
+    emb = {
+        "title": f"Context Update: {context_type}",
+        "color": 0xfee75c,  # Discord yellow
+        "fields": []
+    }
+
+    if payload.get("summary"):
+        emb["description"] = payload["summary"][:2000]
+
+    if payload.get("branch"):
+        emb["fields"].append({"name": "Branch", "value": f"`{payload['branch']}`", "inline": True})
+
+    # Show pending tasks
+    pending_tasks = payload.get("pending_tasks", [])
+    if pending_tasks:
+        pending_count = sum(1 for t in pending_tasks if t.get("status") in ("pending", "in_progress"))
+        completed_count = sum(1 for t in pending_tasks if t.get("status") == "completed")
+        emb["fields"].append({"name": "Tasks", "value": f"{completed_count} completed, {pending_count} pending", "inline": True})
+
+        # Show first few pending tasks
+        pending_list = [t for t in pending_tasks if t.get("status") in ("pending", "in_progress")][:3]
+        if pending_list:
+            task_text = "\n".join(f"• {t.get('content', 'Unknown task')[:80]}" for t in pending_list)
+            emb["fields"].append({"name": "Current Tasks", "value": task_text, "inline": False})
+
+    # Show active files
+    active_files = payload.get("active_files", [])
+    if active_files:
+        files_text = "\n".join(f"• `{f.get('path', 'unknown')}` ({f.get('action', 'modified')})" for f in active_files[:5])
+        emb["fields"].append({"name": "Active Files", "value": files_text, "inline": False})
+
+    # Show CGP geometry summary if present
+    cgp = payload.get("cgp_geometry")
+    if cgp and isinstance(cgp, dict):
+        emb["fields"].append({"name": "CGP Geometry", "value": f"Type: {cgp.get('type', 'unknown')}", "inline": True})
+
+    emb["timestamp"] = payload.get("timestamp")
+
+    await _post_to_discord_thread(thread_id, embeds=[emb])
+
+
+async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
+    """Handle claude.code.session.end.v1 event by posting final summary."""
+    session_id = payload.get("session_id")
+    if not session_id:
+        return
+
+    thread_id = _session_threads.get(session_id)
+    if not thread_id:
+        logger.debug("claude_end_no_thread", extra={"session_id": session_id})
+        return
+
+    end_reason = payload.get("end_reason", "unknown")
+
+    # Build embed
+    emb = {
+        "title": f"Session Ended: {end_reason}",
+        "color": 0xeb459e,  # Discord pink
+        "fields": []
+    }
+
+    if payload.get("summary"):
+        emb["description"] = payload["summary"][:2000]
+
+    if payload.get("duration_seconds"):
+        duration = payload["duration_seconds"]
+        hours, remainder = divmod(duration, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        duration_str = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s"
+        emb["fields"].append({"name": "Duration", "value": duration_str, "inline": True})
+
+    tasks_completed = payload.get("tasks_completed", 0)
+    tasks_pending = payload.get("tasks_pending", 0)
+    if tasks_completed or tasks_pending:
+        emb["fields"].append({"name": "Tasks", "value": f"{tasks_completed} completed, {tasks_pending} pending", "inline": True})
+
+    files_modified = payload.get("files_modified", [])
+    if files_modified:
+        files_text = "\n".join(f"• `{f}`" for f in files_modified[:10])
+        if len(files_modified) > 10:
+            files_text += f"\n... and {len(files_modified) - 10} more"
+        emb["fields"].append({"name": "Files Modified", "value": files_text, "inline": False})
+
+    commits = payload.get("commits_created", [])
+    if commits:
+        commit_text = "\n".join(f"• `{c.get('sha', 'unknown')[:7]}` {c.get('message', '')[:60]}" for c in commits[:5])
+        emb["fields"].append({"name": "Commits", "value": commit_text, "inline": False})
+
+    emb["timestamp"] = payload.get("timestamp")
+    emb["footer"] = {"text": f"Session ID: {session_id}"}
+
+    await _post_to_discord_thread(thread_id, embeds=[emb])
+
+    # Clean up thread tracking
+    _session_threads.pop(session_id, None)
+    logger.info("claude_session_ended", extra={"session_id": session_id, "end_reason": end_reason})
+
 
 @app.on_event("startup")
 async def startup():

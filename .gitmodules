@@ -65,3 +65,6 @@
 [submodule "pmoves/integrations/archon"]
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
+[submodule "PMOVES-n8n"]
+	path = PMOVES-n8n
+	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git

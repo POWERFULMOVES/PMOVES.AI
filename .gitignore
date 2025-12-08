@@ -37,6 +37,7 @@ testkeys.md
 # Tracked examples like pmoves/.env.example should remain in the repo
 /pmoves/.env
 /pmoves/.env.local
+/pmoves/.supabase.env
 /pmoves/env.jellyfin-ai
 /pmoves/jellyfin-ai/
 # Tooling binaries

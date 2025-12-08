@@ -4,6 +4,18 @@
     "agentzero.event.log.v1": {
       "schema": "schemas/agentzero/event.log.v1.schema.json"
     },
+    "claude.code.session.start.v1": {
+      "schema": "schemas/claude/session.start.v1.schema.json",
+      "description": "Claude Code CLI session started"
+    },
+    "claude.code.session.context.v1": {
+      "schema": "schemas/claude/session.context.v1.schema.json",
+      "description": "Claude Code CLI context snapshot for persistence"
+    },
+    "claude.code.session.end.v1": {
+      "schema": "schemas/claude/session.end.v1.schema.json",
+      "description": "Claude Code CLI session ended"
+    },
     "agentzero.memory.ack.v1": {
       "schema": "schemas/agentzero/memory.ack.v1.schema.json"
     },
