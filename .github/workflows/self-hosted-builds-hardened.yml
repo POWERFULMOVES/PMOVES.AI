@@ -8,8 +8,10 @@ on:
       - 'pmoves/**'
       - 'Dockerfile*'
       - 'docker-compose*.yml'
-  pull_request:
-    branches: [main]
+  # NOTE: PR trigger disabled until self-hosted runners are deployed
+  # Re-enable when AI Lab + VPS runners are operational
+  # pull_request:
+  #   branches: [main]
   workflow_dispatch:
     inputs:
       deploy_target:
