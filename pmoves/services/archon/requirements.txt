@@ -25,7 +25,7 @@ yt-dlp==2025.11.12
 tldextract>=5.1.2
 
 # Supabase/Postgres integration
-supabase==2.15.1
+supabase==2.25.0
 asyncpg>=0.29.0
 python-jose[cryptography]>=3.3.0
 cryptography>=41.0.0
