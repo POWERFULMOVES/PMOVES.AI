@@ -37,11 +37,15 @@ trap cleanup EXIT
 test_hirag_health() {
     log_info "Testing Hi-RAG v2 health endpoint..."
 
-    if curl -sf "${HIRAG_V2_URL}/health" > /dev/null 2>&1; then
+    # Hi-RAG v2 uses root endpoint for health check (returns {"ok":true,...})
+    if curl -sf "${HIRAG_V2_URL}/" 2>&1 | grep -q '"ok":true'; then
         log_info "✓ Hi-RAG v2 health check passed"
         return 0
+    elif curl -sf "${HIRAG_V2_URL}/health" > /dev/null 2>&1; then
+        log_info "✓ Hi-RAG v2 health check passed (/health)"
+        return 0
     elif curl -sf "${HIRAG_V2_URL}/healthz" > /dev/null 2>&1; then
-        log_info "✓ Hi-RAG v2 health check passed (healthz)"
+        log_info "✓ Hi-RAG v2 health check passed (/healthz)"
         return 0
     else
         log_error "✗ Hi-RAG v2 health check failed"

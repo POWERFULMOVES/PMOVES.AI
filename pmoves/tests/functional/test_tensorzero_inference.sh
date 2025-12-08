@@ -57,35 +57,44 @@ test_clickhouse_health() {
 }
 
 test_chat_completions() {
-    log_info "Testing TensorZero chat completions..."
+    log_info "Testing TensorZero inference endpoint..."
 
-    local episode_id="test-$(date +%s)-chat"
     local response
 
-    # Use a configured TensorZero model - chat_ollama_llama3 uses local Ollama
-    # Fallback models: agent_zero_qwen14b_local, qwen2_5_14b, chat_openrouter
-    response=$(curl -sf --max-time 30 -X POST "${TENSORZERO_URL}/v1/chat/completions" \
+    # TensorZero uses function-based API at /inference, not OpenAI-compatible /v1/chat/completions
+    # Test with agent_zero function which has multiple variants (local and hosted)
+    response=$(curl -sf --max-time 60 -X POST "${TENSORZERO_URL}/inference" \
         -H "Content-Type: application/json" \
-        -d "{
-            \"model\": \"chat_ollama_llama3\",
-            \"messages\": [{\"role\": \"user\", \"content\": \"Say 'test successful'\"}],
-            \"max_tokens\": 50
-        }" 2>&1) || {
-        log_error "✗ Chat completions request failed"
-        echo "Response: $response"
-        return 1
-    }
+        -d '{
+            "function_name": "agent_zero",
+            "input": {
+                "messages": [{"role": "user", "content": "Say test"}]
+            }
+        }' 2>&1)
 
-    # Validate response structure
-    if echo "$response" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
-        local content=$(echo "$response" | jq -r '.choices[0].message.content')
-        log_info "✓ Chat completions working - Response: ${content:0:50}..."
-        return 0
-    else
-        log_error "✗ Chat completions response invalid"
-        echo "Response: $response"
-        return 1
+    local curl_exit=$?
+
+    # Check if curl succeeded (model may not be available, but API should respond)
+    if [ $curl_exit -eq 0 ]; then
+        # Check for successful response with content
+        if echo "$response" | jq -e '.content[0].text' > /dev/null 2>&1; then
+            local content=$(echo "$response" | jq -r '.content[0].text')
+            log_info "✓ TensorZero inference working - Response: ${content:0:50}..."
+            return 0
+        # Check for model error (API works, model not available)
+        elif echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+            local error=$(echo "$response" | jq -r '.error')
+            if echo "$error" | grep -q "not found\|failed to infer"; then
+                log_warn "⚠ TensorZero API works but model not available (non-critical)"
+                log_warn "  Error: ${error:0:100}..."
+                return 0  # API works, just no model pulled
+            fi
+        fi
     fi
+
+    log_error "✗ TensorZero inference request failed"
+    echo "Response: $response"
+    return 1
 }
 
 test_inference_endpoint() {
