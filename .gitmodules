@@ -75,3 +75,4 @@
 	path = PMOVES-crush
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
 	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
