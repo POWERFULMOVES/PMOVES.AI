@@ -30,6 +30,93 @@ from typing import Iterable, List, Optional
 
 HARVEST_SUFFIX = "pmoves/data/consciousness/Constellation-Harvest-Regularization"
 
+# Kuhn's Landscape of Consciousness Taxonomy - 10 major categories
+# Based on "A landscape of consciousness: Toward a taxonomy of explanations and implications" (2024)
+CONSCIOUSNESS_TAXONOMY = {
+    "Materialism-Theories": {
+        "description": "Theories holding that consciousness arises from or is identical to physical brain processes.",
+        "subcategories": {
+            "Neurobiological": [
+                ("Global Workspace Theory", "Bernard Baars, Stanislas Dehaene", "Consciousness arises when information is broadcast globally across the brain."),
+                ("Neural Correlates of Consciousness", "Christof Koch, Francis Crick", "Identifying specific neural patterns that correlate with conscious experience."),
+                ("Predictive Processing", "Karl Friston, Andy Clark", "Brain constantly generates predictions; consciousness emerges from prediction error minimization."),
+            ],
+            "Computational-Informational": [
+                ("Attention Schema Theory", "Michael Graziano", "Brain constructs a model of attention, which we experience as consciousness."),
+                ("Global Neuronal Workspace", "Stanislas Dehaene", "Consciousness involves global information integration via cortical workspace."),
+            ],
+            "Embodied-Enactive": [
+                ("Enactivism", "Francisco Varela, Evan Thompson", "Consciousness arises through sensorimotor coupling with the world."),
+                ("Extended Mind", "Andy Clark, David Chalmers", "Cognitive processes extend beyond the brain into body and environment."),
+            ],
+        }
+    },
+    "Non-Reductive-Physicalism": {
+        "description": "Mental properties are physical but not reducible to lower-level physical descriptions.",
+        "theories": [
+            ("Emergentism", "C.D. Broad", "Consciousness is an emergent property not predictable from physical components."),
+            ("Anomalous Monism", "Donald Davidson", "Mental events are physical but not governed by strict psychophysical laws."),
+        ]
+    },
+    "Quantum-Theories": {
+        "description": "Consciousness involves or requires quantum mechanical processes.",
+        "theories": [
+            ("Orchestrated Objective Reduction", "Roger Penrose, Stuart Hameroff", "Consciousness arises from quantum computations in microtubules."),
+            ("Quantum Mind", "Henry Stapp", "Quantum mechanics essential for understanding consciousness and free will."),
+        ]
+    },
+    "Integrated-Information-Theory": {
+        "description": "Consciousness is integrated information (Phi) in a system.",
+        "theories": [
+            ("IIT 3.0/4.0", "Giulio Tononi", "Consciousness is identical to integrated information; Phi measures consciousness."),
+        ]
+    },
+    "Panpsychisms": {
+        "description": "Consciousness or proto-consciousness is a fundamental feature of reality.",
+        "theories": [
+            ("Constitutive Panpsychism", "Philip Goff", "Macro-consciousness constituted by micro-level consciousness."),
+            ("Cosmopsychism", "Itay Shani", "Universe itself is conscious; individual minds are aspects of cosmic mind."),
+            ("Russellian Monism", "Bertrand Russell, Galen Strawson", "Physical properties are structural; intrinsic nature is experiential."),
+        ]
+    },
+    "Monisms": {
+        "description": "Reality is fundamentally one kind of substance.",
+        "theories": [
+            ("Neutral Monism", "William James, Bertrand Russell", "Reality is neither mental nor physical but neutral."),
+            ("Double-Aspect Monism", "Baruch Spinoza", "Mind and matter are two aspects of one substance."),
+        ]
+    },
+    "Dualisms": {
+        "description": "Mind and matter are fundamentally distinct substances or properties.",
+        "theories": [
+            ("Property Dualism", "David Chalmers", "Mental properties are non-physical properties of physical substances."),
+            ("Interactionist Dualism", "Karl Popper, John Eccles", "Mind and brain causally interact."),
+        ]
+    },
+    "Idealisms": {
+        "description": "Reality is fundamentally mental or consciousness-based.",
+        "theories": [
+            ("Analytic Idealism", "Bernardo Kastrup", "Reality is mental; matter is appearance of mental processes."),
+            ("Conscious Realism", "Donald Hoffman", "Consciousness is fundamental; spacetime and objects are user interfaces."),
+        ]
+    },
+    "Anomalous-Altered-States": {
+        "description": "Consciousness studies informed by altered states, near-death experiences, meditation.",
+        "theories": [
+            ("Psychedelic Consciousness", "Robin Carhart-Harris", "Psychedelics reveal aspects of consciousness through entropic brain states."),
+            ("Contemplative Science", "Richard Davidson", "Contemplative practices transform conscious experience."),
+        ]
+    },
+    "Challenge-Theories": {
+        "description": "Theories that challenge or question standard assumptions about consciousness.",
+        "theories": [
+            ("Illusionism", "Keith Frankish", "Consciousness as we conceive it is an illusion."),
+            ("Mysterianism", "Colin McGinn", "Human minds may be constitutionally incapable of understanding consciousness."),
+            ("The Hard Problem", "David Chalmers", "Why is there subjective experience at all?"),
+        ]
+    },
+}
+
 
 @dataclass
 class Chunk:
@@ -52,8 +139,66 @@ def strip_html(html: str) -> str:
     return cleaned.strip()
 
 
+def collect_taxonomy_chunks() -> List[Chunk]:
+    """Generate chunks from the Kuhn consciousness taxonomy."""
+    chunks: List[Chunk] = []
+
+    for category, cat_data in CONSCIOUSNESS_TAXONOMY.items():
+        # Category description chunk
+        chunk_id = f"consciousness-cat-{category.lower()}"
+        chunks.append(
+            Chunk(
+                chunk_id=chunk_id,
+                title=f"{category.replace('-', ' ')} - Category Overview",
+                url=None,
+                category=category,
+                content=f"{category.replace('-', ' ')}: {cat_data['description']}",
+            )
+        )
+
+        # Subcategory theories
+        for subcat_name, theories in cat_data.get("subcategories", {}).items():
+            for theory_name, proponents, desc in theories:
+                chunk_id = f"consciousness-theory-{theory_name.lower().replace(' ', '-')[:30]}-{uuid.uuid4().hex[:6]}"
+                content = (
+                    f"{theory_name} is a consciousness theory in the {subcat_name} subcategory of {category.replace('-', ' ')}. "
+                    f"Key proponents: {proponents}. {desc}"
+                )
+                chunks.append(
+                    Chunk(
+                        chunk_id=chunk_id,
+                        title=theory_name,
+                        url=None,
+                        category=category,
+                        content=content,
+                    )
+                )
+
+        # Direct theories (no subcategory)
+        for theory_name, proponents, desc in cat_data.get("theories", []):
+            chunk_id = f"consciousness-theory-{theory_name.lower().replace(' ', '-')[:30]}-{uuid.uuid4().hex[:6]}"
+            content = (
+                f"{theory_name} is a consciousness theory in the {category.replace('-', ' ')} category. "
+                f"Key proponents: {proponents}. {desc}"
+            )
+            chunks.append(
+                Chunk(
+                    chunk_id=chunk_id,
+                    title=theory_name,
+                    url=None,
+                    category=category,
+                    content=content,
+                )
+            )
+
+    return chunks
+
+
 def collect_chunks(base: Path) -> List[Chunk]:
     chunks: List[Chunk] = []
+
+    # First, add taxonomy chunks
+    chunks.extend(collect_taxonomy_chunks())
 
     # Research papers
     research_dir = base / "research-papers"
