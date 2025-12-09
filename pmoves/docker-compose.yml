@@ -719,6 +719,34 @@ services:
       retries: 12
       start_period: 20s
 
+  botz-gateway:
+    build: ./services/botz-gateway
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero:3030}
+      - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
+      - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
+    depends_on:
+      nats:
+        condition: service_started
+    ports: ["8054:8054"]
+    profiles: ["agents", "botz"]
+    networks:
+      api_tier:
+      bus_tier:
+      data_tier:
+      monitoring_tier:
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8054/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped

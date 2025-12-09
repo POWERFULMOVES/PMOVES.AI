@@ -71,3 +71,7 @@
 [submodule "pmoves/vendor/agentgym-rl"]
 	path = pmoves/vendor/agentgym-rl
 	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
+[submodule "PMOVES-crush"]
+	path = PMOVES-crush
+	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
+	ignore = all
