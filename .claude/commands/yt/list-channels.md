@@ -13,7 +13,7 @@ Read the channel monitor configuration and display:
 
 ```bash
 # Read config
-cat /home/pmoves/PMOVES.AI/pmoves/config/channel_monitor.json | jq '.channels[] | {name: .channel_name, id: .channel_id, enabled: .enabled, auto_process: .auto_process, interval_min: .check_interval_minutes, priority: .priority, namespace: .namespace}'
+cat /home/pmoves/PMOVES.AI/pmoves/config/channel_monitor.json | jq '.channels[] | {name: .channel_name, id: .channel_id, source_type: .source_type, enabled: .enabled, auto_process: .auto_process, interval_min: .check_interval_minutes, priority: .priority, namespace: .namespace}'
 ```
 
 Display results in a clean table format showing:
