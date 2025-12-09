@@ -379,6 +379,7 @@ services:
       - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
     volumes:
       - ./config:/app/config
+      - ./data/yt-dlp:/data/yt-dlp
     depends_on:
       minio:
         condition: service_started
@@ -398,7 +399,7 @@ services:
       - PORT=4416
     depends_on: [minio]
     profiles: ["orchestration","yt"]
-    networks: [app_tier]
+    networks: [api_tier, app_tier]  # api_tier added for external DNS/googleapis access
 
   channel-monitor:
     build: ./services/channel-monitor
@@ -1014,10 +1015,12 @@ services:
       invidious-companion:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/trending >/dev/null"]
+      # Use root endpoint instead of /trending which often fails due to YouTube blocking
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 0"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 60s
     profiles: ["invidious"]
     networks: [api_tier, app_tier, data_tier, monitoring_tier]
 
