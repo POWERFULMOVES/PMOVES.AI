@@ -4,7 +4,7 @@ Add a new YouTube channel to the channel monitor configuration.
 
 ## Arguments
 
-- `$ARGUMENTS` - YouTube channel URL (e.g., https://www.youtube.com/@ChannelName)
+- `$ARGUMENTS` - YouTube channel URL (e.g., `https://www.youtube.com/@ChannelName`)
 
 ## Instructions
 
