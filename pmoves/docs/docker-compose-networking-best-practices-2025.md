@@ -27,7 +27,7 @@ This document provides comprehensive best practices for Docker Compose networkin
 - By default, Docker binds published ports to all network interfaces (`0.0.0.0`)
 - This exposes services to external networks, creating potential security risks
 
-#### Security Recommendation: Use 127.0.0.1 for Internal Services
+**Security Recommendation: Use 127.0.0.1 for Internal Services**
 
 ```yaml
 services:
@@ -725,7 +725,7 @@ services:
 ### 1. Port Already in Use
 
 **Error:**
-```text
+```
 ERROR: for app  Cannot start service app: driver failed programming external connectivity:
 Bind for 0.0.0.0:8080 failed: port is already allocated
 ```
