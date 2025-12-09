@@ -1016,7 +1016,7 @@ services:
         condition: service_started
     healthcheck:
       # Use root endpoint instead of /trending which often fails due to YouTube blocking
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 0"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1"]
       interval: 30s
       timeout: 5s
       retries: 3

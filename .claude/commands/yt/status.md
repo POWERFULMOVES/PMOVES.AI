@@ -8,14 +8,14 @@ Check health of:
 1. **Channel Monitor** (port 8097) - Discovers new videos
 2. **PMOVES.YT** (port 8077) - Downloads and processes videos
 3. **bgutil-pot-provider** - YouTube PO token generation
-4. **Invidious** (port 3001) - Privacy-focused YouTube API
+4. **Invidious** (port 3000) - Privacy-focused YouTube API
 5. **Invidious Companion** - Token companion service
 
 ```bash
 # Service health checks
 echo "=== Channel Monitor ===" && curl -s http://localhost:8097/healthz
 echo "=== PMOVES.YT ===" && curl -s http://localhost:8077/healthz
-echo "=== Invidious ===" && curl -s http://localhost:3001/api/v1/stats
+echo "=== Invidious ===" && curl -s http://localhost:3000/ >/dev/null && echo '{"status":"ok"}' || echo '{"status":"error"}'
 ```
 
 ```bash
