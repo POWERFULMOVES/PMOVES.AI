@@ -1333,7 +1333,10 @@ class ChannelMonitor:
                     channel_id,
                     MAX(channel_name) AS channel_name,
                     MAX(namespace) AS namespace,
-                    ARRAY_AGG(tags) AS tags_collection,
+                    (SELECT ARRAY_AGG(DISTINCT tag) FROM (
+                        SELECT UNNEST(tags) AS tag FROM pmoves.channel_monitoring cm2
+                        WHERE cm2.channel_id = pmoves.channel_monitoring.channel_id
+                    ) t) AS tags_collection,
                     COUNT(*) AS total,
                     COUNT(*) FILTER (WHERE processing_status='pending') AS pending,
                     COUNT(*) FILTER (WHERE processing_status='queued') AS queued,
@@ -1370,11 +1373,9 @@ class ChannelMonitor:
         channel_breakdown: List[Dict[str, Any]] = []
         for item in channel_rows:
             tags_collection = item.get("tags_collection") or []
+            # tags_collection is now a flat array of distinct tags
             tag_set = {
-                tag
-                for tags in tags_collection
-                if isinstance(tags, list)
-                for tag in tags
+                tag for tag in tags_collection
                 if isinstance(tag, str) and tag
             }
             subscriber_raw = item.get("subscriber_count_raw")
