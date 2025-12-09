@@ -4,7 +4,7 @@ Add a new YouTube channel to the channel monitor configuration.
 
 ## Arguments
 
-- `$ARGUMENTS` - YouTube channel URL (e.g., `https://www.youtube.com/@ChannelName`)
+- `$ARGUMENTS` - YouTube channel URL (e.g., https://www.youtube.com/@ChannelName)
 
 ## Instructions
 
@@ -29,9 +29,8 @@ Add a new YouTube channel to the channel monitor configuration.
 7. Restart channel-monitor service
 
 ```bash
-# After editing config (uses PMOVES_ROOT env var or defaults to current git repo root)
-PMOVES_ROOT="${PMOVES_ROOT:-$(git rev-parse --show-toplevel)}"
-docker compose -f "${PMOVES_ROOT}/pmoves/docker-compose.yml" restart channel-monitor
+# After editing config
+docker compose -f /home/pmoves/PMOVES.AI/pmoves/docker-compose.yml restart channel-monitor
 ```
 
 Ask user for:
