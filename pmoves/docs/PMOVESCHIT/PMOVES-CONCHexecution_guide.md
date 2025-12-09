@@ -1,5 +1,5 @@
 # PMOVES Consciousness Integration • Execution Guide
-_Last updated: 2025-10-20_
+_Last updated: 2025-12-09_
 
 This guide operationalizes the consciousness knowledge harvest so it plugs cleanly into the current PMOVES stack (Supabase CLI runtime, Geometry Bus, CHIT playback, Evo Swarm).
 
