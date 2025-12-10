@@ -44,6 +44,7 @@ export default function ChatDashboardPage() {
   // Setup Realtime subscription
   useEffect(() => {
     let isMounted = true;
+    let pollingInterval: NodeJS.Timeout | null = null;
     setStatus('connecting');
 
     const setupRealtime = async () => {
@@ -57,8 +58,12 @@ export default function ChatDashboardPage() {
         // Setup Realtime subscription
         const client = getSupabaseRealtimeClient();
 
-        // Use a placeholder owner_id for now - will be replaced with auth context
-        const ownerId = 'default-owner';
+        // Get owner_id from auth context or use session-based filtering
+        // TODO: Replace with actual auth context when authentication is implemented
+        // For now, we rely on RLS policies to filter messages appropriately
+        const ownerId = typeof window !== 'undefined'
+          ? localStorage.getItem('pmoves_user_id') || 'anonymous'
+          : 'anonymous';
 
         const channel = subscribeToChatMessages(client, ownerId, {
           onInsert: (message) => {
@@ -101,8 +106,7 @@ export default function ChatDashboardPage() {
               console.error('Polling failed:', e);
             }
           };
-          const t = setInterval(load, 3000);
-          return () => clearInterval(t);
+          pollingInterval = setInterval(load, 3000);
         }
       }
     };
@@ -111,6 +115,10 @@ export default function ChatDashboardPage() {
 
     return () => {
       isMounted = false;
+      // Clean up polling interval if it was created
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
       if (channelRef.current) {
         const client = getSupabaseRealtimeClient();
         client.removeChannel(channelRef.current);

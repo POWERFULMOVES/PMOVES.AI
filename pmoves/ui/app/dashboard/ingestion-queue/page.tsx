@@ -37,7 +37,7 @@ const STATUS_COLORS: Record<IngestionStatus, string> = {
 };
 
 function formatDuration(seconds: number | null): string {
-  if (!seconds) return '--:--';
+  if (seconds === null || seconds === undefined) return '--:--';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;

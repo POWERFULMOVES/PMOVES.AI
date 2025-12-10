@@ -187,12 +187,12 @@ class ChatRelayService:
             if result.data:
                 self.messages_relayed += 1
                 logger.info(f"Relayed message from {agent_name}: {content[:50]}...")
+                # Only acknowledge after successful insert to prevent data loss
+                await msg.ack()
             else:
                 logger.error(f"Failed to insert message: {result}")
                 self.errors += 1
-
-            # Acknowledge the message
-            await msg.ack()
+                # Don't ack - let message be redelivered for retry
 
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in message: {e}")

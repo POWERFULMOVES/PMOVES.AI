@@ -117,6 +117,17 @@ BEGIN
     CREATE POLICY ingestion_owner_update ON public.ingestion_queue
       FOR UPDATE USING (auth.uid() = owner_id);
   END IF;
+
+  -- Owner can insert new items
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+    AND tablename = 'ingestion_queue'
+    AND policyname = 'ingestion_owner_insert'
+  ) THEN
+    CREATE POLICY ingestion_owner_insert ON public.ingestion_queue
+      FOR INSERT WITH CHECK (auth.uid() = owner_id);
+  END IF;
 END $$;
 
 -- Indexes for common queries
@@ -159,7 +170,51 @@ CREATE TRIGGER ingestion_queue_updated_at
   BEFORE UPDATE ON public.ingestion_queue
   FOR EACH ROW EXECUTE FUNCTION update_ingestion_queue_updated_at();
 
--- View for pending items with thumbnails
+-- Function to get pending items for the current user (respects RLS)
+-- Use function instead of view to ensure owner filtering is enforced
+CREATE OR REPLACE FUNCTION get_pending_ingestion_items(
+  p_limit int DEFAULT 50,
+  p_offset int DEFAULT 0
+) RETURNS TABLE (
+  id uuid,
+  source_type ingestion_source_type,
+  source_url text,
+  source_id text,
+  title text,
+  description text,
+  thumbnail_url text,
+  duration_seconds int,
+  priority int,
+  created_at timestamptz,
+  channel_name text,
+  uploader text
+) LANGUAGE sql STABLE SECURITY INVOKER AS $$
+  SELECT
+    iq.id,
+    iq.source_type,
+    iq.source_url,
+    iq.source_id,
+    iq.title,
+    iq.description,
+    iq.thumbnail_url,
+    iq.duration_seconds,
+    iq.priority,
+    iq.created_at,
+    iq.source_meta->>'channel_name' as channel_name,
+    iq.source_meta->>'uploader' as uploader
+  FROM public.ingestion_queue iq
+  WHERE iq.status = 'pending'
+    AND (auth.role() = 'service_role' OR iq.owner_id = auth.uid())
+  ORDER BY iq.priority DESC, iq.created_at ASC
+  LIMIT p_limit
+  OFFSET p_offset;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_pending_ingestion_items TO authenticated;
+GRANT EXECUTE ON FUNCTION get_pending_ingestion_items TO service_role;
+
+-- View for pending items with thumbnails (for backwards compatibility)
+-- Note: This view uses RLS policies on the underlying table
 CREATE OR REPLACE VIEW public.ingestion_queue_pending AS
 SELECT
   id,

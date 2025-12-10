@@ -52,6 +52,7 @@ BEGIN
 END $$;
 
 -- Function to get recent chat history for a session
+-- SECURITY DEFINER with explicit authorization check to prevent unauthorized access
 CREATE OR REPLACE FUNCTION get_chat_history(
   p_session_id uuid,
   p_limit int DEFAULT 50,
@@ -65,14 +66,34 @@ CREATE OR REPLACE FUNCTION get_chat_history(
   message_type text,
   metadata jsonb,
   created_at timestamptz
-) LANGUAGE sql STABLE SECURITY DEFINER AS $$
+) LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
+BEGIN
+  -- Authorization check: service_role has full access, others must own the session
+  IF auth.role() != 'service_role' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.chat_messages cm
+      WHERE cm.session_id = p_session_id
+        AND cm.owner_id = auth.uid()
+      LIMIT 1
+    ) AND NOT EXISTS (
+      SELECT 1 FROM public.claude_sessions cs
+      WHERE cs.session_id = p_session_id
+        AND cs.user_id = auth.uid()
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION 'Not authorized to access this session';
+    END IF;
+  END IF;
+
+  RETURN QUERY
   SELECT
-    id, role, agent, agent_id, content, message_type, metadata, created_at
-  FROM public.chat_messages
-  WHERE session_id = p_session_id
-  ORDER BY created_at DESC
+    cm.id, cm.role, cm.agent, cm.agent_id, cm.content, cm.message_type, cm.metadata, cm.created_at
+  FROM public.chat_messages cm
+  WHERE cm.session_id = p_session_id
+  ORDER BY cm.created_at DESC
   LIMIT p_limit
   OFFSET p_offset;
+END;
 $$;
 
 -- Grant execute to authenticated users
