@@ -851,6 +851,23 @@ services:
     profiles: ["orchestration","agents"]
     networks: [app_tier, bus_tier, monitoring_tier]
 
+  messaging-gateway:
+    build: ./services/messaging-gateway
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID}
+      - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - MESSAGING_SUBJECTS=${MESSAGING_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1}
+    depends_on: [nats]
+    ports: ["8101:8101"]
+    profiles: ["workers"]
+    networks: [api_tier, bus_tier]
+
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped

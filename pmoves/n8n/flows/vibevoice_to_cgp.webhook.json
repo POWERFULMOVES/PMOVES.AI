@@ -1,7 +1,7 @@
 {
   "name": "VibeVoice TTS \u2192 CGP (webhook)",
   "settings": {},
-  "active": false,
+  "active": true,
   "nodes": [
     {
       "parameters": {
