@@ -37,9 +37,17 @@ testkeys.md
 # Tracked examples like pmoves/.env.example should remain in the repo
 /pmoves/.env
 /pmoves/.env.local
+/pmoves/.env.testkeys
+/pmoves/.env.precleanup-*
+/pmoves/.env.*.bak
+/pmoves/.env copy
 /pmoves/.supabase.env
 /pmoves/env.jellyfin-ai
 /pmoves/jellyfin-ai/
+# Root env files
+/.env
+/.env.local
+/.env.testkeys
 # Tooling binaries
 /actionlint
 # Root env scratch (not used by stack, keep untracked)

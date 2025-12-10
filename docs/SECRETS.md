@@ -1,6 +1,6 @@
 # Secret Management Playbook
 
-Updated: 2025-10-21
+Updated: 2025-12-10
 
 This note explains how PMOVES shares configuration secrets across the stack and
 how to keep them safe while still making it easy for operators to provide the
@@ -74,6 +74,26 @@ The encoder/decoder modules live under `pmoves/chit/` and align with the spec in
 `pmoves/docs/PMOVESCHIT/PMOVESCHIT.md`. These helpers are intentionally simple
 so we can plug in stronger encryption (HMAC + AES-GCM) as part of a future
 iteration.
+
+### CHIT Production Configuration
+
+For production deployments, enable CHIT signature verification and encryption:
+
+```bash
+# Required production settings in pmoves/.env:
+CHIT_REQUIRE_SIGNATURE=true
+CHIT_PASSPHRASE=<strong-32+-char-passphrase>  # Generate: openssl rand -base64 32 | tr -d '/+=' | head -c 48
+CHIT_PERSIST_DB=true
+
+# Optional decoders (enable as needed):
+CHIT_DECODE_TEXT=true  # Enable for secret field decryption
+```
+
+The `CHIT_PASSPHRASE` should be:
+1. Generated using `openssl rand -base64 32 | tr -d '/+=' | head -c 48`
+2. Stored in GitHub Secrets as `CHIT_PASSPHRASE`
+3. Never committed to version control
+4. Rotated quarterly or on suspected compromise
 
 `pmoves/chit/secrets_manifest.yaml` provides the canonical mapping between CGP
 labels and the env files we materialize locally. Generate the runtime files via
