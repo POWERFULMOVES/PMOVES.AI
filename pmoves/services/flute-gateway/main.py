@@ -1,0 +1,451 @@
+"""
+Flute Gateway - PMOVES Multimodal Voice Communication Layer
+
+FastAPI service providing Text-to-Speech (TTS) and Speech-to-Text (STT)
+capabilities across the PMOVES.AI agent hierarchy.
+
+Ports:
+    8055: HTTP REST API
+    8056: WebSocket streaming (future)
+
+Providers:
+    - VibeVoice: Real-time TTS (WebSocket, 24kHz PCM16)
+    - Whisper: STT via ffmpeg-whisper service
+    - ElevenLabs: External TTS (optional)
+"""
+
+import asyncio
+import json
+import logging
+import os
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID, uuid4
+
+import httpx
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+# Provider imports
+from providers import VibeVoiceProvider, WhisperProvider
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("flute-gateway")
+
+# Environment configuration
+NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "http://localhost:3010")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+VIBEVOICE_URL = os.getenv("VIBEVOICE_URL", "http://localhost:3000")
+WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
+DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
+
+# Prometheus metrics
+REQUESTS_TOTAL = Counter(
+    "flute_requests_total",
+    "Total requests by endpoint and status",
+    ["endpoint", "status"]
+)
+TTS_DURATION = Histogram(
+    "flute_tts_duration_seconds",
+    "TTS synthesis duration in seconds",
+    ["provider"]
+)
+STT_DURATION = Histogram(
+    "flute_stt_duration_seconds",
+    "STT recognition duration in seconds",
+    ["provider"]
+)
+
+# Provider instances (initialized on startup)
+vibevoice_provider: Optional[VibeVoiceProvider] = None
+whisper_provider: Optional[WhisperProvider] = None
+nats_client = None
+
+
+# Pydantic models
+class SynthesizeRequest(BaseModel):
+    """Request for TTS synthesis."""
+    text: str = Field(..., description="Text to synthesize", max_length=5000)
+    persona_id: Optional[str] = Field(None, description="Voice persona ID or slug")
+    provider: Optional[str] = Field(None, description="Provider override (vibevoice, elevenlabs)")
+    voice: Optional[str] = Field(None, description="Voice preset for provider")
+    output_format: str = Field("wav", description="Output format: wav, mp3, pcm")
+
+
+class SynthesizeResponse(BaseModel):
+    """Response for TTS synthesis."""
+    audio_uri: Optional[str] = Field(None, description="MinIO URI if stored")
+    duration_seconds: float = Field(..., description="Audio duration")
+    sample_rate: int = Field(24000, description="Sample rate in Hz")
+    format: str = Field("pcm16", description="Audio format")
+
+
+class RecognizeResponse(BaseModel):
+    """Response for STT recognition."""
+    text: str = Field(..., description="Transcribed text")
+    confidence: float = Field(..., description="Confidence score 0-1")
+    language: str = Field(..., description="Detected/specified language")
+
+
+class VoicePersona(BaseModel):
+    """Voice persona configuration."""
+    id: UUID
+    slug: str
+    name: str
+    voice_provider: str
+    voice_config: Dict[str, Any]
+    personality_traits: List[str]
+    language: str
+    is_active: bool
+
+
+class HealthResponse(BaseModel):
+    """Health check response."""
+    status: str
+    providers: Dict[str, bool]
+    nats: str
+    supabase: str
+    timestamp: str
+
+
+class ConfigResponse(BaseModel):
+    """Service configuration response."""
+    providers: List[str]
+    default_provider: str
+    sample_rate: int
+    format: str
+    features: Dict[str, bool]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan - startup and shutdown."""
+    global vibevoice_provider, whisper_provider, nats_client
+
+    logger.info("Starting Flute Gateway...")
+
+    # Initialize providers
+    vibevoice_provider = VibeVoiceProvider(VIBEVOICE_URL)
+    whisper_provider = WhisperProvider(WHISPER_URL)
+
+    # Initialize NATS (optional)
+    try:
+        import nats
+        nats_client = await nats.connect(NATS_URL)
+        logger.info("Connected to NATS at %s", NATS_URL)
+    except Exception as e:
+        logger.warning("NATS connection failed: %s (continuing without NATS)", e)
+        nats_client = None
+
+    logger.info("Flute Gateway started successfully")
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Flute Gateway...")
+    if nats_client:
+        await nats_client.close()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="PMOVES-Flute-Gateway",
+    description="Multimodal Voice Communication Layer",
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+
+# Health check endpoint
+@app.get("/healthz", response_model=HealthResponse)
+async def health_check():
+    """Check service health and provider availability."""
+    providers = {}
+
+    # Check VibeVoice
+    if vibevoice_provider:
+        providers["vibevoice"] = await vibevoice_provider.health_check()
+    else:
+        providers["vibevoice"] = False
+
+    # Check Whisper
+    if whisper_provider:
+        providers["whisper"] = await whisper_provider.health_check()
+    else:
+        providers["whisper"] = False
+
+    # Check NATS
+    nats_status = "connected" if nats_client and nats_client.is_connected else "disconnected"
+
+    # Check Supabase
+    supabase_status = "unknown"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{SUPABASE_URL}/rest/v1/")
+            supabase_status = "connected" if resp.status_code in [200, 401] else "error"
+    except Exception:
+        supabase_status = "disconnected"
+
+    REQUESTS_TOTAL.labels(endpoint="/healthz", status="200").inc()
+
+    return HealthResponse(
+        status="healthy",
+        providers=providers,
+        nats=nats_status,
+        supabase=supabase_status,
+        timestamp=datetime.utcnow().isoformat()
+    )
+
+
+# Configuration endpoint
+@app.get("/v1/voice/config", response_model=ConfigResponse)
+async def get_config():
+    """Get service configuration and available features."""
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/config", status="200").inc()
+
+    return ConfigResponse(
+        providers=["vibevoice", "whisper", "elevenlabs"],
+        default_provider=DEFAULT_PROVIDER,
+        sample_rate=24000,
+        format="pcm16",
+        features={
+            "tts_batch": True,
+            "tts_stream": True,
+            "stt_batch": True,
+            "stt_stream": False,  # TODO: Implement
+            "voice_cloning": False,  # TODO: Implement
+            "personas": True,
+        }
+    )
+
+
+# TTS synthesis endpoint
+@app.post("/v1/voice/synthesize", response_model=SynthesizeResponse)
+async def synthesize_speech(request: SynthesizeRequest):
+    """
+    Synthesize speech from text.
+
+    Uses VibeVoice by default for real-time TTS.
+    Returns audio data or MinIO URI.
+    """
+    import time
+    start_time = time.time()
+
+    provider_name = request.provider or DEFAULT_PROVIDER
+
+    try:
+        if provider_name == "vibevoice" and vibevoice_provider:
+            audio_data = await vibevoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+            )
+            duration = time.time() - start_time
+            TTS_DURATION.labels(provider="vibevoice").observe(duration)
+
+            # Estimate audio duration (24kHz, 16-bit = 48000 bytes/sec)
+            audio_duration = len(audio_data) / 48000
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
+
+            return SynthesizeResponse(
+                duration_seconds=audio_duration,
+                sample_rate=24000,
+                format="pcm16"
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Provider '{provider_name}' not available"
+            )
+
+    except NotImplementedError as e:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="400").inc()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
+        logger.error("TTS synthesis failed: %s", e)
+        raise HTTPException(status_code=500, detail="TTS synthesis failed")
+
+
+# STT recognition endpoint
+@app.post("/v1/voice/recognize", response_model=RecognizeResponse)
+async def recognize_speech(
+    audio: UploadFile = File(...),
+    language: Optional[str] = Form(None)
+):
+    """
+    Recognize speech from audio file.
+
+    Uses Whisper for transcription.
+    Supports WAV, MP3, and other common audio formats.
+    """
+    import time
+    start_time = time.time()
+
+    try:
+        audio_data = await audio.read()
+
+        if whisper_provider:
+            result = await whisper_provider.recognize(
+                audio_data=audio_data,
+                language=language
+            )
+            duration = time.time() - start_time
+            STT_DURATION.labels(provider="whisper").observe(duration)
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="200").inc()
+
+            return RecognizeResponse(
+                text=result["text"],
+                confidence=result["confidence"],
+                language=result["language"]
+            )
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail="Whisper provider not available"
+            )
+
+    except NotImplementedError as e:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="400").inc()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="500").inc()
+        logger.error("STT recognition failed: %s", e)
+        raise HTTPException(status_code=500, detail="STT recognition failed")
+
+
+# Voice personas endpoints
+@app.get("/v1/voice/personas")
+async def list_personas() -> List[Dict[str, Any]]:
+    """List all voice personas from Supabase."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/voice_persona",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}"
+                },
+                params={"is_active": "eq.true", "select": "*"}
+            )
+            if resp.status_code == 200:
+                REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="200").inc()
+                return resp.json()
+            else:
+                logger.warning("Supabase query failed: %s", resp.text)
+                return []
+    except Exception as e:
+        logger.error("Failed to fetch personas: %s", e)
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="500").inc()
+        raise HTTPException(status_code=500, detail="Failed to fetch personas")
+
+
+@app.get("/v1/voice/personas/{persona_id}")
+async def get_persona(persona_id: str) -> Dict[str, Any]:
+    """Get a specific voice persona by ID or slug."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Try by ID first, then by slug
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/voice_persona",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}"
+                },
+                params={"or": f"(id.eq.{persona_id},slug.eq.{persona_id})", "limit": "1"}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data:
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas/{id}", status="200").inc()
+                    return data[0]
+            raise HTTPException(status_code=404, detail="Persona not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch persona: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to fetch persona")
+
+
+# WebSocket TTS streaming endpoint
+@app.websocket("/v1/voice/stream/tts")
+async def websocket_tts(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time TTS streaming.
+
+    Client sends: {"text": "Hello world", "voice": "default"}
+    Server sends: Binary audio chunks (PCM16, 24kHz)
+    Server sends: {"type": "done", "duration": 1.5}
+    """
+    await websocket.accept()
+
+    try:
+        while True:
+            # Receive text request
+            data = await websocket.receive_json()
+            text = data.get("text", "")
+            voice = data.get("voice", "default")
+
+            if not text:
+                await websocket.send_json({"type": "error", "message": "No text provided"})
+                continue
+
+            # Stream audio chunks
+            if vibevoice_provider:
+                chunk_count = 0
+                async for chunk in vibevoice_provider.synthesize_stream(text, voice):
+                    await websocket.send_bytes(chunk)
+                    chunk_count += 1
+
+                await websocket.send_json({
+                    "type": "done",
+                    "chunks": chunk_count
+                })
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "VibeVoice provider not available"
+                })
+
+    except Exception as e:
+        logger.error("WebSocket TTS error: %s", e)
+    finally:
+        await websocket.close()
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
+
+
+# NATS event publishing helper
+async def publish_voice_event(subject: str, data: Dict[str, Any]):
+    """Publish a voice event to NATS."""
+    if nats_client and nats_client.is_connected:
+        try:
+            await nats_client.publish(
+                subject,
+                json.dumps(data).encode()
+            )
+            logger.debug("Published to %s: %s", subject, data)
+        except Exception as e:
+            logger.error("Failed to publish to NATS: %s", e)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("FLUTE_HTTP_PORT", "8055"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
