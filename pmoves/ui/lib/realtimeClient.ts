@@ -337,3 +337,335 @@ export async function insertSessionMessage(
 
   return data as MessageRecord;
 }
+
+// ============================================================================
+// Chat Messages Realtime (Phase 9)
+// ============================================================================
+
+export type ChatMessage = {
+  id: number;
+  owner_id: string;
+  role: 'user' | 'agent';
+  agent: string | null;
+  agent_id: string | null;
+  avatar_url: string | null;
+  content: string;
+  message_type: 'text' | 'action' | 'system' | 'approval';
+  session_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type ChatMessageHandlers = {
+  onInsert?: (message: ChatMessage) => void;
+  onUpdate?: (message: ChatMessage) => void;
+  onDelete?: (message: ChatMessage) => void;
+};
+
+export function subscribeToChatMessages(
+  client: SupabaseClient,
+  ownerId: string,
+  handlers: ChatMessageHandlers,
+  sessionId?: string
+): RealtimeChannel {
+  const channelName = sessionId
+    ? `chat_messages:session:${sessionId}`
+    : `chat_messages:owner:${ownerId}`;
+  const channel = client.channel(channelName);
+
+  const filter = sessionId
+    ? `session_id=eq.${sessionId}`
+    : `owner_id=eq.${ownerId}`;
+
+  channel
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter,
+      },
+      (payload) => {
+        handlers.onInsert?.(payload.new as ChatMessage);
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'chat_messages',
+        filter,
+      },
+      (payload) => {
+        handlers.onUpdate?.(payload.new as ChatMessage);
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'chat_messages',
+        filter,
+      },
+      (payload) => {
+        handlers.onDelete?.(payload.old as ChatMessage);
+      }
+    );
+
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      console.log(`[Realtime] Subscribed to chat_messages: ${channelName}`);
+    }
+  });
+
+  return channel;
+}
+
+export async function fetchChatMessages(
+  client: SupabaseClient,
+  ownerId: string,
+  options?: { limit?: number; sessionId?: string }
+): Promise<ChatMessage[]> {
+  let query = client
+    .from('chat_messages')
+    .select('id, owner_id, role, agent, agent_id, avatar_url, content, message_type, session_id, metadata, created_at')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: true });
+
+  if (options?.sessionId) {
+    query = query.eq('session_id', options.sessionId);
+  }
+
+  if (options?.limit) {
+    query = query.limit(options.limit);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as ChatMessage[];
+}
+
+export async function insertChatMessage(
+  client: SupabaseClient,
+  message: Pick<ChatMessage, 'owner_id' | 'role' | 'content'> & Partial<ChatMessage>
+): Promise<ChatMessage> {
+  const { data, error } = await client
+    .from('chat_messages')
+    .insert({
+      owner_id: message.owner_id,
+      role: message.role,
+      content: message.content,
+      agent: message.agent ?? null,
+      agent_id: message.agent_id ?? null,
+      avatar_url: message.avatar_url ?? null,
+      message_type: message.message_type ?? 'text',
+      session_id: message.session_id ?? null,
+      metadata: message.metadata ?? null,
+    })
+    .select('id, owner_id, role, agent, agent_id, avatar_url, content, message_type, session_id, metadata, created_at')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as ChatMessage;
+}
+
+// ============================================================================
+// Ingestion Queue Realtime (Phase 9)
+// ============================================================================
+
+export type IngestionSourceType =
+  | 'youtube'
+  | 'pdf'
+  | 'url'
+  | 'upload'
+  | 'notebook'
+  | 'discord'
+  | 'telegram'
+  | 'rss';
+
+export type IngestionStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+export type IngestionQueueItem = {
+  id: string;
+  owner_id: string | null;
+  source_type: IngestionSourceType;
+  source_url: string | null;
+  source_id: string | null;
+  title: string | null;
+  description: string | null;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  source_meta: Record<string, unknown>;
+  status: IngestionStatus;
+  priority: number;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  processor_id: string | null;
+  processing_started_at: string | null;
+  processed_at: string | null;
+  error_message: string | null;
+  retry_count: number;
+  output_refs: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IngestionQueueHandlers = {
+  onInsert?: (item: IngestionQueueItem) => void;
+  onUpdate?: (item: IngestionQueueItem) => void;
+  onDelete?: (item: IngestionQueueItem) => void;
+};
+
+export function subscribeToIngestionQueue(
+  client: SupabaseClient,
+  handlers: IngestionQueueHandlers,
+  statusFilter?: IngestionStatus
+): RealtimeChannel {
+  const channelName = statusFilter
+    ? `ingestion_queue:status:${statusFilter}`
+    : 'ingestion_queue:all';
+  const channel = client.channel(channelName);
+
+  const baseConfig = {
+    schema: 'public',
+    table: 'ingestion_queue',
+  };
+
+  const filterConfig = statusFilter
+    ? { ...baseConfig, filter: `status=eq.${statusFilter}` }
+    : baseConfig;
+
+  channel
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', ...filterConfig },
+      (payload) => {
+        handlers.onInsert?.(payload.new as IngestionQueueItem);
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', ...filterConfig },
+      (payload) => {
+        handlers.onUpdate?.(payload.new as IngestionQueueItem);
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', ...filterConfig },
+      (payload) => {
+        handlers.onDelete?.(payload.old as IngestionQueueItem);
+      }
+    );
+
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      console.log(`[Realtime] Subscribed to ingestion_queue: ${channelName}`);
+    }
+  });
+
+  return channel;
+}
+
+export async function fetchIngestionQueue(
+  client: SupabaseClient,
+  options?: {
+    status?: IngestionStatus;
+    sourceType?: IngestionSourceType;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<IngestionQueueItem[]> {
+  let query = client
+    .from('ingestion_queue')
+    .select('*')
+    .order('priority', { ascending: false })
+    .order('created_at', { ascending: true });
+
+  if (options?.status) {
+    query = query.eq('status', options.status);
+  }
+
+  if (options?.sourceType) {
+    query = query.eq('source_type', options.sourceType);
+  }
+
+  if (options?.limit) {
+    query = query.limit(options.limit);
+  }
+
+  if (options?.offset) {
+    query = query.range(options.offset, options.offset + (options.limit ?? 50) - 1);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as IngestionQueueItem[];
+}
+
+export async function approveIngestion(
+  client: SupabaseClient,
+  id: string,
+  priority?: number
+): Promise<IngestionQueueItem | null> {
+  const { data, error } = await client.rpc('approve_ingestion', {
+    p_id: id,
+    p_priority: priority ?? null,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data as IngestionQueueItem | null;
+}
+
+export async function rejectIngestion(
+  client: SupabaseClient,
+  id: string,
+  reason?: string
+): Promise<IngestionQueueItem | null> {
+  const { data, error } = await client.rpc('reject_ingestion', {
+    p_id: id,
+    p_reason: reason ?? null,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data as IngestionQueueItem | null;
+}
+
+export async function fetchIngestionStats(
+  client: SupabaseClient
+): Promise<Array<{ status: IngestionStatus; source_type: IngestionSourceType; count: number }>> {
+  const { data, error } = await client.rpc('get_ingestion_stats');
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as Array<{ status: IngestionStatus; source_type: IngestionSourceType; count: number }>;
+}

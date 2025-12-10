@@ -281,6 +281,27 @@ services:
     profiles: ["workers","orchestration"]
     networks: [bus_tier, monitoring_tier]
 
+  chat-relay:
+    build:
+      context: .
+      dockerfile: services/chat-relay/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - HEALTH_PORT=8102
+      - AGENT_RESPONSE_SUBJECT=agent.response.v1
+      - AGENT_REQUEST_SUBJECT=agent.request.v1
+      - DEFAULT_OWNER_ID=${DEFAULT_OWNER_ID:-00000000-0000-0000-0000-000000000000}
+    depends_on:
+      nats:
+        condition: service_started
+    ports: ["8102:8102"]
+    profiles: ["workers","orchestration"]
+    networks: [bus_tier, data_tier, monitoring_tier]
+
   ffmpeg-whisper:
     build:
       context: ..
