@@ -23,6 +23,23 @@ from typing import Any
 TENSORZERO_URL = os.getenv("TENSORZERO_BASE_URL", "http://localhost:3030")
 
 
+def is_tensorzero_available() -> bool:
+    """Check if TensorZero gateway is reachable."""
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{TENSORZERO_URL}/health")
+            return response.status_code == 200
+    except (httpx.ConnectError, httpx.TimeoutException, Exception):
+        return False
+
+
+# Skip all tests in this module if TensorZero is not available
+pytestmark = pytest.mark.skipif(
+    not is_tensorzero_available(),
+    reason=f"TensorZero gateway not available at {TENSORZERO_URL}"
+)
+
+
 @pytest.fixture
 def tensorzero_client():
     """Create HTTP client for TensorZero gateway."""
