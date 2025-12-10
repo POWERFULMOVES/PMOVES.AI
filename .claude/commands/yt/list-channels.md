@@ -12,8 +12,9 @@ Read the channel monitor configuration and display:
 5. Priority and namespace
 
 ```bash
-# Read config
-cat /home/pmoves/PMOVES.AI/pmoves/config/channel_monitor.json | jq '.channels[] | {name: .channel_name, id: .channel_id, source_type: .source_type, enabled: .enabled, auto_process: .auto_process, interval_min: .check_interval_minutes, priority: .priority, namespace: .namespace}'
+# Read config (uses PMOVES_ROOT env var or defaults to current git repo root)
+PMOVES_ROOT="${PMOVES_ROOT:-$(git rev-parse --show-toplevel)}"
+cat "${PMOVES_ROOT}/pmoves/config/channel_monitor.json" | jq '.channels[] | {name: .channel_name, id: .channel_id, source_type: .source_type, enabled: .enabled, auto_process: .auto_process, interval_min: .check_interval_minutes, priority: .priority, namespace: .namespace}'
 ```
 
 Display results in a clean table format showing:
