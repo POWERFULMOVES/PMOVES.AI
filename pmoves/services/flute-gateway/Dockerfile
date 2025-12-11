@@ -14,11 +14,16 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Non-root user for security
+RUN useradd --create-home --shell /bin/bash pmoves
+
 # Copy source
 COPY . .
 
-# Non-root user
-RUN useradd -m -u 1000 pmoves
+# Change ownership to non-root user
+RUN chown -R pmoves:pmoves /app
+
+# Switch to non-root user
 USER pmoves
 
 # Environment

@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, WebSocket
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -46,6 +46,17 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 VIBEVOICE_URL = os.getenv("VIBEVOICE_URL", "http://localhost:3000")
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
+FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
+
+# API Key authentication dependency
+async def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
+    """Verify API key for service authentication."""
+    # Skip auth if no key configured (development mode)
+    if not FLUTE_API_KEY:
+        return None
+    if not x_api_key or x_api_key != FLUTE_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return x_api_key
 
 # Prometheus metrics
 REQUESTS_TOTAL = Counter(
@@ -227,7 +238,7 @@ async def get_config():
 
 
 # TTS synthesis endpoint
-@app.post("/v1/voice/synthesize", response_model=SynthesizeResponse)
+@app.post("/v1/voice/synthesize", response_model=SynthesizeResponse, dependencies=[Depends(verify_api_key)])
 async def synthesize_speech(request: SynthesizeRequest):
     """
     Synthesize speech from text.
@@ -268,14 +279,14 @@ async def synthesize_speech(request: SynthesizeRequest):
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
-        logger.error("TTS synthesis failed: %s", e)
+        logger.exception("TTS synthesis failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
 
 
 # STT recognition endpoint
-@app.post("/v1/voice/recognize", response_model=RecognizeResponse)
+@app.post("/v1/voice/recognize", response_model=RecognizeResponse, dependencies=[Depends(verify_api_key)])
 async def recognize_speech(
     audio: UploadFile = File(...),
     language: Optional[str] = Form(None)
@@ -316,14 +327,14 @@ async def recognize_speech(
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="500").inc()
-        logger.error("STT recognition failed: %s", e)
+        logger.exception("STT recognition failed")
         raise HTTPException(status_code=500, detail="STT recognition failed")
 
 
 # Voice personas endpoints
-@app.get("/v1/voice/personas")
+@app.get("/v1/voice/personas", dependencies=[Depends(verify_api_key)])
 async def list_personas() -> List[Dict[str, Any]]:
     """List all voice personas from Supabase."""
     try:
@@ -342,13 +353,13 @@ async def list_personas() -> List[Dict[str, Any]]:
             else:
                 logger.warning("Supabase query failed: %s", resp.text)
                 return []
-    except Exception as e:
-        logger.error("Failed to fetch personas: %s", e)
+    except Exception:
+        logger.exception("Failed to fetch personas")
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="500").inc()
         raise HTTPException(status_code=500, detail="Failed to fetch personas")
 
 
-@app.get("/v1/voice/personas/{persona_id}")
+@app.get("/v1/voice/personas/{persona_id}", dependencies=[Depends(verify_api_key)])
 async def get_persona(persona_id: str) -> Dict[str, Any]:
     """Get a specific voice persona by ID or slug."""
     try:
@@ -370,8 +381,8 @@ async def get_persona(persona_id: str) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail="Persona not found")
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Failed to fetch persona: %s", e)
+    except Exception:
+        logger.exception("Failed to fetch persona")
         raise HTTPException(status_code=500, detail="Failed to fetch persona")
 
 
@@ -415,8 +426,8 @@ async def websocket_tts(websocket: WebSocket):
                     "message": "VibeVoice provider not available"
                 })
 
-    except Exception as e:
-        logger.error("WebSocket TTS error: %s", e)
+    except Exception:
+        logger.exception("WebSocket TTS error")
     finally:
         await websocket.close()
 
@@ -441,8 +452,8 @@ async def publish_voice_event(subject: str, data: Dict[str, Any]):
                 json.dumps(data).encode()
             )
             logger.debug("Published to %s: %s", subject, data)
-        except Exception as e:
-            logger.error("Failed to publish to NATS: %s", e)
+        except Exception:
+            logger.exception("Failed to publish to NATS")
 
 
 if __name__ == "__main__":
