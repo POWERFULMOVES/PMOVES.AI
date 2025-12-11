@@ -1,6 +1,6 @@
 # Cataclysm Studios Platform Vision & Brand Identity
 
-_Status review: October 26 2025 (repo branch `feature/supabase-tensorzero-cloudflare`)_
+_Status review: December 11 2025 (repo branch `feature/youtube-pipeline-config`)_
 
 This document aligns the Cataclysm Studios brand platform with the current PMOVES.AI codebase so product, engineering, and creative teams can work from a single, verifiable blueprint.
 
@@ -12,9 +12,10 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 - Stewardship focus: trustworthy operations, reproducible builds, and compliance with internal security policies (`SECURITY.md`, `docs/PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md`).
 
 ### 1.2 PMOVES.AI (Powerful Moves AI)
-- Primary technical product—multi-agent orchestration mesh centred on Agent Zero, Archon, and Hi‑RAG services (`README.md`, `docs/PMOVES_ARC.md`, `pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md`).
-- Code, compose profiles, and runbooks live under `pmoves/`; roadmap and implementation evidence are tracked in `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`, `NEXT_STEPS.md`, and `SESSION_IMPLEMENTATION_PLAN.md`.
-- Brand promise: “Local-first autonomy, reproducible provisioning, and self-improving research loops.”
+- Primary technical product—a 60+ microservice orchestration platform featuring Agent Zero, Archon, Hi-RAG v2, TensorZero LLM gateway, and EvoSwarm evolutionary optimization (`README.md`, `docs/PMOVES_ARC.md`, `pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md`).
+- Centralized LLM observability via TensorZero [Port 3030] with ClickHouse metrics storage and UI dashboard [Port 4000]; structured multimodal data exchange via CHIT Geometry Bus.
+- Code, compose profiles, and runbooks live under `pmoves/`; developer context for Claude Code CLI is maintained in `.claude/CLAUDE.md` with 43+ slash commands across 12 categories.
+- Brand promise: "Local-first autonomy, reproducible provisioning, and self-improving research loops."
 
 ### 1.3 DARKXSIDE
 - Artistic persona and storytelling lens for Cataclysm’s community activation.  
@@ -29,22 +30,59 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 | Pillar | Description | Primary Evidence |
 | --- | --- | --- |
-| Orchestration Mesh | Agent Zero + Archon + Hi‑RAG gateways ingest, reason, and enrich data across Supabase, Neo4j, Qdrant, Meili, and TensorZero providers. | `README.md`, `pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md`, `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md` |
-| Knowledge & Data Plane | Supabase CLI stack, render/presign services, retrieval-eval harness, telemetry dashboards. | `pmoves/README.md`, `pmoves/docs/services/supabase/README.md`, `pmoves/docs/TELEMETRY_ROI.md` |
-| Creative & Media Stack | ComfyUI pipelines, pmoves-yt ingestion, publisher + Discord bridge, Jellyfin integration. | `pmoves/creator/README.md`, `pmoves/services/publisher/`, `pmoves/services/pmoves-yt/`, `pmoves/docs/services/jellyfin-ai/README.md` |
-| Health & Finance Integrations | Branded Wger and Firefly stacks with smoke tests and env guidance. | `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`, `pmoves/docs/services/wger/README.md`, `pmoves/docs/services/firefly-iii/README.md`, `pmoves/Makefile` (smoke targets) |
-| Research Notebook Workflow | Open Notebook deployment, local model seeding via Ollama, notebook-sync bridge. | `pmoves/docs/services/open-notebook/README.md`, `pmoves/scripts/open_notebook_seed.py`, `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md` |
-| Governance & Reliability | CI parity expectations, reproducible make targets, upcoming change-control expansion. | `docs/LOCAL_CI_CHECKS.md`, `pmoves/docs/MAKE_TARGETS.md`, `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md` (Stability initiative) |
+| Orchestration Mesh | Agent Zero [8080] + Archon [8091] + Hi-RAG v2 [8086/8087] + TensorZero [3030] + EvoSwarm [8113] + BoTZ Gateway [8054] + Mesh Agent coordinate across Supabase, Neo4j, Qdrant, Meili. | `README.md`, `.claude/CLAUDE.md`, `.claude/context/services-catalog.md` |
+| Knowledge & Data Plane | Hi-RAG v2 with cross-encoder reranking, CHIT Geometry Bus for structured multimodal exchange, Supabase CLI stack, retrieval-eval harness. | `.claude/context/chit-geometry-bus.md`, `pmoves/README.md`, `pmoves/docs/services/supabase/README.md` |
+| Creative & Media Stack | ComfyUI pipelines, PMOVES.YT [8077] with 10 slash commands, Channel Monitor [8097], FFmpeg-Whisper [8078], media analyzers, Jellyfin Bridge [8093]. | `pmoves/creator/README.md`, `.claude/commands/yt/`, `pmoves/services/pmoves-yt/` |
+| LLM Observability Fabric | TensorZero Gateway [3030] for unified LLM API, ClickHouse [8123] metrics storage, TensorZero UI [4000] dashboard, token usage and latency tracking. | `.claude/context/tensorzero.md`, `pmoves/tensorzero/config/tensorzero.toml` |
+| Developer Experience Layer | `.claude/` directory with 43+ slash commands across 12 categories, TAC (Tactical Agentic Coding) git worktree patterns, security hooks with NATS observability. | `.claude/CLAUDE.md`, `.claude/README.md`, `.claude/context/git-worktrees.md` |
+| Multi-Platform Communications | Messaging Gateway [8101] for Discord/Telegram/WhatsApp, Publisher-Discord [8094] for ingestion notifications, NATS event-driven coordination. | `.claude/context/nats-subjects.md`, `pmoves/services/messaging-gateway/` |
+| Health & Finance Integrations | Branded Wger and Firefly stacks with smoke tests and env guidance. | `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`, `pmoves/docs/services/wger/README.md`, `pmoves/docs/services/firefly-iii/README.md` |
+| Research & Deep Search | SupaSerch [8099] holographic deep research, DeepResearch [8098] LLM-based planner, Open Notebook sync, notebook-sync bridge. | `.claude/commands/search/`, `pmoves/docs/services/open-notebook/README.md` |
+| Governance & Reliability | 5-tier network architecture (api/app/bus/data/monitoring), CI parity, reproducible make targets, Prometheus/Grafana/Loki monitoring. | `docs/LOCAL_CI_CHECKS.md`, `pmoves/docs/MAKE_TARGETS.md`, `.claude/context/services-catalog.md` |
 
-## 3. Implementation Snapshot (as of October 26 2025)
+## 3. Implementation Snapshot (as of December 11 2025)
 
-- **Roadmap alignment** – Milestone M1 complete, M2 mid-flight with active tasks on publisher metadata, Discord automation, and Wger/Firefly integration polish (`pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`).  
-- **UI platform** – `pmoves/ui` upgraded to Next 16 + React 19, secured upload ingestion via owner-scoped Supabase policies (`pmoves/ui/app/api/uploads/presign/route.ts`), added Playwright/Jest harnesses, and documented eslint migration guidance (`pmoves/ui/README.md`, `pmoves/docs/LOCAL_DEV.md#ui-workspace-nextjs--supabase-platform-kit`).  
-- **External services** – `make up-external-wger` and `make up-external-firefly` now pull `ghcr.io/cataclysm-studios-inc` images, apply branding defaults (`pmoves/scripts/wger_brand_defaults.sh`), and expose dedicated smoke targets (`pmoves/Makefile`, `pmoves/docs/SMOKETESTS.md`).  
-- **Open Notebook** – Local-first embeddings enabled via `OPEN_NOTEBOOK_*` envs and Ollama integration; sync helpers logged a successful validation run on 2025‑10‑26 (`pmoves/docs/services/open-notebook/README.md`, `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`).  
-- **YouTube ingestion** – Async `/yt/emit` pipeline with status endpoint, lexical fallback, and vendored `httpx` refresh using `make vendor-httpx`; pytest suite green (13 tests) (`pmoves/services/pmoves-yt/`, `pmoves/Makefile`, `pmoves/docs/MAKE_TARGETS.md`).  
-- **Security posture** – Supabase anon role restricted on upload presign paths; previews require authenticated sessions. Wger ships with Django Axes enabled and documented Redis cache expectations (`pmoves/docs/services/wger/README.md`).  
-- **Pending clean-up** – `pmoves/ui/middleware.ts` rename to `proxy.ts` is tracked, Playwright scenarios need expansion, and untracked assets under `CATACLYSM_STUDIOS_INC/ABOUT/` require triage before release (noted in repo `git status`).
+### 3.1 Infrastructure Evolution
+- **60+ Microservices** – Platform expanded from initial Agent Zero/Archon core to comprehensive orchestration ecosystem with Docker Compose profiles: `agents`, `workers`, `orchestration`, `yt`, `gpu`, `monitoring`, `tensorzero`.
+- **5-Tier Network Architecture** – Defense-in-depth isolation: `api_tier` (172.30.1.0/24), `app_tier` (172.30.2.0/24), `bus_tier` (172.30.3.0/24), `data_tier` (172.30.4.0/24), `monitoring_tier` (172.30.5.0/24).
+- **TensorZero Stack** – Operational LLM gateway at port 3030 with ClickHouse metrics storage [8123] and UI dashboard [4000]. Supports OpenAI, Anthropic, Venice, Ollama model routing with full observability.
+
+### 3.2 Advanced AI Services
+- **Hi-RAG v2** [8086/8087] – Hybrid RAG with cross-encoder reranking (BAAI/bge-reranker-base or Qwen3-Reranker-4B), combining Qdrant vectors + Neo4j graph + Meilisearch full-text.
+- **SupaSerch** [8099] – Multimodal holographic deep research orchestrator coordinating DeepResearch, Agent Zero MCP tools, and Hi-RAG.
+- **DeepResearch** [8098] – LLM-based research planner (Alibaba Tongyi DeepResearch) with auto-publishing to Open Notebook.
+- **EvoSwarm Controller** [8113] – Evolutionary test-time optimization for CHIT Geometry parameters using genetic algorithms.
+- **CHIT Geometry Bus** – Production-ready structured multimodal data exchange format across services.
+
+### 3.3 Agent Coordination
+- **Agent Zero** [8080/8081] – Central orchestrator with MCP API at `/mcp/*`, NATS JetStream integration for task coordination.
+- **Archon** [8091/3737] – Supabase-driven agent service with prompt/form management, optional Work Orders service [8053].
+- **BoTZ Gateway** [8054] – Agent orchestration gateway with heartbeat-based health tracking.
+- **Mesh Agent** – Distributed node announcer publishing host capabilities every 15 seconds via NATS.
+
+### 3.4 Media & Communications
+- **PMOVES.YT** [8077] – YouTube ingestion with yt-dlp, transcript extraction, MinIO storage; 10 dedicated slash commands in `.claude/commands/yt/`.
+- **Channel Monitor** [8097] – External content watcher triggering ingestion on new YouTube/RSS content.
+- **Messaging Gateway** [8101] – Multi-platform notifications for Discord, Telegram, WhatsApp.
+- **Publisher-Discord** [8094] – Ingestion event notifications via NATS subjects.
+- **FFmpeg-Whisper** [8078] – GPU-accelerated transcription with Faster-Whisper backend.
+
+### 3.5 Developer Experience
+- **Claude Code CLI Integration** – `.claude/` directory with 43+ slash commands across 12 categories (agents, botz, crush, db, deploy, github, health, k8s, search, workitems, worktree, yt).
+- **TAC Patterns** – Tactical Agentic Coding via git worktrees enabling multiple Claude instances working simultaneously.
+- **Security Hooks** – `pre-tool.sh` blocks dangerous operations; `post-tool.sh` publishes tool executions to NATS `claude.code.tool.executed.v1`.
+- **Context Documentation** – 7 reference files in `.claude/context/` covering services, TensorZero, EvoSwarm, CHIT, NATS, MCP, git worktrees.
+
+### 3.6 Monitoring & Observability
+- **Prometheus** [9090] – Metrics scraping from all service `/metrics` endpoints.
+- **Grafana** [3000] – Dashboard visualization with pre-configured "Services Overview" dashboard.
+- **Loki** [3100] – Centralized log aggregation with Promtail collector.
+- **cAdvisor** – Container metrics for Prometheus integration.
+
+### 3.7 Retained from Previous Snapshot
+- **UI platform** – `pmoves/ui` on Next 16 + React 19 with Supabase auth gating and Playwright/Jest harnesses.
+- **External services** – Wger and Firefly stacks with branding defaults and smoke targets.
+- **Security posture** – Supabase RLS, Django Axes rate limiting, Redis cache expectations documented.
 
 ## 4. Brand & Experience Guidelines
 
@@ -65,20 +103,23 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 ## 5. Blueprint Backlog (cross-reference with ROADMAP & NEXT_STEPS)
 
-### 5.1 Now (active sprint)
-1. **Finalize publisher & Discord embeds** – Close remaining M2 deliverables (`pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`, `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md`).  
-2. **Document Axes + Redis wiring** – Extend `pmoves/docs/services/wger/README.md` with production cache setup and link from `docs/LOCAL_CI_CHECKS.md`.  
-3. **UI middleware migration** – Replace `pmoves/ui/middleware.ts` with new proxy entrypoint, update docs/tests.
+### 5.1 Now (December 2025 Sprint)
+1. **EvoSwarm → CHIT calibration loop** – Complete integration of evolutionary optimization with CHIT Geometry parameters; validate production telemetry feedback.
+2. **BoTZ Gateway work item distribution** – Finalize work item claiming and completion flow for multi-instance Claude Code CLI coordination.
+3. **WhatsApp Business API integration** – Extend Messaging Gateway [8101] with WhatsApp webhook handlers and template messaging.
+4. **YouTube pipeline configuration** – Complete Channel Monitor trigger rules and PMOVES.YT batch processing optimizations.
 
 ### 5.2 Next
-1. **Extend uv/vendor workflow** – Apply `make vendor-httpx` pattern to other Python services (publisher, notebook-sync) and capture instructions in `pmoves/docs/LOCAL_TOOLING_REFERENCE.md`.  
-2. **Playwright scenarios** – Add authenticated upload + presign E2E tests (`pmoves/ui/e2e/`) and document expected datasets.  
-3. **Integrations cleanup** – Decide on tracking vs ignoring `CATACLYSM_STUDIOS_INC/ABOUT/` subdirectories and `.dockerignore`; formalize policy in repository `.gitignore`.
+1. **Multi-population EvoSwarm evolution** – Implement island model for diverse parameter exploration across GPU clusters.
+2. **GAN Sidecar validation** – Deploy adversarial quality validation for Hi-RAG v2 retrieval results in production.
+3. **Kubernetes deployment automation** – Operationalize `/k8s:deploy` slash command with Kustomize overlays for cloud deployment.
+4. **Playwright scenarios expansion** – Add authenticated upload + presign E2E tests (`pmoves/ui/e2e/`) covering TensorZero API flows.
 
 ### 5.3 Later
-1. **DAO / Tokenomics implementation** – Move conceptual token suite (Food-USD, GroToken, Fame/$WORK) from research into actionable specs: generate contracts, define Supabase schemas, and author enforcement docs.  
-2. **Design system & brand kit** – Build shared component library for `pmoves/ui`, Figma token export, and printable brand book referencing this document.  
+1. **DAO / Tokenomics implementation** – Move conceptual token suite (Food-USD, GroToken, Fame/$WORK) from research into actionable specs: generate contracts, define Supabase schemas, and author enforcement docs.
+2. **Design system & brand kit** – Build shared component library for `pmoves/ui`, Figma token export, and printable brand book referencing this document.
 3. **Community pilot playbook** – Translate Fordham Hill prototype steps into a repeatable guide under `docs/PMOVES_COMMUNITY_PILOT.md` (new file).
+4. **ShapeStore integration** – Persist EvoSwarm evolved shapes for cross-session parameter inheritance.
 
 ## 6. Governance & Token Strategy (Research Track)
 
@@ -96,16 +137,123 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 | Domain | Key Files (repo-relative) | Purpose |
 | --- | --- | --- |
-| Architecture & Ops | `README.md`; `pmoves/README.md`; `pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md`; `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md` | System overview, service inventory, roadmap status |
-| Integrations | `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`; `pmoves/docs/services/{wger,firefly-iii,open-notebook}/README.md`; `pmoves/scripts/wger_brand_defaults.sh` | Runbooks and automation helpers |
-| Security & CI | `SECURITY.md`; `docs/LOCAL_CI_CHECKS.md`; `pmoves/docs/MAKE_TARGETS.md`; `pmoves/docs/SMOKETESTS.md` | Policies, required checks, smoke harness |
-| Creative Stack | `pmoves/creator/README.md`; `pmoves/docs/PMOVES.AI PLANS/CREATOR_PIPELINE.md` | DARKXSIDE media workflows and creative automation |
-| UI & Frontend | `pmoves/ui/README.md`; `pmoves/ui/app/api/uploads/*`; `pmoves/ui/e2e/`; `pmoves/ui/__tests__/` | Next.js platform kit, ingestion security, test suites |
-| Notebook & Knowledge | `pmoves/docs/services/open-notebook/README.md`; `pmoves/scripts/open_notebook_seed.py`; `pmoves/scripts/mindmap_to_notebook.py`; `pmoves/scripts/hirag_search_to_notebook.py` | Research workspace integration |
+| Architecture & Ops | `README.md`; `.claude/CLAUDE.md`; `.claude/context/services-catalog.md`; `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md` | System overview, service inventory, roadmap status |
+| LLM & AI Fabric | `.claude/context/tensorzero.md`; `.claude/context/evoswarm.md`; `pmoves/tensorzero/config/tensorzero.toml` | TensorZero gateway, EvoSwarm optimization |
+| Data Exchange | `.claude/context/chit-geometry-bus.md`; `.claude/context/nats-subjects.md`; `.claude/context/mcp-api.md` | CHIT format, NATS events, MCP API |
+| Developer Tools | `.claude/README.md`; `.claude/hooks/README.md`; `.claude/context/git-worktrees.md` | Claude Code CLI, TAC patterns, hooks |
+| Integrations | `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`; `pmoves/docs/services/{wger,firefly-iii,open-notebook}/README.md` | Runbooks and automation helpers |
+| Security & CI | `SECURITY.md`; `docs/LOCAL_CI_CHECKS.md`; `pmoves/docs/MAKE_TARGETS.md`; `.claude/hooks/pre-tool.sh` | Policies, required checks, security hooks |
+| Creative Stack | `pmoves/creator/README.md`; `.claude/commands/yt/`; `pmoves/services/pmoves-yt/` | DARKXSIDE media, YouTube pipeline |
+| UI & Frontend | `pmoves/ui/README.md`; `pmoves/ui/app/api/uploads/*`; `pmoves/ui/e2e/`; `pmoves/ui/__tests__/` | Next.js platform kit, test suites |
+| Notebook & Knowledge | `.claude/commands/search/`; `pmoves/docs/services/open-notebook/README.md`; `pmoves/scripts/hirag_search_to_notebook.py` | Research workspace, Hi-RAG queries |
 
 ## 8. Change Log
 
-- **2025‑10‑26:** Rebuilt document to match repository state, removed external-only references, and established blueprint backlog linked to `pmoves/docs/`.
+- **2025-12-11:** Major platform evolution update—expanded from 6 to 9 platform pillars reflecting 60+ microservices. Added TensorZero LLM gateway stack, CHIT Geometry Bus, EvoSwarm evolutionary optimization, Messaging Gateway, BoTZ Gateway, and comprehensive `.claude/` directory documentation. Updated all platform pillars, implementation snapshot, blueprint backlog, and reference map to reflect current architecture. Added new Section 9 documenting Claude Code CLI integration with 43+ slash commands.
+- **2025-10-26:** Rebuilt document to match repository state, removed external-only references, and established blueprint backlog linked to `pmoves/docs/`.
+
+## 9. Claude Code CLI Integration (.claude/ Directory)
+
+The `.claude/` directory provides always-on context for Claude Code CLI when working in the PMOVES.AI repository. It enables Claude to understand and leverage existing infrastructure without duplicating services.
+
+### 9.1 Directory Tree
+
+```
+.claude/
+├── CLAUDE.md                     # Always-on context (12KB) - loaded automatically
+├── README.md                     # Guide to .claude/ directory
+├── settings.local.json           # 131 allowed bash command patterns
+├── test-self-hosting.sh          # NATS + Hi-RAG integration test
+│
+├── commands/                     # 43 custom slash commands
+│   ├── agents/ (2)               # Agent Zero orchestration
+│   │   ├── status.md             # /agents:status - service health
+│   │   └── mcp-query.md          # /agents:mcp-query - MCP API calls
+│   ├── botz/ (4)                 # Bot configuration & CHIT
+│   │   ├── init.md               # /botz:init - initialize bot
+│   │   ├── profile.md            # /botz:profile - CHIT profiles
+│   │   ├── secrets.md            # /botz:secrets - secret management
+│   │   └── mcp.md                # /botz:mcp - MCP integration
+│   ├── crush/ (2)                # Compression utilities
+│   ├── db/ (3)                   # Database operations (backup, migrate, query)
+│   ├── deploy/ (3)               # Service deployment (up, services, smoke)
+│   ├── github/ (4)               # GitHub integration (actions, issues, PR, security)
+│   ├── health/ (2)               # Health monitoring (check-all, metrics)
+│   ├── k8s/ (3)                  # Kubernetes operations (deploy, logs, status)
+│   ├── search/ (3)               # Knowledge retrieval
+│   │   ├── hirag.md              # /search:hirag - Hi-RAG v2 queries
+│   │   ├── supaserch.md          # /search:supaserch - holographic research
+│   │   └── deepresearch.md       # /search:deepresearch - LLM planner
+│   ├── workitems/ (3)            # BoTZ work tracking (claim, complete, list)
+│   ├── worktree/ (4)             # Git worktree / TAC patterns
+│   │   ├── create.md             # /worktree:create - new worktree
+│   │   ├── switch.md             # /worktree:switch - change context
+│   │   ├── list.md               # /worktree:list - show all
+│   │   └── cleanup.md            # /worktree:cleanup - remove stale
+│   └── yt/ (10)                  # YouTube pipeline
+│       ├── ingest.md             # /yt:ingest - download + transcript
+│       ├── status.md             # /yt:status - pipeline health
+│       ├── channels.md           # /yt:channels - monitored channels
+│       └── ... (7 more)          # Additional YT operations
+│
+├── context/                      # Reference documentation (7 files)
+│   ├── services-catalog.md       # Complete service listing with ports
+│   ├── tensorzero.md             # TensorZero LLM gateway deep dive
+│   ├── evoswarm.md               # Evolutionary optimization system
+│   ├── chit-geometry-bus.md      # Structured multimodal data format
+│   ├── nats-subjects.md          # NATS event subject catalog
+│   ├── mcp-api.md                # Agent Zero MCP API reference
+│   └── git-worktrees.md          # TAC (Tactical Agentic Coding) workflows
+│
+└── hooks/                        # Security & observability (4 files)
+    ├── pre-tool.sh               # Security validation gate
+    │                             # Blocks: rm -rf /, DROP DATABASE, etc.
+    ├── post-tool.sh              # NATS observability publisher
+    │                             # Publishes: claude.code.tool.executed.v1
+    ├── README.md                 # Hook configuration guide
+    └── TEST_RESULTS.md           # Validation test results
+```
+
+### 9.2 Integration Philosophy
+
+- **Leverage, Don't Duplicate**: Use existing services (Hi-RAG, TensorZero, NATS) via APIs
+- **NATS for Coordination**: All tool executions published to `claude.code.tool.executed.v1`
+- **Observability by Default**: Post-tool hooks stream events for monitoring
+- **Security by Design**: Pre-tool hooks block dangerous operations (disk wipes, DROP DATABASE)
+
+### 9.3 TAC (Tactical Agentic Coding) Patterns
+
+Git worktrees enable multiple Claude Code CLI instances working simultaneously:
+
+```bash
+# Create isolated worktree for parallel development
+/worktree:create feature/new-api
+
+# Each worktree has:
+# - Independent file state
+# - Separate Docker Compose environment
+# - Isolated branch context
+```
+
+**Use cases:**
+- A/B testing different implementation approaches
+- Parallel feature development across team
+- Safe experimentation without affecting main workspace
+
+Reference: `.claude/context/git-worktrees.md`
+
+### 9.4 Slash Command Categories
+
+| Category | Commands | Primary Use |
+| --- | --- | --- |
+| `/agents:*` | 2 | Agent Zero health and MCP queries |
+| `/botz:*` | 4 | CHIT profile management, secrets |
+| `/search:*` | 3 | Hi-RAG, SupaSerch, DeepResearch |
+| `/yt:*` | 10 | YouTube ingestion pipeline |
+| `/deploy:*` | 3 | Service deployment and smoke tests |
+| `/worktree:*` | 4 | TAC parallel development |
+| `/health:*` | 2 | Platform-wide health checks |
+| `/k8s:*` | 3 | Kubernetes operations |
 
 ---
 
