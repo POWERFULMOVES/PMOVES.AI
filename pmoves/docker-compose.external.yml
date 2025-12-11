@@ -76,8 +76,8 @@ services:
       - ./data/open-notebook/surreal_data:/mydata
 
   open-notebook-ext:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:v1-latest}
-    # Default to the forked Next.js v1 build; override OPEN_NOTEBOOK_IMAGE to use a different tag.
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:v1-latest}
+    # Default to PMOVES fork with integrations; override OPEN_NOTEBOOK_IMAGE to use a different tag.
     container_name: cataclysm-open-notebook
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
