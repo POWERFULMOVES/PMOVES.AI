@@ -143,6 +143,11 @@ async def lifespan(app: FastAPI):
 
     logger.info("Starting Flute Gateway...")
 
+    # Validate critical environment variables
+    if not SUPABASE_KEY:
+        logger.error("SUPABASE_SERVICE_ROLE_KEY is not set")
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY environment variable is required")
+
     # Initialize providers
     vibevoice_provider = VibeVoiceProvider(VIBEVOICE_URL)
     whisper_provider = WhisperProvider(WHISPER_URL)
@@ -381,9 +386,9 @@ async def get_persona(persona_id: str) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail="Persona not found")
     except HTTPException:
         raise
-    except Exception:
+    except (httpx.HTTPError, httpx.RequestError) as exc:
         logger.exception("Failed to fetch persona")
-        raise HTTPException(status_code=500, detail="Failed to fetch persona")
+        raise HTTPException(status_code=500, detail="Failed to fetch persona") from exc
 
 
 # WebSocket TTS streaming endpoint
