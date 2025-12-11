@@ -283,8 +283,13 @@ services:
 
   chat-relay:
     build:
+<<<<<<< HEAD
       context: ./services/chat-relay
       dockerfile: Dockerfile
+=======
+      context: .
+      dockerfile: services/chat-relay/Dockerfile
+>>>>>>> origin/main
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
@@ -302,6 +307,7 @@ services:
     profiles: ["workers","orchestration"]
     networks: [bus_tier, data_tier, monitoring_tier]
 
+<<<<<<< HEAD
   flute-gateway:
     build:
       context: ./services/flute-gateway
@@ -325,6 +331,8 @@ services:
     profiles: ["workers","orchestration"]
     networks: [api_tier, bus_tier, data_tier, monitoring_tier]
 
+=======
+>>>>>>> origin/main
   ffmpeg-whisper:
     build:
       context: ..

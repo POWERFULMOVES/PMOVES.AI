@@ -41,6 +41,7 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 │   │   ├── list.md               # /worktree:list - show all
 │   │   └── cleanup.md            # /worktree:cleanup - remove stale
 │   └── yt/ (10)                  # YouTube pipeline
+<<<<<<< HEAD
 │       ├── ingest-video.md       # /yt:ingest-video - download + transcript
 │       ├── status.md             # /yt:status - pipeline health
 │       ├── list-channels.md      # /yt:list-channels - monitored channels
@@ -51,6 +52,12 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 │       ├── check-now.md          # /yt:check-now - force check
 │       ├── pending.md            # /yt:pending - show pending items
 │       └── help.md               # /yt:help - command reference
+=======
+│       ├── ingest.md             # /yt:ingest - download + transcript
+│       ├── status.md             # /yt:status - pipeline health
+│       ├── channels.md           # /yt:channels - monitored channels
+│       └── ... (7 more)          # Additional YT operations
+>>>>>>> origin/main
 │
 ├── context/                      # Reference documentation (7 files)
 │   ├── services-catalog.md       # Complete service listing with ports

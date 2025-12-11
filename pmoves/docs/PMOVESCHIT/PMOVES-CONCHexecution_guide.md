@@ -359,6 +359,7 @@ curl -X POST http://localhost:8086/hirag/query \
 
 ## Phase 5: Persona Grounding (1-2 hours)
 
+<<<<<<< HEAD
 ### 5.0 Prerequisites - Apply Grounding Schema
 
 Before creating grounding packs and personas, ensure the required tables exist:
@@ -380,6 +381,8 @@ psql "${SUPABASE_DB_URL}" -c "\dt grounding_packs; \dt personas; \dt persona_eva
 - `personas` - Agent personas with grounding configurations
 - `persona_eval_gates` - Quality thresholds for persona retrieval
 
+=======
+>>>>>>> origin/main
 ### 5.1 Create Consciousness Grounding Pack
 
 ```sql

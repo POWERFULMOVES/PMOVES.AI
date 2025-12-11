@@ -124,7 +124,7 @@ class TestWorkOrderLifecycle:
         # Clean up - delete the test order if created
         if response.status_code == 201:
             delete_response = supabase_client.delete(
-                "/archon_agent_work_orders",
+                f"/archon_agent_work_orders",
                 params={"agent_work_order_id": f"eq.{test_order_id}"}
             )
             assert delete_response.status_code in [200, 204]

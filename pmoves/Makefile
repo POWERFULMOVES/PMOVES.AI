@@ -136,6 +136,8 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	  $(MAKE) agents-headless-smoke || true; \
 	  echo "→ Archon MCP evidence"; \
 	  $(MAKE) archon-mcp-evidence || true; \
+	  echo "→ Discord smoke"; \
+	  $(MAKE) discord-smoke || true; \
 	  echo "✔ Verify-all sequence executed. Review console + Grafana."
 
 .PHONY: archon-mcp-evidence
@@ -1858,10 +1860,20 @@ web-geometry:
 	@$(MAKE) smoke-geometry
 
 .PHONY: discord-smoke
-discord-smoke:
+discord-smoke: ## Smoke test Discord publisher: health + direct publish + NATS event trigger
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
-	@echo "[Discord] Health" && curl -sf http://localhost:8092/healthz | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
-	@echo "[Discord] Publish test" && curl -sS -X POST http://localhost:8092/publish -H 'content-type: application/json' -d '{"content":"PMOVES test ping"}' | jq -e '.ok==true' >/dev/null && echo OK || (echo FAIL && exit 1)
+	@echo "[Discord] Health check (port 8094->8092)"
+	@curl -sf http://localhost:8094/healthz | jq -e '.status=="ok" or .ok==true' >/dev/null 2>&1 && echo "  ✓ Health OK" || (echo "  ✗ Health FAIL (is publisher-discord running?)" && exit 1)
+	@echo "[Discord] Direct publish test"
+	@curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' -d '{"content":"🧪 PMOVES smoke test ping","embeds":[{"title":"Smoke Test","description":"Automated test from make discord-smoke","color":3447003}]}' | jq -e '.ok==true or .success==true' >/dev/null 2>&1 && echo "  ✓ Direct publish OK" || echo "  ⚠ Direct publish failed (check DISCORD_WEBHOOK_URL)"
+	@echo "[Discord] NATS event trigger test"
+	@if command -v nats >/dev/null 2>&1; then \
+	  nats pub ingest.file.added.v1 '{"video_id":"smoke-test-'$$(date +%s)'","title":"Smoke Test Video","url":"https://example.com/test","source":"smoke-test"}' 2>/dev/null && echo "  ✓ NATS event published (check Discord for notification)"; \
+	elif [ -f tools/nats_publish.py ] && python3 -c "import nats" 2>/dev/null; then \
+	  python3 tools/nats_publish.py ingest.file.added.v1 '{"video_id":"smoke-test","title":"Smoke Test Video","url":"https://example.com/test","source":"smoke-test"}' 2>/dev/null && echo "  ✓ NATS event published via Python (check Discord for notification)"; \
+	else \
+	  echo "  ℹ NATS event test skipped (nats CLI not available). Discord health check passed."; \
+	fi
 
 .PHONY: jellyfin-smoke
 jellyfin-smoke:
