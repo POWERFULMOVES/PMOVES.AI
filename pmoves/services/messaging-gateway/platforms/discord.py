@@ -61,8 +61,8 @@ class DiscordPlatform:
         except BadSignatureError:
             logger.warning("Discord signature verification failed: invalid signature")
             return False
-        except Exception as e:
-            logger.error(f"Discord signature verification error: {e}")
+        except Exception:
+            logger.exception("Discord signature verification error")
             return False
 
     async def send(
@@ -105,8 +105,8 @@ class DiscordPlatform:
             else:
                 logger.warning(f"Discord send failed: {r.status_code} - {r.text[:200]}")
                 return False
-        except Exception as e:
-            logger.error(f"Discord send exception: {e}")
+        except Exception:
+            logger.exception("Discord send exception")
             return False
 
     def _build_button_components(self, buttons: List[Dict]) -> List[Dict]:

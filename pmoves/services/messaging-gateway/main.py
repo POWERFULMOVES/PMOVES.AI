@@ -182,8 +182,8 @@ async def _handle_nats_message(msg):
                 content=content,
                 metadata={"subject": subject, "payload": payload}
             ))
-        except Exception as e:
-            logger.error(f"Failed to forward NATS event to platforms: {e}")
+        except Exception:
+            logger.exception("Failed to forward NATS event to platforms")
 
 
 def _format_notification(subject: str, payload: dict) -> str:

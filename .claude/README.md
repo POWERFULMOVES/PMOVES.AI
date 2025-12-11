@@ -41,10 +41,16 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 │   │   ├── list.md               # /worktree:list - show all
 │   │   └── cleanup.md            # /worktree:cleanup - remove stale
 │   └── yt/ (10)                  # YouTube pipeline
-│       ├── ingest.md             # /yt:ingest - download + transcript
+│       ├── ingest-video.md       # /yt:ingest-video - download + transcript
 │       ├── status.md             # /yt:status - pipeline health
-│       ├── channels.md           # /yt:channels - monitored channels
-│       └── ... (7 more)          # Additional YT operations
+│       ├── list-channels.md      # /yt:list-channels - monitored channels
+│       ├── add-channel.md        # /yt:add-channel - add channel to monitor
+│       ├── remove-channel.md     # /yt:remove-channel - remove channel
+│       ├── toggle-channel.md     # /yt:toggle-channel - enable/disable
+│       ├── add-playlist.md       # /yt:add-playlist - add playlist
+│       ├── check-now.md          # /yt:check-now - force check
+│       ├── pending.md            # /yt:pending - show pending items
+│       └── help.md               # /yt:help - command reference
 │
 ├── context/                      # Reference documentation (7 files)
 │   ├── services-catalog.md       # Complete service listing with ports

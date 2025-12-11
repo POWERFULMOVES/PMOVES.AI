@@ -1,6 +1,7 @@
 {
   "meta": {
-    "instanceId": "pmoves-demo"
+    "instanceId": "pmoves-demo",
+    "securityNote": "WARNING: Webhook endpoint has no authentication. Add headerAuth or basicAuth before exposing to untrusted networks."
   },
   "nodes": [
     {

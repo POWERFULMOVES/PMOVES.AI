@@ -359,6 +359,27 @@ curl -X POST http://localhost:8086/hirag/query \
 
 ## Phase 5: Persona Grounding (1-2 hours)
 
+### 5.0 Prerequisites - Apply Grounding Schema
+
+Before creating grounding packs and personas, ensure the required tables exist:
+
+```bash
+# Apply the grounded personas schema (creates grounding_packs, personas, persona_eval_gates tables)
+psql "${SUPABASE_DB_URL}" -f pmoves/db/v5_12_grounded_personas.sql
+
+# Or via Docker Compose
+docker compose -p pmoves exec postgres psql -U pmoves -d pmoves -f /app/db/v5_12_grounded_personas.sql
+
+# Verify tables were created
+psql "${SUPABASE_DB_URL}" -c "\dt grounding_packs; \dt personas; \dt persona_eval_gates;"
+```
+
+**Required tables:**
+- `grounding_packs` - Knowledge pack definitions
+- `pack_members` - Assets linked to packs
+- `personas` - Agent personas with grounding configurations
+- `persona_eval_gates` - Quality thresholds for persona retrieval
+
 ### 5.1 Create Consciousness Grounding Pack
 
 ```sql

@@ -1,5 +1,6 @@
 {
   "name": "Finance Firefly Sync → Supabase (hourly)",
+  "description": "LIMITATION: Currently fetches only 100 transactions per hour. For high-volume instances, implement pagination by checking meta.pagination.total and looping with ?page=N parameter.",
   "settings": {},
   "active": true,
   "nodes": [

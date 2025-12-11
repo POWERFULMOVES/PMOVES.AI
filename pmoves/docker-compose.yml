@@ -281,6 +281,50 @@ services:
     profiles: ["workers","orchestration"]
     networks: [bus_tier, monitoring_tier]
 
+  chat-relay:
+    build:
+      context: ./services/chat-relay
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - HEALTH_PORT=8102
+      - AGENT_RESPONSE_SUBJECT=agent.response.v1
+      - AGENT_REQUEST_SUBJECT=agent.request.v1
+      - DEFAULT_OWNER_ID=${DEFAULT_OWNER_ID:-00000000-0000-0000-0000-000000000000}
+    depends_on:
+      nats:
+        condition: service_started
+    ports: ["8102:8102"]
+    profiles: ["workers","orchestration"]
+    networks: [bus_tier, data_tier, monitoring_tier]
+
+  flute-gateway:
+    build:
+      context: ./services/flute-gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - VIBEVOICE_URL=${VIBEVOICE_URL:-http://localhost:3000}
+      - WHISPER_URL=${WHISPER_URL:-http://ffmpeg-whisper:8078}
+      - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+      - FLUTE_API_KEY=${FLUTE_API_KEY:-}
+      - FLUTE_HTTP_PORT=8055
+      - FLUTE_WS_PORT=8056
+    depends_on:
+      nats:
+        condition: service_started
+    ports: ["8055:8055", "8056:8056"]
+    profiles: ["workers","orchestration"]
+    networks: [api_tier, bus_tier, data_tier, monitoring_tier]
+
   ffmpeg-whisper:
     build:
       context: ..
