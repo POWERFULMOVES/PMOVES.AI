@@ -6,6 +6,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import httpx
+from nacl.signing import VerifyKey
+from nacl.exceptions import BadSignatureError
 
 logger = logging.getLogger("discord_platform")
 
@@ -17,6 +19,12 @@ class DiscordPlatform:
         self.webhook_url = webhook_url
         self.application_id = application_id
         self.public_key = public_key
+        self._verify_key: Optional[VerifyKey] = None
+        if public_key:
+            try:
+                self._verify_key = VerifyKey(bytes.fromhex(public_key))
+            except Exception as e:
+                logger.error(f"Failed to initialize Discord verify key: {e}")
         self._client: Optional[httpx.AsyncClient] = None
 
     def is_configured(self) -> bool:
@@ -26,6 +34,36 @@ class DiscordPlatform:
     async def initialize(self):
         """Initialize HTTP client."""
         self._client = httpx.AsyncClient(timeout=15)
+
+    def verify_signature(self, signature: str, timestamp: str, body: bytes) -> bool:
+        """
+        Verify Discord interaction signature using Ed25519.
+
+        Discord requires signature verification for all interaction endpoints.
+        See: https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
+
+        Args:
+            signature: X-Signature-Ed25519 header value
+            timestamp: X-Signature-Timestamp header value
+            body: Raw request body bytes
+
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        if not self._verify_key:
+            logger.error("Discord signature verification failed: no verify key configured")
+            return False
+
+        try:
+            message = timestamp.encode() + body
+            self._verify_key.verify(message, bytes.fromhex(signature))
+            return True
+        except BadSignatureError:
+            logger.warning("Discord signature verification failed: invalid signature")
+            return False
+        except Exception as e:
+            logger.error(f"Discord signature verification error: {e}")
+            return False
 
     async def send(
         self,

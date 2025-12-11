@@ -80,6 +80,10 @@ class TelegramPlatform:
             logger.warning("No target chat IDs configured for Telegram")
             return False
 
+        if self._client is None:
+            logger.error("Telegram client not initialized")
+            return False
+
         success = False
         for chat in target_chats:
             try:
@@ -156,25 +160,35 @@ class TelegramPlatform:
                 response = "Button clicked"
 
             # Answer callback query (required by Telegram)
-            await self._client.post(
-                f"https://api.telegram.org/bot{self.bot_token}/answerCallbackQuery",
-                json={
-                    "callback_query_id": callback["id"],
-                    "text": response,
-                }
-            )
+            if self._client is None:
+                logger.error("Telegram client not initialized")
+                return {"ok": False, "error": "client_not_initialized"}
+
+            try:
+                await self._client.post(
+                    f"https://api.telegram.org/bot{self.bot_token}/answerCallbackQuery",
+                    json={
+                        "callback_query_id": callback["id"],
+                        "text": response,
+                    }
+                )
+            except Exception as e:
+                logger.exception(f"Failed to answer callback query: {e}")
 
             # Edit original message to show result
             if chat_id:
                 message_id = callback.get("message", {}).get("message_id")
-                await self._client.post(
-                    f"https://api.telegram.org/bot{self.bot_token}/editMessageText",
-                    json={
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "text": response,
-                    }
-                )
+                try:
+                    await self._client.post(
+                        f"https://api.telegram.org/bot{self.bot_token}/editMessageText",
+                        json={
+                            "chat_id": chat_id,
+                            "message_id": message_id,
+                            "text": response,
+                        }
+                    )
+                except Exception as e:
+                    logger.exception(f"Failed to edit message: {e}")
 
             return {"ok": True}
 

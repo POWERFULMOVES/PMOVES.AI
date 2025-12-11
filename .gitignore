@@ -50,8 +50,6 @@ testkeys.md
 /.env.testkeys
 # Tooling binaries
 /actionlint
-# Root env scratch (not used by stack, keep untracked)
-/.env
 
 # Backup files (may contain credentials)
 *.backup*
@@ -89,3 +87,4 @@ temp*.mp4
 pmoves/ui/.pmoves_ui_dev.pid
 pmoves/ui/.pmoves_ui_dev.log
 docs/notes.md
+notes.md

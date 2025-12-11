@@ -76,6 +76,5 @@ GRANT SELECT ON archon_work_orders_with_steps TO service_role;
 GRANT SELECT ON archon_work_orders_active TO authenticated;
 GRANT SELECT ON archon_work_orders_with_steps TO authenticated;
 
--- Grant SELECT to anon (public read for specific use cases)
-GRANT SELECT ON archon_work_orders_active TO anon;
-GRANT SELECT ON archon_work_orders_with_steps TO anon;
+-- Note: anon role access intentionally omitted as underlying tables
+-- have RLS enabled without corresponding anon policies
