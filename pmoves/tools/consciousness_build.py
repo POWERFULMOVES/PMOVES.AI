@@ -16,12 +16,12 @@ This script is intentionally lightweight and avoids external dependencies.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
 import sys
 import textwrap
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -127,16 +127,6 @@ class Chunk:
     content: str
 
 
-def deterministic_id(content: str, prefix: str, max_len: int = 12) -> str:
-    """Generate deterministic ID from content using SHA-256.
-
-    This ensures idempotent chunk generation - re-running the script
-    produces identical IDs for the same content.
-    """
-    content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:max_len]
-    return f"{prefix}-{content_hash}"
-
-
 def strip_html(html: str) -> str:
     """Very small HTML → text helper; removes scripts/styles and tags."""
     cleaned = re.sub(r"(?is)<(script|style).*?>.*?(</\1>)", "", html)
@@ -169,9 +159,7 @@ def collect_taxonomy_chunks() -> List[Chunk]:
         # Subcategory theories
         for subcat_name, theories in cat_data.get("subcategories", {}).items():
             for theory_name, proponents, desc in theories:
-                # Use theory name + category for deterministic ID
-                id_source = f"{theory_name}:{category}:{subcat_name}"
-                chunk_id = deterministic_id(id_source, "consciousness-theory")
+                chunk_id = f"consciousness-theory-{theory_name.lower().replace(' ', '-')[:30]}-{uuid.uuid4().hex[:6]}"
                 content = (
                     f"{theory_name} is a consciousness theory in the {subcat_name} subcategory of {category.replace('-', ' ')}. "
                     f"Key proponents: {proponents}. {desc}"
@@ -188,9 +176,7 @@ def collect_taxonomy_chunks() -> List[Chunk]:
 
         # Direct theories (no subcategory)
         for theory_name, proponents, desc in cat_data.get("theories", []):
-            # Use theory name + category for deterministic ID
-            id_source = f"{theory_name}:{category}"
-            chunk_id = deterministic_id(id_source, "consciousness-theory")
+            chunk_id = f"consciousness-theory-{theory_name.lower().replace(' ', '-')[:30]}-{uuid.uuid4().hex[:6]}"
             content = (
                 f"{theory_name} is a consciousness theory in the {category.replace('-', ' ')} category. "
                 f"Key proponents: {proponents}. {desc}"
@@ -226,8 +212,7 @@ def collect_chunks(base: Path) -> List[Chunk]:
             if not text:
                 continue
             title = html_path.stem.replace("_", " ").replace("-", " ").title()
-            # Use filename for deterministic ID (stable across runs)
-            chunk_id = deterministic_id(html_path.name, "consciousness-paper")
+            chunk_id = f"consciousness-paper-{uuid.uuid4().hex[:12]}"
             chunks.append(
                 Chunk(
                     chunk_id=chunk_id,
@@ -250,8 +235,7 @@ def collect_chunks(base: Path) -> List[Chunk]:
             label = entry.get("Text") or entry.get("text") or url
             if not label:
                 continue
-            # Use URL for deterministic ID (unique per link)
-            chunk_id = deterministic_id(url or label, "consciousness-link")
+            chunk_id = f"consciousness-link-{uuid.uuid4().hex[:12]}"
             content = f"Discovered theory/category link: {label} ({url})"
             chunks.append(
                 Chunk(
@@ -267,7 +251,7 @@ def collect_chunks(base: Path) -> List[Chunk]:
     if not chunks:
         chunks.append(
             Chunk(
-                chunk_id="consciousness-placeholder-empty",
+                chunk_id=f"consciousness-placeholder-{uuid.uuid4().hex[:12]}",
                 title="Landscape of Consciousness (placeholder)",
                 url=str(research_dir),
                 category="placeholder",
