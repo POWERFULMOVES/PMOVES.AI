@@ -98,7 +98,7 @@ class TelegramPlatform:
                 else:
                     logger.warning(f"Telegram send failed for {chat}: {r.status_code} - {r.text[:200]}")
             except Exception as e:
-                logger.error(f"Telegram send exception for {chat}: {e}")
+                logger.exception(f"Telegram send exception for {chat}: {e}")
 
         return success
 
