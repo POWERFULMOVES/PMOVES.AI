@@ -23,8 +23,8 @@ class DiscordPlatform:
         if public_key:
             try:
                 self._verify_key = VerifyKey(bytes.fromhex(public_key))
-            except Exception as e:
-                logger.error(f"Failed to initialize Discord verify key: {e}")
+            except Exception:
+                logger.exception("Failed to initialize Discord verify key")
         self._client: Optional[httpx.AsyncClient] = None
 
     def is_configured(self) -> bool:

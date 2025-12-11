@@ -39,8 +39,8 @@ class TelegramPlatform:
                 logger.info(f"Telegram bot initialized: {bot_info.get('result', {}).get('username')}")
             else:
                 logger.warning(f"Failed to verify Telegram bot: {r.status_code}")
-        except Exception as e:
-            logger.error(f"Telegram initialization error: {e}")
+        except Exception:
+            logger.exception("Telegram initialization error")
 
     async def send(
         self,
@@ -97,8 +97,8 @@ class TelegramPlatform:
                     success = True
                 else:
                     logger.warning(f"Telegram send failed for {chat}: {r.status_code} - {r.text[:200]}")
-            except Exception as e:
-                logger.exception(f"Telegram send exception for {chat}: {e}")
+            except Exception:
+                logger.exception(f"Telegram send exception for {chat}")
 
         return success
 
@@ -172,8 +172,8 @@ class TelegramPlatform:
                         "text": response,
                     }
                 )
-            except Exception as e:
-                logger.exception(f"Failed to answer callback query: {e}")
+            except Exception:
+                logger.exception("Failed to answer callback query")
 
             # Edit original message to show result
             if chat_id:
@@ -187,8 +187,8 @@ class TelegramPlatform:
                             "text": response,
                         }
                     )
-                except Exception as e:
-                    logger.exception(f"Failed to edit message: {e}")
+                except Exception:
+                    logger.exception("Failed to edit message")
 
             return {"ok": True}
 
