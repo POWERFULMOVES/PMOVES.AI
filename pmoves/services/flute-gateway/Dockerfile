@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-LABEL org.opencontainers.image.source="https://github.com/frostbytten/PMOVES.AI"
+LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
 LABEL org.opencontainers.image.description="Flute Gateway - Multimodal Voice Communication Layer"
 
 WORKDIR /app

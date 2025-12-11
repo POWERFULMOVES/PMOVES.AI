@@ -409,6 +409,11 @@ async def websocket_tts(websocket: WebSocket):
                 await websocket.send_json({"type": "error", "message": "No text provided"})
                 continue
 
+            # Validate text length (same limit as REST endpoint)
+            if len(text) > 5000:
+                await websocket.send_json({"type": "error", "message": "Text exceeds 5000 character limit"})
+                continue
+
             # Stream audio chunks
             if vibevoice_provider:
                 chunk_count = 0
