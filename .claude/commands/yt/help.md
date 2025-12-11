@@ -31,8 +31,7 @@ List all available YouTube management commands.
 ## Configuration
 
 All channel configurations are stored in:
-`${PMOVES_ROOT}/pmoves/config/channel_monitor.json`
-(where `PMOVES_ROOT` defaults to the git repository root)
+`/home/pmoves/PMOVES.AI/pmoves/config/channel_monitor.json`
 
 Key settings:
 - `auto_process: false` - Videos require manual approval (default)

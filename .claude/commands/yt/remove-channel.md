@@ -19,9 +19,8 @@ Remove a YouTube channel or playlist from the channel monitor configuration.
 7. Restart channel-monitor service
 
 ```bash
-# After editing config (uses PMOVES_ROOT env var or defaults to current git repo root)
-PMOVES_ROOT="${PMOVES_ROOT:-$(git rev-parse --show-toplevel)}"
-docker compose -f "${PMOVES_ROOT}/pmoves/docker-compose.yml" restart channel-monitor
+# After editing config
+docker compose -f /home/pmoves/PMOVES.AI/pmoves/docker-compose.yml restart channel-monitor
 ```
 
 Always confirm before removing.

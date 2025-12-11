@@ -17,9 +17,8 @@ Enable or disable a YouTube channel/playlist in the channel monitor.
 5. Restart channel-monitor service
 
 ```bash
-# After editing config (uses PMOVES_ROOT env var or defaults to current git repo root)
-PMOVES_ROOT="${PMOVES_ROOT:-$(git rev-parse --show-toplevel)}"
-docker compose -f "${PMOVES_ROOT}/pmoves/docker-compose.yml" restart channel-monitor
+# After editing config
+docker compose -f /home/pmoves/PMOVES.AI/pmoves/docker-compose.yml restart channel-monitor
 ```
 
 Show the new state after toggling.

@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 const NAV_LINKS: Array<{ href: string; label: string; key: NavKey }> = [
   { href: '/dashboard/ingest', label: 'Ingestion', key: 'ingest' },
+  { href: '/dashboard/ingestion-queue', label: 'Queue', key: 'ingestion-queue' },
   { href: '/dashboard/videos', label: 'Video reviews', key: 'videos' },
   { href: '/dashboard/monitor', label: 'Monitor', key: 'monitor' },
   { href: '/dashboard/notebook', label: 'Notebook', key: 'notebook' },
@@ -17,6 +18,7 @@ const NAV_LINKS: Array<{ href: string; label: string; key: NavKey }> = [
 
 export type NavKey =
   | 'ingest'
+  | 'ingestion-queue'
   | 'videos'
   | 'monitor'
   | 'notebook'
