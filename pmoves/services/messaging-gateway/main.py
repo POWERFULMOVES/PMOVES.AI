@@ -8,7 +8,7 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel
 
@@ -120,8 +120,28 @@ async def send_message(request: SendMessageRequest):
 
 
 @app.post("/webhooks/discord")
-async def discord_webhook(payload: dict):
-    """Handle Discord interaction callbacks (button clicks)."""
+async def discord_webhook(request: Request):
+    """Handle Discord interaction callbacks (button clicks).
+
+    Validates Ed25519 signature before processing per Discord requirements.
+    See: https://discord.com/developers/docs/interactions/receiving-and-responding
+    """
+    # Get raw body and signature headers
+    body = await request.body()
+    signature = request.headers.get("X-Signature-Ed25519", "")
+    timestamp = request.headers.get("X-Signature-Timestamp", "")
+
+    # Verify signature (required by Discord)
+    if not discord_platform.verify_signature(signature, timestamp, body):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    # Parse and handle interaction
+    payload = await request.json()
+
+    # Handle ping (type 1) for Discord URL verification
+    if payload.get("type") == 1:
+        return {"type": 1}
+
     return await discord_platform.handle_interaction(payload)
 
 
@@ -274,7 +294,7 @@ async def shutdown():
         _nats_loop_task.cancel()
         try:
             await _nats_loop_task
-        except:
+        except asyncio.CancelledError:
             pass
         _nats_loop_task = None
 
