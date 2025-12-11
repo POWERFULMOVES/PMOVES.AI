@@ -351,7 +351,7 @@ services:
     profiles: ["workers","orchestration"]
     networks: [app_tier, data_tier, monitoring_tier]
   pmoves-yt:
-    image: ${PMOVES_YT_IMAGE:-}
+    image: ${PMOVES_YT_IMAGE:-ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest}
     build:
       context: ./services/pmoves-yt
       args:
@@ -379,6 +379,7 @@ services:
       - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
     volumes:
       - ./config:/app/config
+      - ./data/yt-dlp:/data/yt-dlp
     depends_on:
       minio:
         condition: service_started
@@ -398,7 +399,7 @@ services:
       - PORT=4416
     depends_on: [minio]
     profiles: ["orchestration","yt"]
-    networks: [app_tier]
+    networks: [api_tier, app_tier]  # api_tier added for external DNS/googleapis access
 
   channel-monitor:
     build: ./services/channel-monitor
@@ -741,7 +742,7 @@ services:
       data_tier:
       monitoring_tier:
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8054/healthz >/dev/null || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -763,7 +764,7 @@ services:
     build:
       context: .
       dockerfile: services/deepresearch/Dockerfile
-    image: ${DEEPRESEARCH_IMAGE:-}
+    image: ${DEEPRESEARCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-deepresearch:pmoves-latest}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]
     environment:
@@ -794,7 +795,7 @@ services:
     build:
       context: ./services
       dockerfile: supaserch/Dockerfile
-    image: ${SUPASERCH_IMAGE:-}
+    image: ${SUPASERCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-supaserch:pmoves-latest}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
@@ -849,6 +850,23 @@ services:
     ports: ["8094:8092"]
     profiles: ["orchestration","agents"]
     networks: [app_tier, bus_tier, monitoring_tier]
+
+  messaging-gateway:
+    build: ./services/messaging-gateway
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID}
+      - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - MESSAGING_SUBJECTS=${MESSAGING_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1}
+    depends_on: [nats]
+    ports: ["8101:8101"]
+    profiles: ["workers"]
+    networks: [api_tier, bus_tier]
 
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
@@ -1014,10 +1032,12 @@ services:
       invidious-companion:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/v1/trending >/dev/null"]
+      # Use root endpoint instead of /trending which often fails due to YouTube blocking
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 60s
     profiles: ["invidious"]
     networks: [api_tier, app_tier, data_tier, monitoring_tier]
 

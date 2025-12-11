@@ -1,7 +1,24 @@
 {
   "name": "Health Wger Sync (stub)",
-  "active": false,
+  "active": true,
   "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "ScheduleTrigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [60, 200]
+    },
     {
       "parameters": {
         "httpMethod": "GET",
@@ -72,6 +89,9 @@
     }
   ],
   "connections": {
+    "Schedule Trigger": {
+      "main": [ [ { "node": "Fetch Workout Logs", "type": "main", "index": 0 } ] ]
+    },
     "Fetch Workout Logs": {
       "main": [ [ { "node": "Map → upsert rows", "type": "main", "index": 0 } ] ]
     },
@@ -83,4 +103,3 @@
     }
   }
 }
-

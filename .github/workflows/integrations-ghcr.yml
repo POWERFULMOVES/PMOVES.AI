@@ -25,6 +25,18 @@ on:
         required: true
         default: false
         type: boolean
+  push:
+    branches: [main]
+    paths:
+      # Rebuild images when submodules are updated
+      - 'PMOVES-Open-Notebook'
+      - 'PMOVES-Agent-Zero'
+      - 'PMOVES-Archon'
+      - 'PMOVES.YT'
+      - 'PMOVES-Jellyfin'
+      - 'PMOVES-Supaserch'
+      # Also rebuild when this workflow changes
+      - '.github/workflows/integrations-ghcr.yml'
   schedule:
     - cron: '17 7 * * *'
 
@@ -68,8 +80,8 @@ jobs:
             dockerfile: Dockerfile
             image_name: pmoves-archon-ui
           - name: open-notebook
-            git_url: https://github.com/lfnovo/open-notebook.git
-            ref: main
+            git_url: https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
+            ref: PMOVES.AI-Edition-Hardened
             context: .
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
