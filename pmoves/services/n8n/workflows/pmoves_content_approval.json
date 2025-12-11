@@ -77,7 +77,7 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {},
   "staticData": null,
   "id": "PMOVES Content Approval v1"

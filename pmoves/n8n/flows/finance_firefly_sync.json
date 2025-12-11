@@ -1,6 +1,6 @@
 {
   "name": "Finance Firefly Sync (stub)",
-  "active": false,
+  "active": true,
   "nodes": [
     {
       "parameters": {

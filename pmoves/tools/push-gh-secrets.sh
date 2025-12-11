@@ -83,7 +83,7 @@ should_include() {
     done
     return 1
   fi
-  if [[ $PUSH_ALL -eq 1 || ${#MANIFEST_KEYS[@]:-0} -eq 0 ]]; then
+  if [[ $PUSH_ALL -eq 1 || ${#MANIFEST_KEYS[@]} -eq 0 ]]; then
     return 0
   fi
   for k in "${MANIFEST_KEYS[@]}"; do

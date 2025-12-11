@@ -3,7 +3,7 @@
 Purpose: keep PATs/API keys out of the repo while making collaboration easy.
 
 What goes where
-- GitHub Actions secrets (preferred): `GH_PAT_PUBLISH`, `GHCR_USERNAME`, `DOCKERHUB_PAT`, `DOCKERHUB_USERNAME`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `YOUTUBE_API_KEY`, `GOOGLE_OAUTH_CLIENT_SECRET`, `DISCORD_WEBHOOK` (and any other third‑party keys).
+- GitHub Actions secrets (preferred): `GH_PAT_PUBLISH`, `GHCR_USERNAME`, `DOCKERHUB_PAT`, `DOCKERHUB_USERNAME`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `YOUTUBE_API_KEY`, `GOOGLE_OAUTH_CLIENT_SECRET`, `DISCORD_WEBHOOK`, `CHIT_PASSPHRASE` (and any other third‑party keys).
 - Environment scoping: use repo environments (Dev/Prod) for least privilege and required reviewers.
 - Human retrieval: store the same values in the team vault (1Password/Bitwarden/etc.) for onboarding; never in tracked files.
 
@@ -26,6 +26,7 @@ Compose/runtime pattern (hardened images)
 Rotation
 - Rotate any credential that ever touched a tracked file (including old `docs/notes.md` contents) before reuse.
 - Set a 90‑day reminder for PAT/API keys; regenerate Discord webhooks instead of reusing.
+- CHIT passphrase: rotate quarterly; regenerate using `openssl rand -base64 32 | tr -d '/+=' | head -c 48`
 
 Checklist before shipping a PR
 - No secrets in `git diff` or `git status`.

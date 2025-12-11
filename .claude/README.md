@@ -10,29 +10,76 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 
 ```
 .claude/
-├── CLAUDE.md                      # Always-on context - READ THIS FIRST
-├── README.md                      # This file
-├── commands/                      # Custom slash commands
-│   ├── agents/
-│   │   ├── status.md              # /agents:status - Check Agent Zero
-│   │   └── mcp-query.md           # /agents:mcp-query - Call MCP API
-│   ├── search/
-│   │   ├── hirag.md               # /search:hirag - Query Hi-RAG v2
-│   │   ├── supaserch.md           # /search:supaserch - Deep research
-│   │   └── deepresearch.md        # /search:deepresearch - LLM research
-│   ├── health/
-│   │   ├── check-all.md           # /health:check-all - Verify all services
-│   │   └── metrics.md             # /health:metrics - Prometheus queries
-│   └── deploy/
-│       ├── smoke-test.md          # /deploy:smoke-test - Run integration tests
-│       └── services.md            # /deploy:services - Docker status
-└── context/                       # Reference documentation
-    ├── services-catalog.md        # Complete service listing
-    ├── nats-subjects.md           # NATS event catalog
-    ├── mcp-api.md                 # Agent Zero MCP reference
-    ├── chit-geometry-bus.md       # CHIT structured data format
-    └── evoswarm.md                # Evolutionary optimization system
+├── CLAUDE.md                     # Always-on context (12KB) - loaded automatically
+├── README.md                     # This file
+├── settings.local.json           # 131 allowed bash command patterns
+├── test-self-hosting.sh          # NATS + Hi-RAG integration test
+│
+├── commands/                     # 43 custom slash commands
+│   ├── agents/ (2)               # Agent Zero orchestration
+│   │   ├── status.md             # /agents:status - service health
+│   │   └── mcp-query.md          # /agents:mcp-query - MCP API calls
+│   ├── botz/ (4)                 # Bot configuration & CHIT
+│   │   ├── init.md               # /botz:init - initialize bot
+│   │   ├── profile.md            # /botz:profile - CHIT profiles
+│   │   ├── secrets.md            # /botz:secrets - secret management
+│   │   └── mcp.md                # /botz:mcp - MCP integration
+│   ├── crush/ (2)                # Compression utilities
+│   ├── db/ (3)                   # Database operations (backup, migrate, query)
+│   ├── deploy/ (3)               # Service deployment (up, services, smoke)
+│   ├── github/ (4)               # GitHub integration (actions, issues, PR, security)
+│   ├── health/ (2)               # Health monitoring (check-all, metrics)
+│   ├── k8s/ (3)                  # Kubernetes operations (deploy, logs, status)
+│   ├── search/ (3)               # Knowledge retrieval
+│   │   ├── hirag.md              # /search:hirag - Hi-RAG v2 queries
+│   │   ├── supaserch.md          # /search:supaserch - holographic research
+│   │   └── deepresearch.md       # /search:deepresearch - LLM planner
+│   ├── workitems/ (3)            # BoTZ work tracking (claim, complete, list)
+│   ├── worktree/ (4)             # Git worktree / TAC patterns
+│   │   ├── create.md             # /worktree:create - new worktree
+│   │   ├── switch.md             # /worktree:switch - change context
+│   │   ├── list.md               # /worktree:list - show all
+│   │   └── cleanup.md            # /worktree:cleanup - remove stale
+│   └── yt/ (10)                  # YouTube pipeline
+│       ├── ingest.md             # /yt:ingest - download + transcript
+│       ├── status.md             # /yt:status - pipeline health
+│       ├── channels.md           # /yt:channels - monitored channels
+│       └── ... (7 more)          # Additional YT operations
+│
+├── context/                      # Reference documentation (7 files)
+│   ├── services-catalog.md       # Complete service listing with ports
+│   ├── tensorzero.md             # TensorZero LLM gateway deep dive
+│   ├── evoswarm.md               # Evolutionary optimization system
+│   ├── chit-geometry-bus.md      # Structured multimodal data format
+│   ├── nats-subjects.md          # NATS event subject catalog
+│   ├── mcp-api.md                # Agent Zero MCP API reference
+│   └── git-worktrees.md          # TAC (Tactical Agentic Coding) workflows
+│
+└── hooks/                        # Security & observability (4 files)
+    ├── pre-tool.sh               # Security validation gate
+    │                             # Blocks: rm -rf /, DROP DATABASE, etc.
+    ├── post-tool.sh              # NATS observability publisher
+    │                             # Publishes: claude.code.tool.executed.v1
+    ├── README.md                 # Hook configuration guide
+    └── TEST_RESULTS.md           # Validation test results
 ```
+
+### Slash Command Categories Summary
+
+| Category | Commands | Primary Use |
+| --- | --- | --- |
+| `/agents:*` | 2 | Agent Zero health and MCP queries |
+| `/botz:*` | 4 | CHIT profile management, secrets |
+| `/search:*` | 3 | Hi-RAG, SupaSerch, DeepResearch |
+| `/yt:*` | 10 | YouTube ingestion pipeline |
+| `/deploy:*` | 3 | Service deployment and smoke tests |
+| `/worktree:*` | 4 | TAC parallel development |
+| `/health:*` | 2 | Platform-wide health checks |
+| `/k8s:*` | 3 | Kubernetes operations |
+| `/db:*` | 3 | Database backup, migrate, query |
+| `/github:*` | 4 | Actions, issues, PRs, security |
+| `/crush:*` | 2 | Compression utilities |
+| `/workitems:*` | 3 | BoTZ work item tracking |
 
 ## Quick Start
 
@@ -144,13 +191,34 @@ Additional context, gotchas, tips
 
 Commands are automatically discovered by Claude Code CLI.
 
-## Hooks (Optional)
+## Hooks (Active)
 
-Hooks can be configured to:
-- **Pre-tool validation** - Block dangerous operations
-- **Post-tool logging** - Publish Claude actions to NATS for observability
+The `.claude/hooks/` directory contains security and observability hooks:
 
-See integration plan: `docs/PMOVES-claude code integrate.md`
+### Pre-Tool Hook (`pre-tool.sh`)
+Validates commands before execution. **Blocks dangerous operations:**
+- `rm -rf /` - Disk wipes
+- `DROP DATABASE` - Database destruction
+- `docker system prune -a` - Container mass deletion
+- Force push to protected branches
+
+### Post-Tool Hook (`post-tool.sh`)
+Publishes tool executions to NATS for observability:
+```bash
+# Events published to:
+claude.code.tool.executed.v1
+
+# Payload includes:
+# - tool: Tool name
+# - status: success/failure
+# - timestamp: ISO 8601
+# - user: Current user
+# - session_id: Claude session
+```
+
+Fallback logging to `~/.claude/logs/tool-events.jsonl` when NATS unavailable.
+
+See: `.claude/hooks/README.md` for configuration details
 
 ## Git Worktrees (Advanced)
 

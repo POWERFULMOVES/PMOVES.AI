@@ -3,29 +3,41 @@
 -- Part of Phase 8: PMOVES-Crush CLI Integration & TAC Work Items Registry
 
 -- Skill levels for BoTZ progression
-CREATE TYPE IF NOT EXISTS skill_level AS ENUM (
-    'basic',           -- Basic CLI operations
-    'tac_enabled',     -- TAC commands and worktree management
-    'mcp_augmented',   -- MCP tool integration
-    'agentic'          -- Full orchestration capabilities
-);
+DO $$ BEGIN
+    CREATE TYPE skill_level AS ENUM (
+        'basic',           -- Basic CLI operations
+        'tac_enabled',     -- TAC commands and worktree management
+        'mcp_augmented',   -- MCP tool integration
+        'agentic'          -- Full orchestration capabilities
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Work item status tracking
-CREATE TYPE IF NOT EXISTS work_item_status AS ENUM (
-    'backlog',         -- Not ready for work
-    'ready',           -- Available for claiming
-    'in_progress',     -- Being worked on
-    'completed',       -- Done
-    'blocked'          -- Waiting on dependencies
-);
+DO $$ BEGIN
+    CREATE TYPE work_item_status AS ENUM (
+        'backlog',         -- Not ready for work
+        'ready',           -- Available for claiming
+        'in_progress',     -- Being worked on
+        'completed',       -- Done
+        'blocked'          -- Waiting on dependencies
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Work item priority levels
-CREATE TYPE IF NOT EXISTS work_item_priority AS ENUM (
-    'p0_critical',     -- Must be done immediately
-    'p1_high',         -- Important, should be done soon
-    'p2_medium',       -- Normal priority
-    'p3_low'           -- Nice to have
-);
+DO $$ BEGIN
+    CREATE TYPE work_item_priority AS ENUM (
+        'p0_critical',     -- Must be done immediately
+        'p1_high',         -- Important, should be done soon
+        'p2_medium',       -- Normal priority
+        'p3_low'           -- Nice to have
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- BoTZ CLI Instance Registry
 -- Tracks all registered BoTZ CLI instances and their capabilities

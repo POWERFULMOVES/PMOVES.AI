@@ -1,7 +1,7 @@
 {
   "name": "Health Wger Sync → Supabase (hourly)",
   "settings": {},
-  "active": false,
+  "active": true,
   "nodes": [
     {"parameters": {"triggerTimes": [{"item": {"mode": "everyHour"}}]}, "id": "cron", "name": "Schedule", "type": "n8n-nodes-base.cron", "typeVersion": 1, "position": [ -320, 120 ]},
     {"parameters": {"url": "={{ $env.WGER_BASE_URL }}/api/v2/workoutlog/", "sendHeaders": true, "headerParameters": {"parameters": [{"name": "Authorization", "value": "=Token {{$env.WGER_API_TOKEN}}"}]}, "options": {"timeout": 30}}, "id": "fetch", "name": "Fetch Wger Logs", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [ -40, 120 ]},
