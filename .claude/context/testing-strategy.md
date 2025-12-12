@@ -104,6 +104,27 @@ Every PR **must** include a Testing section (per `.github/pull_request_template.
 | `make archon-smoke` | Archon service validation |
 | `make discord-smoke` | Discord publisher validation |
 
+### Observability Testing
+
+| Command | Description |
+|---------|-------------|
+| `make smoke-tensorzero-observability` | TensorZero Gateway → ClickHouse pipeline |
+| `make smoke-creator-pipeline` | Creator pipeline (render-webhook, comfy-watcher) |
+| `make smoke-prerequisites` | Environment prerequisites check |
+
+### Functional Test Scripts
+
+Located in `pmoves/tests/functional/`:
+
+| Script | Purpose |
+|--------|---------|
+| `check_prerequisites.sh` | Validates environment before smoke tests |
+| `test_tensorzero_observability.sh` | Tests TensorZero metrics flow to ClickHouse |
+| `test_creator_pipeline.sh` | Tests render-webhook, comfy-watcher, MinIO, NATS |
+| `test_tensorzero_inference.sh` | Tests LLM inference via TensorZero |
+| `test_nats_pubsub.sh` | Tests NATS JetStream and critical subjects |
+| `test_hirag_query.sh` | Tests Hi-RAG v2 query pipeline |
+
 ### Health & Monitoring
 
 | Command | Description |
@@ -227,6 +248,100 @@ curl -f http://localhost:7474/             # Neo4j
 - Verify Docker Compose profiles are correct
 - Check service dependencies (NATS, Supabase, etc.)
 - Review Loki logs at http://localhost:3100
+
+---
+
+## verify-all Sequence
+
+The `make verify-all` command executes the following tests in order:
+
+1. **bringup-with-ui** - Start all services with parallel readiness checks
+2. **preflight-retro** - Retro-styled preflight validation
+3. **monitoring-report** - Generate monitoring/metrics report
+4. **smoke-tensorzero-observability** - Validate TensorZero → ClickHouse pipeline
+5. **smoke-creator-pipeline** - Test render-webhook, comfy-watcher, MinIO
+6. **yt-docs-catalog-smoke** - yt-dlp catalog validation
+7. **archon-smoke** - Archon service health
+8. **archon-rest-policy-smoke** - Archon REST API policy probe
+9. **smoke** - Core 15-step smoke tests
+10. **smoke-gpu** - GPU reranker validation
+11. **channel-monitor-smoke** - Channel monitor health
+12. **agents-headless-smoke** - Agent Zero headless validation
+13. **archon-mcp-evidence** - Capture MCP API evidence
+14. **discord-smoke** - Discord publisher validation
+
+---
+
+## TensorZero Observability Testing
+
+TensorZero provides centralized LLM gateway with ClickHouse-backed observability.
+
+### Test Flow
+
+```bash
+# 1. Check gateway health
+curl -sf http://localhost:3030/health
+
+# 2. Check ClickHouse
+curl -sf http://localhost:8123/ping
+
+# 3. Send test inference
+curl -X POST http://localhost:3030/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "claude-sonnet-4-5", "messages": [{"role": "user", "content": "test"}]}'
+
+# 4. Verify metrics logged to ClickHouse
+curl "http://localhost:8123/?user=tensorzero&password=tensorzero" \
+  --data "SELECT count() FROM ChatInference"
+
+# 5. Check UI accessible
+curl -sf http://localhost:4000
+```
+
+### Run via Make
+
+```bash
+make smoke-tensorzero-observability
+```
+
+---
+
+## Creator Pipeline Testing
+
+The creator pipeline handles ComfyUI renders through MinIO/NATS/Supabase.
+
+### Components
+
+| Service | Port | Function |
+|---------|------|----------|
+| render-webhook | 8085 | ComfyUI callback handler |
+| comfy-watcher | - | MinIO file watcher |
+| MinIO | 9000/9001 | S3-compatible storage |
+| NATS | 4222 | Event bus (gen.image.result.v1) |
+
+### Test Flow
+
+```bash
+# 1. Check render-webhook health
+curl -sf http://localhost:8085/healthz
+
+# 2. Test webhook endpoint (expects 401 without auth)
+curl -X POST http://localhost:8085/comfy/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"bucket": "test", "key": "test.png", "s3_uri": "s3://test/test.png"}'
+
+# 3. Check MinIO health
+curl -sf http://localhost:9000/minio/health/live
+
+# 4. Verify comfy-watcher running
+docker ps | grep comfy-watcher
+```
+
+### Run via Make
+
+```bash
+make smoke-creator-pipeline
+```
 
 ---
 
