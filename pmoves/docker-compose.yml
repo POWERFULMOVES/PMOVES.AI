@@ -283,8 +283,13 @@ services:
 
   chat-relay:
     build:
+<<<<<<< HEAD
+      context: ./services/chat-relay
+      dockerfile: Dockerfile
+=======
       context: .
       dockerfile: services/chat-relay/Dockerfile
+>>>>>>> origin/main
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
@@ -302,6 +307,32 @@ services:
     profiles: ["workers","orchestration"]
     networks: [bus_tier, data_tier, monitoring_tier]
 
+<<<<<<< HEAD
+  flute-gateway:
+    build:
+      context: ./services/flute-gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - VIBEVOICE_URL=${VIBEVOICE_URL:-http://localhost:3000}
+      - WHISPER_URL=${WHISPER_URL:-http://ffmpeg-whisper:8078}
+      - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+      - FLUTE_API_KEY=${FLUTE_API_KEY:-}
+      - FLUTE_HTTP_PORT=8055
+      - FLUTE_WS_PORT=8056
+    depends_on:
+      nats:
+        condition: service_started
+    ports: ["8055:8055", "8056:8056"]
+    profiles: ["workers","orchestration"]
+    networks: [api_tier, bus_tier, data_tier, monitoring_tier]
+
+=======
+>>>>>>> origin/main
   ffmpeg-whisper:
     build:
       context: ..
@@ -372,7 +403,7 @@ services:
     profiles: ["workers","orchestration"]
     networks: [app_tier, data_tier, monitoring_tier]
   pmoves-yt:
-    image: ${PMOVES_YT_IMAGE:-}
+    image: ${PMOVES_YT_IMAGE:-ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest}
     build:
       context: ./services/pmoves-yt
       args:
@@ -763,7 +794,7 @@ services:
       data_tier:
       monitoring_tier:
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8054/healthz >/dev/null || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -785,7 +816,7 @@ services:
     build:
       context: .
       dockerfile: services/deepresearch/Dockerfile
-    image: ${DEEPRESEARCH_IMAGE:-}
+    image: ${DEEPRESEARCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-deepresearch:pmoves-latest}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]
     environment:
@@ -816,7 +847,7 @@ services:
     build:
       context: ./services
       dockerfile: supaserch/Dockerfile
-    image: ${SUPASERCH_IMAGE:-}
+    image: ${SUPASERCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-supaserch:pmoves-latest}
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
@@ -871,6 +902,23 @@ services:
     ports: ["8094:8092"]
     profiles: ["orchestration","agents"]
     networks: [app_tier, bus_tier, monitoring_tier]
+
+  messaging-gateway:
+    build: ./services/messaging-gateway
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID}
+      - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - MESSAGING_SUBJECTS=${MESSAGING_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1}
+    depends_on: [nats]
+    ports: ["8101:8101"]
+    profiles: ["workers"]
+    networks: [api_tier, bus_tier]
 
   jellyfin-bridge:
     build: ./services/jellyfin-bridge

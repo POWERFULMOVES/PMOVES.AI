@@ -336,12 +336,37 @@ docker compose --profile agents --profile workers up -d
 - Feature branches: `feature/*`
 - PR target: `main`
 
+## Testing Workflow
+
+### Before PR Submission
+1. Run `/test:pr` to execute standard test suite
+2. Copy generated Testing section to PR description
+3. Ensure docstring coverage ≥80% on new/modified Python code
+
+### Test Commands
+| Command | Description |
+|---------|-------------|
+| `cd pmoves && make verify-all` | Full verification (smoke tests, health checks) |
+| `/health:check-all` | Check all service health endpoints |
+| `/test:pr` | PR testing workflow with documentation |
+| `/deploy:smoke-test` | Deployment smoke tests |
+| `pytest pmoves/tests/` | Integration tests |
+
+### CI Requirements
+- **CodeQL Analysis** - Security scanning (must pass)
+- **CHIT Contract Check** - Schema validation (must pass)
+- **SQL Policy Lint** - Migration validation (must pass)
+- **CodeRabbit Review** - Docstring coverage ≥80%
+
+See `.claude/context/testing-strategy.md` for detailed testing guidelines.
+
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
 - `services-catalog.md` - Complete service listing with all details
 - `nats-subjects.md` - Comprehensive NATS subject catalog
 - `mcp-api.md` - Agent Zero MCP API reference
+- `testing-strategy.md` - Testing workflow and PR requirements
 
 ## Meta-Instruction for Claude Code CLI
 
@@ -351,5 +376,6 @@ When developing features for PMOVES.AI:
 3. **Expose health/metrics** - Follow observability patterns
 4. **Check health first** - Always verify service status before use
 5. **Consult context docs** - Reference `.claude/context/` for details
+6. **Test before PR** - Run `/test:pr` and document results
 
 PMOVES.AI is a sophisticated production system. Your role is to build features that integrate with this ecosystem, not replace it.

@@ -40,15 +40,24 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 │   │   ├── switch.md             # /worktree:switch - change context
 │   │   ├── list.md               # /worktree:list - show all
 │   │   └── cleanup.md            # /worktree:cleanup - remove stale
+│   ├── test/ (1)                 # Testing workflow
+│   │   └── pr.md                 # /test:pr - PR testing workflow
 │   └── yt/ (10)                  # YouTube pipeline
-│       ├── ingest.md             # /yt:ingest - download + transcript
+│       ├── ingest-video.md       # /yt:ingest-video - download + transcript
 │       ├── status.md             # /yt:status - pipeline health
-│       ├── channels.md           # /yt:channels - monitored channels
-│       └── ... (7 more)          # Additional YT operations
+│       ├── list-channels.md      # /yt:list-channels - monitored channels
+│       ├── add-channel.md        # /yt:add-channel - add channel to monitor
+│       ├── remove-channel.md     # /yt:remove-channel - remove channel
+│       ├── toggle-channel.md     # /yt:toggle-channel - enable/disable
+│       ├── add-playlist.md       # /yt:add-playlist - add playlist
+│       ├── check-now.md          # /yt:check-now - force check
+│       ├── pending.md            # /yt:pending - show pending items
+│       └── help.md               # /yt:help - command reference
 │
-├── context/                      # Reference documentation (7 files)
+├── context/                      # Reference documentation (8 files)
 │   ├── services-catalog.md       # Complete service listing with ports
 │   ├── tensorzero.md             # TensorZero LLM gateway deep dive
+│   ├── testing-strategy.md       # Testing workflow & PR requirements
 │   ├── evoswarm.md               # Evolutionary optimization system
 │   ├── chit-geometry-bus.md      # Structured multimodal data format
 │   ├── nats-subjects.md          # NATS event subject catalog
@@ -71,6 +80,7 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 | `/agents:*` | 2 | Agent Zero health and MCP queries |
 | `/botz:*` | 4 | CHIT profile management, secrets |
 | `/search:*` | 3 | Hi-RAG, SupaSerch, DeepResearch |
+| `/test:*` | 1 | PR testing workflow |
 | `/yt:*` | 10 | YouTube ingestion pipeline |
 | `/deploy:*` | 3 | Service deployment and smoke tests |
 | `/worktree:*` | 4 | TAC parallel development |
