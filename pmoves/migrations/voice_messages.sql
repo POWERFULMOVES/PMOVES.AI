@@ -149,3 +149,55 @@ CREATE TRIGGER trg_voice_message_session
 COMMENT ON TABLE voice_messages IS 'Stores all voice interactions across Discord, Telegram, and WhatsApp';
 COMMENT ON TABLE voice_sessions IS 'Tracks conversation sessions per user per platform';
 COMMENT ON TABLE voice_personas IS 'Configurable AI voice personas with different voices and prompts';
+
+-- Enable Row Level Security
+ALTER TABLE voice_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voice_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voice_personas ENABLE ROW LEVEL SECURITY;
+
+-- Grant permissions to anon role for development
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE voice_messages TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE voice_sessions TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE voice_personas TO anon;
+
+-- RLS Policies for voice_messages
+DO $$
+BEGIN
+  CREATE POLICY voice_messages_anon_all
+    ON voice_messages
+    FOR ALL
+    TO anon
+    USING (true)
+    WITH CHECK (true);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END;
+$$;
+
+-- RLS Policies for voice_sessions
+DO $$
+BEGIN
+  CREATE POLICY voice_sessions_anon_all
+    ON voice_sessions
+    FOR ALL
+    TO anon
+    USING (true)
+    WITH CHECK (true);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END;
+$$;
+
+-- RLS Policies for voice_personas
+DO $$
+BEGIN
+  CREATE POLICY voice_personas_anon_all
+    ON voice_personas
+    FOR ALL
+    TO anon
+    USING (true)
+    WITH CHECK (true);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END;
+$$;
