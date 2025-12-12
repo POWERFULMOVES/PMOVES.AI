@@ -6,8 +6,11 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 
-def test_multiagent_video_to_search_pipeline(load_service_module, monkeypatch):
+def test_multiagent_video_to_search_pipeline(load_service_module, monkeypatch, tmp_path):
     yt = load_service_module("pmoves_yt_multiagent", "services/pmoves-yt/yt.py")
+    # Use temp directory for archive to avoid creating /data/yt-dlp
+    monkeypatch.setattr(yt, "YT_ARCHIVE_DIR", tmp_path / "yt-dlp")
+    monkeypatch.setattr(yt, "YT_DOWNLOAD_ARCHIVE", str(tmp_path / "yt-dlp" / "archive.txt"))
 
     uploads: list[tuple[str, str, str]] = []
     published: list[tuple[str, dict]] = []
@@ -71,7 +74,8 @@ def test_multiagent_video_to_search_pipeline(load_service_module, monkeypatch):
     assert video_payload["video_id"] == "abc123"
     assert uploads and uploads[0][1:] == ("assets", "yt/abc123/raw.mp4")
     assert any(topic == "ingest.file.added.v1" for topic, _ in published)
-    assert {table for table, _ in inserts} == {"studio_board", "videos"}
+    # Download only inserts into studio_board (transcripts/yt_jobs are separate paths)
+    assert {table for table, _ in inserts} == {"studio_board"}
 
     lang = load_service_module("langextract_multiagent", "services/langextract/api.py")
     extracted: list[dict] = []

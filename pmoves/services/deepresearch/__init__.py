@@ -3,14 +3,13 @@
 from .parser import parse_model_output, prepare_result
 from .worker import (
     InvalidResearchRequest,
-    ResearchRequest,
     _decode_request,
     _extract_message_content,
     _handle_request,
     _run_openrouter,
 )
 from .cookbooks import CookbookFetchError, clear_cache, load_cookbooks
-from .models import ResearchResources
+from .models import ResearchRequest, ResearchResources
 from .runner import DeepResearchRunner
 
 __all__ = [

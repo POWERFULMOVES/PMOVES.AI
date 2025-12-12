@@ -43,6 +43,9 @@ def test_hirag_query_returns_stubbed_results(load_service_module, monkeypatch):
     gateway.qdrant = _FakeQdrant()
     monkeypatch.setattr(gateway, "embed_query", lambda q: [0.1, 0.2, 0.3])
     monkeypatch.setattr(gateway, "driver", None)
+    # Disable Tailscale IP checks for TestClient (returns "testclient" as IP)
+    monkeypatch.setattr(gateway, "TAILSCALE_ONLY", False)
+    monkeypatch.setattr(gateway, "require_tailscale", lambda request, admin_only=False: None)
 
     client = TestClient(gateway.app)
     resp = client.post(
