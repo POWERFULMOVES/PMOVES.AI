@@ -142,11 +142,40 @@ check_curl() {
 check_env_files() {
     log_info "Checking environment files..."
 
-    local env_shared="${PMOVES_ROOT}/.env"
+    local env_shared="${PMOVES_ROOT}/env.shared"
+    local env_file="${PMOVES_ROOT}/.env"
     local env_local="${PMOVES_ROOT}/.env.local"
     local env_generated="${PMOVES_ROOT}/.env.generated"
 
-    if [ -f "${env_shared}" ] || [ -f "${env_local}" ] || [ -f "${env_generated}" ]; then
+    local found=false
+
+    # Source env files to make variables available for checks
+    if [ -f "${env_shared}" ]; then
+        set -a  # Auto-export all variables
+        source "${env_shared}" 2>/dev/null || true
+        set +a
+        found=true
+    fi
+    if [ -f "${env_file}" ]; then
+        set -a
+        source "${env_file}" 2>/dev/null || true
+        set +a
+        found=true
+    fi
+    if [ -f "${env_local}" ]; then
+        set -a
+        source "${env_local}" 2>/dev/null || true
+        set +a
+        found=true
+    fi
+    if [ -f "${env_generated}" ]; then
+        set -a
+        source "${env_generated}" 2>/dev/null || true
+        set +a
+        found=true
+    fi
+
+    if [ "$found" = true ]; then
         log_info "✓ Environment file(s) found"
     else
         log_warn "⚠ No environment files found"
@@ -216,24 +245,63 @@ check_disk_space() {
 check_network_ports() {
     log_info "Checking common service ports..."
 
+    # Core infrastructure
     local ports_to_check=(
         "3030:TensorZero"
+        "4000:TensorZero-UI"
         "4222:NATS"
         "6333:Qdrant"
+        "7474:Neo4j-HTTP"
+        "7687:Neo4j-Bolt"
         "7700:Meilisearch"
-        "8080:AgentZero"
         "8123:ClickHouse"
+        "9000:MinIO-API"
     )
 
-    local in_use=0
+    # Agent services
+    ports_to_check+=(
+        "8080:AgentZero"
+        "8081:AgentZero-UI"
+        "8091:Archon"
+        "8054:BoTZ-Gateway"
+    )
+
+    # RAG & Research
+    ports_to_check+=(
+        "8086:HiRAG-v2-CPU"
+        "8087:HiRAG-v2-GPU"
+        "8098:DeepResearch"
+        "8099:SupaSerch"
+    )
+
+    # Media & Ingestion
+    ports_to_check+=(
+        "8077:PMOVES-YT"
+        "8078:FFmpeg-Whisper"
+        "8083:Extract-Worker"
+    )
+
+    # Monitoring
+    ports_to_check+=(
+        "3000:Grafana"
+        "9090:Prometheus"
+        "3100:Loki"
+    )
+
+    local running=0
+    local total=${#ports_to_check[@]}
+
     for port_name in "${ports_to_check[@]}"; do
         local port="${port_name%%:*}"
         local name="${port_name##*:}"
 
         if nc -z localhost "$port" 2>/dev/null || ss -ln 2>/dev/null | grep -q ":${port} "; then
             log_info "  ✓ Port ${port} (${name}): service running"
+            running=$((running + 1))
         fi
     done
+
+    log_info "  ${running}/${total} services detected"
 
     return 0
 }

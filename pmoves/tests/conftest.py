@@ -39,15 +39,24 @@ def stub_external_modules() -> None:
         models_module = ModuleType("qdrant_client.http.models")
 
         class _FakeFilter:
-            def __init__(self, *args, **kwargs) -> None:  # pragma: no cover - trivial
+            def __init__(self, *args, must=None, **kwargs) -> None:  # pragma: no cover - trivial
                 self.args = args
+                self.must = must or []
                 self.kwargs = kwargs
 
         class _FakeFieldCondition(_FakeFilter):
-            pass
+            def __init__(self, key=None, match=None, *args, **kwargs) -> None:  # pragma: no cover
+                super().__init__(*args, **kwargs)
+                self.key = key
+                self.match = match
 
-        class _FakeMatchValue(_FakeFilter):
-            pass
+        class _FakeMatchValue:
+            def __init__(self, value=None, **kwargs) -> None:  # pragma: no cover
+                self.value = value
+                self.kwargs = kwargs
+
+            def model_dump(self):  # pragma: no cover
+                return {"value": self.value}
 
         models_module.Filter = _FakeFilter  # type: ignore[attr-defined]
         models_module.FieldCondition = _FakeFieldCondition  # type: ignore[attr-defined]
