@@ -82,8 +82,8 @@ jobs:
               with path.open() as handle:
                   for raw in handle:
                       line = raw.strip()
-                      if not line or line.startswith("#"):
-                          continue
+                      if not line or line.startswith("#") or line.startswith("-"):
+                          continue  # Skip comments, empty lines, and pip options
                       # Extract package name (handle >=, ==, etc.)
                       name = line.split(">=")[0].split("==")[0].split("<")[0].split("[")[0]
                       if name in skip:
