@@ -112,8 +112,12 @@ test_hirag_query_basic() {
         return 1
     }
 
-    # Validate response structure
-    if echo "$response" | jq -e '.results' > /dev/null 2>&1; then
+    # Validate response structure - API returns .hits (not .results)
+    if echo "$response" | jq -e '.hits' > /dev/null 2>&1; then
+        local count=$(echo "$response" | jq '.hits | length')
+        log_info "✓ Hi-RAG basic query working - Retrieved ${count} results"
+        return 0
+    elif echo "$response" | jq -e '.results' > /dev/null 2>&1; then
         local count=$(echo "$response" | jq '.results | length')
         log_info "✓ Hi-RAG basic query working - Retrieved ${count} results"
         return 0
@@ -141,8 +145,12 @@ test_hirag_query_with_rerank() {
         return 0  # Don't fail if reranking not configured
     }
 
-    # Validate response
-    if echo "$response" | jq -e '.results' > /dev/null 2>&1; then
+    # Validate response - API returns .hits (not .results)
+    if echo "$response" | jq -e '.hits' > /dev/null 2>&1; then
+        local count=$(echo "$response" | jq '.hits | length')
+        log_info "✓ Hi-RAG reranking working - Retrieved ${count} reranked results"
+        return 0
+    elif echo "$response" | jq -e '.results' > /dev/null 2>&1; then
         local count=$(echo "$response" | jq '.results | length')
         log_info "✓ Hi-RAG reranking working - Retrieved ${count} reranked results"
         return 0
@@ -170,7 +178,11 @@ test_hirag_filters() {
         return 0
     }
 
-    if echo "$response" | jq -e '.results' > /dev/null 2>&1; then
+    if echo "$response" | jq -e '.hits' > /dev/null 2>&1; then
+        local count=$(echo "$response" | jq '.hits | length')
+        log_info "✓ Hi-RAG filtered query working - Retrieved ${count} results"
+        return 0
+    elif echo "$response" | jq -e '.results' > /dev/null 2>&1; then
         local count=$(echo "$response" | jq '.results | length')
         log_info "✓ Hi-RAG filtered query working - Retrieved ${count} results"
         return 0
