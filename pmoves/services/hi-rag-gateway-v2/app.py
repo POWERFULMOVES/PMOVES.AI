@@ -749,11 +749,31 @@ def _hostname_resolves(url: str) -> bool:
     try:
         from urllib.parse import urlparse
         import socket
-        host = urlparse(url).hostname
+        parsed = urlparse(url)
+        host = parsed.hostname
         if not host:
             return False
         socket.getaddrinfo(host, None)
         return True
+    except Exception:
+        return False
+
+
+def _port_reachable(url: str, timeout: float = 2.0) -> bool:
+    """Check if the host:port is actually reachable (not just DNS resolution)."""
+    try:
+        from urllib.parse import urlparse
+        import socket
+        parsed = urlparse(url)
+        host = parsed.hostname
+        port = parsed.port
+        if not host or not port:
+            return False
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
     except Exception:
         return False
 
@@ -787,12 +807,12 @@ def _derive_realtime_url() -> Optional[str]:
                 "Rewriting SUPABASE_REALTIME_URL host 'api.supabase.internal' to host-gateway failed; no REST base set"
             )
         else:
-            if _hostname_resolves(SUPABASE_REALTIME_URL):
+            if _port_reachable(SUPABASE_REALTIME_URL):
                 return SUPABASE_REALTIME_URL
-            # If a custom URL is set but doesn't resolve inside the container,
+            # If a custom URL is set but port isn't reachable inside the container,
             # try to derive one from the REST base (host-gateway safe) so we recover automatically.
-            logger.warning(
-                "Configured SUPABASE_REALTIME_URL host does not resolve; deriving from REST base instead"
+            logger.info(
+                "Configured SUPABASE_REALTIME_URL port not reachable; deriving from REST base instead"
             )
     # Prefer internal host-gateway REST base if present
     rest_base = SUPABASE_REST_INTERNAL_URL or SUPABASE_REST_URL
@@ -801,7 +821,7 @@ def _derive_realtime_url() -> Optional[str]:
     rest = (rest_base or "").rstrip("/")
     if "postgrest" in rest or rest.endswith(":3000"):
         candidate = "ws://realtime:4000/socket/websocket"
-        if _hostname_resolves(candidate):
+        if _port_reachable(candidate):
             return candidate
         logger.info("Supabase realtime service not available on docker network; skipping subscription")
         return None
