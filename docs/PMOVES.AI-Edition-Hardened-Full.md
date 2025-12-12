@@ -1712,13 +1712,14 @@ docker compose -f monitoring/docker-compose.monitoring.yml down
 - **Fix:** Upgrade PyTorch to 2.6.0+, use `weights_only=True`
 - **Services affected:** ffmpeg-whisper, media-video, hi-rag-gateway-v2
 
-#### CVE-2025-55182 (CRITICAL) - Next.js Authorization Bypass
-- **Affected:** Next.js versions prior to patched releases
-- **Risk:** Authorization bypass in middleware
-- **Impact:** Unauthorized access to protected routes
+#### CVE-2025-55182 (CRITICAL) - Next.js RSC Remote Code Execution
+- **Affected:** Next.js App Router deployments (versions before patched releases)
+- **Risk:** Remote Code Execution via React Server Components (RSC) unsafe deserialization
+- **Impact:** Pre-auth RCE - attackers can execute arbitrary code on the server
 - **Fix:** Upgrade Next.js to one of the patched versions: 15.0.5, 15.1.9, 15.2.6, 15.3.6+, 15.4.8+, 15.5.7+, or 16.0.7+
 - **Services affected:** pmoves-ui, archon-ui, tensorzero-ui
 - **Warning:** Versions 15.3.0-15.3.5 are NOT patched despite being newer than 15.2.6
+- **Note:** Pages Router and Edge Runtime have reduced exposure; App Router is primary attack surface
 
 ### Docker Compose V5 (December 2025)
 

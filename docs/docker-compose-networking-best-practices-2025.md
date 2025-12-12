@@ -38,6 +38,12 @@ This document provides comprehensive best practices for Docker Compose networkin
 iptables -I DOCKER-USER -s 192.168.65.0/24 -d 192.168.65.7 -p tcp --dport 2375 -j DROP
 ```
 
+> **Platform Notes:**
+> - This iptables rule applies to **Docker Engine on Linux** only
+> - **Docker Desktop on macOS/Windows**: Uses a different networking model; the VM's internal network may use different subnets (check `docker network inspect bridge`)
+> - **Common subnets**: `172.17.0.0/16` (default bridge), `192.168.65.0/24` (Docker Desktop VM)
+> - Always verify your actual subnet with `docker network inspect bridge | grep Subnet` before applying rules
+
 ### CVE-2025-62725 (HIGH) - Compose Path Traversal
 
 | Field | Value |
