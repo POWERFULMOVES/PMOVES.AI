@@ -120,6 +120,10 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	  $(MAKE) preflight-retro; \
 	  echo "→ Monitoring report"; \
 	  $(MAKE) monitoring-report || true; \
+	  echo "→ TensorZero observability"; \
+	  $(MAKE) smoke-tensorzero-observability || true; \
+	  echo "→ Creator pipeline"; \
+	  $(MAKE) smoke-creator-pipeline || true; \
 	  echo "→ yt-dlp catalog smoke"; \
 	  $(MAKE) yt-docs-catalog-smoke || true; \
 	  echo "→ Archon smoke"; \
@@ -1123,6 +1127,37 @@ smoke-webhook-ci:
 		else \
 	   python tools/smoke_webhook.py; \
 	 fi
+
+.PHONY: smoke-prerequisites
+smoke-prerequisites: ## Check environment prerequisites before running smoke tests
+	@echo "→ Checking prerequisites for smoke testing"
+	@bash tests/functional/check_prerequisites.sh
+
+.PHONY: smoke-tensorzero-observability
+smoke-tensorzero-observability: ## Test TensorZero observability pipeline (Gateway → ClickHouse → UI)
+	@echo "→ Testing TensorZero observability pipeline"
+	@bash tests/functional/test_tensorzero_observability.sh
+
+.PHONY: smoke-creator-pipeline
+smoke-creator-pipeline: ## Test creator pipeline (render-webhook, comfy-watcher, MinIO, NATS)
+	@echo "→ Testing creator pipeline"
+	@bash tests/functional/test_creator_pipeline.sh
+
+.PHONY: smoke-tensorzero-observability-strict
+smoke-tensorzero-observability-strict: ## Test TensorZero observability (STRICT mode - all warnings are failures)
+	@echo "→ Testing TensorZero observability (STRICT mode)"
+	@STRICT=1 bash tests/functional/test_tensorzero_observability.sh
+
+.PHONY: smoke-creator-pipeline-strict
+smoke-creator-pipeline-strict: ## Test creator pipeline (STRICT mode - all warnings are failures)
+	@echo "→ Testing creator pipeline (STRICT mode)"
+	@STRICT=1 bash tests/functional/test_creator_pipeline.sh
+
+.PHONY: smoke-all-strict
+smoke-all-strict: ## Run all smoke tests in STRICT mode
+	@echo "→ Running all smoke tests in STRICT mode"
+	@STRICT=1 $(MAKE) smoke-tensorzero-observability
+	@STRICT=1 $(MAKE) smoke-creator-pipeline
 
 .PHONY: test-discord-format
 test-discord-format:
