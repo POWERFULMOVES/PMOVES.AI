@@ -1,0 +1,642 @@
+{
+  "name": "[v3.2_COS-3.0] AI Output | Image Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<script>window.close()</script>",
+        "options": {}
+      },
+      "id": "14efcc66-13d6-462a-8eb5-73770b034ac9",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        920,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook').item.json.query.base_id }}/{{ $('Webhook').item.json.query.table_id }}/{{ $('Webhook').item.json.query.record_id }}",
+        "options": {}
+      },
+      "id": "6b54f1b2-9dcf-42f2-a8c0-752a410ce0b7",
+      "name": "GET Airtable Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook').item.json.query.base_id }}/{{ $('Webhook').item.json.query.table_id }}/{{ $('Webhook').item.json.query.record_id }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"fields\": {\n    \"AI Status\": \"AI Writing...\"\n  }\n}",
+        "options": {}
+      },
+      "id": "65d51ac9-23a7-4ff9-903d-11d08e5e9c14",
+      "name": "Set Record Status to AI Writing (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "167f3ee1-cb22-4885-81a5-3f08b8405248",
+              "name": "SetImagePrompt",
+              "value": "=###Context###\nHere are some details on how to write great AI image prompts: \nPart 1: Structuring the Prompt\nA well-structured prompt guides the AI effectively, ensuring all necessary elements are included.\n1.1 Subject\nDefine the Main Focus:\nCharacter: Describe appearance, attire, and emotions.Example: \"A young elven archer with emerald eyes and intricate silver armor.\"\nScene: Outline the setting and key elements.\nExample: \"A bustling cyberpunk cityscape at night with neon signs.\"\nObject: Specify details and significance.\nExample: \"An ancient, weathered compass lying on a map.\"\nTips:Be Specific: Avoid general terms.\nUse Descriptive Language: Employ vivid adjectives and nouns.\n1.2 Style\nDescribe the Artistic Approach:\nPhotorealistic: Focus on lifelike accuracy.Example: \"Rendered in ultra-realistic detail with accurate textures.\"\nStylized: Incorporate artistic influences.\nExample: \"In the style of Japanese anime with bold lines and vibrant colors.\"\nCinematic: Emulate film aesthetics.\nExample: \"Shot with a wide-angle lens, featuring dramatic shadows.\"\nSuggestions:\nReference Artists or Movements: \"In the style of Van Gogh\" or \"inspired by Art Deco.\"\nMention Mediums: \"Watercolor effect\" or \"digital illustration.\"\n1.3 Details\nSpecify Attributes and Characteristics:\nAnatomy/Design: Physical traits or design elements.\nExample: \"Wearing a flowing red cape that billows in the wind.\"\nLighting: Type and direction of light.\nExample: \"Illuminated by a soft, golden sunset.\"\nTextures: Surface qualities.\nExample: \"Featuring a rough, stone-like texture on the dragon's scales.\"\nStrategies:\nUse Sensory Language: Describe how elements might feel or sound.\nIncorporate Metaphors: \"Eyes as deep as the ocean.\"\n1.4 Background/Environment\nSet the Scene:\nEnvironment Description: Landscape, architecture, weather.\nExample: \"A serene Japanese garden during cherry blossom season.\"\nContextual Elements: Objects or characters in the background.\nExample: \"Silhouettes of distant mountains under a starry sky.\"\nApproach:\nCreate Depth: Mention foreground, middle ground, and background elements.\nAtmospheric Conditions: Include weather effects like rain, fog, or snow.2.5 Keywords for Enhancement\nIncorporate Advanced Descriptors:\nLighting Effects:\"Volumetric lighting\" for realistic beams of light.\"Global illumination\" for natural light diffusion.\nCamera Techniques:\"Depth of field\" for focus variation.\"Motion blur\" for dynamic movement.\nVisual Effects:\"Lens flare\" for bright light sources.\"Particle effects\" for dust, sparks, or magic.\nImplementation:\nUse Technical Terms Recognized by FLUX AI:\nEnsure compatibility with the AI's understanding.\nCombine Keywords:\"Ultra-detailed, 8K resolution with cinematic lighting.\"\nPart 2: Enhancing the PromptRefinement transforms a good prompt into an exceptional one, maximizing precision and quality.\n2.1 Adding Precision\nReplace Vague Terms:\nGeneral to Specific: Instead of \"a nice building,\" use \"a Victorian-era mansion with ornate detailing.\"\nQuantify When Possible:\"A crowd of people\" becomes \"a group of five travelers.\"\nEnhancement Techniques:\nUse Strong Adjectives: Opt for words like \"majestic,\" \"dilapidated,\" \"gleaming.\"Avoid Ambiguity: Remove words like \"some,\" \"thing,\" \"stuff.\"\n2.2 Incorporating Advanced KeywordsInclude AI-Recognized Terms:\nResolution and Detail:\"Rendered in 8K with ultra-high-definition textures.\"Lighting and Effects:\"Dynamic shadows and ambient occlusion for depth.\"\nArtistic Enhancements:\"HDR imaging for balanced exposure.\"\nBest Practices:\nStay Relevant: Only use keywords that enhance the intended effect.\nAvoid Overloading: Too many technical terms can confuse the AI.\n2.3 Balancing Creativity and FocusAvoid Conflicting Details:\nSimplify Complex Ideas:\nBreak down multifaceted concepts into clear, concise descriptions.\nMaintain Consistency:Ensure all elements support the same theme and style.\nStrategies:\nPrioritize Key Elements: Focus on the most important aspects.\nLimit Descriptors per Element: Prevent overcomplication.\n2.4 Matching Output Expectations\nAdjust for Complexity:\nFor Intricate Scenes:\nEmphasize primary components to avoid overwhelming the AI.\nFor Multiple Subjects:\nSpecify relationships and interactions clearly.\nTechniques:\nUse Hierarchical Descriptions:\nStart with the main subject, then detail secondary elements.\nSet Boundaries:Indicate the scope, like \"foreground focus on the character, with a blurred background.\"\n\nAbout the brand: \n{{ $('GET Airtable Record').item.json.fields['About The Brand (from Brand Assets)'][0] }}\n\nCustomer avatar: \n{{ $('GET Airtable Record').item.json.fields['Customer Avatar (from Brand Assets)'][0] }}\n\n###Instruction###\nYour task is to use that context and improve this prompt: \n{{ $('GET Airtable Record').item.json.fields['Image Prompt'] }}.\n\n###Example Output###\nYour output must be a maximum of 2-3 sentences. Do not provide any other context besides the prompt exactly how it should be used.",
+              "type": "string"
+            },
+            {
+              "id": "f045a2fc-3fc5-4fb6-b1a5-052d86f4cf32",
+              "name": "base_id",
+              "value": "={{ $('Webhook').item.json.query.base_id }}",
+              "type": "string"
+            },
+            {
+              "id": "5ca43b05-002b-407d-9f4c-8e1dec61679a",
+              "name": "table_id",
+              "value": "={{ $('Webhook').item.json.query.table_id }}",
+              "type": "string"
+            },
+            {
+              "id": "1a23949a-dcd9-44fd-8433-26472871e0a7",
+              "name": "record_id",
+              "value": "={{ $('Webhook').item.json.query.record_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1880540b-76bf-4c82-a1e6-e098aa1cd701",
+      "name": "Set Image Prompt and Airtable IDs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1540,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Get the SetImagePrompt field from the current item\n  const SetImagePrompt = item.json.SetImagePrompt;\n\n  // Ensure SetImagePrompt exists and is valid\n  if (!SetImagePrompt) {\n    throw new Error(\"SetOutline field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = SetImagePrompt\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      ImagePromptOutput: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "df795d6e-6e05-4e7b-9690-53742f6bcef7",
+      "name": "Convert SetImagePrompt into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Access the message content within choices array\n  const messageContent = item.json.choices[0]?.message?.content;\n\n  // Ensure message content exists and is valid\n  if (!messageContent) {\n    throw new Error(\"message.content field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = messageContent\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      ImagePromptJson: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "0b8e7772-7eda-4f4b-b492-e3d1e2bc6595",
+      "name": "Convert Image Prompt into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $('Set Image Prompt and Airtable IDs').item.json.base_id }}/{{ $('Set Image Prompt and Airtable IDs').item.json.table_id }}/{{ $('Set Image Prompt and Airtable IDs').item.json.record_id }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"fields\": {\n    \"Image Prompt\": \"{{ $json.ImagePromptJson }}\" \n  }\n}",
+        "options": {}
+      },
+      "id": "9e4cc9cb-5e9f-488f-af48-681da35464d9",
+      "name": "Update Image Prompt Record (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2300,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.replicate.com/v1/models/black-forest-labs/{{ $('GET Airtable Record').item.json.fields['AI Model (from AI Image Models)'][0] }}/predictions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"input\":{\n      \"prompt\":\"{{ $('Convert Image Prompt into JSON').item.json.ImagePromptJson }}\",\n      \"num_outputs\":1,\n      \"aspect_ratio\":\"{{ $('GET Airtable Record').item.json.fields['Aspect Ratio - FLUX'] }}\",\n      \"output_format\":\"jpg\",\n      \"output_quality\":90,\n      \"disable_safety_checker\":true\n   }\n}",
+        "options": {}
+      },
+      "id": "d72d319f-aab3-4115-b016-5a4c11061e67",
+      "name": "Create Image (Flux)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2500,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.urls.get }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bcd8a375-cb2f-42d7-9c54-408ee3f8b935",
+      "name": "Get Image (Flux)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.cloudinary.com/v1_1/dxodjssrl/image/upload",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $json.output }}"
+            },
+            {
+              "name": "api_key",
+              "value": "xxxxxx"
+            },
+            {
+              "name": "upload_preset",
+              "value": "ml_default"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dba8f9b8-af1b-4d26-95d9-24c58c1905fb",
+      "name": "Upload to Cloudinary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.tinify.com/shrink",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.Authorization }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source\": {\n    \"url\": \"{{ $('Upload to Cloudinary').item.json.url }}\"\n  }\n} \n\n{{ $json.tinifyAPI }}\n",
+        "options": {}
+      },
+      "id": "3848c651-0068-40dc-a7bc-96aa2cb43cd5",
+      "name": "Upload to Tinify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3740,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve the Tinify API Key from the input\nconst tinifyAPIKey = $(`Set Tinify API Key`).item.json.tinifyAPI;\n\n// Retrieve base_id, table_id, and record_id\nconst base_id = $(`Set Image Prompt and Airtable IDs`).item.json.base_id;\nconst table_id = $(`Set Image Prompt and Airtable IDs`).item.json.table_id;\nconst record_id = $(`Set Image Prompt and Airtable IDs`).item.json.record_id;\n\n// Ensure the API key is defined\nif (!tinifyAPIKey) {\n  throw new Error('Tinify API Key is missing!');\n}\n\n// Generate the Base64-encoded authorization string\nconst base64EncodedKey = Buffer.from(`api:${tinifyAPIKey}`).toString('base64');\n\n// Ensure base_id, table_id, and record_id are defined\nif (!base_id || !table_id || !record_id) {\n  throw new Error('One or more Airtable IDs are missing (base_id, table_id, or record_id)!');\n}\n\n// Return the Authorization key and Airtable IDs as output\nreturn {\n  Authorization: `Basic ${base64EncodedKey}`,\n  base_id,\n  table_id,\n  record_id,\n};\n"
+      },
+      "id": "83182a4c-f01c-4136-9d8d-dd4c748e06ea",
+      "name": "Generate Base64 Key for Tinify API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Refines Image Prompt ",
+        "height": 243.17921194887094,
+        "width": 945.899258160691
+      },
+      "id": "1c91c263-3a27-45b9-a03b-576207292851",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Generates the image ",
+        "height": 243.17921194887094,
+        "width": 1650.7308574384142,
+        "color": 4
+      },
+      "id": "44e5bbcc-aa00-4292-8ea9-7ec080d70488",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2462.0779936847266,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aad68b30-648b-4172-b3e7-4861fd056974",
+              "name": "tinifyAPI",
+              "value": "wcDv4t3YjlqhS3THVHd5WJBj7ctykfYS",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5424de46-3146-40eb-99b1-afebf6b45871",
+      "name": "Set Tinify API Key",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3300,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"n\":\"1\",\n   \"model\":\"{{ $('GET Airtable Record').item.json.fields['AI Model (Plain Text) (from AI Models)'][0] }}\",\n   \"top_p\":1,\n   \"fallback\":true,\n   \"messages\":[\n      {\n         \"role\":\"user\",\n         \"content\":\"{{ $json.ImagePromptOutput }}\"\n      }\n   ],\n   \"json_mode\":true,\n   \"max_tokens\":1024,\n   \"temperature\":{{ $('GET Airtable Record').item.json.fields['Temperature (from AI Models)'][0] }}\n}",
+        "options": {}
+      },
+      "id": "065be4c8-25e0-4836-8637-916018b9ca12",
+      "name": "Set Image Prompt (OpenRouter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1900,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $('Generate Base64 Key for Tinify API').item.json.base_id }}/{{ $('Generate Base64 Key for Tinify API').item.json.table_id }}/{{ $('Generate Base64 Key for Tinify API').item.json.record_id }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n   \"fields\":{\n      \"AI Status\":\"AI Complete\",\n      \"AI Image URL\":\"{{ $json.output.url }}\",\n      \"Content Image\":[\n         {\n            \"url\":\"{{ $json.output.url }}\"\n         }\n      ]\n   }\n}",
+        "options": {}
+      },
+      "id": "269030bb-d580-41f0-953d-a583c31ca96b",
+      "name": "Update Record Status to AI Complete (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3960,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "id": "31564477-abf3-4780-a512-ee99360f1f68",
+      "name": "Wait 30 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2700,
+        380
+      ],
+      "webhookId": "4e5a1ea1-a965-4b48-b783-2ebb0b2aba9e"
+    },
+    {
+      "parameters": {
+        "path": "0f99bc36-8e6b-4a1d-9c32-2db075f1037d",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "5859adcf-4a71-4149-8c80-3f0f6ab1de78",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        720,
+        380
+      ],
+      "webhookId": "0f99bc36-8e6b-4a1d-9c32-2db075f1037d"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "bigmovesio.app.n8n.cloud",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.7",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "49.149.78.44",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "PH",
+            "cf-ray": "8ff09e0f0524dd3a-HKG",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "cookie": "rl_page_init_referrer=RudderEncrypt%3AU2FsdGVkX19s8mt0nLwSKOAWckJO%2BfhhpEZFGBr6exU%3D; rl_page_init_referring_domain=RudderEncrypt%3AU2FsdGVkX1%2BuwugQmn5SpOg4hEvV1dT2rVXzd6WiOVk%3D; n8n-auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjM4NmZjM2RmLWM3ZmMtNGE5Zi05ZjQyLTMxYTYwZmQzYmQzNyIsImhhc2giOiJpdkZEb2w0YjREIiwiYnJvd3NlcklkIjoiWGljMXhOOGgvWWNxRWVRZVdTcXlKU2xoYWNTNFJBSEVFczFYMVBRZ09WMD0iLCJpYXQiOjE3MzYxMjU0MDIsImV4cCI6MTczNjczMDIwMn0.wyzS8ATdxVjPK6pM8Pin3SVjM-CxOu5oNdwVqNWxs0U; rl_anonymous_id=RudderEncrypt%3AU2FsdGVkX1%2FPIFdIwHUyEqaC9q968IfRxQe6u9fhiwkDokmu3U7DjXqZVxotAv2gOXJmndalpgZ5zGRNank4Ew%3D%3D; rl_user_id=RudderEncrypt%3AU2FsdGVkX1%2BtGGKVZolbSHj1JgP06qYasqYQTU%2FYmcFpPDFYX8%2FprxWvpJavoQvoSxrIZ0tdTOMiQJlXwFc5wElYcxS9O1EkTt1kALKMh0VnoMJa1IAAdnIGmkHGkgQja3FzEy%2FTgRKh5TupgsQMr%2FvQ3ynOvg4MHVkMVAda8hc%3D; rl_trait=RudderEncrypt%3AU2FsdGVkX19NwCIyzTQR0UGVUnI00%2FX0r7GfHnuDQTZWtqfq7OsZBoFzD3KoaM8UFSkRsY0jaRFobGZvCL1EpmCCLN2Lx85gT6vFelK9eD5xDWkPjCq%2Bf%2FyxfQ7Id3TRfMhlZEeFkaD6hhttFTaFbexyM9bAGXcRmSef5I6uUP8%3D; n8n_anonymous_id=16b6a0d9-ad8d-40b2-8fcb-b429db09abca; ph_phc_4URIAm1uYfJO7j8kWSe0J8lc8IqnstRLS7Jx8NcakHo_posthog=%7B%22distinct_id%22%3A%22fa8972778f1b26c95c2f56e5dcac0460449919a72b08cf533215bb49c07cb34d%23386fc3df-c7fc-4a9f-9f42-31a60fd3bd37%22%2C%22%24sesid%22%3A%5B1736385756951%2C%2201944899-e630-7da6-8935-6dd5abadf1c3%22%2C1736384833072%5D%2C%22%24epp%22%3Atrue%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fbigmovesio.app.n8n.cloud%2Fsignin%22%7D%7D; rl_session=RudderEncrypt%3AU2FsdGVkX1%2FAD3EkmaQvrwKhu%2BlOLJmRDfTqf0v2WjTtV8%2BoDZ58Tw4I5EyHYvYxgqdteBXTpb7%2BYTkX%2FrtMObknNqbk3UiXuwxDVhC9QQ0Y1qoHc9SLuyydmZdXpNDOj4gCP8WOYnrvTEH5L6HS3g%3D%3D",
+            "priority": "u=0, i",
+            "sec-ch-ua": "\"Not)A;Brand\";v=\"99\", \"Brave\";v=\"127\", \"Chromium\";v=\"127\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-user": "?1",
+            "sec-gpc": "1",
+            "upgrade-insecure-requests": "1",
+            "x-forwarded-for": "49.149.78.44, 162.158.178.208",
+            "x-forwarded-host": "bigmovesio.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-2-ddc688d69-smgqs",
+            "x-is-trusted": "yes",
+            "x-real-ip": "49.149.78.44"
+          },
+          "params": {},
+          "query": {
+            "base_id": "apppsc8i7GDCJyR6I",
+            "table_id": "tbljgMgNIsPZM8Cfo",
+            "record_id": "rec0j2YGw3ZH0VkQs"
+          },
+          "body": {},
+          "webhookUrl": "https://bigmovesio.app.n8n.cloud/webhook-test/1a20b4c1-6689-400c-ba16-5df8a2c18854",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "GET Airtable Record": {
+      "main": [
+        [
+          {
+            "node": "Set Record Status to AI Writing (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Record Status to AI Writing (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Set Image Prompt and Airtable IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "GET Airtable Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Image Prompt and Airtable IDs": {
+      "main": [
+        [
+          {
+            "node": "Convert SetImagePrompt into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert SetImagePrompt into JSON": {
+      "main": [
+        [
+          {
+            "node": "Set Image Prompt (OpenRouter)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Image Prompt into JSON": {
+      "main": [
+        [
+          {
+            "node": "Update Image Prompt Record (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Image Prompt Record (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Create Image (Flux)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Image (Flux)": {
+      "main": [
+        [
+          {
+            "node": "Wait 30 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Image (Flux)": {
+      "main": [
+        [
+          {
+            "node": "Upload to Cloudinary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Cloudinary": {
+      "main": [
+        [
+          {
+            "node": "Set Tinify API Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Base64 Key for Tinify API": {
+      "main": [
+        [
+          {
+            "node": "Upload to Tinify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Tinify": {
+      "main": [
+        [
+          {
+            "node": "Update Record Status to AI Complete (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Tinify API Key": {
+      "main": [
+        [
+          {
+            "node": "Generate Base64 Key for Tinify API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Image Prompt (OpenRouter)": {
+      "main": [
+        [
+          {
+            "node": "Convert Image Prompt into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Get Image (Flux)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "41da3149-3bcc-4848-b3bf-73fc966412dd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fa8972778f1b26c95c2f56e5dcac0460449919a72b08cf533215bb49c07cb34d"
+  },
+  "id": "MuXbsAM8zoA3H5RX",
+  "tags": [
+    {
+      "createdAt": "2024-12-17T22:38:04.164Z",
+      "updatedAt": "2024-12-17T22:38:04.164Z",
+      "id": "gGvm1CJL8gd1R8EN",
+      "name": "OS 3.2"
+    },
+    {
+      "createdAt": "2025-01-07T06:23:59.510Z",
+      "updatedAt": "2025-01-07T06:23:59.510Z",
+      "id": "mPrqlIkZQr0cgqJa",
+      "name": "template"
+    }
+  ]
+}
