@@ -358,6 +358,8 @@ SUPABASE_REALTIME_URL = "ws://host.docker.internal:65421/realtime/v1"
 headers = {"apikey": SUPABASE_ANON_KEY}
 ```
 
+> **Note on Linux:** `host.docker.internal` is not available by default on Linux. Use `--add-host=host.docker.internal:host-gateway` in your Docker run/compose configuration, or replace with the explicit gateway IP (typically `172.17.0.1` for default bridge).
+
 ---
 
 ### 5-Tier Network Segmentation (Defense-in-Depth)
@@ -1745,7 +1747,8 @@ models:
 
 3. **Compose Bridge GA:**
 - Convert Compose files to Kubernetes manifests or Helm charts
-- Command: `docker compose convert --format kubernetes`
+- Command: `docker compose bridge convert`
+- Documentation: [Docker Compose Bridge](https://docs.docker.com/compose/bridge/)
 
 4. **Watch mode for development:**
 ```bash
@@ -1819,9 +1822,10 @@ services:
 
 - [ ] **Secrets migrated**
   - No plaintext secrets in compose files
-  - .env files have 600 permissions
+  - .env files have 600 permissions (verify: `stat -c %a .env`)
   - Supabase keys use JWT format (not sb_publishable_*)
-  - Verify: `grep -r "password\|secret\|key" docker-compose.yml`
+  - Verify env var usage: `grep -o '\${[^}]*}' docker-compose.yml` (check all secrets use placeholders)
+  - Use secret scanner: `git-secrets --scan` or `trufflehog` (avoid printing secret values to logs)
 
 - [ ] **Health checks configured**
   - All services have healthcheck definitions
