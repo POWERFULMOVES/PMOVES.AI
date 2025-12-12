@@ -933,21 +933,12 @@ networks:
 - [Docker Compose Networking](https://docs.docker.com/compose/how-tos/networking/)
 - [Port Publishing and Mapping](https://docs.docker.com/engine/network/port-publishing/)
 - [Docker Security Announcements](https://docs.docker.com/security/security-announcements/)
+- [Docker Compose Specification](https://docs.docker.com/compose/compose-file/)
+- [Docker Compose Release Notes](https://github.com/docker/compose/releases)
 
-### Best Practices Articles
-- [Networking With Docker Compose (Quick Guide)](https://www.netmaker.io/resources/docker-compose-network)
-- [Modern Docker Best Practices for 2025](https://talent500.com/blog/modern-docker-best-practices-2025/)
-- [Docker Compose Best Practices for 2025](https://toxigon.com/docker-compose-best-practices-2025)
-- [Enhancing Docker Security with Strategic Network Segmentation](https://medium.com/@ruslan.alekseyev/enhancing-docker-security-with-strategic-network-segmentation-aa1e4a5304d3)
-
-### Health Check Resources
-- [Docker Compose Health Checks: An Easy-to-follow Guide](https://last9.io/blog/docker-compose-health-checks/)
-- [Health Checks in Docker Compose: A Practical Guide](https://www.tvaidyan.com/2025/02/13/health-checks-in-docker-compose-a-practical-guide/)
-- [Docker Compose Health Checks Made Easy](https://medium.com/@cbaah123/docker-compose-health-checks-made-easy-a-practical-guide-3a340571b88e)
-
-### Security Resources
-- [CVE-2025-9074: Critical Vulnerability in Docker Desktop](https://socprime.com/blog/cve-2025-9074-docker-desktop-vulnerability/)
-- [Docker Fixes CVE-2025-9074](https://thehackernews.com/2025/08/docker-fixes-cve-2025-9074-critical.html)
+### Security Advisories
+- [CVE-2025-9074: Docker Desktop Security Advisory](https://docs.docker.com/security/security-announcements/)
+- [CVE-2025-62725: Docker Compose Path Traversal (GHSA-gv8h-7v7w-r22q)](https://github.com/docker/compose/security/advisories/GHSA-gv8h-7v7w-r22q)
 - [OWASP Docker Security - Network Segmentation](https://github.com/OWASP/Docker-Security/blob/main/D03%20-%20Network%20Segmentation%20and%20Firewalling.md)
 
 ---

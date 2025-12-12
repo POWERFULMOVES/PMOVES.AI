@@ -242,25 +242,25 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 
 | Port | Service | Tier | Current Binding | Production Binding | Notes |
 |------|---------|------|-----------------|-------------------|-------|
-| **Core Infrastructure** |||||
+| **Core Infrastructure** | | | | | |
 | 3030 | tensorzero-gateway | api | 0.0.0.0 | 0.0.0.0 | LLM gateway (public) |
 | 4000 | tensorzero-ui | api | 0.0.0.0 | 127.0.0.1 | Admin console |
 | 8123 | tensorzero-clickhouse | data | 0.0.0.0 | 127.0.0.1 | Metrics DB |
 | 4222 | nats | bus | 0.0.0.0 | 127.0.0.1 | JetStream (internal) |
-| **Agent Orchestration** |||||
+| **Agent Orchestration** | | | | | |
 | 8080 | agent-zero (API) | api | 0.0.0.0 | 0.0.0.0 | MCP orchestration (public) |
 | 8081 | agent-zero (UI) | api | 0.0.0.0 | 127.0.0.1 | Agent UI (dev only) |
 | 8091 | archon | api | 0.0.0.0 | 0.0.0.0 | Agent service (public) |
 | 8054 | botz-gateway | api | 0.0.0.0 | 0.0.0.0 | Bot interface (public) |
 | 8097 | channel-monitor | api | 0.0.0.0 | 127.0.0.1 | Content watcher |
-| **Knowledge & Retrieval** |||||
+| **Knowledge & Retrieval** | | | | | |
 | 8086 | hi-rag-gateway-v2 | api | 0.0.0.0 | 0.0.0.0 | Hybrid RAG (public) |
 | 8087 | hi-rag-gateway-v2-gpu | api | 0.0.0.0 | 127.0.0.1 | GPU variant (internal) |
 | 8089 | hi-rag-gateway (v1) | api | 0.0.0.0 | 127.0.0.1 | Legacy fallback |
 | 8098 | deepresearch | api | 0.0.0.0 | 127.0.0.1 | Research (NATS preferred) |
 | 8099 | supaserch | api | 0.0.0.0 | 0.0.0.0 | Holographic search (public) |
 | 8095 | notebook-sync | app | 0.0.0.0 | 127.0.0.1 | Sync worker |
-| **Media Processing** |||||
+| **Media Processing** | | | | | |
 | 8077 | pmoves-yt | api | 0.0.0.0 | 127.0.0.1 | YouTube ingest |
 | 8078 | ffmpeg-whisper | app | 0.0.0.0 | 127.0.0.1 | Transcription |
 | 8079 | media-video | app | 0.0.0.0 | 127.0.0.1 | YOLO analysis |
@@ -268,12 +268,12 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 | 8083 | extract-worker | app | 0.0.0.0 | 127.0.0.1 | Embedding |
 | 8092 | pdf-ingest | app | 0.0.0.0 | 127.0.0.1 | Document ingest |
 | 8084 | langextract | app | 0.0.0.0 | 127.0.0.1 | NLP preprocessing |
-| **Utilities** |||||
+| **Utilities** | | | | | |
 | 8088 | presign | api | 0.0.0.0 | 127.0.0.1 | URL presigner |
 | 8085 | render-webhook | api | 0.0.0.0 | 127.0.0.1 | ComfyUI callback |
 | 8094 | publisher-discord | app | 0.0.0.0 | 127.0.0.1 | Discord bot |
 | 8093 | jellyfin-bridge | api | 0.0.0.0 | 127.0.0.1 | Jellyfin sync |
-| **Data Storage (Supabase-Managed)** |||||
+| **Data Storage (Supabase-Managed)** | | | | | |
 | 5432 | postgres | data | 0.0.0.0 | Supabase | Supabase CLI manages |
 | 3010 | postgrest | api | 0.0.0.0 | Supabase | Supabase REST API |
 | 6333 | qdrant | data | 0.0.0.0 | 127.0.0.1 | Vector DB (via Hi-RAG) |
@@ -283,7 +283,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 | 9000 | minio (API) | data | 0.0.0.0 | Supabase Storage | Object storage |
 | 9001 | minio (Console) | data | 0.0.0.0 | 127.0.0.1 | Admin console |
 | 11434 | pmoves-ollama | app | 0.0.0.0 | 127.0.0.1 | Local LLM |
-| **Monitoring** |||||
+| **Monitoring** | | | | | |
 | 9090 | prometheus | mon | 0.0.0.0 | 127.0.0.1 | Metrics |
 | 3002 | grafana | mon | 0.0.0.0 | 0.0.0.0 | Dashboards (auth required) |
 | 3100 | loki | mon | 0.0.0.0 | 127.0.0.1 | Log aggregation |
@@ -323,7 +323,7 @@ extract-worker    → http://qdrant:6333          # Embedding storage
 
 #### Cross-Tier Communication Rules
 
-```
+```text
 api_tier ←→ app_tier     : ✅ Allowed (via bridge)
 api_tier ←→ data_tier    : ✅ Allowed (for gateways)
 app_tier ←→ data_tier    : ✅ Allowed (workers need storage)
@@ -336,7 +336,7 @@ api_tier ←→ bus_tier     : ⚠️ Via app_tier only
 
 For services that need loose coupling:
 
-```
+```text
 mesh.node.announce.v1           → Host presence announcements
 research.deepresearch.request.v1 → Task routing to workers
 ingest.transcript.ready.v1      → Media pipeline coordination
@@ -1711,11 +1711,12 @@ docker compose -f monitoring/docker-compose.monitoring.yml down
 - **Services affected:** ffmpeg-whisper, media-video, hi-rag-gateway-v2
 
 #### CVE-2025-55182 (CRITICAL) - Next.js Authorization Bypass
-- **Affected:** Next.js < 15.3.0
+- **Affected:** Next.js versions prior to patched releases
 - **Risk:** Authorization bypass in middleware
 - **Impact:** Unauthorized access to protected routes
-- **Fix:** Upgrade Next.js to 15.3.0+
+- **Fix:** Upgrade Next.js to one of the patched versions: 15.0.5, 15.1.9, 15.2.6, 15.3.6+, 15.4.8+, 15.5.7+, or 16.0.7+
 - **Services affected:** pmoves-ui, archon-ui, tensorzero-ui
+- **Warning:** Versions 15.3.0-15.3.5 are NOT patched despite being newer than 15.2.6
 
 ### Docker Compose V5 (December 2025)
 
