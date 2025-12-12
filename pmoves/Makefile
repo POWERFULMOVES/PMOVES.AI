@@ -166,6 +166,26 @@ archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARC
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml up -d archon
 
+# -------- Consciousness Taxonomy Loaders ----------
+.PHONY: load-consciousness-neo4j harvest-consciousness
+
+load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j
+	@echo "→ Loading consciousness Neo4j schema…"
+	@$(LOAD_ENV_SHARED); \
+	  auth="$${NEO4J_AUTH:-neo4j/neo4j}"; \
+	  user="$${auth%%/*}"; pass="$${auth#*/}"; \
+	  cat data/consciousness/neo4j-consciousness-schema.cypher | \
+	    docker exec -i neo4j cypher-shell -u "$$user" -p "$$pass"; \
+	  echo "✔ Consciousness taxonomy loaded into Neo4j"
+
+harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
+	@echo "→ Running consciousness harvester…"
+	@$(PYTHON) tools/consciousness_harvester.py \
+	  --urls-file data/consciousness/harvest-urls.txt \
+	  --output data/consciousness/harvested \
+	  --publish
+	@echo "✔ Consciousness harvest complete"
+
 .PHONY: loki-ready
 loki-ready: ## Check Loki readiness endpoint (/ready)
 	@echo "→ Checking Loki /ready"; \

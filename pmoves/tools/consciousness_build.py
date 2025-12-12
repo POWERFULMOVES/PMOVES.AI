@@ -29,93 +29,19 @@ from typing import Iterable, List, Optional
 
 
 HARVEST_SUFFIX = "pmoves/data/consciousness/Constellation-Harvest-Regularization"
+TAXONOMY_SUFFIX = "pmoves/data/consciousness/kuhn_full_taxonomy.json"
 
-# Kuhn's Landscape of Consciousness Taxonomy - 10 major categories
-# Based on "A landscape of consciousness: Toward a taxonomy of explanations and implications" (2024)
-CONSCIOUSNESS_TAXONOMY = {
-    "Materialism-Theories": {
-        "description": "Theories holding that consciousness arises from or is identical to physical brain processes.",
-        "subcategories": {
-            "Neurobiological": [
-                ("Global Workspace Theory", "Bernard Baars, Stanislas Dehaene", "Consciousness arises when information is broadcast globally across the brain."),
-                ("Neural Correlates of Consciousness", "Christof Koch, Francis Crick", "Identifying specific neural patterns that correlate with conscious experience."),
-                ("Predictive Processing", "Karl Friston, Andy Clark", "Brain constantly generates predictions; consciousness emerges from prediction error minimization."),
-            ],
-            "Computational-Informational": [
-                ("Attention Schema Theory", "Michael Graziano", "Brain constructs a model of attention, which we experience as consciousness."),
-                ("Global Neuronal Workspace", "Stanislas Dehaene", "Consciousness involves global information integration via cortical workspace."),
-            ],
-            "Embodied-Enactive": [
-                ("Enactivism", "Francisco Varela, Evan Thompson", "Consciousness arises through sensorimotor coupling with the world."),
-                ("Extended Mind", "Andy Clark, David Chalmers", "Cognitive processes extend beyond the brain into body and environment."),
-            ],
-        }
-    },
-    "Non-Reductive-Physicalism": {
-        "description": "Mental properties are physical but not reducible to lower-level physical descriptions.",
-        "theories": [
-            ("Emergentism", "C.D. Broad", "Consciousness is an emergent property not predictable from physical components."),
-            ("Anomalous Monism", "Donald Davidson", "Mental events are physical but not governed by strict psychophysical laws."),
-        ]
-    },
-    "Quantum-Theories": {
-        "description": "Consciousness involves or requires quantum mechanical processes.",
-        "theories": [
-            ("Orchestrated Objective Reduction", "Roger Penrose, Stuart Hameroff", "Consciousness arises from quantum computations in microtubules."),
-            ("Quantum Mind", "Henry Stapp", "Quantum mechanics essential for understanding consciousness and free will."),
-        ]
-    },
-    "Integrated-Information-Theory": {
-        "description": "Consciousness is integrated information (Phi) in a system.",
-        "theories": [
-            ("IIT 3.0/4.0", "Giulio Tononi", "Consciousness is identical to integrated information; Phi measures consciousness."),
-        ]
-    },
-    "Panpsychisms": {
-        "description": "Consciousness or proto-consciousness is a fundamental feature of reality.",
-        "theories": [
-            ("Constitutive Panpsychism", "Philip Goff", "Macro-consciousness constituted by micro-level consciousness."),
-            ("Cosmopsychism", "Itay Shani", "Universe itself is conscious; individual minds are aspects of cosmic mind."),
-            ("Russellian Monism", "Bertrand Russell, Galen Strawson", "Physical properties are structural; intrinsic nature is experiential."),
-        ]
-    },
-    "Monisms": {
-        "description": "Reality is fundamentally one kind of substance.",
-        "theories": [
-            ("Neutral Monism", "William James, Bertrand Russell", "Reality is neither mental nor physical but neutral."),
-            ("Double-Aspect Monism", "Baruch Spinoza", "Mind and matter are two aspects of one substance."),
-        ]
-    },
-    "Dualisms": {
-        "description": "Mind and matter are fundamentally distinct substances or properties.",
-        "theories": [
-            ("Property Dualism", "David Chalmers", "Mental properties are non-physical properties of physical substances."),
-            ("Interactionist Dualism", "Karl Popper, John Eccles", "Mind and brain causally interact."),
-        ]
-    },
-    "Idealisms": {
-        "description": "Reality is fundamentally mental or consciousness-based.",
-        "theories": [
-            ("Analytic Idealism", "Bernardo Kastrup", "Reality is mental; matter is appearance of mental processes."),
-            ("Conscious Realism", "Donald Hoffman", "Consciousness is fundamental; spacetime and objects are user interfaces."),
-        ]
-    },
-    "Anomalous-Altered-States": {
-        "description": "Consciousness studies informed by altered states, near-death experiences, meditation.",
-        "theories": [
-            ("Psychedelic Consciousness", "Robin Carhart-Harris", "Psychedelics reveal aspects of consciousness through entropic brain states."),
-            ("Contemplative Science", "Richard Davidson", "Contemplative practices transform conscious experience."),
-        ]
-    },
-    "Challenge-Theories": {
-        "description": "Theories that challenge or question standard assumptions about consciousness.",
-        "theories": [
-            ("Illusionism", "Keith Frankish", "Consciousness as we conceive it is an illusion."),
-            ("Mysterianism", "Colin McGinn", "Human minds may be constitutionally incapable of understanding consciousness."),
-            ("The Hard Problem", "David Chalmers", "Why is there subjective experience at all?"),
-        ]
-    },
-}
+
+def load_full_taxonomy(repo_root: Path) -> dict:
+    """Load the full Kuhn consciousness taxonomy from JSON file."""
+    taxonomy_path = repo_root / TAXONOMY_SUFFIX
+    if taxonomy_path.exists():
+        try:
+            with taxonomy_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"[warn] Failed to load taxonomy from {taxonomy_path}: {e}", file=sys.stderr)
+    return {}
 
 
 @dataclass
@@ -139,54 +65,102 @@ def strip_html(html: str) -> str:
     return cleaned.strip()
 
 
-def collect_taxonomy_chunks() -> List[Chunk]:
-    """Generate chunks from the Kuhn consciousness taxonomy."""
-    chunks: List[Chunk] = []
+def collect_taxonomy_chunks(taxonomy: dict) -> List[Chunk]:
+    """Generate chunks from the Kuhn consciousness taxonomy JSON.
 
-    for category, cat_data in CONSCIOUSNESS_TAXONOMY.items():
+    Supports the full JSON taxonomy format with:
+    - categories: dict of category objects
+    - Each category has: id, description, theories (optional), subcategories (optional)
+    - Each subcategory has: description, theories
+    - Each theory has: name, proponents (list), description
+    """
+    chunks: List[Chunk] = []
+    categories = taxonomy.get("categories", {})
+
+    if not categories:
+        print("[warn] No categories found in taxonomy", file=sys.stderr)
+        return chunks
+
+    for cat_key, cat_data in categories.items():
+        # Normalize category name for display
+        category_id = cat_data.get("id", cat_key.replace("_", "-").lower())
+        category_name = cat_key.replace("_", " ").lstrip("0123456789").strip()
+        cat_description = cat_data.get("description", "")
+
         # Category description chunk
-        chunk_id = f"consciousness-cat-{category.lower()}"
+        chunk_id = f"consciousness-cat-{category_id}"
         chunks.append(
             Chunk(
                 chunk_id=chunk_id,
-                title=f"{category.replace('-', ' ')} - Category Overview",
+                title=f"{category_name} - Category Overview",
                 url=None,
-                category=category,
-                content=f"{category.replace('-', ' ')}: {cat_data['description']}",
+                category=category_id,
+                content=f"{category_name}: {cat_description}",
             )
         )
 
-        # Subcategory theories
-        for subcat_name, theories in cat_data.get("subcategories", {}).items():
-            for theory_name, proponents, desc in theories:
-                chunk_id = f"consciousness-theory-{theory_name.lower().replace(' ', '-')[:30]}-{uuid.uuid4().hex[:6]}"
+        # Process subcategories
+        for subcat_key, subcat_data in cat_data.get("subcategories", {}).items():
+            subcat_name = subcat_key.replace("_", " ").lstrip("0123456789.").strip()
+            subcat_description = subcat_data.get("description", "")
+
+            # Subcategory chunk
+            subcat_id = f"consciousness-subcat-{subcat_key.lower().replace(' ', '-').replace('.', '-')[:40]}"
+            chunks.append(
+                Chunk(
+                    chunk_id=subcat_id,
+                    title=f"{subcat_name} - Subcategory",
+                    url=None,
+                    category=category_id,
+                    content=f"{subcat_name} is a subcategory of {category_name}. {subcat_description}",
+                )
+            )
+
+            # Theories in subcategory
+            for theory in subcat_data.get("theories", []):
+                theory_name = theory.get("name", "Unknown Theory")
+                proponents = theory.get("proponents", [])
+                proponents_str = ", ".join(proponents) if isinstance(proponents, list) else str(proponents)
+                desc = theory.get("description", "")
+
+                # Create stable ID from theory name
+                theory_slug = theory_name.lower().replace(" ", "-").replace("'", "").replace("/", "-")[:35]
+                chunk_id = f"consciousness-theory-{theory_slug}-{uuid.uuid4().hex[:6]}"
+
                 content = (
-                    f"{theory_name} is a consciousness theory in the {subcat_name} subcategory of {category.replace('-', ' ')}. "
-                    f"Key proponents: {proponents}. {desc}"
+                    f"{theory_name} is a consciousness theory in the {subcat_name} subcategory of {category_name}. "
+                    f"Key proponents: {proponents_str}. {desc}"
                 )
                 chunks.append(
                     Chunk(
                         chunk_id=chunk_id,
                         title=theory_name,
                         url=None,
-                        category=category,
+                        category=category_id,
                         content=content,
                     )
                 )
 
         # Direct theories (no subcategory)
-        for theory_name, proponents, desc in cat_data.get("theories", []):
-            chunk_id = f"consciousness-theory-{theory_name.lower().replace(' ', '-')[:30]}-{uuid.uuid4().hex[:6]}"
+        for theory in cat_data.get("theories", []):
+            theory_name = theory.get("name", "Unknown Theory")
+            proponents = theory.get("proponents", [])
+            proponents_str = ", ".join(proponents) if isinstance(proponents, list) else str(proponents)
+            desc = theory.get("description", "")
+
+            theory_slug = theory_name.lower().replace(" ", "-").replace("'", "").replace("/", "-")[:35]
+            chunk_id = f"consciousness-theory-{theory_slug}-{uuid.uuid4().hex[:6]}"
+
             content = (
-                f"{theory_name} is a consciousness theory in the {category.replace('-', ' ')} category. "
-                f"Key proponents: {proponents}. {desc}"
+                f"{theory_name} is a consciousness theory in the {category_name} category. "
+                f"Key proponents: {proponents_str}. {desc}"
             )
             chunks.append(
                 Chunk(
                     chunk_id=chunk_id,
                     title=theory_name,
                     url=None,
-                    category=category,
+                    category=category_id,
                     content=content,
                 )
             )
@@ -194,11 +168,11 @@ def collect_taxonomy_chunks() -> List[Chunk]:
     return chunks
 
 
-def collect_chunks(base: Path) -> List[Chunk]:
+def collect_chunks(base: Path, taxonomy: dict) -> List[Chunk]:
     chunks: List[Chunk] = []
 
-    # First, add taxonomy chunks
-    chunks.extend(collect_taxonomy_chunks())
+    # First, add taxonomy chunks from JSON
+    chunks.extend(collect_taxonomy_chunks(taxonomy))
 
     # Research papers
     research_dir = base / "research-papers"
@@ -358,6 +332,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=HARVEST_SUFFIX,
         help="Harvest directory (default: %(default)s relative to repo root)",
     )
+    parser.add_argument(
+        "--taxonomy",
+        default=TAXONOMY_SUFFIX,
+        help="Taxonomy JSON file (default: %(default)s relative to repo root)",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -366,7 +345,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"[error] Harvest directory not found: {base}", file=sys.stderr)
         return 1
 
-    chunks = collect_chunks(base)
+    # Load full taxonomy from JSON
+    taxonomy = load_full_taxonomy(repo_root)
+    if not taxonomy:
+        # Fallback: try from base directory
+        taxonomy_in_base = base.parent / "kuhn_full_taxonomy.json"
+        if taxonomy_in_base.exists():
+            try:
+                taxonomy = json.loads(taxonomy_in_base.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, IOError):
+                pass
+
+    if not taxonomy:
+        print("[warn] No taxonomy loaded, will only process research papers", file=sys.stderr)
+
+    chunks = collect_chunks(base, taxonomy)
     chunks_sorted = sorted(chunks, key=lambda c: c.chunk_id)
 
     write_jsonl(
