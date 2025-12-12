@@ -20,10 +20,21 @@ This document provides comprehensive best practices for Docker Compose networkin
 | Risk | Containers can access Docker Engine API via default subnet |
 | Impact | Container escape, full host compromise |
 | Fix | Upgrade to Docker Desktop 4.44.3+ |
+| Advisory | [Docker Security Announcement](https://docs.docker.com/security/security-announcements/) |
 
 **Mitigation if upgrade not immediately possible:**
+
+> **Note:** The example below uses Docker Desktop-specific addresses. The `192.168.65.0/24` subnet and `192.168.65.7` IP are typical for Docker Desktop on macOS/Windows. On Linux Engine setups, the network topology may differ.
+>
+> **To find your actual subnet/IP:**
+> - Check Docker networks: `docker network inspect bridge`
+> - Check host interfaces: `ip addr` or `ifconfig`
+> - Find listening ports: `ss -tunlp | grep 2375` or `netstat -tunlp | grep 2375`
+>
+> Replace the subnet and IP below with your discovered values before applying the rule.
+
 ```bash
-# Block API access from containers
+# Block API access from containers (adjust subnet/IP for your environment)
 iptables -I DOCKER-USER -s 192.168.65.0/24 -d 192.168.65.7 -p tcp --dport 2375 -j DROP
 ```
 
@@ -36,6 +47,7 @@ iptables -I DOCKER-USER -s 192.168.65.0/24 -d 192.168.65.7 -p tcp --dport 2375 -
 | Risk | Path traversal when pulling OCI artifacts |
 | Impact | Arbitrary file read during build |
 | Fix | Upgrade to Compose v2.40.2+ |
+| Advisory | [GitHub Security Advisory GHSA-gv8h-7v7w-r22q](https://github.com/docker/compose/security/advisories/GHSA-gv8h-7v7w-r22q) |
 
 **Verification:**
 ```bash
@@ -47,12 +59,14 @@ docker compose version
 
 ## Docker Compose V5 Changes (December 2025)
 
-**Breaking changes to be aware of:**
+**Key changes in Docker Compose v5.0.0 ("Mont Blanc"):**
 
-1. **Version field deprecated** - Remove `version: '3.8'` from compose files
-2. **New `models:` key** - Native AI/ML integration support
-3. **Compose Bridge GA** - Convert to Kubernetes manifests: `docker compose convert --format kubernetes`
-4. **Watch mode** - Real-time code sync: `docker compose watch`
+1. **New official Go SDK** - For integrating Compose functionality into applications
+2. **Internal BuildKit builder removed** - Builds now delegated to Docker Bake/bake-based flow
+3. **Configurable progress UI** - Enhanced progress display options
+4. **`--wait` flag for `docker compose start`** - Wait for services to reach healthy state
+
+**Reference:** [Docker Compose v5.0.0 Release Notes](https://github.com/docker/compose/releases/tag/v5.0.0)
 
 ---
 
@@ -78,7 +92,7 @@ docker compose version
 - By default, Docker binds published ports to all network interfaces (`0.0.0.0`)
 - This exposes services to external networks, creating potential security risks
 
-**Security Recommendation: Use 127.0.0.1 for Internal Services**
+#### Security Recommendation: Use 127.0.0.1 for Internal Services
 
 ```yaml
 services:
@@ -547,6 +561,8 @@ docker exec container_name curl -f http://localhost:8080/health
 - Affects Windows and macOS (Linux not vulnerable)
 - Can lead to container escape and host filesystem access
 
+> **Note:** The `192.168.65.7:2375` reference is specific to Docker Desktop on macOS/Windows. See the [Critical Security Advisories](#critical-security-advisories-december-2025) section above for platform-specific guidance on identifying your Docker Engine API endpoint.
+
 **Additional 2025 CVEs:**
 - CVE-2025-10657: Enhanced Container Isolation issues
 - CVE-2025-9164: DLL hijacking in Windows installer
@@ -776,7 +792,7 @@ services:
 ### 1. Port Already in Use
 
 **Error:**
-```
+```text
 ERROR: for app  Cannot start service app: driver failed programming external connectivity:
 Bind for 0.0.0.0:8080 failed: port is already allocated
 ```
