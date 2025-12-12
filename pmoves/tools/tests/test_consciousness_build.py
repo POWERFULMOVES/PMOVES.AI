@@ -26,7 +26,6 @@ from consciousness_build import (
     collect_chunks,
     write_jsonl,
     write_schema,
-    build_query if hasattr(__import__('consciousness_build'), 'build_query') else None,
 )
 
 
