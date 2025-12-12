@@ -236,6 +236,132 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - NATS diagnostics (2): `nats-echo-req`, `nats-echo-res`
 - Support services (6): `postgrest-health`, `postgrest-cli`, `hi-rag-gateway-gpu`, `invidious-companion-proxy`, etc.
 
+### Port Allocation Reference Table
+
+**Complete inventory of all service ports with security classification and binding recommendations.**
+
+| Port | Service | Tier | Current Binding | Production Binding | Notes |
+|------|---------|------|-----------------|-------------------|-------|
+| **Core Infrastructure** | | | | | |
+| 3030 | tensorzero-gateway | api | 0.0.0.0 | 0.0.0.0 | LLM gateway (public) |
+| 4000 | tensorzero-ui | api | 0.0.0.0 | 127.0.0.1 | Admin console |
+| 8123 | tensorzero-clickhouse | data | 0.0.0.0 | 127.0.0.1 | Metrics DB |
+| 4222 | nats | bus | 0.0.0.0 | 127.0.0.1 | JetStream (internal) |
+| **Agent Orchestration** | | | | | |
+| 8080 | agent-zero (API) | api | 0.0.0.0 | 0.0.0.0 | MCP orchestration (public) |
+| 8081 | agent-zero (UI) | api | 0.0.0.0 | 127.0.0.1 | Agent UI (dev only) |
+| 8091 | archon | api | 0.0.0.0 | 0.0.0.0 | Agent service (public) |
+| 8054 | botz-gateway | api | 0.0.0.0 | 0.0.0.0 | Bot interface (public) |
+| 8097 | channel-monitor | api | 0.0.0.0 | 127.0.0.1 | Content watcher |
+| **Knowledge & Retrieval** | | | | | |
+| 8086 | hi-rag-gateway-v2 | api | 0.0.0.0 | 0.0.0.0 | Hybrid RAG (public) |
+| 8087 | hi-rag-gateway-v2-gpu | api | 0.0.0.0 | 127.0.0.1 | GPU variant (internal) |
+| 8089 | hi-rag-gateway (v1) | api | 0.0.0.0 | 127.0.0.1 | Legacy fallback |
+| 8098 | deepresearch | api | 0.0.0.0 | 127.0.0.1 | Research (NATS preferred) |
+| 8099 | supaserch | api | 0.0.0.0 | 0.0.0.0 | Holographic search (public) |
+| 8095 | notebook-sync | app | 0.0.0.0 | 127.0.0.1 | Sync worker |
+| **Media Processing** | | | | | |
+| 8077 | pmoves-yt | api | 0.0.0.0 | 127.0.0.1 | YouTube ingest |
+| 8078 | ffmpeg-whisper | app | 0.0.0.0 | 127.0.0.1 | Transcription |
+| 8079 | media-video | app | 0.0.0.0 | 127.0.0.1 | YOLO analysis |
+| 8082 | media-audio | app | 0.0.0.0 | 127.0.0.1 | Audio analysis |
+| 8083 | extract-worker | app | 0.0.0.0 | 127.0.0.1 | Embedding |
+| 8092 | pdf-ingest | app | 0.0.0.0 | 127.0.0.1 | Document ingest |
+| 8084 | langextract | app | 0.0.0.0 | 127.0.0.1 | NLP preprocessing |
+| **Utilities** | | | | | |
+| 8088 | presign | api | 0.0.0.0 | 127.0.0.1 | URL presigner |
+| 8085 | render-webhook | api | 0.0.0.0 | 127.0.0.1 | ComfyUI callback |
+| 8094 | publisher-discord | app | 0.0.0.0 | 127.0.0.1 | Discord bot |
+| 8093 | jellyfin-bridge | api | 0.0.0.0 | 127.0.0.1 | Jellyfin sync |
+| **Data Storage (Supabase-Managed)** | | | | | |
+| 5432 | postgres | data | 0.0.0.0 | Supabase | Supabase CLI manages |
+| 3010 | postgrest | api | 0.0.0.0 | Supabase | Supabase REST API |
+| 6333 | qdrant | data | 0.0.0.0 | 127.0.0.1 | Vector DB (via Hi-RAG) |
+| 7474 | neo4j (HTTP) | data | 0.0.0.0 | 127.0.0.1 | Graph DB (via Hi-RAG) |
+| 7687 | neo4j (Bolt) | data | 0.0.0.0 | 127.0.0.1 | Graph queries |
+| 7700 | meilisearch | data | 0.0.0.0 | 127.0.0.1 | Full-text (via Hi-RAG) |
+| 9000 | minio (API) | data | 0.0.0.0 | Supabase Storage | Object storage |
+| 9001 | minio (Console) | data | 0.0.0.0 | 127.0.0.1 | Admin console |
+| 11434 | pmoves-ollama | app | 0.0.0.0 | 127.0.0.1 | Local LLM |
+| **Monitoring** | | | | | |
+| 9090 | prometheus | mon | 0.0.0.0 | 127.0.0.1 | Metrics |
+| 3002 | grafana | mon | 0.0.0.0 | 0.0.0.0 | Dashboards (auth required) |
+| 3100 | loki | mon | 0.0.0.0 | 127.0.0.1 | Log aggregation |
+| 9180 | cadvisor | mon | 0.0.0.0 | 127.0.0.1 | Container metrics |
+| 9115 | blackbox | mon | 0.0.0.0 | 127.0.0.1 | Health probes |
+
+**Supabase Integration Notes:**
+- PostgreSQL, MinIO storage migrate to Supabase-managed services in production
+- Local instances remain for development and self-hosted deployments
+- PostgREST replaced by Supabase REST API (`host.docker.internal:65421`)
+
+**Production Binding Strategy:**
+- **Public (0.0.0.0):** 8 services - API gateways and user-facing endpoints
+- **Localhost (127.0.0.1):** 25+ services - Internal workers, admin consoles, databases
+- **Supabase-Managed:** PostgreSQL, storage - Cloud-native data layer
+
+---
+
+### Service Discovery Patterns
+
+**How services find each other securely in deployment.**
+
+#### Docker DNS (Automatic)
+
+Services discover each other via container names on custom networks:
+
+```yaml
+# Internal service-to-service communication
+hi-rag-gateway-v2 → http://qdrant:6333          # Vector search
+hi-rag-gateway-v2 → http://meilisearch:7700     # Full-text search
+hi-rag-gateway-v2 → bolt://neo4j:7687           # Graph queries
+deepresearch      → nats://nats:4222            # Event publishing
+extract-worker    → http://qdrant:6333          # Embedding storage
+```
+
+**Key Principle:** Container names become DNS hostnames within the same network tier.
+
+#### Cross-Tier Communication Rules
+
+```text
+api_tier ←→ app_tier     : ✅ Allowed (via bridge)
+api_tier ←→ data_tier    : ✅ Allowed (for gateways)
+app_tier ←→ data_tier    : ✅ Allowed (workers need storage)
+app_tier ←→ bus_tier     : ✅ Allowed (NATS coordination)
+data_tier ←→ bus_tier    : ❌ Blocked (isolation)
+api_tier ←→ bus_tier     : ⚠️ Via app_tier only
+```
+
+#### NATS-Based Async Discovery
+
+For services that need loose coupling:
+
+```text
+mesh.node.announce.v1           → Host presence announcements
+research.deepresearch.request.v1 → Task routing to workers
+ingest.transcript.ready.v1      → Media pipeline coordination
+claude.code.tool.executed.v1    → CLI observability events
+```
+
+**Benefits:** No direct IP/port knowledge required; services subscribe to subjects.
+
+#### Supabase Realtime Discovery
+
+For services integrated with Supabase:
+
+```python
+# Services connect via standardized URL pattern
+SUPABASE_URL = "http://host.docker.internal:65421"
+SUPABASE_REALTIME_URL = "ws://host.docker.internal:65421/realtime/v1"
+
+# Authentication via JWT anon key
+headers = {"apikey": SUPABASE_ANON_KEY}
+```
+
+> **Note on Linux:** `host.docker.internal` is not available by default on Linux. Use `--add-host=host.docker.internal:host-gateway` in your Docker run/compose configuration, or replace with the explicit gateway IP (typically `172.17.0.1` for default bridge).
+
+---
+
 ### 5-Tier Network Segmentation (Defense-in-Depth)
 
 **Phase 2 Security Enhancement:** Legacy flat `pmoves` network replaced with 5-tier isolation:
@@ -1560,6 +1686,163 @@ docker compose -f monitoring/docker-compose.monitoring.yml down
 - 🔲 HashiCorp Vault for secrets management
 - 🔲 OPA policy enforcement
 - 🔲 Service mesh with Istio/Linkerd
+
+### Docker 2025 Security Advisories
+
+**Critical CVEs requiring immediate attention:**
+
+#### CVE-2025-9074 (CRITICAL) - Docker Desktop API Exposure
+- **Affected:** Docker Desktop < 4.44.3
+- **Risk:** Containers can access Docker Engine API via default subnet (192.168.65.7:2375)
+- **Impact:** Container escape, host compromise
+- **Fix:** Upgrade Docker Desktop to 4.44.3+
+- **Verification:** `docker version --format '{{.Client.Version}}'`
+
+#### CVE-2025-62725 (HIGH) - Compose Path Traversal
+- **Affected:** Docker Compose < 2.40.2
+- **Risk:** Path traversal in OCI artifact support (CVSS 8.9)
+- **Impact:** Arbitrary file read during build
+- **Fix:** Upgrade to Compose v2.40.2+
+- **Verification:** `docker compose version`
+
+#### CVE-2025-32434 (HIGH) - PyTorch torch.load
+- **Affected:** PyTorch < 2.6.0
+- **Risk:** Arbitrary code execution via malicious model files
+- **Impact:** RCE when loading untrusted .pt/.pth files
+- **Fix:** Upgrade PyTorch to 2.6.0+, use `weights_only=True`
+- **Services affected:** ffmpeg-whisper, media-video, hi-rag-gateway-v2
+
+#### CVE-2025-55182 (CRITICAL) - Next.js RSC Remote Code Execution
+- **Affected:** Next.js App Router deployments (versions before patched releases)
+- **Risk:** Remote Code Execution via React Server Components (RSC) unsafe deserialization
+- **Impact:** Pre-auth RCE - attackers can execute arbitrary code on the server
+- **Fix:** Upgrade Next.js to one of the patched versions: 15.0.5, 15.1.9, 15.2.6, 15.3.6+, 15.4.8+, 15.5.7+, or 16.0.7+
+- **Services affected:** pmoves-ui, archon-ui, tensorzero-ui
+- **Warning:** Versions 15.3.0-15.3.5 are NOT patched despite being newer than 15.2.6
+- **Note:** Pages Router and Edge Runtime have reduced exposure; App Router is primary attack surface
+
+### Docker Compose V5 (December 2025)
+
+**Key changes affecting PMOVES.AI:**
+
+1. **Version field deprecated:**
+```yaml
+# Old (generates warning)
+version: '3.8'
+services:
+  ...
+
+# New (V5+)
+services:
+  ...
+```
+
+2. **New AI/ML support:**
+```yaml
+# New top-level models key for LLM integration
+models:
+  llama:
+    provider: ollama
+    model: llama3.2:latest
+```
+
+3. **Compose Bridge GA:**
+- Convert Compose files to Kubernetes manifests or Helm charts
+- Command: `docker compose bridge convert`
+- Documentation: [Docker Compose Bridge](https://docs.docker.com/compose/bridge/)
+
+4. **Watch mode for development:**
+```bash
+docker compose watch  # Real-time code updates
+```
+
+### Container Security Best Practices (2025)
+
+**Mandatory for all services:**
+
+```yaml
+services:
+  example-service:
+    # 1. Non-root user
+    user: "65532:65532"
+
+    # 2. Read-only filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+
+    # 3. Drop all capabilities
+    cap_drop:
+      - ALL
+
+    # 4. Prevent privilege escalation
+    security_opt:
+      - no-new-privileges:true
+
+    # 5. Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+```
+
+**Secrets management hierarchy (most to least secure):**
+1. External secret manager (HashiCorp Vault, AWS Secrets Manager)
+2. Docker secrets (Swarm mode)
+3. BuildKit secret mounts (build-time only)
+4. .env files with restricted permissions (development only)
+5. ❌ Environment variables in compose (avoid for sensitive data)
+
+### Production Deployment Checklist
+
+**Pre-deployment verification:**
+
+- [ ] **Docker versions updated**
+  - Docker Desktop ≥ 4.44.3 (CVE-2025-9074)
+  - Docker Compose ≥ 2.40.2 (CVE-2025-62725)
+  - Verify: `docker version && docker compose version`
+
+- [ ] **Port binding hardened**
+  - Internal services bound to 127.0.0.1
+  - Only API gateways on 0.0.0.0
+  - Data tier ports not exposed to host
+  - Verify: `docker compose config | grep -A2 "ports:"`
+
+- [ ] **Network isolation verified**
+  - 5-tier networks configured (api/app/bus/data/monitoring)
+  - Internal networks have `internal: true`
+  - Cross-tier communication tested
+  - Verify: `docker network ls | grep pmoves`
+
+- [ ] **Container hardening applied**
+  - All services run as non-root (UID 65532)
+  - Read-only filesystems where applicable
+  - Capabilities dropped (`cap_drop: ALL`)
+  - Verify: `docker compose config | grep -A5 "security_opt"`
+
+- [ ] **Secrets migrated**
+  - No plaintext secrets in compose files
+  - .env files have 600 permissions (verify: `stat -c %a .env`)
+  - Supabase keys use JWT format (not sb_publishable_*)
+  - Verify env var usage: `grep -o '\${[^}]*}' docker-compose.yml` (check all secrets use placeholders)
+  - Use secret scanner: `git-secrets --scan` or `trufflehog` (avoid printing secret values to logs)
+
+- [ ] **Health checks configured**
+  - All services have healthcheck definitions
+  - Dependencies use `condition: service_healthy`
+  - Verify: `docker compose ps` shows "(healthy)" status
+
+- [ ] **Monitoring operational**
+  - Prometheus scraping all /metrics endpoints
+  - Grafana dashboards loading
+  - Loki receiving logs
+  - Verify: `curl localhost:9090/api/v1/targets`
+
+- [ ] **CVE scan passed**
+  - Trivy scan shows no HIGH/CRITICAL
+  - Docker Scout enabled for continuous monitoring
+  - Verify: `trivy image --severity HIGH,CRITICAL <image>`
 
 ### Security Checklist
 
