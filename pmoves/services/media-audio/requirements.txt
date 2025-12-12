@@ -1,8 +1,8 @@
 fastapi==0.114.2
 uvicorn[standard]==0.30.6
 transformers==4.53.0
-torch>=2.5.1
-torchaudio>=2.5.1
+torch>=2.6.0
+torchaudio>=2.6.0
 librosa==0.10.2.post1
 soundfile==0.12.1
 whisperx==3.4.2

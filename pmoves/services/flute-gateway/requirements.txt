@@ -4,5 +4,5 @@ httpx>=0.27.0
 nats-py>=2.8.0
 prometheus-client>=0.20.0
 websockets>=12.0
-python-multipart>=0.0.6
+python-multipart>=0.0.7
 supabase>=2.0.0

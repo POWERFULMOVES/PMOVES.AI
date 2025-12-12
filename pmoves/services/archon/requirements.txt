@@ -42,5 +42,5 @@ markdown>=3.8
 # Optional extras – install when enabling richer RAG / orchestration features
 langchain>=0.2.0
 sentence-transformers>=2.2.2
-torch>=2.0.0
+torch>=2.6.0
 transformers>=4.30.0
