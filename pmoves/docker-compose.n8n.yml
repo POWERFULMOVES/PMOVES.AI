@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: compose/n8n/Dockerfile
     image: pmoves/n8n:1.123.4-sqlite
+    container_name: pmoves-n8n
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
@@ -42,6 +43,7 @@ services:
       - ./n8n/flows:/flows:ro
   n8n-runners:
     image: n8nio/runners:1.123.4
+    container_name: pmoves-n8n-runners
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:

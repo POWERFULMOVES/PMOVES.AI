@@ -858,21 +858,21 @@ up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfi
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx'
 	@$(MAKE) wger-brand-defaults
 
 up-external-firefly: ## Start Firefly III on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d firefly
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d firefly'
 
 up-external-on: ## Start Open Notebook on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d open-notebook-ext
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d open-notebook-ext'
 
 up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext'
 
 .PHONY: down-jellyfin-ai
 down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
@@ -883,7 +883,7 @@ down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
 up-jellyfin-single: ## Single Jellyfin using your forked image (8096)
 	@$(MAKE) --no-print-directory down-jellyfin-ai
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -c 'files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d jellyfin-ext'
+	@bash -lc '$(LOAD_ENV_SHARED) files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d jellyfin-ext'
 	@echo "✔ Jellyfin (single) up at http://localhost:8096 using $${JELLYFIN_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest}"
 
 .PHONY: jellyfin-enhanced-smoke
@@ -1189,23 +1189,34 @@ n8n-sync-flows: ## Sync n8n flow exports into integration folders (best-effort)
 
 n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n container
 	@echo "→ Importing n8n workflows from pmoves/n8n/flows (mounted at /flows)"
-	@out=$$(docker exec pmoves-n8n-1 n8n import:workflow --separate --input=/flows 2>&1) || { \
-	  echo "$$out" | tail -60; \
-	  echo ""; \
-	  echo "✗ n8n import failed. If this is a fresh n8n instance, complete the first-run owner setup in the UI (http://localhost:5678), then rerun:"; \
-	  echo "  make -C pmoves n8n-bootstrap"; \
-	  echo ""; \
-	  echo "If you want to reset n8n to a clean default user state (DESTRUCTIVE), run:"; \
-	  echo "  make -C pmoves n8n-reset"; \
-	  exit 1; \
-	}; \
-	echo "✔ Imported workflows into n8n"
+	@project_id=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite 'select id from project limit 1;' | head -1 | tr -d '\r\n'); \
+	 test -n "$$project_id" || { echo "✗ Could not resolve n8n projectId (is the owner user created?)" && exit 1; }; \
+	 failed=0; \
+	 for f in n8n/flows/*.json; do \
+	   base=$$(basename "$$f"); \
+	   echo "  - $$base"; \
+	   out=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n import:workflow --input="/flows/$$base" --projectId="$$project_id" 2>&1) || { \
+	     echo "$$out" | tail -60; \
+	     failed=1; \
+	     break; \
+	   }; \
+	 done; \
+	 if [ "$$failed" = "1" ]; then \
+	   echo ""; \
+	   echo "✗ n8n import failed. If this is a fresh n8n instance, complete the first-run owner setup in the UI (http://localhost:5678), then rerun:"; \
+	   echo "  make -C pmoves n8n-bootstrap"; \
+	   echo ""; \
+	   echo "If you want to reset n8n to a clean default user state (DESTRUCTIVE), run:"; \
+	   echo "  make -C pmoves n8n-reset"; \
+	   exit 1; \
+	 fi; \
+	 echo "✔ Imported workflows into n8n"
 
 n8n-activate-flows: ## Activate n8n workflows (default: all). Set ALL=0 to skip.
 	@ALL=$${ALL:-1}; \
 	 if [ "$$ALL" = "1" ]; then \
 	   echo "→ Activating all n8n workflows"; \
-	   docker exec pmoves-n8n-1 n8n update:workflow --all --active=true >/dev/null; \
+	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n update:workflow --all --active=true >/dev/null; \
 	   echo "✔ Activated all workflows"; \
 	 else \
 	   echo "ALL=0 set; skipping activation."; \
@@ -1219,8 +1230,16 @@ n8n-bootstrap: ## Sync, import, then activate n8n flows (requires n8n running)
 .PHONY: n8n-reset
 n8n-reset: ## DESTRUCTIVE: Reset n8n DB to default user state (use before importing flows on a fresh instance)
 	@echo "→ Resetting n8n database to default user state (DESTRUCTIVE)"
-	@docker exec pmoves-n8n-1 n8n user-management:reset >/dev/null
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n user-management:reset >/dev/null
 	@echo "✔ Reset complete. Re-run: make -C pmoves n8n-bootstrap"
+
+.PHONY: n8n-export-repo-flows n8n-normalize-repo-flows
+
+n8n-export-repo-flows: ## Export current n8n DB workflows into pmoves/n8n/flows (sanitized/minimal)
+	@bash tools/n8n_export_repo_flows.sh
+
+n8n-normalize-repo-flows: ## Normalize pmoves/n8n/flows/*.json into importable minimal format
+	@python3 tools/n8n_flow_normalize.py --inplace-dir n8n/flows
 
 .PHONY: smoke-tensorzero-observability-strict
 smoke-tensorzero-observability-strict: ## Test TensorZero observability (STRICT mode - all warnings are failures)
@@ -1381,8 +1400,8 @@ retrieval-eval-smoke:
 	  $(PYTHON) services/retrieval-eval/evaluate.py "$$ds" --no-query-details; \
 	done
 
-.PHONY: harvest-consciousness
-harvest-consciousness:
+.PHONY: harvest-consciousness-corpus
+harvest-consciousness-corpus:
 	@bash -c 'set -euo pipefail; \
 	HARVEST_DIR="$(CURDIR)/data/consciousness/Constellation-Harvest-Regularization"; \
 	echo "[Harvest] Downloading consciousness corpus via bash helper"; \

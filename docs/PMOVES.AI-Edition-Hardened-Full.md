@@ -12,6 +12,8 @@ The deployment model synthesizes Microsoft Azure's agent orchestration research,
 - Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
 - Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
 - Docker Desktop/WSL environments may write `credsStore=desktop.exe` into `~/.docker/config.json`, which breaks pulls/builds on Linux/headless hosts. Prefer the repo-scoped `.docker-nocreds/` config (set `DOCKER_CONFIG=.../.docker-nocreds`)—`pmoves/Makefile` will auto-use it when present.
+- n8n flows are repo-tracked as sanitized, importable exports under `pmoves/n8n/flows/` (Voice Agents + pollers). Import/activate with `make -C pmoves n8n-import-flows` + `make -C pmoves n8n-activate-flows`.
+- Open Notebook externals default to `OPEN_NOTEBOOK_IMAGE` (see `pmoves/env.shared.example`). External bring-up targets load `env.shared` so image pins apply consistently.
 - Local “everything up” baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
 
 ---
@@ -212,12 +214,14 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `langextract` - Language detection & NLP (port 8084)
 - `bgutil-pot-provider` - YouTube proof-of-origin token provider (port 4416)
 
-**Utilities & Integration (6 services)**
+**Utilities & Integration (8 services)**
 - `presign` - MinIO URL presigner (port 8088)
 - `render-webhook` - ComfyUI callback handler (port 8085)
 - `publisher-discord` - Discord notification bot (port 8094)
 - `jellyfin-bridge` - Jellyfin metadata webhook (port 8093)
 - `retrieval-eval` - RAG evaluation service (port 8090)
+- `flute-gateway` - Realtime multimodal ingress (ports 8055-8056)
+- `n8n` - Workflow automation + webhooks (port 5678)
 - `cloudflared` - Cloudflare Tunnel connector
 
 **Monitoring Stack (7 services)**

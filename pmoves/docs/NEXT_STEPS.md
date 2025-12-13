@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-11-07_
+_Last updated: 2025-12-13_
 
 ## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
@@ -16,6 +16,13 @@ _Last updated: 2025-11-07_
 - SupaSerch: FastAPI worker now bridges `supaserch.request.v1` → `supaserch.result.v1`, exposes Prometheus metrics, and ships `make supaserch-smoke` plus Console quick links.
 - GPU smokes: strict rerank validation is the default (`GPU_SMOKE_STRICT=true`) with Qwen3 4B pinned in `env.shared.example`; smoke harness asserts rerank stats.
 - Monitoring: Node Exporter toggle added (Linux only), cAdvisor remains default.
+
+### Latest changes (Dec 13)
+- n8n flows are now repo-tracked as **sanitized, importable exports** (no project/user metadata) under `pmoves/n8n/flows/`, including Voice Agent router + Discord/Telegram flows.
+  - Import: `make -C pmoves n8n-import-flows` (file-by-file) then `make -C pmoves n8n-activate-flows`.
+  - Refresh from a live n8n instance: `make -C pmoves n8n-export-repo-flows`.
+- Open Notebook external stack now defaults to `OPEN_NOTEBOOK_IMAGE` (see `env.shared.example`) and external Make targets load `env.shared` so image pins apply consistently (`make -C pmoves up-external-on`).
+- DeepResearch smoke is green and writes a Notebook entry (see `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md` for the latest ID).
 
 ## Immediate
 

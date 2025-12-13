@@ -108,6 +108,7 @@ Automated review assignments configured in `.github/CODEOWNERS`:
 - **GHCR publish scope:** pushing images to GHCR requires a token with `write:packages` (and `read:packages` for pulls of private packages). For GitHub CLI tokens: `gh auth refresh -h github.com -s write:packages`.
 - **dotenv safety + compose overrides:** avoid `source`-ing `pmoves/env.shared` directly in shell scripts/Make recipes (it may contain non-shell-safe values). Prefer `pmoves/scripts/with-env.sh`, which sanitizes dotenv files before exporting vars.
 - **Secrets precedence:** avoid Compose-time `environment: VAR=${VAR}` for secrets that are already in `env_file`, because an unset shell var becomes an empty string and overrides the `env_file` value inside containers. This surfaced as Open Notebook tokens drifting from DeepResearch until the compose interpolation was removed.
+- **n8n flow versioning:** canonical repo flows now live in `pmoves/n8n/flows/` as sanitized, importable exports. Use `make -C pmoves n8n-import-flows` (imports file-by-file) and `make -C pmoves n8n-activate-flows`; refresh from a live n8n instance via `make -C pmoves n8n-export-repo-flows`.
 
 ### Docker Build Reliability Improvements (2025-12-06 to 2025-12-07)
 **Status:** Complete ✅
