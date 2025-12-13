@@ -190,12 +190,12 @@ SUPABASE_REALTIME_URL = (
 SUPABASE_REALTIME_DISABLED = SUPABASE_REALTIME_URL.lower() in {"", "disabled", "none"}
 if SUPABASE_REALTIME_DISABLED:
     SUPABASE_REALTIME_URL = ""
-SUPABASE_REALTIME_KEY = (
-    os.environ.get("SUPABASE_REALTIME_KEY")
-    or os.environ.get("REALTIME_ANON_KEY")
-    or SUPABASE_SERVICE_KEY
-    or SUPABASE_ANON_KEY
-)
+# For backend realtime subscriptions, prefer service_role key over anon key
+# Service role key has full access to all channels without RLS restrictions
+# Only use explicit SUPABASE_REALTIME_KEY if it looks like a service_role JWT
+_explicit_realtime_key = os.environ.get("SUPABASE_REALTIME_KEY") or os.environ.get("REALTIME_ANON_KEY")
+# Backend services should use service_role for full realtime access
+SUPABASE_REALTIME_KEY = SUPABASE_SERVICE_KEY or _explicit_realtime_key or SUPABASE_ANON_KEY
 GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
 GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
 
