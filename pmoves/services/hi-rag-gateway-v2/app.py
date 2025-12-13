@@ -190,12 +190,20 @@ SUPABASE_REALTIME_URL = (
 SUPABASE_REALTIME_DISABLED = SUPABASE_REALTIME_URL.lower() in {"", "disabled", "none"}
 if SUPABASE_REALTIME_DISABLED:
     SUPABASE_REALTIME_URL = ""
-# For backend realtime subscriptions, prefer service_role key over anon key
-# Service role key has full access to all channels without RLS restrictions
-# Only use explicit SUPABASE_REALTIME_KEY if it looks like a service_role JWT
+# For backend realtime subscriptions, we need a JWT (not sb_secret_ format)
+# Supabase CLI uses sb_secret_ format in SUPABASE_SERVICE_ROLE_KEY, but realtime needs JWT
+# SUPABASE_SERVICE_KEY (without _ROLE) typically contains the JWT format
+_jwt_service_key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
 _explicit_realtime_key = os.environ.get("SUPABASE_REALTIME_KEY") or os.environ.get("REALTIME_ANON_KEY")
-# Backend services should use service_role for full realtime access
-SUPABASE_REALTIME_KEY = SUPABASE_SERVICE_KEY or _explicit_realtime_key or SUPABASE_ANON_KEY
+# For realtime: prefer JWT keys, avoid sb_secret_ format which doesn't work with websockets
+def _is_jwt(key: str) -> bool:
+    return key and key.startswith("eyJ") and key.count(".") == 2
+SUPABASE_REALTIME_KEY = (
+    _jwt_service_key if _is_jwt(_jwt_service_key) else
+    _explicit_realtime_key if _is_jwt(_explicit_realtime_key) else
+    SUPABASE_ANON_KEY if _is_jwt(SUPABASE_ANON_KEY) else
+    _jwt_service_key or _explicit_realtime_key or SUPABASE_ANON_KEY
+)
 GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
 GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
 
