@@ -1,5 +1,16 @@
 # PMOVES top-level Makefile
 
+# Many targets rely on bashisms (heredocs, arrays, $'...' quoting). Use bash for all recipes.
+SHELL := bash
+
+# Docker Desktop / WSL often writes a credential helper (`credsStore=desktop.exe`) into ~/.docker/config.json
+# that is not executable in headless Linux environments. Prefer the repo-scoped nocreds config when present.
+DOCKER_CONFIG_REPO ?= $(CURDIR)/../.docker-nocreds
+ifneq ("$(wildcard $(DOCKER_CONFIG_REPO)/config.json)","")
+  DOCKER_CONFIG ?= $(DOCKER_CONFIG_REPO)
+  export DOCKER_CONFIG
+endif
+
 # -------- External-mode → Compose profiles ----------
 # If EXTERNAL_* is true, we skip the corresponding local service profile.
 # Profiles are defined on services in docker-compose.yml.
@@ -38,19 +49,9 @@ ENV_SHARED_TEMPLATE ?= env.shared.example
 HIRAG_CPU_PORT := $(if $(HIRAG_V2_HOST_PORT),$(HIRAG_V2_HOST_PORT),8086)
 HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
 
-ifeq ($(SINGLE_ENV_MODE),1)
-  LOAD_ENV_SHARED := set -a; \
-        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f env.shared.generated ] && . env.shared.generated; \
-        set +a;
-		else
-  LOAD_ENV_SHARED := set -a; \
-        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f env.shared.generated ] && . env.shared.generated; \
-        [ -f .env.generated ] && . .env.generated; \
-        [ -f .env.local ] && . .env.local; \
-        set +a;
-endif
+# env.shared is dotenv-style and may contain values that are not safe to `source` directly (multi-line, etc).
+# Use the repo's sanitizer/loader so scripts get stable, safe environment variables.
+LOAD_ENV_SHARED := . ./scripts/with-env.sh;
 export LOAD_ENV_SHARED
 
 .PHONY: ensure-env-shared
@@ -73,9 +74,25 @@ update-service-docs: ## Regenerate service update notes from git metadata
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
 	@git pull --rebase
-	@docker compose pull --quiet
-	@docker compose up -d
+	@docker compose -p $(PROJECT) pull --quiet
+	@docker compose -p $(PROJECT) up -d
 	@echo "✔ Updated & reconciled containers."
+
+# One-shot bring-up for the common local dev stack (keeps container names stable under the $(PROJECT) project).
+.PHONY: up-all
+up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
+	@$(MAKE) up
+	@$(MAKE) up-agents-ui
+	@$(MAKE) up-bots
+	@$(MAKE) up-external-on
+	@$(MAKE) up-n8n
+	@$(MAKE) up-monitoring
+	@echo "✔ Full stack up (core + agents UI + n8n + monitoring)."
+
+.PHONY: up-bots
+up-bots: ## Start bot services (BotZ + messaging gateway)
+	@docker compose -p $(PROJECT) -f docker-compose.yml --profile data --profile workers --profile botz up -d botz-gateway messaging-gateway
+	@echo "✔ Bots up (botz-gateway + messaging-gateway)."
 
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke
@@ -791,7 +808,7 @@ build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-ar
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
-	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
+	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && PYTHONPATH="$(CURDIR)/.." python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
 
 .PHONY: deepresearch-smoke-in-net
 deepresearch-smoke-in-net: ## Run DeepResearch NATS smoke inside the compose network (reliable visibility)
@@ -836,7 +853,7 @@ ps:
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@bash -c 'set -a; [ -f env.shared ] && . env.shared; [ -f .env.local ] && . .env.local; set +a; exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d'
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
@@ -849,6 +866,7 @@ up-external-firefly: ## Start Firefly III on cataclysm-net
 
 up-external-on: ## Start Open Notebook on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
+	@docker network create pmoves-net >/dev/null 2>&1 || true
 	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d open-notebook-ext
 
 up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
@@ -1253,11 +1271,7 @@ smoke:
 
 	@echo "[13/15] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
 	@echo "[14/15] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
-	@if [ -n "$$OPENROUTER_API_KEY" ] && [ -n "$$OPEN_NOTEBOOK_API_TOKEN" ] && [ -n "$$DEEPRESEARCH_NOTEBOOK_ID" ]; then \
-	        echo "[15/15] DeepResearch smoke..." && $(MAKE) deepresearch-smoke || exit 1; \
-	  else \
-	        echo "[15/15] DeepResearch smoke... SKIP (set OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_TOKEN, DEEPRESEARCH_NOTEBOOK_ID)"; \
-	fi
+	@bash -lc '$(LOAD_ENV_SHARED) if [ -n "$$OPENROUTER_API_KEY" ] && [ -n "$$OPEN_NOTEBOOK_API_TOKEN" ] && [ -n "$$DEEPRESEARCH_NOTEBOOK_ID" ]; then echo "[15/15] DeepResearch smoke..." && $(MAKE) deepresearch-smoke; else echo "[15/15] DeepResearch smoke... SKIP (set OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_TOKEN, DEEPRESEARCH_NOTEBOOK_ID)"; fi'
 
 .PHONY: channel-monitor-up
 channel-monitor-up:
@@ -1523,7 +1537,7 @@ jellyfin-verify:
 .PHONY: jellyfin-verify-single
 jellyfin-verify-single:
 	@bash -c 'set -euo pipefail; \
-	 set -a; [ -f env.shared ] && . env.shared; set +a; \
+	 . ./scripts/with-env.sh; \
 	 export JELLYFIN_URL=$${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}; \
 	 JELLYFIN_EXPECTED_SERVER_NAME="" JELLYFIN_USER_ID="" python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
 

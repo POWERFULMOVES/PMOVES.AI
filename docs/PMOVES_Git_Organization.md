@@ -98,6 +98,17 @@ Automated review assignments configured in `.github/CODEOWNERS`:
 
 ## Recent Fixes
 
+### Docker Auth + Build Stability (2025-12-13)
+**Status:** Complete ✅
+
+- **Docker credential helper mismatch:** Docker Desktop/WSL commonly writes `credsStore=desktop.exe` into `~/.docker/config.json`. On Linux/headless hosts this can break pulls/builds with `docker-credential-desktop.exe: permission denied`.
+  - **Preferred fix:** use the repo-scoped Docker config under `.docker-nocreds/` and set `DOCKER_CONFIG` accordingly.
+  - The `pmoves/Makefile` now auto-prefers `../.docker-nocreds` when present so `make -C pmoves up-*` and `make -C pmoves update` work in headless environments.
+- **Buildx drift:** stale Docker Desktop/WSL buildx builders can reference dead `/run/desktop/mnt/host/wsl/...` bind mounts. Switch to the default builder (`docker buildx use default`) or recreate the builder if builds fail.
+- **GHCR publish scope:** pushing images to GHCR requires a token with `write:packages` (and `read:packages` for pulls of private packages). For GitHub CLI tokens: `gh auth refresh -h github.com -s write:packages`.
+- **dotenv safety + compose overrides:** avoid `source`-ing `pmoves/env.shared` directly in shell scripts/Make recipes (it may contain non-shell-safe values). Prefer `pmoves/scripts/with-env.sh`, which sanitizes dotenv files before exporting vars.
+- **Secrets precedence:** avoid Compose-time `environment: VAR=${VAR}` for secrets that are already in `env_file`, because an unset shell var becomes an empty string and overrides the `env_file` value inside containers. This surfaced as Open Notebook tokens drifting from DeepResearch until the compose interpolation was removed.
+
 ### Docker Build Reliability Improvements (2025-12-06 to 2025-12-07)
 **Status:** Complete ✅
 

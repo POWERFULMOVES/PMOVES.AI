@@ -98,8 +98,8 @@ services:
       SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-root}
       SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
       SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
-      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
-      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
+      # Keep auth secrets sourced from env_file (env.shared / .env.local). Avoid compose-time interpolation
+      # that can override env_file with blank values.
       OPEN_NOTEBOOK_API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_API_BASE: ${OPENAI_API_BASE:-}
