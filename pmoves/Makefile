@@ -45,6 +45,7 @@ SINGLE_ENV_MODE ?= 1
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
+PULL ?= missing
 
 HIRAG_CPU_PORT := $(if $(HIRAG_V2_HOST_PORT),$(HIRAG_V2_HOST_PORT),8086)
 HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
@@ -74,8 +75,8 @@ update-service-docs: ## Regenerate service update notes from git metadata
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
 	@git pull --rebase
-	@docker compose -p $(PROJECT) pull --quiet
-	@docker compose -p $(PROJECT) up -d
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) pull --quiet'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) up -d --pull $(PULL)'
 	@echo "✔ Updated & reconciled containers."
 
 # One-shot bring-up for the common local dev stack (keeps container names stable under the $(PROJECT) project).
@@ -854,25 +855,25 @@ ps:
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL)'
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) wger wger-nginx'
 	@$(MAKE) wger-brand-defaults
 
 up-external-firefly: ## Start Firefly III on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d firefly'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) firefly'
 
 up-external-on: ## Start Open Notebook on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d open-notebook-ext'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) open-notebook-ext'
 
 up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) jellyfin-ext'
 
 .PHONY: down-jellyfin-ai
 down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
@@ -883,7 +884,7 @@ down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
 up-jellyfin-single: ## Single Jellyfin using your forked image (8096)
 	@$(MAKE) --no-print-directory down-jellyfin-ai
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d jellyfin-ext'
+	@bash -lc '$(LOAD_ENV_SHARED) files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d --pull $(PULL) jellyfin-ext'
 	@echo "✔ Jellyfin (single) up at http://localhost:8096 using $${JELLYFIN_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest}"
 
 .PHONY: jellyfin-enhanced-smoke
