@@ -1190,12 +1190,21 @@ n8n-sync-flows: ## Sync n8n flow exports into integration folders (best-effort)
 
 n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n container
 	@echo "→ Importing n8n workflows from pmoves/n8n/flows (mounted at /flows)"
-	@project_id=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite 'select id from project limit 1;' | head -1 | tr -d '\r\n'); \
+	@set -e; \
+	 REPLACE=$${REPLACE:-0}; \
+	 project_id=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite 'select id from project limit 1;' | head -1 | tr -d '\r\n'); \
 	 test -n "$$project_id" || { echo "✗ Could not resolve n8n projectId (is the owner user created?)" && exit 1; }; \
 	 failed=0; \
 	 for f in n8n/flows/*.json; do \
 	   base=$$(basename "$$f"); \
 	   echo "  - $$base"; \
+	   if [ "$$REPLACE" = "1" ]; then \
+	     name=$$(python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); print((d[0].get("name") if isinstance(d,list) and d else \"\") or \"\")' "$$f"); \
+	     if [ -n "$$name" ]; then \
+	       esc=$$(printf "%s" "$$name" | sed "s/'/''/g"); \
+	       docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "delete from workflow_entity where name='$$esc';" >/dev/null; \
+	     fi; \
+	   fi; \
 	   out=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n import:workflow --input="/flows/$$base" --projectId="$$project_id" 2>&1) || { \
 	     echo "$$out" | tail -60; \
 	     failed=1; \
