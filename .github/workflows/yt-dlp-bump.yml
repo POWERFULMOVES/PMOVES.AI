@@ -9,6 +9,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   bump-yt-dlp:
     runs-on: ubuntu-latest
@@ -46,6 +50,8 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           branch="chore/bump-yt-dlp-${VERSION}"
           git checkout -b "$branch"
           # Record version in tracker to surface provenance
@@ -54,4 +60,3 @@ jobs:
           git commit -m "chore(pmoves-yt): bump yt-dlp to ${VERSION}"
           git push origin "$branch"
           gh pr create --title "chore(pmoves-yt): bump yt-dlp to ${VERSION}" --body "Automated weekly bump to yt-dlp ${VERSION}." || true
-
