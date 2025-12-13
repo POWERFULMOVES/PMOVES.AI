@@ -39,6 +39,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - n8n-data:/home/node/.n8n
+      - ./n8n/flows:/flows:ro
   n8n-runners:
     image: n8nio/runners:1.123.4
     restart: unless-stopped

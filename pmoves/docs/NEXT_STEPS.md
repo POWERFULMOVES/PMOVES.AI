@@ -168,6 +168,7 @@ Next 48 hours
 - **Importing**
   1. Open n8n → *Workflows* → *Import from File* and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
   2. Rename the flows if desired and keep them inactive until credentials are configured.
+  3. Shortcut (local dev): `make -C pmoves n8n-bootstrap` mounts `pmoves/n8n/flows` into the container, imports all JSON, and activates workflows.
 - **Required environment**
   - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
   - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
@@ -175,6 +176,7 @@ Next 48 hours
   - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.
   - `DISCORD_WEBHOOK_URL` – Discord channel webhook (flows post embeds here).
   - `DISCORD_WEBHOOK_USERNAME` – optional override for the Discord display name.
+  - Security (recommended for non-local): `N8N_ENCRYPTION_KEY` plus Basic Auth (`N8N_BASIC_AUTH_*`) for UI access.
 - **Manual verification checklist**
   1. Insert a `studio_board` row with `status='approved'`, `content_url='s3://...'`, and confirm `meta.publish_event_sent_at` is null.
   2. Trigger the approval poller (activate or execute once) and confirm Agent Zero logs a `content.publish.approved.v1` event.

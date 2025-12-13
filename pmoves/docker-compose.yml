@@ -74,7 +74,6 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MEILI_ENV=production
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-master_key}
     ports: ["7700:7700"]
     profiles: ["data","meili-local"]
     networks: [data_tier, monitoring_tier]
@@ -101,8 +100,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     ports: ["9000:9000","9001:9001"]
     volumes:
       - minio-data:/data
@@ -189,6 +188,32 @@ services:
     extra_hosts:
       - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
+
+  comfy-watcher:
+    build:
+      context: .
+      dockerfile: services/comfy-watcher/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      # comfy-watcher uses the MinIO Python client, which requires a host:port endpoint (no path prefix).
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
+      - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
+    depends_on:
+      nats:
+        condition: service_started
+      minio:
+        condition: service_started
+    volumes:
+      - comfy-watcher-output:/data
+      - comfy-watcher-state:/state
+    profiles: ["orchestration","workers"]
+    networks: [bus_tier, data_tier]
 
   extract-worker:
     build: ./services/extract-worker
@@ -1169,6 +1194,8 @@ volumes:
   minio-data: {}
   supabase-data: {}
   notebook-sync-data: {}
+  comfy-watcher-output: {}
+  comfy-watcher-state: {}
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}

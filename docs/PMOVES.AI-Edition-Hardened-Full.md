@@ -565,7 +565,8 @@ services:
     restart: unless-stopped
     environment:
       - MEILI_ENV=production
-      - MEILI_MASTER_KEY=master_key
+      # Do not hardcode. Supply via env files or Docker secrets.
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     ports:
       - "7700:7700"
     networks:
@@ -577,8 +578,9 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      # Do not hardcode. Supply via env files or Docker secrets.
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -717,8 +719,8 @@ services:
     restart: unless-stopped
     environment:
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - NATS_URL=nats://nats:4222
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
     depends_on:
@@ -739,8 +741,8 @@ services:
     restart: unless-stopped
     environment:
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - USE_CUDA=true
       - WHISPER_MODEL=small
     ports:
@@ -1600,8 +1602,8 @@ OPEN_NOTEBOOK_API_URL=https://notebook.example.com/rpc
 OPEN_NOTEBOOK_API_TOKEN=...
 
 # MinIO Configuration
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
+MINIO_ACCESS_KEY=...
+MINIO_SECRET_KEY=...
 
 # Database Credentials (defaults for local dev)
 POSTGRES_USER=pmoves

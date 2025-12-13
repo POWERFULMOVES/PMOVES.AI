@@ -11,7 +11,8 @@ RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
     chown -R pmoves:pmoves /app
 
-USER pmoves:pmoves
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8095
-CMD ["uvicorn","sync:app","--host","0.0.0.0","--port","8095"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -232,31 +232,31 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 .PHONY: up up-gpu up-both-gateways
 up: ensure-env-shared ## Start core data + workers and both Hi-RAG gateways
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
-	@docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
 
 up-gpu: ## Start with optional GPU accelerations where supported
-	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
+	@$(LOAD_ENV_SHARED) docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
 	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up-gpu-gateways
 up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
 	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
-	@docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT), v1-gpu :8090)."
 
 .PHONY: recreate-v2-gpu
 recreate-v2-gpu: ## Force-recreate v2-gpu container (no deps)
-	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
 	@echo "✔ Recreated hi-rag-gateway-v2-gpu"
 
 .PHONY: recreate-v2
 recreate-v2: ## Force-recreate v2 CPU container (no deps)
-	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2
 	@echo "✔ Recreated hi-rag-gateway-v2"
 
 .PHONY: up-open-notebook
@@ -582,6 +582,7 @@ models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL e
 
 ui-dev-start: ## Start the PMOVES console dev server on :3001 with env layering
 	@cd ui && \
+	  if [ ! -d node_modules ]; then echo "→ Installing UI dependencies (npm ci)"; npm ci; fi && \
 	  (logfile=.pmoves_ui_dev.log; nohup node scripts/with-env.mjs npm run dev:3001 > "$$logfile" 2>&1 & echo $$! > .pmoves_ui_dev.pid; \
 	  echo "✔ Console dev server starting (http://localhost:3001). PID: $$(cat .pmoves_ui_dev.pid)"; \
 	  sleep 1; tail -n 5 "$$logfile" || true)
@@ -842,7 +843,7 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared
-	docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
 
 # Status helper
 ps:
@@ -1180,6 +1181,46 @@ smoke-tensorzero-observability: ## Test TensorZero observability pipeline (Gatew
 smoke-creator-pipeline: ## Test creator pipeline (render-webhook, comfy-watcher, MinIO, NATS)
 	@echo "→ Testing creator pipeline"
 	@bash tests/functional/test_creator_pipeline.sh
+
+.PHONY: n8n-sync-flows n8n-import-flows n8n-activate-flows n8n-bootstrap
+
+n8n-sync-flows: ## Sync n8n flow exports into integration folders (best-effort)
+	@bash tools/n8n_sync_flows.sh
+
+n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n container
+	@echo "→ Importing n8n workflows from pmoves/n8n/flows (mounted at /flows)"
+	@out=$$(docker exec pmoves-n8n-1 n8n import:workflow --separate --input=/flows 2>&1) || { \
+	  echo "$$out" | tail -60; \
+	  echo ""; \
+	  echo "✗ n8n import failed. If this is a fresh n8n instance, complete the first-run owner setup in the UI (http://localhost:5678), then rerun:"; \
+	  echo "  make -C pmoves n8n-bootstrap"; \
+	  echo ""; \
+	  echo "If you want to reset n8n to a clean default user state (DESTRUCTIVE), run:"; \
+	  echo "  make -C pmoves n8n-reset"; \
+	  exit 1; \
+	}; \
+	echo "✔ Imported workflows into n8n"
+
+n8n-activate-flows: ## Activate n8n workflows (default: all). Set ALL=0 to skip.
+	@ALL=$${ALL:-1}; \
+	 if [ "$$ALL" = "1" ]; then \
+	   echo "→ Activating all n8n workflows"; \
+	   docker exec pmoves-n8n-1 n8n update:workflow --all --active=true >/dev/null; \
+	   echo "✔ Activated all workflows"; \
+	 else \
+	   echo "ALL=0 set; skipping activation."; \
+	 fi
+
+n8n-bootstrap: ## Sync, import, then activate n8n flows (requires n8n running)
+	@$(MAKE) n8n-sync-flows
+	@$(MAKE) n8n-import-flows
+	@$(MAKE) n8n-activate-flows
+
+.PHONY: n8n-reset
+n8n-reset: ## DESTRUCTIVE: Reset n8n DB to default user state (use before importing flows on a fresh instance)
+	@echo "→ Resetting n8n database to default user state (DESTRUCTIVE)"
+	@docker exec pmoves-n8n-1 n8n user-management:reset >/dev/null
+	@echo "✔ Reset complete. Re-run: make -C pmoves n8n-bootstrap"
 
 .PHONY: smoke-tensorzero-observability-strict
 smoke-tensorzero-observability-strict: ## Test TensorZero observability (STRICT mode - all warnings are failures)
