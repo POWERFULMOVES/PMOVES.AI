@@ -6,6 +6,12 @@
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
+### Status (2025-12-13)
+- Hardened self-hosted multi-arch builds + Trivy gating shipped (`.github/workflows/self-hosted-builds-hardened.yml`); pmoves-yt yt-dlp bump workflow live; env pins warn on `:pmoves-latest`.
+- Arm/Jetson path covered via `pmoves/docker-compose.arm64.override.yml`; GPU smoke still red when NVIDIA runtime is missing—rerun `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` once GPU is exposed.
+- Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
+- Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
+
 ---
 
 ## 1. GitHub Actions Self-Hosted Runner Infrastructure

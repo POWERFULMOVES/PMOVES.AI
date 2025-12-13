@@ -144,14 +144,20 @@ Archon runs headless for orchestrations (Agent Zero → Archon via MCP) while th
 
 ### Claude Code CLI context (keep tools aligned)
 - Always read `.claude/CLAUDE.md` before tooling; it is the live “service map” for Agent Zero, Archon, NATS subjects, and MCP wiring.
-- Slash commands live in `.claude/commands/` (e.g., `/agents:status`, `/search:hirag`, `/yt:*`). Reuse these when adding workflows so doc/automation stay in sync.
+- Slash commands live in `.claude/commands/` (e.g., `/agents:status`, `/search:hirag`, `/yt:*`). Reuse these when adding workflows so doc/automation stay in sync. Quick uptime probe: `.claude/commands/health/quick.md` (pings core services + GPU stats).
 - Hooks: `.claude/hooks/pre-tool.sh` blocks destructive shell (e.g., `rm -rf /`, `DROP DATABASE`); `.claude/hooks/post-tool.sh` publishes `claude.code.tool.executed.v1` to NATS for observability. Keep new scripts compliant.
 - If you add or move services/endpoints, mirror the change in `.claude/context/services-catalog.md` and, when relevant, add a command stub so operators get a one-liner.
 
 ### Hardening status (in-flight)
-- Added pmoves-yt to the hardened CI matrix and enabled multi-arch builds in `.github/workflows/self-hosted-builds-hardened.yml`.
-- Added arm64 override compose: `pmoves/docker-compose.arm64.override.yml` for Jetson/edge nodes.
-- Remaining high-priority tasks: (1) upstream/dep-pin yt-dlp (drop vendored copy), (2) regenerate test PEM fixtures or generate at runtime, (3) extend hardened matrix to other exposed services (channel-monitor, publisher, archon UI/API), (4) pin image tags in `env.shared` and add freshness check. See `docs/hardening/PMOVES-hardening-tracker.md` for the live checklist.
+- Hardened CI now builds/scans multi-arch images (amd64+arm64) for exposed services; Trivy gates on HIGH/CRITICAL in `.github/workflows/self-hosted-builds-hardened.yml`.
+- Arm/Jetson path: `pmoves/docker-compose.arm64.override.yml` wires GPU/CUDA flags for edge nodes; keep `DOCKER_DEFAULT_PLATFORM` unset when building native arm64.
+- Dependency freshness: weekly yt-dlp bump workflow (`.github/workflows/yt-dlp-bump.yml`) keeps PMOVES.YT extractors current; image pins in `pmoves/env.shared.example` warn if `:pmoves-latest` is used.
+- High-priority follow-ups: finalize hashed locks on Python 3.11 (agent-zero, media-video), finish Loki `/ready` 200, and extend StepSecurity egress allowlists per workflow job. Track in `docs/hardening/PMOVES-hardening-tracker.md` and `docs/PMOVES.AI-Edition-Hardened-Full.md` status section.
+
+### Security & code-scanning triage
+- CodeQL alerts (HIGH/CRITICAL) block hardened builds via Trivy; triage by reproducing locally: `make -C pmoves smoke` then `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` when GPU is available.
+- For code scanning regressions, prefer patching in-service requirements locks; regenerate with `uv pip compile --generate-hashes -o requirements.lock requirements.txt` on Python 3.11.
+- Secrets: onboarding + rotation steps live in `docs/SECRETS_ONBOARDING.md`; avoid keeping real values in `pmoves/env.shared`.
 
 ### Reproducible integration images (GHCR)
 

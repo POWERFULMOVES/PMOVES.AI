@@ -8,14 +8,20 @@ Status snapshot and to-dos to align with `PMOVES.AI-Edition-Hardened-Full.md`.
 - Documented Claude CLI hooks and current hardening state in `AGENTS.md`.
 - Removed vendored `PMOVES.YT/yt_dlp` (pmoves-yt now pulls yt-dlp from pip build arg). Removed legacy PEM test fixtures (YT/Tailscale) that were triggering secret scans.
 - Added weekly yt-dlp bump workflow (`.github/workflows/yt-dlp-bump.yml`) to keep pmoves-yt aligned with upstream.
+- Trivy gating (HIGH/CRITICAL -> fail) is active in hardened self-hosted builds; SARIF uploaded to GitHub Code Scanning.
+- GPU/arm64 builds wired for multi-arch; override compose validated on Jetson path.
 
 ## High-priority next steps
 1) Dependency locks
-   - Most services now have lockfiles; `agent-zero` and `media-video` use temporary constraints (need Py>=3.11 + CUDA wheels to generate hashes). Re-run `uv pip compile requirements.txt --generate-hashes -o requirements.lock` on a Py3.11 host with the right extra-index to finalize.
+   - Most services now have lockfiles; `agent-zero` and `media-video` locks were generated on Py3.10 with CUDA 12.1 pins. Re-run `uv pip compile requirements.txt --generate-hashes -o requirements.lock --python-version 3.11` on a Py3.11 host (with CUDA wheels available) to finalize.
 2) Image pinning & freshness
    - Pin remaining image tags as releases land; `flight-check` now warns on `:pmoves-latest`.
 3) Secret handling SOP
    - Keep allowlist minimal; rotation checklist lives in `docs/SECRETS_ONBOARDING.md`.
+4) Loki readiness
+   - Finish `/ready` wiring and add to `make monitoring-report`.
+5) Rerank GPU smoke
+   - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` is still red when GPU runtime is absent; ensure NVIDIA runtime exposure on GPU hosts and rerun.
 
 ## Optional / nice-to-have
 - Compose profiles for split deployments (PC + Jetsons + VPS) with minimal service graphs per host.
