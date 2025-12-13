@@ -44,10 +44,21 @@ jobs:
             files.pythonhosted.org:443
 
       - uses: actions/checkout@v4
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
+          swap-storage: false
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - name: Install test dependencies
         shell: bash
         run: |
@@ -78,7 +89,11 @@ jobs:
                   "pyannote.audio", "faster-whisper", "ultralytics", "timm",
                   "accelerate", "sentence-transformers", "transformers",
                   "FlagEmbedding", "openai-whisper", "onnxruntime",
-                  "langchain-unstructured", "unstructured", "unstructured-client"}
+                  "langchain-unstructured", "unstructured", "unstructured-client",
+                  "browser-use", "playwright", "faiss-cpu", "faiss-gpu",
+                  "librosa", "numba", "kokoro", "newspaper3k", "boto3",
+                  "langchain", "langchain-community", "langchain-core",
+                  "litellm", "pymupdf", "qdrant-client"}
 
           # Collect unique package names (strip versions to let pip resolve)
           packages = set()

@@ -11,14 +11,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY services/flute-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash pmoves
 
 # Copy source
-COPY . .
+COPY services/flute-gateway/ .
 
 # Change ownership to non-root user
 RUN chown -R pmoves:pmoves /app

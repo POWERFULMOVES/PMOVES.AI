@@ -20,6 +20,7 @@ if _contracts_dir.exists():
     os.environ.setdefault("PMOVES_CONTRACTS_DIR", str(_contracts_dir))
 
 from .api import chit, events as events_api  # noqa: E402  (local import after sys.path tweak)
+from .api.consciousness import router as consciousness_router  # noqa: E402
 from .api.events import router as events_router  # noqa: E402
 from .api.mindmap import router as mindmap_router  # noqa: E402
 from .api.signaling import router as sig_router  # noqa: E402
@@ -64,6 +65,7 @@ app.add_middleware(
 )
 
 app.include_router(chit.router)
+app.include_router(consciousness_router)
 app.include_router(sig_router)
 app.include_router(viz_router)
 app.include_router(workflow_router)
