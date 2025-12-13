@@ -142,6 +142,17 @@ Archon runs headless for orchestrations (Agent Zero → Archon via MCP) while th
   - `make -C pmoves build-agents-integrations`
   - `make -C pmoves up-agents-integrations`
 
+### Claude Code CLI context (keep tools aligned)
+- Always read `.claude/CLAUDE.md` before tooling; it is the live “service map” for Agent Zero, Archon, NATS subjects, and MCP wiring.
+- Slash commands live in `.claude/commands/` (e.g., `/agents:status`, `/search:hirag`, `/yt:*`). Reuse these when adding workflows so doc/automation stay in sync.
+- Hooks: `.claude/hooks/pre-tool.sh` blocks destructive shell (e.g., `rm -rf /`, `DROP DATABASE`); `.claude/hooks/post-tool.sh` publishes `claude.code.tool.executed.v1` to NATS for observability. Keep new scripts compliant.
+- If you add or move services/endpoints, mirror the change in `.claude/context/services-catalog.md` and, when relevant, add a command stub so operators get a one-liner.
+
+### Hardening status (in-flight)
+- Added pmoves-yt to the hardened CI matrix and enabled multi-arch builds in `.github/workflows/self-hosted-builds-hardened.yml`.
+- Added arm64 override compose: `pmoves/docker-compose.arm64.override.yml` for Jetson/edge nodes.
+- Remaining high-priority tasks: (1) upstream/dep-pin yt-dlp (drop vendored copy), (2) regenerate test PEM fixtures or generate at runtime, (3) extend hardened matrix to other exposed services (channel-monitor, publisher, archon UI/API), (4) pin image tags in `env.shared` and add freshness check. See `docs/hardening/PMOVES-hardening-tracker.md` for the live checklist.
+
 ### Reproducible integration images (GHCR)
 
 The GHCR workflow (`.github/workflows/integrations-ghcr.yml`) builds/publishes multi‑arch images nightly and on demand for:
@@ -236,4 +247,3 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and
 
 - The bootstrap prefers `uv pip` if available (faster); otherwise falls back to `python -m pip`.
 - The scripts install requirements from `services/*/requirements.txt` and `tools/*/requirements.txt`. Pass `-IncludeDocs` (PowerShell) or `INCLUDE_DOCS=1` (Bash) to include `docs/**/requirements.txt`.
-

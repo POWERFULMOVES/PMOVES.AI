@@ -1566,6 +1566,18 @@ ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1
 		else
 	@bash scripts/env_check.sh
+	@$(PYTHON) - <<'PY'
+import os
+images = {
+    'AGENT_ZERO_IMAGE': os.getenv('AGENT_ZERO_IMAGE'),
+    'ARCHON_IMAGE': os.getenv('ARCHON_IMAGE'),
+    'ARCHON_UI_IMAGE': os.getenv('ARCHON_UI_IMAGE'),
+    'PMOVES_YT_IMAGE': os.getenv('PMOVES_YT_IMAGE'),
+}
+stale = [k for k,v in images.items() if v and v.endswith(':pmoves-latest')]
+if stale:
+    print(f"[flight] WARN: unpinned images detected: {', '.join(stale)} (pin dated tags)")
+PY
 endif
 
 .PHONY: flight-check-retro

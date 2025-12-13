@@ -1,34 +1,32 @@
-# Secrets Onboarding & Sharing
+# Secrets Onboarding & Rotation Checklist
 
-Purpose: keep PATs/API keys out of the repo while making collaboration easy.
+## Storing secrets (preferred order)
+1) GitHub Actions secrets (environment-scoped for Dev/Prod). Avoid repository-level if you can scope narrower.
+2) Docker/Compose secrets via `*_FILE` mounts (e.g., `SUPABASE_SERVICE_ROLE_KEY_FILE`).
+3) Local dev: `.env.local` (gitignored) and `pmoves/env.shared` with placeholder defaults only.
 
-What goes where
-- GitHub Actions secrets (preferred): `GH_PAT_PUBLISH`, `GHCR_USERNAME`, `DOCKERHUB_PAT`, `DOCKERHUB_USERNAME`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `YOUTUBE_API_KEY`, `GOOGLE_OAUTH_CLIENT_SECRET`, `DISCORD_WEBHOOK`, `CHIT_PASSPHRASE` (and any other third‑party keys).
-- Environment scoping: use repo environments (Dev/Prod) for least privilege and required reviewers.
-- Human retrieval: store the same values in the team vault (1Password/Bitwarden/etc.) for onboarding; never in tracked files.
+## When a secret scan/alert fires
+- Assume compromise; rotate immediately in the upstream system (AWS/Supabase/Discord/etc.).
+- Update GitHub Secrets and any runtime secret stores.
+- If the secret was in code history, rotate all sibling credentials in the same provider.
+- Record the rotation in the PR/issue and note scope (dev/prod).
 
-Onboarding steps (new collaborator)
-1) Get vault access and retrieve required secrets.
-2) Copy `.env.example` → `.env.local` (or `pmoves/.env.local`) and paste values; keep these files untracked.
-3) If rotating PATs/API keys, run `gh auth login` then set secrets:
-   ```bash
-   printf '%s' '<ghcr-pat>' | gh secret set GH_PAT_PUBLISH --repo POWERFULMOVES/PMOVES.AI
-   printf '%s' '<docker-pat>' | gh secret set DOCKERHUB_PAT --repo POWERFULMOVES/PMOVES.AI
-   ```
-   Use environment-scoped secrets (`--env Dev`) when appropriate.
-4) For local hardened runs, write secrets to `/run/secrets/*` and use the `*_FILE` env pattern shown below.
-5) If using the local credentials-entry script, see `docs/SECRETS_ENTRY_SCRIPT.md` for how to keep outputs untracked and push values into GitHub secrets.
+## Secret scanning allowlist (keep minimal)
+- Only allowlist generated test keys that cannot be removed. Prefer generating keys at test runtime instead.
+- Location for allowlist file: `.github/secret-scanning-allowlist.json` (create only if necessary) with comments explaining each entry and expiry dates.
 
-Compose/runtime pattern (hardened images)
-- Preferred: mount secrets as files and reference them with `*_FILE` envs (example in `pmoves/docker-compose.hardened.yml`).
-- Avoid inline env values for long secrets; use files for anything high-sensitivity (JWT secrets, service role keys, API keys).
+## Adding new secrets
+- Use descriptive names, include environment suffix (e.g., `SUPABASE_SERVICE_ROLE_KEY_DEV`).
+- Avoid putting real values in `env.shared.example`; keep placeholders.
+- For local runs, use `.env.local` and never commit it.
 
-Rotation
-- Rotate any credential that ever touched a tracked file (including old `docs/notes.md` contents) before reuse.
-- Set a 90‑day reminder for PAT/API keys; regenerate Discord webhooks instead of reusing.
-- CHIT passphrase: rotate quarterly; regenerate using `openssl rand -base64 32 | tr -d '/+=' | head -c 48`
+## Rotation cadence
+- Mandatory rotation when alerted.
+- Suggested periodic rotation for high-privilege keys (service-role, cloud provider) every 90 days.
 
-Checklist before shipping a PR
-- No secrets in `git diff` or `git status`.
-- Secrets only in GitHub secrets, Docker secrets, vault, or untracked env files.
-- If a new secret is introduced, add its name to this doc and the CI workflow variables.
+## Checklist (per incident or new secret)
+- [ ] Rotate in provider
+- [ ] Update GitHub Secrets / secret store
+- [ ] Update compose/env files (dev only, if needed)
+- [ ] Remove from code/history or add minimal allowlist entry
+- [ ] Note rotation in PR/issue

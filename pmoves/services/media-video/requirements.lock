@@ -1,0 +1,18 @@
+# Temporary constraint mirror; hashed lock generation failed (GPU wheels + Py version). Re-run with Python 3.11 and matching CUDA index to generate hashes.
+--extra-index-url https://download.pytorch.org/whl/cu121
+fastapi==0.114.2
+uvicorn[standard]==0.30.6
+ultralytics==8.2.103
+Pillow==10.4.0
+boto3==1.34.162
+requests==2.32.4
+torch==2.8.0
+torchvision==0.18.1+cu121
+torchaudio==2.3.1+cu121
+nats-py==2.7.2
+supabase==2.3.1
+transformers==4.53.0
+timm==0.9.16
+accelerate==0.32.1
+sentencepiece==0.2.0
+einops==0.8.0
