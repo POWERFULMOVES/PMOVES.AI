@@ -13,6 +13,7 @@ The deployment model synthesizes Microsoft Azure's agent orchestration research,
 - Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
 - Docker Desktop/WSL environments may write `credsStore=desktop.exe` into `~/.docker/config.json`, which breaks pulls/builds on Linux/headless hosts. Prefer the repo-scoped `.docker-nocreds/` config (set `DOCKER_CONFIG=.../.docker-nocreds`)—`pmoves/Makefile` will auto-use it when present.
 - n8n flows are repo-tracked as sanitized, importable exports under `pmoves/n8n/flows/` (Voice Agents + pollers). Import/activate with `make -C pmoves n8n-import-flows` + `make -C pmoves n8n-activate-flows`.
+- Flute Gateway uses VibeVoice for realtime TTS when available. VibeVoice is typically run outside Docker (Pinokio/host) and reached via `VIBEVOICE_URL=http://host.docker.internal:<PORT>`; see `pmoves/docs/ARTSTUFF/README.md`.
 - Open Notebook externals default to `OPEN_NOTEBOOK_IMAGE` (see `pmoves/env.shared.example`). External bring-up targets load `env.shared` so image pins apply consistently.
 - Local “everything up” baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
 

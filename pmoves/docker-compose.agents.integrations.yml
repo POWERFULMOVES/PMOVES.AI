@@ -4,31 +4,27 @@ services:
       context: ${INTEGRATIONS_WORKSPACE:-../integrations-workspace}/PMOVES-Agent-Zero
       dockerfile: ${AGENT_ZERO_DOCKERFILE:-Dockerfile}
     image: ${AGENT_ZERO_IMAGE:-pmoves/agent-zero:dev-local}
-    networks: [pmoves]
   archon:
     build:
       context: ${ARCHON_BUILD_CONTEXT:-${INTEGRATIONS_WORKSPACE:-../integrations-workspace}/PMOVES-Archon/python}
       dockerfile: ${ARCHON_DOCKERFILE:-Dockerfile.server}
     image: ${ARCHON_IMAGE:-pmoves/archon:dev-local}
-    networks:
-      pmoves:
-        aliases:
-          - archon-server
   archon-ui:
     build:
       context: ${ARCHON_UI_BUILD_CONTEXT:-${INTEGRATIONS_WORKSPACE:-../integrations-workspace}/PMOVES-Archon/archon-ui-main}
       dockerfile: ${ARCHON_UI_DOCKERFILE:-Dockerfile}
     image: ${ARCHON_UI_IMAGE:-pmoves/archon-ui:dev-local}
+    profiles: ["agents"]
     environment:
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - VITE_ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-      - VITE_API_URL=${ARCHON_UI_API_URL:-}
-      - HOST=${ARCHON_UI_HOST:-localhost}
+      - VITE_API_URL=${ARCHON_UI_API_URL:-http://host.docker.internal:8091}
+      - HOST=0.0.0.0
       - PROD=${ARCHON_UI_PROD:-false}
     ports:
       - "${ARCHON_UI_PORT:-3737}:3737"
-    networks: [pmoves]
-
-networks:
-  pmoves:
-    driver: bridge
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "archon-server:host-gateway"
+    networks:
+      api_tier:

@@ -100,8 +100,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}
     ports: ["9000:9000","9001:9001"]
     volumes:
       - minio-data:/data
@@ -341,7 +341,8 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - VIBEVOICE_URL=${VIBEVOICE_URL:-http://localhost:3000}
+      # VibeVoice is typically run outside Docker (Pinokio/host); reach it via host-gateway.
+      - VIBEVOICE_URL=${VIBEVOICE_URL:-http://host.docker.internal:3000}
       - WHISPER_URL=${WHISPER_URL:-http://ffmpeg-whisper:8078}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
@@ -353,6 +354,8 @@ services:
     ports: ["8055:8055", "8056:8056"]
     profiles: ["workers","orchestration"]
     networks: [api_tier, bus_tier, data_tier, monitoring_tier]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   ffmpeg-whisper:
     build:
@@ -453,14 +456,6 @@ services:
     volumes:
       - ./config:/app/config
       - ./data/yt-dlp:/data/yt-dlp
-    depends_on:
-      minio:
-        condition: service_started
-      # bgutil-pot-provider is optional and may be excluded when compose is
-      # invoked with profiles that don't include the 'yt' provider. Remove
-      # the hard dependency so `make up` with different profiles doesn't
-      # fail with an "undefined service" error. The image/service is still
-      # defined below and can be enabled via profiles when needed.
     ports: ["8077:8077"]
     profiles: ["orchestration","workers","agents"]
     networks: [api_tier, app_tier, bus_tier, data_tier, monitoring_tier]
@@ -470,7 +465,6 @@ services:
     restart: unless-stopped
     environment:
       - PORT=4416
-    depends_on: [minio]
     profiles: ["orchestration","yt"]
     networks: [api_tier, app_tier]  # api_tier added for external DNS/googleapis access
 

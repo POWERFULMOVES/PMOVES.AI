@@ -35,7 +35,7 @@ services:
       - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
       - N8N_LOG_LEVEL=debug
     ports: ["5678:5678"]
-    networks: [cataclysm]
+    networks: [cataclysm, api_tier]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -50,7 +50,7 @@ services:
       - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
       - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
-    networks: [cataclysm]
+    networks: [cataclysm, api_tier]
     depends_on:
       - n8n
     volumes:

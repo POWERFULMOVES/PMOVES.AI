@@ -658,9 +658,9 @@ agents-headless-smoke: ## Check Agent Zero and Archon headless services
 	@$(MAKE) archon-headless-smoke
 
 .PHONY: up-agents-published
-up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images (no local builds)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
-	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
+up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord
+	@echo "✔ Agents started (published images where available). For production, use PULL=always and pin *_IMAGE tags."
 
 .PHONY: up-agents-ui
 up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use PUBLISHED_AGENTS=1 for images)
@@ -1183,7 +1183,7 @@ smoke-creator-pipeline: ## Test creator pipeline (render-webhook, comfy-watcher,
 	@echo "→ Testing creator pipeline"
 	@bash tests/functional/test_creator_pipeline.sh
 
-.PHONY: n8n-sync-flows n8n-import-flows n8n-activate-flows n8n-bootstrap
+.PHONY: n8n-sync-flows n8n-import-flows n8n-sanitize-db n8n-activate-flows n8n-bootstrap
 
 n8n-sync-flows: ## Sync n8n flow exports into integration folders (best-effort)
 	@bash tools/n8n_sync_flows.sh
@@ -1199,7 +1199,7 @@ n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n c
 	   base=$$(basename "$$f"); \
 	   echo "  - $$base"; \
 	   if [ "$$REPLACE" = "1" ]; then \
-	     name=$$(python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); print((d[0].get("name") if isinstance(d,list) and d else \"\") or \"\")' "$$f"); \
+	     name=$$(python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); print((d[0].get("name") if isinstance(d,list) and d else "") or "")' "$$f"); \
 	     if [ -n "$$name" ]; then \
 	       esc=$$(printf "%s" "$$name" | sed "s/'/''/g"); \
 	       docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "delete from workflow_entity where name='$$esc';" >/dev/null; \
@@ -1222,12 +1222,32 @@ n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n c
 	 fi; \
 	 echo "✔ Imported workflows into n8n"
 
+n8n-sanitize-db: ## Repair common n8n SQLite FK drift after repeated imports (safe, idempotent)
+	@echo "→ Sanitizing n8n SQLite workflow relations (fixing orphan rows + seeding workflow_history)"
+	@set -e; \
+	 docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "\
+	  PRAGMA foreign_keys=OFF; \
+	  delete from shared_workflow where workflowId not in (select id from workflow_entity); \
+	  delete from workflow_history where workflowId not in (select id from workflow_entity); \
+	  delete from workflow_publish_history where workflowId not in (select id from workflow_entity); \
+	  delete from workflows_tags where workflowId not in (select id from workflow_entity); \
+	  update workflow_entity set activeVersionId=NULL; \
+	  insert into workflow_history(versionId,workflowId,authors,nodes,connections,name,autosaved,description) \
+	    select versionId,id,'system',nodes,connections,name,0,description from workflow_entity \
+	    where versionId not in (select versionId from workflow_history); \
+	  PRAGMA foreign_keys=ON; \
+	 "; \
+	 docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "PRAGMA foreign_key_check;" | sed -n '1,20p'; \
+	 echo "✔ n8n DB sanitized"
+
 n8n-activate-flows: ## Activate n8n workflows (default: all). Set ALL=0 to skip.
 	@ALL=$${ALL:-1}; \
 	 if [ "$$ALL" = "1" ]; then \
 	   echo "→ Activating all n8n workflows"; \
-	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n update:workflow --all --active=true >/dev/null; \
-	   echo "✔ Activated all workflows"; \
+	   $(MAKE) n8n-sanitize-db >/dev/null; \
+	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n update:workflow --all --active=true >/dev/null || { echo "✗ n8n activation failed" && exit 1; }; \
+	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml restart -t 10 n8n >/dev/null || true; \
+	   echo "✔ Activated all workflows (n8n restarted)"; \
 	 else \
 	   echo "ALL=0 set; skipping activation."; \
 	 fi
@@ -1235,6 +1255,7 @@ n8n-activate-flows: ## Activate n8n workflows (default: all). Set ALL=0 to skip.
 n8n-bootstrap: ## Sync, import, then activate n8n flows (requires n8n running)
 	@$(MAKE) n8n-sync-flows
 	@$(MAKE) n8n-import-flows
+	@$(MAKE) n8n-sanitize-db
 	@$(MAKE) n8n-activate-flows
 
 .PHONY: n8n-reset
