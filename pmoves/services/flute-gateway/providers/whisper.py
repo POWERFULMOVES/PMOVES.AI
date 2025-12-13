@@ -26,7 +26,7 @@ class WhisperProvider(VoiceProvider):
         """
         super().__init__(base_url)
         self.transcribe_endpoint = f"{base_url}/transcribe"
-        self.health_endpoint = f"{base_url}/health"
+        self.health_endpoint = f"{base_url}/healthz"
 
     async def synthesize(
         self,

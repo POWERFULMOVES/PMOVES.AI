@@ -482,7 +482,7 @@ class TestProviders:
         provider = WhisperProvider("http://localhost:8078")
         assert provider.base_url == "http://localhost:8078"
         assert provider.transcribe_endpoint == "http://localhost:8078/transcribe"
-        assert provider.health_endpoint == "http://localhost:8078/health"
+        assert provider.health_endpoint == "http://localhost:8078/healthz"
 
     @pytest.mark.asyncio
     async def test_vibevoice_recognize_not_implemented(self):
