@@ -178,7 +178,7 @@ archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence un
 .PHONY: archon-submodule-extract
 archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARCHON_SUBMODULE_REPO=Org/Repo)
 	@if [ -z "$$ARCHON_SUBMODULE_REPO" ]; then echo "Usage: make archon-submodule-extract ARCHON_SUBMODULE_REPO=Org/Repo" && exit 2; fi; \
-	bash pmoves/tools/submodules/extract_to_submodule.sh services/archon "$$ARCHON_SUBMODULE_REPO" pmoves/integrations/archon
+	bash tools/submodules/extract_to_submodule.sh services/archon "$$ARCHON_SUBMODULE_REPO" integrations/archon
 
 .PHONY: up-archon-submodule
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
@@ -564,7 +564,7 @@ model-profiles: ## List available model manifests
 	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
 
 model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (PROFILE=archon HOST=workstation_5090)
-	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash pmoves/tools/models/apply_profile.sh
+	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash tools/models/apply_profile.sh
 
 models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
 	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$(HOST)" --tensorzero-base "$(TENSORZERO_BASE_URL)"
@@ -951,13 +951,13 @@ integrations-import-flows: ## Import JSON flows from integrations/* into n8n via
 package-pr-kits: ## Package PR kits into dist/pr-kits/*.tar.gz
 	@mkdir -p dist/pr-kits
 	@for kit in wger firefly open-notebook jellyfin; do \
-	  tar -czf dist/pr-kits/$$kit.pr-kit.tgz -C pmoves/integrations/pr-kits/ $$kit; \
+	  tar -czf dist/pr-kits/$$kit.pr-kit.tgz -C integrations/pr-kits/ $$kit; \
 	  echo "→ dist/pr-kits/$$kit.pr-kit.tgz"; \
 	done
 
 .PHONY: integrations-workspace
 integrations-workspace: ## Clone forks and apply PR kits into INTEGRATIONS_BASE (default: integrations-workspace/)
-	@bash pmoves/tools/integrations/bootstrap_workspace.sh "$${INTEGRATIONS_BASE:-integrations-workspace}"
+	@bash tools/integrations/bootstrap_workspace.sh "$${INTEGRATIONS_BASE:-integrations-workspace}"
 
 # ---- CHIT demo mappers (health/finance → CGP) ----
 .PHONY: demo-health-cgp demo-finance-cgp firefly-seed-sample
@@ -967,7 +967,7 @@ demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 
 demo-finance-cgp: ## Map sample finance monthly summary to CGP and POST to gateway
 	@echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
-	@PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+	@PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 firefly-seed-sample: ensure-env-shared ## Seed Firefly III with PMOVES 5-year projection sample dataset
 	@bash -c '$(LOAD_ENV_SHARED) \
@@ -1162,12 +1162,11 @@ smoke-personas: ## Assert personas are seeded (v5.12) in Supabase CLI DB; fails 
 .PHONY: smoke-webhook-ci
 smoke-webhook-ci:
 	@echo "Render-webhook smoke (dry-run by default). Use LIVE=1 to POST."
-	@cd pmoves && \
-	 if [ "$(LIVE)" = "1" ]; then \
-	   python tools/smoke_webhook.py --live; \
-		else \
-	   python tools/smoke_webhook.py; \
-	 fi
+	@if [ "$(LIVE)" = "1" ]; then \
+	  python tools/smoke_webhook.py --live; \
+	else \
+	  python tools/smoke_webhook.py; \
+	fi
 
 .PHONY: smoke-prerequisites
 smoke-prerequisites: ## Check environment prerequisites before running smoke tests
@@ -1229,10 +1228,11 @@ n8n-sanitize-db: ## Repair common n8n SQLite FK drift after repeated imports (sa
 	 docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "\
 	  PRAGMA foreign_keys=OFF; \
 	  delete from shared_workflow where workflowId not in (select id from workflow_entity); \
+	  delete from webhook_entity where workflowId not in (select id from workflow_entity); \
 	  delete from workflow_history where workflowId not in (select id from workflow_entity); \
 	  delete from workflow_publish_history where workflowId not in (select id from workflow_entity); \
 	  delete from workflows_tags where workflowId not in (select id from workflow_entity); \
-	  update workflow_entity set activeVersionId=NULL; \
+	  update workflow_entity set activeVersionId=versionId where active=1 and (activeVersionId is NULL or activeVersionId=''); \
 	  insert into workflow_history(versionId,workflowId,authors,nodes,connections,name,autosaved,description) \
 	    select versionId,id,'system',nodes,connections,name,0,description from workflow_entity \
 	    where versionId not in (select versionId from workflow_history); \
@@ -1304,11 +1304,11 @@ discord-ping:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for discord-ping" && exit 1)
 	@if [ -z "$$DISCORD_WEBHOOK_URL" ]; then echo "Set DISCORD_WEBHOOK_URL in env or .env/.env.local" && exit 1; fi
 	@MSG="$${MSG:-PMOVES Discord wiring check}"; \
-	sh -c './pmoves/scripts/discord_ping.sh "'"$${MSG}"'"'
+	sh -c './scripts/discord_ping.sh "'"$${MSG}"'"'
 
 .PHONY: discord-ping-ps
 discord-ping-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/discord_ping.ps1 -Message "$(MSG)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/discord_ping.ps1 -Message "$(MSG)"
 
 
 .PHONY: smoke
@@ -1486,14 +1486,14 @@ smoke-presign-put:
 .PHONY: smoke-pdf
 smoke-pdf:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-pdf" && exit 1)
-	@test -f ../pmoves/datasets/sample.pdf || (echo "datasets/sample.pdf missing" && exit 1)
+	@test -f datasets/sample.pdf || (echo "datasets/sample.pdf missing" && exit 1)
 	@echo "[1/4] Create presign URL for sample.pdf" && \
 	URL=$$(curl -s -X POST http://localhost:8088/presign/put \
 	  -H 'content-type: application/json' \
 	  -H "Authorization: Bearer $${PRESIGN_SHARED_SECRET:-change_me}" \
 	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","content_type":"application/pdf","expires":300}' ) && echo OK || (echo FAIL && exit 1)
 	@echo "[2/4] Upload sample.pdf to MinIO" && \
-	echo "$$URL" | jq -r .url | xargs -I {} curl -s -X PUT -H 'Content-Type: application/pdf' --data-binary @../pmoves/datasets/sample.pdf '{}' >/dev/null && echo OK || (echo FAIL && exit 1)
+	echo "$$URL" | jq -r .url | xargs -I {} curl -s -X PUT -H 'Content-Type: application/pdf' --data-binary @datasets/sample.pdf '{}' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[3/4] Trigger pdf-ingest" && \
 	curl -sf http://localhost:8092/pdf/ingest -H 'content-type: application/json' \
 	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","namespace":"pmoves","title":"Sample PDF","publish_events":false}' \
@@ -2096,7 +2096,7 @@ yt-jellyfin-smoke:
 demo-content-published:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for demo-content-published" && exit 1)
 	@URL=$${AGENT_ZERO_BASE_URL:-http://localhost:8080}; \
-	FILE=$${FILE:-pmoves/contracts/samples/content.published.v1.sample.json}; \
+	FILE=$${FILE:-contracts/samples/content.published.v1.sample.json}; \
 	[ -f "$$FILE" ] || (echo "Sample file not found: $$FILE" && exit 1); \
 	jq -c '{topic:"content.published.v1", payload:.}' "$$FILE" | \
 	curl -s -X POST "$$URL/events/publish" -H 'content-type: application/json' --data-binary @- | jq .
@@ -2154,7 +2154,7 @@ m2-preflight:
 	@echo "[2/3] Publisher-Discord health" && curl -sf http://localhost:8094/healthz | jq .
 	@echo "[3/3] Discord webhook ping (if configured)" && \
 	if [ -n "$$DISCORD_WEBHOOK_URL" ]; then \
-	  MSG="PMOVES Preflight: $(shell date +%F-%T)" ./pmoves/scripts/discord_ping.sh "PMOVES M2 preflight ping" >/dev/null || true; \
+	  MSG="PMOVES Preflight: $(shell date +%F-%T)" ./scripts/discord_ping.sh "PMOVES M2 preflight ping" >/dev/null || true; \
 	  echo "Ping attempted (check Discord)"; \
 		else \
 	  echo "DISCORD_WEBHOOK_URL not set; skipping ping"; \
@@ -2163,38 +2163,38 @@ m2-preflight:
 .PHONY: venv
 venv:
 	@if [ "$(OS)" = "Windows_NT" ]; then \
-		pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/create_venv.ps1 ; \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/create_venv.ps1 ; \
 		else \
-		bash pmoves/scripts/create_venv.sh ; \
+		bash scripts/create_venv.sh ; \
 	fi
 
 .PHONY: venv-min
 venv-min:
 	@if [ "$(OS)" = "Windows_NT" ]; then \
-		pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/create_venv_min.ps1 ; \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/create_venv_min.ps1 ; \
 		else \
-		bash pmoves/scripts/create_venv_min.sh ; \
+		bash scripts/create_venv_min.sh ; \
 	fi
 
 .PHONY: win-bootstrap
 win-bootstrap:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/windows_bootstrap.ps1
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_bootstrap.ps1
 
 .PHONY: evidence-stamp
 evidence-stamp:
-	@./pmoves/tools/evidence_stamp.sh "$${LABEL:-evidence}" "$${EXT:-png}"
+	@./tools/evidence_stamp.sh "$${LABEL:-evidence}" "$${EXT:-png}"
 
 .PHONY: evidence-stamp-ps
 evidence-stamp-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/evidence_stamp.ps1 -Label "$(LABEL)" -Ext "$(EXT)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File tools/evidence_stamp.ps1 -Label "$(LABEL)" -Ext "$(EXT)"
 
 .PHONY: evidence-log
 evidence-log:
-	@./pmoves/tools/evidence_log.sh "$(LABEL)" "$(PATH)" "$(NOTE)"
+	@./tools/evidence_log.sh "$(LABEL)" "$(PATH)" "$(NOTE)"
 
 .PHONY: evidence-log-ps
 evidence-log-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/evidence_log.ps1 -Label "$(LABEL)" -Path "$(PATH)" -Note "$(NOTE)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File tools/evidence_log.ps1 -Label "$(LABEL)" -Path "$(PATH)" -Note "$(NOTE)"
 
 .PHONY: m2-seed-demo
 m2-seed-demo:
@@ -2207,7 +2207,7 @@ m2-seed-demo:
 n8n-webhook-demo:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for n8n-webhook-demo" && exit 1)
 	@URL=$${URL:-http://localhost:5678/webhook/pmoves/content-published}; \
-	FILE=$${FILE:-pmoves/contracts/samples/content.published.v1.sample.json}; \
+	FILE=$${FILE:-contracts/samples/content.published.v1.sample.json}; \
 	[ -f "$$FILE" ] || (echo "Sample file not found: $$FILE" && exit 1); \
 	jq -c '{topic:"content.published.v1", payload:.}' "$$FILE" | \
 	curl -s -X POST "$$URL" -H 'content-type: application/json' --data-binary @- | jq .
@@ -2216,11 +2216,11 @@ n8n-webhook-demo:
 seed-approval:
 	@TITLE="$${TITLE:-Demo}"; URL="$${URL:-s3://outputs/demo/example.png}"; NS="$${NAMESPACE:-$${INDEXER_NAMESPACE:-pmoves}}"; \
 	echo "Seeding studio_board: title='$${TITLE}', url='$${URL}', namespace='$${NS}'"; \
-	./pmoves/tools/seed_studio_board.sh "$${TITLE}" "$${URL}" "$${NS}"
+	./tools/seed_studio_board.sh "$${TITLE}" "$${URL}" "$${NS}"
 
 .PHONY: seed-approval-ps
 seed-approval-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/seed_studio_board.ps1 -Title "$(TITLE)" -Url "$(URL)" -Namespace "$(NAMESPACE)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File tools/seed_studio_board.ps1 -Title "$(TITLE)" -Url "$(URL)" -Namespace "$(NAMESPACE)"
 .PHONY: manifest-audit
 manifest-audit: ## Audit provisioning inventory and Supabase exports for unsupported hardware
 	@PYTHONPATH=.. $(PYTHON) -m pmoves.tools.manifest_audit

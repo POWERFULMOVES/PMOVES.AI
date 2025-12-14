@@ -6,13 +6,14 @@
         "parameters": {
           "httpMethod": "POST",
           "path": "pmoves/approve-content",
-          "responseMode": "lastNode",
+          "responseMode": "responseNode",
           "options": {}
         },
         "id": "Webhook",
         "name": "Webhook: Approve Content",
         "type": "n8n-nodes-base.webhook",
-        "typeVersion": 1.0,
+        "typeVersion": 2,
+        "webhookId": "pmoves-approve-content",
         "position": [
           260,
           300

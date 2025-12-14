@@ -6,13 +6,14 @@
         "parameters": {
           "httpMethod": "POST",
           "path": "pmoves/content-published",
-          "responseMode": "lastNode",
+          "responseMode": "responseNode",
           "options": {}
         },
         "id": "webhook_content_published",
         "name": "Webhook: Content Published",
         "type": "n8n-nodes-base.webhook",
-        "typeVersion": 1,
+        "typeVersion": 2,
+        "webhookId": "pmoves-content-published",
         "position": [
           -420,
           240

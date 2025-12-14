@@ -6,13 +6,14 @@
         "parameters": {
           "httpMethod": "POST",
           "path": "pmoves/ingest",
-          "responseMode": "lastNode",
+          "responseMode": "responseNode",
           "options": {}
         },
         "id": "Webhook",
         "name": "Webhook: Ingest Transcript",
         "type": "n8n-nodes-base.webhook",
-        "typeVersion": 1.0,
+        "typeVersion": 2,
+        "webhookId": "pmoves-ingest",
         "position": [
           260,
           300
