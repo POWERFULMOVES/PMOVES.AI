@@ -323,6 +323,7 @@ STACK_FILES ?= \
 	$(VOICE_STACK_FILE) \
 	$(N8N_DB_STACK_FILE) \
 	-f docker-compose.comfyui.yml \
+	-f docker-compose.ultimate-tts-studio.yml \
 	-f docker-compose.external.yml \
 	-f docker-compose.archon.submodule.yml \
 	-f docker-compose.archon-ui.submodule.yml \
@@ -921,6 +922,26 @@ comfyui-smoke: ## Smoke check ComfyUI / (expects 200/302)
 	    exit 1; \
 	  fi; \
 	  echo "✔ ComfyUI reachable (HTTP $$code)"
+
+.PHONY: up-tts-studio tts-studio-smoke
+up-tts-studio: ## Start Ultimate TTS Studio UI (Gradio) from hardened GHCR image
+	@$(DC) --profile creator up -d ultimate-tts-studio
+	@echo "✔ Ultimate TTS Studio up at http://localhost:$${ULTIMATE_TTS_STUDIO_HOST_PORT:-7861}"
+
+tts-studio-smoke: ## Smoke check Ultimate TTS Studio / (expects 200/302)
+	@port=$${ULTIMATE_TTS_STUDIO_HOST_PORT:-7861}; \
+	  echo "→ Waiting for Ultimate TTS Studio on http://localhost:$$port/"; \
+	  code=""; \
+	  for i in $$(seq 1 60); do \
+	    code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
+	    if [ "$$code" = "200" ] || [ "$$code" = "302" ]; then break; fi; \
+	    sleep 2; \
+	  done; \
+	  if [ "$$code" != "200" ] && [ "$$code" != "302" ]; then \
+	    echo "✖ Ultimate TTS Studio / => $$code (start with: make -C pmoves up-tts-studio)"; \
+	    exit 1; \
+	  fi; \
+	  echo "✔ Ultimate TTS Studio reachable (HTTP $$code)"
 
 .PHONY: up-vibevoice
 up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights on first run)

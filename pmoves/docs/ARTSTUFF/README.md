@@ -25,6 +25,10 @@ How it feeds PMOVES:
   - upload to S3/MinIO via the Creator pipeline and trigger the `vibevoice-to-cgp` webhook in n8n, or
   - post a `studio_board` row directly (advanced) and let the publish pipeline pick it up.
 
+Docker option (preferred for PMOVES “all green”): use the hardened fork image.
+- Start: `make -C pmoves up-tts-studio`
+- Smoke: `make -C pmoves tts-studio-smoke`
+
 ## How this connects to PMOVES
 
 - `services/flute-gateway` can use VibeVoice for realtime TTS via `VIBEVOICE_URL`.
