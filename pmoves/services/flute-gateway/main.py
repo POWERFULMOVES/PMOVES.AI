@@ -15,9 +15,11 @@ Providers:
 """
 
 import asyncio
+import io
 import json
 import logging
 import os
+import wave
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -49,6 +51,16 @@ VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:3000
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
+
+
+def _pcm16_to_wav_bytes(pcm16: bytes, sample_rate: int) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)  # 16-bit
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm16)
+    return buf.getvalue()
 
 
 def _running_in_docker() -> bool:
@@ -327,6 +339,53 @@ async def synthesize_speech(request: SynthesizeRequest):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
         logger.exception("TTS synthesis failed")
+        raise HTTPException(status_code=500, detail="TTS synthesis failed")
+
+
+@app.post("/v1/voice/synthesize/audio", dependencies=[Depends(verify_api_key)])
+async def synthesize_speech_audio(request: SynthesizeRequest):
+    """
+    Synthesize speech and return the audio bytes.
+
+    - `output_format=wav` returns `audio/wav` (PCM16 mono, 24kHz)
+    - `output_format=pcm` returns raw PCM16 bytes (`application/octet-stream`)
+    """
+    provider_name = request.provider or DEFAULT_PROVIDER
+    output_format = (request.output_format or "wav").lower().strip()
+
+    if output_format not in {"wav", "pcm"}:
+        raise HTTPException(status_code=400, detail=f"output_format '{output_format}' not supported (use wav or pcm)")
+
+    try:
+        if provider_name == "vibevoice" and vibevoice_provider:
+            pcm16 = await vibevoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+            )
+            if output_format == "pcm":
+                REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                return Response(content=pcm16, media_type="application/octet-stream")
+
+            wav_bytes = _pcm16_to_wav_bytes(pcm16, sample_rate=24000)
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+            return Response(
+                content=wav_bytes,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="flute_tts.wav"'},
+            )
+
+        if provider_name == "vibevoice" and not vibevoice_provider:
+            raise HTTPException(
+                status_code=503,
+                detail="VibeVoice provider not configured (set VIBEVOICE_URL to the running server URL).",
+            )
+        raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
+    except HTTPException:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="400").inc()
+        raise
+    except Exception:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
+        logger.exception("TTS synthesis (audio) failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
 
 
