@@ -471,26 +471,19 @@ MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 up-monitoring: ## Start monitoring stack and print URLs
 	@echo "⛳ Starting monitoring stack (Prometheus, Grafana, Loki, Promtail, blackbox, cAdvisor)..."
 	@profiles=""; \
-	if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
-	  profiles="$$profiles --profile linux"; \
-	fi; \
-	if [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ]; then \
-	  profiles="$$profiles --profile linux-node"; \
-	fi; \
-	if [ -n "$$profiles" ]; then \
-	  echo "→ Including compose profiles:$$profiles"; \
-	  docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) $$profiles up -d; \
-	else \
-	  echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
-	  docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) up -d; \
-	fi
-	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
-		echo "→ Including linux profile (cAdvisor/Node Exporter)"; \
-		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) --profile linux up -d; \
-		else \
-		echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
-		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) up -d; \
-	  fi
+	  services="prometheus grafana loki promtail blackbox"; \
+	  if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
+	    profiles="$$profiles --profile linux"; \
+	    services="$$services cadvisor"; \
+	  else \
+	    echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
+	  fi; \
+	  if [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ]; then \
+	    profiles="$$profiles --profile linux-node"; \
+	    services="$$services node-exporter"; \
+	  fi; \
+	  if [ -n "$$profiles" ]; then echo "→ Including compose profiles:$$profiles"; fi; \
+	  $(DC) $$profiles up -d $$services
 	@echo "Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"
 	@echo "Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"
 	@echo "Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"
