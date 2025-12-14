@@ -490,7 +490,7 @@ up-monitoring: ## Start monitoring stack and print URLs
 	@echo "cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-9180}"
 
 down-monitoring: ## Stop monitoring stack and remove volumes
-	@docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) down -v
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) -f $(MONITORING_COMPOSE) down -v
 
 monitoring-open: ## Open Grafana and Prometheus in your browser
 	@python3 -c "import os,webbrowser; g='http://localhost:%s'%os.environ.get('GRAFANA_HOST_PORT','3002'); p='http://localhost:%s'%os.environ.get('PROMETHEUS_HOST_PORT','9090'); print('Opening',g,'and',p); webbrowser.open(g); webbrowser.open(p)"
