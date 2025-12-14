@@ -33,7 +33,7 @@ CREATE POLICY voice_messages_service_role
   ON public.voice_messages
   FOR ALL
   TO service_role
-  USING (true)
-  WITH CHECK (true);
+  USING (current_role = 'service_role')
+  WITH CHECK (current_role = 'service_role');
 
 COMMENT ON TABLE public.voice_messages IS 'Voice agent interaction logs (platform, transcript, response, metadata)';
