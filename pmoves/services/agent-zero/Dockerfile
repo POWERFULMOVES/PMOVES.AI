@@ -37,6 +37,9 @@ RUN chmod +x /ins/copy_A0.sh
 # Include PMOVES contract schemas so Agent Zero can validate envelopes.
 COPY contracts /app/contracts
 
+# Include PMOVES agent forms (used by /mcp/execute form.get and related flows).
+COPY configs /app/configs
+
 # Copy PMOVES service implementation on top of the upstream runtime
 COPY services /app/services
 
