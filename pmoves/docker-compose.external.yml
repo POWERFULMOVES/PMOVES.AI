@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest}

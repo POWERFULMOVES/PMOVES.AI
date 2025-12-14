@@ -75,8 +75,8 @@ update-service-docs: ## Regenerate service update notes from git metadata
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
 	@git pull --rebase
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) pull --quiet'
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) up -d --pull $(PULL)'
+	@bash -lc '$(DC) pull --quiet'
+	@bash -lc '$(DC) up -d --pull $(PULL)'
 	@echo "✔ Updated & reconciled containers."
 
 # One-shot bring-up for the common local dev stack (keeps container names stable under the $(PROJECT) project).
@@ -92,7 +92,7 @@ up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
 
 .PHONY: up-bots
 up-bots: ## Start bot services (BotZ + messaging gateway)
-	@docker compose -p $(PROJECT) -f docker-compose.yml --profile data --profile workers --profile botz up -d botz-gateway messaging-gateway
+	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway messaging-gateway
 	@echo "✔ Bots up (botz-gateway + messaging-gateway)."
 
 # -------- PMOVES.YT docs helpers ----------
@@ -233,9 +233,9 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 .PHONY: up up-gpu up-both-gateways
 up: ensure-env-shared ## Start core data + workers and both Hi-RAG gateways
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
+	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
 
 up-gpu: ## Start with optional GPU accelerations where supported
@@ -300,6 +300,19 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 PROJECT ?= pmoves
 export PROJECT
 
+# Always pass the same compose file set for the $(PROJECT) stack.
+# Otherwise, invoking docker compose with different -f subsets causes noisy
+# "Found orphan containers" warnings (and makes status output confusing).
+STACK_FILES ?= \
+	-f docker-compose.yml \
+	-f docker-compose.n8n.yml \
+	-f docker-compose.external.yml \
+	-f docker-compose.archon.submodule.yml \
+	-f docker-compose.archon-ui.submodule.yml \
+	-f monitoring/docker-compose.monitoring.yml
+
+DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) $(STACK_FILES)
+
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WGER := compose/docker-compose.wger.yml
 INTEGRATIONS_COMPOSE_FIREFLY := compose/docker-compose.firefly.yml
@@ -345,10 +358,10 @@ endif
 endif
 
 down:
-	docker compose -p $(PROJECT) down
+	@$(DC) down
 
 clean:
-	docker compose -p $(PROJECT) down -v --remove-orphans
+	@$(DC) down -v --remove-orphans
 
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
 	@bash -c '$(LOAD_ENV_SHARED) \
@@ -646,12 +659,12 @@ ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts 
 
 # Jellyfin bridge only
 up-jellyfin:
-	docker compose -p $(PROJECT) up -d jellyfin-bridge
+	@$(DC) up -d jellyfin-bridge
 
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
 .PHONY: up-agents
 up-agents: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 
 .PHONY: agents-headless-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
@@ -665,7 +678,7 @@ up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using publ
 
 .PHONY: up-agents-ui
 up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use PUBLISHED_AGENTS=1 for images)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml -f docker-compose.archon-ui.submodule.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
+	@$(DC) --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
 .PHONY: a0-mcp-seed
@@ -845,36 +858,36 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
+	@$(DC) up -d n8n
 
 # Status helper
 ps:
-	 docker compose -p $(PROJECT) ps
+	@$(DC) ps
 
 # -------- External stacks (forks / published images) ----------
 .PHONY: up-external up-external-wger up-external-firefly up-external-on up-external-jellyfin down-external
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL)'
+	@$(DC) up -d --pull $(PULL) wger wger-nginx firefly open-notebook-surrealdb-ext open-notebook-ext jellyfin-ext
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) wger wger-nginx'
+	@$(DC) up -d --pull $(PULL) wger wger-nginx
 	@$(MAKE) wger-brand-defaults
 
 up-external-firefly: ## Start Firefly III on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) firefly'
+	@$(DC) up -d --pull $(PULL) firefly
 
 up-external-on: ## Start Open Notebook on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) open-notebook-ext'
+	@$(DC) up -d --pull $(PULL) open-notebook-surrealdb-ext open-notebook-ext
 
 up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) jellyfin-ext'
+	@$(DC) up -d --pull $(PULL) jellyfin-ext
 
 .PHONY: down-jellyfin-ai
 down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
@@ -897,7 +910,8 @@ jellyfin-hosts-generate: ## Generate compose override from pmoves/jellyfin.hosts
 	@$(PYTHON) tools/generate_jellyfin_mounts.py
 
 down-external: ## Stop all external stacks
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml down
+	@$(DC) stop wger wger-nginx firefly open-notebook-surrealdb-ext open-notebook-ext jellyfin-ext >/dev/null 2>&1 || true
+	@echo "✔ External stacks stopped (containers retained)."
 
 .PHONY: vendor-httpx
 vendor-httpx: ## Refresh vendored pmoves-yt dependencies via uv
@@ -2047,6 +2061,27 @@ discord-smoke: ## Smoke test Discord publisher: health + direct publish + NATS e
 	else \
 	  echo "  ℹ NATS event test skipped (nats CLI not available). Discord health check passed."; \
 	fi
+
+.PHONY: voice-agent-smoke
+voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero publish -> NATS)
+	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
+	@echo "[Voice] Subscribing to voice.agent.response.v1 (via nats-box)"; \
+	OUT=$$(mktemp); \
+	( timeout 60 docker run --rm --network pmoves_bus natsio/nats-box:latest nats sub 'voice.agent.response.v1' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
+	PID=$$!; \
+	for i in $$(seq 1 30); do \
+	  if grep -q 'Subscribing on voice\\.agent\\.response\\.v1' "$$OUT" 2>/dev/null; then break; fi; \
+	  sleep 0.2; \
+	done; \
+	echo "[Voice] Triggering n8n webhook (platform=local)"; \
+	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest \
+	  -H 'content-type: application/json' \
+	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Reply with a short greeting."}' | jq .; \
+	wait $$PID || true; \
+	echo "[Voice] NATS output:"; \
+	sed -n '1,20p' "$$OUT"; \
+	grep -q 'Received on \"voice\.agent\.response\.v1\"' "$$OUT" && echo "  ✓ NATS event received" || (echo "  ✗ No voice.agent.response.v1 received" && exit 1); \
+	rm -f "$$OUT"
 
 .PHONY: jellyfin-smoke
 jellyfin-smoke:

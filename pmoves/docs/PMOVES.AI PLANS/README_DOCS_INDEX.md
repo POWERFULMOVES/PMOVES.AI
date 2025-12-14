@@ -1,6 +1,7 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2025-11-03_
+_Last updated: 2025-12-14_
 
+- **Stabilization Checklist** — `STABILIZATION_CHECKLIST.md`
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
 - **Hi‑RAG Reranker Providers** — `HI_RAG_RERANK_PROVIDERS.md`

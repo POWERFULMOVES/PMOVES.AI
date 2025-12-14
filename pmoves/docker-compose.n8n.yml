@@ -34,6 +34,7 @@ services:
       # Discord webhook for echo publisher
       - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
       - N8N_LOG_LEVEL=debug
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
     networks: [cataclysm, api_tier]
     extra_hosts:
