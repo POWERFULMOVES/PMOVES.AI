@@ -1,5 +1,5 @@
 # n8n Setup Checklist (Supabase → Agent Zero → Discord)
-_Last updated: 2025-10-17_
+_Last updated: 2025-12-14_
 
 ## Overview
 This guide streamlines importing and running the PMOVES approval and publish workflows in n8n. It targets Supabase CLI on the host, Agent Zero + NATS in Docker, and Discord webhooks.
@@ -29,7 +29,7 @@ Set these in n8n (Settings → Variables) or via container env:
 
 > **Supabase runtime note:** The CLI runtime binds REST on port `65421` per `supabase/config.toml`. If you switch back to the docker-compose PostgREST service, update `SUPABASE_REST_URL` accordingly (typically `http://host.docker.internal:54321/rest/v1`).
 
-Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Make target `make up-n8n`, populate `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, and `N8N_RUNNERS_AUTH_TOKEN` in `.env.local`. Rotate the runner token any time the sidecar logs authentication failures.
+Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use `make up-n8n`, populate `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, and `N8N_RUNNERS_AUTH_TOKEN` in `pmoves/env.shared` or `pmoves/.env.local`. The runner token is loaded via `env_file` (not compose-time interpolation) so recreating containers won’t accidentally desync the broker and sidecar.
 
 Note: n8n 1.115.3 already executes cron triggers in the main process. Avoid re-adding the deprecated `EXECUTIONS_PROCESS` flag—the service emits a warning and ignores it.
 

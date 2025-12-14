@@ -109,6 +109,8 @@ Automated review assignments configured in `.github/CODEOWNERS`:
 - **dotenv safety + compose overrides:** avoid `source`-ing `pmoves/env.shared` directly in shell scripts/Make recipes (it may contain non-shell-safe values). Prefer `pmoves/scripts/with-env.sh`, which sanitizes dotenv files before exporting vars.
 - **Secrets precedence:** avoid Compose-time `environment: VAR=${VAR}` for secrets that are already in `env_file`, because an unset shell var becomes an empty string and overrides the `env_file` value inside containers. This surfaced as Open Notebook tokens drifting from DeepResearch until the compose interpolation was removed.
 - **n8n flow versioning:** canonical, shareable exports live under `pmoves/n8n/flows/` and are mirrored into the `PMOVES-n8n` submodule (`PMOVES-n8n/workflows/`). Import/activate with `make -C pmoves n8n-bootstrap` (handles import + DB sanitize + restart). Refresh exports from a live n8n instance via `make -C pmoves n8n-export-repo-flows`.
+- **n8n HTTP timeouts:** `options.timeout` for HTTP Request nodes is **milliseconds** in n8n. Treat values like `10/20/30` as 10ms/20ms/30ms unless explicitly multiplied (this has bitten Voice Agent flows and Supabase/NATS calls).
+- **Voice Agents (Flute):** Voice Agent router (`pmoves/n8n/flows/voice_platform_router.json`) defaults to TensorZero local models when available (`VOICE_AGENT_MODEL=tensorzero::model_name::qwen2_5_14b`) and publishes `voice.agent.response.v1` to NATS.
 
 ### Docker Build Reliability Improvements (2025-12-06 to 2025-12-07)
 **Status:** Complete ✅

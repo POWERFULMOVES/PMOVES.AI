@@ -9,7 +9,7 @@ PMOVES_YT_URL="${PMOVES_YT_URL:-http://localhost:8077}"
 WHISPER_URL="${WHISPER_URL:-http://localhost:8078}"
 VIDEO_ANALYZER_URL="${VIDEO_ANALYZER_URL:-http://localhost:8079}"
 AUDIO_ANALYZER_URL="${AUDIO_ANALYZER_URL:-http://localhost:8082}"
-EXTRACT_WORKER_URL="${EXTRACT_WORKER_URL:-http://localhost:8083}"
+EXTRACT_WORKER_URL="${EXTRACT_WORKER_URL:-http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}}"
 MINIO_URL="${MINIO_URL:-http://localhost:9000}"
 
 # Color codes

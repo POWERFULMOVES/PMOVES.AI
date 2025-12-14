@@ -10,7 +10,7 @@ import tempfile
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 
 try:  # pragma: no cover - exercised in production
     import boto3
@@ -457,6 +457,68 @@ def transcribe(body: Dict[str, Any] = Body(...)):
             "device": transcript.get("device"),
             "provider": provider,
             "forwarded": forwarded,
+        }
+    except subprocess.CalledProcessError as exc:
+        raise HTTPException(500, f"ffmpeg error: {exc}") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("transcription error")
+        raise HTTPException(500, f"transcribe error: {exc}") from exc
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+@app.post("/transcribe_file")
+async def transcribe_file(
+    audio: UploadFile = File(...),
+    language: Optional[str] = Form(None),
+    provider: Optional[str] = Form(None),
+    model: Optional[str] = Form(None),
+    whisper_model: Optional[str] = Form(None),
+    diarize: bool = Form(True),
+) -> Dict[str, Any]:
+    """
+    Transcribe an uploaded audio file directly (multipart/form-data).
+
+    This complements the existing `/transcribe` endpoint (bucket/key JSON) and is used
+    by Flute Gateway for ad-hoc STT requests.
+    """
+
+    chosen_provider = (provider or DEFAULT_PROVIDER).lower()
+    if chosen_provider not in SUPPORTED_PROVIDERS:
+        raise HTTPException(400, f"provider must be one of {', '.join(SUPPORTED_PROVIDERS)}")
+
+    model_name = whisper_model or model or DEFAULT_WHISPER_MODEL
+
+    tmpdir = tempfile.mkdtemp(prefix="ffw-upload-")
+    try:
+        src_path = os.path.join(tmpdir, audio.filename or "source")
+        raw_bytes = await audio.read()
+        with open(src_path, "wb") as fh:
+            fh.write(raw_bytes)
+
+        audio_path = os.path.join(tmpdir, "audio.wav")
+        ffmpeg_extract_audio(src_path, audio_path)
+
+        transcript = _transcribe_with_provider(
+            chosen_provider,
+            audio_path,
+            language=language,
+            model_name=model_name,
+            diarize=diarize,
+        )
+
+        return {
+            "ok": True,
+            "text": transcript.get("text"),
+            "language": transcript.get("language") or language,
+            "segments": transcript.get("segments"),
+            "word_segments": transcript.get("word_segments"),
+            "speakers": transcript.get("speakers"),
+            "model": transcript.get("model") or model_name,
+            "device": transcript.get("device"),
+            "provider": chosen_provider,
         }
     except subprocess.CalledProcessError as exc:
         raise HTTPException(500, f"ffmpeg error: {exc}") from exc

@@ -60,7 +60,7 @@
           "sendBody": true,
           "body": "={{ JSON.stringify($json.studio_row) }}",
           "options": {
-            "timeout": 30
+            "timeout": 30000
           }
         },
         "id": "insert_studio",
@@ -91,7 +91,7 @@
           "sendBody": true,
           "body": "={{ JSON.stringify($json) }}",
           "options": {
-            "timeout": 30,
+            "timeout": 30000,
             "bodyContentType": "json"
           },
           "method": "POST",

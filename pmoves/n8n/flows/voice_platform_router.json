@@ -21,7 +21,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Unified platform normalizer\n// Input: raw webhook payload from any platform\n// Output: normalized voice message object\n\nconst items = $input.all();\nconst payload = items[0].json;\n\nlet normalized = {\n  platform: null,\n  user_id: null,\n  user_name: null,\n  channel_id: null,\n  message_id: null,\n  message_type: 'text', // 'text' | 'voice'\n  content: null,\n  audio_url: null,\n  timestamp: new Date().toISOString(),\n  raw_payload: payload\n};\n\n// Detect platform and normalize\nif (payload.platform) {\n  // Already normalized (direct API call)\n  normalized = { ...normalized, ...payload };\n} else if (payload.message?.chat?.id && payload.message?.from?.id) {\n  // Telegram format\n  normalized.platform = 'telegram';\n  normalized.user_id = String(payload.message.from.id);\n  normalized.user_name = payload.message.from.first_name || payload.message.from.username;\n  normalized.channel_id = String(payload.message.chat.id);\n  normalized.message_id = String(payload.message.message_id);\n  \n  if (payload.message.voice) {\n    normalized.message_type = 'voice';\n    normalized.audio_url = payload.message.voice.file_id; // Needs Telegram API to resolve\n  } else if (payload.message.text) {\n    normalized.message_type = 'text';\n    normalized.content = payload.message.text;\n  }\n} else if (payload.messages?.[0]?.from) {\n  // WhatsApp format\n  normalized.platform = 'whatsapp';\n  normalized.user_id = payload.messages[0].from;\n  normalized.user_name = payload.contacts?.[0]?.profile?.name || 'WhatsApp User';\n  normalized.channel_id = payload.metadata?.phone_number_id;\n  normalized.message_id = payload.messages[0].id;\n  \n  if (payload.messages[0].type === 'audio') {\n    normalized.message_type = 'voice';\n    normalized.audio_url = payload.messages[0].audio?.id; // Needs WhatsApp API to resolve\n  } else if (payload.messages[0].type === 'text') {\n    normalized.message_type = 'text';\n    normalized.content = payload.messages[0].text?.body;\n  }\n} else if (payload.author?.id && payload.channelId) {\n  // Discord format\n  normalized.platform = 'discord';\n  normalized.user_id = payload.author.id;\n  normalized.user_name = payload.author.username;\n  normalized.channel_id = payload.channelId;\n  normalized.message_id = payload.id;\n  \n  if (payload.attachments?.length > 0 && payload.attachments[0].contentType?.startsWith('audio/')) {\n    normalized.message_type = 'voice';\n    normalized.audio_url = payload.attachments[0].url;\n  } else if (payload.content) {\n    normalized.message_type = 'text';\n    normalized.content = payload.content;\n  }\n}\n\n// Validate required fields\nif (!normalized.platform || !normalized.user_id) {\n  throw new Error('Unable to detect platform or extract user_id from payload');\n}\n\nreturn [{ json: normalized }];"
+	          "jsCode": "// Unified platform normalizer\n// Input: raw webhook payload from any platform\n// Output: normalized voice message object\n\nconst items = $input.all();\nconst raw = items[0].json;\n// Webhook nodes typically nest the request body under `body`\nconst payload = raw.body ?? raw;\n\nlet normalized = {\n  platform: null,\n  user_id: null,\n  user_name: null,\n  channel_id: null,\n  message_id: null,\n  message_type: 'text', // 'text' | 'voice'\n  content: null,\n  audio_url: null,\n  timestamp: new Date().toISOString(),\n  raw_payload: raw,\n  body: payload\n};\n\n// Detect platform and normalize\nif (payload.platform) {\n  // Already normalized (direct API call)\n  normalized = { ...normalized, ...payload };\n} else if (payload.message?.chat?.id && payload.message?.from?.id) {\n  // Telegram format\n  normalized.platform = 'telegram';\n  normalized.user_id = String(payload.message.from.id);\n  normalized.user_name = payload.message.from.first_name || payload.message.from.username;\n  normalized.channel_id = String(payload.message.chat.id);\n  normalized.message_id = String(payload.message.message_id);\n  \n  if (payload.message.voice) {\n    normalized.message_type = 'voice';\n    normalized.audio_url = payload.message.voice.file_id; // Needs Telegram API to resolve\n  } else if (payload.message.text) {\n    normalized.message_type = 'text';\n    normalized.content = payload.message.text;\n  }\n} else if (payload.messages?.[0]?.from) {\n  // WhatsApp format\n  normalized.platform = 'whatsapp';\n  normalized.user_id = payload.messages[0].from;\n  normalized.user_name = payload.contacts?.[0]?.profile?.name || 'WhatsApp User';\n  normalized.channel_id = payload.metadata?.phone_number_id;\n  normalized.message_id = payload.messages[0].id;\n  \n  if (payload.messages[0].type === 'audio') {\n    normalized.message_type = 'voice';\n    normalized.audio_url = payload.messages[0].audio?.id; // Needs WhatsApp API to resolve\n  } else if (payload.messages[0].type === 'text') {\n    normalized.message_type = 'text';\n    normalized.content = payload.messages[0].text?.body;\n  }\n} else if (payload.author?.id && payload.channelId) {\n  // Discord format\n  normalized.platform = 'discord';\n  normalized.user_id = payload.author.id;\n  normalized.user_name = payload.author.username;\n  normalized.channel_id = payload.channelId;\n  normalized.message_id = payload.id;\n  \n  if (payload.attachments?.length > 0 && payload.attachments[0].contentType?.startsWith('audio/')) {\n    normalized.message_type = 'voice';\n    normalized.audio_url = payload.attachments[0].url;\n  } else if (payload.content) {\n    normalized.message_type = 'text';\n    normalized.content = payload.content;\n  }\n}\n\n// Ensure a stable message_id for contract publishing\nif (!normalized.message_id) {\n  try {\n    normalized.message_id = `local-${crypto.randomUUID()}`;\n  } catch {\n    normalized.message_id = `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;\n  }\n}\n\n// Validate required fields\nif (!normalized.platform || !normalized.user_id) {\n  throw new Error('Unable to detect platform or extract user_id from payload');\n}\n\nreturn [{ json: normalized }];"
         },
         "id": "normalize-platform",
         "name": "Normalize Platform",
@@ -34,8 +34,9 @@
       },
       {
         "parameters": {
+          "mode": "rules",
           "rules": {
-            "rules": [
+            "values": [
               {
                 "conditions": {
                   "options": {
@@ -95,8 +96,9 @@
       },
       {
         "parameters": {
+          "mode": "rules",
           "rules": {
-            "rules": [
+            "values": [
               {
                 "conditions": {
                   "options": {
@@ -189,13 +191,14 @@
           900,
           100
         ],
-        "credentials": {
-          "telegramApi": {
-            "id": "telegram-bot-cred",
-            "name": "Telegram Bot"
-          }
-        }
-      },
+	        "credentials": {
+	          "telegramApi": {
+	            "id": "telegram-bot-cred",
+	            "name": "Telegram Bot"
+	          }
+	        },
+	        "disabled": true
+	      },
       {
         "parameters": {
           "method": "GET",
@@ -212,11 +215,12 @@
         "name": "Telegram Download",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
-        "position": [
-          1100,
-          100
-        ]
-      },
+	        "position": [
+	          1100,
+	          100
+	        ],
+	        "disabled": true
+	      },
       {
         "parameters": {
           "operation": "mediaUrlGet",
@@ -230,13 +234,14 @@
           900,
           200
         ],
-        "credentials": {
-          "whatsAppBusinessCloudApi": {
-            "id": "whatsapp-cred",
-            "name": "WhatsApp Business"
-          }
-        }
-      },
+	        "credentials": {
+	          "whatsAppBusinessCloudApi": {
+	            "id": "whatsapp-cred",
+	            "name": "WhatsApp Business"
+	          }
+	        },
+	        "disabled": true
+	      },
       {
         "parameters": {
           "method": "GET",
@@ -259,13 +264,14 @@
           1100,
           200
         ],
-        "credentials": {
-          "httpHeaderAuth": {
-            "id": "whatsapp-auth",
-            "name": "WhatsApp Token"
-          }
-        }
-      },
+	        "credentials": {
+	          "httpHeaderAuth": {
+	            "id": "whatsapp-auth",
+	            "name": "WhatsApp Token"
+	          }
+	        },
+	        "disabled": true
+	      },
       {
         "parameters": {
           "method": "GET",
@@ -290,20 +296,16 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://tensorzero-gateway:3030/v1/audio/transcriptions",
+	          "url": "http://flute-gateway:8055/v1/voice/recognize",
           "sendBody": true,
           "contentType": "multipart-form-data",
           "bodyParameters": {
             "parameters": [
               {
                 "parameterType": "formBinaryData",
-                "name": "file",
+	                "name": "audio",
                 "inputDataFieldName": "data"
-              },
-              {
-                "name": "model",
-                "value": "whisper-1"
-              }
+	              }
             ]
           },
           "options": {}
@@ -331,15 +333,17 @@
           250
         ]
       },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "http://hi-rag-gateway-v2-cpu:8086/hirag/query",
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={\n  \"query\": \"{{ $json.content }}\",\n  \"top_k\": 3,\n  \"rerank\": true\n}",
-          "options": {}
-        },
+	      {
+	        "parameters": {
+	          "method": "POST",
+	          "url": "http://hi-rag-gateway-v2:8086/hirag/query",
+	          "sendBody": true,
+	          "specifyBody": "json",
+	          "jsonBody": "={\n  \"query\": \"{{ $json.content }}\",\n  \"top_k\": 3,\n  \"rerank\": true\n}",
+	          "options": {
+		            "timeout": 15000
+	          }
+	        },
         "id": "hirag-query",
         "name": "Hi-RAG Query",
         "type": "n8n-nodes-base.httpRequest",
@@ -364,26 +368,44 @@
         ]
       },
       {
-        "parameters": {
-          "method": "POST",
-          "url": "http://tensorzero-gateway:3030/v1/chat/completions",
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful voice assistant for PMOVES.AI. Keep responses concise and conversational, suitable for voice output. Aim for 1-3 sentences unless more detail is specifically requested.{{ $json.context }}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.content }}\"\n    }\n  ],\n  \"max_tokens\": 500\n}",
-          "options": {}
-        },
+	        "parameters": {
+	          "method": "POST",
+				          "url": "={{ ($env.OPENAI_COMPATIBLE_BASE_URL || $env.OPENAI_COMPAT_BASE_URL || ($env.TENSORZERO_BASE_URL ? ($env.TENSORZERO_BASE_URL.replace(/\\/$/, '') + '/openai/v1') : 'https://api.openai.com/v1')).replace(/\\/$/, '') }}/chat/completions",
+		          "sendHeaders": true,
+		          "headerParameters": {
+		            "parameters": [
+		              {
+		                "name": "content-type",
+		                "value": "application/json"
+		              },
+		              {
+		                "name": "Authorization",
+			                "value": "={{ 'Bearer ' + ($env.OPENAI_COMPAT_API_KEY || $env.OPENAI_API_KEY || '') }}"
+		              }
+		            ]
+		          },
+	          "sendBody": true,
+	          "specifyBody": "json",
+					          "jsonBody": "={{ {\n  model: ($env.VOICE_AGENT_MODEL || $env.OPENAI_MODEL || ($env.TENSORZERO_BASE_URL ? 'tensorzero::model_name::qwen2_5_14b' : 'gpt-4o-mini')),\n  messages: [\n    {\n      role: 'system',\n      content: 'You are a helpful voice assistant for PMOVES.AI. Keep responses concise and conversational, suitable for voice output. Aim for 1-3 sentences unless more detail is specifically requested.' + ($json.context || '')\n    },\n    {\n      role: 'user',\n      content: $json.content\n    }\n  ],\n  max_tokens: 500\n} }}",
+	          "options": {
+		            "timeout": 60000
+	          }
+	        },
         "id": "llm-response",
         "name": "Generate Response",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
-        "position": [
-          2100,
-          300
-        ]
-      },
+	        "position": [
+	          2100,
+	          300
+	        ]
+	      ,
+	        "continueOnFail": true,
+	        "alwaysOutputData": true
+	      },
       {
         "parameters": {
-          "jsCode": "// Extract response and prepare for platform routing\nconst items = $input.all();\nconst llmResult = items[0].json;\nconst prevData = $('Build Context').first().json;\n\nconst responseText = llmResult.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';\n\nreturn [{\n  json: {\n    ...prevData,\n    response_text: responseText,\n    model_used: llmResult.model || 'claude-sonnet-4-5'\n  }\n}];"
+		          "jsCode": "// Extract response and prepare for platform routing\nconst items = $input.all();\nconst rawResult = items[0].json;\nconst llmResult = rawResult.body ?? rawResult;\nconst prevData = $('Build Context').first().json;\n\nlet responseText = llmResult.choices?.[0]?.message?.content || llmResult.response || llmResult.text;\n\n// Fallback: if the LLM is unavailable, return the top RAG context snippet\nif (!responseText) {\n  const ctx = String(prevData.context || '');\n  const m = ctx.match(/\\[1\\]\\s*([^\\n]+)/);\n  if (m && m[1] && m[1].trim()) {\n    responseText = m[1].trim();\n  }\n}\n\nif (!responseText) {\n  responseText = 'Sorry, I could not generate a response.';\n}\n\nconst defaultModel = ($env.VOICE_AGENT_MODEL || $env.OPENAI_MODEL || ($env.TENSORZERO_BASE_URL ? 'tensorzero::model_name::qwen2_5_14b' : 'gpt-4o-mini'));\n\nreturn [{\n  json: {\n    ...prevData,\n    response_text: responseText,\n    model_used: llmResult.model || rawResult.model || defaultModel\n  }\n}];"
         },
         "id": "extract-response",
         "name": "Extract Response",
@@ -394,12 +416,13 @@
           300
         ]
       },
-      {
-        "parameters": {
-          "rules": {
-            "rules": [
-              {
-                "conditions": {
+	      {
+	        "parameters": {
+	          "mode": "rules",
+	          "rules": {
+	            "values": [
+	              {
+	                "conditions": {
                   "options": {
                     "leftValue": "",
                     "caseSensitive": true,
@@ -461,13 +484,35 @@
                     }
                   ]
                 },
-                "renameOutput": true,
-                "outputKey": "discord"
-              }
-            ]
-          },
-          "options": {}
-        },
+	                "renameOutput": true,
+	                "outputKey": "discord"
+	              },
+	              {
+	                "conditions": {
+	                  "options": {
+	                    "leftValue": "",
+	                    "caseSensitive": true,
+	                    "typeValidation": "strict"
+	                  },
+	                  "combinator": "and",
+	                  "conditions": [
+	                    {
+	                      "leftValue": "={{ $json.platform }}",
+	                      "rightValue": "local",
+	                      "operator": {
+	                        "type": "string",
+	                        "operation": "equals"
+	                      }
+	                    }
+	                  ]
+	                },
+	                "renameOutput": true,
+	                "outputKey": "local"
+	              }
+	            ]
+	          },
+	          "options": {}
+	        },
         "id": "route-platform-response",
         "name": "Route Platform (Response)",
         "type": "n8n-nodes-base.switch",
@@ -493,13 +538,14 @@
           2700,
           200
         ],
-        "credentials": {
-          "telegramApi": {
-            "id": "telegram-bot-cred",
-            "name": "Telegram Bot"
-          }
-        }
-      },
+	        "credentials": {
+	          "telegramApi": {
+	            "id": "telegram-bot-cred",
+	            "name": "Telegram Bot"
+	          }
+	        },
+	        "disabled": true
+	      },
       {
         "parameters": {
           "operation": "sendMessage",
@@ -515,41 +561,39 @@
           2700,
           300
         ],
-        "credentials": {
-          "whatsAppBusinessCloudApi": {
-            "id": "whatsapp-cred",
-            "name": "WhatsApp Business"
-          }
-        }
-      },
+	        "credentials": {
+	          "whatsAppBusinessCloudApi": {
+	            "id": "whatsapp-cred",
+	            "name": "WhatsApp Business"
+	          }
+	        },
+	        "disabled": true
+	      },
+	      {
+		        "parameters": {
+		          "method": "POST",
+		          "url": "http://messaging-gateway:8101/v1/send",
+		          "sendBody": true,
+		          "specifyBody": "json",
+		          "jsonBody": "={\n  \"platforms\": [\"discord\"],\n  \"content\": \"{{ $json.response_text }}\",\n  \"meta\": {\n    \"channel_id\": \"{{ $json.channel_id }}\",\n    \"message_id\": \"{{ $json.message_id }}\",\n    \"user_id\": \"{{ $json.user_id }}\",\n    \"user_name\": \"{{ $json.user_name }}\"\n  }\n}",
+		          "options": {
+		            "timeout": 10000
+		          }
+		        },
+	        "id": "send-discord",
+	        "name": "Send Discord",
+	        "type": "n8n-nodes-base.httpRequest",
+	        "typeVersion": 4.2,
+	        "position": [
+	          2700,
+	          400
+	        ],
+	        "continueOnFail": true
+	      },
       {
-        "parameters": {
-          "operation": "sendMessage",
-          "channelId": "={{ $json.channel_id }}",
-          "content": "={{ $json.response_text }}",
-          "options": {
-            "replyToMessage": "={{ $json.message_id }}"
-          }
-        },
-        "id": "send-discord",
-        "name": "Send Discord",
-        "type": "n8n-nodes-discord-bot.discord",
-        "typeVersion": 1,
-        "position": [
-          2700,
-          400
-        ],
-        "credentials": {
-          "discordBotApi": {
-            "id": "discord-bot-cred",
-            "name": "Discord Bot"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/voice_messages",
+	        "parameters": {
+	          "method": "POST",
+	          "url": "={{ $env.SUPABASE_URL }}/rest/v1/voice_messages",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -571,11 +615,13 @@
               }
             ]
           },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"user_id\": \"{{ $json.user_id }}\",\n  \"user_name\": \"{{ $json.user_name }}\",\n  \"transcript\": \"{{ $json.content }}\",\n  \"response_text\": \"{{ $json.response_text }}\",\n  \"model_used\": \"{{ $json.model_used }}\",\n  \"status\": \"completed\",\n  \"metadata\": { \"message_type\": \"{{ $json.message_type }}\", \"sources\": {{ JSON.stringify($json.sources || []) }} }\n}",
-          "options": {}
-        },
+	          "sendBody": true,
+	          "specifyBody": "json",
+	          "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"user_id\": \"{{ $json.user_id }}\",\n  \"user_name\": \"{{ $json.user_name }}\",\n  \"transcript\": \"{{ $json.content }}\",\n  \"response_text\": \"{{ $json.response_text }}\",\n  \"model_used\": \"{{ $json.model_used }}\",\n  \"status\": \"completed\",\n  \"metadata\": { \"message_type\": \"{{ $json.message_type }}\", \"sources\": {{ JSON.stringify($json.sources || []) }} }\n}",
+	          "options": {
+	            "timeout": 10000
+	          }
+	        },
         "id": "log-to-supabase",
         "name": "Log to Supabase",
         "type": "n8n-nodes-base.httpRequest",
@@ -586,42 +632,70 @@
         ],
         "continueOnFail": true
       },
-      {
-        "parameters": {
-          "method": "POST",
-          "url": "http://nats:4222/publish",
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={\n  \"subject\": \"voice.agent.response.v1\",\n  \"data\": {\n    \"platform\": \"{{ $json.platform }}\",\n    \"user_id\": \"{{ $json.user_id }}\",\n    \"message_id\": \"{{ $json.message_id }}\",\n    \"response_text\": \"{{ $json.response_text }}\",\n    \"model_used\": \"{{ $json.model_used }}\",\n    \"timestamp\": \"{{ $json.timestamp }}\"\n  }\n}",
-          "options": {}
-        },
-        "id": "publish-nats",
-        "name": "Publish NATS Event",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "position": [
-          3100,
-          300
-        ],
-        "continueOnFail": true
-      },
-      {
-        "parameters": {
-          "respondWith": "json",
-          "responseBody": "={\n  \"success\": true,\n  \"platform\": \"{{ $json.platform }}\",\n  \"user_id\": \"{{ $json.user_id }}\",\n  \"response_sent\": true\n}",
-          "options": {}
-        },
-        "id": "respond-webhook",
-        "name": "Respond to Webhook",
-        "type": "n8n-nodes-base.respondToWebhook",
-        "typeVersion": 1.1,
-        "position": [
-          3300,
-          300
-        ]
-      }
-    ],
-    "connections": {
+	      {
+	        "parameters": {
+	          "method": "POST",
+	          "url": "={{ $env.AGENT_ZERO_BASE_URL || 'http://agent-zero:8080' }}/events/publish",
+	          "sendHeaders": true,
+	          "headerParameters": {
+	            "parameters": [
+	              {
+	                "name": "content-type",
+	                "value": "application/json"
+	              },
+	              {
+	                "name": "x-agent-token",
+	                "value": "={{ $env.AGENT_ZERO_EVENTS_TOKEN || '' }}"
+	              }
+	            ]
+	          },
+	          "sendBody": true,
+	          "specifyBody": "json",
+	          "jsonBody": "={\n  \"topic\": \"voice.agent.response.v1\",\n  \"payload\": {\n    \"platform\": \"{{ $('Extract Response').first().json.platform }}\",\n    \"user_id\": \"{{ $('Extract Response').first().json.user_id }}\",\n    \"message_id\": \"{{ $('Extract Response').first().json.message_id }}\",\n    \"response_text\": \"{{ $('Extract Response').first().json.response_text }}\",\n    \"model_used\": \"{{ $('Extract Response').first().json.model_used }}\",\n    \"timestamp\": \"{{ $('Extract Response').first().json.timestamp }}\",\n    \"sources\": {{ JSON.stringify($('Extract Response').first().json.sources || []) }}\n  }\n}",
+	          "options": {
+	            "timeout": 10000
+	          }
+	        },
+	        "id": "publish-nats",
+	        "name": "Publish NATS Event",
+	        "type": "n8n-nodes-base.httpRequest",
+	        "typeVersion": 4.2,
+	        "position": [
+	          3100,
+	          300
+	        ],
+	        "continueOnFail": true
+	      },
+	      {
+	        "parameters": {
+	          "jsCode": "// Build a stable webhook response payload.\n// Prefer the pre-publish data from Extract Response; include publish result when available.\n\nlet base;\ntry {\n  base = $('Extract Response').first().json;\n} catch {\n  base = $input.first().json;\n}\n\nconst publishResult = $json || {};\n\nreturn [\n  {\n    json: {\n      success: true,\n      platform: base.platform,\n      user_id: base.user_id,\n      user_name: base.user_name,\n      message_id: base.message_id,\n      message_type: base.message_type,\n      response_text: base.response_text,\n      model_used: base.model_used,\n      sources: base.sources || [],\n      published_topic: publishResult.published || null,\n      published_id: publishResult.id || null,\n      publish_ok: Boolean(publishResult.published)\n    }\n  }\n];"
+	        },
+	        "id": "build-webhook-response",
+	        "name": "Build Webhook Response",
+	        "type": "n8n-nodes-base.code",
+	        "typeVersion": 2,
+	        "position": [
+	          3300,
+	          300
+	        ]
+	      },
+	      {
+	        "parameters": {
+	          "respondWith": "json",
+	          "responseBody": "={{ $json }}",
+	          "options": {}
+	        },
+	        "id": "respond-webhook",
+	        "name": "Respond to Webhook",
+	        "type": "n8n-nodes-base.respondToWebhook",
+	        "typeVersion": 1.1,
+	        "position": [
+	          3500,
+	          300
+	        ]
+	      }
+	    ],
+	    "connections": {
       "Webhook Trigger": {
         "main": [
           [
@@ -808,31 +882,38 @@
           ]
         ]
       },
-      "Route Platform (Response)": {
-        "main": [
-          [
-            {
-              "node": "Send Telegram",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Send WhatsApp",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Send Discord",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
+	      "Route Platform (Response)": {
+	        "main": [
+	          [
+	            {
+	              "node": "Send Telegram",
+	              "type": "main",
+	              "index": 0
+	            }
+	          ],
+	          [
+	            {
+	              "node": "Send WhatsApp",
+	              "type": "main",
+	              "index": 0
+	            }
+	          ],
+	          [
+	            {
+	              "node": "Send Discord",
+	              "type": "main",
+	              "index": 0
+	            }
+	          ],
+	          [
+	            {
+	              "node": "Log to Supabase",
+	              "type": "main",
+	              "index": 0
+	            }
+	          ]
+	        ]
+	      },
       "Send Telegram": {
         "main": [
           [
@@ -877,18 +958,30 @@
           ]
         ]
       },
-      "Publish NATS Event": {
-        "main": [
-          [
-            {
-              "node": "Respond to Webhook",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
+	      "Publish NATS Event": {
+	        "main": [
+	          [
+	            {
+	              "node": "Build Webhook Response",
+	              "type": "main",
+	              "index": 0
+	            }
+	          ]
+	        ]
+	      }
+	      ,
+	      "Build Webhook Response": {
+	        "main": [
+	          [
+	            {
+	              "node": "Respond to Webhook",
+	              "type": "main",
+	              "index": 0
+	            }
+	          ]
+	        ]
+	      }
+	    },
     "settings": {
       "executionOrder": "v1"
     },

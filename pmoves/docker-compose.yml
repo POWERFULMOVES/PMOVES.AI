@@ -221,14 +221,17 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+      # Keep extract-worker embeddings aligned with Hi-RAG v2 defaults (TensorZero → Ollama),
+      # so ingestion and query stay on the same embedding space.
+      - EMBEDDING_BACKEND=${EXTRACT_WORKER_EMBEDDING_BACKEND:-tensorzero}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       # Use unified Supabase REST by default (env_file values are not interpolated at compose time)
       - SUPA_REST_URL=http://host.docker.internal:65421/rest/v1
       - SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1
-    ports: ["8083:8083"]
+    ports: ["${EXTRACT_WORKER_HOST_PORT:-8083}:8083"]
     profiles: ["workers","orchestration"]
     networks: [app_tier, data_tier, api_tier, monitoring_tier]
     extra_hosts:
@@ -499,7 +502,7 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - ALPHA=${ALPHA:-0.7}
@@ -513,10 +516,10 @@ services:
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
-      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
@@ -602,7 +605,7 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - ALPHA=${ALPHA:-0.7}
@@ -634,10 +637,10 @@ services:
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
       # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
-      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     gpus: all
     deploy:

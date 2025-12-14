@@ -1,5 +1,5 @@
 # Local Development & Networking
-_Last updated: 2025-11-03_
+_Last updated: 2025-12-14_
 
 Note: See consolidated index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md for cross-links.
 
@@ -22,7 +22,7 @@ Refer to `pmoves/docs/LOCAL_TOOLING_REFERENCE.md` for the consolidated list of s
 - hi-rag-gateway-v2 (CPU): `${HIRAG_V2_HOST_PORT:-8086}` → 8086 (internal name `hi-rag-gateway-v2`)
 - hi-rag-gateway-v2-gpu (GPU): `${HIRAG_V2_GPU_HOST_PORT:-8087}` → 8086 (internal name `hi-rag-gateway-v2-gpu`)
   - Tip: when local tools already bind to 8086/8087 (e.g., legacy uvicorn processes), set `HIRAG_V2_HOST_PORT` / `HIRAG_V2_GPU_HOST_PORT` in `.env.local` (or the shell) before running `make up` to remap the published ports (for example `18086` / `18087`).
-- Embedding defaults: the v2 gateways now pull embeddings from TensorZero (`http://tensorzero-gateway:3000`) which proxies Ollama’s `embeddinggemma` family. `make -C pmoves up-tensorzero` now starts ClickHouse, the gateway/UI, **and** the bundled `pmoves-ollama` sidecar so `embeddinggemma:latest`/`300m` respond immediately. On hardware where Ollama cannot run (Jetson, low-memory VPS) point `TENSORZERO_BASE_URL` at a remote gateway or leave `EMBEDDING_BACKEND` unset so services fall back to sentence-transformers.
+- Embedding defaults: the v2 gateways pull embeddings from TensorZero (`http://tensorzero-gateway:3000`) which proxies the bundled Ollama sidecar. Production default is `qwen3-embedding:4b` (`tensorzero::embedding_model_name::qwen3_embedding_4b_local`); for Jetson/low VRAM prefer `qwen3-embedding:0.6b` or `embeddinggemma:300m` (use a separate Qdrant collection; do not mix embedding dims). On hosts where Ollama cannot run, point `TENSORZERO_BASE_URL` at a remote gateway or leave `EMBEDDING_BACKEND` unset so services fall back to sentence-transformers.
 - retrieval-eval: 8090 (internal name `retrieval-eval`)
 - render-webhook: 8085 (internal name `render-webhook`)
 - pdf-ingest: 8092 (internal name `pdf-ingest`)
@@ -194,7 +194,7 @@ If your fork’s internal port differs, adjust `AGENT_ZERO_EXTRA_ARGS` / `ARCHON
 - No Make? `python3 -m pmoves.tools.onboarding_helper generate` produces the same env files and reports any missing CHIT labels before you bring up containers.
 - Configure Crush with `python3 -m pmoves.tools.mini_cli crush setup` so your local Crush CLI session understands PMOVES context paths, providers, and MCP stubs.
   - Optional: install `direnv` and copy `pmoves/.envrc.example` to `pmoves/.envrc` for auto‑loading.
-- TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). `make -C pmoves up-tensorzero` now starts ClickHouse, the gateway/UI, and `pmoves-ollama`, so the default `gemma_embed_local` route works without manual pulls. If you deploy on hardware that cannot run Ollama (Jetson, remote inference nodes), skip the sidecar and point `TENSORZERO_BASE_URL` at a remote gateway instead. Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces.
+- TensorZero gateway (optional): copy `pmoves/tensorzero/config/tensorzero.toml.example` to `pmoves/tensorzero/config/tensorzero.toml`, then set `TENSORZERO_BASE_URL=http://localhost:3030` (and `TENSORZERO_API_KEY` if required). `make -C pmoves up-tensorzero` now starts ClickHouse, the gateway/UI, and `pmoves-ollama`, so the default `qwen3_embedding_4b_local` embedding route works without manual pulls. If you deploy on hardware that cannot run Ollama (Jetson, remote inference nodes), skip the sidecar and point `TENSORZERO_BASE_URL` at a remote gateway instead. Setting `LANGEXTRACT_PROVIDER=tensorzero` routes LangExtract through the gateway; populate `LANGEXTRACT_REQUEST_ID` / `LANGEXTRACT_FEEDBACK_*` variables to tag observability traces.
   - Advanced toggles: `TENSORZERO_MODEL` overrides the default chat backend, `TENSORZERO_TIMEOUT_SECONDS` adjusts request timeouts, and `TENSORZERO_STATIC_TAGS` (JSON or `key=value,key2=value2`) forwards deployment metadata as `tensorzero::tags`.
   - Observability: the gateway ships with observability disabled, but the `gateway.observability.clickhouse` block already points at the bundled ClickHouse defaults (`http://tensorzero-clickhouse:8123`, user/password/database `tensorzero`). Follow [`pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md`](services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md) to confirm the env vars and flip `observability.enabled` to `true` when you want metrics.
 
@@ -358,7 +358,7 @@ Defaults baked into compose:
  - Local PostgREST at `http://postgrest:3000` with a local Postgres database.
 
 Embedding providers (local-first):
-- Ollama: set `OLLAMA_URL` and `OLLAMA_EMBED_MODEL` (default nomic-embed-text).
+- Ollama: set `OLLAMA_URL` and `OLLAMA_EMBED_MODEL` (default `qwen3-embedding:4b`).
 - OpenAI-compatible endpoints (LM Studio, vLLM, NVIDIA NIM): set `OPENAI_COMPAT_BASE_URL` and `OPENAI_COMPAT_API_KEY`.
 - Hugging Face Inference: set `HF_API_KEY` and optionally `HF_EMBED_MODEL`.
 If none are configured/reachable, the gateway falls back to `SENTENCE_MODEL` locally.
@@ -403,7 +403,7 @@ OpenAI-compatible presets:
 - Live/offline toggle: `NOTEBOOK_SYNC_MODE` (`live` or `offline`) controls whether the worker processes updates at all.
 - Source filter: `NOTEBOOK_SYNC_SOURCES` (comma list of `notebooks`, `notes`, `sources`) limits which resources feed LangExtract.
 - Cursor storage: `NOTEBOOK_SYNC_DB_PATH` (default `/data/notebook_sync.db` mounted via the `notebook-sync-data` volume).
-- Extract worker routing: set `EMBEDDING_BACKEND=tensorzero` to call the TensorZero gateway for chunk embeddings (uses `TENSORZERO_BASE_URL` + `TENSORZERO_EMBED_MODEL`, defaults to `tensorzero::embedding_model_name::gemma_embed_local`, which proxies to Ollama's `embeddinggemma:300m`). Leave unset for local `sentence-transformers`.
+- Extract worker routing: set `EMBEDDING_BACKEND=tensorzero` to call the TensorZero gateway for chunk embeddings (uses `TENSORZERO_BASE_URL` + `TENSORZERO_EMBED_MODEL`, default `tensorzero::embedding_model_name::qwen3_embedding_4b_local`, which proxies to Ollama's `qwen3-embedding:4b`). Leave unset for local `sentence-transformers`.
 
 ### Mindmap + Open Notebook integration
 
@@ -504,9 +504,9 @@ OpenAI-compatible presets:
 
 1. Prepare library folders: `make jellyfin-folders`. Copy media into the resulting structure or mount additional host paths by editing `docker-compose.external.yml` (`./data/jellyfin/media` is bound to `/media` in the container).
 2. First-run wizard: add the Movies/TV/Music folders created above and configure metadata providers/time zone.
-3. Install the official Kodi Sync Queue plugin from Dashboard → Plugins → Catalog → "Kodi Sync Queue" (stable repo).citeturn1search1 This enables instant library updates for Jellyfin for Kodi clients.
-4. On Kodi devices, install the "Jellyfin for Kodi" add-on (Download → Video add-ons → Jellyfin), sign in with the same server URL/API key, and enable automatic sync.citeturn1search1
-5. Optional: add Jellyfin's stable plugin repository manually (`https://repo.jellyfin.org/releases/plugin/manifest-stable.json`) if the catalog isn't pre-populated.citeturn1search1
+3. Install the official Kodi Sync Queue plugin from Dashboard → Plugins → Catalog → "Kodi Sync Queue" (stable repo). This enables instant library updates for Jellyfin for Kodi clients.
+4. On Kodi devices, install the "Jellyfin for Kodi" add-on (Download → Video add-ons → Jellyfin), sign in with the same server URL/API key, and enable automatic sync.
+5. Optional: add Jellyfin's stable plugin repository manually (`https://repo.jellyfin.org/releases/plugin/manifest-stable.json`) if the catalog isn't pre-populated.
 
 ## n8n Flows (Quick Import)
 

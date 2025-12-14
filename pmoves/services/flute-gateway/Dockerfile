@@ -12,6 +12,7 @@ RUN apt-get update \
 
 # Install Python dependencies
 COPY services/flute-gateway/requirements.txt .
+COPY services/flute-gateway/requirements.lock .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Non-root user for security

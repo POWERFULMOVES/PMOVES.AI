@@ -49,7 +49,7 @@
             ]
           },
           "options": {
-            "timeout": 30
+            "timeout": 30000
           }
         },
         "id": "fetch_health",
@@ -93,7 +93,7 @@
           "sendBody": true,
           "body": "={{ JSON.stringify($json) }}",
           "options": {
-            "timeout": 30,
+            "timeout": 30000,
             "bodyContentType": "json"
           },
           "method": "POST",

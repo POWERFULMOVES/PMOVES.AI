@@ -5,6 +5,8 @@
 **Effort:** 1.5-2 hours with TAC
 **Date:** 2025-12-06
 
+> Update (2025-12-14): The runtime stack now uses a **5-tier** segmentation layout (as reflected in `pmoves/docker-compose.yml` and `docs/PMOVES.AI-Edition-Hardened-Full.md`). Treat this file as the original Phase 2 design notes; reconcile any drift by preferring the compose + hardened overlay and updating this document when making further network-policy changes.
+
 ## Overview
 
 Network policies implement network segmentation to limit lateral movement, enforce least-privilege networking, and reduce attack surface. This design creates isolated network tiers with explicit allow rules for required communication.

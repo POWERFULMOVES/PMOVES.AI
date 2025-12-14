@@ -220,7 +220,7 @@ chmod +x functional/test_tensorzero_inference.sh
 - `WHISPER_URL` (default: `http://localhost:8078`)
 - `VIDEO_ANALYZER_URL` (default: `http://localhost:8079`)
 - `AUDIO_ANALYZER_URL` (default: `http://localhost:8082`)
-- `EXTRACT_WORKER_URL` (default: `http://localhost:8083`)
+- `EXTRACT_WORKER_URL` (default: `http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}`)
 - `MINIO_URL` (default: `http://localhost:9000`)
 
 ## Test Output

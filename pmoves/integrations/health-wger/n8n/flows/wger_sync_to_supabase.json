@@ -34,7 +34,7 @@
             ]
           },
           "options": {
-            "timeout": 30
+            "timeout": 30000
           }
         },
         "id": "fetch",
@@ -104,7 +104,7 @@
           },
           "body": "={{ JSON.stringify($json) }}",
           "options": {
-            "timeout": 30
+            "timeout": 30000
           }
         },
         "id": "upsert",

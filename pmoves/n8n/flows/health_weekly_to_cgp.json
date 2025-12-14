@@ -43,7 +43,7 @@
         "parameters": {
           "url": "http://hi-rag-gateway-v2:8086/geometry/event",
           "options": {
-            "timeout": 20
+            "timeout": 20000
           }
         },
         "id": "Post",

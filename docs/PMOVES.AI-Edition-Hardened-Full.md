@@ -6,13 +6,16 @@
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
-### Status (2025-12-13)
+### Status (2025-12-14)
 - Hardened self-hosted multi-arch builds + Trivy gating shipped (`.github/workflows/self-hosted-builds-hardened.yml`); pmoves-yt yt-dlp bump workflow live; env pins warn on `:pmoves-latest`.
 - Arm/Jetson path covered via `pmoves/docker-compose.arm64.override.yml`; GPU smoke still red when NVIDIA runtime is missing—rerun `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` once GPU is exposed.
 - Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
 - Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
 - Docker Desktop/WSL environments may write `credsStore=desktop.exe` into `~/.docker/config.json`, which breaks pulls/builds on Linux/headless hosts. Prefer the repo-scoped `.docker-nocreds/` config (set `DOCKER_CONFIG=.../.docker-nocreds`)—`pmoves/Makefile` will auto-use it when present.
 - n8n flows are repo-tracked as sanitized, importable exports under `pmoves/n8n/flows/` (Voice Agents + pollers). Import/activate with `make -C pmoves n8n-import-flows` + `make -C pmoves n8n-activate-flows`.
+- Voice Agents now default to a **local** TensorZero/Ollama model when available (`VOICE_AGENT_MODEL=tensorzero::model_name::qwen2_5_14b`). The Voice Agent router publishes `voice.agent.response.v1` on NATS.
+- n8n HTTP Request nodes interpret `options.timeout` as **milliseconds**; repo-tracked flows have been corrected to use sane ms timeouts (LLM/Supabase/NATS).
+- FFmpeg-Whisper now supports `POST /transcribe_file` (multipart) for ad-hoc STT (used by Flute Gateway); `python-multipart` is included in the service lockfile to support form parsing.
 - Flute Gateway uses VibeVoice for realtime TTS when available. VibeVoice is typically run outside Docker (Pinokio/host) and reached via `VIBEVOICE_URL=http://host.docker.internal:<PORT>`; see `pmoves/docs/ARTSTUFF/README.md`.
 - Open Notebook externals default to `OPEN_NOTEBOOK_IMAGE` (see `pmoves/env.shared.example`). External bring-up targets load `env.shared` so image pins apply consistently.
 - Local “everything up” baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
@@ -1006,46 +1009,38 @@ TensorZero provides a **unified gateway for all LLM providers** with built-in ob
 ```toml
 [gateway]
 bind_address = "0.0.0.0:3000"
+observability.enabled = true
 
-[clickhouse]
-url = "http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default"
+# ClickHouse connection is configured via env:
+# TENSORZERO_CLICKHOUSE_URL=http://user:pass@tensorzero-clickhouse:8123/default
 
-[[models]]
-name = "claude-sonnet-4-5"
-provider = "anthropic"
-model_name = "claude-sonnet-4-5-20251022"
-max_tokens = 200000
+[models.qwen2_5_14b]
+routing = ["ollama_local"]
 
-[[models]]
-name = "gpt-4o"
-provider = "openai"
-model_name = "gpt-4o-2024-11-20"
-max_tokens = 128000
+[models.qwen2_5_14b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2.5:14b"
+api_key_location = "none"
 
-[[models]]
-name = "gemma_embed_local"
-provider = "ollama"
-model_name = "embeddinggemma:300m"
-type = "embedding"
+[embedding_models.qwen3_embedding_4b_local]
+routing = ["ollama_local_embedding"]
 
-[providers.anthropic]
-api_key_env = "ANTHROPIC_API_KEY"
-
-[providers.openai]
-api_key_env = "OPENAI_API_KEY"
-
-[providers.ollama]
-base_url = "http://pmoves-ollama:11434"
+[embedding_models.qwen3_embedding_4b_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-embedding:4b"
+api_key_location = "none"
 ```
 
 ### API Usage
 
 **Chat completions:**
 ```bash
-curl -X POST http://localhost:3030/v1/chat/completions \
+curl -X POST http://localhost:3030/openai/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4-5",
+    "model": "tensorzero::model_name::qwen2_5_14b",
     "messages": [
       {"role": "user", "content": "Explain NATS JetStream"}
     ],
@@ -1055,10 +1050,10 @@ curl -X POST http://localhost:3030/v1/chat/completions \
 
 **Embeddings:**
 ```bash
-curl -X POST http://localhost:3030/v1/embeddings \
+curl -X POST http://localhost:3030/openai/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemma_embed_local",
+    "model": "tensorzero::embedding_model_name::qwen3_embedding_4b_local",
     "input": "Text to embed for semantic search"
   }'
 ```
@@ -1098,7 +1093,7 @@ docker exec -it tensorzero-clickhouse clickhouse-client \
 # Hi-RAG automatically uses TensorZero for embeddings
 import os
 os.environ['TENSORZERO_BASE_URL'] = 'http://tensorzero-gateway:3000'
-os.environ['TENSORZERO_EMBED_MODEL'] = 'tensorzero::embedding_model_name::gemma_embed_local'
+os.environ['TENSORZERO_EMBED_MODEL'] = 'tensorzero::embedding_model_name::qwen3_embedding_4b_local'
 
 # Requests are now tracked in ClickHouse
 ```
@@ -1920,7 +1915,7 @@ services:
 - **Agent Zero Response:** Sub-500ms (via TensorZero gateway)
 - **Hi-RAG v2 Query:** 200-800ms (with reranking)
 - **TensorZero Latency:** p95 < 2s (OpenAI), p95 < 3s (Anthropic)
-- **Local Embeddings:** 50-150ms (Ollama gemma_embed_local)
+- **Local Embeddings:** 50-250ms (Ollama qwen3-embedding:4b; edge fallback gemma_embed_local)
 
 **Media Processing:**
 - **YouTube Download:** 1-5 min (720p video)

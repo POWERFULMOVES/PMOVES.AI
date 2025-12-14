@@ -136,7 +136,7 @@ The gateway architecture addresses three critical challenges in production AI sy
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-Services integrate with TensorZero via environment variables like `TENSORZERO_BASE_URL=http://tensorzero-gateway:3000` and `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::gemma_embed_local`. The gateway integrates with PMOVES's observability stack (Prometheus, Grafana, Loki) and is launched via `make up-tensorzero`.
+Services integrate with TensorZero via environment variables like `TENSORZERO_BASE_URL=http://tensorzero-gateway:3000` and `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local`. The gateway integrates with PMOVES's observability stack (Prometheus, Grafana, Loki) and is launched via `make up-tensorzero`.
 
 ### Recommended Model Configurations
 
@@ -155,6 +155,8 @@ Services integrate with TensorZero via environment variables like `TENSORZERO_BA
 * **Anthropic Claude 3.5 Sonnet** – Long context model via OpenRouter at `https://openrouter.ai/api/v1` with `model_name = "anthropic/claude-3.5-sonnet"`. 200k context window, ~$3/1M input tokens. Superior long-context handling and ethical reasoning.
 
 **Embedding Models:**
+
+* **Qwen3-Embedding 4B** – Production-grade local embeddings via Ollama with `model_name = "qwen3-embedding:4b"`. Strong multilingual retrieval quality; route via TensorZero for observability.
 
 * **Gemma Embed 300M** – Fast local embeddings via Ollama with `model_name = "embeddinggemma:300m"`. Generates 500-1000 embeddings/sec in 768 dimensions, requires ~1GB VRAM. Low latency with no API costs.
 
@@ -200,12 +202,13 @@ Observability is disabled by default (`observability.enabled = false`). To enabl
 | Qwen 14B             | RTX 3090 (24GB)       | 16GB     | 15-25      | 128k    | Primary orchestration    |
 | Mistral 7B           | RTX 3090 (24GB)       | 8GB      | 30-50      | 32k     | Balanced perf/quality    |
 | Phi-3 Mini 3.8B      | Jetson Orin Nano (8GB)| 4GB      | 10-20      | 128k    | Edge deployment          |
+| Qwen3-Embedding 4B    | RTX 3090 (24GB)       | 3-4GB    | -          | 32k     | Default local embeddings |
 | Gemma Embed 300M     | RTX 3090 (24GB)       | 1GB      | 500-1000   | -       | Fast local embeddings    |
 | Nomic Embed Text     | RTX 3090 (24GB)       | 2GB      | 300-500    | -       | High quality local       |
 
 ### Integration with PMOVES Services
 
-**Hi-RAG v2** uses TensorZero for optional embedding generation via `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::gemma_embed_local`. **Agent Zero** routes all LLM calls through TensorZero for observability with dynamic model selection via function variants. **Archon** uses TensorZero for prompt execution in agent workflows. **Extract Worker** can use TensorZero for embedding generation as an alternative to local `sentence-transformers`.
+**Hi-RAG v2** uses TensorZero for embedding generation via `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local` (production default). **Agent Zero** routes all LLM calls through TensorZero for observability with dynamic model selection via function variants. **Archon** uses TensorZero for prompt execution in agent workflows. **Extract Worker** can use TensorZero for embedding generation as an alternative to local `sentence-transformers`.
 
 ### Configuration Patterns
 

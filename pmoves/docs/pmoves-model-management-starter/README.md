@@ -3,8 +3,8 @@
 This starter explains how to pick embedding/rerank models, switch providers at runtime, and bring up Agent Zero and Archon UIs for orchestration.
 
 ## Embeddings
-- Local (Ollama): set `USE_OLLAMA_EMBED=true`, `OLLAMA_URL=http://pmoves-ollama:11434`, and pick `OLLAMA_EMBED_MODEL=embeddinggemma:300m`.
-- Remote (TensorZero): set `EMBEDDING_BACKEND=tensorzero`, `TENSORZERO_BASE_URL=http://<remote>:3000`, and choose `TENSORZERO_EMBED_MODEL` (e.g., `tensorzero::embedding_model_name::gemma_embed_local`).
+- Local (Ollama): set `USE_OLLAMA_EMBED=true`, `OLLAMA_URL=http://pmoves-ollama:11434`, and pick `OLLAMA_EMBED_MODEL=qwen3-embedding:4b` (Jetson/low VRAM: `qwen3-embedding:0.6b` or `embeddinggemma:300m`).
+- Remote (TensorZero): set `EMBEDDING_BACKEND=tensorzero`, `TENSORZERO_BASE_URL=http://<remote>:3000`, and choose `TENSORZERO_EMBED_MODEL` (default `tensorzero::embedding_model_name::qwen3_embedding_4b_local`).
 - Fallback: without providers, hi-rag uses `all-MiniLM-L6-v2` via sentence-transformers.
 
 ## Reranking
@@ -13,7 +13,7 @@ This starter explains how to pick embedding/rerank models, switch providers at r
 
 ## Agent UIs
 - Start the agents stack: `make -C pmoves up-agents` (NATS, Agent Zero, Archon, Mesh Agent, publisher-discord).
-- Agent Zero UI: http://localhost:8080 (health: `make -C pmoves health-agent-zero`).
+- Agent Zero UI: http://localhost:8081 (health: `make -C pmoves health-agent-zero`).
 - Archon UI/health: http://localhost:8091/healthz (smoke: `make -C pmoves smoke-archon`).
 - If NATS JetStream errors appear after image upgrades, rebuild and restart Agent Zero:
   ```bash

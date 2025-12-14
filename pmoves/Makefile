@@ -574,6 +574,7 @@ model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.loca
 
 models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL examples)
 	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
+	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen3-embedding:4b"}' >/dev/null 2>&1 || true
 	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"embeddinggemma:300m"}' >/dev/null 2>&1 || true
 	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen2.5:14b-instruct-q4_K_M"}' >/dev/null 2>&1 || true
 	@echo "✔ Seeded baseline Ollama models (if sidecar available)."
@@ -1394,7 +1395,7 @@ smoke-gpu:
         STRICT=$${GPU_SMOKE_STRICT:-true}; \
         PASS=false; \
         for Q in "$$Q1" "$$Q2" "$$Q3"; do \
-          RESP=$$(docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d "$$Q"); \
+          RESP=$$(curl -sf --max-time 30 http://localhost:$(HIRAG_GPU_PORT)/hirag/query -H 'content-type: application/json' -d "$$Q"); \
           if [ "$$STRICT" = "true" ]; then \
             if echo "$$RESP" | jq -e '.used_rerank==true' >/dev/null; then PASS=true; break; fi; \
           else \

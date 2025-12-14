@@ -25,6 +25,7 @@ RUN python3 -m pip install --index-url https://download.pytorch.org/whl/${TORCH_
 
 # Base requirements
 COPY services/hi-rag-gateway-v2/requirements.txt /app/requirements.txt
+COPY services/hi-rag-gateway-v2/requirements.lock /app/requirements.lock
 RUN python3 -m pip install -r /app/requirements.txt
 
 # CLAP (uses torch)

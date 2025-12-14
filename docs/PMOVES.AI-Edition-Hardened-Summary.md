@@ -1,4 +1,10 @@
 PMOVES.AI Edition - Hardened Integrations, Images, and CI/CD
+_Last updated: 2025-12-14_
+
+Update (2025-12-14)
+- Voice Agents are wired end-to-end via n8n + Flute Gateway + TensorZero (default local model: `tensorzero::model_name::qwen2_5_14b`) and publish `voice.agent.response.v1` on NATS.
+- FFmpeg-Whisper supports `POST /transcribe_file` (multipart) for ad-hoc STT calls (used by Flute Gateway).
+- n8n flow exports in `pmoves/n8n/flows/` use millisecond timeouts for HTTP Request nodes (n8n interprets `options.timeout` as ms).
 
 Overview
 - Goal: treat each external integration as a first-class, hardened submodule with a pinned image in GHCR, reproducible builds, and CI parity with PMOVES.AI.

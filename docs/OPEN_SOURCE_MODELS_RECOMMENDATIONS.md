@@ -2,7 +2,7 @@
 
 Comprehensive guide to open-source model selection for PMOVES services, optimized for different deployment contexts.
 
-**Last Updated**: December 7, 2025
+**Last Updated**: December 14, 2025
 
 ## Model Selection Philosophy
 
@@ -32,7 +32,7 @@ PMOVES.AI prioritizes:
 |------|----------|-------------------|-------|
 | **Primary LLM** | Qwen 2.5 32B | **Qwen3 30B** (MoE) | 3.3B active params, 256K ctx |
 | **Reasoning** | None | **DeepSeek-R1:32b** | Qwen2.5 distill, MIT license |
-| **Embeddings** | nomic-embed-text | **Qwen3-Embedding:4b** | MTEB #1, 32K context |
+| **Embeddings** | qwen3-embedding:4b | **Qwen3-Embedding (default) / Nomic (fallback)** | Qwen3-Embedding is MTEB-leading; PMOVES defaults to local Qwen3 embeddings via Ollama/TensorZero |
 | **Code** | Qwen2.5-Coder | **Qwen3-Coder:30b** | 256K ctx, MoE 3.3B active |
 | **Edge** | Phi-3 Mini | **Qwen3:4b** | 256K ctx, better quality |
 | **Vision** | LLaVA | **Qwen3-VL:8b** | GUI agent, 256K ctx |
@@ -75,9 +75,10 @@ PMOVES.AI prioritizes:
 | **nomic-embed-text** | 64-768 | 0.5GB | 53.01 | 8K | Speed-optimized |
 | **all-minilm:l6-v2** | 384 | 43MB | Moderate | 512 | Ultra-fast, CPU OK |
 
-**PMOVES Default (Hi-RAG v2)**: `qwen3-embedding:4b` (MTEB #1 family, 32K context)
-**PMOVES Extract Worker**: `snowflake-arctic-embed2:568m` (100+ docs/sec, 1024d)
-**PMOVES Edge/Fallback**: `all-minilm:l6-v2` (CPU inference, 384d)
+**PMOVES Default (production, RTX 5090 class)**: `qwen3-embedding:4b` via TensorZero embedding route `tensorzero::embedding_model_name::qwen3_embedding_4b_local`.
+**PMOVES Fast local fallback**: `nomic-embed-text` (use a dedicated Qdrant collection; do not mix dims).
+**PMOVES Edge (Jetson/low VRAM)**: `qwen3-embedding:0.6b` or `embeddinggemma:300m` (use a dedicated Qdrant collection; do not mix dims).
+**PMOVES CPU-only fallback**: `all-minilm:l6-v2` (384-dim; use a dedicated Qdrant collection).
 
 ### 3. Reranking
 
@@ -245,12 +246,14 @@ weight = 0.1  # Premium fallback
 ```toml
 [functions.embed]
 type = "embedding"
-variants = ["local_nomic"]
+variants = ["local_qwen3_embedding"]
 
-[functions.embed.variants.local_nomic]
+[functions.embed.variants.local_qwen3_embedding]
 provider = "ollama"
-model = "nomic-embed-text"
+model = "qwen3-embedding:4b"
 ```
+
+Implementation note (this repo): PMOVES uses TensorZero’s `embedding_models.*` routes (see `pmoves/tensorzero/config/tensorzero.toml`) and services point at those via `TENSORZERO_EMBED_MODEL` in `pmoves/env.shared`.
 
 ---
 
@@ -269,7 +272,7 @@ model = "nomic-embed-text"
 
 ### Hi-RAG v2 (Retrieval)
 
-- **Embeddings**: bge-large-en-v1.5 (quality) or nomic-embed-text (speed)
+- **Embeddings**: qwen3-embedding:4b (default) or nomic-embed-text (speed; separate collection)
 - **Reranker**: Qwen Reranker 4B (GPU) or bge-reranker-base (CPU)
 - **Generator**: Routed through TensorZero
 

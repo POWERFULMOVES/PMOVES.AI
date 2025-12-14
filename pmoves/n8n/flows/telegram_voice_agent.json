@@ -19,9 +19,10 @@
         "webhookId": "telegram-voice-webhook"
       },
       {
-        "parameters": {
-          "rules": {
-            "rules": [
+	        "parameters": {
+	          "mode": "rules",
+	          "rules": {
+	            "values": [
               {
                 "conditions": {
                   "options": {
@@ -123,19 +124,15 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://tensorzero-gateway:3030/v1/audio/transcriptions",
+          "url": "http://flute-gateway:8055/v1/voice/recognize",
           "sendBody": true,
           "contentType": "multipart-form-data",
           "bodyParameters": {
             "parameters": [
               {
                 "parameterType": "formBinaryData",
-                "name": "file",
+                "name": "audio",
                 "inputDataFieldName": "data"
-              },
-              {
-                "name": "model",
-                "value": "whisper-1"
               }
             ]
           },
@@ -199,10 +196,23 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://tensorzero-gateway:3030/v1/chat/completions",
+          "url": "={{ ($env.OPENAI_COMPATIBLE_BASE_URL || $env.OPENAI_COMPAT_BASE_URL || ($env.TENSORZERO_BASE_URL ? ($env.TENSORZERO_BASE_URL.replace(/\\/$/, '') + '/openai/v1') : 'https://api.openai.com/v1')).replace(/\\/$/, '') }}/chat/completions",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "Authorization",
+                "value": "={{ 'Bearer ' + ($env.OPENAI_COMPAT_API_KEY || $env.OPENAI_API_KEY || '') }}"
+              }
+            ]
+          },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful voice assistant for PMOVES.AI. Keep responses concise and conversational, suitable for voice output. Aim for 1-3 sentences unless more detail is specifically requested.{{ $json.context }}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.user_message }}\"\n    }\n  ],\n  \"max_tokens\": 500\n}",
+          "jsonBody": "={{ {\n  model: ($env.VOICE_AGENT_MODEL || $env.OPENAI_MODEL || ($env.TENSORZERO_BASE_URL ? 'tensorzero::model_name::qwen2_5_14b' : 'gpt-4o-mini')),\n  messages: [\n    {\n      role: 'system',\n      content: 'You are a helpful voice assistant for PMOVES.AI. Keep responses concise and conversational, suitable for voice output. Aim for 1-3 sentences unless more detail is specifically requested.' + ($json.context || '')\n    },\n    {\n      role: 'user',\n      content: $json.user_message\n    }\n  ],\n  max_tokens: 500\n} }}",
           "options": {}
         },
         "id": "llm-response",
@@ -216,7 +226,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Extract response text\nconst items = $input.all();\nconst llmResult = items[0].json;\nconst prevData = $('Build Context').first().json;\n\nconst responseText = llmResult.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';\n\nreturn [{\n  json: {\n    ...prevData,\n    response_text: responseText,\n    model_used: llmResult.model || 'claude-sonnet-4-5'\n  }\n}];"
+          "jsCode": "// Extract response text\nconst items = $input.all();\nconst rawResult = items[0].json;\nconst llmResult = rawResult.body ?? rawResult;\nconst prevData = $('Build Context').first().json;\n\nconst responseText = llmResult.choices?.[0]?.message?.content || llmResult.response || llmResult.text || 'Sorry, I could not generate a response.';\nconst defaultModel = ($env.VOICE_AGENT_MODEL || $env.OPENAI_MODEL || ($env.TENSORZERO_BASE_URL ? 'tensorzero::model_name::qwen2_5_14b' : 'gpt-4o-mini'));\n\nreturn [{\n  json: {\n    ...prevData,\n    response_text: responseText,\n    model_used: llmResult.model || rawResult.model || defaultModel\n  }\n}];"
         },
         "id": "extract-response",
         "name": "Extract Response",
