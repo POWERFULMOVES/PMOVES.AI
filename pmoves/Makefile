@@ -2221,7 +2221,18 @@ voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero p
 	  echo "  ✗ No matching voice agent event received"; \
 	  exit 1; \
 	fi; \
-	rm -f "$$OUT" "$$RESP"
+		rm -f "$$OUT" "$$RESP"
+
+.PHONY: flute-tts-smoke
+flute-tts-smoke: ## Generate a WAV file via Flute TTS (writes ../tmp/flute_tts_smoke.wav)
+	@out="../tmp/flute_tts_smoke.wav"; \
+	mkdir -p "$$(dirname "$$out")"; \
+	echo "→ Generating $$out via http://localhost:8055/v1/voice/synthesize/audio"; \
+	curl -fsS -X POST http://localhost:8055/v1/voice/synthesize/audio \
+	  -H 'content-type: application/json' \
+	  --data-binary '{"text":"Hello from PMOVES. This is a TTS smoke test.","provider":"vibevoice","voice":"en-Emma_woman","output_format":"wav"}' \
+	  -o "$$out"; \
+	echo "✔ Wrote $$out (open/play it to hear audio)"
 
 .PHONY: jellyfin-smoke
 jellyfin-smoke:
