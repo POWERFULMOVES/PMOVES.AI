@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-_Last updated: 2025-12-14_
+Last updated: 2025-12-14
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.

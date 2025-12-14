@@ -188,19 +188,19 @@ docker history app:latest | grep -i secret  # Should return nothing
 
 PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ services organized into functional tiers:
 
-**Core Infrastructure (4 services)**
+### Core Infrastructure (4 services)
 - `tensorzero-gateway` - Centralized LLM gateway (port 3030)
 - `tensorzero-clickhouse` - Observability metrics database (port 8123)
 - `tensorzero-ui` - Metrics dashboard (port 4000)
 - `nats` - JetStream message bus for event coordination (port 4222)
 
-**Agent Orchestration (4 services)**
+### Agent Orchestration (4 services)
 - `agent-zero` - Control-plane orchestrator with MCP API (ports 8080 API, 8081 UI)
 - `archon` - Supabase-driven agent service (port 8091)
 - `mesh-agent` - Distributed node announcer
 - `channel-monitor` - External content watcher (port 8097)
 
-**Knowledge & Retrieval (6 services)**
+### Knowledge & Retrieval (6 services)
 - `hi-rag-gateway-v2` - Hybrid RAG with cross-encoder reranking (port 8086)
 - `hi-rag-gateway-v2-gpu` - GPU-accelerated variant (port 8087)
 - `hi-rag-gateway` - Legacy v1 gateway (port 8089)
@@ -208,7 +208,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `supaserch` - Multimodal holographic research orchestrator (port 8099)
 - `notebook-sync` - Open Notebook synchronizer (port 8095)
 
-**Media Ingestion & Processing (8 services)**
+### Media Ingestion & Processing (8 services)
 - `pmoves-yt` - YouTube ingestion service (port 8077)
 - `ffmpeg-whisper` - GPU-accelerated Whisper transcription (port 8078)
 - `media-video` - YOLOv8 object detection (port 8079)
@@ -218,7 +218,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `langextract` - Language detection & NLP (port 8084)
 - `bgutil-pot-provider` - YouTube proof-of-origin token provider (port 4416)
 
-**Utilities & Integration (8 services)**
+### Utilities & Integration (8 services)
 - `presign` - MinIO URL presigner (port 8088)
 - `render-webhook` - ComfyUI callback handler (port 8085)
 - `publisher-discord` - Discord notification bot (port 8094)
@@ -228,7 +228,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `n8n` - Workflow automation + webhooks (port 5678)
 - `cloudflared` - Cloudflare Tunnel connector
 
-**Monitoring Stack (7 services)**
+### Monitoring Stack (7 services)
 - `prometheus` - Metrics scraping (port 9090)
 - `grafana` - Dashboard visualization (port 3002)
 - `loki` - Log aggregation (port 3100)
@@ -237,7 +237,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `blackbox` - Endpoint health monitoring (port 9115)
 - `node-exporter` - Host metrics
 
-**Data Storage (7 services)**
+### Data Storage (7 services)
 - `postgres` - PostgreSQL with pgvector (port 5432)
 - `postgrest` - REST API for Postgres (port 3010)
 - `qdrant` - Vector database (port 6333)
@@ -246,7 +246,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `minio` - S3-compatible object storage (ports 9000 API, 9001 Console)
 - `pmoves-ollama` - Local LLM server (port 11434)
 
-**Additional Services (13 services)**
+### Additional Services (13 services)
 - Invidious stack (3): `invidious`, `invidious-db`, `invidious-companion`
 - Grayjay stack (2): `grayjay-server`, `grayjay-plugin-host`
 - NATS diagnostics (2): `nats-echo-req`, `nats-echo-res`
@@ -254,7 +254,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 
 ### Port Allocation Reference Table
 
-**Complete inventory of all service ports with security classification and binding recommendations.**
+Complete inventory of all service ports with security classification and binding recommendations.
 
 | Port | Service | Tier | Current Binding | Production Binding | Notes |
 |------|---------|------|-----------------|-------------------|-------|

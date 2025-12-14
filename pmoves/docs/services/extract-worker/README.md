@@ -23,7 +23,7 @@ Environment
 - `SUPA_REST_URL` (default `http://host.docker.internal:65421/rest/v1`)
 
 Smoke
-```
+```bash
 docker compose up -d qdrant meilisearch postgrest extract-worker
 docker compose ps extract-worker
 curl -sS "http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/healthz" | head -c 200 || true
