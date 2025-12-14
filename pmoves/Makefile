@@ -322,6 +322,7 @@ STACK_FILES ?= \
 	-f docker-compose.n8n.yml \
 	$(VOICE_STACK_FILE) \
 	$(N8N_DB_STACK_FILE) \
+	-f docker-compose.comfyui.yml \
 	-f docker-compose.external.yml \
 	-f docker-compose.archon.submodule.yml \
 	-f docker-compose.archon-ui.submodule.yml \
@@ -900,6 +901,20 @@ up-n8n: ensure-env-shared
 	  echo "→ n8n DB mode: sqlite"; \
 	  $(DC) up -d n8n n8n-runners; \
 	fi
+
+.PHONY: up-comfyui comfyui-smoke
+up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)
+	@$(DC) --profile creator up -d comfyui
+	@echo "✔ ComfyUI up at http://localhost:$${COMFYUI_HOST_PORT:-8188}"
+
+comfyui-smoke: ## Smoke check ComfyUI / (expects 200/302)
+	@port=$${COMFYUI_HOST_PORT:-8188}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
+	if [ "$$code" != "200" ] && [ "$$code" != "302" ]; then \
+	  echo "✖ ComfyUI / => $$code (start with: make -C pmoves up-comfyui)"; \
+	  exit 1; \
+	fi; \
+	echo "✔ ComfyUI reachable (HTTP $$code)"
 
 .PHONY: up-vibevoice
 up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights on first run)

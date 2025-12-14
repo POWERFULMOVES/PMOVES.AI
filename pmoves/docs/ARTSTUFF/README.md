@@ -11,6 +11,20 @@ These assets are **not** part of the default PMOVES Docker stack unless explicit
   - `pmoves/docs/ARTSTUFF/realtime/README.md` describes a **Pinokio** launcher for VibeVoice Realtime.
   - The Windows `.bat` scripts here install ComfyUI Manager nodes/models into an existing ComfyUI install.
 
+## Ultimate TTS Studio (SUP3R Edition) UI
+
+The repo `SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition` is a **creator-workstation Gradio UI** that bundles multiple voice engines (including VibeVoice).
+
+- Recommended runtime: **Pinokio / Windows creator workstation** (matches upstream assumptions; GPU-heavy).
+- Entry docs:
+  - `pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio-SUP3R-EditionREADME.md` (quick pointer)
+  - `pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio-SUP3R-EditionREADMECLAUDE.md` (operational notes)
+
+How it feeds PMOVES:
+- Generate audio assets locally, then either:
+  - upload to S3/MinIO via the Creator pipeline and trigger the `vibevoice-to-cgp` webhook in n8n, or
+  - post a `studio_board` row directly (advanced) and let the publish pipeline pick it up.
+
 ## How this connects to PMOVES
 
 - `services/flute-gateway` can use VibeVoice for realtime TTS via `VIBEVOICE_URL`.
@@ -29,3 +43,13 @@ This repo ships an **optional** VibeVoice service under `pmoves/docker-compose.v
 - Flute can reach it either:
   - via host gateway: `VIBEVOICE_URL=http://host.docker.internal:${VIBEVOICE_HOST_PORT:-3000}` (works even if VibeVoice is run outside Docker), or
   - via service DNS (preferred when containerized): `VIBEVOICE_URL=http://vibevoice:3000`
+
+## ComfyUI (Docker vs creator workstation)
+
+Most of the `.bat` installers in this folder are designed for a **Windows creator workstation** ComfyUI install.
+
+For Docker-based local dev, PMOVES also provides an optional ComfyUI service:
+- Start: `make -C pmoves up-comfyui` (host `:${COMFYUI_HOST_PORT:-8188}`)
+- Smoke: `make -C pmoves comfyui-smoke`
+
+This is primarily used by the `pmoves_comfy_gen` workflow (n8n → `http://comfyui:8188/prompt`).
