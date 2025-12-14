@@ -6,8 +6,8 @@ LABEL org.opencontainers.image.description="PMOVES-BoTZ Gateway - Work item coor
 WORKDIR /app
 
 # Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock .
+RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
 # Copy application
 COPY main.py .

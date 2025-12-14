@@ -32,10 +32,13 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
 
 ### Secret Sync Helper
 
-- The manifest `pmoves/config/ci_secrets_manifest.yaml` tracks which runtime credentials map to CI secrets.
-- Use `python pmoves/scripts/secrets_sync.py diff` to verify local `env.shared` / CHIT bundles align with the manifest and that all required GitHub secrets exist.
-- Materialize an env file for manual updates with `python pmoves/scripts/secrets_sync.py download --output pmoves/tmp/ci-secrets.env`, then run `gh secret set --repo POWERFULMOVES/PMOVES.AI --env-file pmoves/tmp/ci-secrets.env`.
-- Prefer the helper to push changes directly: `python pmoves/scripts/secrets_sync.py upload --include-optional` (add `--dry-run` to preview). This relies on the GitHub CLI (`gh`) being authenticated for the repository.
+- CI secrets are sourced from the same single-env files used locally (`pmoves/env.shared` and generated overlays), and mirrored into GitHub Secrets.
+- To validate/generate the overlays from the CHIT bundle:
+  - `python -m pmoves.tools.onboarding_helper status`
+  - `python -m pmoves.tools.onboarding_helper generate`
+- To push secrets to GitHub:
+  - `./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev --dry-run`
+  - `./pmoves/tools/push-categorized-secrets.sh --env Dev --dry-run`
 
 ## Extending to Other Integrations
 

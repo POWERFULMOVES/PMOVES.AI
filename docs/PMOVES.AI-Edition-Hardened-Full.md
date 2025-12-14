@@ -6,6 +6,17 @@
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
+### Status (2025-12-13)
+- Hardened self-hosted multi-arch builds + Trivy gating shipped (`.github/workflows/self-hosted-builds-hardened.yml`); pmoves-yt yt-dlp bump workflow live; env pins warn on `:pmoves-latest`.
+- Arm/Jetson path covered via `pmoves/docker-compose.arm64.override.yml`; GPU smoke still red when NVIDIA runtime is missing—rerun `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` once GPU is exposed.
+- Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
+- Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
+- Docker Desktop/WSL environments may write `credsStore=desktop.exe` into `~/.docker/config.json`, which breaks pulls/builds on Linux/headless hosts. Prefer the repo-scoped `.docker-nocreds/` config (set `DOCKER_CONFIG=.../.docker-nocreds`)—`pmoves/Makefile` will auto-use it when present.
+- n8n flows are repo-tracked as sanitized, importable exports under `pmoves/n8n/flows/` (Voice Agents + pollers). Import/activate with `make -C pmoves n8n-import-flows` + `make -C pmoves n8n-activate-flows`.
+- Flute Gateway uses VibeVoice for realtime TTS when available. VibeVoice is typically run outside Docker (Pinokio/host) and reached via `VIBEVOICE_URL=http://host.docker.internal:<PORT>`; see `pmoves/docs/ARTSTUFF/README.md`.
+- Open Notebook externals default to `OPEN_NOTEBOOK_IMAGE` (see `pmoves/env.shared.example`). External bring-up targets load `env.shared` so image pins apply consistently.
+- Local “everything up” baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
+
 ---
 
 ## 1. GitHub Actions Self-Hosted Runner Infrastructure
@@ -204,12 +215,14 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `langextract` - Language detection & NLP (port 8084)
 - `bgutil-pot-provider` - YouTube proof-of-origin token provider (port 4416)
 
-**Utilities & Integration (6 services)**
+**Utilities & Integration (8 services)**
 - `presign` - MinIO URL presigner (port 8088)
 - `render-webhook` - ComfyUI callback handler (port 8085)
 - `publisher-discord` - Discord notification bot (port 8094)
 - `jellyfin-bridge` - Jellyfin metadata webhook (port 8093)
 - `retrieval-eval` - RAG evaluation service (port 8090)
+- `flute-gateway` - Realtime multimodal ingress (ports 8055-8056)
+- `n8n` - Workflow automation + webhooks (port 5678)
 - `cloudflared` - Cloudflare Tunnel connector
 
 **Monitoring Stack (7 services)**
@@ -557,7 +570,8 @@ services:
     restart: unless-stopped
     environment:
       - MEILI_ENV=production
-      - MEILI_MASTER_KEY=master_key
+      # Do not hardcode. Supply via env files or Docker secrets.
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     ports:
       - "7700:7700"
     networks:
@@ -569,8 +583,9 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      # Do not hardcode. Supply via env files or Docker secrets.
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -709,8 +724,8 @@ services:
     restart: unless-stopped
     environment:
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - NATS_URL=nats://nats:4222
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
     depends_on:
@@ -731,8 +746,8 @@ services:
     restart: unless-stopped
     environment:
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - USE_CUDA=true
       - WHISPER_MODEL=small
     ports:
@@ -1592,8 +1607,8 @@ OPEN_NOTEBOOK_API_URL=https://notebook.example.com/rpc
 OPEN_NOTEBOOK_API_TOKEN=...
 
 # MinIO Configuration
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
+MINIO_ACCESS_KEY=...
+MINIO_SECRET_KEY=...
 
 # Database Credentials (defaults for local dev)
 POSTGRES_USER=pmoves

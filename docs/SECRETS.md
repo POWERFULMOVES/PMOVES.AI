@@ -136,13 +136,11 @@ air-gapped machines while keeping a cryptographically structured payload.
 
 ## 6. CI Secret Sync
 
-- `pmoves/config/ci_secrets_manifest.yaml` captures the subset of credentials
-   required by GitHub Actions (integration image builds, smoke harnesses, etc.).
-- Run `python pmoves/scripts/secrets_sync.py diff` to confirm local values match
-   across CHIT bundles, `env.shared`, and GitHub repository secrets.
-- To stage updates, generate an env file with `python pmoves/scripts/secrets_sync.py download`
-   and feed it to the GitHub CLI (`gh secret set --repo POWERFULMOVES/PMOVES.AI --env-file …`).
-- You can also push directly via `python pmoves/scripts/secrets_sync.py upload --include-optional`.
+PMOVES keeps CI secrets aligned with local runtime values using:
+
+- `pmoves/chit/secrets_manifest.yaml` (what must exist in the CHIT bundle, and which env files it materializes)
+- `python -m pmoves.tools.onboarding_helper status|generate` (validate/generate `env.shared.generated` + `.env.generated`)
+- `pmoves/tools/push-gh-secrets.sh` and `pmoves/tools/push-categorized-secrets.sh` (mirror env files into GitHub Secrets)
 
 ### Shortcut: push env.shared to GitHub secrets
 Use `pmoves/tools/push-gh-secrets.sh` to send keys from `pmoves/env.shared` to GitHub Secrets without UI clicks:

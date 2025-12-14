@@ -1,10 +1,1 @@
-fastapi==0.114.2
-uvicorn==0.30.6
-qdrant-client==1.15.1
-sentence-transformers==3.0.1
-rapidfuzz==3.9.4
-requests==2.32.4
-neo4j==5.23.1
-cryptography==44.0.1
-# Optional HRM refinement sidecar (decoder packs)
-# torch==2.4.0
+-r requirements.lock

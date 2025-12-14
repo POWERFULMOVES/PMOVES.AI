@@ -83,7 +83,18 @@ RUN if [ "${USE_LOCAL_VENDOR}" = "1" ]; then \
       git clone --depth 1 --single-branch --branch "${ARCHON_GIT_REF}" "${ARCHON_GIT_REMOTE}" /app/vendor/archon; \
     fi
 
-COPY services/archon/requirements.txt ./requirements.txt
+# Patch upstream Archon MCP bootstrap for FastMCP compatibility.
+# fastmcp>=2.x expects `instructions=` (and does not accept `description=`).
+RUN set -eux; \
+    target="/app/vendor/archon/python/src/mcp_server/mcp_server.py"; \
+    if [ -f "$target" ] && grep -q "FastMCP(" "$target" && grep -q "description=" "$target"; then \
+      sed -i '/^[[:space:]]*description=/d' "$target"; \
+      echo "→ Patched MCP server description kwarg"; \
+    else \
+      echo "→ MCP server patch not needed"; \
+    fi
+
+COPY services/archon/requirements.txt services/archon/requirements.lock ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 

@@ -1,4 +1,1 @@
-minio==7.2.7
-nats-py==2.7.2
-watchdog==4.0.1
-jsonschema==4.22.0
+-r requirements.lock

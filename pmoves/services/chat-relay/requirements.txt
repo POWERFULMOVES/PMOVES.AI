@@ -1,7 +1,1 @@
-# Chat Relay Service Dependencies
-nats-py>=2.6.0
-supabase>=2.0.0
-aiohttp>=3.9.0
-
-# Integration tests (optional - for postgres connectivity)
-psycopg[binary]>=3.1.0
+-r requirements.lock

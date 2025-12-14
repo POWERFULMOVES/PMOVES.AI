@@ -1,63 +1,186 @@
-{
-  "workflowId": "pmoves-yt-docs-sync-diff",
-  "meta": { "instanceId": "pmoves-demo" },
-  "nodes": [
-    { "parameters": { "triggerTimes": [{ "item": { "mode": "everyDay", "hour": 3 } }] },
-      "id": "cron",
-      "name": "Nightly",
-      "type": "n8n-nodes-base.cron",
-      "typeVersion": 1,
-      "position": [-520, 120]
+[
+  {
+    "name": "PMOVES • YT Docs Sync Diff v1",
+    "nodes": [
+      {
+        "parameters": {
+          "triggerTimes": [
+            {
+              "item": {
+                "mode": "everyDay",
+                "hour": 3
+              }
+            }
+          ]
+        },
+        "id": "cron",
+        "name": "Nightly",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [
+          -520,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.PMOVES_YT_BASE_URL || 'http://localhost:8091' }}/yt/docs/sync",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "sync",
+        "name": "Sync Docs",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          -280,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.SUPABASE_REST_URL }}/pmoves_core.tool_docs",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "tool",
+                "value": "eq.yt-dlp"
+              },
+              {
+                "name": "doc_type",
+                "value": "eq.extractors"
+              },
+              {
+                "name": "order",
+                "value": "created_at.desc"
+              },
+              {
+                "name": "limit",
+                "value": "2"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "fetch_last2",
+        "name": "Fetch Last 2 Extractors",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          -20,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "functionCode": "const rows = items[0].json || [];\nif (!Array.isArray(rows) || rows.length === 0) {\n  return [{json: {summary: 'No extractor rows yet', added: [], removed: [], counts: {before:0, after:0}}}];\n}\nconst after = rows[0];\nconst before = rows[1];\nconst textAfter = ((after.content||{}).text||'').split('\n').map(s=>s.trim()).filter(Boolean);\nconst textBefore = ((before||{}).content||{}).text ? before.content.text.split('\n').map(s=>s.trim()).filter(Boolean) : [];\nconst setA = new Set(textAfter);\nconst setB = new Set(textBefore);\nconst added = textAfter.filter(x=>!setB.has(x));\nconst removed = textBefore.filter(x=>!setA.has(x));\nreturn [{json: {\n  summary: `extractors: +${added.length} / -${removed.length}`,\n  added, removed, counts: {before: textBefore.length, after: textAfter.length},\n  version: after.version, ts: after.created_at\n}}];"
+        },
+        "id": "diff",
+        "name": "Diff Extractors",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [
+          240,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({content: `YT docs sync: ${$json.summary} (before ${$json.counts.before} → after ${$json.counts.after})`}) }}",
+          "options": {}
+        },
+        "id": "discord",
+        "name": "Notify Discord",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          520,
+          120
+        ]
+      }
+    ],
+    "connections": {
+      "Nightly": {
+        "main": [
+          [
+            {
+              "node": "Sync Docs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sync Docs": {
+        "main": [
+          [
+            {
+              "node": "Fetch Last 2 Extractors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Last 2 Extractors": {
+        "main": [
+          [
+            {
+              "node": "Diff Extractors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Diff Extractors": {
+        "main": [
+          [
+            {
+              "node": "Notify Discord",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
     },
-    { "parameters": { "method": "POST", "url": "={{ $env.PMOVES_YT_BASE_URL || 'http://localhost:8091' }}/yt/docs/sync",
-        "sendHeaders": true, "headerParameters": { "parameters": [{"name":"content-type","value":"application/json"}] },
-        "options": {} },
-      "id": "sync",
-      "name": "Sync Docs",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [-280, 120]
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "instanceId": "pmoves-demo"
     },
-    { "parameters": { "url": "={{ $env.SUPABASE_REST_URL }}/pmoves_core.tool_docs",
-        "sendQuery": true,
-        "queryParameters": { "parameters": [
-          {"name": "tool", "value": "eq.yt-dlp"},
-          {"name": "doc_type", "value": "eq.extractors"},
-          {"name": "order", "value": "created_at.desc"},
-          {"name": "limit", "value": "2"}
-        ] },
-        "sendHeaders": true,
-        "headerParameters": { "parameters": [
-          {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"},
-          {"name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}
-        ] },
-        "options": {} },
-      "id": "fetch_last2",
-      "name": "Fetch Last 2 Extractors",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [-20, 120]
-    },
-    { "parameters": { "functionCode": "const rows = items[0].json || [];\nif (!Array.isArray(rows) || rows.length === 0) {\n  return [{json: {summary: 'No extractor rows yet', added: [], removed: [], counts: {before:0, after:0}}}];\n}\nconst after = rows[0];\nconst before = rows[1];\nconst textAfter = ((after.content||{}).text||'').split('\n').map(s=>s.trim()).filter(Boolean);\nconst textBefore = ((before||{}).content||{}).text ? before.content.text.split('\n').map(s=>s.trim()).filter(Boolean) : [];\nconst setA = new Set(textAfter);\nconst setB = new Set(textBefore);\nconst added = textAfter.filter(x=>!setB.has(x));\nconst removed = textBefore.filter(x=>!setA.has(x));\nreturn [{json: {\n  summary: `extractors: +${added.length} / -${removed.length}`,\n  added, removed, counts: {before: textBefore.length, after: textAfter.length},\n  version: after.version, ts: after.created_at\n}}];" },
-      "id": "diff",
-      "name": "Diff Extractors",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [240, 120]
-    },
-    { "parameters": { "method": "POST", "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
-        "sendBody": true, "body": "={{ JSON.stringify({content: `YT docs sync: ${$json.summary} (before ${$json.counts.before} → after ${$json.counts.after})`}) }}",
-        "options": {} },
-      "id": "discord",
-      "name": "Notify Discord",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [520, 120]
-    }
-  ],
-  "connections": { "Nightly": { "main": [[{"node": "Sync Docs", "type": "main", "index": 0}]] },
-    "Sync Docs": { "main": [[{"node": "Fetch Last 2 Extractors", "type": "main", "index": 0}]] },
-    "Fetch Last 2 Extractors": { "main": [[{"node": "Diff Extractors", "type": "main", "index": 0}]] },
-    "Diff Extractors": { "main": [[{"node": "Notify Discord", "type": "main", "index": 0}]] } }
-}
-
+    "pinData": null,
+    "versionId": "bcb8b3a5-a307-4482-aefd-b6c8abc29bbc",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": []
+  }
+]

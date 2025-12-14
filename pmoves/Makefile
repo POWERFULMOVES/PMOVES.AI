@@ -1,5 +1,16 @@
 # PMOVES top-level Makefile
 
+# Many targets rely on bashisms (heredocs, arrays, $'...' quoting). Use bash for all recipes.
+SHELL := bash
+
+# Docker Desktop / WSL often writes a credential helper (`credsStore=desktop.exe`) into ~/.docker/config.json
+# that is not executable in headless Linux environments. Prefer the repo-scoped nocreds config when present.
+DOCKER_CONFIG_REPO ?= $(CURDIR)/../.docker-nocreds
+ifneq ("$(wildcard $(DOCKER_CONFIG_REPO)/config.json)","")
+  DOCKER_CONFIG ?= $(DOCKER_CONFIG_REPO)
+  export DOCKER_CONFIG
+endif
+
 # -------- External-mode → Compose profiles ----------
 # If EXTERNAL_* is true, we skip the corresponding local service profile.
 # Profiles are defined on services in docker-compose.yml.
@@ -34,23 +45,14 @@ SINGLE_ENV_MODE ?= 1
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
+PULL ?= missing
 
 HIRAG_CPU_PORT := $(if $(HIRAG_V2_HOST_PORT),$(HIRAG_V2_HOST_PORT),8086)
 HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
 
-ifeq ($(SINGLE_ENV_MODE),1)
-  LOAD_ENV_SHARED := set -a; \
-        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f env.shared.generated ] && . env.shared.generated; \
-        set +a;
-		else
-  LOAD_ENV_SHARED := set -a; \
-        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f env.shared.generated ] && . env.shared.generated; \
-        [ -f .env.generated ] && . .env.generated; \
-        [ -f .env.local ] && . .env.local; \
-        set +a;
-endif
+# env.shared is dotenv-style and may contain values that are not safe to `source` directly (multi-line, etc).
+# Use the repo's sanitizer/loader so scripts get stable, safe environment variables.
+LOAD_ENV_SHARED := . ./scripts/with-env.sh;
 export LOAD_ENV_SHARED
 
 .PHONY: ensure-env-shared
@@ -73,9 +75,25 @@ update-service-docs: ## Regenerate service update notes from git metadata
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
 	@git pull --rebase
-	@docker compose pull --quiet
-	@docker compose up -d
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) pull --quiet'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) up -d --pull $(PULL)'
 	@echo "✔ Updated & reconciled containers."
+
+# One-shot bring-up for the common local dev stack (keeps container names stable under the $(PROJECT) project).
+.PHONY: up-all
+up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
+	@$(MAKE) up
+	@$(MAKE) up-agents-ui
+	@$(MAKE) up-bots
+	@$(MAKE) up-external-on
+	@$(MAKE) up-n8n
+	@$(MAKE) up-monitoring
+	@echo "✔ Full stack up (core + agents UI + n8n + monitoring)."
+
+.PHONY: up-bots
+up-bots: ## Start bot services (BotZ + messaging gateway)
+	@docker compose -p $(PROJECT) -f docker-compose.yml --profile data --profile workers --profile botz up -d botz-gateway messaging-gateway
+	@echo "✔ Bots up (botz-gateway + messaging-gateway)."
 
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke
@@ -215,31 +233,31 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 .PHONY: up up-gpu up-both-gateways
 up: ensure-env-shared ## Start core data + workers and both Hi-RAG gateways
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
-	@docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
 
 up-gpu: ## Start with optional GPU accelerations where supported
-	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
+	@$(LOAD_ENV_SHARED) docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
 	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up-gpu-gateways
 up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
 	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
-	@docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT), v1-gpu :8090)."
 
 .PHONY: recreate-v2-gpu
 recreate-v2-gpu: ## Force-recreate v2-gpu container (no deps)
-	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
 	@echo "✔ Recreated hi-rag-gateway-v2-gpu"
 
 .PHONY: recreate-v2
 recreate-v2: ## Force-recreate v2 CPU container (no deps)
-	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2
 	@echo "✔ Recreated hi-rag-gateway-v2"
 
 .PHONY: up-open-notebook
@@ -565,6 +583,7 @@ models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL e
 
 ui-dev-start: ## Start the PMOVES console dev server on :3001 with env layering
 	@cd ui && \
+	  if [ ! -d node_modules ]; then echo "→ Installing UI dependencies (npm ci)"; npm ci; fi && \
 	  (logfile=.pmoves_ui_dev.log; nohup node scripts/with-env.mjs npm run dev:3001 > "$$logfile" 2>&1 & echo $$! > .pmoves_ui_dev.pid; \
 	  echo "✔ Console dev server starting (http://localhost:3001). PID: $$(cat .pmoves_ui_dev.pid)"; \
 	  sleep 1; tail -n 5 "$$logfile" || true)
@@ -639,9 +658,9 @@ agents-headless-smoke: ## Check Agent Zero and Archon headless services
 	@$(MAKE) archon-headless-smoke
 
 .PHONY: up-agents-published
-up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images (no local builds)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
-	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
+up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord
+	@echo "✔ Agents started (published images where available). For production, use PULL=always and pin *_IMAGE tags."
 
 .PHONY: up-agents-ui
 up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use PUBLISHED_AGENTS=1 for images)
@@ -791,7 +810,7 @@ build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-ar
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
-	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
+	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && PYTHONPATH="$(CURDIR)/.." python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
 
 .PHONY: deepresearch-smoke-in-net
 deepresearch-smoke-in-net: ## Run DeepResearch NATS smoke inside the compose network (reliable visibility)
@@ -825,7 +844,7 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared
-	docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
 
 # Status helper
 ps:
@@ -836,24 +855,25 @@ ps:
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@bash -c 'set -a; [ -f env.shared ] && . env.shared; [ -f .env.local ] && . .env.local; set +a; exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d'
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL)'
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) wger wger-nginx'
 	@$(MAKE) wger-brand-defaults
 
 up-external-firefly: ## Start Firefly III on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d firefly
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) firefly'
 
 up-external-on: ## Start Open Notebook on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d open-notebook-ext
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) open-notebook-ext'
 
 up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext
+	@bash -lc '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d --pull $(PULL) jellyfin-ext'
 
 .PHONY: down-jellyfin-ai
 down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
@@ -864,7 +884,7 @@ down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
 up-jellyfin-single: ## Single Jellyfin using your forked image (8096)
 	@$(MAKE) --no-print-directory down-jellyfin-ai
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -c 'files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d jellyfin-ext'
+	@bash -lc '$(LOAD_ENV_SHARED) files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d --pull $(PULL) jellyfin-ext'
 	@echo "✔ Jellyfin (single) up at http://localhost:8096 using $${JELLYFIN_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest}"
 
 .PHONY: jellyfin-enhanced-smoke
@@ -1163,6 +1183,95 @@ smoke-creator-pipeline: ## Test creator pipeline (render-webhook, comfy-watcher,
 	@echo "→ Testing creator pipeline"
 	@bash tests/functional/test_creator_pipeline.sh
 
+.PHONY: n8n-sync-flows n8n-import-flows n8n-sanitize-db n8n-activate-flows n8n-bootstrap
+
+n8n-sync-flows: ## Sync n8n flow exports into integration folders (best-effort)
+	@bash tools/n8n_sync_flows.sh
+
+n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n container
+	@echo "→ Importing n8n workflows from pmoves/n8n/flows (mounted at /flows)"
+	@set -e; \
+	 REPLACE=$${REPLACE:-0}; \
+	 project_id=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite 'select id from project limit 1;' | head -1 | tr -d '\r\n'); \
+	 test -n "$$project_id" || { echo "✗ Could not resolve n8n projectId (is the owner user created?)" && exit 1; }; \
+	 failed=0; \
+	 for f in n8n/flows/*.json; do \
+	   base=$$(basename "$$f"); \
+	   echo "  - $$base"; \
+	   if [ "$$REPLACE" = "1" ]; then \
+	     name=$$(python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); print((d[0].get("name") if isinstance(d,list) and d else "") or "")' "$$f"); \
+	     if [ -n "$$name" ]; then \
+	       esc=$$(printf "%s" "$$name" | sed "s/'/''/g"); \
+	       docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "delete from workflow_entity where name='$$esc';" >/dev/null; \
+	     fi; \
+	   fi; \
+	   out=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n import:workflow --input="/flows/$$base" --projectId="$$project_id" 2>&1) || { \
+	     echo "$$out" | tail -60; \
+	     failed=1; \
+	     break; \
+	   }; \
+	 done; \
+	 if [ "$$failed" = "1" ]; then \
+	   echo ""; \
+	   echo "✗ n8n import failed. If this is a fresh n8n instance, complete the first-run owner setup in the UI (http://localhost:5678), then rerun:"; \
+	   echo "  make -C pmoves n8n-bootstrap"; \
+	   echo ""; \
+	   echo "If you want to reset n8n to a clean default user state (DESTRUCTIVE), run:"; \
+	   echo "  make -C pmoves n8n-reset"; \
+	   exit 1; \
+	 fi; \
+	 echo "✔ Imported workflows into n8n"
+
+n8n-sanitize-db: ## Repair common n8n SQLite FK drift after repeated imports (safe, idempotent)
+	@echo "→ Sanitizing n8n SQLite workflow relations (fixing orphan rows + seeding workflow_history)"
+	@set -e; \
+	 docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "\
+	  PRAGMA foreign_keys=OFF; \
+	  delete from shared_workflow where workflowId not in (select id from workflow_entity); \
+	  delete from workflow_history where workflowId not in (select id from workflow_entity); \
+	  delete from workflow_publish_history where workflowId not in (select id from workflow_entity); \
+	  delete from workflows_tags where workflowId not in (select id from workflow_entity); \
+	  update workflow_entity set activeVersionId=NULL; \
+	  insert into workflow_history(versionId,workflowId,authors,nodes,connections,name,autosaved,description) \
+	    select versionId,id,'system',nodes,connections,name,0,description from workflow_entity \
+	    where versionId not in (select versionId from workflow_history); \
+	  PRAGMA foreign_keys=ON; \
+	 "; \
+	 docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "PRAGMA foreign_key_check;" | sed -n '1,20p'; \
+	 echo "✔ n8n DB sanitized"
+
+n8n-activate-flows: ## Activate n8n workflows (default: all). Set ALL=0 to skip.
+	@ALL=$${ALL:-1}; \
+	 if [ "$$ALL" = "1" ]; then \
+	   echo "→ Activating all n8n workflows"; \
+	   $(MAKE) n8n-sanitize-db >/dev/null; \
+	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n update:workflow --all --active=true >/dev/null || { echo "✗ n8n activation failed" && exit 1; }; \
+	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml restart -t 10 n8n >/dev/null || true; \
+	   echo "✔ Activated all workflows (n8n restarted)"; \
+	 else \
+	   echo "ALL=0 set; skipping activation."; \
+	 fi
+
+n8n-bootstrap: ## Sync, import, then activate n8n flows (requires n8n running)
+	@$(MAKE) n8n-sync-flows
+	@$(MAKE) n8n-import-flows
+	@$(MAKE) n8n-sanitize-db
+	@$(MAKE) n8n-activate-flows
+
+.PHONY: n8n-reset
+n8n-reset: ## DESTRUCTIVE: Reset n8n DB to default user state (use before importing flows on a fresh instance)
+	@echo "→ Resetting n8n database to default user state (DESTRUCTIVE)"
+	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n user-management:reset >/dev/null
+	@echo "✔ Reset complete. Re-run: make -C pmoves n8n-bootstrap"
+
+.PHONY: n8n-export-repo-flows n8n-normalize-repo-flows
+
+n8n-export-repo-flows: ## Export current n8n DB workflows into pmoves/n8n/flows (sanitized/minimal)
+	@bash tools/n8n_export_repo_flows.sh
+
+n8n-normalize-repo-flows: ## Normalize pmoves/n8n/flows/*.json into importable minimal format
+	@python3 tools/n8n_flow_normalize.py --inplace-dir n8n/flows
+
 .PHONY: smoke-tensorzero-observability-strict
 smoke-tensorzero-observability-strict: ## Test TensorZero observability (STRICT mode - all warnings are failures)
 	@echo "→ Testing TensorZero observability (STRICT mode)"
@@ -1253,11 +1362,7 @@ smoke:
 
 	@echo "[13/15] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
 	@echo "[14/15] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
-	@if [ -n "$$OPENROUTER_API_KEY" ] && [ -n "$$OPEN_NOTEBOOK_API_TOKEN" ] && [ -n "$$DEEPRESEARCH_NOTEBOOK_ID" ]; then \
-	        echo "[15/15] DeepResearch smoke..." && $(MAKE) deepresearch-smoke || exit 1; \
-	  else \
-	        echo "[15/15] DeepResearch smoke... SKIP (set OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_TOKEN, DEEPRESEARCH_NOTEBOOK_ID)"; \
-	fi
+	@bash -lc '$(LOAD_ENV_SHARED) if [ -n "$$OPENROUTER_API_KEY" ] && [ -n "$$OPEN_NOTEBOOK_API_TOKEN" ] && [ -n "$$DEEPRESEARCH_NOTEBOOK_ID" ]; then echo "[15/15] DeepResearch smoke..." && $(MAKE) deepresearch-smoke; else echo "[15/15] DeepResearch smoke... SKIP (set OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_TOKEN, DEEPRESEARCH_NOTEBOOK_ID)"; fi'
 
 .PHONY: channel-monitor-up
 channel-monitor-up:
@@ -1326,8 +1431,8 @@ retrieval-eval-smoke:
 	  $(PYTHON) services/retrieval-eval/evaluate.py "$$ds" --no-query-details; \
 	done
 
-.PHONY: harvest-consciousness
-harvest-consciousness:
+.PHONY: harvest-consciousness-corpus
+harvest-consciousness-corpus:
 	@bash -c 'set -euo pipefail; \
 	HARVEST_DIR="$(CURDIR)/data/consciousness/Constellation-Harvest-Regularization"; \
 	echo "[Harvest] Downloading consciousness corpus via bash helper"; \
@@ -1523,7 +1628,7 @@ jellyfin-verify:
 .PHONY: jellyfin-verify-single
 jellyfin-verify-single:
 	@bash -c 'set -euo pipefail; \
-	 set -a; [ -f env.shared ] && . env.shared; set +a; \
+	 . ./scripts/with-env.sh; \
 	 export JELLYFIN_URL=$${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}; \
 	 JELLYFIN_EXPECTED_SERVER_NAME="" JELLYFIN_USER_ID="" python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
 
@@ -1566,6 +1671,18 @@ ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1
 		else
 	@bash scripts/env_check.sh
+	@$(PYTHON) - <<'PY'
+import os
+images = {
+    'AGENT_ZERO_IMAGE': os.getenv('AGENT_ZERO_IMAGE'),
+    'ARCHON_IMAGE': os.getenv('ARCHON_IMAGE'),
+    'ARCHON_UI_IMAGE': os.getenv('ARCHON_UI_IMAGE'),
+    'PMOVES_YT_IMAGE': os.getenv('PMOVES_YT_IMAGE'),
+}
+stale = [k for k,v in images.items() if v and v.endswith(':pmoves-latest')]
+if stale:
+    print(f"[flight] WARN: unpinned images detected: {', '.join(stale)} (pin dated tags)")
+PY
 endif
 
 .PHONY: flight-check-retro

@@ -1,13 +1,19 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
+# x86 CUDA builds: keep torch/vision/audio aligned on cu121; fall back to CPU wheels on arm64/other arch
+torch==2.3.1+cu121 ; platform_machine == "x86_64"
+torchvision==0.18.1+cu121 ; platform_machine == "x86_64"
+torchaudio==2.3.1+cu121 ; platform_machine == "x86_64"
+# CPU fallback
+torch==2.3.1 ; platform_machine != "x86_64"
+torchvision==0.18.1 ; platform_machine != "x86_64"
+torchaudio==2.3.1 ; platform_machine != "x86_64"
+
 fastapi==0.114.2
 uvicorn[standard]==0.30.6
 ultralytics==8.2.103
 Pillow==10.4.0
 boto3==1.34.162
 requests==2.32.4
-torch==2.8.0
-torchvision==0.18.1+cu121
-torchaudio==2.3.1+cu121
 nats-py==2.7.2
 supabase==2.3.1
 transformers==4.53.0

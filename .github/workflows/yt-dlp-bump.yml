@@ -1,0 +1,62 @@
+name: Weekly yt-dlp bump
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"  # Mondays 08:00 UTC
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-yt-dlp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Determine latest yt-dlp version
+        id: meta
+        run: |
+          set -euo pipefail
+          latest=$(pip index versions yt-dlp | sed -n 's/^LATEST: //p' | head -n1)
+          if [ -z "$latest" ]; then
+            echo "failed to resolve yt-dlp latest" >&2
+            exit 1
+          fi
+          echo "version=$latest" >> $GITHUB_OUTPUT
+
+      - name: Build pmoves-yt with bumped yt-dlp
+        uses: docker/build-push-action@v5
+        with:
+          context: ./pmoves/services/pmoves-yt
+          push: false
+          build-args: |
+            YTDLP_VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ env.IMAGE_PREFIX }}/pmoves-yt:tmp-bump
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Open PR with bump
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          branch="chore/bump-yt-dlp-${VERSION}"
+          git checkout -b "$branch"
+          # Record version in tracker to surface provenance
+          sed -i "1i- $(date +%Y-%m-%d): bumped yt-dlp to ${VERSION} (scheduled)" docs/hardening/PMOVES-hardening-tracker.md
+          git add docs/hardening/PMOVES-hardening-tracker.md
+          git commit -m "chore(pmoves-yt): bump yt-dlp to ${VERSION}"
+          git push origin "$branch"
+          gh pr create --title "chore(pmoves-yt): bump yt-dlp to ${VERSION}" --body "Automated weekly bump to yt-dlp ${VERSION}." || true
