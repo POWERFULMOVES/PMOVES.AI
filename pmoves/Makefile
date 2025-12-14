@@ -2339,19 +2339,18 @@ ui-dev-health: ## Check Notebook Workbench dev server (port 3001)
 	if [ "$$code" != "200" ]; then echo "✖ ui-dev / => $$code" && exit 1; fi; \
 	echo "✔ ui-dev / 200 (http://localhost:3001)"
 
-.PHONY: health
-health: ## Quick local health check (agents + core UIs)
+.PHONY: health health-core health-optional
+health: health-core ## Quick local health check (agents + core UIs)
 	@which jq >/dev/null 2>&1 || (echo "jq is required for health" && exit 1)
-	@$(MAKE) health-agent-zero
-	@$(MAKE) archon-ui-smoke
-	@$(MAKE) archon-mcp-smoke
-	@$(MAKE) archon-upload-smoke
-	@$(MAKE) health-flute-gateway
-	@$(MAKE) n8n-health
+	@$(MAKE) health-optional
+	@echo "✔ health OK"
+
+health-core: health-agent-zero archon-ui-smoke archon-mcp-smoke archon-upload-smoke health-flute-gateway n8n-health
+
+health-optional:
 	@$(MAKE) health-publisher-discord || true
 	@$(MAKE) health-jellyfin-bridge || true
 	@$(MAKE) ui-dev-health || true
-	@echo "✔ health OK"
 
 .PHONY: m2-preflight
 m2-preflight:
