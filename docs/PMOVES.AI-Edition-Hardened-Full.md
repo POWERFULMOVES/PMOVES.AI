@@ -12,11 +12,16 @@ The deployment model synthesizes Microsoft Azure's agent orchestration research,
 - Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
 - Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
 - Docker Desktop/WSL environments may write `credsStore=desktop.exe` into `~/.docker/config.json`, which breaks pulls/builds on Linux/headless hosts. Prefer the repo-scoped `.docker-nocreds/` config (set `DOCKER_CONFIG=.../.docker-nocreds`)—`pmoves/Makefile` will auto-use it when present.
+- For local GHCR pushes/pulls, also run Docker auth using the same repo-scoped config to avoid the credential-helper crash:
+  - `DOCKER_CONFIG=./.docker-nocreds gh auth token | DOCKER_CONFIG=./.docker-nocreds docker login ghcr.io -u <USER> --password-stdin`
 - n8n flows are repo-tracked as sanitized, importable exports under `pmoves/n8n/flows/` (Voice Agents + pollers). Import/activate with `make -C pmoves n8n-import-flows` + `make -C pmoves n8n-activate-flows`.
+- n8n “production DB”: for VPS/prod, run n8n on Postgres (instead of SQLite) with `N8N_DB=postgres` and `N8N_DB_*` vars (see `pmoves/docker-compose.n8n.postgres.yml` and `pmoves/docs/PMOVES.AI PLANS/N8N_SETUP.md`).
 - Voice Agents now default to a **local** TensorZero/Ollama model when available (`VOICE_AGENT_MODEL=tensorzero::model_name::qwen2_5_14b`). The Voice Agent router publishes `voice.agent.response.v1` on NATS.
 - n8n HTTP Request nodes interpret `options.timeout` as **milliseconds**; repo-tracked flows have been corrected to use sane ms timeouts (LLM/Supabase/NATS).
 - FFmpeg-Whisper now supports `POST /transcribe_file` (multipart) for ad-hoc STT (used by Flute Gateway); `python-multipart` is included in the service lockfile to support form parsing.
 - Flute Gateway uses VibeVoice for realtime TTS when available. VibeVoice is typically run outside Docker (Pinokio/host) and reached via `VIBEVOICE_URL=http://host.docker.internal:<PORT>`; see `pmoves/docs/ARTSTUFF/README.md`.
+- Optional: VibeVoice can also be run in Docker for local bring-up (`VOICE_REALTIME=1 make -C pmoves up-vibevoice`). On RTX 5090 / SM_120, the container auto-falls back to `--device cpu` until a compatible PyTorch wheel is available.
+- Invidious companion may log `HTMLCanvasElement.prototype.getContext` from jsdom; this is expected and not a functional error.
 - Open Notebook externals default to `OPEN_NOTEBOOK_IMAGE` (see `pmoves/env.shared.example`). External bring-up targets load `env.shared` so image pins apply consistently.
 - Local “everything up” baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
 
