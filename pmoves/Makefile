@@ -310,13 +310,9 @@ else
   N8N_DB_STACK_FILE :=
 endif
 
-# Optional voice realtime stack (VibeVoice). Disabled by default because it pulls large model weights.
-VOICE_REALTIME ?= 0
-ifeq ($(VOICE_REALTIME),1)
-  VOICE_STACK_FILE := -f docker-compose.voice.yml
-else
-  VOICE_STACK_FILE :=
-endif
+# VibeVoice compose file is always included so compose invocations remain consistent.
+# The service itself is still gated behind the `voice` compose profile (see docker-compose.voice.yml).
+VOICE_STACK_FILE := -f docker-compose.voice.yml
 
 # Always pass the same compose file set for the $(PROJECT) stack.
 # Otherwise, invoking docker compose with different -f subsets causes noisy
@@ -912,33 +908,24 @@ up-n8n: ensure-env-shared
 	  $(DC) up -d n8n n8n-runners; \
 	fi
 
-.PHONY: up-vibevoice up-vibevoice-inner
-up-vibevoice: ## Start VibeVoice realtime (VOICE_REALTIME=1; binds host :3000)
-	@$(MAKE) --no-print-directory VOICE_REALTIME=1 up-vibevoice-inner
-
-up-vibevoice-inner:
+.PHONY: up-vibevoice
+up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights on first run)
 	@$(DC) --profile voice up -d vibevoice
 	@port=$${VIBEVOICE_HOST_PORT:-3000}; \
 	  echo "✔ VibeVoice realtime up (expected at http://localhost:$$port/config). Flute uses VIBEVOICE_URL=$${VIBEVOICE_URL:-http://host.docker.internal:$$port}"
 
-.PHONY: stop-vibevoice stop-vibevoice-inner
+.PHONY: stop-vibevoice
 stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
-	@$(MAKE) --no-print-directory VOICE_REALTIME=1 stop-vibevoice-inner
-
-stop-vibevoice-inner:
 	@$(DC) stop vibevoice >/dev/null 2>&1 || true
 	@echo "✔ VibeVoice stopped"
 
-.PHONY: vibevoice-smoke vibevoice-smoke-inner
+.PHONY: vibevoice-smoke
 vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running on :3000)
-	@$(MAKE) --no-print-directory VOICE_REALTIME=1 vibevoice-smoke-inner
-
-vibevoice-smoke-inner:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for vibevoice-smoke" && exit 1)
 	@port=$${VIBEVOICE_HOST_PORT:-3000}; \
 	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/config" || true); \
 	if [ "$$code" != "200" ]; then \
-	  echo "✖ VibeVoice /config => $$code (start with: VOICE_REALTIME=1 make -C pmoves up-vibevoice)"; \
+	  echo "✖ VibeVoice /config => $$code (start with: make -C pmoves up-vibevoice)"; \
 	  exit 1; \
 	fi; \
 	echo "✔ VibeVoice /config 200"; \
