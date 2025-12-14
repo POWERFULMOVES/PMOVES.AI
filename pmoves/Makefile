@@ -728,7 +728,33 @@ archon-smoke: ## Combined Archon smoke: /healthz 200 and Supabase CLI REST reach
 	pg=$$(curl -s -o /dev/null -w "%{http_code}" "$$probe" || true); \
 	if [ "$$api" != "200" ]; then echo "✖ archon /healthz => $$api" && exit 1; fi; \
 	if [ "$$pg" = "000" ] || [ -z "$$pg" ] || [ "$$pg" -ge 500 ]; then echo "✖ Supabase REST probe failed (HTTP $$pg) URL: $$probe" && exit 1; fi; \
-	echo "✔ archon /healthz 200 and Supabase REST probe $$probe (HTTP $$pg)"'
+	echo "✔ archon /healthz 200 and Supabase REST probe $$probe (HTTP $$pg)"; \
+	$(MAKE) archon-upload-smoke'
+
+.PHONY: archon-upload-smoke
+archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload) to validate embedding wiring
+	@which jq >/dev/null 2>&1 || (echo "jq is required for archon-upload-smoke" && exit 1)
+	@bash -lc 'set -euo pipefail; \
+	  base="http://localhost:8091"; \
+	  echo "→ Archon upload smoke ($$base/api/documents/upload)"; \
+	  : "If OpenAI isn’t configured, force local Ollama base + embedding model"; \
+	  openai_ok=$$(curl -sS "$$base/api/providers/openai/status" | jq -r ".ok // false" || echo "false"); \
+	  if [ "$$openai_ok" != "true" ]; then \
+	    ollama_base="$${ARCHON_OLLAMA_BASE_URL:-http://pmoves-ollama:11434/v1}"; \
+	    embed_model="$${ARCHON_EMBEDDING_MODEL:-qwen3-embedding:4b}"; \
+	    echo "→ OpenAI not configured; setting LLM_BASE_URL=$$ollama_base and EMBEDDING_MODEL=$$embed_model"; \
+	    curl -fsS -X PUT "$$base/api/credentials/LLM_PROVIDER" -H "content-type: application/json" -d "{\"value\":\"ollama\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: default to local Ollama\"}" >/dev/null; \
+	    curl -fsS -X PUT "$$base/api/credentials/EMBEDDING_PROVIDER" -H "content-type: application/json" -d "{\"value\":\"ollama\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: embeddings via local Ollama\"}" >/dev/null; \
+	    curl -fsS -X PUT "$$base/api/credentials/LLM_BASE_URL" -H "content-type: application/json" -d "{\"value\":\"$$ollama_base\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: in-network Ollama base URL\"}" >/dev/null; \
+	    curl -fsS -X PUT "$$base/api/credentials/EMBEDDING_MODEL" -H "content-type: application/json" -d "{\"value\":\"$$embed_model\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: local embedding model\"}" >/dev/null; \
+	  fi; \
+	  tmp=$$(mktemp); echo "PMOVES archon upload smoke $$(date -Is)" > "$$tmp"; \
+	  resp=$$(curl -fsS -F "file=@$$tmp;type=text/plain" -F "filename=smoke.txt" "$$base/api/documents/upload"); \
+	  rm -f "$$tmp"; \
+	  ok=$$(printf "%s" "$$resp" | jq -r ".success // false"); \
+	  pid=$$(printf "%s" "$$resp" | jq -r ".progressId // .progress_id // empty"); \
+	  if [ "$$ok" != "true" ] || [ -z "$$pid" ]; then echo "✖ archon upload response unexpected:"; echo "$$resp" | jq .; exit 1; fi; \
+	  echo "✔ archon upload accepted (progressId=$$pid)"'
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
@@ -2297,6 +2323,7 @@ health: ## Quick local health check (agents + core UIs)
 	@$(MAKE) health-agent-zero
 	@$(MAKE) archon-ui-smoke
 	@$(MAKE) archon-mcp-smoke
+	@$(MAKE) archon-upload-smoke
 	@$(MAKE) health-flute-gateway
 	@$(MAKE) n8n-health
 	@$(MAKE) health-publisher-discord || true
