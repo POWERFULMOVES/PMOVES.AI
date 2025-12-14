@@ -22,14 +22,5 @@ services:
               count: ${GPU_COUNT:-all}
     networks: [api_tier, data_tier]
 
-networks:
-  api_tier:
-    external: true
-    name: pmoves_api
-  data_tier:
-    external: true
-    name: pmoves_data
-
 volumes:
   ultimate-tts-data: {}
-
