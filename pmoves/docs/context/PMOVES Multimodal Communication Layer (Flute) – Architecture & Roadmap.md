@@ -574,7 +574,9 @@ SUPABASE_SERVICE_ROLE_KEY=...
 MINIO_ENDPOINT=minio:9000
 
 # Voice Providers
-VIBEVOICE_URL=http://localhost:3000  # Pinokio port
+# If Flute is running in Docker, do NOT use localhost (it points at the container).
+# Use host-gateway for a Pinokio/host-run VibeVoice, or set it to the docker service URL when applicable.
+VIBEVOICE_URL=http://host.docker.internal:3000  # Pinokio/host-run VibeVoice (from Docker)
 WHISPER_URL=http://ffmpeg-whisper:8078
 ELEVENLABS_API_KEY=...  # Optional
 

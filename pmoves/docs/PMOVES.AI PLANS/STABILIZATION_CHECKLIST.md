@@ -30,8 +30,12 @@ Goal: one-command bring-up, no red containers, and smoketests green for M2 (Crea
   - `curl -sf http://localhost:8055/healthz | jq .`
 - [ ] End-to-end voice smoke (n8n webhook → Agent Zero publish → NATS):
   - `make -C pmoves voice-agent-smoke`
-- [ ] VibeVoice (optional): Flute `/healthz` will show `"vibevoice": false` until you run the host Pinokio server.
-  - See `pmoves/docs/ARTSTUFF/VibeVoice-RealtimeREADME.md`
+- [ ] VibeVoice (realtime TTS): confirm `GET /config` returns 200, then ensure `VIBEVOICE_URL` points at it and restart `flute-gateway` if needed.
+  - Option A (host / Pinokio): run the Pinokio VibeVoice server, then set `VIBEVOICE_URL=http://host.docker.internal:<PORT>`.
+    - See `pmoves/docs/ARTSTUFF/VibeVoice-RealtimeREADME.md`
+  - Option B (Docker, downloads large model weights): `VOICE_REALTIME=1 make -C pmoves up-vibevoice` (expects `http://localhost:${VIBEVOICE_HOST_PORT:-3000}/config`).
+    - Note (RTX 5090 / SM_120): the Docker VibeVoice launcher auto-falls back to `--device cpu` when the bundled PyTorch build can’t run CUDA kernels yet; synthesis will be slower until a compatible wheel lands.
+  - Flute `/healthz` will show `"vibevoice": false` until VibeVoice is running.
 
 ## 4) Core smokes (release gates)
 - [ ] Core smoke:
@@ -59,4 +63,3 @@ Goal: one-command bring-up, no red containers, and smoketests green for M2 (Crea
   - `make -C pmoves gpu-rerank-evidence`
   - `make -C pmoves archon-mcp-evidence`
   - `make -C pmoves evidence-auto`
-

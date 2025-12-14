@@ -1093,7 +1093,7 @@ services:
           port: 5432
           check_tables: true
         domain: ${INVIDIOUS_DOMAIN:-}
-        external_port: ${INVIDIOUS_EXTERNAL_PORT:-3000}
+        external_port: ${INVIDIOUS_EXTERNAL_PORT:-3005}
         https_only: ${INVIDIOUS_HTTPS_ONLY:-false}
         hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
         invidious_companion:
@@ -1106,7 +1106,7 @@ services:
           use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}
           redirector_url: "${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}"
     ports:
-      - "${INVIDIOUS_BIND:-127.0.0.1:3000}:3000"
+      - "${INVIDIOUS_BIND:-127.0.0.1:3005}:3000"
     depends_on:
       invidious-db:
         condition: service_healthy

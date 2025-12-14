@@ -300,12 +300,32 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 PROJECT ?= pmoves
 export PROJECT
 
+# n8n persistence mode:
+# - sqlite: simplest local bring-up (default)
+# - postgres: production-grade n8n DB (recommended for VPS)
+N8N_DB ?= sqlite
+ifeq ($(N8N_DB),postgres)
+  N8N_DB_STACK_FILE := -f docker-compose.n8n.postgres.yml
+else
+  N8N_DB_STACK_FILE :=
+endif
+
+# Optional voice realtime stack (VibeVoice). Disabled by default because it pulls large model weights.
+VOICE_REALTIME ?= 0
+ifeq ($(VOICE_REALTIME),1)
+  VOICE_STACK_FILE := -f docker-compose.voice.yml
+else
+  VOICE_STACK_FILE :=
+endif
+
 # Always pass the same compose file set for the $(PROJECT) stack.
 # Otherwise, invoking docker compose with different -f subsets causes noisy
 # "Found orphan containers" warnings (and makes status output confusing).
 STACK_FILES ?= \
 	-f docker-compose.yml \
 	-f docker-compose.n8n.yml \
+	$(VOICE_STACK_FILE) \
+	$(N8N_DB_STACK_FILE) \
 	-f docker-compose.external.yml \
 	-f docker-compose.archon.submodule.yml \
 	-f docker-compose.archon-ui.submodule.yml \
@@ -781,7 +801,7 @@ archon-headless-smoke: ## Verify Archon headless services: /ready 200 and MCP br
 
 .PHONY: archon-rebuild
 archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)
-	@docker compose build --no-cache archon
+	@$(DC) build --no-cache archon
 	@echo "✔ Archon image rebuilt"
 
 .PHONY: deepresearch-health
@@ -858,7 +878,45 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared
-	@$(DC) up -d n8n
+	@if [ "$(N8N_DB)" = "postgres" ]; then \
+	  echo "→ n8n DB mode: postgres"; \
+	  $(DC) up -d n8n-db n8n n8n-runners; \
+	else \
+	  echo "→ n8n DB mode: sqlite"; \
+	  $(DC) up -d n8n n8n-runners; \
+	fi
+
+.PHONY: up-vibevoice up-vibevoice-inner
+up-vibevoice: ## Start VibeVoice realtime (VOICE_REALTIME=1; binds host :3000)
+	@$(MAKE) --no-print-directory VOICE_REALTIME=1 up-vibevoice-inner
+
+up-vibevoice-inner:
+	@$(DC) --profile voice up -d vibevoice
+	@port=$${VIBEVOICE_HOST_PORT:-3000}; \
+	  echo "✔ VibeVoice realtime up (expected at http://localhost:$$port/config). Flute uses VIBEVOICE_URL=$${VIBEVOICE_URL:-http://host.docker.internal:$$port}"
+
+.PHONY: stop-vibevoice stop-vibevoice-inner
+stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
+	@$(MAKE) --no-print-directory VOICE_REALTIME=1 stop-vibevoice-inner
+
+stop-vibevoice-inner:
+	@$(DC) stop vibevoice >/dev/null 2>&1 || true
+	@echo "✔ VibeVoice stopped"
+
+.PHONY: vibevoice-smoke vibevoice-smoke-inner
+vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running on :3000)
+	@$(MAKE) --no-print-directory VOICE_REALTIME=1 vibevoice-smoke-inner
+
+vibevoice-smoke-inner:
+	@which jq >/dev/null 2>&1 || (echo "jq is required for vibevoice-smoke" && exit 1)
+	@port=$${VIBEVOICE_HOST_PORT:-3000}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/config" || true); \
+	if [ "$$code" != "200" ]; then \
+	  echo "✖ VibeVoice /config => $$code (start with: VOICE_REALTIME=1 make -C pmoves up-vibevoice)"; \
+	  exit 1; \
+	fi; \
+	echo "✔ VibeVoice /config 200"; \
+	curl -sS "http://localhost:$$port/config" | jq .
 
 # Status helper
 ps:
@@ -1206,7 +1264,7 @@ n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n c
 	@echo "→ Importing n8n workflows from pmoves/n8n/flows (mounted at /flows)"
 	@set -e; \
 	 REPLACE=$${REPLACE:-0}; \
-	 project_id=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite 'select id from project limit 1;' | head -1 | tr -d '\r\n'); \
+	 project_id=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite 'select id from project limit 1;' | head -1 | tr -d '\r\n'); \
 	 test -n "$$project_id" || { echo "✗ Could not resolve n8n projectId (is the owner user created?)" && exit 1; }; \
 	 failed=0; \
 	 for f in n8n/flows/*.json; do \
@@ -1216,10 +1274,10 @@ n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n c
 	     name=$$(python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); print((d[0].get("name") if isinstance(d,list) and d else "") or "")' "$$f"); \
 	     if [ -n "$$name" ]; then \
 	       esc=$$(printf "%s" "$$name" | sed "s/'/''/g"); \
-	       docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "delete from workflow_entity where name='$$esc';" >/dev/null; \
+	       docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "delete from workflow_entity where name='$$esc';" >/dev/null; \
 	     fi; \
 	   fi; \
-	   out=$$(docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n import:workflow --input="/flows/$$base" --projectId="$$project_id" 2>&1) || { \
+	   out=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n import:workflow --input="/flows/$$base" --projectId="$$project_id" 2>&1) || { \
 	     echo "$$out" | tail -60; \
 	     failed=1; \
 	     break; \
@@ -1239,7 +1297,7 @@ n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n c
 n8n-sanitize-db: ## Repair common n8n SQLite FK drift after repeated imports (safe, idempotent)
 	@echo "→ Sanitizing n8n SQLite workflow relations (fixing orphan rows + seeding workflow_history)"
 	@set -e; \
-	 docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "\
+	 docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "\
 	  PRAGMA foreign_keys=OFF; \
 	  delete from shared_workflow where workflowId not in (select id from workflow_entity); \
 	  delete from webhook_entity where workflowId not in (select id from workflow_entity); \
@@ -1252,17 +1310,42 @@ n8n-sanitize-db: ## Repair common n8n SQLite FK drift after repeated imports (sa
 	    where versionId not in (select versionId from workflow_history); \
 	  PRAGMA foreign_keys=ON; \
 	 "; \
-	 docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "PRAGMA foreign_key_check;" | sed -n '1,20p'; \
+	 docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "PRAGMA foreign_key_check;" | sed -n '1,20p'; \
 	 echo "✔ n8n DB sanitized"
 
-n8n-activate-flows: ## Activate n8n workflows (default: all). Set ALL=0 to skip.
+n8n-activate-flows: ## Activate n8n workflows. Default: best-effort (skips (stub)/(demo); auto-disables failures). Set ALL=0 to skip.
 	@ALL=$${ALL:-1}; \
 	 if [ "$$ALL" = "1" ]; then \
-	   echo "→ Activating all n8n workflows"; \
+	   echo "→ Activating n8n workflows (best-effort; skipping stubs/demos)"; \
 	   $(MAKE) n8n-sanitize-db >/dev/null; \
-	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n update:workflow --all --active=true >/dev/null || { echo "✗ n8n activation failed" && exit 1; }; \
-	   docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml restart -t 10 n8n >/dev/null || true; \
-	   echo "✔ Activated all workflows (n8n restarted)"; \
+	   echo "→ Disabling stub/demo workflows to avoid activation retry spam"; \
+	   docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "update workflow_entity set active=0, activeVersionId=NULL where name like '%(stub)%' or name like '%(demo)%' or name = 'Unnamed workflow';" >/dev/null || true; \
+	   docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "select '  - ' || name from workflow_entity where name like '%(stub)%' or name like '%(demo)%' or name = 'Unnamed workflow' order by name;" | tr -d '\r' || true; \
+	   VOICE_PLATFORMS=$${VOICE_PLATFORMS:-0}; \
+	   if [ "$$VOICE_PLATFORMS" != "1" ]; then \
+	     echo "→ Disabling chat-platform voice agents (set VOICE_PLATFORMS=1 to enable)"; \
+	     docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "update workflow_entity set active=0, activeVersionId=NULL where name in ('Discord Voice Agent - PMOVES','Telegram Voice Agent - PMOVES');" >/dev/null || true; \
+	     docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "select '  - ' || name from workflow_entity where name in ('Discord Voice Agent - PMOVES','Telegram Voice Agent - PMOVES') order by name;" | tr -d '\r' || true; \
+	   fi; \
+	   rows=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "select id || '|' || name from workflow_entity where name not like '%(stub)%' and name not like '%(demo)%' and name != 'Unnamed workflow' order by name;" | tr -d '\r'); \
+	   failed=0; failed_names=""; \
+	   IFS=$$(printf '\n'); \
+	   for row in $$rows; do \
+	     wid=$${row%%|*}; wname=$${row#*|}; \
+	     [ -n "$$wid" ] || continue; \
+	     out=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n update:workflow --id="$$wid" --active=true 2>&1) && continue; \
+	     echo "✗ n8n activate failed: $$wname ($$wid)"; \
+	     echo "$$out" | sed -n '1,4p'; \
+	     docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n update:workflow --id="$$wid" --active=false >/dev/null 2>&1 || true; \
+	     failed=1; failed_names="$$failed_names\n- $$wname ($$wid)"; \
+	   done; \
+	   docker compose -p $(PROJECT) $(STACK_FILES) restart -t 10 n8n >/dev/null || true; \
+	   if [ "$$failed" = "1" ]; then \
+	     echo "⚠ Some workflows failed activation and were left inactive (to avoid retry spam):"; \
+	     printf "$$failed_names\n"; \
+	   else \
+	     echo "✔ Activated workflows (n8n restarted)"; \
+	   fi; \
 	 else \
 	   echo "ALL=0 set; skipping activation."; \
 	 fi
@@ -1276,7 +1359,7 @@ n8n-bootstrap: ## Sync, import, then activate n8n flows (requires n8n running)
 .PHONY: n8n-reset
 n8n-reset: ## DESTRUCTIVE: Reset n8n DB to default user state (use before importing flows on a fresh instance)
 	@echo "→ Resetting n8n database to default user state (DESTRUCTIVE)"
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml exec -T n8n n8n user-management:reset >/dev/null
+	@docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n user-management:reset >/dev/null
 	@echo "✔ Reset complete. Re-run: make -C pmoves n8n-bootstrap"
 
 .PHONY: n8n-export-repo-flows n8n-normalize-repo-flows
@@ -2067,21 +2150,30 @@ voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero p
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
 	@echo "[Voice] Subscribing to voice.agent.response.v1 (via nats-box)"; \
 	OUT=$$(mktemp); \
-	( timeout 60 docker run --rm --network pmoves_bus natsio/nats-box:latest nats sub 'voice.agent.response.v1' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
+	( timeout 90 docker run --rm --network pmoves_bus natsio/nats-box:latest nats sub 'voice.agent.>' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
 	PID=$$!; \
 	for i in $$(seq 1 30); do \
-	  if grep -q 'Subscribing on voice\\.agent\\.response\\.v1' "$$OUT" 2>/dev/null; then break; fi; \
+	  if grep -q 'Subscribing on voice\\.agent\\.>' "$$OUT" 2>/dev/null; then break; fi; \
 	  sleep 0.2; \
 	done; \
+	sleep 0.5; \
 	echo "[Voice] Triggering n8n webhook (platform=local)"; \
+	RESP=$$(mktemp); \
 	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest \
 	  -H 'content-type: application/json' \
-	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Reply with a short greeting."}' | jq .; \
+	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Reply with a short greeting."}' > "$$RESP"; \
+	cat "$$RESP" | jq .; \
+	PUB_ID=$$(jq -r '.published_id // empty' "$$RESP"); \
 	wait $$PID || true; \
 	echo "[Voice] NATS output:"; \
 	sed -n '1,20p' "$$OUT"; \
-	grep -q 'Received on \"voice\.agent\.response\.v1\"' "$$OUT" && echo "  ✓ NATS event received" || (echo "  ✗ No voice.agent.response.v1 received" && exit 1); \
-	rm -f "$$OUT"
+	if [ -n "$$PUB_ID" ] && grep -q "$$PUB_ID" "$$OUT"; then \
+	  echo "  ✓ NATS event received (id=$$PUB_ID)"; \
+	else \
+	  echo "  ✗ No matching voice agent event received"; \
+	  exit 1; \
+	fi; \
+	rm -f "$$OUT" "$$RESP"
 
 .PHONY: jellyfin-smoke
 jellyfin-smoke:
@@ -2181,6 +2273,36 @@ a0-mcp-exec-smoke: ## Execute a trivial MCP call (form.get)
 health-jellyfin-bridge:
 	@echo "Checking Jellyfin Bridge on http://localhost:8093/healthz" && \
 	curl -sf http://localhost:8093/healthz | jq .
+
+.PHONY: health-flute-gateway
+health-flute-gateway: ## Check Flute Gateway healthz endpoint
+	@echo "Checking Flute Gateway on http://localhost:8055/healthz" && \
+	curl -sf http://localhost:8055/healthz | jq .
+
+.PHONY: n8n-health
+n8n-health: ## Check n8n healthz endpoint (200)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5678/healthz || true); \
+	if [ "$$code" != "200" ]; then echo "✖ n8n /healthz => $$code" && exit 1; fi; \
+	echo "✔ n8n /healthz 200"
+
+.PHONY: ui-dev-health
+ui-dev-health: ## Check Notebook Workbench dev server (port 3001)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/ || true); \
+	if [ "$$code" != "200" ]; then echo "✖ ui-dev / => $$code" && exit 1; fi; \
+	echo "✔ ui-dev / 200 (http://localhost:3001)"
+
+.PHONY: health
+health: ## Quick local health check (agents + core UIs)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for health" && exit 1)
+	@$(MAKE) health-agent-zero
+	@$(MAKE) archon-ui-smoke
+	@$(MAKE) archon-mcp-smoke
+	@$(MAKE) health-flute-gateway
+	@$(MAKE) n8n-health
+	@$(MAKE) health-publisher-discord || true
+	@$(MAKE) health-jellyfin-bridge || true
+	@$(MAKE) ui-dev-health || true
+	@echo "✔ health OK"
 
 .PHONY: m2-preflight
 m2-preflight:

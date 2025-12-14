@@ -1,6 +1,8 @@
 """VibeVoice realtime TTS provider integration."""
 
 import logging
+import os
+import time
 from typing import Any, AsyncIterator, Dict, Optional
 from urllib.parse import quote
 
@@ -31,6 +33,8 @@ class VibeVoiceProvider(VoiceProvider):
         ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
         self.ws_url = f"{ws_url}/stream"
         self.config_url = f"{base_url}/config"
+        self._health_last_log_ts: float = 0.0
+        self._health_log_interval_sec: float = float(os.getenv("VIBEVOICE_HEALTH_LOG_INTERVAL_SEC", "60"))
 
     async def synthesize(
         self,
@@ -71,13 +75,15 @@ class VibeVoiceProvider(VoiceProvider):
         Yields:
             Audio chunks (PCM16, 24kHz)
         """
-        voice_preset = voice or "default"
         cfg = kwargs.get("cfg", 1.5)
         steps = kwargs.get("steps", 8)
 
         # URL encode the text
         encoded_text = quote(text)
-        ws_endpoint = f"{self.ws_url}?text={encoded_text}&cfg={cfg}&steps={steps}&voice={voice_preset}"
+        ws_endpoint = f"{self.ws_url}?text={encoded_text}&cfg={cfg}&steps={steps}"
+        # `voice` is optional. If omitted, the server should use its default_voice from /config.
+        if voice:
+            ws_endpoint += f"&voice={quote(voice)}"
 
         try:
             async with websockets.connect(ws_endpoint) as ws:
@@ -120,5 +126,15 @@ class VibeVoiceProvider(VoiceProvider):
                 response = await client.get(self.config_url)
                 return response.status_code == 200
         except Exception as exc:
-            logger.warning("VibeVoice health check failed: %s", exc)
+            now = time.monotonic()
+            if now - self._health_last_log_ts >= self._health_log_interval_sec:
+                self._health_last_log_ts = now
+                logger.warning(
+                    "VibeVoice health check failed (%s). Is the realtime server running? "
+                    "Expected GET %s (Pinokio/host-run VibeVoice).",
+                    exc,
+                    self.config_url,
+                )
+            else:
+                logger.debug("VibeVoice health check failed: %s", exc)
             return False

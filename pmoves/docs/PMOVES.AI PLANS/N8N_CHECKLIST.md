@@ -13,7 +13,7 @@ _Copy-paste friendly for internal wiki_
     `pmoves/integrations/firefly-iii/n8n/flows/`; run `make integrations-up-all` for the watcher auto-import or
     `make integrations-import-flows` to sync once via REST.
   - Ensure Variables:
-    - `SUPABASE_REST_URL=http://host.docker.internal:54321/rest/v1`
+    - `SUPABASE_REST_URL=http://host.docker.internal:65421/rest/v1`
     - `SUPABASE_SERVICE_ROLE_KEY=<service_role_key>`
     - `AGENT_ZERO_BASE_URL=http://agent-zero:8080`
     - `AGENT_ZERO_EVENTS_TOKEN` (optional)
@@ -42,3 +42,6 @@ _Copy-paste friendly for internal wiki_
   - 503 from Agent Zero → ensure `make up-agents` ran (NATS + Agent Zero)
   - No Discord embed → verify webhook URL and rate limits
 
+- Persistence mode (VPS/prod)
+  - Use Postgres for n8n: `N8N_DB=postgres make -C pmoves up-n8n`
+  - Required envs: `N8N_DB_NAME`, `N8N_DB_USER`, `N8N_DB_PASSWORD`

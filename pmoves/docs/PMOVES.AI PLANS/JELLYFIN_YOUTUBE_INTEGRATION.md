@@ -87,7 +87,7 @@ make -C pmoves up-invidious
 
 Verify the services:
 
-- Invidious API: `curl http://127.0.0.1:3000/api/v1/stats`
+- Invidious API: `curl http://127.0.0.1:3005/api/v1/stats`
 - Companion health: `curl http://127.0.0.1:8282/healthz`
 
 Both endpoints should return HTTP 200.
