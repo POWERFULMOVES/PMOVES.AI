@@ -909,12 +909,18 @@ up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)
 
 comfyui-smoke: ## Smoke check ComfyUI / (expects 200/302)
 	@port=$${COMFYUI_HOST_PORT:-8188}; \
-	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
-	if [ "$$code" != "200" ] && [ "$$code" != "302" ]; then \
-	  echo "✖ ComfyUI / => $$code (start with: make -C pmoves up-comfyui)"; \
-	  exit 1; \
-	fi; \
-	echo "✔ ComfyUI reachable (HTTP $$code)"
+	  echo "→ Waiting for ComfyUI on http://localhost:$$port/ (first run may take a while)"; \
+	  code=""; \
+	  for i in $$(seq 1 60); do \
+	    code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
+	    if [ "$$code" = "200" ] || [ "$$code" = "302" ] || [ "$$code" = "404" ]; then break; fi; \
+	    sleep 2; \
+	  done; \
+	  if [ "$$code" != "200" ] && [ "$$code" != "302" ] && [ "$$code" != "404" ]; then \
+	    echo "✖ ComfyUI / => $$code (start with: make -C pmoves up-comfyui)"; \
+	    exit 1; \
+	  fi; \
+	  echo "✔ ComfyUI reachable (HTTP $$code)"
 
 .PHONY: up-vibevoice
 up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights on first run)
