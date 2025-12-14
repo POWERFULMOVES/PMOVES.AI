@@ -23,7 +23,9 @@ If VibeVoice is not running, Flute Gateway will still start, but VibeVoice provi
 
 ## If you want it containerized
 
-This repo currently does **not** ship a Docker service that runs VibeVoice Realtime, because it pulls large model weights and expects a GPU runtime.
+This repo ships an **optional** VibeVoice service under `pmoves/docker-compose.voice.yml` (compose profile: `voice`).
 
-If you want, we can add an **optional compose profile** (e.g. `--profile realtime`) that runs a VibeVoice container and persists model weights under `pmoves/data/`.
-
+- Bring it up: `make -C pmoves up-vibevoice` (binds `:${VIBEVOICE_HOST_PORT:-3000}`; downloads model weights on first run).
+- Flute can reach it either:
+  - via host gateway: `VIBEVOICE_URL=http://host.docker.internal:${VIBEVOICE_HOST_PORT:-3000}` (works even if VibeVoice is run outside Docker), or
+  - via service DNS (preferred when containerized): `VIBEVOICE_URL=http://vibevoice:3000`
