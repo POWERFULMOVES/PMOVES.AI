@@ -60,6 +60,7 @@ services:
       - "${FIREFLY_PORT:-8080}:8080"
     volumes:
       - firefly-storage:/var/www/html/storage
+      - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
 
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
