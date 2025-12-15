@@ -44,7 +44,7 @@ env:
   REGISTRY: ghcr.io
   # Standard secret names (documented in docs/SECRETS_ONBOARDING.md)
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GH_PAT_PUBLISH || secrets.GITHUB_TOKEN }}
+  GHCR_PASSWORD: ${{ secrets.GH_PAT_PUBLISH || github.token }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
@@ -55,7 +55,7 @@ jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
     permissions:
       contents: read
       packages: write
@@ -66,64 +66,75 @@ jobs:
         include:
           - name: agent-zero
             git_url: https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
-            ref: main
+            ref: PMOVES.AI-Edition-Hardened
             context: .
-            dockerfile: Dockerfile
+            dockerfile: docker/run/Dockerfile
             image_name: pmoves-agent-zero
+            build_args: |
+              BRANCH=PMOVES.AI-Edition-Hardened
           - name: archon
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
             context: pmoves
-            dockerfile: services/archon/Dockerfile
+            dockerfile: pmoves/services/archon/Dockerfile
             image_name: pmoves-archon
+            build_args: ''
           - name: archon-ui
             git_url: https://github.com/POWERFULMOVES/PMOVES-Archon.git
-            ref: main
+            ref: PMOVES.AI-Edition-Hardened
             context: archon-ui-main
-            dockerfile: Dockerfile
+            dockerfile: archon-ui-main/Dockerfile
             image_name: pmoves-archon-ui
+            build_args: ''
           - name: open-notebook
             git_url: https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
             ref: PMOVES.AI-Edition-Hardened
             context: .
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
+            build_args: ''
           - name: wger
-            git_url: https://github.com/hunnibear/pmoves-health-wger.git
-            ref: main
+            git_url: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
+            ref: PMOVES.AI-Edition-Hardened
             context: .
-            dockerfile: Dockerfile
+            dockerfile: extras/docker/production/Dockerfile
             image_name: pmoves-health-wger
+            build_args: ''
           - name: firefly-iii
-            git_url: https://github.com/cataclysm-studios-inc/pmoves-firefly-iii.git
+            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: .
-            dockerfile: Dockerfile
+            context: pmoves/images/firefly-iii
+            dockerfile: pmoves/images/firefly-iii/Dockerfile
             image_name: pmoves-firefly-iii
+            build_args: ''
           - name: jellyfin
-            git_url: https://github.com/cataclysm-studios-inc/pmoves-jellyfin.git
+            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: .
-            dockerfile: Dockerfile
+            context: pmoves/images/jellyfin
+            dockerfile: pmoves/images/jellyfin/Dockerfile
             image_name: pmoves-jellyfin
+            build_args: ''
           - name: pmoves-yt
-            git_url: https://github.com/POWERFULMOVES/PMOVES.YT.git
+            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: .
-            dockerfile: Dockerfile
+            context: pmoves
+            dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
+            build_args: ''
           - name: deepresearch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
             context: pmoves
-            dockerfile: services/deepresearch/Dockerfile
+            dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
+            build_args: ''
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
             context: pmoves
-            dockerfile: services/supaserch/Dockerfile
+            dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
+            build_args: ''
           # To add other integrations, duplicate one of the entries above.
           # Example (commented):
           # - name: open-notebook
@@ -232,6 +243,7 @@ jobs:
           push: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
+            ${{ matrix.build_args }}
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
