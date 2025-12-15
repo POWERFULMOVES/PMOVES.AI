@@ -305,13 +305,13 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (docker prune)
+      - name: Free disk space (docker build cache)
         run: |
           set -euxo pipefail
           docker system df || true
           docker buildx prune -af || true
           docker builder prune -af || true
-          docker system prune -af --volumes || true
+          docker system df || true
           df -h
 
       - name: Pull image for Trivy (private GHCR)
