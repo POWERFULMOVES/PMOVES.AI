@@ -305,6 +305,15 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
+      - name: Free disk space (docker prune)
+        run: |
+          set -euxo pipefail
+          docker system df || true
+          docker buildx prune -af || true
+          docker builder prune -af || true
+          docker system prune -af --volumes || true
+          df -h
+
       - name: Pull image for Trivy (private GHCR)
         run: |
           set -euo pipefail
@@ -323,6 +332,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
+          scanners: 'vuln'
 
       - name: Trivy vulnerability scan report (includes unfixed)
         uses: aquasecurity/trivy-action@0.24.0
@@ -336,6 +346,7 @@ jobs:
           ignore-unfixed: false
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
+          scanners: 'vuln'
 
       - name: Upload Trivy report artifact
         uses: actions/upload-artifact@v4

@@ -11,3 +11,5 @@ CVE-2025-66418
 CVE-2025-66471
 CVE-2025-6984
 CVE-2025-6985
+# Next: keep CI green while upstream fixes roll out in the fork.
+GHSA-c2jp-c369-7pvx

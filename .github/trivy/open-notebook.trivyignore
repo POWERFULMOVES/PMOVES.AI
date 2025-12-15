@@ -8,3 +8,5 @@ CVE-2025-66416
 CVE-2025-66418
 CVE-2025-66471
 CVE-2025-67644
+# Next.js advisory (fix in upstream; tracked via fork updates).
+GHSA-5j59-xgg2-r9c4
