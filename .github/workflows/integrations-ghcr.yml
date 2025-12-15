@@ -54,7 +54,10 @@ env:
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
-    runs-on: [self-hosted, vps]
+    runs-on: ubuntu-latest
+    # Note: `inputs.*` only exists for workflow_dispatch, but this workflow also runs on push/schedule.
+    # Use github.event.inputs.* so non-dispatch events don't fail during workflow evaluation.
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
     permissions:
       contents: read
       packages: write
@@ -67,13 +70,10 @@ jobs:
             git_url: https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
             ref: PMOVES.AI-Edition-Hardened
             context: .
-            dockerfile: DockerfileLocal
+            dockerfile: docker/run/Dockerfile
             image_name: pmoves-agent-zero
             build_args: |
-              BRANCH=local
-            platforms: linux/amd64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/agent-zero.trivyignore
+              BRANCH=PMOVES.AI-Edition-Hardened
           - name: archon
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -81,9 +81,6 @@ jobs:
             dockerfile: pmoves/services/archon/Dockerfile
             image_name: pmoves-archon
             build_args: ''
-            platforms: linux/amd64
-            generate_sbom: false
-            trivy_ignorefile: ''
           - name: archon-ui
             git_url: https://github.com/POWERFULMOVES/PMOVES-Archon.git
             ref: PMOVES.AI-Edition-Hardened
@@ -91,9 +88,6 @@ jobs:
             dockerfile: archon-ui-main/Dockerfile
             image_name: pmoves-archon-ui
             build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/archon-ui.trivyignore
           - name: open-notebook
             git_url: https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
             ref: PMOVES.AI-Edition-Hardened
@@ -101,9 +95,6 @@ jobs:
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
             build_args: ''
-            platforms: linux/amd64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/open-notebook.trivyignore
           - name: wger
             git_url: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
             ref: PMOVES.AI-Edition-Hardened
@@ -111,9 +102,6 @@ jobs:
             dockerfile: extras/docker/production/Dockerfile
             image_name: pmoves-health-wger
             build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
           - name: firefly-iii
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -121,9 +109,6 @@ jobs:
             dockerfile: pmoves/images/firefly-iii/Dockerfile
             image_name: pmoves-firefly-iii
             build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
           - name: jellyfin
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -131,19 +116,13 @@ jobs:
             dockerfile: pmoves/images/jellyfin/Dockerfile
             image_name: pmoves-jellyfin
             build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/jellyfin.trivyignore
           - name: pmoves-yt
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: pmoves/services/pmoves-yt
+            context: pmoves
             dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
             build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
           - name: deepresearch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -151,19 +130,13 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
-            platforms: linux/amd64
-            generate_sbom: false
-            trivy_ignorefile: .github/trivy/deepresearch.trivyignore
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: pmoves/services
+            context: pmoves
             dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
             build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
           # To add other integrations, duplicate one of the entries above.
           # Example (commented):
           # - name: open-notebook
@@ -175,6 +148,7 @@ jobs:
 
     steps:
       - name: Harden Runner
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: step-security/harden-runner@v2
         with:
           egress-policy: audit
@@ -191,9 +165,11 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout (stub)
-        uses: actions/checkout@v6
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
+        uses: actions/checkout@v4
 
       - name: Clone integration repo
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         run: |
           set -euo pipefail
           url="${{ matrix.git_url }}"
@@ -205,23 +181,20 @@ jobs:
             exit 1
           fi
 
-      - name: Free disk space (runner)
-        run: |
-          set -euxo pipefail
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
-          sudo rm -rf /usr/local/share/boost || true
-          df -h
-
       - name: Set up QEMU
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: docker/setup-buildx-action@v3
 
       - name: Install Cosign
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: sigstore/cosign-installer@v3.4.0
 
       - name: Log in to GHCR
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -229,7 +202,7 @@ jobs:
           password: ${{ env.GHCR_PASSWORD }}
 
       - name: Optional login to Docker Hub
-        if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.push_to_dockerhub == true && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD && (github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name)) || (github.event_name != 'workflow_dispatch' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD) }}
         uses: docker/login-action@v3
         with:
           registry: docker.io
@@ -241,7 +214,8 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
-          INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+          INCLUDE_DOCKERHUB: ${{ (github.event_name != 'workflow_dispatch' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD) || (github.event_name == 'workflow_dispatch' && github.event.inputs.push_to_dockerhub == true && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD) }}
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         run: |
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
@@ -263,7 +237,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Build and push (multi-arch)
-        id: build
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: docker/build-push-action@v6
         with:
           context: integration-src/${{ matrix.context }}
@@ -272,12 +246,13 @@ jobs:
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ matrix.build_args }}
-          platforms: ${{ matrix.platforms }}
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Cosign sign GHCR digest (keyless)
+      - name: Cosign sign GHCR tags (keyless)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
@@ -296,12 +271,12 @@ jobs:
           exit 1
 
       - name: Install Syft (SBOM)
-        if: ${{ matrix.generate_sbom }}
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: anchore/sbom-action/download-syft@v0.17.7
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
-        if: ${{ matrix.generate_sbom }}
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         run: |
           set -euo pipefail
           TAG_PRIMARY=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
@@ -309,27 +284,14 @@ jobs:
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
-        if: ${{ matrix.generate_sbom }}
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (docker build cache)
-        run: |
-          set -euxo pipefail
-          docker system df || true
-          docker buildx prune -af || true
-          docker builder prune -af || true
-          docker system df || true
-          df -h
-
-      - name: Pull image for Trivy (private GHCR)
-        run: |
-          set -euo pipefail
-          docker pull "${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest"
-
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
@@ -337,47 +299,41 @@ jobs:
           # fixable regressions as hard failures.
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
-          trivyignores: ${{ matrix.trivy_ignorefile }}
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
-          scanners: 'vuln'
 
       - name: Trivy vulnerability scan report (includes unfixed)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
           output: trivy-${{ matrix.name }}.txt
-          # Always include full findings (even if the gate uses trivyignore to unblock a build).
-          trivyignores: ''
           exit-code: '0'
           ignore-unfixed: false
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
-          scanners: 'vuln'
 
       - name: Upload Trivy report artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
 
-      - name: Cosign verify GHCR digest (keyless)
+      - name: Cosign verify GHCR tags (keyless)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
         env:
-          IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
           COSIGN_EXPERIMENTAL: "1"
         run: |
           set -euo pipefail
-          issuer="https://token.actions.githubusercontent.com"
-          identity="https://github.com/${GITHUB_WORKFLOW_REF}"
-          for attempt in 1 2 3; do
-            echo "→ cosign verify attempt ${attempt}/3"
-            if cosign verify --certificate-oidc-issuer "$issuer" --certificate-identity "$identity" "$IMAGE_DIGEST_REF"; then
-              exit 0
-            fi
-            sleep $((attempt * 3))
+          echo "$TAGS" | tr '\n' '\0' | while IFS= read -r -d '' tag; do
+            case "$tag" in
+              ghcr.io/*|docker.io/*)
+                cosign verify "$tag" ;; 
+              *) ;; # skip other registries
+            esac
           done
-          echo "✖ cosign verify failed after retries"
-          exit 1
