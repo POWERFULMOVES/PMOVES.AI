@@ -71,6 +71,8 @@ tmp/*.wav
 /pmoves/ui/out
 # Local exports: keep operator-only dumps out of the repo
 /pmoves/docs/coolify/
+# Large local voice/assets (do not commit model weights)
+/pmoves/docs/ARTSTUFF/lora/
 # Generated repo indexing artifacts
 /pmoves/datasets/repo_docs.jsonl
 .clinerules/byterover-rules.md

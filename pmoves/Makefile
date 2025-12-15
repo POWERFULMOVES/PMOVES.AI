@@ -252,12 +252,12 @@ up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
 
 .PHONY: recreate-v2-gpu
 recreate-v2-gpu: ## Force-recreate v2-gpu container (no deps)
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
+	@$(DC) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
 	@echo "✔ Recreated hi-rag-gateway-v2-gpu"
 
 .PHONY: recreate-v2
 recreate-v2: ## Force-recreate v2 CPU container (no deps)
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2
+	@$(DC) up -d --force-recreate --no-deps hi-rag-gateway-v2
 	@echo "✔ Recreated hi-rag-gateway-v2"
 
 .PHONY: up-open-notebook
@@ -280,14 +280,14 @@ down-open-notebook: ## Stop Open Notebook
 	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
-	@docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway-v2
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(DC) --profile workers up -d hi-rag-gateway-v2 >/dev/null 2>&1 || true
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu >/dev/null 2>&1 || true
 	@echo "✔ hi-rag-gateway-v2(:$(HIRAG_CPU_PORT)) and hi-rag-gateway-v2-gpu(:$(HIRAG_GPU_PORT)) ready."
 
 .PHONY: up-legacy-both
 up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
-	@docker compose -p $(PROJECT) --profile legacy up -d hi-rag-gateway
-	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@$(DC) --profile legacy up -d hi-rag-gateway >/dev/null 2>&1 || true
+	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu >/dev/null 2>&1 || true
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
@@ -733,7 +733,7 @@ voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (te
 	echo "[Voice→Discord] Publishing to publisher-discord"; \
 	content=$$'🗣️ Voice Agent (smoke)\n\n'"$$short"; \
 	echo "[Voice→Discord] Generating TTS (mp3) via Flute"; \
-	tts_b64=$$(python3 -c 'import base64, json, subprocess, sys, urllib.request; text=sys.argv[1]; url="http://localhost:8055/v1/voice/synthesize/audio"; payload={"text":text,"provider":"vibevoice","voice":None,"output_format":"wav"}; req=urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST"); req.add_header("content-type","application/json"); wav=urllib.request.urlopen(req, timeout=180).read(); p=subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-f","wav","-i","pipe:0","-f","mp3","pipe:1"], input=wav, stdout=subprocess.PIPE, check=True); print(base64.b64encode(p.stdout).decode("ascii"))' "$$short"); \
+	tts_b64=$$(python3 tools/flute_tts_to_mp3_b64.py "$$short"); \
 	payload=$$(jq -n --arg content "$$content" --arg b64 "$$tts_b64" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}], file:{name:"voice_agent_smoke.mp3", content_type:"audio/mpeg", content_b64:$$b64} }'); \
 	curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' \
 	  -d "$$payload" \
