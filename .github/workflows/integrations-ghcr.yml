@@ -153,7 +153,7 @@ jobs:
             build_args: ''
             platforms: linux/amd64
             generate_sbom: false
-            trivy_ignorefile: ''
+            trivy_ignorefile: .github/trivy/deepresearch.trivyignore
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
