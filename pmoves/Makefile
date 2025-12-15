@@ -650,7 +650,8 @@ voice-say: ## Speak a message locally (requires voice-speaker-start). Usage: mak
 	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-say" && exit 1)
 	@MSG="$${MSG:-Hello from PMOVES}"; \
 	PORT="$${VOICE_SPEAKER_PORT:-8120}"; \
-	MODE="$${VOICE_SPEAKER_MODE:-stream}"; \
+	# Back-compat: accept MODE=... as a shorthand for VOICE_SPEAKER_MODE
+	MODE="$${MODE:-$${VOICE_SPEAKER_MODE:-stream}}"; \
 	VOICE="$${VOICE_SPEAKER_VOICE:-}"; \
 	PAYLOAD=$$(jq -n --arg text "$$MSG" --arg mode "$$MODE" --arg voice "$$VOICE" '{text:$$text, mode:$$mode, voice: (if ($$voice|length)>0 then $$voice else null end)}'); \
 	curl -fsS -X POST "http://127.0.0.1:$$PORT/say" -H 'content-type: application/json' --data-binary "$$PAYLOAD" | jq .

@@ -47,6 +47,17 @@ def _env(name: str, default: str) -> str:
     return v.strip() if v else default
 
 
+def _is_wsl() -> bool:
+    # Heuristic: works for WSL1/WSL2.
+    if os.getenv("WSL_INTEROP") or os.getenv("WSL_DISTRO_NAME"):
+        return True
+    try:
+        with open("/proc/sys/kernel/osrelease", "r", encoding="utf-8") as fp:
+            return "microsoft" in fp.read().lower()
+    except OSError:
+        return False
+
+
 def load_config() -> SpeakerConfig:
     return SpeakerConfig(
         bind=_env("VOICE_SPEAKER_BIND", "127.0.0.1"),
@@ -85,7 +96,57 @@ def _which_any(names: list[str]) -> Optional[str]:
     return None
 
 
+def _windows_path_from_wsl(path: str) -> Optional[str]:
+    wslpath = _which_any(["wslpath"])
+    if not wslpath:
+        return None
+    try:
+        out = subprocess.check_output([wslpath, "-w", path], stderr=subprocess.DEVNULL)
+        win = out.decode("utf-8", errors="ignore").strip()
+        return win or None
+    except Exception:
+        return None
+
+
+def _play_wav_via_windows(wav_bytes: bytes) -> bool:
+    """
+    If we're running under WSL2, play WAV using Windows' SoundPlayer so audio comes out of the host speakers.
+
+    This is often more reliable than Linux audio output under WSL (depending on WSLg/Pulse config).
+    """
+    if not _is_wsl():
+        return False
+
+    powershell = _which_any(["powershell.exe", "pwsh.exe"])
+    if not powershell:
+        return False
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as fp:
+        fp.write(wav_bytes)
+        tmp_path = fp.name
+
+    try:
+        win_path = _windows_path_from_wsl(tmp_path)
+        if not win_path:
+            return False
+        # Use SoundPlayer (WAV only) and block until completion.
+        cmd = f"(New-Object Media.SoundPlayer '{win_path}').PlaySync();"
+        subprocess.run([powershell, "-NoProfile", "-Command", cmd], check=False)
+        return True
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
 def _play_wav_bytes(wav_bytes: bytes) -> None:
+    # Prefer Windows playback when running inside WSL unless explicitly disabled.
+    # This makes "local realtime voice" work even when WSL audio is not configured.
+    if _env("VOICE_SPEAKER_WSL_WINDOWS_AUDIO", "1") not in {"0", "false", "FALSE", "no", "NO"}:
+        if _play_wav_via_windows(wav_bytes):
+            return
+
     ffplay = _which_any(["ffplay"])
     if ffplay:
         subprocess.run(
