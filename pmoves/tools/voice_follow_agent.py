@@ -77,7 +77,8 @@ def _extract_text(payload: Dict[str, Any]) -> Optional[str]:
 
 def speak(text: str) -> None:
     speaker_url = _env("VOICE_SPEAKER_URL", "http://127.0.0.1:8120").rstrip("/")
-    mode = _env("VOICE_SPEAKER_MODE", "stream")
+    # Default to batch for reliability (streaming can be choppy depending on TTS backend / host load).
+    mode = _env("VOICE_SPEAKER_MODE", "batch")
     voice = os.getenv("VOICE_SPEAKER_VOICE") or None
     try:
         resp = requests.post(

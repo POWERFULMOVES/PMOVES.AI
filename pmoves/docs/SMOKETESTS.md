@@ -134,6 +134,8 @@ Quick manual test (forces WAV/batch mode):
 VOICE_SPEAKER_MODE=batch make -C pmoves voice-say MSG="Voice loop check"
 ```
 
+If audio is choppy in `stream` mode, keep `VOICE_SPEAKER_MODE=batch` (slightly higher latency, much more reliable).
+
 ## 4) Seed Demo Data (Optional but helpful)
 - `make seed-data` (loads small sample docs into Qdrant/Meilisearch; already invoked by `make bootstrap-data`)
 - Alternatively: `make load-jsonl FILE=$(pwd)/datasets/queries_demo.jsonl`
