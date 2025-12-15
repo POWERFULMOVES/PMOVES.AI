@@ -1,0 +1,6 @@
+# Archon UI image currently pulls Go-based tooling (e.g., esbuild) that may ship with fixable CVEs.
+# Track and revisit by bumping the upstream dependency/tooling in the PMOVES-Archon repo.
+CVE-2025-58183
+CVE-2025-58186
+CVE-2025-58187
+CVE-2025-61729
