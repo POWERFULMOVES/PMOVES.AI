@@ -382,16 +382,16 @@ clean:
 	@$(DC) down -v --remove-orphans
 
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
-	@bash -c '$(LOAD_ENV_SHARED) \
+	@$(LOAD_ENV_SHARED) \
 	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ] && [ -z "$$CLOUDFLARE_TUNNEL_NAME" ]; then \
-	echo "↷ Set CLOUDFLARE_TUNNEL_TOKEN (Zero Trust token) or CLOUDFLARE_TUNNEL_NAME + credentials in $(ENV_SHARED_FILE) before running make up-cloudflare."; \
-	exit 1; \
-		fi; \
-	exec docker compose -p $(PROJECT) --profile cloudflare up -d cloudflared'
+	  echo "↷ Set CLOUDFLARE_TUNNEL_TOKEN (Zero Trust token) or CLOUDFLARE_TUNNEL_NAME + credentials in $(ENV_SHARED_FILE) before running make up-cloudflare."; \
+	  exit 1; \
+	fi; \
+	$(DC) --profile cloudflare up -d cloudflared
 	@$(MAKE) --no-print-directory cloudflare-url || true
 
 down-cloudflare: ## Stop the Cloudflare tunnel connector
-	@bash -c '$(LOAD_ENV_SHARED) exec docker compose -p $(PROJECT) --profile cloudflare stop cloudflared >/dev/null 2>&1 || true'
+	@$(DC) --profile cloudflare stop cloudflared >/dev/null 2>&1 || true
 	@echo "✔ Cloudflare tunnel stopped."
 
 restart-cloudflare: ## Restart the Cloudflare tunnel connector
@@ -399,10 +399,10 @@ restart-cloudflare: ## Restart the Cloudflare tunnel connector
 	@$(MAKE) --no-print-directory up-cloudflare
 
 logs-cloudflare: ## Tail Cloudflare tunnel logs
-	docker compose -p $(PROJECT) logs -f cloudflared
+	@$(DC) logs -f cloudflared
 
 cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector logs
-	@docker compose -p $(PROJECT) logs --since 30m cloudflared 2>/dev/null | python3 -c 'import re, sys; urls=[m.group(0).rstrip("\"] ,;") for line in sys.stdin for m in re.finditer(r"https://[^\s\"]+", line)]; print(f"🌐 Tunnel URL: {urls[-1]}") if urls else print("↷ No tunnel URL detected in recent cloudflared logs (run `make logs-cloudflare` to inspect startup.)")'
+	@$(DC) logs --since 30m cloudflared 2>/dev/null | python3 -c 'import re, sys; urls=[m.group(0).rstrip("\"] ,;") for line in sys.stdin for m in re.finditer(r"https://[^\s\"]+", line)]; print(f"🌐 Tunnel URL: {urls[-1]}") if urls else print("↷ No tunnel URL detected in recent cloudflared logs (run make logs-cloudflare to inspect startup.)")'
 
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
 	docker network create cataclysm-net >/dev/null 2>&1 || true
@@ -427,7 +427,7 @@ notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundl
 
 # Bring only worker services (ensures data deps are active)
 up-workers:
-	docker compose -p $(PROJECT) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
+	@$(DC) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
 
 # YouTube ingest + whisper stack
 up-yt:
