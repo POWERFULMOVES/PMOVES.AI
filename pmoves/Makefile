@@ -732,9 +732,9 @@ voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (te
 	rm -f "$$resp"; \
 	echo "[Voice→Discord] Publishing to publisher-discord"; \
 	content=$$'🗣️ Voice Agent (smoke)\n\n'"$$short"; \
-	echo "[Voice→Discord] Generating TTS (wav) via Flute"; \
-	tts_b64=$$(python3 -c 'import base64, json, sys, urllib.request; text=sys.argv[1]; url="http://localhost:8055/v1/voice/synthesize/audio"; payload={"text":text,"provider":"vibevoice","voice":None,"output_format":"wav"}; req=urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST"); req.add_header("content-type","application/json"); wav=urllib.request.urlopen(req, timeout=180).read(); print(base64.b64encode(wav).decode("ascii"))' "$$short"); \
-	payload=$$(jq -n --arg content "$$content" --arg b64 "$$tts_b64" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}], file:{name:"voice_agent_smoke.wav", content_type:"audio/wav", content_b64:$$b64} }'); \
+	echo "[Voice→Discord] Generating TTS (mp3) via Flute"; \
+	tts_b64=$$(python3 -c 'import base64, json, subprocess, sys, urllib.request; text=sys.argv[1]; url="http://localhost:8055/v1/voice/synthesize/audio"; payload={"text":text,"provider":"vibevoice","voice":None,"output_format":"wav"}; req=urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST"); req.add_header("content-type","application/json"); wav=urllib.request.urlopen(req, timeout=180).read(); p=subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-f","wav","-i","pipe:0","-f","mp3","pipe:1"], input=wav, stdout=subprocess.PIPE, check=True); print(base64.b64encode(p.stdout).decode("ascii"))' "$$short"); \
+	payload=$$(jq -n --arg content "$$content" --arg b64 "$$tts_b64" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}], file:{name:"voice_agent_smoke.mp3", content_type:"audio/mpeg", content_b64:$$b64} }'); \
 	curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' \
 	  -d "$$payload" \
 	  | jq -e '.ok==true or .success==true' >/dev/null && echo "✔ Discord publish OK" || (echo "✖ Discord publish failed" && exit 1)
