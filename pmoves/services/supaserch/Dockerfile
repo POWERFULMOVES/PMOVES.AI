@@ -8,7 +8,7 @@ RUN apt-get update \
 COPY supaserch/requirements.txt /tmp/requirements.txt
 COPY supaserch/requirements.lock /tmp/requirements.lock
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r /tmp/requirements.txt
+    && pip install --no-cache-dir --require-hashes -r /tmp/requirements.lock
 
 COPY . /app/services
 ENV PYTHONPATH=/app
