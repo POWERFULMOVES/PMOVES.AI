@@ -71,6 +71,7 @@ jobs:
             image_name: pmoves-agent-zero
             build_args: |
               BRANCH=local
+            platforms: linux/amd64
             trivy_ignorefile: ''
           - name: archon
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
@@ -79,6 +80,7 @@ jobs:
             dockerfile: pmoves/services/archon/Dockerfile
             image_name: pmoves-archon
             build_args: ''
+            platforms: linux/amd64
             trivy_ignorefile: ''
           - name: archon-ui
             git_url: https://github.com/POWERFULMOVES/PMOVES-Archon.git
@@ -87,6 +89,7 @@ jobs:
             dockerfile: archon-ui-main/Dockerfile
             image_name: pmoves-archon-ui
             build_args: ''
+            platforms: linux/amd64,linux/arm64
             trivy_ignorefile: .github/trivy/archon-ui.trivyignore
           - name: open-notebook
             git_url: https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
@@ -95,6 +98,7 @@ jobs:
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
             build_args: ''
+            platforms: linux/amd64
             trivy_ignorefile: ''
           - name: wger
             git_url: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
@@ -103,6 +107,7 @@ jobs:
             dockerfile: extras/docker/production/Dockerfile
             image_name: pmoves-health-wger
             build_args: ''
+            platforms: linux/amd64,linux/arm64
             trivy_ignorefile: ''
           - name: firefly-iii
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
@@ -111,6 +116,7 @@ jobs:
             dockerfile: pmoves/images/firefly-iii/Dockerfile
             image_name: pmoves-firefly-iii
             build_args: ''
+            platforms: linux/amd64,linux/arm64
             trivy_ignorefile: ''
           - name: jellyfin
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
@@ -119,6 +125,7 @@ jobs:
             dockerfile: pmoves/images/jellyfin/Dockerfile
             image_name: pmoves-jellyfin
             build_args: ''
+            platforms: linux/amd64,linux/arm64
             trivy_ignorefile: .github/trivy/jellyfin.trivyignore
           - name: pmoves-yt
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
@@ -127,6 +134,7 @@ jobs:
             dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
             build_args: ''
+            platforms: linux/amd64,linux/arm64
             trivy_ignorefile: ''
           - name: deepresearch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
@@ -135,6 +143,7 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
+            platforms: linux/amd64
             trivy_ignorefile: ''
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
@@ -143,6 +152,7 @@ jobs:
             dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
             build_args: ''
+            platforms: linux/amd64,linux/arm64
             trivy_ignorefile: ''
           # To add other integrations, duplicate one of the entries above.
           # Example (commented):
@@ -184,6 +194,14 @@ jobs:
             echo "::error::Failed to clone ${url} (ref=${{ matrix.ref }}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
             exit 1
           fi
+
+      - name: Free disk space (runner)
+        run: |
+          set -euxo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo docker system prune -af || true
+          df -h
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -236,6 +254,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Build and push (multi-arch)
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: integration-src/${{ matrix.context }}
@@ -244,24 +263,18 @@ jobs:
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ matrix.build_args }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platforms }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Cosign sign GHCR tags (keyless)
+      - name: Cosign sign GHCR digest (keyless)
         env:
-          TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
         run: |
           set -euo pipefail
-          echo "$TAGS" | tr '\n' '\0' | while IFS= read -r -d '' tag; do
-            case "$tag" in
-              ghcr.io/*|docker.io/*)
-                cosign sign --yes "$tag" ;;
-              *) ;; # skip other registries
-            esac
-          done
+          cosign sign --yes "$IMAGE_DIGEST_REF"
 
       - name: Install Syft (SBOM)
         uses: anchore/sbom-action/download-syft@v0.17.7
@@ -312,18 +325,12 @@ jobs:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
 
-      - name: Cosign verify GHCR tags (keyless)
+      - name: Cosign verify GHCR digest (keyless)
         env:
-          TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
         run: |
           set -euo pipefail
           issuer="https://token.actions.githubusercontent.com"
-          identity_regex="^https://github.com/${GITHUB_REPOSITORY}/\\.github/workflows/integrations-ghcr\\.yml@.*$"
-          echo "$TAGS" | tr '\n' '\0' | while IFS= read -r -d '' tag; do
-            case "$tag" in
-              ghcr.io/*|docker.io/*)
-                cosign verify --certificate-oidc-issuer "$issuer" --certificate-identity-regexp "$identity_regex" "$tag" ;; 
-              *) ;; # skip other registries
-            esac
-          done
+          identity="https://github.com/${GITHUB_WORKFLOW_REF}"
+          cosign verify --certificate-oidc-issuer "$issuer" --certificate-identity "$identity" "$IMAGE_DIGEST_REF"
