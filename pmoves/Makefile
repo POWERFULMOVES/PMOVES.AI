@@ -619,6 +619,42 @@ ui-dev-stop: ## Stop the console dev server started by ui-dev-start
 ui-dev-logs: ## Tail the console dev server logs
 	@cd ui && [ -f .pmoves_ui_dev.log ] && tail -f .pmoves_ui_dev.log || echo "No UI dev log found. Run 'make -C pmoves ui-dev-start' first."
 
+# -------- Local voice speaker (host audio) --------
+.PHONY: voice-speaker-start voice-speaker-stop voice-speaker-logs voice-say
+
+voice-speaker-start: ## Start local voice speaker API (plays audio on this machine)
+	@logfile=.pmoves_voice_speaker.log; \
+	pidfile=.pmoves_voice_speaker.pid; \
+	if [ -f "$$pidfile" ] && kill -0 "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1; then \
+	  echo "✔ voice-speaker already running (PID $$(cat "$$pidfile"))"; \
+	  exit 0; \
+	fi; \
+	nohup bash -lc '. ./scripts/with-env.sh; exec python3 tools/voice_speaker.py serve' > "$$logfile" 2>&1 & echo $$! > "$$pidfile"; \
+	echo "✔ voice-speaker starting (http://127.0.0.1:$${VOICE_SPEAKER_PORT:-8120}). PID: $$(cat "$$pidfile")"; \
+	for i in $$(seq 1 25); do \
+	  if curl -fsS "http://127.0.0.1:$${VOICE_SPEAKER_PORT:-8120}/healthz" >/dev/null 2>&1; then break; fi; \
+	  sleep 0.2; \
+	done; \
+	tail -n 10 "$$logfile" || true
+
+voice-speaker-stop: ## Stop local voice speaker API started by voice-speaker-start
+	@pidfile=.pmoves_voice_speaker.pid; \
+	kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || true; \
+	rm -f "$$pidfile"; \
+	echo "✔ voice-speaker stopped."
+
+voice-speaker-logs: ## Tail voice speaker logs
+	@[ -f .pmoves_voice_speaker.log ] && tail -f .pmoves_voice_speaker.log || echo "No voice-speaker log found. Run 'make -C pmoves voice-speaker-start' first."
+
+voice-say: ## Speak a message locally (requires voice-speaker-start). Usage: make -C pmoves voice-say MSG="Hello"
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-say" && exit 1)
+	@MSG="$${MSG:-Hello from PMOVES}"; \
+	PORT="$${VOICE_SPEAKER_PORT:-8120}"; \
+	MODE="$${VOICE_SPEAKER_MODE:-stream}"; \
+	VOICE="$${VOICE_SPEAKER_VOICE:-}"; \
+	PAYLOAD=$$(jq -n --arg text "$$MSG" --arg mode "$$MODE" --arg voice "$$VOICE" '{text:$$text, mode:$$mode, voice: (if ($$voice|length)>0 then $$voice else null end)}'); \
+	curl -fsS -X POST "http://127.0.0.1:$$PORT/say" -H 'content-type: application/json' --data-binary "$$PAYLOAD" | jq .
+
 # Toggle Single‑User (Owner) Mode for the console and restart dev server
 .PHONY: ui-single-user ui-single-user-on ui-single-user-off
 ui-single-user: ## Toggle SINGLE_USER_MODE for the console (MODE=1|0) and restart UI dev

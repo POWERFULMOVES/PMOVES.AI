@@ -44,6 +44,26 @@ The realtime demo exposes:
 - A WebSocket streaming endpoint at `GET /stream`
 - A configuration endpoint at `GET /config`
 
+## Local speaker bridge (PMOVES Flute → audible audio)
+
+The VibeVoice realtime server only produces audio bytes; it does not automatically play sound on your machine.
+
+PMOVES includes an optional **host-run** helper that calls Flute Gateway and plays audio through your local speakers:
+
+1. Start Flute + VibeVoice (Docker profiles already handle this in the PMOVES stack).
+2. Start the local speaker API:
+   ```bash
+   make -C pmoves voice-speaker-start
+   ```
+3. Speak a message:
+   ```bash
+   make -C pmoves voice-say MSG="Hello from PMOVES"
+   ```
+
+Notes:
+- The speaker runs on `http://127.0.0.1:8120` by default and is meant for local development.
+- Playback prefers `ffplay` (install `ffmpeg` if you don’t have it).
+
 Below, `BASE_URL` is the server root, for example:
 
 - `http://127.0.0.1:<PORT>` (local direct access), or

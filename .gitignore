@@ -32,6 +32,9 @@ Thumbs.db
 integrations-workspace/
 testkeys.md
 .tmp_*
+.pmoves_voice_speaker.log
+.pmoves_voice_speaker.pid
+tmp/*.wav
 /.cache/
 # dotenv: keep local env files out of the repo
 # Tracked examples like pmoves/.env.example should remain in the repo
