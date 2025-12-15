@@ -24,6 +24,10 @@ RUN git clone --depth 1 --single-branch --branch "${VIBEVOICE_GIT_REF}" "${VIBEV
 
 WORKDIR /app/vibevoice
 
+# Apply local hardening/operational patches to upstream.
+COPY services/vibevoice-realtime/patches/*.patch /tmp/patches/
+RUN git apply /tmp/patches/*.patch
+
 # Install VibeVoice (editable) so demo entrypoints import correctly.
 RUN python -m pip install --no-cache-dir -e .
 
@@ -32,4 +36,3 @@ RUN chmod +x /entrypoint.sh
 
 EXPOSE 3000
 ENTRYPOINT ["/entrypoint.sh"]
-

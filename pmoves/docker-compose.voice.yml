@@ -15,6 +15,8 @@ services:
       - VIBEVOICE_PORT=3000
       # Use `auto` to fall back to CPU when PyTorch lacks SM support (common on RTX 5090 until nightly wheels land).
       - VIBEVOICE_DEVICE=${VIBEVOICE_DEVICE:-auto}
+      # Cap generation so the service doesn't stay "busy" for minutes on short prompts.
+      - VIBEVOICE_MAX_NEW_TOKENS=${VIBEVOICE_MAX_NEW_TOKENS:-512}
       # Hugging Face caches (optional). If you have gated models, set HF_TOKEN in env.shared.
       - HF_HOME=/models/.hf
       - HUGGINGFACE_HUB_CACHE=/models/.hf
