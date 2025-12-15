@@ -67,7 +67,7 @@ jobs:
             git_url: https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
             ref: PMOVES.AI-Edition-Hardened
             context: .
-            dockerfile: docker/run/Dockerfile
+            dockerfile: DockerfileLocal
             image_name: pmoves-agent-zero
             build_args: |
               BRANCH=PMOVES.AI-Edition-Hardened
@@ -116,7 +116,7 @@ jobs:
           - name: pmoves-yt
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: pmoves
+            context: pmoves/services/pmoves-yt
             dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
             build_args: ''
@@ -130,7 +130,7 @@ jobs:
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: pmoves
+            context: pmoves/services/supaserch
             dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
             build_args: ''
