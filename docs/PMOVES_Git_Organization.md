@@ -120,7 +120,8 @@ Following Phase 2 Security Hardening, we identified and resolved critical Docker
 
 **Critical Issues Fixed:**
 1. **DeepResearch** — container restart loop and build wiring
-   - Commit `4a2a36a6` updated `pmoves/services/deepresearch/Dockerfile` and `pmoves/docker-compose.yml` to restore required build/runtime inputs.
+   - Commit `3147c523` corrected Dockerfile COPY paths to match the then-active build context expectations.
+   - Commit `4a2a36a6` restored the runtime `contracts/` mount/copy so the container stopped crash-looping.
 2. **FFmpeg-Whisper** — scoped build context and safer ignore rules
    - Commit `714681db` updated `pmoves/services/ffmpeg-whisper/Dockerfile`, `pmoves/docker-compose.yml`, and the repo root `.dockerignore`.
 

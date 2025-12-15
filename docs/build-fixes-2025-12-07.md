@@ -17,7 +17,7 @@ Following Phase 2 Security Hardening completion, we identified and resolved crit
 
 **Fix Applied** (commit 3147c52):
 ```diff
-# In services/deepresearch/Dockerfile
+# In pmoves/services/deepresearch/Dockerfile
 - COPY services/deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
 + COPY deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
 
@@ -30,33 +30,7 @@ Following Phase 2 Security Hardening completion, we identified and resolved crit
 
 **Impact**: DeepResearch container now builds successfully and can be deployed alongside other orchestration services.
 
-### 2. Environment File - JSON Value Shell Parsing Error
-
-**Problem**: Shell error `.env.local: line 11: 0.3,: command not found` when loading environment files.
-
-**Root Cause**:
-- Unquoted JSON object in environment variable
-- Shell interpreted `{"temperature":` as a command to execute
-
-**Before**:
-```bash
-AGENT_ZERO_DECODING={"temperature": 0.3, "top_p": 0.8}
-```
-
-**After**:
-```bash
-AGENT_ZERO_DECODING='{"temperature": 0.3, "top_p": 0.8}'
-```
-
-**Fix Applied** (commit 3147c52):
-- Quote all JSON values in `.env.local` and environment templates
-- Added documentation reminder that `.env.local` is gitignored and users must apply this pattern
-
-**Files Modified**: Documentation updated; `.env.local` is gitignored (users apply locally)
-
-**Impact**: Environment loading now works correctly for all shell contexts (bash, zsh, sh).
-
-### 3. Container Restart Loop - Missing Contracts Directory
+### 2. Container Restart Loop - Missing Contracts Directory
 
 **Problem**: DeepResearch container entered restart loop after successful build, with logs showing "contracts directory not found" errors.
 
@@ -66,7 +40,7 @@ AGENT_ZERO_DECODING='{"temperature": 0.3, "top_p": 0.8}'
 
 **Fix Applied** (commit 4a2a36a):
 ```diff
-# In services/deepresearch/Dockerfile
+# In pmoves/services/deepresearch/Dockerfile
 + COPY contracts /app/contracts
 ```
 
@@ -86,34 +60,26 @@ AGENT_ZERO_DECODING='{"temperature": 0.3, "top_p": 0.8}'
 
 **Fix Applied** (commit 714681d):
 ```dockerignore
-# In services/ffmpeg-whisper/.dockerignore
+# In .dockerignore (repo root)
 jellyfin-ai/
 neo4j/
 redis/
 ```
 
-**Files Modified**: Created `pmoves/services/ffmpeg-whisper/.dockerignore`
+**Files Modified**: `pmoves/services/ffmpeg-whisper/Dockerfile`, `pmoves/docker-compose.yml`, `.dockerignore`
 
 **Impact**: FFmpeg-Whisper builds now complete reliably without permission errors.
 
 ### Media-Audio - Torch/Torchaudio Version Conflicts
 
-**Problem**: Historical dependency conflicts between torch 2.8.0 and torchaudio 2.3.1 causing build failures.
+**Problem**: Dependency conflicts between torch/torchaudio (and friends) caused intermittent build failures.
 
 **Root Cause**:
 - Incompatible version constraints in requirements.txt
 - Newer PyTorch versions require compatible torchaudio versions
 
-**Fix Applied** (Earlier, documented for completeness):
-```diff
-# In services/media-audio/requirements.txt
--torch==2.3.1
--torchaudio==2.3.1
-+torch>=2.5.1
-+torchaudio>=2.5.1
-```
-
-**Files Modified**: `pmoves/services/media-audio/requirements.txt`
+**Fix Applied** (commit a3d74f41, later consolidated into lockfiles):
+- Dependency alignment was implemented in `pmoves/services/media-audio/requirements.txt` and then migrated into `pmoves/services/media-audio/requirements.lock` as the repo standardized on lockfile-based installs (so `requirements.txt` now typically contains `-r requirements.lock`).
 
 **Impact**: Media-audio service now builds with compatible PyTorch ecosystem versions.
 
@@ -135,25 +101,24 @@ The fixes were applied using a systematic approach:
 - DeepResearch: Build failed (context mismatch)
 - FFmpeg-Whisper: Intermittent failures (permission errors)
 - Media-Audio: Build failed (dependency conflicts)
-- Environment loading: Shell parsing errors
+ 
 
 **After Fixes**:
 - DeepResearch: Builds successfully, runs without restart loops
-- FFmpeg-Whisper: Reliable builds with proper .dockerignore
+- FFmpeg-Whisper: Reliable builds with proper `.dockerignore` scoping
 - Media-Audio: Compatible dependency versions
-- Environment loading: All JSON values properly quoted
+ 
 
-**Files Modified**: 5 total
-- `pmoves/services/deepresearch/Dockerfile` (2 commits: context fix, then contracts restoration)
-- `pmoves/services/media-audio/requirements.txt` (dependency versions)
-- `pmoves/services/ffmpeg-whisper/.dockerignore` (new file)
-- Documentation updates (build-fixes-2025-12-06.md)
+**Files Modified** (high-level)
+- `pmoves/services/deepresearch/Dockerfile` (build context alignment + contracts runtime fix)
+- `pmoves/services/ffmpeg-whisper/Dockerfile`, `pmoves/docker-compose.yml`, `.dockerignore` (context scoping)
+- `pmoves/services/media-audio/requirements.*` (dependency alignment; later lockfile consolidation)
 
 **Commits**:
-- 3147c52: DeepResearch Dockerfile build context and env syntax
+- 3147c52: DeepResearch Dockerfile build context alignment
 - 4a2a36a: DeepResearch container restart loop fix
 - 714681d: FFmpeg-Whisper build context scoping
-- 65f68f1: Documentation of fixes
+- a3d74f41: Media-audio dependency alignment (later lockfile consolidation)
 
 ## Testing & Validation
 
