@@ -67,30 +67,24 @@ This document provides a comprehensive guide to PMOVES.AI's GitHub organization,
 
 ## Branch Protection Rules
 
-### Main Branch Protection (Active since Phase 2)
-The `main` branch is protected with the following rules:
+### Default branch merge rules (Rulesets)
+PMOVES.AI uses **GitHub Rulesets** on the default branch (not classic branch protection). This matters because the REST endpoint for branch protection can return 404 even when merges are still gated.
 
-**Required Before Merging:**
-- Pull request with at least 1 approval
-- Status checks must pass:
-  - CI tests
-  - `make verify` validation
-  - CodeQL security scanning
-- All conversations must be resolved
-- Linear history (no merge commits)
-- Commits must be GPG signed
+**Inspect the active ruleset (recommended):**
+- List rulesets: `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets`
+- View a ruleset: `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/<id>`
+- Quick summary (human-readable): `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/<id> | jq '{enforcement,conditions,rules: [.rules[].type]}'`
 
-**Bypass Permissions:**
-- @powerfulmoves (repository owner)
-- @claudedev (automation bot)
-- @coderabbitai (review bot)
+**Current expected gates (as of 2025-12-15):**
+- Pull requests required
+- Code owner review required (see `.github/CODEOWNERS`)
+- Last-push approval required (someone other than the last pusher must approve)
+- Review threads must be resolved before merge
+- Prevent deletion + non-fast-forward updates on the default branch
+- Allowed merge methods: merge, squash, rebase
 
 ### CODEOWNERS
-Automated review assignments configured in `.github/CODEOWNERS`:
-- `/pmoves/**` - Core services team
-- `/.github/**` - DevOps team
-- `/docs/**` - Documentation team
-- `/deploy/**` - Infrastructure team
+Automated review assignments are configured in `.github/CODEOWNERS` and are authoritative (inspect it directly: `.github/CODEOWNERS`). This repo intentionally keeps owners narrow for security-critical paths (workflows, compose, env, and core services).
 
 **Status:** Active and enforced since PR #276 (2025-12-07)
 
@@ -98,31 +92,42 @@ Automated review assignments configured in `.github/CODEOWNERS`:
 
 ## Recent Fixes
 
+### Docker Auth + Build Stability (2025-12-13)
+**Status:** Complete ✅
+
+- **Docker credential helper mismatch:** Docker Desktop/WSL commonly writes `credsStore=desktop.exe` into `~/.docker/config.json`. On Linux/headless hosts this can break pulls/builds with `docker-credential-desktop.exe: permission denied`.
+  - **Preferred fix:** use the repo-scoped Docker config under `.docker-nocreds/` and set `DOCKER_CONFIG` accordingly.
+  - The `pmoves/Makefile` now auto-prefers `../.docker-nocreds` when present so `make -C pmoves up-*` and `make -C pmoves update` work in headless environments.
+  - **GHCR login tip (local):** use the same repo-scoped config when logging into GHCR, otherwise Docker will try to save credentials via the broken helper:
+    - `DOCKER_CONFIG=./.docker-nocreds gh auth token | DOCKER_CONFIG=./.docker-nocreds docker login ghcr.io -u <USER> --password-stdin`
+    - Note: run this from the repository root (or adjust the relative `.docker-nocreds` path accordingly).
+    - Safety note: avoid `docker login` without `DOCKER_CONFIG` on headless hosts unless you intentionally want credentials written to `~/.docker/config.json`.
+- **Compose file subsets:** invoking `docker compose` with different `-f` subsets under the same project name can cause noisy “Found orphan containers” warnings (and confusing status output). Prefer the `pmoves/Makefile` targets, which operate on a consistent compose file set for the `pmoves` stack.
+- **Buildx drift:** stale Docker Desktop/WSL buildx builders can reference dead `/run/desktop/mnt/host/wsl/...` bind mounts. Switch to the default builder (`docker buildx use default`) or recreate the builder if builds fail.
+- **GHCR publish scope:** pushing images to GHCR requires a token with `write:packages` (and `read:packages` for pulls of private packages). For GitHub CLI tokens: `gh auth refresh -h github.com -s write:packages`.
+  - If `gh auth refresh` rate-limits with `slow_down`, wait ~30–60 seconds and retry (GitHub device flow throttles repeated attempts).
+- **GHCR namespace casing:** GHCR image references must use a lowercase namespace. If your org/user owner is uppercase (e.g., `POWERFULMOVES`), normalize tags to lowercase in CI/CD (the integrations GHCR workflow now does this).
+- **dotenv safety + compose overrides:** avoid `source`-ing `pmoves/env.shared` directly in shell scripts/Make recipes (it may contain non-shell-safe values). Prefer `pmoves/scripts/with-env.sh`, which sanitizes dotenv files before exporting vars.
+- **Secrets precedence:** avoid Compose-time `environment: VAR=${VAR}` for secrets that are already in `env_file`, because an unset shell var becomes an empty string and overrides the `env_file` value inside containers. This surfaced as Open Notebook tokens drifting from DeepResearch until the compose interpolation was removed.
+- **n8n flow versioning:** canonical, shareable exports live under `pmoves/n8n/flows/` and are mirrored into the `PMOVES-n8n` submodule (`PMOVES-n8n/workflows/`). Import/activate with `make -C pmoves n8n-bootstrap` (handles import + DB sanitize + restart). Refresh exports from a live n8n instance via `make -C pmoves n8n-export-repo-flows`.
+- **n8n HTTP timeouts:** `options.timeout` for HTTP Request nodes is **milliseconds** in n8n. Treat values like `10/20/30` as 10ms/20ms/30ms unless explicitly multiplied (this has bitten Voice Agent flows and Supabase/NATS calls).
+- **Voice Agents (Flute):** Voice Agent router (`pmoves/n8n/flows/voice_platform_router.json`) defaults to TensorZero local models when available (`VOICE_AGENT_MODEL=tensorzero::model_name::qwen2_5_14b`) and publishes `voice.agent.response.v1` to NATS.
+
 ### Docker Build Reliability Improvements (2025-12-06 to 2025-12-07)
 **Status:** Complete ✅
 
 Following Phase 2 Security Hardening, we identified and resolved critical Docker build failures across the stack:
 
 **Critical Issues Fixed:**
-1. **DeepResearch** - Build context mismatch (commit 3147c52)
-   - Fixed Dockerfile COPY paths to align with `context: ./services`
-   - Resolved container restart loop by restoring contracts directory (commit 4a2a36a)
-2. **Environment Files** - JSON parsing errors (commit 3147c52)
-   - Quoted all JSON values in shell-sourced environment files
-   - Prevents shell interpretation of JSON syntax as commands
-3. **FFmpeg-Whisper** - Permission denied errors (commit 714681d)
-   - Added .dockerignore to exclude restricted jellyfin-ai directories
-   - Eliminates intermittent build failures from permission issues
+1. **DeepResearch** — container restart loop and build wiring
+   - Commit `3147c523` corrected Dockerfile COPY paths to match the then-active build context expectations.
+   - Commit `4a2a36a6` restored the runtime `contracts/` mount/copy so the container stopped crash-looping.
+2. **FFmpeg-Whisper** — scoped build context and safer ignore rules
+   - Commit `714681db` updated `pmoves/services/ffmpeg-whisper/Dockerfile`, `pmoves/docker-compose.yml`, and the repo root `.dockerignore`.
 
 **Build Success Rate**: Improved from intermittent failures to 100% successful builds for affected services
 
-**Files Modified**: 5 files across 4 commits
-- `services/deepresearch/Dockerfile` (2 commits)
-- `services/ffmpeg-whisper/.dockerignore` (new file)
-- `services/media-audio/requirements.txt` (dependency updates)
-- Documentation updates
-
-**See Also**: `docs/build-fixes-2025-12-07.md` for detailed analysis and lessons learned
+**See Also**: `docs/build-fixes-2025-12-07.md` for the detailed timeline and root-cause analysis.
 
 ---
 

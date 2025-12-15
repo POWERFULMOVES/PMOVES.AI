@@ -6,8 +6,8 @@ RUN groupadd -r pmoves && useradd -r -g pmoves pmoves
 WORKDIR /app
 
 # Install dependencies first (cache layer)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock .
+RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
 # Copy application code
 COPY *.py ./

@@ -1,5 +1,5 @@
 # n8n Setup Checklist (Supabase → Agent Zero → Discord)
-_Last updated: 2025-10-17_
+_Last updated: 2025-12-14_
 
 ## Overview
 This guide streamlines importing and running the PMOVES approval and publish workflows in n8n. It targets Supabase CLI on the host, Agent Zero + NATS in Docker, and Discord webhooks.
@@ -13,7 +13,9 @@ This guide streamlines importing and running the PMOVES approval and publish wor
 ## Prerequisites
 - Supabase CLI running locally: `supabase start` or `make supa-start`
 - PMOVES stack up: `make up && make up-agents`
-- n8n running: `make up-n8n` (UI at `http://localhost:5678`, launches the `n8n` broker + `n8n-runners` sidecar for scheduled tasks)
+- n8n running:
+  - Local/dev (SQLite): `make up-n8n` (UI at `http://localhost:5678`, launches `n8n` + `n8n-runners`)
+  - VPS/prod (Postgres): `N8N_DB=postgres make up-n8n` (adds `n8n-db` Postgres for durable state)
 - Secrets at hand: `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, `N8N_RUNNERS_AUTH_TOKEN`
 
 ## Environment (n8n)
@@ -27,9 +29,19 @@ Set these in n8n (Settings → Variables) or via container env:
 - `N8N_RUNNERS_AUTH_TOKEN` = `<shared secret – must match the sidecar>`
 - `N8N_DEFAULT_TIMEZONE` = `America/New_York` (aligns cron schedules with project TZ)
 
+### n8n persistence mode (SQLite vs Postgres)
+By default, `make up-n8n` runs n8n with SQLite for quick local bring-up.
+
+For VPS/production, run n8n on Postgres:
+- Set `N8N_DB=postgres`
+- Set `N8N_DB_NAME`, `N8N_DB_USER`, `N8N_DB_PASSWORD` (in `pmoves/env.shared` or injected secrets)
+- Bring up: `N8N_DB=postgres make -C pmoves up-n8n`
+
+This uses `pmoves/docker-compose.n8n.postgres.yml` to add a dedicated `n8n-db` container. It does **not** move your PMOVES app data into n8n — it only stores n8n’s own workflow/execution state in Postgres.
+
 > **Supabase runtime note:** The CLI runtime binds REST on port `65421` per `supabase/config.toml`. If you switch back to the docker-compose PostgREST service, update `SUPABASE_REST_URL` accordingly (typically `http://host.docker.internal:54321/rest/v1`).
 
-Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use the Make target `make up-n8n`, populate `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, and `N8N_RUNNERS_AUTH_TOKEN` in `.env.local`. Rotate the runner token any time the sidecar logs authentication failures.
+Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use `make up-n8n`, populate `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, and `N8N_RUNNERS_AUTH_TOKEN` in `pmoves/env.shared` or `pmoves/.env.local`. The runner token is loaded via `env_file` (not compose-time interpolation) so recreating containers won’t accidentally desync the broker and sidecar.
 
 Note: n8n 1.115.3 already executes cron triggers in the main process. Avoid re-adding the deprecated `EXECUTIONS_PROCESS` flag—the service emits a warning and ignores it.
 
@@ -73,6 +85,12 @@ Note: n8n 1.115.3 already executes cron triggers in the main process. Avoid re-a
 5. Activate echo publisher → confirm Discord embed (title/link/thumbnail if provided)
 6. Optional: Post directly to n8n webhook (flow must be active)
    - `make n8n-webhook-demo`
+
+### Voice platform flows (Discord/Telegram)
+The repo includes optional chat-platform voice agent flows (Discord/Telegram) that require additional credentials and/or custom n8n nodes.
+
+To keep the stack green by default, `make -C pmoves n8n-activate-flows` disables these unless you opt in:
+- Enable chat-platform voice flows: `VOICE_PLATFORMS=1 make -C pmoves n8n-activate-flows`
 
 ## VibeVoice / RVC Audio Capture
 These flows extend the core approval automations so we can surface RVC voice outputs produced by the VibeVoice toolchain.

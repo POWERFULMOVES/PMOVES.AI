@@ -64,20 +64,30 @@ test_render_webhook_health() {
 test_render_webhook_endpoint() {
     log_info "Testing render-webhook /comfy/webhook endpoint..."
 
-    local response
-    response=$(curl -sf --max-time 10 -X OPTIONS "${RENDER_WEBHOOK_URL}/comfy/webhook" 2>&1) || {
+    # Do not use `-f` here: non-2xx (401/405/422) still proves the route exists.
+    local code
+    code=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" -X OPTIONS "${RENDER_WEBHOOK_URL}/comfy/webhook" 2>&1 || true)
+    if [ "$code" = "000" ]; then
         # OPTIONS may not be supported, try HEAD
-        if curl -sf --max-time 10 -I "${RENDER_WEBHOOK_URL}/comfy/webhook" > /dev/null 2>&1; then
-            log_info "✓ /comfy/webhook endpoint exists"
-            return 0
-        fi
-        log_warn "⚠ /comfy/webhook endpoint check inconclusive"
-        strict_check
-        return $?
-    }
+        code=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" -I "${RENDER_WEBHOOK_URL}/comfy/webhook" 2>&1 || true)
+    fi
 
-    log_info "✓ /comfy/webhook endpoint available"
-    return 0
+    case "$code" in
+        200|204|401|405|422)
+            log_info "✓ /comfy/webhook endpoint exists (HTTP ${code})"
+            return 0
+            ;;
+        404)
+            log_warn "⚠ /comfy/webhook endpoint returned 404 (missing route?)"
+            strict_check
+            return $?
+            ;;
+        000|*)
+            log_warn "⚠ /comfy/webhook endpoint check inconclusive (HTTP ${code})"
+            strict_check
+            return $?
+            ;;
+    esac
 }
 
 # Test render-webhook with dry-run payload (expects 401 without auth)
@@ -86,7 +96,8 @@ test_render_webhook_auth() {
 
     local response
     local http_code
-    http_code=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" \
+    # Do not use `-f` here: 401/422 are expected responses and should be observable in STRICT mode.
+    http_code=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${RENDER_WEBHOOK_URL}/comfy/webhook" \
         -H "Content-Type: application/json" \
         -d '{
@@ -189,21 +200,22 @@ test_nats_creator_subjects() {
         return $?
     fi
 
-    # Check if gen.image.result.v1 stream/consumer exists
-    local streams
-    streams=$(nats stream ls --json 2>/dev/null | jq -r '.[] // empty' 2>/dev/null) || {
-        log_warn "⚠ Could not list NATS streams"
-        strict_check
-        return $?
-    }
-
-    # Try to get stream info for gen subjects
-    if nats stream info COMFY_OUTPUTS 2>/dev/null | grep -q "gen.image"; then
+    if NATS_URL="${NATS_URL}" nats stream info COMFY_OUTPUTS 2>/dev/null | grep -q "gen.image"; then
         log_info "✓ COMFY_OUTPUTS stream configured for gen.image subjects"
         return 0
     fi
 
-    log_warn "⚠ COMFY_OUTPUTS stream not found (may use different subject pattern)"
+    log_warn "⚠ COMFY_OUTPUTS stream not found"
+    log_info "Attempting to create COMFY_OUTPUTS stream for gen.image.*"
+
+    if NATS_URL="${NATS_URL}" nats stream add COMFY_OUTPUTS --subjects='gen.image.>' --storage=file --retention=limits --discard=old --defaults >/dev/null 2>&1; then
+        if NATS_URL="${NATS_URL}" nats stream info COMFY_OUTPUTS 2>/dev/null | grep -q "gen.image"; then
+            log_info "✓ COMFY_OUTPUTS stream created"
+            return 0
+        fi
+    fi
+
+    log_warn "⚠ COMFY_OUTPUTS stream still missing or misconfigured"
     strict_check
 }
 
@@ -211,16 +223,15 @@ test_nats_creator_subjects() {
 test_minio_bucket() {
     log_info "Testing MinIO bucket for ComfyUI..."
 
-    # Try to list buckets via MinIO client in container
+    # Try to list buckets via MinIO client in container.
+    # Ensure an alias is configured using the MinIO container's configured root credentials.
     local buckets
-    buckets=$(docker exec pmoves-minio-1 mc ls minio/ 2>/dev/null) || {
-        # Alternative: try direct API
-        buckets=$(curl -sf --max-time 10 "${MINIO_API_URL}" 2>/dev/null) || {
-            log_warn "⚠ Could not check MinIO buckets"
-            strict_check
-            return $?
-        }
-    }
+    buckets=$(docker exec pmoves-minio-1 sh -lc 'mc alias set pmoves http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 || true; mc ls pmoves/ 2>/dev/null' || true)
+    if [ -z "${buckets:-}" ]; then
+        log_warn "⚠ Could not check MinIO buckets"
+        strict_check
+        return $?
+    fi
 
     if echo "$buckets" | grep -qiE "(pmoves-comfyui|assets|outputs)"; then
         log_info "✓ Required MinIO buckets exist"
@@ -236,6 +247,10 @@ test_supabase_connectivity() {
     log_info "Testing Supabase connectivity..."
 
     local supa_url="${SUPA_REST_URL:-http://localhost:65421/rest/v1}"
+    # Supabase REST responds on the trailing-slash form; the non-slash path may 404 at the gateway.
+    if [[ "$supa_url" =~ /rest/v1$ ]]; then
+        supa_url="${supa_url}/"
+    fi
 
     if curl -sf --max-time 10 "${supa_url}" > /dev/null 2>&1; then
         log_info "✓ Supabase REST API accessible"

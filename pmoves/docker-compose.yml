@@ -74,7 +74,6 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - MEILI_ENV=production
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-master_key}
     ports: ["7700:7700"]
     profiles: ["data","meili-local"]
     networks: [data_tier, monitoring_tier]
@@ -101,8 +100,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}
     ports: ["9000:9000","9001:9001"]
     volumes:
       - minio-data:/data
@@ -190,20 +189,49 @@ services:
       - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
 
+  comfy-watcher:
+    build:
+      context: .
+      dockerfile: services/comfy-watcher/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      # comfy-watcher uses the MinIO Python client, which requires a host:port endpoint (no path prefix).
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
+      - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
+    depends_on:
+      nats:
+        condition: service_started
+      minio:
+        condition: service_started
+    volumes:
+      - comfy-watcher-output:/data
+      - comfy-watcher-state:/state
+    profiles: ["orchestration","workers"]
+    networks: [bus_tier, data_tier]
+
   extract-worker:
     build: ./services/extract-worker
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+      # Keep extract-worker embeddings aligned with Hi-RAG v2 defaults (TensorZero → Ollama),
+      # so ingestion and query stay on the same embedding space.
+      - EMBEDDING_BACKEND=${EXTRACT_WORKER_EMBEDDING_BACKEND:-tensorzero}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       # Use unified Supabase REST by default (env_file values are not interpolated at compose time)
       - SUPA_REST_URL=http://host.docker.internal:65421/rest/v1
       - SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1
-    ports: ["8083:8083"]
+    ports: ["${EXTRACT_WORKER_HOST_PORT:-8083}:8083"]
     profiles: ["workers","orchestration"]
     networks: [app_tier, data_tier, api_tier, monitoring_tier]
     extra_hosts:
@@ -247,13 +275,17 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
+      # Open Notebook runs outside this compose project's networks; reach it via host-gateway + published port.
+      # Keep env.shared's OPEN_NOTEBOOK_API_URL=http://localhost:5055 for host-side scripts.
+      - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
       - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
       - NOTEBOOK_SYNC_INTERVAL_SECONDS=${NOTEBOOK_SYNC_INTERVAL_SECONDS:-300}
       - NOTEBOOK_SYNC_NAMESPACE=${NOTEBOOK_SYNC_NAMESPACE:-open-notebook}
       - NOTEBOOK_SYNC_DB_PATH=${NOTEBOOK_SYNC_DB_PATH:-/data/notebook_sync.db}
       - LANGEXTRACT_URL=${LANGEXTRACT_URL:-http://langextract:8084}
       - EXTRACT_WORKER_URL=${EXTRACT_WORKER_URL:-http://extract-worker:8083}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       langextract:
         condition: service_started
@@ -312,7 +344,8 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - VIBEVOICE_URL=${VIBEVOICE_URL:-http://localhost:3000}
+      # VibeVoice is typically run outside Docker (Pinokio/host); reach it via host-gateway.
+      - VIBEVOICE_URL=${VIBEVOICE_URL:-http://host.docker.internal:3000}
       - WHISPER_URL=${WHISPER_URL:-http://ffmpeg-whisper:8078}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
@@ -324,6 +357,8 @@ services:
     ports: ["8055:8055", "8056:8056"]
     profiles: ["workers","orchestration"]
     networks: [api_tier, bus_tier, data_tier, monitoring_tier]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   ffmpeg-whisper:
     build:
@@ -424,14 +459,6 @@ services:
     volumes:
       - ./config:/app/config
       - ./data/yt-dlp:/data/yt-dlp
-    depends_on:
-      minio:
-        condition: service_started
-      # bgutil-pot-provider is optional and may be excluded when compose is
-      # invoked with profiles that don't include the 'yt' provider. Remove
-      # the hard dependency so `make up` with different profiles doesn't
-      # fail with an "undefined service" error. The image/service is still
-      # defined below and can be enabled via profiles when needed.
     ports: ["8077:8077"]
     profiles: ["orchestration","workers","agents"]
     networks: [api_tier, app_tier, bus_tier, data_tier, monitoring_tier]
@@ -441,7 +468,6 @@ services:
     restart: unless-stopped
     environment:
       - PORT=4416
-    depends_on: [minio]
     profiles: ["orchestration","yt"]
     networks: [api_tier, app_tier]  # api_tier added for external DNS/googleapis access
 
@@ -476,7 +502,7 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - ALPHA=${ALPHA:-0.7}
@@ -490,10 +516,10 @@ services:
       - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
-      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
@@ -579,7 +605,7 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - ALPHA=${ALPHA:-0.7}
@@ -611,10 +637,10 @@ services:
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
       # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
-      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     gpus: all
     deploy:
@@ -699,7 +725,6 @@ services:
     depends_on:
       nats:
         condition: service_started
-    command: ["python","-c","import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')"]
     ports: ["8091:8091","8051:8051","8052:8052"]
     profiles: ["agents"]
     networks:
@@ -812,7 +837,6 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]
     environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
       - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
@@ -820,14 +844,13 @@ services:
       - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
       - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
       - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
-      - DEEPRESEARCH_NOTEBOOK_ID=${DEEPRESEARCH_NOTEBOOK_ID}
-      - DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX=${DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX}
       - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
       - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
-      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
-      - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
+      # DeepResearch runs in Docker; reach Open Notebook via host-gateway + published port.
+      - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on: [nats]
     profiles: ["agents"]
     ports: ["8098:8098"]
@@ -907,9 +930,6 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      - CLAUDE_SESSION_CHANNEL_ID=${CLAUDE_SESSION_CHANNEL_ID}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,claude.code.session.start.v1,claude.code.session.context.v1,claude.code.session.end.v1}
     depends_on: [nats]
@@ -922,11 +942,6 @@ services:
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
-      - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID}
-      - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
-      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - MESSAGING_SUBJECTS=${MESSAGING_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1}
     depends_on: [nats]
@@ -1078,7 +1093,7 @@ services:
           port: 5432
           check_tables: true
         domain: ${INVIDIOUS_DOMAIN:-}
-        external_port: ${INVIDIOUS_EXTERNAL_PORT:-3000}
+        external_port: ${INVIDIOUS_EXTERNAL_PORT:-3005}
         https_only: ${INVIDIOUS_HTTPS_ONLY:-false}
         hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
         invidious_companion:
@@ -1091,7 +1106,7 @@ services:
           use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}
           redirector_url: "${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}"
     ports:
-      - "${INVIDIOUS_BIND:-127.0.0.1:3000}:3000"
+      - "${INVIDIOUS_BIND:-127.0.0.1:3005}:3000"
     depends_on:
       invidious-db:
         condition: service_healthy
@@ -1176,6 +1191,8 @@ volumes:
   minio-data: {}
   supabase-data: {}
   notebook-sync-data: {}
+  comfy-watcher-output: {}
+  comfy-watcher-state: {}
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}

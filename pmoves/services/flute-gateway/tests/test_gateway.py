@@ -265,6 +265,27 @@ class TestSynthesizeEndpoint:
         call_args = self.mock_vibevoice.synthesize.call_args
         assert call_args.kwargs.get("voice") == "custom-voice"
 
+    def test_synthesize_audio_returns_wav_bytes(self):
+        """Synthesize/audio returns audio/wav payload."""
+        response = self.client.post(
+            "/v1/voice/synthesize/audio",
+            json={"text": "Hello world", "output_format": "wav"},
+            headers={"X-API-Key": "test-api-key"},
+        )
+        assert response.status_code == 200
+        assert response.headers.get("content-type", "").startswith("audio/wav")
+        assert len(response.content) > 44  # WAV header + frames
+
+    def test_synthesize_audio_rejects_empty_audio(self):
+        """Synthesize/audio must not return a header-only WAV on upstream failures."""
+        self.mock_vibevoice.synthesize = AsyncMock(return_value=b"")
+        response = self.client.post(
+            "/v1/voice/synthesize/audio",
+            json={"text": "Hello world", "output_format": "wav"},
+            headers={"X-API-Key": "test-api-key"},
+        )
+        assert response.status_code == 502
+
 
 @requires_deps
 class TestRecognizeEndpoint:

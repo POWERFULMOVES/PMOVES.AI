@@ -1,51 +1,61 @@
-{
-  "name": "Debug Cron",
-  "nodes": [
-    {
-      "parameters": {
-        "triggerTimes": [
-          {
-            "item": {
-              "mode": "everyMinute"
+[
+  {
+    "name": "Debug Cron",
+    "nodes": [
+      {
+        "parameters": {
+          "triggerTimes": [
+            {
+              "item": {
+                "mode": "everyMinute"
+              }
             }
-          }
+          ]
+        },
+        "id": "cron_debug",
+        "name": "Schedule: Debug",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [
+          -200,
+          200
         ]
       },
-      "id": "cron_debug",
-      "name": "Schedule: Debug",
-      "type": "n8n-nodes-base.cron",
-      "typeVersion": 1,
-      "position": [
-        -200,
-        200
-      ]
+      {
+        "parameters": {
+          "functionCode": "console.log('debug cron fired at', new Date().toISOString());\nreturn { json: { firedAt: new Date().toISOString() } };"
+        },
+        "id": "function_debug",
+        "name": "Log",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [
+          40,
+          200
+        ]
+      }
+    ],
+    "connections": {
+      "Schedule: Debug": {
+        "main": [
+          [
+            {
+              "node": "Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
     },
-    {
-      "parameters": {
-        "functionCode": "console.log('debug cron fired at', new Date().toISOString());\nreturn { json: { firedAt: new Date().toISOString() } };"
-      },
-      "id": "function_debug",
-      "name": "Log",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [
-        40,
-        200
-      ]
-    }
-  ],
-  "connections": {
-    "Schedule: Debug": {
-      "main": [
-        [
-          {
-            "node": "Log",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "active": true
-}
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {},
+    "pinData": null,
+    "versionId": "366ee772-85cb-482c-aa46-f23e37a55bd5",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": []
+  }
+]

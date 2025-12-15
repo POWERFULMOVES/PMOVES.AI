@@ -15,9 +15,11 @@ Providers:
 """
 
 import asyncio
+import io
 import json
 import logging
 import os
+import wave
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -30,7 +32,7 @@ from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 # Provider imports
-from providers import VibeVoiceProvider, WhisperProvider
+from providers import VibeVoiceBusyError, VibeVoiceNoAudioError, VibeVoiceProvider, WhisperProvider
 
 # Configure logging
 logging.basicConfig(
@@ -43,10 +45,50 @@ logger = logging.getLogger("flute-gateway")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://localhost:3010")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-VIBEVOICE_URL = os.getenv("VIBEVOICE_URL", "http://localhost:3000")
+# VibeVoice is a host-run realtime TTS demo (Pinokio or manual run).
+# Default to the host-gateway URL so the Flute stack is voice-ready by default.
+VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:3000").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
+
+
+def _pcm16_to_wav_bytes(pcm16: bytes, sample_rate: int) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)  # 16-bit
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm16)
+    return buf.getvalue()
+
+
+def _running_in_docker() -> bool:
+    return os.path.exists("/.dockerenv")
+
+
+def _normalize_vibevoice_url(url: str) -> str:
+    """Normalize a user-provided VibeVoice URL for Docker contexts.
+
+    A common misconfiguration is setting `VIBEVOICE_URL=http://localhost:<port>` in `env.shared`,
+    which works on the host but fails inside containers (localhost points at the container).
+    """
+    if not url:
+        return url
+    if not _running_in_docker():
+        return url
+    if url.startswith("http://localhost"):
+        return url.replace("http://localhost", "http://host.docker.internal", 1)
+    if url.startswith("http://127.0.0.1"):
+        return url.replace("http://127.0.0.1", "http://host.docker.internal", 1)
+    if url.startswith("https://localhost"):
+        return url.replace("https://localhost", "https://host.docker.internal", 1)
+    if url.startswith("https://127.0.0.1"):
+        return url.replace("https://127.0.0.1", "https://host.docker.internal", 1)
+    return url
+
+
+VIBEVOICE_URL = _normalize_vibevoice_url(VIBEVOICE_URL)
 
 # API Key authentication dependency
 async def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
@@ -148,8 +190,12 @@ async def lifespan(app: FastAPI):
         logger.error("SUPABASE_SERVICE_ROLE_KEY is not set")
         raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY environment variable is required")
 
-    # Initialize providers
-    vibevoice_provider = VibeVoiceProvider(VIBEVOICE_URL)
+    # Initialize providers (VibeVoice is optional; Whisper is required for STT)
+    if VIBEVOICE_URL:
+        vibevoice_provider = VibeVoiceProvider(VIBEVOICE_URL)
+    else:
+        vibevoice_provider = None
+        logger.info("VibeVoice disabled (set VIBEVOICE_URL to enable realtime TTS).")
     whisper_provider = WhisperProvider(WHISPER_URL)
 
     # Initialize NATS (optional)
@@ -226,8 +272,12 @@ async def get_config():
     """Get service configuration and available features."""
     REQUESTS_TOTAL.labels(endpoint="/v1/voice/config", status="200").inc()
 
+    providers: List[str] = ["whisper", "elevenlabs"]
+    if vibevoice_provider:
+        providers.insert(0, "vibevoice")
+
     return ConfigResponse(
-        providers=["vibevoice", "whisper", "elevenlabs"],
+        providers=providers,
         default_provider=DEFAULT_PROVIDER,
         sample_rate=24000,
         format="pcm16",
@@ -262,6 +312,8 @@ async def synthesize_speech(request: SynthesizeRequest):
                 text=request.text,
                 voice=request.voice,
             )
+            if not audio_data:
+                raise HTTPException(status_code=502, detail="VibeVoice returned empty audio (try again later).")
             duration = time.time() - start_time
             TTS_DURATION.labels(provider="vibevoice").observe(duration)
 
@@ -276,17 +328,79 @@ async def synthesize_speech(request: SynthesizeRequest):
                 format="pcm16"
             )
         else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Provider '{provider_name}' not available"
-            )
+            if provider_name == "vibevoice" and not vibevoice_provider:
+                raise HTTPException(
+                    status_code=503,
+                    detail="VibeVoice provider not configured (set VIBEVOICE_URL to the running server URL).",
+                )
+            raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
 
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="502").inc()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except HTTPException as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status=str(exc.status_code)).inc()
+        raise
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
         logger.exception("TTS synthesis failed")
+        raise HTTPException(status_code=500, detail="TTS synthesis failed")
+
+
+@app.post("/v1/voice/synthesize/audio", dependencies=[Depends(verify_api_key)])
+async def synthesize_speech_audio(request: SynthesizeRequest):
+    """
+    Synthesize speech and return the audio bytes.
+
+    - `output_format=wav` returns `audio/wav` (PCM16 mono, 24kHz)
+    - `output_format=pcm` returns raw PCM16 bytes (`application/octet-stream`)
+    """
+    provider_name = request.provider or DEFAULT_PROVIDER
+    output_format = (request.output_format or "wav").lower().strip()
+
+    if output_format not in {"wav", "pcm"}:
+        raise HTTPException(status_code=400, detail=f"output_format '{output_format}' not supported (use wav or pcm)")
+
+    try:
+        if provider_name == "vibevoice" and vibevoice_provider:
+            pcm16 = await vibevoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+            )
+            if not pcm16:
+                raise HTTPException(status_code=502, detail="VibeVoice returned empty audio (try again later).")
+            if len(pcm16) % 2 != 0:
+                raise HTTPException(status_code=502, detail="VibeVoice returned malformed PCM16 (odd byte length).")
+            if output_format == "pcm":
+                REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                return Response(content=pcm16, media_type="application/octet-stream")
+
+            wav_bytes = _pcm16_to_wav_bytes(pcm16, sample_rate=24000)
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+            return Response(
+                content=wav_bytes,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="flute_tts.wav"'},
+            )
+
+        if provider_name == "vibevoice" and not vibevoice_provider:
+            raise HTTPException(
+                status_code=503,
+                detail="VibeVoice provider not configured (set VIBEVOICE_URL to the running server URL).",
+            )
+        raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="502").inc()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except HTTPException as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status=str(exc.status_code)).inc()
+        raise
+    except Exception:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
+        logger.exception("TTS synthesis (audio) failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
 
 
@@ -421,15 +535,18 @@ async def websocket_tts(websocket: WebSocket):
 
             # Stream audio chunks
             if vibevoice_provider:
-                chunk_count = 0
-                async for chunk in vibevoice_provider.synthesize_stream(text, voice):
-                    await websocket.send_bytes(chunk)
-                    chunk_count += 1
-
-                await websocket.send_json({
-                    "type": "done",
-                    "chunks": chunk_count
-                })
+                try:
+                    chunk_count = 0
+                    async for chunk in vibevoice_provider.synthesize_stream(text, voice):
+                        await websocket.send_bytes(chunk)
+                        chunk_count += 1
+                    if chunk_count == 0:
+                        await websocket.send_json({"type": "error", "message": "VibeVoice produced no audio (try again later)."})
+                        continue
+                    await websocket.send_json({"type": "done", "chunks": chunk_count})
+                except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+                    await websocket.send_json({"type": "error", "message": str(exc)})
+                    continue
             else:
                 await websocket.send_json({
                     "type": "error",

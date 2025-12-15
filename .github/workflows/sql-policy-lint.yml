@@ -45,11 +45,7 @@ jobs:
             "pmoves/supabase/migrations/2025-12-08_archon_work_orders.sql"
             "pmoves/supabase/migrations/2025-12-08_botz_work_items.sql"
             "pmoves/supabase/migrations/2025-12-08_claude_sessions.sql"
-<<<<<<< HEAD
-            "pmoves/supabase/migrations/2025-12-08_botz_work_items.sql"
-=======
             "pmoves/supabase/migrations/2025-12-10_voice_personas.sql"
->>>>>>> origin/main
             "pmoves/supabase/migrations/2025-12-11_work_orders_schema_compatibility.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."

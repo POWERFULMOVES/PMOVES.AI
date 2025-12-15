@@ -78,11 +78,11 @@ def cmd_prompt(manifest: Path, out_file: Path) -> int:
     # Collect required target keys (unique)
     required_keys: list[str] = []
     for entry in entries:
-        if not entry.get("required", False):
+        if not entry.required:
             continue
-        for target in entry.get("targets", []):
-            key = target.get("key")
-            if key and key not in required_keys:
+        for target in entry.targets:
+            key = target.key
+            if key not in required_keys:
                 required_keys.append(key)
 
     existing = parse_env_file(out_file)

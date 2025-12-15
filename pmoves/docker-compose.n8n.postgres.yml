@@ -1,0 +1,35 @@
+services:
+  n8n-db:
+    image: postgres:16-alpine
+    container_name: pmoves-n8n-db
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - POSTGRES_DB=${N8N_DB_NAME:?set N8N_DB_NAME}
+      - POSTGRES_USER=${N8N_DB_USER:?set N8N_DB_USER}
+      - POSTGRES_PASSWORD=${N8N_DB_PASSWORD:?set N8N_DB_PASSWORD}
+    volumes:
+      - n8n-db-data:/var/lib/postgresql/data
+    networks: [cataclysm, api_tier]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  n8n:
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME:?set N8N_DB_NAME}
+      - DB_POSTGRESDB_USER=${N8N_DB_USER:?set N8N_DB_USER}
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD:?set N8N_DB_PASSWORD}
+      - DB_POSTGRESDB_SCHEMA=${N8N_DB_SCHEMA:-public}
+    depends_on:
+      n8n-db:
+        condition: service_healthy
+
+volumes:
+  n8n-db-data: {}
+

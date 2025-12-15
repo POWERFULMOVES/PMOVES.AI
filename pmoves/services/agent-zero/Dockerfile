@@ -37,14 +37,22 @@ RUN chmod +x /ins/copy_A0.sh
 # Include PMOVES contract schemas so Agent Zero can validate envelopes.
 COPY contracts /app/contracts
 
+# Include PMOVES agent forms (used by /mcp/execute form.get and related flows).
+COPY configs /app/configs
+
 # Copy PMOVES service implementation on top of the upstream runtime
 COPY services /app/services
 
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
-    chown -R pmoves:pmoves /app
+    chown -R pmoves:pmoves /app && \
+    mkdir -p /a0 && chown -R pmoves:pmoves /a0 && \
+    chown -R pmoves:pmoves /git/agent-zero && \
+    if [ -d /opt/pyenv ]; then chown -R pmoves:pmoves /opt/pyenv; fi
 
-USER pmoves:pmoves
+USER root
 
-CMD ["/bin/bash", "-lc", "/ins/copy_A0.sh && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true && /opt/venv-a0/bin/python services/agent-zero/main.py"]
+# Upstream Agent Zero preparation sets the root password (for SSH) and must run as root.
+# Run preload as root, then drop privileges for the long-running service process.
+CMD ["/bin/bash", "-lc", "/ins/copy_A0.sh && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true && chown -R pmoves:pmoves /a0 && exec su -s /bin/bash -c '/opt/venv-a0/bin/python services/agent-zero/main.py' pmoves"]

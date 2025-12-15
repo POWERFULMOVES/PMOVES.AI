@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import contextlib
 import datetime
 import json
@@ -550,6 +551,114 @@ async def _post_discord(content: Optional[str], embeds: Optional[list] = None, r
     _webhook_counters["discord_webhook_failures"] += 1
     return False
 
+
+def _decode_publish_file(obj: Any) -> Optional[dict]:
+    """
+    Accept a small file payload for webhook attachment.
+
+    Shape:
+      {
+        "name": "voice.wav",
+        "content_type": "audio/wav",
+        "content_b64": "..."
+      }
+    """
+    if not isinstance(obj, dict):
+        return None
+    name = obj.get("name") or obj.get("filename")
+    content_b64 = obj.get("content_b64") or obj.get("b64")
+    content_type = obj.get("content_type") or obj.get("type") or "application/octet-stream"
+    if not isinstance(name, str) or not name.strip():
+        return None
+    if not isinstance(content_b64, str) or not content_b64.strip():
+        return None
+    try:
+        raw = base64.b64decode(content_b64.encode("ascii"), validate=False)
+    except Exception:
+        return None
+    # Discord webhooks: 8MB typical limit; keep tighter to avoid noisy failures.
+    if len(raw) == 0 or len(raw) > 7_500_000:
+        return None
+    return {"name": name.strip(), "content_type": str(content_type), "bytes": raw}
+
+
+async def _post_discord_with_file(
+    content: Optional[str],
+    embeds: Optional[list],
+    file_name: str,
+    file_bytes: bytes,
+    file_content_type: str,
+    retries: int = 3,
+) -> bool:
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning("discord_webhook_missing", extra={"event": "discord_webhook_missing"})
+        _webhook_counters["discord_webhook_missing"] += 1
+        return False
+
+    payload = {"username": DISCORD_USERNAME}
+    if DISCORD_AVATAR_URL:
+        payload["avatar_url"] = DISCORD_AVATAR_URL
+    if content:
+        payload["content"] = content
+    if embeds:
+        payload["embeds"] = embeds
+
+    # Discord expects multipart with payload_json + files[0]
+    data = {"payload_json": json.dumps(payload)}
+    files = {"files[0]": (file_name, file_bytes, file_content_type)}
+
+    backoff = 1.0
+    async with httpx.AsyncClient(timeout=30) as client:
+        for attempt in range(max(1, retries)):
+            try:
+                r = await client.post(DISCORD_WEBHOOK_URL, data=data, files=files)
+            except Exception as exc:
+                logger.warning(
+                    "discord_webhook_exception",
+                    extra={
+                        "event": "discord_webhook_exception",
+                        "error": str(exc),
+                        "attempt": attempt + 1,
+                    },
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2.0, 8.0)
+                continue
+            if r.status_code in (200, 204):
+                _webhook_counters["discord_webhook_success"] += 1
+                return True
+            if r.status_code == 429:
+                try:
+                    ra = float(r.headers.get("Retry-After", backoff))
+                except Exception:
+                    ra = backoff
+                await asyncio.sleep(ra)
+                backoff = min(backoff * 2.0, 8.0)
+                continue
+            if 500 <= r.status_code < 600:
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2.0, 8.0)
+                continue
+            logger.warning(
+                "discord_webhook_failed",
+                extra={
+                    "event": "discord_webhook_failed",
+                    "status_code": r.status_code,
+                    "attempt": attempt + 1,
+                    "body": r.text[:256],
+                },
+            )
+            _webhook_counters["discord_webhook_failures"] += 1
+            return False
+
+    logger.warning(
+        "discord_webhook_failed",
+        extra={"event": "discord_webhook_failed", "status_code": None, "attempt": retries},
+    )
+    _webhook_counters["discord_webhook_failures"] += 1
+    return False
+
+
 def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     name = name.strip()
     emb = {"title": name, "fields": []}
@@ -911,12 +1020,22 @@ async def shutdown():
 async def publish_test(body: Dict[str, Any] = Body(...)):
     content = body.get("content") or "PMOVES test message"
     embeds = body.get("embeds")
+    file_obj = _decode_publish_file(body.get("file"))
     if _nc is None:
         logger.warning(
             "nats_publish_skipped",
             extra={"event": "nats_publish_skipped", "reason": "nats_client_none"},
         )
-    ok = await _post_discord(content, embeds)
+    if file_obj:
+        ok = await _post_discord_with_file(
+            content,
+            embeds,
+            file_name=file_obj["name"],
+            file_bytes=file_obj["bytes"],
+            file_content_type=file_obj["content_type"],
+        )
+    else:
+        ok = await _post_discord(content, embeds)
     if not ok:
         raise HTTPException(502, "discord webhook failed")
     return {"ok": True}

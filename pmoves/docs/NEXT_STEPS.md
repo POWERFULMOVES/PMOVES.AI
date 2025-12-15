@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-11-07_
+_Last updated: 2025-12-14_
 
 ## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
@@ -16,6 +16,18 @@ _Last updated: 2025-11-07_
 - SupaSerch: FastAPI worker now bridges `supaserch.request.v1` → `supaserch.result.v1`, exposes Prometheus metrics, and ships `make supaserch-smoke` plus Console quick links.
 - GPU smokes: strict rerank validation is the default (`GPU_SMOKE_STRICT=true`) with Qwen3 4B pinned in `env.shared.example`; smoke harness asserts rerank stats.
 - Monitoring: Node Exporter toggle added (Linux only), cAdvisor remains default.
+
+### Latest changes (Dec 13)
+- n8n flows are now repo-tracked as **sanitized, importable exports** (no project/user metadata) under `pmoves/n8n/flows/`, including Voice Agent router + Discord/Telegram flows.
+  - Import: `make -C pmoves n8n-import-flows` (file-by-file) then `make -C pmoves n8n-activate-flows`.
+  - Refresh from a live n8n instance: `make -C pmoves n8n-export-repo-flows`.
+- Open Notebook external stack now defaults to `OPEN_NOTEBOOK_IMAGE` (see `env.shared.example`) and external Make targets load `env.shared` so image pins apply consistently (`make -C pmoves up-external-on`).
+- DeepResearch smoke is green and writes a Notebook entry (see `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md` for the latest ID).
+
+### Latest changes (Dec 14)
+- Voice Agents: `pmoves/n8n/flows/voice_platform_router.json` now defaults to the TensorZero OpenAI-compatible endpoint when `TENSORZERO_BASE_URL` is set and uses a local model by default (`tensorzero::model_name::qwen2_5_14b`), publishing `voice.agent.response.v1` on NATS.
+- n8n flows: fixed HTTP Request `options.timeout` values (n8n expects **milliseconds**, so `20` means 20ms). The repo-tracked flows now use sane ms timeouts for LLM/Supabase/NATS steps.
+- FFmpeg-Whisper: fixed `/transcribe_file` support (multipart) to match Flute’s ad-hoc STT path; added the required dependency (`python-multipart`) for FastAPI form parsing.
 
 ## Immediate
 
@@ -168,6 +180,7 @@ Next 48 hours
 - **Importing**
   1. Open n8n → *Workflows* → *Import from File* and load `pmoves/n8n/flows/approval_poller.json` and `pmoves/n8n/flows/echo_publisher.json`.
   2. Rename the flows if desired and keep them inactive until credentials are configured.
+  3. Shortcut (local dev): `make -C pmoves n8n-bootstrap` mounts `pmoves/n8n/flows` into the container, imports all JSON, and activates workflows.
 - **Required environment**
   - `SUPABASE_REST_URL` – PostgREST endpoint (e.g., `http://localhost:3010`).
   - `SUPABASE_SERVICE_ROLE_KEY` – used for polling and patching `studio_board` (grants `Bearer` + `apikey`).
@@ -175,6 +188,7 @@ Next 48 hours
   - `AGENT_ZERO_EVENTS_TOKEN` – optional shared secret for `/events/publish`.
   - `DISCORD_WEBHOOK_URL` – Discord channel webhook (flows post embeds here).
   - `DISCORD_WEBHOOK_USERNAME` – optional override for the Discord display name.
+  - Security (recommended for non-local): `N8N_ENCRYPTION_KEY` plus Basic Auth (`N8N_BASIC_AUTH_*`) for UI access.
 - **Manual verification checklist**
   1. Insert a `studio_board` row with `status='approved'`, `content_url='s3://...'`, and confirm `meta.publish_event_sent_at` is null.
   2. Trigger the approval poller (activate or execute once) and confirm Agent Zero logs a `content.publish.approved.v1` event.

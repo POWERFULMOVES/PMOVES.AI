@@ -171,6 +171,8 @@ jobs:
       fail-fast: false
       matrix:
         service:
+          - name: pmoves-yt
+            context: ./services/pmoves-yt
           - name: agent-zero
             context: ./services/agent-zero
           - name: hirag-gateway
@@ -179,6 +181,20 @@ jobs:
             context: ./services/extract-worker
           - name: publisher-discord
             context: ./pmoves/services/publisher-discord
+          - name: publisher
+            context: ./pmoves/services/publisher
+          - name: channel-monitor
+            context: ./pmoves/services/channel-monitor
+          - name: archon
+            context: ./pmoves/services/archon
+          - name: archon-ui
+            context: ./pmoves/services/archon-ui
+          - name: ffmpeg-whisper
+            context: ./pmoves/services/ffmpeg-whisper
+          - name: hirag-gateway
+            context: ./pmoves/services/hi-rag-gateway
+          - name: hirag-gateway-v2
+            context: ./pmoves/services/hi-rag-gateway-v2
 
     steps:
       - name: Harden Runner
@@ -220,12 +236,14 @@ jobs:
         with:
           context: ${{ matrix.service.context }}
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            PIP_CONSTRAINT=requirements.lock
           tags: |
             ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:latest
             ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           provenance: true
           sbom: true
 
@@ -236,7 +254,7 @@ jobs:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
           format: sarif
           output: trivy-${{ matrix.service.name }}.sarif
-          exit-code: '0'  # Set to '1' after baseline vulnerabilities addressed
+          exit-code: '1'
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
           vuln-type: 'os,library'

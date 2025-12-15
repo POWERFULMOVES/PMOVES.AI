@@ -72,18 +72,83 @@ ENV ARCHON_FORM=POWERFULMOVES \
     ARCHON_VENDOR_ROOT=/app/vendor/archon \
     MCP_CREDENTIALS_PATH=/app/config/mcp/credentials.json
 
+# Local vendor seed (submodule) for USE_LOCAL_VENDOR=1 builds.
+# NOTE: This requires the submodule to be present in the build context.
+COPY integrations/archon /app/_local_vendor/archon
+
 # Bring in upstream Archon sources to vendor path
 # Prefer local submodule when USE_LOCAL_VENDOR=1; otherwise clone from remote.
 RUN if [ "${USE_LOCAL_VENDOR}" = "1" ]; then \
       echo "→ Using local submodule vendor at /app/vendor/archon"; \
       mkdir -p /app/vendor; \
-      cp -R ./integrations/archon /app/vendor/archon; \
+      cp -R /app/_local_vendor/archon /app/vendor/archon; \
     else \
       echo "→ Cloning vendor ${ARCHON_GIT_REMOTE}@${ARCHON_GIT_REF}"; \
       git clone --depth 1 --single-branch --branch "${ARCHON_GIT_REF}" "${ARCHON_GIT_REMOTE}" /app/vendor/archon; \
+    fi; \
+    rm -rf /app/_local_vendor
+
+# Patch upstream Archon MCP bootstrap for FastMCP compatibility.
+# fastmcp>=2.x expects `instructions=` (and does not accept `description=`).
+RUN set -eux; \
+    target="/app/vendor/archon/python/src/mcp_server/mcp_server.py"; \
+    if [ -f "$target" ] && grep -q "FastMCP(" "$target" && grep -q "description=" "$target"; then \
+      sed -i '/^[[:space:]]*description=/d' "$target"; \
+      echo "→ Patched MCP server description kwarg"; \
+    else \
+      echo "→ MCP server patch not needed"; \
     fi
 
-COPY services/archon/requirements.txt ./requirements.txt
+# Patch upstream Archon migration checker to avoid `/rpc/sql` calls.
+# Supabase REST does not ship a default `sql` RPC, so calling it produces noisy 404 logs.
+RUN python - <<'PY'
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+path = Path("/app/vendor/archon/python/src/server/services/migration_service.py")
+if not path.exists():
+    print(f"→ Archon migration_service.py not found at {path}; skipping patch")
+    raise SystemExit(0)
+
+text = path.read_text(encoding="utf-8")
+marker = "async def check_migrations_table_exists"
+start = text.find(marker)
+if start == -1:
+    print("→ check_migrations_table_exists not found; skipping patch")
+    raise SystemExit(0)
+
+# Find the next method at the same indentation level (4 spaces).
+match = re.search(r"\n    async def [a-zA-Z_][a-zA-Z0-9_]*\(", text[start + 1 :])
+end = (start + 1 + match.start()) if match else len(text)
+
+replacement = """async def check_migrations_table_exists(self) -> bool:
+        \"""
+        Check if the archon_migrations table exists in the database.
+
+        Supabase REST does not include a built-in `sql` RPC endpoint, so avoid calling
+        `supabase.rpc("sql", ...)` just to probe table existence.
+
+        Returns:
+            True if table exists, False otherwise
+        \"""
+        supabase = self._get_supabase_client()
+        try:
+            supabase.table("archon_migrations").select("id").limit(0).execute()
+            return True
+        except Exception as e:  # noqa: BLE001
+            logfire.info(f"Migrations table does not exist (or is not exposed): {e}")
+            return False
+
+"""
+
+patched = text[:start] + replacement + text[end:]
+path.write_text(patched, encoding="utf-8")
+print("→ Patched Archon check_migrations_table_exists (removed /rpc/sql probe)")
+PY
+
+COPY services/archon/requirements.txt services/archon/requirements.lock ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 

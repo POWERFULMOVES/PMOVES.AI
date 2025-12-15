@@ -45,6 +45,9 @@ env:
   # Standard secret names (documented in docs/SECRETS_ONBOARDING.md)
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
   GHCR_PASSWORD: ${{ secrets.GH_PAT_PUBLISH || secrets.GITHUB_TOKEN }}
+  # Used for cloning other integration repos (private repos require a PAT with repo read).
+  # If unset, clones fall back to unauthenticated https (works for public repos only).
+  CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.CI_DOCKERHUB_USERNAME }}
   DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
 
@@ -155,7 +158,15 @@ jobs:
       - name: Clone integration repo
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         run: |
-          git clone --depth=1 --branch "${{ matrix.ref }}" "${{ matrix.git_url }}" integration-src
+          set -euo pipefail
+          url="${{ matrix.git_url }}"
+          if [ -n "${CI_GIT_CLONE_TOKEN:-}" ]; then
+            url="${url/https:\/\/github.com\//https:\/\/x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/}"
+          fi
+          if ! git clone --depth=1 --branch "${{ matrix.ref }}" "$url" integration-src; then
+            echo "::error::Failed to clone ${url} (ref=${{ matrix.ref }}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
+            exit 1
+          fi
 
       - name: Set up QEMU
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
@@ -197,9 +208,12 @@ jobs:
           SHA_SHORT=${GITHUB_SHA::7}
           echo "date_tag=${DATE_TAG}" >> $GITHUB_OUTPUT
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
-          GHCR_NS="${{ secrets.CI_GHCR_NAMESPACE }}"
-          if [ -z "$GHCR_NS" ]; then GHCR_NS="${{ secrets.GHCR_NAMESPACE }}"; fi
-          if [ -z "$GHCR_NS" ]; then GHCR_NS=${{ github.repository_owner }}; fi
+          GHCR_NS_RAW="${{ secrets.CI_GHCR_NAMESPACE }}"
+          if [ -z "$GHCR_NS_RAW" ]; then GHCR_NS_RAW="${{ secrets.GHCR_NAMESPACE }}"; fi
+          if [ -z "$GHCR_NS_RAW" ]; then GHCR_NS_RAW="${{ github.repository_owner }}"; fi
+          # Docker tag validation requires the repository namespace be lowercase.
+          GHCR_NS="${GHCR_NS_RAW,,}"
+          echo "ghcr_ns=${GHCR_NS}" >> $GITHUB_OUTPUT
           TAGS="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest\n${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
           if [ "$INCLUDE_DOCKERHUB" = "true" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
             DH_NS=${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}
@@ -216,6 +230,8 @@ jobs:
           context: integration-src/${{ matrix.context }}
           file: integration-src/${{ matrix.dockerfile }}
           push: true
+          build-args: |
+            PIP_CONSTRAINT=requirements.lock
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
@@ -260,9 +276,34 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}:pmoves-latest
+          # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
+          # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
+          # fixable regressions as hard failures.
+          image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
           exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Trivy vulnerability scan report (includes unfixed)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
+          format: table
+          output: trivy-${{ matrix.name }}.txt
+          exit-code: '0'
+          ignore-unfixed: false
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Upload Trivy report artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-trivy
+          path: trivy-${{ matrix.name }}.txt
 
       - name: Cosign verify GHCR tags (keyless)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
@@ -278,19 +319,3 @@ jobs:
               *) ;; # skip other registries
             esac
           done
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'HIGH,CRITICAL'
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.6.0
-      - name: Cosign sign (keyless)
-        env:
-          COSIGN_EXPERIMENTAL: 'true'
-        run: |
-          set -euo pipefail
-          while read -r tag; do
-            [ -n "$tag" ] || continue
-            echo "Signing $tag"
-            cosign sign --yes "$tag"
-          done < <(echo "${{ steps.meta.outputs.tags }}")

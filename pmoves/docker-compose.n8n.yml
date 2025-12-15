@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: compose/n8n/Dockerfile
     image: pmoves/n8n:1.123.4-sqlite
+    container_name: pmoves-n8n
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
@@ -33,21 +34,23 @@ services:
       # Discord webhook for echo publisher
       - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
       - N8N_LOG_LEVEL=debug
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
-    networks: [cataclysm]
+    networks: [cataclysm, api_tier]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - n8n-data:/home/node/.n8n
+      - ./n8n/flows:/flows:ro
   n8n-runners:
     image: n8nio/runners:1.123.4
+    container_name: pmoves-n8n-runners
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
     environment:
       - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
-      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
-    networks: [cataclysm]
+    networks: [cataclysm, api_tier]
     depends_on:
       - n8n
     volumes:

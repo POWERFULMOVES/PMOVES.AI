@@ -134,9 +134,9 @@ Profiles:
 Tests the TensorZero gateway's ability to process LLM requests:
 
 ```bash
-curl -X POST http://localhost:3030/v1/chat/completions \
+curl -X POST http://localhost:3030/openai/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"test","messages":[{"role":"user","content":"ping"}]}'
+  -d '{"model":"tensorzero::model_name::qwen2_5_14b","messages":[{"role":"user","content":"ping"}]}'
 ```
 
 **Expected:** 200 OK with valid completion response

@@ -32,11 +32,7 @@ gh api --method PUT /repos/POWERFULMOVES/PMOVES.AI/environments/Prod \
 ```
 
 Or via GitHub UI:
-<<<<<<< HEAD
-1. Go to [GitHub Environments Settings](https://github.com/POWERFULMOVES/PMOVES.AI/settings/environments)
-=======
 1. Go to https://github.com/POWERFULMOVES/PMOVES.AI/settings/environments
->>>>>>> origin/main
 2. Click "New environment"
 3. Enter "Dev", then click "Configure environment"
 4. Repeat for "Prod"

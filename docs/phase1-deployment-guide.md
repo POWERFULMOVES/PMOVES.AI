@@ -4,6 +4,8 @@
 **Date**: 2025-12-06
 **Version**: 1.0.0
 
+> Note (2025-12-14): This document captures the Phase 1 hardening rollout as of 2025-12-06. Since then, additional services and workflows (n8n Voice Agents, Flute Gateway, TensorZero/Ollama local models, etc.) have been added. For the current production baseline and image/compose guidance, prefer `docs/PMOVES.AI-Edition-Hardened-Full.md` and `pmoves/docker-compose.hardened.yml`.
+
 ## Overview
 
 This guide covers the deployment of Phase 1 Security Hardening to PMOVES.AI production environments. Phase 1 implements foundational container security controls across all 30 services:
@@ -431,7 +433,7 @@ curl -f http://localhost:8077/health   # PMOVES.YT
 curl -f http://localhost:8098/health   # DeepResearch
 curl -f http://localhost:8099/metrics  # SupaSerch
 curl -f http://localhost:8088/health   # Presign
-curl -f http://localhost:8083/health   # Extract Worker
+curl -f http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/health   # Extract Worker
 
 # Test NATS pub/sub
 docker compose exec nats nats pub test.subject "test message"
@@ -474,10 +476,10 @@ curl -X POST http://localhost:8080/mcp/command \
 # Test PMOVES.YT health
 curl http://localhost:8077/health
 
-# Test TensorZero gateway
-curl -X POST http://localhost:3030/v1/chat/completions \
+# Test TensorZero gateway (OpenAI-compatible)
+curl -X POST http://localhost:3030/openai/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "claude-sonnet-4-5", "messages": [{"role": "user", "content": "Hello"}]}'
+  -d '{"model": "tensorzero::model_name::qwen2_5_14b", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
 ### 4. Performance Baseline

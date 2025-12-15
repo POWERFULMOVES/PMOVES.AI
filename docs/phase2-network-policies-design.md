@@ -5,15 +5,78 @@
 **Effort:** 1.5-2 hours with TAC
 **Date:** 2025-12-06
 
+> Update (2025-12-14): The runtime stack now uses a **5-tier** segmentation layout (as reflected in `pmoves/docker-compose.yml` and `docs/PMOVES.AI-Edition-Hardened-Full.md`). Treat this file as the original Phase 2 design notes; reconcile any drift by preferring the compose + hardened overlay and updating this document when making further network-policy changes.
+
 ## Overview
 
 Network policies implement network segmentation to limit lateral movement, enforce least-privilege networking, and reduce attack surface. This design creates isolated network tiers with explicit allow rules for required communication.
 
-## Current Network Architecture
+## Current Network Architecture (as of 2025-12-14)
 
-### Existing Network Configuration
+The runtime stack has moved from a flat `pmoves-net` model to a segmented **5-tier** layout implemented directly in `pmoves/docker-compose.yml` (plus optional hardening overlays).
 
-**Networks:** (from docker-compose.yml:994-1000)
+**Source of truth:** `pmoves/docker-compose.yml` `networks:` stanza.
+
+### Implemented Docker Compose networks
+
+```yaml
+networks:
+  # 5-Tier Network Architecture for Defense in Depth
+  api_tier:
+    driver: bridge
+    name: pmoves_api
+    ipam:
+      config:
+        - subnet: 172.30.1.0/24
+
+  app_tier:
+    driver: bridge
+    name: pmoves_app
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.2.0/24
+
+  bus_tier:
+    driver: bridge
+    name: pmoves_bus
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.3.0/24
+
+  data_tier:
+    driver: bridge
+    name: pmoves_data
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.4.0/24
+
+  monitoring_tier:
+    driver: bridge
+    name: pmoves_monitoring
+    ipam:
+      config:
+        - subnet: 172.30.5.0/24
+
+  # Legacy external network (maintain compatibility for jellyfin-bridge only)
+  cataclysm:
+    external: true
+    name: cataclysm-net
+```
+
+### Practical meaning
+
+- `internal: true` on `app_tier` / `bus_tier` / `data_tier` prevents direct internet egress from those networks (containers can still reach services on other attached networks).
+- Public exposure is controlled via `ports:` mappings on services attached to `api_tier` / `monitoring_tier`.
+- The legacy `cataclysm-net` remains for external integrations that historically ran outside the main segmented stack (e.g., Jellyfin bridge compatibility).
+
+## Historical Network Architecture (pre 2025-12-14)
+
+### Previous Network Configuration (historical)
+
+**Networks:** (historical; kept here for context)
 ```yaml
 networks:
   pmoves:
@@ -198,7 +261,7 @@ We'll implement a **4-tier network architecture** based on the Zero Trust princi
 
 ### Docker Compose Network Configuration
 
-**Target docker-compose.yml networks section:**
+**Historical target (pre-2025-12-14):** the section below reflects the original plan draft (dashed network names + external `pmoves-net`). The active implementation is documented in **Current Network Architecture (as of 2025-12-14)** above; prefer that stanza when reconciling changes.
 
 ```yaml
 networks:

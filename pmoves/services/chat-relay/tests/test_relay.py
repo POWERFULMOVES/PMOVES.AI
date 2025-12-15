@@ -301,12 +301,37 @@ class TestChatRelayService:
         service.nc.drain = AsyncMock()
         service.sub = MagicMock()
         service.sub.unsubscribe = AsyncMock()
+        sub = service.sub
+        nc = service.nc
 
         await service.shutdown()
 
         assert service.running is False
-        service.sub.unsubscribe.assert_called_once()
-        service.nc.drain.assert_called_once()
+        sub.unsubscribe.assert_called_once()
+        nc.drain.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_is_idempotent_when_connection_closed(self, service):
+        """Shutdown can be called multiple times even if unsubscribe/drain raise."""
+        from nats.errors import ConnectionClosedError
+
+        service.running = True
+        service.messages_relayed = 1
+        service.errors = 0
+
+        service.sub = MagicMock()
+        service.sub.unsubscribe = AsyncMock(side_effect=ConnectionClosedError())
+        sub = service.sub
+
+        service.nc = MagicMock()
+        service.nc.drain = AsyncMock(side_effect=ConnectionClosedError())
+        nc = service.nc
+
+        await service.shutdown()
+        await service.shutdown()
+
+        sub.unsubscribe.assert_called_once()
+        nc.drain.assert_called_once()
 
 
 class TestMessageParsing:

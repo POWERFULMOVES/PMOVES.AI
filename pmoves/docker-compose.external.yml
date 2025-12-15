@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest}
@@ -50,7 +48,8 @@ services:
         aliases:
           - cataclysm-firefly
     environment:
-      APP_KEY: ${FIREFLY_APP_KEY:-SomeRandomStringOf32CharsExactly}
+      # Keep secrets sourced from env files / runtime secrets. Do not inline defaults.
+      APP_KEY: ${FIREFLY_APP_KEY}
       APP_ENV: ${FIREFLY_APP_ENV:-production}
       SITE_OWNER: ${FIREFLY_SITE_OWNER:-ops@cataclysmstudios.com}
       DB_CONNECTION: ${FIREFLY_DB_CONNECTION:-sqlite}
@@ -61,23 +60,26 @@ services:
       - "${FIREFLY_PORT:-8080}:8080"
     volumes:
       - firefly-storage:/var/www/html/storage
+      - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
 
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: cataclysm-open-notebook-surrealdb
-    command: start --log info --user ${OPEN_NOTEBOOK_SURREAL_USER:-root} --pass ${OPEN_NOTEBOOK_SURREAL_PASS:-root} rocksdb:/mydata/mydatabase.db
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} rocksdb:/mydata/mydatabase.db
     restart: unless-stopped
     user: "0:0"
     networks:
       cataclysm:
         aliases:
           - cataclysm-open-notebook-surrealdb
+          - open-notebook-surrealdb-ext
     volumes:
       - ./data/open-notebook/surreal_data:/mydata
 
   open-notebook-ext:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:v1-latest}
-    # Default to PMOVES fork with integrations; override OPEN_NOTEBOOK_IMAGE to use a different tag.
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:v1-latest}
+    # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
     container_name: cataclysm-open-notebook
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
@@ -91,41 +93,8 @@ services:
         aliases:
           - cataclysm-open-notebook
     environment:
-      SURREAL_URL: ${OPEN_NOTEBOOK_SURREAL_URL:-ws://cataclysm-open-notebook-surrealdb:8000/rpc}
-      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-cataclysm-open-notebook-surrealdb}
-      SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
-      SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:-root}
-      SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-root}
-      SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
-      SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
-      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-}
-      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-}
-      OPEN_NOTEBOOK_API_URL: ${OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_API_BASE: ${OPENAI_API_BASE:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      XAI_API_KEY: ${XAI_API_KEY:-}
-      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
-      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
-      AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME:-}
-      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-}
-      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      OLLAMA_API_BASE: ${OLLAMA_API_BASE:-}
-      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
-      OPENAI_COMPATIBLE_BASE_URL_LLM: ${OPENAI_COMPATIBLE_BASE_URL_LLM:-}
-      OPENAI_COMPATIBLE_BASE_URL_EMBEDDING: ${OPENAI_COMPATIBLE_BASE_URL_EMBEDDING:-}
-      OPENAI_COMPATIBLE_BASE_URL_STT: ${OPENAI_COMPATIBLE_BASE_URL_STT:-}
-      OPENAI_COMPATIBLE_BASE_URL_TTS: ${OPENAI_COMPATIBLE_BASE_URL_TTS:-}
-      VERTEX_PROJECT: ${VERTEX_PROJECT:-}
-      VERTEX_LOCATION: ${VERTEX_LOCATION:-}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      # UI talks to API on localhost inside container.
+      API_URL: http://localhost:5055
     ports:
       - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"    # UI
       - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"  # API

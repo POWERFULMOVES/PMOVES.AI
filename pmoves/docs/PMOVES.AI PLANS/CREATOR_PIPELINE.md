@@ -1,5 +1,5 @@
 # PMOVES v5 • Creator Pipeline (ComfyUI → MinIO → Webhook → Supabase → Indexer → Publisher)
-_Last updated: 2025-10-20_
+_Last updated: 2025-12-14_
 
 This doc shows the end‑to‑end creative flow from **ComfyUI** render to **Discord/Jellyfin** publish.
 
@@ -144,6 +144,16 @@ Node inputs:
 ## Geometry Bus & Avatar Playback
 - Domain events (health + finance) already ship `geometry.cgp.v1` packets through `services/common/cgp_mappers.py`, so constellations appear in the Geometry UI as soon as the flows fire. Set `CHIT_PERSIST_DB=true` and supply Postgres creds if you want Supabase to store the packets for replay.
 - Creative webhooks (WAN/Qwen/VibeVoice) automatically transform payloads into `geometry.cgp.v1` packets via the n8n flows; use `tools/integrations/events_to_cgp.py` only for manual backfills or legacy payloads.
+
+### VibeVoice (realtime TTS) runtime options
+- **Preferred (creator workstation / Pinokio):** follow `pmoves/docs/ARTSTUFF/realtime/README.md` and point Flute at it via `VIBEVOICE_URL=http://host.docker.internal:<PORT>`.
+- **Optional (Docker profile, pulls weights):** `make -C pmoves up-vibevoice` runs the service from `pmoves/docker-compose.voice.yml` (profile: `voice`). For in-Docker routing, set `VIBEVOICE_URL=http://vibevoice:3000`.
+
+### Ultimate TTS Studio (SUP3R Edition) UI (creator workstation)
+- If you want a unified voice UI (multiple engines including VibeVoice), use:
+  - `SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition` (typically via Pinokio).
+  - See `pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio-SUP3R-EditionREADME.md`.
+- Treat this as a creator-workstation tool that emits audio artifacts into the same pipeline (upload → webhook → Supabase → n8n → CHIT/publisher).
 - PMOVES avatars: the Supabase table `persona_avatar` (namespace, persona_slug, avatar URIs, geometry_constellation_id, meta) now ships via migration `2025-10-20_persona_avatar.sql`. Populate rows with WAN outputs and matching geometry IDs to light up the Avatars panel (`make -C pmoves web-geometry`). Coordinate with the Geometry UI repo on any additional columns before extending the schema.
 - Demo (current stack): trigger `make -C pmoves demo-health-cgp`, `make -C pmoves demo-finance-cgp`, and fire the creative webhooks (`wan-to-cgp`, `qwen-to-cgp`, `vibevoice-to-cgp`). Open the Geometry UI to inspect constellations with jump links. Record screenshots or CGP exports in `pmoves/docs/logs/` for regression tracking.
 

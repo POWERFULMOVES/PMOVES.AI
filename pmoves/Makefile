@@ -1,5 +1,16 @@
 # PMOVES top-level Makefile
 
+# Many targets rely on bashisms (heredocs, arrays, $'...' quoting). Use bash for all recipes.
+SHELL := bash
+
+# Docker Desktop / WSL often writes a credential helper (`credsStore=desktop.exe`) into ~/.docker/config.json
+# that is not executable in headless Linux environments. Prefer the repo-scoped nocreds config when present.
+DOCKER_CONFIG_REPO ?= $(CURDIR)/../.docker-nocreds
+ifneq ("$(wildcard $(DOCKER_CONFIG_REPO)/config.json)","")
+  DOCKER_CONFIG ?= $(DOCKER_CONFIG_REPO)
+  export DOCKER_CONFIG
+endif
+
 # -------- External-mode → Compose profiles ----------
 # If EXTERNAL_* is true, we skip the corresponding local service profile.
 # Profiles are defined on services in docker-compose.yml.
@@ -34,23 +45,14 @@ SINGLE_ENV_MODE ?= 1
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
+PULL ?= missing
 
 HIRAG_CPU_PORT := $(if $(HIRAG_V2_HOST_PORT),$(HIRAG_V2_HOST_PORT),8086)
 HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
 
-ifeq ($(SINGLE_ENV_MODE),1)
-  LOAD_ENV_SHARED := set -a; \
-        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f env.shared.generated ] && . env.shared.generated; \
-        set +a;
-		else
-  LOAD_ENV_SHARED := set -a; \
-        [ -f "$(ENV_SHARED_FILE)" ] && . "$(ENV_SHARED_FILE)"; \
-        [ -f env.shared.generated ] && . env.shared.generated; \
-        [ -f .env.generated ] && . .env.generated; \
-        [ -f .env.local ] && . .env.local; \
-        set +a;
-endif
+# env.shared is dotenv-style and may contain values that are not safe to `source` directly (multi-line, etc).
+# Use the repo's sanitizer/loader so scripts get stable, safe environment variables.
+LOAD_ENV_SHARED := . ./scripts/with-env.sh;
 export LOAD_ENV_SHARED
 
 .PHONY: ensure-env-shared
@@ -73,9 +75,25 @@ update-service-docs: ## Regenerate service update notes from git metadata
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
 	@git pull --rebase
-	@docker compose pull --quiet
-	@docker compose up -d
+	@bash -lc '$(DC) pull --quiet'
+	@bash -lc '$(DC) up -d --pull $(PULL)'
 	@echo "✔ Updated & reconciled containers."
+
+# One-shot bring-up for the common local dev stack (keeps container names stable under the $(PROJECT) project).
+.PHONY: up-all
+up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
+	@$(MAKE) up
+	@$(MAKE) up-agents-ui
+	@$(MAKE) up-bots
+	@$(MAKE) up-external-on
+	@$(MAKE) up-n8n
+	@$(MAKE) up-monitoring
+	@echo "✔ Full stack up (core + agents UI + n8n + monitoring)."
+
+.PHONY: up-bots
+up-bots: ## Start bot services (BotZ + messaging gateway)
+	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway messaging-gateway
+	@echo "✔ Bots up (botz-gateway + messaging-gateway)."
 
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke
@@ -160,7 +178,7 @@ archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence un
 .PHONY: archon-submodule-extract
 archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARCHON_SUBMODULE_REPO=Org/Repo)
 	@if [ -z "$$ARCHON_SUBMODULE_REPO" ]; then echo "Usage: make archon-submodule-extract ARCHON_SUBMODULE_REPO=Org/Repo" && exit 2; fi; \
-	bash pmoves/tools/submodules/extract_to_submodule.sh services/archon "$$ARCHON_SUBMODULE_REPO" pmoves/integrations/archon
+	bash tools/submodules/extract_to_submodule.sh services/archon "$$ARCHON_SUBMODULE_REPO" integrations/archon
 
 .PHONY: up-archon-submodule
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
@@ -215,31 +233,31 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 .PHONY: up up-gpu up-both-gateways
 up: ensure-env-shared ## Start core data + workers and both Hi-RAG gateways
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
-	@docker compose -p $(PROJECT) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
+	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
 
 up-gpu: ## Start with optional GPU accelerations where supported
-	@docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
+	@$(LOAD_ENV_SHARED) docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
 	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up-gpu-gateways
 up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
 	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
-	@docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@$(DC) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT), v1-gpu :8090)."
 
 .PHONY: recreate-v2-gpu
 recreate-v2-gpu: ## Force-recreate v2-gpu container (no deps)
-	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
+	@$(DC) up -d --force-recreate --no-deps hi-rag-gateway-v2-gpu
 	@echo "✔ Recreated hi-rag-gateway-v2-gpu"
 
 .PHONY: recreate-v2
 recreate-v2: ## Force-recreate v2 CPU container (no deps)
-	@docker compose -p $(PROJECT) up -d --force-recreate --no-deps hi-rag-gateway-v2
+	@$(DC) up -d --force-recreate --no-deps hi-rag-gateway-v2
 	@echo "✔ Recreated hi-rag-gateway-v2"
 
 .PHONY: up-open-notebook
@@ -262,14 +280,14 @@ down-open-notebook: ## Stop Open Notebook
 	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
-	@docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway-v2
-	@docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(DC) --profile workers up -d hi-rag-gateway-v2 >/dev/null 2>&1 || true
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu >/dev/null 2>&1 || true
 	@echo "✔ hi-rag-gateway-v2(:$(HIRAG_CPU_PORT)) and hi-rag-gateway-v2-gpu(:$(HIRAG_GPU_PORT)) ready."
 
 .PHONY: up-legacy-both
 up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
-	@docker compose -p $(PROJECT) --profile legacy up -d hi-rag-gateway
-	@docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@$(DC) --profile legacy up -d hi-rag-gateway >/dev/null 2>&1 || true
+	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu >/dev/null 2>&1 || true
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
@@ -281,6 +299,37 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 # always operate on the same stack regardless of cwd/path.
 PROJECT ?= pmoves
 export PROJECT
+
+# n8n persistence mode:
+# - sqlite: simplest local bring-up (default)
+# - postgres: production-grade n8n DB (recommended for VPS)
+N8N_DB ?= sqlite
+ifeq ($(N8N_DB),postgres)
+  N8N_DB_STACK_FILE := -f docker-compose.n8n.postgres.yml
+else
+  N8N_DB_STACK_FILE :=
+endif
+
+# VibeVoice compose file is always included so compose invocations remain consistent.
+# The service itself is still gated behind the `voice` compose profile (see docker-compose.voice.yml).
+VOICE_STACK_FILE := -f docker-compose.voice.yml
+
+# Always pass the same compose file set for the $(PROJECT) stack.
+# Otherwise, invoking docker compose with different -f subsets causes noisy
+# "Found orphan containers" warnings (and makes status output confusing).
+STACK_FILES ?= \
+	-f docker-compose.yml \
+	-f docker-compose.n8n.yml \
+	$(VOICE_STACK_FILE) \
+	$(N8N_DB_STACK_FILE) \
+	-f docker-compose.comfyui.yml \
+	-f docker-compose.ultimate-tts-studio.yml \
+	-f docker-compose.external.yml \
+	-f docker-compose.archon.submodule.yml \
+	-f docker-compose.archon-ui.submodule.yml \
+	-f monitoring/docker-compose.monitoring.yml
+
+DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) $(STACK_FILES)
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WGER := compose/docker-compose.wger.yml
@@ -327,10 +376,10 @@ endif
 endif
 
 down:
-	docker compose -p $(PROJECT) down
+	@$(DC) down
 
 clean:
-	docker compose -p $(PROJECT) down -v --remove-orphans
+	@$(DC) down -v --remove-orphans
 
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
 	@bash -c '$(LOAD_ENV_SHARED) \
@@ -424,33 +473,26 @@ MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 up-monitoring: ## Start monitoring stack and print URLs
 	@echo "⛳ Starting monitoring stack (Prometheus, Grafana, Loki, Promtail, blackbox, cAdvisor)..."
 	@profiles=""; \
-	if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
-	  profiles="$$profiles --profile linux"; \
-	fi; \
-	if [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ]; then \
-	  profiles="$$profiles --profile linux-node"; \
-	fi; \
-	if [ -n "$$profiles" ]; then \
-	  echo "→ Including compose profiles:$$profiles"; \
-	  docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) $$profiles up -d; \
-	else \
-	  echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
-	  docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) up -d; \
-	fi
-	@if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
-		echo "→ Including linux profile (cAdvisor/Node Exporter)"; \
-		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) --profile linux up -d; \
-		else \
-		echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
-		docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) up -d; \
-	  fi
+	  services="prometheus grafana loki promtail blackbox"; \
+	  if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
+	    profiles="$$profiles --profile linux"; \
+	    services="$$services cadvisor"; \
+	  else \
+	    echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
+	  fi; \
+	  if [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ]; then \
+	    profiles="$$profiles --profile linux-node"; \
+	    services="$$services node-exporter"; \
+	  fi; \
+	  if [ -n "$$profiles" ]; then echo "→ Including compose profiles:$$profiles"; fi; \
+	  $(DC) $$profiles up -d $$services
 	@echo "Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"
 	@echo "Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"
 	@echo "Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"
 	@echo "cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-9180}"
 
 down-monitoring: ## Stop monitoring stack and remove volumes
-	@docker compose -p $(PROJECT) -f $(MONITORING_COMPOSE) down -v
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) -f $(MONITORING_COMPOSE) down -v
 
 monitoring-open: ## Open Grafana and Prometheus in your browser
 	@python3 -c "import os,webbrowser; g='http://localhost:%s'%os.environ.get('GRAFANA_HOST_PORT','3002'); p='http://localhost:%s'%os.environ.get('PROMETHEUS_HOST_PORT','9090'); print('Opening',g,'and',p); webbrowser.open(g); webbrowser.open(p)"
@@ -546,7 +588,7 @@ model-profiles: ## List available model manifests
 	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
 
 model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (PROFILE=archon HOST=workstation_5090)
-	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash pmoves/tools/models/apply_profile.sh
+	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash tools/models/apply_profile.sh
 
 models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
 	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$(HOST)" --tensorzero-base "$(TENSORZERO_BASE_URL)"
@@ -556,6 +598,7 @@ model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.loca
 
 models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL examples)
 	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
+	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen3-embedding:4b"}' >/dev/null 2>&1 || true
 	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"embeddinggemma:300m"}' >/dev/null 2>&1 || true
 	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen2.5:14b-instruct-q4_K_M"}' >/dev/null 2>&1 || true
 	@echo "✔ Seeded baseline Ollama models (if sidecar available)."
@@ -565,6 +608,7 @@ models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL e
 
 ui-dev-start: ## Start the PMOVES console dev server on :3001 with env layering
 	@cd ui && \
+	  if [ ! -d node_modules ]; then echo "→ Installing UI dependencies (npm ci)"; npm ci; fi && \
 	  (logfile=.pmoves_ui_dev.log; nohup node scripts/with-env.mjs npm run dev:3001 > "$$logfile" 2>&1 & echo $$! > .pmoves_ui_dev.pid; \
 	  echo "✔ Console dev server starting (http://localhost:3001). PID: $$(cat .pmoves_ui_dev.pid)"; \
 	  sleep 1; tail -n 5 "$$logfile" || true)
@@ -574,6 +618,126 @@ ui-dev-stop: ## Stop the console dev server started by ui-dev-start
 
 ui-dev-logs: ## Tail the console dev server logs
 	@cd ui && [ -f .pmoves_ui_dev.log ] && tail -f .pmoves_ui_dev.log || echo "No UI dev log found. Run 'make -C pmoves ui-dev-start' first."
+
+# -------- Local voice speaker (host audio) --------
+.PHONY: voice-speaker-start voice-speaker-stop voice-speaker-logs voice-say
+
+voice-speaker-start: ## Start local voice speaker API (plays audio on this machine)
+	@logfile=.pmoves_voice_speaker.log; \
+	pidfile=.pmoves_voice_speaker.pid; \
+	if [ -f "$$pidfile" ] && kill -0 "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1; then \
+	  echo "✔ voice-speaker already running (PID $$(cat "$$pidfile"))"; \
+	  exit 0; \
+	fi; \
+	nohup bash -lc '. ./scripts/with-env.sh; exec python3 tools/voice_speaker.py serve' > "$$logfile" 2>&1 & echo $$! > "$$pidfile"; \
+	echo "✔ voice-speaker starting (http://127.0.0.1:$${VOICE_SPEAKER_PORT:-8120}). PID: $$(cat "$$pidfile")"; \
+	for i in $$(seq 1 25); do \
+	  if curl -fsS "http://127.0.0.1:$${VOICE_SPEAKER_PORT:-8120}/healthz" >/dev/null 2>&1; then break; fi; \
+	  sleep 0.2; \
+	done; \
+	tail -n 10 "$$logfile" || true
+
+voice-speaker-stop: ## Stop local voice speaker API started by voice-speaker-start
+	@pidfile=.pmoves_voice_speaker.pid; \
+	kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || true; \
+	rm -f "$$pidfile"; \
+	echo "✔ voice-speaker stopped."
+
+voice-speaker-logs: ## Tail voice speaker logs
+	@[ -f .pmoves_voice_speaker.log ] && tail -f .pmoves_voice_speaker.log || echo "No voice-speaker log found. Run 'make -C pmoves voice-speaker-start' first."
+
+voice-say: ## Speak a message locally (requires voice-speaker-start). Usage: make -C pmoves voice-say MSG="Hello"
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-say" && exit 1)
+	@MSG="$${MSG:-Hello from PMOVES}"; \
+	PORT="$${VOICE_SPEAKER_PORT:-8120}"; \
+	MODE="$${VOICE_SPEAKER_MODE:-stream}"; \
+	VOICE="$${VOICE_SPEAKER_VOICE:-}"; \
+	PAYLOAD=$$(jq -n --arg text "$$MSG" --arg mode "$$MODE" --arg voice "$$VOICE" '{text:$$text, mode:$$mode, voice: (if ($$voice|length)>0 then $$voice else null end)}'); \
+	curl -fsS -X POST "http://127.0.0.1:$$PORT/say" -H 'content-type: application/json' --data-binary "$$PAYLOAD" | jq .
+
+.PHONY: voice-follow-start voice-follow-stop voice-follow-logs
+
+voice-follow-start: ## Start host-run daemon: speak NATS agent/voice responses via voice-speaker
+	@logfile=.pmoves_voice_follow.log; \
+	pidfile=.pmoves_voice_follow.pid; \
+	if [ -f "$$pidfile" ] && kill -0 "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1; then \
+	  echo "✔ voice-follow already running (PID $$(cat "$$pidfile"))"; \
+	  exit 0; \
+	fi; \
+	nohup bash -lc '. ./scripts/with-env.sh; export VOICE_FOLLOW_NATS_URL=$${VOICE_FOLLOW_NATS_URL:-nats://127.0.0.1:4222}; exec python3 tools/voice_follow_agent.py' > "$$logfile" 2>&1 & echo $$! > "$$pidfile"; \
+	echo "✔ voice-follow starting (PID $$(cat "$$pidfile")). Requires voice-speaker running."; \
+	sleep 0.3; tail -n 8 "$$logfile" || true
+
+voice-follow-stop: ## Stop voice-follow daemon
+	@pidfile=.pmoves_voice_follow.pid; \
+	kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || true; \
+	rm -f "$$pidfile"; \
+	echo "✔ voice-follow stopped."
+
+voice-follow-logs: ## Tail voice-follow logs
+	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
+
+.PHONY: voice-follow-smoke voice-agent-discord-smoke
+
+voice-follow-smoke: ## Smoke: start speaker + follow(--once), trigger voice agent, assert speaker was called
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-follow-smoke" && exit 1)
+	@echo "→ Starting voice-speaker (DRY_RUN=1 so we don't require an audio device)"; \
+	VOICE_SPEAKER_DRY_RUN=1 $(MAKE) voice-speaker-start >/dev/null; \
+	start_lines=$$(wc -l < .pmoves_voice_speaker.log 2>/dev/null || echo 0); \
+	$(MAKE) voice-follow-stop >/dev/null 2>&1 || true; \
+	rm -f .pmoves_voice_follow_smoke.log; \
+	echo "→ Starting voice-follow (--once)"; \
+	(nohup bash -lc '. ./scripts/with-env.sh; VOICE_SPEAKER_DRY_RUN=1 exec python3 tools/voice_follow_agent.py --once' > .pmoves_voice_follow_smoke.log 2>&1 & echo $$! > .pmoves_voice_follow_smoke.pid); \
+	sleep 0.4; \
+	echo "→ Triggering n8n voice agent ingest"; \
+	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest -H 'content-type: application/json' \
+	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Reply with a short greeting."}' | jq -e '.published_id != null' >/dev/null; \
+	echo "→ Waiting for voice-follow to receive one message"; \
+	pid=$$(cat .pmoves_voice_follow_smoke.pid); \
+	for i in $$(seq 1 120); do \
+	  if ! kill -0 "$$pid" >/dev/null 2>&1; then break; fi; \
+	  sleep 0.25; \
+	done; \
+	if kill -0 "$$pid" >/dev/null 2>&1; then \
+	  echo "✖ voice-follow did not exit; see .pmoves_voice_follow_smoke.log"; \
+	  kill "$$pid" >/dev/null 2>&1 || true; \
+	  exit 1; \
+	fi; \
+	new_lines=$$(wc -l < .pmoves_voice_speaker.log 2>/dev/null || echo 0); \
+	if [ "$$new_lines" -le "$$start_lines" ]; then \
+	  echo "✖ voice-speaker log did not grow; expected a /say call"; \
+	  tail -n 50 .pmoves_voice_speaker.log || true; \
+	  exit 1; \
+	fi; \
+	tail -n +$$((start_lines+1)) .pmoves_voice_speaker.log | grep -q 'POST /say' || { \
+	  echo "✖ voice-speaker did not receive POST /say"; \
+	  tail -n 80 .pmoves_voice_speaker.log || true; \
+	  exit 1; \
+	}; \
+	$(MAKE) voice-speaker-stop >/dev/null 2>&1 || true; \
+	echo "✔ voice-follow-smoke OK"
+
+voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (text)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-agent-discord-smoke" && exit 1)
+	@echo "[Ultimate] tts-studio-smoke" && $(MAKE) tts-studio-smoke >/dev/null && echo OK
+	@set -euo pipefail; \
+	echo "[Voice→Discord] Trigger voice agent via n8n webhook"; \
+	resp=$$(mktemp); \
+	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest -H 'content-type: application/json' \
+	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Give a 1-sentence greeting for Discord."}' > "$$resp"; \
+	text=$$(jq -r '.response_text // empty' "$$resp"); \
+	if [ -z "$$text" ]; then echo "✖ no response_text from voice agent"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
+	if [ "$$text" = "Sorry, I could not generate a response." ]; then echo "✖ voice agent returned fallback response (LLM likely unavailable)"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
+	short=$$(python3 -c 'import sys; s=sys.argv[1]; print((s[:1800] + "…") if len(s)>1800 else s)' "$$text"); \
+	rm -f "$$resp"; \
+	echo "[Voice→Discord] Publishing to publisher-discord"; \
+	content=$$'🗣️ Voice Agent (smoke)\n\n'"$$short"; \
+	echo "[Voice→Discord] Generating TTS (mp3) via Flute"; \
+	tts_b64=$$(python3 tools/flute_tts_to_mp3_b64.py "$$short"); \
+	payload=$$(jq -n --arg content "$$content" --arg b64 "$$tts_b64" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}], file:{name:"voice_agent_smoke.mp3", content_type:"audio/mpeg", content_b64:$$b64} }'); \
+	curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' \
+	  -d "$$payload" \
+	  | jq -e '.ok==true or .success==true' >/dev/null && echo "✔ Discord publish OK" || (echo "✖ Discord publish failed" && exit 1)
 
 # Toggle Single‑User (Owner) Mode for the console and restart dev server
 .PHONY: ui-single-user ui-single-user-on ui-single-user-off
@@ -626,12 +790,12 @@ ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts 
 
 # Jellyfin bridge only
 up-jellyfin:
-	docker compose -p $(PROJECT) up -d jellyfin-bridge
+	@$(DC) up -d jellyfin-bridge
 
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
 .PHONY: up-agents
 up-agents: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 
 .PHONY: agents-headless-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
@@ -639,13 +803,13 @@ agents-headless-smoke: ## Check Agent Zero and Archon headless services
 	@$(MAKE) archon-headless-smoke
 
 .PHONY: up-agents-published
-up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images (no local builds)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d nats agent-zero archon mesh-agent publisher-discord
-	@echo "✔ Agents started using published images. Override AGENT_ZERO_IMAGE/ARCHON_IMAGE to pin versions."
+up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord
+	@echo "✔ Agents started (published images where available). For production, use PULL=always and pin *_IMAGE tags."
 
 .PHONY: up-agents-ui
 up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use PUBLISHED_AGENTS=1 for images)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml -f docker-compose.archon-ui.submodule.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
+	@$(DC) --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
 .PHONY: a0-mcp-seed
@@ -675,7 +839,33 @@ archon-smoke: ## Combined Archon smoke: /healthz 200 and Supabase CLI REST reach
 	pg=$$(curl -s -o /dev/null -w "%{http_code}" "$$probe" || true); \
 	if [ "$$api" != "200" ]; then echo "✖ archon /healthz => $$api" && exit 1; fi; \
 	if [ "$$pg" = "000" ] || [ -z "$$pg" ] || [ "$$pg" -ge 500 ]; then echo "✖ Supabase REST probe failed (HTTP $$pg) URL: $$probe" && exit 1; fi; \
-	echo "✔ archon /healthz 200 and Supabase REST probe $$probe (HTTP $$pg)"'
+	echo "✔ archon /healthz 200 and Supabase REST probe $$probe (HTTP $$pg)"; \
+	$(MAKE) archon-upload-smoke'
+
+.PHONY: archon-upload-smoke
+archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload) to validate embedding wiring
+	@which jq >/dev/null 2>&1 || (echo "jq is required for archon-upload-smoke" && exit 1)
+	@bash -lc 'set -euo pipefail; \
+	  base="http://localhost:8091"; \
+	  echo "→ Archon upload smoke ($$base/api/documents/upload)"; \
+	  : "If OpenAI isn’t configured, force local Ollama base + embedding model"; \
+	  openai_ok=$$(curl -sS "$$base/api/providers/openai/status" | jq -r ".ok // false" || echo "false"); \
+	  if [ "$$openai_ok" != "true" ]; then \
+	    ollama_base="$${ARCHON_OLLAMA_BASE_URL:-http://pmoves-ollama:11434/v1}"; \
+	    embed_model="$${ARCHON_EMBEDDING_MODEL:-qwen3-embedding:4b}"; \
+	    echo "→ OpenAI not configured; setting LLM_BASE_URL=$$ollama_base and EMBEDDING_MODEL=$$embed_model"; \
+	    curl -fsS -X PUT "$$base/api/credentials/LLM_PROVIDER" -H "content-type: application/json" -d "{\"value\":\"ollama\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: default to local Ollama\"}" >/dev/null; \
+	    curl -fsS -X PUT "$$base/api/credentials/EMBEDDING_PROVIDER" -H "content-type: application/json" -d "{\"value\":\"ollama\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: embeddings via local Ollama\"}" >/dev/null; \
+	    curl -fsS -X PUT "$$base/api/credentials/LLM_BASE_URL" -H "content-type: application/json" -d "{\"value\":\"$$ollama_base\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: in-network Ollama base URL\"}" >/dev/null; \
+	    curl -fsS -X PUT "$$base/api/credentials/EMBEDDING_MODEL" -H "content-type: application/json" -d "{\"value\":\"$$embed_model\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: local embedding model\"}" >/dev/null; \
+	  fi; \
+	  tmp=$$(mktemp); echo "PMOVES archon upload smoke $$(date -Is)" > "$$tmp"; \
+	  resp=$$(curl -fsS -F "file=@$$tmp;type=text/plain" -F "filename=smoke.txt" "$$base/api/documents/upload"); \
+	  rm -f "$$tmp"; \
+	  ok=$$(printf "%s" "$$resp" | jq -r ".success // false"); \
+	  pid=$$(printf "%s" "$$resp" | jq -r ".progressId // .progress_id // empty"); \
+	  if [ "$$ok" != "true" ] || [ -z "$$pid" ]; then echo "✖ archon upload response unexpected:"; echo "$$resp" | jq .; exit 1; fi; \
+	  echo "✔ archon upload accepted (progressId=$$pid)"'
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
@@ -748,7 +938,7 @@ archon-headless-smoke: ## Verify Archon headless services: /ready 200 and MCP br
 
 .PHONY: archon-rebuild
 archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)
-	@docker compose build --no-cache archon
+	@$(DC) build --no-cache archon
 	@echo "✔ Archon image rebuilt"
 
 .PHONY: deepresearch-health
@@ -791,7 +981,7 @@ build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-ar
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
-	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
+	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && PYTHONPATH="$(CURDIR)/.." python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
 
 .PHONY: deepresearch-smoke-in-net
 deepresearch-smoke-in-net: ## Run DeepResearch NATS smoke inside the compose network (reliable visibility)
@@ -825,35 +1015,127 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 
 .PHONY: up-n8n
 up-n8n: ensure-env-shared
-	docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.n8n.yml up -d n8n
+	@if [ "$(N8N_DB)" = "postgres" ]; then \
+	  echo "→ n8n DB mode: postgres"; \
+	  $(DC) up -d n8n-db n8n n8n-runners; \
+	else \
+	  echo "→ n8n DB mode: sqlite"; \
+	  $(DC) up -d n8n n8n-runners; \
+	fi
+
+.PHONY: up-comfyui comfyui-smoke
+up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)
+	@$(DC) --profile creator up -d comfyui
+	@echo "✔ ComfyUI up at http://localhost:$${COMFYUI_HOST_PORT:-8188}"
+
+comfyui-smoke: ## Smoke check ComfyUI / (expects 200/302)
+	@port=$${COMFYUI_HOST_PORT:-8188}; \
+	  echo "→ Waiting for ComfyUI on http://localhost:$$port/ (first run may take a while)"; \
+	  code=""; \
+	  for i in $$(seq 1 60); do \
+	    code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
+	    if [ "$$code" = "200" ] || [ "$$code" = "302" ] || [ "$$code" = "404" ]; then break; fi; \
+	    sleep 2; \
+	  done; \
+	  if [ "$$code" != "200" ] && [ "$$code" != "302" ] && [ "$$code" != "404" ]; then \
+	    echo "✖ ComfyUI / => $$code (start with: make -C pmoves up-comfyui)"; \
+	    exit 1; \
+	  fi; \
+	  echo "✔ ComfyUI reachable (HTTP $$code)"
+
+.PHONY: up-tts-studio tts-studio-smoke
+up-tts-studio: ## Start Ultimate TTS Studio UI (Gradio) from hardened GHCR image
+	@$(DC) --profile creator up -d ultimate-tts-studio
+	@echo "✔ Ultimate TTS Studio up at http://localhost:$${ULTIMATE_TTS_STUDIO_HOST_PORT:-7861}"
+
+tts-studio-smoke: ## Smoke check Ultimate TTS Studio / (expects 200/302)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for tts-studio-smoke" && exit 1)
+	@port=$${ULTIMATE_TTS_STUDIO_HOST_PORT:-7861}; \
+		  echo "→ Waiting for Ultimate TTS Studio on http://localhost:$$port/"; \
+		  code=""; \
+		  for i in $$(seq 1 60); do \
+		    code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
+		    if [ "$$code" = "200" ] || [ "$$code" = "302" ]; then break; fi; \
+		    sleep 2; \
+		  done; \
+		  if [ "$$code" != "200" ] && [ "$$code" != "302" ]; then \
+		    echo "✖ Ultimate TTS Studio / => $$code (start with: make -C pmoves up-tts-studio)"; \
+		    exit 1; \
+		  fi; \
+		  tmp=$$(mktemp); \
+		  curl -fsS "http://localhost:$$port/" -o "$$tmp"; \
+		  if ! grep -q '__gradio_mode__ = \"app\"' "$$tmp"; then \
+		    echo "✖ Ultimate TTS Studio HTML did not look like a Gradio app (missing __gradio_mode__)"; \
+		    rm -f "$$tmp"; \
+		    exit 1; \
+		  fi; \
+		  rm -f "$$tmp"; \
+		  info=$$(mktemp); \
+		  curl -fsS "http://localhost:$$port/gradio_api/info" -o "$$info"; \
+		  if ! jq -e '.named_endpoints != null' "$$info" >/dev/null 2>&1; then \
+		    echo "✖ Ultimate TTS Studio /gradio_api/info invalid"; \
+		    rm -f "$$info"; \
+		    exit 1; \
+		  fi; \
+		  if ! jq -r '.named_endpoints|keys[]' "$$info" | grep -q '^/generate_unified_tts$$'; then \
+		    echo "✖ Ultimate TTS Studio missing /generate_unified_tts endpoint"; \
+		    rm -f "$$info"; \
+		    exit 1; \
+		  fi; \
+		  rm -f "$$info"; \
+		  echo "✔ Ultimate TTS Studio reachable (HTTP $$code) + gradio_api/info OK"
+
+.PHONY: up-vibevoice
+up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights on first run)
+	@$(DC) --profile voice up -d vibevoice
+	@port=$${VIBEVOICE_HOST_PORT:-3000}; \
+	  echo "✔ VibeVoice realtime up (expected at http://localhost:$$port/config). Flute uses VIBEVOICE_URL=$${VIBEVOICE_URL:-http://host.docker.internal:$$port}"
+
+.PHONY: stop-vibevoice
+stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
+	@$(DC) stop vibevoice >/dev/null 2>&1 || true
+	@echo "✔ VibeVoice stopped"
+
+.PHONY: vibevoice-smoke
+vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running on :3000)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for vibevoice-smoke" && exit 1)
+	@port=$${VIBEVOICE_HOST_PORT:-3000}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/config" || true); \
+	if [ "$$code" != "200" ]; then \
+	  echo "✖ VibeVoice /config => $$code (start with: make -C pmoves up-vibevoice)"; \
+	  exit 1; \
+	fi; \
+	echo "✔ VibeVoice /config 200"; \
+	curl -sS "http://localhost:$$port/config" | jq .
 
 # Status helper
 ps:
-	 docker compose -p $(PROJECT) ps
+	@$(DC) ps
 
 # -------- External stacks (forks / published images) ----------
 .PHONY: up-external up-external-wger up-external-firefly up-external-on up-external-jellyfin down-external
 up-external: ## Start all external stacks (Wger, Firefly, Open Notebook, Jellyfin)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker network create pmoves-net >/dev/null 2>&1 || true
-	@bash -c 'set -a; [ -f env.shared ] && . env.shared; [ -f .env.local ] && . .env.local; set +a; exec docker compose -p $(PROJECT) -f docker-compose.external.yml up -d'
+	@$(DC) up -d --pull $(PULL) wger wger-nginx firefly open-notebook-surrealdb-ext open-notebook-ext jellyfin-ext
 
 up-external-wger: ## Start Wger (Django + nginx proxy) on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d wger wger-nginx
+	@$(DC) up -d --pull $(PULL) wger wger-nginx
 	@$(MAKE) wger-brand-defaults
 
 up-external-firefly: ## Start Firefly III on cataclysm-net
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d firefly
+	@$(DC) up -d --pull $(PULL) firefly
 
 up-external-on: ## Start Open Notebook on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d open-notebook-ext
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@$(DC) up -d --pull $(PULL) open-notebook-surrealdb-ext open-notebook-ext
 
 up-external-jellyfin: ## Start Jellyfin on cataclysm-net (external image)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml up -d jellyfin-ext
+	@$(DC) up -d --pull $(PULL) jellyfin-ext
 
 .PHONY: down-jellyfin-ai
 down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
@@ -864,7 +1146,7 @@ down-jellyfin-ai: ## Stop the Jellyfin AI overlay stack (single-instance mode)
 up-jellyfin-single: ## Single Jellyfin using your forked image (8096)
 	@$(MAKE) --no-print-directory down-jellyfin-ai
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@bash -c 'files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d jellyfin-ext'
+	@bash -lc '$(LOAD_ENV_SHARED) files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d --pull $(PULL) jellyfin-ext'
 	@echo "✔ Jellyfin (single) up at http://localhost:8096 using $${JELLYFIN_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest}"
 
 .PHONY: jellyfin-enhanced-smoke
@@ -876,7 +1158,8 @@ jellyfin-hosts-generate: ## Generate compose override from pmoves/jellyfin.hosts
 	@$(PYTHON) tools/generate_jellyfin_mounts.py
 
 down-external: ## Stop all external stacks
-	@docker compose -p $(PROJECT) -f docker-compose.external.yml down
+	@$(DC) stop wger wger-nginx firefly open-notebook-surrealdb-ext open-notebook-ext jellyfin-ext >/dev/null 2>&1 || true
+	@echo "✔ External stacks stopped (containers retained)."
 
 .PHONY: vendor-httpx
 vendor-httpx: ## Refresh vendored pmoves-yt dependencies via uv
@@ -930,13 +1213,13 @@ integrations-import-flows: ## Import JSON flows from integrations/* into n8n via
 package-pr-kits: ## Package PR kits into dist/pr-kits/*.tar.gz
 	@mkdir -p dist/pr-kits
 	@for kit in wger firefly open-notebook jellyfin; do \
-	  tar -czf dist/pr-kits/$$kit.pr-kit.tgz -C pmoves/integrations/pr-kits/ $$kit; \
+	  tar -czf dist/pr-kits/$$kit.pr-kit.tgz -C integrations/pr-kits/ $$kit; \
 	  echo "→ dist/pr-kits/$$kit.pr-kit.tgz"; \
 	done
 
 .PHONY: integrations-workspace
 integrations-workspace: ## Clone forks and apply PR kits into INTEGRATIONS_BASE (default: integrations-workspace/)
-	@bash pmoves/tools/integrations/bootstrap_workspace.sh "$${INTEGRATIONS_BASE:-integrations-workspace}"
+	@bash tools/integrations/bootstrap_workspace.sh "$${INTEGRATIONS_BASE:-integrations-workspace}"
 
 # ---- CHIT demo mappers (health/finance → CGP) ----
 .PHONY: demo-health-cgp demo-finance-cgp firefly-seed-sample
@@ -946,7 +1229,7 @@ demo-health-cgp: ## Map sample health weekly summary to CGP and POST to gateway
 
 demo-finance-cgp: ## Map sample finance monthly summary to CGP and POST to gateway
 	@echo "→ Posting finance.monthly.summary.v1 as CGP to $(HIRAG_URL:-?http://localhost:8086)"
-	@PYTHONPATH=. python3 tools/events_to_cgp.py --file pmoves/contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
+	@PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}"
 
 firefly-seed-sample: ensure-env-shared ## Seed Firefly III with PMOVES 5-year projection sample dataset
 	@bash -c '$(LOAD_ENV_SHARED) \
@@ -1141,12 +1424,11 @@ smoke-personas: ## Assert personas are seeded (v5.12) in Supabase CLI DB; fails 
 .PHONY: smoke-webhook-ci
 smoke-webhook-ci:
 	@echo "Render-webhook smoke (dry-run by default). Use LIVE=1 to POST."
-	@cd pmoves && \
-	 if [ "$(LIVE)" = "1" ]; then \
-	   python tools/smoke_webhook.py --live; \
-		else \
-	   python tools/smoke_webhook.py; \
-	 fi
+	@if [ "$(LIVE)" = "1" ]; then \
+	  python tools/smoke_webhook.py --live; \
+	else \
+	  python tools/smoke_webhook.py; \
+	fi
 
 .PHONY: smoke-prerequisites
 smoke-prerequisites: ## Check environment prerequisites before running smoke tests
@@ -1162,6 +1444,121 @@ smoke-tensorzero-observability: ## Test TensorZero observability pipeline (Gatew
 smoke-creator-pipeline: ## Test creator pipeline (render-webhook, comfy-watcher, MinIO, NATS)
 	@echo "→ Testing creator pipeline"
 	@bash tests/functional/test_creator_pipeline.sh
+
+.PHONY: n8n-sync-flows n8n-import-flows n8n-sanitize-db n8n-activate-flows n8n-bootstrap
+
+n8n-sync-flows: ## Sync n8n flow exports into integration folders (best-effort)
+	@bash tools/n8n_sync_flows.sh
+
+n8n-import-flows: ## Import all workflow JSON from /flows into the running n8n container
+	@echo "→ Importing n8n workflows from pmoves/n8n/flows (mounted at /flows)"
+	@set -e; \
+	 REPLACE=$${REPLACE:-0}; \
+	 project_id=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite 'select id from project limit 1;' | head -1 | tr -d '\r\n'); \
+	 test -n "$$project_id" || { echo "✗ Could not resolve n8n projectId (is the owner user created?)" && exit 1; }; \
+	 failed=0; \
+	 for f in n8n/flows/*.json; do \
+	   base=$$(basename "$$f"); \
+	   echo "  - $$base"; \
+	   if [ "$$REPLACE" = "1" ]; then \
+	     name=$$(python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); print((d[0].get("name") if isinstance(d,list) and d else "") or "")' "$$f"); \
+	     if [ -n "$$name" ]; then \
+	       esc=$$(printf "%s" "$$name" | sed "s/'/''/g"); \
+	       docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "delete from workflow_entity where name='$$esc';" >/dev/null; \
+	     fi; \
+	   fi; \
+	   out=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n import:workflow --input="/flows/$$base" --projectId="$$project_id" 2>&1) || { \
+	     echo "$$out" | tail -60; \
+	     failed=1; \
+	     break; \
+	   }; \
+	 done; \
+	 if [ "$$failed" = "1" ]; then \
+	   echo ""; \
+	   echo "✗ n8n import failed. If this is a fresh n8n instance, complete the first-run owner setup in the UI (http://localhost:5678), then rerun:"; \
+	   echo "  make -C pmoves n8n-bootstrap"; \
+	   echo ""; \
+	   echo "If you want to reset n8n to a clean default user state (DESTRUCTIVE), run:"; \
+	   echo "  make -C pmoves n8n-reset"; \
+	   exit 1; \
+	 fi; \
+	 echo "✔ Imported workflows into n8n"
+
+n8n-sanitize-db: ## Repair common n8n SQLite FK drift after repeated imports (safe, idempotent)
+	@echo "→ Sanitizing n8n SQLite workflow relations (fixing orphan rows + seeding workflow_history)"
+	@set -e; \
+	 docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "\
+	  PRAGMA foreign_keys=OFF; \
+	  delete from shared_workflow where workflowId not in (select id from workflow_entity); \
+	  delete from webhook_entity where workflowId not in (select id from workflow_entity); \
+	  delete from workflow_history where workflowId not in (select id from workflow_entity); \
+	  delete from workflow_publish_history where workflowId not in (select id from workflow_entity); \
+	  delete from workflows_tags where workflowId not in (select id from workflow_entity); \
+	  update workflow_entity set activeVersionId=versionId where active=1 and (activeVersionId is NULL or activeVersionId=''); \
+	  insert into workflow_history(versionId,workflowId,authors,nodes,connections,name,autosaved,description) \
+	    select versionId,id,'system',nodes,connections,name,0,description from workflow_entity \
+	    where versionId not in (select versionId from workflow_history); \
+	  PRAGMA foreign_keys=ON; \
+	 "; \
+	 docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "PRAGMA foreign_key_check;" | sed -n '1,20p'; \
+	 echo "✔ n8n DB sanitized"
+
+n8n-activate-flows: ## Activate n8n workflows. Default: best-effort (skips (stub)/(demo); auto-disables failures). Set ALL=0 to skip.
+	@ALL=$${ALL:-1}; \
+	 if [ "$$ALL" = "1" ]; then \
+	   echo "→ Activating n8n workflows (best-effort; skipping stubs/demos)"; \
+	   $(MAKE) n8n-sanitize-db >/dev/null; \
+	   echo "→ Disabling stub/demo workflows to avoid activation retry spam"; \
+	   docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "update workflow_entity set active=0, activeVersionId=NULL where name like '%(stub)%' or name like '%(demo)%' or name = 'Unnamed workflow';" >/dev/null || true; \
+	   docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "select '  - ' || name from workflow_entity where name like '%(stub)%' or name like '%(demo)%' or name = 'Unnamed workflow' order by name;" | tr -d '\r' || true; \
+	   VOICE_PLATFORMS=$${VOICE_PLATFORMS:-0}; \
+	   if [ "$$VOICE_PLATFORMS" != "1" ]; then \
+	     echo "→ Disabling chat-platform voice agents (set VOICE_PLATFORMS=1 to enable)"; \
+	     docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "update workflow_entity set active=0, activeVersionId=NULL where name in ('Discord Voice Agent - PMOVES','Telegram Voice Agent - PMOVES');" >/dev/null || true; \
+	     docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "select '  - ' || name from workflow_entity where name in ('Discord Voice Agent - PMOVES','Telegram Voice Agent - PMOVES') order by name;" | tr -d '\r' || true; \
+	   fi; \
+	   rows=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n /usr/bin/sqlite3 /home/node/.n8n/database.sqlite "select id || '|' || name from workflow_entity where name not like '%(stub)%' and name not like '%(demo)%' and name != 'Unnamed workflow' order by name;" | tr -d '\r'); \
+	   failed=0; failed_names=""; \
+	   IFS=$$(printf '\n'); \
+	   for row in $$rows; do \
+	     wid=$${row%%|*}; wname=$${row#*|}; \
+	     [ -n "$$wid" ] || continue; \
+	     out=$$(docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n update:workflow --id="$$wid" --active=true 2>&1) && continue; \
+	     echo "✗ n8n activate failed: $$wname ($$wid)"; \
+	     echo "$$out" | sed -n '1,4p'; \
+	     docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n update:workflow --id="$$wid" --active=false >/dev/null 2>&1 || true; \
+	     failed=1; failed_names="$$failed_names\n- $$wname ($$wid)"; \
+	   done; \
+	   docker compose -p $(PROJECT) $(STACK_FILES) restart -t 10 n8n >/dev/null || true; \
+	   if [ "$$failed" = "1" ]; then \
+	     echo "⚠ Some workflows failed activation and were left inactive (to avoid retry spam):"; \
+	     printf "$$failed_names\n"; \
+	   else \
+	     echo "✔ Activated workflows (n8n restarted)"; \
+	   fi; \
+	 else \
+	   echo "ALL=0 set; skipping activation."; \
+	 fi
+
+n8n-bootstrap: ## Sync, import, then activate n8n flows (requires n8n running)
+	@$(MAKE) n8n-sync-flows
+	@$(MAKE) n8n-import-flows
+	@$(MAKE) n8n-sanitize-db
+	@$(MAKE) n8n-activate-flows
+
+.PHONY: n8n-reset
+n8n-reset: ## DESTRUCTIVE: Reset n8n DB to default user state (use before importing flows on a fresh instance)
+	@echo "→ Resetting n8n database to default user state (DESTRUCTIVE)"
+	@docker compose -p $(PROJECT) $(STACK_FILES) exec -T n8n n8n user-management:reset >/dev/null
+	@echo "✔ Reset complete. Re-run: make -C pmoves n8n-bootstrap"
+
+.PHONY: n8n-export-repo-flows n8n-normalize-repo-flows
+
+n8n-export-repo-flows: ## Export current n8n DB workflows into pmoves/n8n/flows (sanitized/minimal)
+	@bash tools/n8n_export_repo_flows.sh
+
+n8n-normalize-repo-flows: ## Normalize pmoves/n8n/flows/*.json into importable minimal format
+	@python3 tools/n8n_flow_normalize.py --inplace-dir n8n/flows
 
 .PHONY: smoke-tensorzero-observability-strict
 smoke-tensorzero-observability-strict: ## Test TensorZero observability (STRICT mode - all warnings are failures)
@@ -1194,11 +1591,11 @@ discord-ping:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for discord-ping" && exit 1)
 	@if [ -z "$$DISCORD_WEBHOOK_URL" ]; then echo "Set DISCORD_WEBHOOK_URL in env or .env/.env.local" && exit 1; fi
 	@MSG="$${MSG:-PMOVES Discord wiring check}"; \
-	sh -c './pmoves/scripts/discord_ping.sh "'"$${MSG}"'"'
+	sh -c './scripts/discord_ping.sh "'"$${MSG}"'"'
 
 .PHONY: discord-ping-ps
 discord-ping-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/discord_ping.ps1 -Message "$(MSG)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/discord_ping.ps1 -Message "$(MSG)"
 
 
 .PHONY: smoke
@@ -1253,11 +1650,7 @@ smoke:
 
 	@echo "[13/15] Health weekly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/health.weekly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_health_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_health_cgp_resp.json >/dev/null && rm -f .tmp_health_cgp_resp.json && echo OK || (echo FAIL && exit 1)
 	@echo "[14/15] Finance monthly → CGP..." && PYTHONPATH=pmoves PYTHONPATH=. python3 tools/events_to_cgp.py --file contracts/samples/finance.monthly.summary.v1.sample.json --post --gateway "$${HIRAG_URL:-http://localhost:8086}" | tee .tmp_finance_cgp_resp.json >/dev/null && jq -e '.ok==true' .tmp_finance_cgp_resp.json >/dev/null && rm -f .tmp_finance_cgp_resp.json && echo OK || (echo FAIL && exit 1)
-	@if [ -n "$$OPENROUTER_API_KEY" ] && [ -n "$$OPEN_NOTEBOOK_API_TOKEN" ] && [ -n "$$DEEPRESEARCH_NOTEBOOK_ID" ]; then \
-	        echo "[15/15] DeepResearch smoke..." && $(MAKE) deepresearch-smoke || exit 1; \
-	  else \
-	        echo "[15/15] DeepResearch smoke... SKIP (set OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_TOKEN, DEEPRESEARCH_NOTEBOOK_ID)"; \
-	fi
+	@bash -lc '$(LOAD_ENV_SHARED) if [ -n "$$OPENROUTER_API_KEY" ] && [ -n "$$OPEN_NOTEBOOK_API_TOKEN" ] && [ -n "$$DEEPRESEARCH_NOTEBOOK_ID" ]; then echo "[15/15] DeepResearch smoke..." && $(MAKE) deepresearch-smoke; else echo "[15/15] DeepResearch smoke... SKIP (set OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_TOKEN, DEEPRESEARCH_NOTEBOOK_ID)"; fi'
 
 .PHONY: channel-monitor-up
 channel-monitor-up:
@@ -1289,7 +1682,7 @@ smoke-gpu:
         STRICT=$${GPU_SMOKE_STRICT:-true}; \
         PASS=false; \
         for Q in "$$Q1" "$$Q2" "$$Q3"; do \
-          RESP=$$(docker compose -p $(PROJECT) exec -T hi-rag-gateway-v2-gpu curl -sf http://localhost:8086/hirag/query -H 'content-type: application/json' -d "$$Q"); \
+          RESP=$$(curl -sf --max-time 30 http://localhost:$(HIRAG_GPU_PORT)/hirag/query -H 'content-type: application/json' -d "$$Q"); \
           if [ "$$STRICT" = "true" ]; then \
             if echo "$$RESP" | jq -e '.used_rerank==true' >/dev/null; then PASS=true; break; fi; \
           else \
@@ -1326,8 +1719,8 @@ retrieval-eval-smoke:
 	  $(PYTHON) services/retrieval-eval/evaluate.py "$$ds" --no-query-details; \
 	done
 
-.PHONY: harvest-consciousness
-harvest-consciousness:
+.PHONY: harvest-consciousness-corpus
+harvest-consciousness-corpus:
 	@bash -c 'set -euo pipefail; \
 	HARVEST_DIR="$(CURDIR)/data/consciousness/Constellation-Harvest-Regularization"; \
 	echo "[Harvest] Downloading consciousness corpus via bash helper"; \
@@ -1380,14 +1773,14 @@ smoke-presign-put:
 .PHONY: smoke-pdf
 smoke-pdf:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for smoke-pdf" && exit 1)
-	@test -f ../pmoves/datasets/sample.pdf || (echo "datasets/sample.pdf missing" && exit 1)
+	@test -f datasets/sample.pdf || (echo "datasets/sample.pdf missing" && exit 1)
 	@echo "[1/4] Create presign URL for sample.pdf" && \
 	URL=$$(curl -s -X POST http://localhost:8088/presign/put \
 	  -H 'content-type: application/json' \
 	  -H "Authorization: Bearer $${PRESIGN_SHARED_SECRET:-change_me}" \
 	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","content_type":"application/pdf","expires":300}' ) && echo OK || (echo FAIL && exit 1)
 	@echo "[2/4] Upload sample.pdf to MinIO" && \
-	echo "$$URL" | jq -r .url | xargs -I {} curl -s -X PUT -H 'Content-Type: application/pdf' --data-binary @../pmoves/datasets/sample.pdf '{}' >/dev/null && echo OK || (echo FAIL && exit 1)
+	echo "$$URL" | jq -r .url | xargs -I {} curl -s -X PUT -H 'Content-Type: application/pdf' --data-binary @datasets/sample.pdf '{}' >/dev/null && echo OK || (echo FAIL && exit 1)
 	@echo "[3/4] Trigger pdf-ingest" && \
 	curl -sf http://localhost:8092/pdf/ingest -H 'content-type: application/json' \
 	  -d '{"bucket":"assets","key":"pdfs/sample.pdf","namespace":"pmoves","title":"Sample PDF","publish_events":false}' \
@@ -1523,7 +1916,7 @@ jellyfin-verify:
 .PHONY: jellyfin-verify-single
 jellyfin-verify-single:
 	@bash -c 'set -euo pipefail; \
-	 set -a; [ -f env.shared ] && . env.shared; set +a; \
+	 . ./scripts/with-env.sh; \
 	 export JELLYFIN_URL=$${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}; \
 	 JELLYFIN_EXPECTED_SERVER_NAME="" JELLYFIN_USER_ID="" python3 "$(CURDIR)/../scripts/check_jellyfin_credentials.py"'
 
@@ -1566,6 +1959,18 @@ ifeq ($(OS),Windows_NT)
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_check.ps1
 		else
 	@bash scripts/env_check.sh
+	@$(PYTHON) - <<'PY'
+import os
+images = {
+    'AGENT_ZERO_IMAGE': os.getenv('AGENT_ZERO_IMAGE'),
+    'ARCHON_IMAGE': os.getenv('ARCHON_IMAGE'),
+    'ARCHON_UI_IMAGE': os.getenv('ARCHON_UI_IMAGE'),
+    'PMOVES_YT_IMAGE': os.getenv('PMOVES_YT_IMAGE'),
+}
+stale = [k for k,v in images.items() if v and v.endswith(':pmoves-latest')]
+if stale:
+    print(f"[flight] WARN: unpinned images detected: {', '.join(stale)} (pin dated tags)")
+PY
 endif
 
 .PHONY: flight-check-retro
@@ -1926,9 +2331,55 @@ discord-smoke: ## Smoke test Discord publisher: health + direct publish + NATS e
 	  nats pub ingest.file.added.v1 '{"video_id":"smoke-test-'$$(date +%s)'","title":"Smoke Test Video","url":"https://example.com/test","source":"smoke-test"}' 2>/dev/null && echo "  ✓ NATS event published (check Discord for notification)"; \
 	elif [ -f tools/nats_publish.py ] && python3 -c "import nats" 2>/dev/null; then \
 	  python3 tools/nats_publish.py ingest.file.added.v1 '{"video_id":"smoke-test","title":"Smoke Test Video","url":"https://example.com/test","source":"smoke-test"}' 2>/dev/null && echo "  ✓ NATS event published via Python (check Discord for notification)"; \
+		else \
+		  echo "  ℹ NATS event test skipped (nats CLI not available). Discord health check passed."; \
+		fi
+
+.PHONY: discord-smoke-full
+discord-smoke-full: ## Discord smoke + voice-agent-discord-smoke (posts voice agent response)
+	@$(MAKE) discord-smoke
+	@$(MAKE) voice-agent-discord-smoke
+
+.PHONY: voice-agent-smoke
+voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero publish -> NATS)
+	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
+	@echo "[Voice] Subscribing to voice.agent.response.v1 (via nats-box)"; \
+	OUT=$$(mktemp); \
+	( timeout 90 docker run --rm --network pmoves_bus natsio/nats-box:0.18.0 nats sub 'voice.agent.>' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
+	PID=$$!; \
+	for i in $$(seq 1 30); do \
+	  if grep -q 'Subscribing on voice\\.agent\\.>' "$$OUT" 2>/dev/null; then break; fi; \
+	  sleep 0.2; \
+	done; \
+	sleep 0.5; \
+	echo "[Voice] Triggering n8n webhook (platform=local)"; \
+	RESP=$$(mktemp); \
+	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest \
+	  -H 'content-type: application/json' \
+	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Reply with a short greeting."}' > "$$RESP"; \
+	cat "$$RESP" | jq .; \
+	PUB_ID=$$(jq -r '.published_id // empty' "$$RESP"); \
+	wait $$PID || true; \
+	echo "[Voice] NATS output:"; \
+	sed -n '1,20p' "$$OUT"; \
+	if [ -n "$$PUB_ID" ] && grep -q "$$PUB_ID" "$$OUT"; then \
+	  echo "  ✓ NATS event received (id=$$PUB_ID)"; \
 	else \
-	  echo "  ℹ NATS event test skipped (nats CLI not available). Discord health check passed."; \
-	fi
+	  echo "  ✗ No matching voice agent event received"; \
+	  exit 1; \
+	fi; \
+		rm -f "$$OUT" "$$RESP"
+
+.PHONY: flute-tts-smoke
+flute-tts-smoke: ## Generate a WAV file via Flute TTS (writes ../tmp/flute_tts_smoke.wav)
+	@out="../tmp/flute_tts_smoke.wav"; \
+	mkdir -p "$$(dirname "$$out")"; \
+	echo "→ Generating $$out via http://localhost:8055/v1/voice/synthesize/audio"; \
+	curl -fsS -X POST http://localhost:8055/v1/voice/synthesize/audio \
+	  -H 'content-type: application/json' \
+	  --data-binary '{"text":"Hello from PMOVES. This is a TTS smoke test.","provider":"vibevoice","voice":"en-Emma_woman","output_format":"wav"}' \
+	  -o "$$out"; \
+	echo "✔ Wrote $$out (open/play it to hear audio)"
 
 .PHONY: jellyfin-smoke
 jellyfin-smoke:
@@ -1978,7 +2429,7 @@ yt-jellyfin-smoke:
 demo-content-published:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for demo-content-published" && exit 1)
 	@URL=$${AGENT_ZERO_BASE_URL:-http://localhost:8080}; \
-	FILE=$${FILE:-pmoves/contracts/samples/content.published.v1.sample.json}; \
+	FILE=$${FILE:-contracts/samples/content.published.v1.sample.json}; \
 	[ -f "$$FILE" ] || (echo "Sample file not found: $$FILE" && exit 1); \
 	jq -c '{topic:"content.published.v1", payload:.}' "$$FILE" | \
 	curl -s -X POST "$$URL/events/publish" -H 'content-type: application/json' --data-binary @- | jq .
@@ -2029,6 +2480,36 @@ health-jellyfin-bridge:
 	@echo "Checking Jellyfin Bridge on http://localhost:8093/healthz" && \
 	curl -sf http://localhost:8093/healthz | jq .
 
+.PHONY: health-flute-gateway
+health-flute-gateway: ## Check Flute Gateway healthz endpoint
+	@echo "Checking Flute Gateway on http://localhost:8055/healthz" && \
+	curl -sf http://localhost:8055/healthz | jq .
+
+.PHONY: n8n-health
+n8n-health: ## Check n8n healthz endpoint (200)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5678/healthz || true); \
+	if [ "$$code" != "200" ]; then echo "✖ n8n /healthz => $$code" && exit 1; fi; \
+	echo "✔ n8n /healthz 200"
+
+.PHONY: ui-dev-health
+ui-dev-health: ## Check Notebook Workbench dev server (port 3001)
+	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/ || true); \
+	if [ "$$code" != "200" ]; then echo "✖ ui-dev / => $$code" && exit 1; fi; \
+	echo "✔ ui-dev / 200 (http://localhost:3001)"
+
+.PHONY: health health-core health-optional
+health: health-core ## Quick local health check (agents + core UIs)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for health" && exit 1)
+	@$(MAKE) health-optional
+	@echo "✔ health OK"
+
+health-core: health-agent-zero archon-ui-smoke archon-mcp-smoke archon-upload-smoke health-flute-gateway n8n-health
+
+health-optional:
+	@$(MAKE) health-publisher-discord || true
+	@$(MAKE) health-jellyfin-bridge || true
+	@$(MAKE) ui-dev-health || true
+
 .PHONY: m2-preflight
 m2-preflight:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for m2-preflight" && exit 1)
@@ -2036,7 +2517,7 @@ m2-preflight:
 	@echo "[2/3] Publisher-Discord health" && curl -sf http://localhost:8094/healthz | jq .
 	@echo "[3/3] Discord webhook ping (if configured)" && \
 	if [ -n "$$DISCORD_WEBHOOK_URL" ]; then \
-	  MSG="PMOVES Preflight: $(shell date +%F-%T)" ./pmoves/scripts/discord_ping.sh "PMOVES M2 preflight ping" >/dev/null || true; \
+	  MSG="PMOVES Preflight: $(shell date +%F-%T)" ./scripts/discord_ping.sh "PMOVES M2 preflight ping" >/dev/null || true; \
 	  echo "Ping attempted (check Discord)"; \
 		else \
 	  echo "DISCORD_WEBHOOK_URL not set; skipping ping"; \
@@ -2045,38 +2526,38 @@ m2-preflight:
 .PHONY: venv
 venv:
 	@if [ "$(OS)" = "Windows_NT" ]; then \
-		pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/create_venv.ps1 ; \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/create_venv.ps1 ; \
 		else \
-		bash pmoves/scripts/create_venv.sh ; \
+		bash scripts/create_venv.sh ; \
 	fi
 
 .PHONY: venv-min
 venv-min:
 	@if [ "$(OS)" = "Windows_NT" ]; then \
-		pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/create_venv_min.ps1 ; \
+		pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/create_venv_min.ps1 ; \
 		else \
-		bash pmoves/scripts/create_venv_min.sh ; \
+		bash scripts/create_venv_min.sh ; \
 	fi
 
 .PHONY: win-bootstrap
 win-bootstrap:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/windows_bootstrap.ps1
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/windows_bootstrap.ps1
 
 .PHONY: evidence-stamp
 evidence-stamp:
-	@./pmoves/tools/evidence_stamp.sh "$${LABEL:-evidence}" "$${EXT:-png}"
+	@./tools/evidence_stamp.sh "$${LABEL:-evidence}" "$${EXT:-png}"
 
 .PHONY: evidence-stamp-ps
 evidence-stamp-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/evidence_stamp.ps1 -Label "$(LABEL)" -Ext "$(EXT)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File tools/evidence_stamp.ps1 -Label "$(LABEL)" -Ext "$(EXT)"
 
 .PHONY: evidence-log
 evidence-log:
-	@./pmoves/tools/evidence_log.sh "$(LABEL)" "$(PATH)" "$(NOTE)"
+	@./tools/evidence_log.sh "$(LABEL)" "$(PATH)" "$(NOTE)"
 
 .PHONY: evidence-log-ps
 evidence-log-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/evidence_log.ps1 -Label "$(LABEL)" -Path "$(PATH)" -Note "$(NOTE)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File tools/evidence_log.ps1 -Label "$(LABEL)" -Path "$(PATH)" -Note "$(NOTE)"
 
 .PHONY: m2-seed-demo
 m2-seed-demo:
@@ -2089,7 +2570,7 @@ m2-seed-demo:
 n8n-webhook-demo:
 	@which jq >/dev/null 2>&1 || (echo "jq is required for n8n-webhook-demo" && exit 1)
 	@URL=$${URL:-http://localhost:5678/webhook/pmoves/content-published}; \
-	FILE=$${FILE:-pmoves/contracts/samples/content.published.v1.sample.json}; \
+	FILE=$${FILE:-contracts/samples/content.published.v1.sample.json}; \
 	[ -f "$$FILE" ] || (echo "Sample file not found: $$FILE" && exit 1); \
 	jq -c '{topic:"content.published.v1", payload:.}' "$$FILE" | \
 	curl -s -X POST "$$URL" -H 'content-type: application/json' --data-binary @- | jq .
@@ -2098,11 +2579,11 @@ n8n-webhook-demo:
 seed-approval:
 	@TITLE="$${TITLE:-Demo}"; URL="$${URL:-s3://outputs/demo/example.png}"; NS="$${NAMESPACE:-$${INDEXER_NAMESPACE:-pmoves}}"; \
 	echo "Seeding studio_board: title='$${TITLE}', url='$${URL}', namespace='$${NS}'"; \
-	./pmoves/tools/seed_studio_board.sh "$${TITLE}" "$${URL}" "$${NS}"
+	./tools/seed_studio_board.sh "$${TITLE}" "$${URL}" "$${NS}"
 
 .PHONY: seed-approval-ps
 seed-approval-ps:
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/tools/seed_studio_board.ps1 -Title "$(TITLE)" -Url "$(URL)" -Namespace "$(NAMESPACE)"
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File tools/seed_studio_board.ps1 -Title "$(TITLE)" -Url "$(URL)" -Namespace "$(NAMESPACE)"
 .PHONY: manifest-audit
 manifest-audit: ## Audit provisioning inventory and Supabase exports for unsupported hardware
 	@PYTHONPATH=.. $(PYTHON) -m pmoves.tools.manifest_audit

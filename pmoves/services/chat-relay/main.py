@@ -90,6 +90,8 @@ class ChatRelayService:
         self.running = False
         self.messages_relayed = 0
         self.errors = 0
+        self._shutdown_lock = asyncio.Lock()
+        self._shutdown_complete = False
 
     async def connect(self) -> None:
         """Connect to NATS and Supabase."""
@@ -226,16 +228,32 @@ class ChatRelayService:
 
     async def shutdown(self) -> None:
         """Clean shutdown."""
-        logger.info("Shutting down chat relay service")
-        self.running = False
+        async with self._shutdown_lock:
+            if self._shutdown_complete:
+                return
 
-        if self.sub:
-            await self.sub.unsubscribe()
+            logger.info("Shutting down chat relay service")
+            self.running = False
 
-        if self.nc:
-            await self.nc.drain()
+            if self.sub:
+                try:
+                    await self.sub.unsubscribe()
+                except Exception as e:
+                    # If the NATS connection is already closed (or mid-shutdown), unsubscribe may raise.
+                    logger.warning(f"Subscription unsubscribe failed during shutdown: {e}")
+                finally:
+                    self.sub = None
 
-        logger.info(f"Shutdown complete. Relayed {self.messages_relayed} messages, {self.errors} errors")
+            if self.nc:
+                try:
+                    await self.nc.drain()
+                except Exception as e:
+                    logger.warning(f"NATS drain failed during shutdown: {e}")
+                finally:
+                    self.nc = None
+
+            self._shutdown_complete = True
+            logger.info(f"Shutdown complete. Relayed {self.messages_relayed} messages, {self.errors} errors")
 
     async def _run_health_server(self) -> None:
         """Simple HTTP health server."""

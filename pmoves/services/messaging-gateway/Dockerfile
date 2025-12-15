@@ -5,8 +5,8 @@ WORKDIR /app
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash pmoves
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock .
+RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
 COPY . .
 

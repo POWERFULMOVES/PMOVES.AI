@@ -415,14 +415,17 @@ def refresh_warm_dictionary():
     try:
         tmp: Dict[str, set] = {}
         with driver.session() as s:
-            count_result = s.run("MATCH (e:Entity) RETURN count(e) AS cnt").single()
+            # Avoid Neo4j "UnknownLabelWarning" when the graph hasn't been seeded yet.
+            count_result = s.run(
+                "MATCH (e) WHERE 'Entity' IN labels(e) RETURN count(e) AS cnt"
+            ).single()
             if not count_result or not count_result["cnt"]:
                 _warm_entities = {}
                 _warm_last = time.time()
                 return
             recs = s.run(
                 (
-                    "MATCH (e:Entity) "
+                    "MATCH (e) WHERE 'Entity' IN labels(e) "
                     "WITH e, CASE WHEN 'type' IN keys(e) THEN e.type ELSE 'UNK' END AS typ "
                     "RETURN e.value AS v, typ AS t "
                     "LIMIT $lim"

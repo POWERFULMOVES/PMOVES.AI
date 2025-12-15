@@ -5,8 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock .
+RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
 COPY channel_monitor ./channel_monitor
 

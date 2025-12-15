@@ -6,6 +6,7 @@ RUN pip install --no-cache-dir --upgrade pip
 COPY libs /app/libs
 COPY services/common /app/services/common
 COPY services/hi-rag-gateway-v2/requirements.txt ./
+COPY services/hi-rag-gateway-v2/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY services/hi-rag-gateway-v2/ ./
 # Include local scripts for seeding explicitly

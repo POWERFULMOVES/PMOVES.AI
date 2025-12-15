@@ -231,9 +231,9 @@ make up-n8n
 **Alternative: Direct TensorZero embedding:**
 ```bash
 # For each chunk
-curl -X POST http://localhost:3030/v1/embeddings \
+curl -X POST http://localhost:3030/openai/v1/embeddings \
   -H "Content-Type: application/json" \
-  -d '{"model": "all-MiniLM-L6-v2", "input": "chunk text here"}'
+  -d '{"model": "tensorzero::embedding_model_name::qwen3_embedding_4b_local", "input": "chunk text here"}'
 ```
 
 ---

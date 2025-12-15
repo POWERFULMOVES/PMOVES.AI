@@ -88,3 +88,10 @@ Ops Quicklinks
 - Smoke checklist: [SMOKETESTS](../../PMOVES.AI%20PLANS/SMOKETESTS.md)
 - Next steps plan: [NEXT_STEPS](../../PMOVES.AI%20PLANS/NEXT_STEPS.md)
 - Roadmap context: [ROADMAP](../../PMOVES.AI%20PLANS/ROADMAP.md)
+
+Local realtime voice (operator audio)
+- To hear `voice.agent.response.v1` events locally, run the host-run speaker + follower:
+  - `make -C pmoves voice-speaker-start`
+  - `make -C pmoves voice-follow-start`
+- Quick manual check:
+  - `make -C pmoves voice-say MSG="Voice loop check" VOICE_SPEAKER_MODE=batch`

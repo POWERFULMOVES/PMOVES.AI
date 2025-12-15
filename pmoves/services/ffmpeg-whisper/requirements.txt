@@ -1,13 +1,1 @@
-fastapi
-uvicorn[standard]
-torch>=2.6.0
-torchaudio>=2.6.0
-whisperx
-pyannote.audio
-onnxruntime
-boto3
-requests
-supabase
-faster-whisper
-transformers
-sentencepiece
+-r requirements.lock

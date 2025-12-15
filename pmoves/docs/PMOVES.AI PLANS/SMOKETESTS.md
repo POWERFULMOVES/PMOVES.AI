@@ -110,6 +110,23 @@ PY
 
 Expected: the Discord channel receives a rich embed with the Smoke Story title, namespace, published path, thumbnail, and tags. Remove `public_url` from the payload if you want to confirm the local-path fallback formatting.
 
+### Local realtime voice loop (operator audio)
+
+To hear `voice.agent.response.v1` replies locally (your host machine speakers), start the host-run speaker + follower:
+
+```bash
+make -C pmoves voice-speaker-start
+make -C pmoves voice-follow-start
+```
+
+Quick manual test (forces WAV/batch mode):
+
+```bash
+VOICE_SPEAKER_MODE=batch make -C pmoves voice-say MSG="Voice loop check"
+```
+
+If audio is choppy in `stream` mode, keep `VOICE_SPEAKER_MODE=batch` (slightly higher latency, much more reliable).
+
 ## 4) Seed Demo Data (Optional but helpful)
 
 - `make seed-data` (loads small sample docs into Qdrant/Meilisearch; already included in `make bootstrap-data`)

@@ -1,271 +1,277 @@
-{
-  "workflowId": "iduu9yTMifft1p47",
-  "meta": {
-    "instanceId": "pmoves-demo"
-  },
-  "nodes": [
-    {
-      "parameters": {
-        "triggerTimes": [
-          {
-            "item": {
-              "mode": "everyMinute"
-            }
-          }
-        ]
-      },
-      "id": "cron_poll",
-      "name": "Schedule: Poll Approvals",
-      "type": "n8n-nodes-base.cron",
-      "typeVersion": 1,
-      "position": [
-        -520,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "url": "={{ $env.SUPABASE_REST_URL }}/studio_board",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
+[
+  {
+    "name": "PMOVES • Supabase Approval Poller v1",
+    "nodes": [
+      {
+        "parameters": {
+          "triggerTimes": [
             {
-              "name": "status",
-              "value": "eq.approved"
-            },
-            {
-              "name": "meta->>publish_event_sent_at",
-              "value": "is.null"
-            },
-            {
-              "name": "order",
-              "value": "created_at.asc"
+              "item": {
+                "mode": "everyMinute"
+              }
             }
           ]
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+        "id": "cron_poll",
+        "name": "Schedule: Poll Approvals",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [
+          -520,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.SUPABASE_REST_URL }}/studio_board",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "status",
+                "value": "eq.approved"
+              },
+              {
+                "name": "meta->>publish_event_sent_at",
+                "value": "is.null"
+              },
+              {
+                "name": "order",
+                "value": "created_at.asc"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "fetch_supabase",
+        "name": "Fetch Pending Approvals",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          -280,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "batchSize": 1
+        },
+        "id": "split_rows",
+        "name": "Split Pending Approvals",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 1,
+        "position": [
+          -20,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "functionCode": "const row = item.json || {};\nconst meta = (row.meta && typeof row.meta === 'object') ? row.meta : {};\nconst payload = {\n  artifact_uri: row.content_url,\n  title: row.title || meta.title || 'Untitled Artifact',\n  namespace: row.namespace || undefined,\n  description: meta.description || undefined,\n  tags: Array.isArray(meta.tags) ? meta.tags : undefined,\n  meta\n};\n\nif (!payload.namespace) {\n  delete payload.namespace;\n}\nif (!payload.description) {\n  delete payload.description;\n}\nif (!payload.tags || payload.tags.length === 0) {\n  delete payload.tags;\n}\n\nconst patch = {\n  status: 'published',\n  meta: {\n    ...meta,\n    publish_event_sent_at: new Date().toISOString()\n  }\n};\n\nreturn {\n  json: {\n    envelope: {\n      topic: 'content.publish.approved.v1',\n      payload\n    },\n    rowId: row.id,\n    patch\n  }\n};"
+        },
+        "id": "prepare_event",
+        "name": "Prepare Publish Envelope",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [
+          240,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.AGENT_ZERO_BASE_URL }}/events/publish",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "x-agent-token",
+                "value": "={{ $env.AGENT_ZERO_EVENTS_TOKEN || '' }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": []
+          },
+          "body": "={{ JSON.stringify($json.envelope) }}",
+          "options": {}
+        },
+        "id": "publish_event",
+        "name": "Publish Approval Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          520,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_REST_URL }}/studio_board?id=eq.{{$json.rowId}}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "prefer",
+                "value": "return=minimal"
+              },
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": []
+          },
+          "body": "={{ JSON.stringify($json.patch) }}",
+          "options": {}
+        },
+        "id": "mark_processed",
+        "name": "Mark Approval Row",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          780,
+          180
+        ]
+      },
+      {
+        "parameters": {
+          "keepOnlySet": true,
+          "values": {
+            "string": [
+              {
+                "name": "message",
+                "value": "No pending approvals"
+              }
+            ]
+          }
+        },
+        "id": "no_pending",
+        "name": "No Pending Approvals",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 2,
+        "position": [
+          240,
+          -20
+        ]
+      }
+    ],
+    "connections": {
+      "Schedule: Poll Approvals": {
+        "main": [
+          [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              "node": "Fetch Pending Approvals",
+              "type": "main",
+              "index": 0
             }
           ]
-        },
-        "options": {}
+        ]
       },
-      "id": "fetch_supabase",
-      "name": "Fetch Pending Approvals",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        -280,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "batchSize": 1
-      },
-      "id": "split_rows",
-      "name": "Split Pending Approvals",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 1,
-      "position": [
-        -20,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const row = item.json || {};\nconst meta = (row.meta && typeof row.meta === 'object') ? row.meta : {};\nconst payload = {\n  artifact_uri: row.content_url,\n  title: row.title || meta.title || 'Untitled Artifact',\n  namespace: row.namespace || undefined,\n  description: meta.description || undefined,\n  tags: Array.isArray(meta.tags) ? meta.tags : undefined,\n  meta\n};\n\nif (!payload.namespace) {\n  delete payload.namespace;\n}\nif (!payload.description) {\n  delete payload.description;\n}\nif (!payload.tags || payload.tags.length === 0) {\n  delete payload.tags;\n}\n\nconst patch = {\n  status: 'published',\n  meta: {\n    ...meta,\n    publish_event_sent_at: new Date().toISOString()\n  }\n};\n\nreturn {\n  json: {\n    envelope: {\n      topic: 'content.publish.approved.v1',\n      payload\n    },\n    rowId: row.id,\n    patch\n  }\n};"
-      },
-      "id": "prepare_event",
-      "name": "Prepare Publish Envelope",
-      "type": "n8n-nodes-base.functionItem",
-      "typeVersion": 1,
-      "position": [
-        240,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.AGENT_ZERO_BASE_URL }}/events/publish",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+      "Fetch Pending Approvals": {
+        "main": [
+          [
             {
-              "name": "content-type",
-              "value": "application/json"
-            },
-            {
-              "name": "x-agent-token",
-              "value": "={{ $env.AGENT_ZERO_EVENTS_TOKEN || '' }}"
+              "node": "Split Pending Approvals",
+              "type": "main",
+              "index": 0
             }
           ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": []
-        },
-        "body": "={{ JSON.stringify($json.envelope) }}",
-        "options": {}
+        ]
       },
-      "id": "publish_event",
-      "name": "Publish Approval Event",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        520,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "={{ $env.SUPABASE_REST_URL }}/studio_board?id=eq.{{$json.rowId}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
+      "Split Pending Approvals": {
+        "main": [
+          [
             {
-              "name": "content-type",
-              "value": "application/json"
-            },
+              "node": "Prepare Publish Envelope",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
             {
-              "name": "prefer",
-              "value": "return=minimal"
-            },
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              "node": "No Pending Approvals",
+              "type": "main",
+              "index": 0
             }
           ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": []
-        },
-        "body": "={{ JSON.stringify($json.patch) }}",
-        "options": {}
+        ]
       },
-      "id": "mark_processed",
-      "name": "Mark Approval Row",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        780,
-        180
-      ]
-    },
-    {
-      "parameters": {
-        "keepOnlySet": true,
-        "values": {
-          "string": [
+      "Prepare Publish Envelope": {
+        "main": [
+          [
             {
-              "name": "message",
-              "value": "No pending approvals"
+              "node": "Publish Approval Event",
+              "type": "main",
+              "index": 0
             }
           ]
-        }
+        ]
       },
-      "id": "no_pending",
-      "name": "No Pending Approvals",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [
-        240,
-        -20
-      ]
-    }
-  ],
-  "connections": {
-    "Schedule: Poll Approvals": {
-      "main": [
-        [
-          {
-            "node": "Fetch Pending Approvals",
-            "type": "main",
-            "index": 0
-          }
+      "Publish Approval Event": {
+        "main": [
+          [
+            {
+              "node": "Mark Approval Row",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
-      ]
+      },
+      "Mark Approval Row": {
+        "main": [
+          [
+            {
+              "node": "Split Pending Approvals",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
     },
-    "Fetch Pending Approvals": {
-      "main": [
-        [
-          {
-            "node": "Split Pending Approvals",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "instanceId": "pmoves-demo"
     },
-    "Split Pending Approvals": {
-      "main": [
-        [
-          {
-            "node": "Prepare Publish Envelope",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "No Pending Approvals",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Publish Envelope": {
-      "main": [
-        [
-          {
-            "node": "Publish Approval Event",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Publish Approval Event": {
-      "main": [
-        [
-          {
-            "node": "Mark Approval Row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Mark Approval Row": {
-      "main": [
-        [
-          {
-            "node": "Split Pending Approvals",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "active": true,
-  "settings": {},
-  "staticData": null,
-  "id": "PMOVES • Supabase Approval Poller v1"
-}
+    "pinData": null,
+    "versionId": "43dd0400-b858-47af-bf01-db0452d1792a",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": []
+  }
+]

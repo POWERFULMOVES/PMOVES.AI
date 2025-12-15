@@ -6,6 +6,25 @@
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
+### Status (2025-12-14)
+- Hardened self-hosted multi-arch builds + Trivy gating shipped (`.github/workflows/self-hosted-builds-hardened.yml`); pmoves-yt yt-dlp bump workflow live; env pins warn on `:pmoves-latest`.
+- Arm/Jetson path covered via `pmoves/docker-compose.arm64.override.yml`; GPU smoke still red when NVIDIA runtime is missing—rerun `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` once GPU is exposed.
+- Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
+- Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
+- Docker Desktop/WSL environments may write `credsStore=desktop.exe` into `~/.docker/config.json`, which breaks pulls/builds on Linux/headless hosts. Prefer the repo-scoped `.docker-nocreds/` config (set `DOCKER_CONFIG=.../.docker-nocreds`)—`pmoves/Makefile` will auto-use it when present.
+- For local GHCR pushes/pulls, also run Docker auth using the same repo-scoped config to avoid the credential-helper crash:
+  - `DOCKER_CONFIG=./.docker-nocreds gh auth token | DOCKER_CONFIG=./.docker-nocreds docker login ghcr.io -u <USER> --password-stdin`
+- n8n flows are repo-tracked as sanitized, importable exports under `pmoves/n8n/flows/` (Voice Agents + pollers). Import/activate with `make -C pmoves n8n-import-flows` + `make -C pmoves n8n-activate-flows`.
+- n8n “production DB”: for VPS/prod, run n8n on Postgres (instead of SQLite) with `N8N_DB=postgres` and `N8N_DB_*` vars (see `pmoves/docker-compose.n8n.postgres.yml` and `pmoves/docs/PMOVES.AI PLANS/N8N_SETUP.md`).
+- Voice Agents now default to a **local** TensorZero/Ollama model when available (`VOICE_AGENT_MODEL=tensorzero::model_name::qwen2_5_14b`). The Voice Agent router publishes `voice.agent.response.v1` on NATS.
+- n8n HTTP Request nodes interpret `options.timeout` as **milliseconds**; repo-tracked flows have been corrected to use sane ms timeouts (LLM/Supabase/NATS).
+- FFmpeg-Whisper now supports `POST /transcribe_file` (multipart) for ad-hoc STT (used by Flute Gateway); `python-multipart` is included in the service lockfile to support form parsing.
+- Flute Gateway uses VibeVoice for realtime TTS when available. VibeVoice is typically run outside Docker (Pinokio/host) and reached via `VIBEVOICE_URL=http://host.docker.internal:<PORT>`; see `pmoves/docs/ARTSTUFF/README.md`.
+- Optional: VibeVoice can also be run in Docker for local bring-up (`VOICE_REALTIME=1 make -C pmoves up-vibevoice`). On RTX 5090 / SM_120, the container auto-falls back to `--device cpu` until a compatible PyTorch wheel is available.
+- Invidious companion may log `HTMLCanvasElement.prototype.getContext` from jsdom; this is expected and not a functional error.
+- Open Notebook externals default to `OPEN_NOTEBOOK_IMAGE` (see `pmoves/env.shared.example`). External bring-up targets load `env.shared` so image pins apply consistently.
+- Local “everything up” baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
+
 ---
 
 ## 1. GitHub Actions Self-Hosted Runner Infrastructure
@@ -174,19 +193,19 @@ docker history app:latest | grep -i secret  # Should return nothing
 
 PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ services organized into functional tiers:
 
-**Core Infrastructure (4 services)**
+### Core Infrastructure (4 services)
 - `tensorzero-gateway` - Centralized LLM gateway (port 3030)
 - `tensorzero-clickhouse` - Observability metrics database (port 8123)
 - `tensorzero-ui` - Metrics dashboard (port 4000)
 - `nats` - JetStream message bus for event coordination (port 4222)
 
-**Agent Orchestration (4 services)**
+### Agent Orchestration (4 services)
 - `agent-zero` - Control-plane orchestrator with MCP API (ports 8080 API, 8081 UI)
 - `archon` - Supabase-driven agent service (port 8091)
 - `mesh-agent` - Distributed node announcer
 - `channel-monitor` - External content watcher (port 8097)
 
-**Knowledge & Retrieval (6 services)**
+### Knowledge & Retrieval (6 services)
 - `hi-rag-gateway-v2` - Hybrid RAG with cross-encoder reranking (port 8086)
 - `hi-rag-gateway-v2-gpu` - GPU-accelerated variant (port 8087)
 - `hi-rag-gateway` - Legacy v1 gateway (port 8089)
@@ -194,7 +213,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `supaserch` - Multimodal holographic research orchestrator (port 8099)
 - `notebook-sync` - Open Notebook synchronizer (port 8095)
 
-**Media Ingestion & Processing (8 services)**
+### Media Ingestion & Processing (8 services)
 - `pmoves-yt` - YouTube ingestion service (port 8077)
 - `ffmpeg-whisper` - GPU-accelerated Whisper transcription (port 8078)
 - `media-video` - YOLOv8 object detection (port 8079)
@@ -204,15 +223,17 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `langextract` - Language detection & NLP (port 8084)
 - `bgutil-pot-provider` - YouTube proof-of-origin token provider (port 4416)
 
-**Utilities & Integration (6 services)**
+### Utilities & Integration (8 services)
 - `presign` - MinIO URL presigner (port 8088)
 - `render-webhook` - ComfyUI callback handler (port 8085)
 - `publisher-discord` - Discord notification bot (port 8094)
 - `jellyfin-bridge` - Jellyfin metadata webhook (port 8093)
 - `retrieval-eval` - RAG evaluation service (port 8090)
+- `flute-gateway` - Realtime multimodal ingress (ports 8055-8056)
+- `n8n` - Workflow automation + webhooks (port 5678)
 - `cloudflared` - Cloudflare Tunnel connector
 
-**Monitoring Stack (7 services)**
+### Monitoring Stack (7 services)
 - `prometheus` - Metrics scraping (port 9090)
 - `grafana` - Dashboard visualization (port 3002)
 - `loki` - Log aggregation (port 3100)
@@ -221,7 +242,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `blackbox` - Endpoint health monitoring (port 9115)
 - `node-exporter` - Host metrics
 
-**Data Storage (7 services)**
+### Data Storage (7 services)
 - `postgres` - PostgreSQL with pgvector (port 5432)
 - `postgrest` - REST API for Postgres (port 3010)
 - `qdrant` - Vector database (port 6333)
@@ -230,7 +251,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `minio` - S3-compatible object storage (ports 9000 API, 9001 Console)
 - `pmoves-ollama` - Local LLM server (port 11434)
 
-**Additional Services (13 services)**
+### Additional Services (13 services)
 - Invidious stack (3): `invidious`, `invidious-db`, `invidious-companion`
 - Grayjay stack (2): `grayjay-server`, `grayjay-plugin-host`
 - NATS diagnostics (2): `nats-echo-req`, `nats-echo-res`
@@ -238,7 +259,7 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 
 ### Port Allocation Reference Table
 
-**Complete inventory of all service ports with security classification and binding recommendations.**
+Complete inventory of all service ports with security classification and binding recommendations.
 
 | Port | Service | Tier | Current Binding | Production Binding | Notes |
 |------|---------|------|-----------------|-------------------|-------|
@@ -557,7 +578,8 @@ services:
     restart: unless-stopped
     environment:
       - MEILI_ENV=production
-      - MEILI_MASTER_KEY=master_key
+      # Do not hardcode. Supply via env files or Docker secrets.
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     ports:
       - "7700:7700"
     networks:
@@ -569,8 +591,9 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      # Do not hardcode. Supply via env files or Docker secrets.
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -709,8 +732,8 @@ services:
     restart: unless-stopped
     environment:
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - NATS_URL=nats://nats:4222
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
     depends_on:
@@ -731,8 +754,8 @@ services:
     restart: unless-stopped
     environment:
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - USE_CUDA=true
       - WHISPER_MODEL=small
     ports:
@@ -991,46 +1014,38 @@ TensorZero provides a **unified gateway for all LLM providers** with built-in ob
 ```toml
 [gateway]
 bind_address = "0.0.0.0:3000"
+observability.enabled = true
 
-[clickhouse]
-url = "http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default"
+# ClickHouse connection is configured via env:
+# TENSORZERO_CLICKHOUSE_URL=http://user:pass@tensorzero-clickhouse:8123/default
 
-[[models]]
-name = "claude-sonnet-4-5"
-provider = "anthropic"
-model_name = "claude-sonnet-4-5-20251022"
-max_tokens = 200000
+[models.qwen2_5_14b]
+routing = ["ollama_local"]
 
-[[models]]
-name = "gpt-4o"
-provider = "openai"
-model_name = "gpt-4o-2024-11-20"
-max_tokens = 128000
+[models.qwen2_5_14b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2.5:14b"
+api_key_location = "none"
 
-[[models]]
-name = "gemma_embed_local"
-provider = "ollama"
-model_name = "embeddinggemma:300m"
-type = "embedding"
+[embedding_models.qwen3_embedding_4b_local]
+routing = ["ollama_local_embedding"]
 
-[providers.anthropic]
-api_key_env = "ANTHROPIC_API_KEY"
-
-[providers.openai]
-api_key_env = "OPENAI_API_KEY"
-
-[providers.ollama]
-base_url = "http://pmoves-ollama:11434"
+[embedding_models.qwen3_embedding_4b_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-embedding:4b"
+api_key_location = "none"
 ```
 
 ### API Usage
 
 **Chat completions:**
 ```bash
-curl -X POST http://localhost:3030/v1/chat/completions \
+curl -X POST http://localhost:3030/openai/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4-5",
+    "model": "tensorzero::model_name::qwen2_5_14b",
     "messages": [
       {"role": "user", "content": "Explain NATS JetStream"}
     ],
@@ -1040,10 +1055,10 @@ curl -X POST http://localhost:3030/v1/chat/completions \
 
 **Embeddings:**
 ```bash
-curl -X POST http://localhost:3030/v1/embeddings \
+curl -X POST http://localhost:3030/openai/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemma_embed_local",
+    "model": "tensorzero::embedding_model_name::qwen3_embedding_4b_local",
     "input": "Text to embed for semantic search"
   }'
 ```
@@ -1083,7 +1098,7 @@ docker exec -it tensorzero-clickhouse clickhouse-client \
 # Hi-RAG automatically uses TensorZero for embeddings
 import os
 os.environ['TENSORZERO_BASE_URL'] = 'http://tensorzero-gateway:3000'
-os.environ['TENSORZERO_EMBED_MODEL'] = 'tensorzero::embedding_model_name::gemma_embed_local'
+os.environ['TENSORZERO_EMBED_MODEL'] = 'tensorzero::embedding_model_name::qwen3_embedding_4b_local'
 
 # Requests are now tracked in ClickHouse
 ```
@@ -1592,8 +1607,8 @@ OPEN_NOTEBOOK_API_URL=https://notebook.example.com/rpc
 OPEN_NOTEBOOK_API_TOKEN=...
 
 # MinIO Configuration
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
+MINIO_ACCESS_KEY=...
+MINIO_SECRET_KEY=...
 
 # Database Credentials (defaults for local dev)
 POSTGRES_USER=pmoves
@@ -1905,7 +1920,7 @@ services:
 - **Agent Zero Response:** Sub-500ms (via TensorZero gateway)
 - **Hi-RAG v2 Query:** 200-800ms (with reranking)
 - **TensorZero Latency:** p95 < 2s (OpenAI), p95 < 3s (Anthropic)
-- **Local Embeddings:** 50-150ms (Ollama gemma_embed_local)
+- **Local Embeddings:** 50-250ms (Ollama qwen3-embedding:4b; edge fallback gemma_embed_local)
 
 **Media Processing:**
 - **YouTube Download:** 1-5 min (720p video)

@@ -32,6 +32,13 @@ Thumbs.db
 integrations-workspace/
 testkeys.md
 .tmp_*
+.pmoves_voice_speaker.log
+.pmoves_voice_speaker.pid
+.pmoves_voice_follow.log
+.pmoves_voice_follow.pid
+.pmoves_voice_follow_smoke.log
+.pmoves_voice_follow_smoke.pid
+tmp/*.wav
 /.cache/
 # dotenv: keep local env files out of the repo
 # Tracked examples like pmoves/.env.example should remain in the repo
@@ -64,6 +71,10 @@ testkeys.md
 /pmoves/ui/out
 # Local exports: keep operator-only dumps out of the repo
 /pmoves/docs/coolify/
+# Large local voice/assets (do not commit model weights)
+/pmoves/docs/ARTSTUFF/lora/
+# Generated repo indexing artifacts
+/pmoves/datasets/repo_docs.jsonl
 .clinerules/byterover-rules.md
 .kilocode/rules/byterover-rules.md
 .roo/rules/byterover-rules.md

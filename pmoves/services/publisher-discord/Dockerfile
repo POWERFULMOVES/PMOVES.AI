@@ -3,6 +3,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir --upgrade pip
 COPY services/publisher-discord/requirements.txt ./requirements.txt
+COPY services/publisher-discord/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir -r requirements.txt
 COPY services /app/services
 

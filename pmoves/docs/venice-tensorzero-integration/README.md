@@ -15,15 +15,15 @@ This guide shows how to use PMOVES with a local or remote TensorZero gateway and
 - TensorZero backend (default):
   - `EMBEDDING_BACKEND=tensorzero`
   - `TENSORZERO_BASE_URL=http://tensorzero-gateway:3000`
-  - `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::gemma_embed_local`
+  - `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local`
 - Ollama backend:
   - `USE_OLLAMA_EMBED=true`
   - `OLLAMA_URL=http://pmoves-ollama:11434`
-  - `OLLAMA_EMBED_MODEL=embeddinggemma:300m`
+  - `OLLAMA_EMBED_MODEL=qwen3-embedding:4b`
 - Fallback: if neither provider is reachable, hi-rag uses `SentenceTransformer` (`all-MiniLM-L6-v2`).
 
 ## Model selection tips
-- Start with `embeddinggemma:300m` for speed; swap to larger variants as needed.
+- Default embeddings on workstation-class GPUs: `qwen3-embedding:4b`. For Jetson/low VRAM, prefer `qwen3-embedding:0.6b` or `embeddinggemma:300m` (use a dedicated Qdrant collection; do not mix dims).
 - For reranking, Qwen/Qwen3-Reranker-4B is pre-configured in the GPU gateway. The first run downloads the model (~2 minutes), later runs are fast.
 
 ## Troubleshooting
@@ -42,10 +42,8 @@ Bring these up to operate and verify the stack end-to-end:
   ```
 - Start the UI dev server:
   ```bash
-  cd pmoves/ui
-  npm install
-  npm run dev
-  # open http://localhost:3000
+  make -C pmoves ui-dev-start
+  # open http://localhost:3001
   ```
 - The console auto‑authenticates using `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` written by `make supabase-boot-user`. To sign in manually, copy `SUPABASE_BOOT_USER_EMAIL` and `SUPABASE_BOOT_USER_PASSWORD` from `pmoves/.env.local` or `pmoves/env.shared`.
 - The landing page includes Quick Links to common dashboards (Agent Zero, Archon health, Geometry, TensorZero, Jellyfin, Open Notebook, Supabase Studio). Override any link with `NEXT_PUBLIC_*` vars (see pmoves/ui/README.md).
@@ -54,7 +52,7 @@ Bring these up to operate and verify the stack end-to-end:
 - Start the agents profile:
   ```bash
   make -C pmoves up-agents
-  # Agent Zero UI: http://localhost:8080
+  # Agent Zero UI: http://localhost:8081
   # Health: curl -sf http://localhost:8080/healthz | jq
   ```
 

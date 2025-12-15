@@ -355,7 +355,7 @@ main() {
 
     # Worker Services
     print_section "Worker Services"
-    test_http_endpoint "Extract Worker" "http://localhost:8083/healthz" "200" "workers"
+    test_http_endpoint "Extract Worker" "http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/healthz" "200" "workers"
     test_http_endpoint "LangExtract" "http://localhost:8084/healthz" "200" "workers"
     test_http_endpoint "PDF Ingest" "http://localhost:8092/healthz" "200" "workers"
     test_http_endpoint "Notebook Sync" "http://localhost:8095/healthz" "200" "orchestration"
