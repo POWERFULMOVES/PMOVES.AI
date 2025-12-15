@@ -1,5 +1,6 @@
 """VibeVoice realtime TTS provider integration."""
 
+import asyncio
 import logging
 import os
 import time
@@ -12,6 +13,14 @@ import websockets
 from .base import VoiceProvider
 
 logger = logging.getLogger(__name__)
+
+
+class VibeVoiceNoAudioError(RuntimeError):
+    """Raised when VibeVoice closes without producing any audio bytes."""
+
+
+class VibeVoiceBusyError(VibeVoiceNoAudioError):
+    """Raised when VibeVoice reports it's busy before yielding audio."""
 
 
 class VibeVoiceProvider(VoiceProvider):
@@ -53,10 +62,32 @@ class VibeVoiceProvider(VoiceProvider):
         Returns:
             Complete audio as PCM16 bytes (24kHz)
         """
-        chunks = []
-        async for chunk in self.synthesize_stream(text, voice, **kwargs):
-            chunks.append(chunk)
-        return b"".join(chunks)
+        max_attempts = int(os.getenv("VIBEVOICE_SYNTH_MAX_ATTEMPTS", "20"))
+        retry_delay_sec = float(os.getenv("VIBEVOICE_SYNTH_RETRY_DELAY_SEC", "0.5"))
+        busy_max_wait_sec = float(os.getenv("VIBEVOICE_SYNTH_BUSY_MAX_WAIT_SEC", "30"))
+
+        last_exc: Optional[Exception] = None
+        waited_sec = 0.0
+        for attempt in range(1, max_attempts + 1):
+            try:
+                chunks: list[bytes] = []
+                async for chunk in self.synthesize_stream(text, voice, **kwargs):
+                    chunks.append(chunk)
+                audio = b"".join(chunks)
+                if not audio:
+                    raise VibeVoiceNoAudioError("VibeVoice produced no audio bytes")
+                return audio
+            except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+                last_exc = exc
+                if attempt < max_attempts and isinstance(exc, VibeVoiceBusyError):
+                    sleep_for = min(retry_delay_sec * attempt, 2.0)
+                    if waited_sec + sleep_for > busy_max_wait_sec:
+                        break
+                    waited_sec += sleep_for
+                    await asyncio.sleep(sleep_for)
+                    continue
+                raise
+        raise last_exc or VibeVoiceNoAudioError("VibeVoice produced no audio bytes")
 
     async def synthesize_stream(
         self,
@@ -85,16 +116,24 @@ class VibeVoiceProvider(VoiceProvider):
         if voice:
             ws_endpoint += f"&voice={quote(voice)}"
 
+        yielded_any = False
         try:
             async with websockets.connect(ws_endpoint) as ws:
                 async for message in ws:
                     if isinstance(message, bytes):
+                        yielded_any = True
                         yield message
                     else:
                         # Log text messages (status updates from server)
                         logger.debug("VibeVoice log: %s", message)
         except websockets.exceptions.ConnectionClosed as e:
-            logger.warning("VibeVoice connection closed: %s", e)
+            if not yielded_any:
+                # Common transient for overloaded hosts: 1013 "try again later" / "Service busy".
+                msg = str(e).lower()
+                if getattr(e, "code", None) == 1013 or "service busy" in msg or "try again later" in msg:
+                    raise VibeVoiceBusyError(f"VibeVoice busy: {e}") from e
+                raise VibeVoiceNoAudioError(f"VibeVoice closed before yielding audio: {e}") from e
+            logger.warning("VibeVoice connection closed after audio: %s", e)
         except Exception as exc:
             logger.error("VibeVoice stream failed: %s", exc)
             raise

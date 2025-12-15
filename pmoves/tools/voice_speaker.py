@@ -124,17 +124,38 @@ def _play_wav_bytes(wav_bytes: bytes) -> None:
 
 
 def speak_batch(config: SpeakerConfig, text: str, voice: Optional[str]) -> None:
-    wav_bytes = _http_bytes(
-        f"{config.flute_base_url}/v1/voice/synthesize/audio",
-        {
-            "text": text,
-            "provider": "vibevoice",
-            "voice": voice,
-            "output_format": "wav",
-        },
-        api_key=config.flute_api_key,
-        timeout_seconds=180.0,
-    )
+    retries = int(_env("VOICE_SPEAKER_RETRIES", "5"))
+    last_exc: Optional[Exception] = None
+    wav_bytes: Optional[bytes] = None
+    for attempt in range(1, max(1, retries) + 1):
+        try:
+            wav_bytes = _http_bytes(
+                f"{config.flute_base_url}/v1/voice/synthesize/audio",
+                {
+                    "text": text,
+                    "provider": "vibevoice",
+                    "voice": voice,
+                    "output_format": "wav",
+                },
+                api_key=config.flute_api_key,
+                timeout_seconds=180.0,
+            )
+            break
+        except urllib.error.HTTPError as exc:
+            last_exc = exc
+            if exc.code in {502, 503} and attempt < retries:
+                time.sleep(0.35 * attempt)
+                continue
+            raise
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retries:
+                time.sleep(0.35 * attempt)
+                continue
+            raise
+
+    if wav_bytes is None:
+        raise last_exc or RuntimeError("No WAV bytes received from Flute")
     if _env("VOICE_SPEAKER_DRY_RUN", "0") in {"1", "true", "TRUE", "yes", "YES"}:
         sys.stderr.write(f"[voice-speaker] dry-run: received {len(wav_bytes)} wav bytes\n")
         return

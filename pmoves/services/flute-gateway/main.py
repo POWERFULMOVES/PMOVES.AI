@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 # Provider imports
-from providers import VibeVoiceProvider, WhisperProvider
+from providers import VibeVoiceBusyError, VibeVoiceNoAudioError, VibeVoiceProvider, WhisperProvider
 
 # Configure logging
 logging.basicConfig(
@@ -312,6 +312,8 @@ async def synthesize_speech(request: SynthesizeRequest):
                 text=request.text,
                 voice=request.voice,
             )
+            if not audio_data:
+                raise HTTPException(status_code=502, detail="VibeVoice returned empty audio (try again later).")
             duration = time.time() - start_time
             TTS_DURATION.labels(provider="vibevoice").observe(duration)
 
@@ -333,6 +335,12 @@ async def synthesize_speech(request: SynthesizeRequest):
                 )
             raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
 
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="502").inc()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except HTTPException as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status=str(exc.status_code)).inc()
+        raise
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
@@ -362,6 +370,10 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 text=request.text,
                 voice=request.voice,
             )
+            if not pcm16:
+                raise HTTPException(status_code=502, detail="VibeVoice returned empty audio (try again later).")
+            if len(pcm16) % 2 != 0:
+                raise HTTPException(status_code=502, detail="VibeVoice returned malformed PCM16 (odd byte length).")
             if output_format == "pcm":
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
                 return Response(content=pcm16, media_type="application/octet-stream")
@@ -380,8 +392,11 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 detail="VibeVoice provider not configured (set VIBEVOICE_URL to the running server URL).",
             )
         raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
-    except HTTPException:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="400").inc()
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="502").inc()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except HTTPException as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status=str(exc.status_code)).inc()
         raise
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
@@ -520,15 +535,18 @@ async def websocket_tts(websocket: WebSocket):
 
             # Stream audio chunks
             if vibevoice_provider:
-                chunk_count = 0
-                async for chunk in vibevoice_provider.synthesize_stream(text, voice):
-                    await websocket.send_bytes(chunk)
-                    chunk_count += 1
-
-                await websocket.send_json({
-                    "type": "done",
-                    "chunks": chunk_count
-                })
+                try:
+                    chunk_count = 0
+                    async for chunk in vibevoice_provider.synthesize_stream(text, voice):
+                        await websocket.send_bytes(chunk)
+                        chunk_count += 1
+                    if chunk_count == 0:
+                        await websocket.send_json({"type": "error", "message": "VibeVoice produced no audio (try again later)."})
+                        continue
+                    await websocket.send_json({"type": "done", "chunks": chunk_count})
+                except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+                    await websocket.send_json({"type": "error", "message": str(exc)})
+                    continue
             else:
                 await websocket.send_json({
                     "type": "error",
