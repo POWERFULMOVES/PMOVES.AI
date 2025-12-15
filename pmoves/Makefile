@@ -655,6 +655,28 @@ voice-say: ## Speak a message locally (requires voice-speaker-start). Usage: mak
 	PAYLOAD=$$(jq -n --arg text "$$MSG" --arg mode "$$MODE" --arg voice "$$VOICE" '{text:$$text, mode:$$mode, voice: (if ($$voice|length)>0 then $$voice else null end)}'); \
 	curl -fsS -X POST "http://127.0.0.1:$$PORT/say" -H 'content-type: application/json' --data-binary "$$PAYLOAD" | jq .
 
+.PHONY: voice-follow-start voice-follow-stop voice-follow-logs
+
+voice-follow-start: ## Start host-run daemon: speak NATS agent/voice responses via voice-speaker
+	@logfile=.pmoves_voice_follow.log; \
+	pidfile=.pmoves_voice_follow.pid; \
+	if [ -f "$$pidfile" ] && kill -0 "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1; then \
+	  echo "✔ voice-follow already running (PID $$(cat "$$pidfile"))"; \
+	  exit 0; \
+	fi; \
+	nohup bash -lc '. ./scripts/with-env.sh; exec python3 tools/voice_follow_agent.py' > "$$logfile" 2>&1 & echo $$! > "$$pidfile"; \
+	echo "✔ voice-follow starting (PID $$(cat "$$pidfile")). Requires voice-speaker running."; \
+	sleep 0.3; tail -n 8 "$$logfile" || true
+
+voice-follow-stop: ## Stop voice-follow daemon
+	@pidfile=.pmoves_voice_follow.pid; \
+	kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || true; \
+	rm -f "$$pidfile"; \
+	echo "✔ voice-follow stopped."
+
+voice-follow-logs: ## Tail voice-follow logs
+	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
+
 # Toggle Single‑User (Owner) Mode for the console and restart dev server
 .PHONY: ui-single-user ui-single-user-on ui-single-user-off
 ui-single-user: ## Toggle SINGLE_USER_MODE for the console (MODE=1|0) and restart UI dev
@@ -965,19 +987,41 @@ up-tts-studio: ## Start Ultimate TTS Studio UI (Gradio) from hardened GHCR image
 	@echo "✔ Ultimate TTS Studio up at http://localhost:$${ULTIMATE_TTS_STUDIO_HOST_PORT:-7861}"
 
 tts-studio-smoke: ## Smoke check Ultimate TTS Studio / (expects 200/302)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for tts-studio-smoke" && exit 1)
 	@port=$${ULTIMATE_TTS_STUDIO_HOST_PORT:-7861}; \
-	  echo "→ Waiting for Ultimate TTS Studio on http://localhost:$$port/"; \
-	  code=""; \
-	  for i in $$(seq 1 60); do \
-	    code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
-	    if [ "$$code" = "200" ] || [ "$$code" = "302" ]; then break; fi; \
-	    sleep 2; \
-	  done; \
-	  if [ "$$code" != "200" ] && [ "$$code" != "302" ]; then \
-	    echo "✖ Ultimate TTS Studio / => $$code (start with: make -C pmoves up-tts-studio)"; \
-	    exit 1; \
-	  fi; \
-	  echo "✔ Ultimate TTS Studio reachable (HTTP $$code)"
+		  echo "→ Waiting for Ultimate TTS Studio on http://localhost:$$port/"; \
+		  code=""; \
+		  for i in $$(seq 1 60); do \
+		    code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/" || true); \
+		    if [ "$$code" = "200" ] || [ "$$code" = "302" ]; then break; fi; \
+		    sleep 2; \
+		  done; \
+		  if [ "$$code" != "200" ] && [ "$$code" != "302" ]; then \
+		    echo "✖ Ultimate TTS Studio / => $$code (start with: make -C pmoves up-tts-studio)"; \
+		    exit 1; \
+		  fi; \
+		  tmp=$$(mktemp); \
+		  curl -fsS "http://localhost:$$port/" -o "$$tmp"; \
+		  if ! grep -q '__gradio_mode__ = \"app\"' "$$tmp"; then \
+		    echo "✖ Ultimate TTS Studio HTML did not look like a Gradio app (missing __gradio_mode__)"; \
+		    rm -f "$$tmp"; \
+		    exit 1; \
+		  fi; \
+		  rm -f "$$tmp"; \
+		  info=$$(mktemp); \
+		  curl -fsS "http://localhost:$$port/gradio_api/info" -o "$$info"; \
+		  if ! jq -e '.named_endpoints != null' "$$info" >/dev/null 2>&1; then \
+		    echo "✖ Ultimate TTS Studio /gradio_api/info invalid"; \
+		    rm -f "$$info"; \
+		    exit 1; \
+		  fi; \
+		  if ! jq -r '.named_endpoints|keys[]' "$$info" | grep -q '^/generate_unified_tts$$'; then \
+		    echo "✖ Ultimate TTS Studio missing /generate_unified_tts endpoint"; \
+		    rm -f "$$info"; \
+		    exit 1; \
+		  fi; \
+		  rm -f "$$info"; \
+		  echo "✔ Ultimate TTS Studio reachable (HTTP $$code) + gradio_api/info OK"
 
 .PHONY: up-vibevoice
 up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights on first run)
