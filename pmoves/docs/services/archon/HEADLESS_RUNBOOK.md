@@ -9,6 +9,7 @@ Targets
 Health & Readiness
 - Archon API health: `make -C pmoves archon-smoke`
 - Archon readiness + MCP bridge: `make -C pmoves archon-headless-smoke`
+- Archon MCP health (port 8051): `curl -sS http://localhost:8051/health | jq .`
 - Agent Zero API health: `make -C pmoves health-agent-zero`
 - Combined: `make -C pmoves agents-headless-smoke`
 - Agent Zero MCP: `make -C pmoves a0-mcp-smoke` and `make -C pmoves a0-mcp-exec-smoke`
