@@ -39,6 +39,7 @@ testkeys.md
 .pmoves_voice_follow_smoke.log
 .pmoves_voice_follow_smoke.pid
 tmp/*.wav
+tmp/*.mp3
 /.cache/
 # dotenv: keep local env files out of the repo
 # Tracked examples like pmoves/.env.example should remain in the repo

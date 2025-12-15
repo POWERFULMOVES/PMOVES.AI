@@ -573,11 +573,16 @@ def _decode_publish_file(obj: Any) -> Optional[dict]:
     if not isinstance(content_b64, str) or not content_b64.strip():
         return None
     try:
-        raw = base64.b64decode(content_b64.encode("ascii"), validate=False)
+        # Be strict: reject malformed base64 rather than silently producing tiny/garbled files.
+        cleaned = re.sub(r"\s+", "", content_b64.strip())
+        raw = base64.b64decode(cleaned.encode("ascii"), validate=True)
     except Exception:
         return None
     # Discord webhooks: 8MB typical limit; keep tighter to avoid noisy failures.
     if len(raw) == 0 or len(raw) > 7_500_000:
+        return None
+    # Guard against "success" uploads that are effectively empty (e.g. bad base64 decoded as a few bytes).
+    if str(content_type).lower().startswith("audio/") and len(raw) < 1024:
         return None
     return {"name": name.strip(), "content_type": str(content_type), "bytes": raw}
 
@@ -1020,7 +1025,10 @@ async def shutdown():
 async def publish_test(body: Dict[str, Any] = Body(...)):
     content = body.get("content") or "PMOVES test message"
     embeds = body.get("embeds")
-    file_obj = _decode_publish_file(body.get("file"))
+    raw_file = body.get("file")
+    file_obj = _decode_publish_file(raw_file)
+    if raw_file is not None and file_obj is None:
+        raise HTTPException(400, "invalid file payload (expected base64 content)")
     if _nc is None:
         logger.warning(
             "nats_publish_skipped",

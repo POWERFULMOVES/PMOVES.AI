@@ -388,7 +388,7 @@
 	          "specifyBody": "json",
 					          "jsonBody": "={{ {\n  model: ($env.VOICE_AGENT_MODEL || $env.OPENAI_MODEL || ($env.TENSORZERO_BASE_URL ? 'tensorzero::model_name::qwen2_5_14b' : 'gpt-4o-mini')),\n  messages: [\n    {\n      role: 'system',\n      content: 'You are a helpful voice assistant for PMOVES.AI. Keep responses concise and conversational, suitable for voice output. Aim for 1-3 sentences unless more detail is specifically requested.' + ($json.context || '')\n    },\n    {\n      role: 'user',\n      content: $json.content\n    }\n  ],\n  max_tokens: 500\n} }}",
 	          "options": {
-		            "timeout": 60000
+		            "timeout": 180000
 	          }
 	        },
         "id": "llm-response",
