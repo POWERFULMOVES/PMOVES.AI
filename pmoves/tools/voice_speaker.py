@@ -169,6 +169,7 @@ def speak_stream(config: SpeakerConfig, text: str, voice: Optional[str]) -> None
     ws_url = f"{ws_url}/v1/voice/stream/tts"
 
     async def _run() -> None:
+        sys.stderr.write("[voice-speaker] streaming via ffplay\n")
         proc = await asyncio.create_subprocess_exec(
             ffplay,
             "-f",
@@ -185,7 +186,7 @@ def speak_stream(config: SpeakerConfig, text: str, voice: Optional[str]) -> None
             "-",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         assert proc.stdin is not None
 
@@ -214,7 +215,26 @@ def speak_stream(config: SpeakerConfig, text: str, voice: Optional[str]) -> None
             except Exception:
                 pass
 
-    asyncio.run(_run())
+        if proc.returncode and proc.returncode != 0:
+            err = b""
+            try:
+                assert proc.stderr is not None
+                err = await proc.stderr.read()
+            except Exception:
+                err = b""
+            if err:
+                try:
+                    sys.stderr.write(f"[voice-speaker] ffplay error: {err.decode('utf-8', errors='ignore').strip()}\n")
+                except Exception:
+                    sys.stderr.write("[voice-speaker] ffplay error (non-utf8)\n")
+            raise RuntimeError(f"ffplay exited with code {proc.returncode}")
+
+    try:
+        asyncio.run(_run())
+    except Exception as e:
+        # Stream path is best-effort; fall back to batch for reliability.
+        sys.stderr.write(f"[voice-speaker] stream failed; falling back to batch: {type(e).__name__}: {e}\n")
+        speak_batch(config, text=text, voice=voice)
 
 
 class VoiceSpeakerHandler(BaseHTTPRequestHandler):

@@ -86,6 +86,14 @@ def speak(text: str) -> None:
             timeout=5,
         )
         resp.raise_for_status()
+        try:
+            obj = resp.json()
+        except Exception:
+            obj = None
+        if isinstance(obj, dict):
+            sys.stderr.write(f"[voice-follow] spoke ok mode={obj.get('mode')}\n")
+        else:
+            sys.stderr.write("[voice-follow] spoke ok\n")
     except Exception as e:
         sys.stderr.write(f"[voice-follow] speaker POST failed: {type(e).__name__}: {e}\n")
 
@@ -115,6 +123,7 @@ async def run(stop_after_one: bool) -> None:
         # Avoid spamming super long content into TTS
         if len(text) > 800:
             text = text[:800].rstrip() + "…"
+        sys.stderr.write(f"[voice-follow] {msg.subject}: {text[:140]}\n")
         speak(text)
         if stop_after_one:
             done.set()
