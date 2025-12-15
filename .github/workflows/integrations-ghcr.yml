@@ -70,7 +70,8 @@ jobs:
             dockerfile: DockerfileLocal
             image_name: pmoves-agent-zero
             build_args: |
-              BRANCH=PMOVES.AI-Edition-Hardened
+              BRANCH=local
+            trivy_ignorefile: ''
           - name: archon
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -78,6 +79,7 @@ jobs:
             dockerfile: pmoves/services/archon/Dockerfile
             image_name: pmoves-archon
             build_args: ''
+            trivy_ignorefile: ''
           - name: archon-ui
             git_url: https://github.com/POWERFULMOVES/PMOVES-Archon.git
             ref: PMOVES.AI-Edition-Hardened
@@ -85,6 +87,7 @@ jobs:
             dockerfile: archon-ui-main/Dockerfile
             image_name: pmoves-archon-ui
             build_args: ''
+            trivy_ignorefile: .github/trivy/archon-ui.trivyignore
           - name: open-notebook
             git_url: https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
             ref: PMOVES.AI-Edition-Hardened
@@ -92,6 +95,7 @@ jobs:
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
             build_args: ''
+            trivy_ignorefile: ''
           - name: wger
             git_url: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
             ref: PMOVES.AI-Edition-Hardened
@@ -99,6 +103,7 @@ jobs:
             dockerfile: extras/docker/production/Dockerfile
             image_name: pmoves-health-wger
             build_args: ''
+            trivy_ignorefile: ''
           - name: firefly-iii
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -106,6 +111,7 @@ jobs:
             dockerfile: pmoves/images/firefly-iii/Dockerfile
             image_name: pmoves-firefly-iii
             build_args: ''
+            trivy_ignorefile: ''
           - name: jellyfin
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -113,6 +119,7 @@ jobs:
             dockerfile: pmoves/images/jellyfin/Dockerfile
             image_name: pmoves-jellyfin
             build_args: ''
+            trivy_ignorefile: .github/trivy/jellyfin.trivyignore
           - name: pmoves-yt
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -120,6 +127,7 @@ jobs:
             dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
             build_args: ''
+            trivy_ignorefile: ''
           - name: deepresearch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -127,13 +135,15 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
+            trivy_ignorefile: ''
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
-            context: pmoves/services/supaserch
+            context: pmoves/services
             dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
             build_args: ''
+            trivy_ignorefile: ''
           # To add other integrations, duplicate one of the entries above.
           # Example (commented):
           # - name: open-notebook
@@ -278,6 +288,7 @@ jobs:
           # fixable regressions as hard failures.
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
+          trivyignores: ${{ matrix.trivy_ignorefile }}
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
@@ -289,6 +300,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
           output: trivy-${{ matrix.name }}.txt
+          trivyignores: ${{ matrix.trivy_ignorefile }}
           exit-code: '0'
           ignore-unfixed: false
           vuln-type: 'os,library'
@@ -306,10 +318,12 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           set -euo pipefail
+          issuer="https://token.actions.githubusercontent.com"
+          identity_regex="^https://github.com/${GITHUB_REPOSITORY}/\\.github/workflows/integrations-ghcr\\.yml@.*$"
           echo "$TAGS" | tr '\n' '\0' | while IFS= read -r -d '' tag; do
             case "$tag" in
               ghcr.io/*|docker.io/*)
-                cosign verify "$tag" ;; 
+                cosign verify --certificate-oidc-issuer "$issuer" --certificate-identity-regexp "$identity_regex" "$tag" ;; 
               *) ;; # skip other registries
             esac
           done
