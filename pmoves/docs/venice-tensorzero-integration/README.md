@@ -18,7 +18,7 @@ This guide shows how to use PMOVES with a local or remote TensorZero gateway and
   - `TENSORZERO_EMBED_MODEL=tensorzero::embedding_model_name::qwen3_embedding_4b_local`
 - Ollama backend:
   - `USE_OLLAMA_EMBED=true`
-  - `OLLAMA_URL=http://pmoves-ollama:11434`
+  - `OLLAMA_URL=http://ollama:11434`
   - `OLLAMA_EMBED_MODEL=qwen3-embedding:4b`
 - Fallback: if neither provider is reachable, hi-rag uses `SentenceTransformer` (`all-MiniLM-L6-v2`).
 

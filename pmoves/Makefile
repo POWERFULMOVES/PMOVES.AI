@@ -182,7 +182,7 @@ archon-submodule-extract: ## Extract Archon service to a submodule repo (set ARC
 
 .PHONY: up-archon-submodule
 up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.archon.submodule.yml up -d archon
+	@$(DC) up -d archon
 
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
@@ -239,7 +239,7 @@ up: ensure-env-shared ## Start core data + workers and both Hi-RAG gateways
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
 
 up-gpu: ## Start with optional GPU accelerations where supported
-	@$(LOAD_ENV_SHARED) docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
+	@$(DC) -f docker-compose.gpu.yml --profile gpu up -d
 	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up-gpu-gateways
