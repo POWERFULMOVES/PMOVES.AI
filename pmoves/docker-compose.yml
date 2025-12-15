@@ -977,7 +977,11 @@ services:
               count: all
               capabilities: [gpu]
     profiles: ["tensorzero"]
-    networks: [app_tier, api_tier]
+    networks:
+      app_tier:
+        aliases: [ollama]
+      api_tier:
+        aliases: [ollama]
 
   tensorzero-clickhouse:
     image: clickhouse/clickhouse-server:24.12-alpine
