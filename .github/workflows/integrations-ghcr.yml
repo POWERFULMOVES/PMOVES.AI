@@ -73,7 +73,7 @@ jobs:
               BRANCH=local
             platforms: linux/amd64
             generate_sbom: true
-            trivy_ignorefile: ''
+            trivy_ignorefile: .github/trivy/agent-zero.trivyignore
           - name: archon
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -103,7 +103,7 @@ jobs:
             build_args: ''
             platforms: linux/amd64
             generate_sbom: true
-            trivy_ignorefile: ''
+            trivy_ignorefile: .github/trivy/open-notebook.trivyignore
           - name: wger
             git_url: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
             ref: PMOVES.AI-Edition-Hardened
@@ -153,7 +153,7 @@ jobs:
             build_args: ''
             platforms: linux/amd64
             generate_sbom: false
-            trivy_ignorefile: .github/trivy/deepresearch.trivyignore
+            trivy_ignorefile: ''
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -191,7 +191,7 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout (stub)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Clone integration repo
         run: |
@@ -305,6 +305,20 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
+      - name: Free disk space (docker build cache)
+        run: |
+          set -euxo pipefail
+          docker system df || true
+          docker buildx prune -af || true
+          docker builder prune -af || true
+          docker system df || true
+          df -h
+
+      - name: Pull image for Trivy (private GHCR)
+        run: |
+          set -euo pipefail
+          docker pull "${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest"
+
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@0.24.0
         with:
@@ -318,6 +332,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
+          scanners: 'vuln'
 
       - name: Trivy vulnerability scan report (includes unfixed)
         uses: aquasecurity/trivy-action@0.24.0
@@ -325,11 +340,13 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
           output: trivy-${{ matrix.name }}.txt
-          trivyignores: ${{ matrix.trivy_ignorefile }}
+          # Always include full findings (even if the gate uses trivyignore to unblock a build).
+          trivyignores: ''
           exit-code: '0'
           ignore-unfixed: false
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
+          scanners: 'vuln'
 
       - name: Upload Trivy report artifact
         uses: actions/upload-artifact@v4
