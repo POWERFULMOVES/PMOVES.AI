@@ -727,11 +727,14 @@ voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (te
 	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Give a 1-sentence greeting for Discord."}' > "$$resp"; \
 	text=$$(jq -r '.response_text // empty' "$$resp"); \
 	if [ -z "$$text" ]; then echo "✖ no response_text from voice agent"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
+	if [ "$$text" = "Sorry, I could not generate a response." ]; then echo "✖ voice agent returned fallback response (LLM likely unavailable)"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
 	short=$$(python3 -c 'import sys; s=sys.argv[1]; print((s[:1800] + "…") if len(s)>1800 else s)' "$$text"); \
 	rm -f "$$resp"; \
 	echo "[Voice→Discord] Publishing to publisher-discord"; \
-	content=$$'🗣️ Voice Agent (smoke)\\n\\n'"$$short"; \
-	payload=$$(jq -n --arg content "$$content" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}] }'); \
+	content=$$'🗣️ Voice Agent (smoke)\n\n'"$$short"; \
+	echo "[Voice→Discord] Generating TTS (wav) via Flute"; \
+	tts_b64=$$(python3 -c 'import base64, json, sys, urllib.request; text=sys.argv[1]; url="http://localhost:8055/v1/voice/synthesize/audio"; payload={"text":text,"provider":"vibevoice","voice":None,"output_format":"wav"}; req=urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST"); req.add_header("content-type","application/json"); wav=urllib.request.urlopen(req, timeout=180).read(); print(base64.b64encode(wav).decode("ascii"))' "$$short"); \
+	payload=$$(jq -n --arg content "$$content" --arg b64 "$$tts_b64" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}], file:{name:"voice_agent_smoke.wav", content_type:"audio/wav", content_b64:$$b64} }'); \
 	curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' \
 	  -d "$$payload" \
 	  | jq -e '.ok==true or .success==true' >/dev/null && echo "✔ Discord publish OK" || (echo "✖ Discord publish failed" && exit 1)
