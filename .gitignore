@@ -36,6 +36,8 @@ testkeys.md
 .pmoves_voice_speaker.pid
 .pmoves_voice_follow.log
 .pmoves_voice_follow.pid
+.pmoves_voice_follow_smoke.log
+.pmoves_voice_follow_smoke.pid
 tmp/*.wav
 /.cache/
 # dotenv: keep local env files out of the repo

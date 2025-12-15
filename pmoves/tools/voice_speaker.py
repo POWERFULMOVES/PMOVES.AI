@@ -135,6 +135,9 @@ def speak_batch(config: SpeakerConfig, text: str, voice: Optional[str]) -> None:
         api_key=config.flute_api_key,
         timeout_seconds=180.0,
     )
+    if _env("VOICE_SPEAKER_DRY_RUN", "0") in {"1", "true", "TRUE", "yes", "YES"}:
+        sys.stderr.write(f"[voice-speaker] dry-run: received {len(wav_bytes)} wav bytes\n")
+        return
     _play_wav_bytes(wav_bytes)
 
 
@@ -147,6 +150,11 @@ def speak_stream(config: SpeakerConfig, text: str, voice: Optional[str]) -> None
     ffplay = _which_any(["ffplay"])
     if not ffplay:
         # Streaming without ffplay is awkward; fall back to batch.
+        speak_batch(config, text=text, voice=voice)
+        return
+
+    if _env("VOICE_SPEAKER_DRY_RUN", "0") in {"1", "true", "TRUE", "yes", "YES"}:
+        # Still hit Flute (so we validate the upstream pipeline), but do not play audio.
         speak_batch(config, text=text, voice=voice)
         return
 
@@ -316,4 +324,3 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
