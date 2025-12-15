@@ -2342,7 +2342,7 @@ voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero p
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
 	@echo "[Voice] Subscribing to voice.agent.response.v1 (via nats-box)"; \
 	OUT=$$(mktemp); \
-	( timeout 90 docker run --rm --network pmoves_bus natsio/nats-box:latest nats sub 'voice.agent.>' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
+	( timeout 90 docker run --rm --network pmoves_bus natsio/nats-box:0.18.0 nats sub 'voice.agent.>' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
 	PID=$$!; \
 	for i in $$(seq 1 30); do \
 	  if grep -q 'Subscribing on voice\\.agent\\.>' "$$OUT" 2>/dev/null; then break; fi; \
