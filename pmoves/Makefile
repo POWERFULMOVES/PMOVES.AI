@@ -245,9 +245,9 @@ up-gpu: ## Start with optional GPU accelerations where supported
 .PHONY: up-gpu-gateways
 up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
 	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@$(DC) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
 	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT), v1-gpu :8090)."
 
 .PHONY: recreate-v2-gpu

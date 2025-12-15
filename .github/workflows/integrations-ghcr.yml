@@ -264,12 +264,34 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
+          # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
+          # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
+          # fixable regressions as hard failures.
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
+
+      - name: Trivy vulnerability scan report (includes unfixed)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
+          format: table
+          output: trivy-${{ matrix.name }}.txt
+          exit-code: '0'
+          ignore-unfixed: false
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Upload Trivy report artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-trivy
+          path: trivy-${{ matrix.name }}.txt
 
       - name: Cosign verify GHCR tags (keyless)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.integration == 'all' || inputs.integration == matrix.name }}

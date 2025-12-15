@@ -73,6 +73,7 @@ PMOVES.AI uses **GitHub Rulesets** on the default branch (not classic branch pro
 **Inspect the active ruleset (recommended):**
 - List rulesets: `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets`
 - View a ruleset: `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/<id>`
+- Quick summary (human-readable): `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/<id> | jq '{enforcement,conditions,rules: [.rules[].type]}'`
 
 **Current expected gates (as of 2025-12-15):**
 - Pull requests required
@@ -83,7 +84,7 @@ PMOVES.AI uses **GitHub Rulesets** on the default branch (not classic branch pro
 - Allowed merge methods: merge, squash, rebase
 
 ### CODEOWNERS
-Automated review assignments are configured in `.github/CODEOWNERS` and are authoritative. This repo intentionally keeps owners narrow for security-critical paths (workflows, compose, env, and core services).
+Automated review assignments are configured in `.github/CODEOWNERS` and are authoritative (inspect it directly: `.github/CODEOWNERS`). This repo intentionally keeps owners narrow for security-critical paths (workflows, compose, env, and core services).
 
 **Status:** Active and enforced since PR #276 (2025-12-07)
 
@@ -99,6 +100,8 @@ Automated review assignments are configured in `.github/CODEOWNERS` and are auth
   - The `pmoves/Makefile` now auto-prefers `../.docker-nocreds` when present so `make -C pmoves up-*` and `make -C pmoves update` work in headless environments.
   - **GHCR login tip (local):** use the same repo-scoped config when logging into GHCR, otherwise Docker will try to save credentials via the broken helper:
     - `DOCKER_CONFIG=./.docker-nocreds gh auth token | DOCKER_CONFIG=./.docker-nocreds docker login ghcr.io -u <USER> --password-stdin`
+    - Note: run this from the repository root (or adjust the relative `.docker-nocreds` path accordingly).
+    - Safety note: avoid `docker login` without `DOCKER_CONFIG` on headless hosts unless you intentionally want credentials written to `~/.docker/config.json`.
 - **Compose file subsets:** invoking `docker compose` with different `-f` subsets under the same project name can cause noisy “Found orphan containers” warnings (and confusing status output). Prefer the `pmoves/Makefile` targets, which operate on a consistent compose file set for the `pmoves` stack.
 - **Buildx drift:** stale Docker Desktop/WSL buildx builders can reference dead `/run/desktop/mnt/host/wsl/...` bind mounts. Switch to the default builder (`docker buildx use default`) or recreate the builder if builds fail.
 - **GHCR publish scope:** pushing images to GHCR requires a token with `write:packages` (and `read:packages` for pulls of private packages). For GitHub CLI tokens: `gh auth refresh -h github.com -s write:packages`.
@@ -116,25 +119,14 @@ Automated review assignments are configured in `.github/CODEOWNERS` and are auth
 Following Phase 2 Security Hardening, we identified and resolved critical Docker build failures across the stack:
 
 **Critical Issues Fixed:**
-1. **DeepResearch** - Build context mismatch (commit 3147c52)
-   - Fixed Dockerfile COPY paths to align with `context: ./services`
-   - Resolved container restart loop by restoring contracts directory (commit 4a2a36a)
-2. **Environment Files** - JSON parsing errors (commit 3147c52)
-   - Quoted all JSON values in shell-sourced environment files
-   - Prevents shell interpretation of JSON syntax as commands
-3. **FFmpeg-Whisper** - Permission denied errors (commit 714681d)
-   - Added .dockerignore to exclude restricted jellyfin-ai directories
-   - Eliminates intermittent build failures from permission issues
+1. **DeepResearch** — container restart loop and build wiring
+   - Commit `4a2a36a6` updated `pmoves/services/deepresearch/Dockerfile` and `pmoves/docker-compose.yml` to restore required build/runtime inputs.
+2. **FFmpeg-Whisper** — scoped build context and safer ignore rules
+   - Commit `714681db` updated `pmoves/services/ffmpeg-whisper/Dockerfile`, `pmoves/docker-compose.yml`, and the repo root `.dockerignore`.
 
 **Build Success Rate**: Improved from intermittent failures to 100% successful builds for affected services
 
-**Files Modified**: 5 files across 4 commits
-- `services/deepresearch/Dockerfile` (2 commits)
-- `services/ffmpeg-whisper/.dockerignore` (new file)
-- `services/media-audio/requirements.txt` (dependency updates)
-- Documentation updates
-
-**See Also**: `docs/build-fixes-2025-12-07.md` for detailed analysis and lessons learned
+**See Also**: `docs/build-fixes-2025-12-07.md` for the detailed timeline and root-cause analysis.
 
 ---
 
