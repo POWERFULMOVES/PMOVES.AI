@@ -664,7 +664,7 @@ voice-follow-start: ## Start host-run daemon: speak NATS agent/voice responses v
 	  echo "✔ voice-follow already running (PID $$(cat "$$pidfile"))"; \
 	  exit 0; \
 	fi; \
-	nohup bash -lc '. ./scripts/with-env.sh; exec python3 tools/voice_follow_agent.py' > "$$logfile" 2>&1 & echo $$! > "$$pidfile"; \
+	nohup bash -lc '. ./scripts/with-env.sh; export VOICE_FOLLOW_NATS_URL=$${VOICE_FOLLOW_NATS_URL:-nats://127.0.0.1:4222}; exec python3 tools/voice_follow_agent.py' > "$$logfile" 2>&1 & echo $$! > "$$pidfile"; \
 	echo "✔ voice-follow starting (PID $$(cat "$$pidfile")). Requires voice-speaker running."; \
 	sleep 0.3; tail -n 8 "$$logfile" || true
 
@@ -676,6 +676,65 @@ voice-follow-stop: ## Stop voice-follow daemon
 
 voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
+
+.PHONY: voice-follow-smoke voice-agent-discord-smoke
+
+voice-follow-smoke: ## Smoke: start speaker + follow(--once), trigger voice agent, assert speaker was called
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-follow-smoke" && exit 1)
+	@echo "→ Starting voice-speaker (DRY_RUN=1 so we don't require an audio device)"; \
+	VOICE_SPEAKER_DRY_RUN=1 $(MAKE) voice-speaker-start >/dev/null; \
+	start_lines=$$(wc -l < .pmoves_voice_speaker.log 2>/dev/null || echo 0); \
+	$(MAKE) voice-follow-stop >/dev/null 2>&1 || true; \
+	rm -f .pmoves_voice_follow_smoke.log; \
+	echo "→ Starting voice-follow (--once)"; \
+	(nohup bash -lc '. ./scripts/with-env.sh; VOICE_SPEAKER_DRY_RUN=1 exec python3 tools/voice_follow_agent.py --once' > .pmoves_voice_follow_smoke.log 2>&1 & echo $$! > .pmoves_voice_follow_smoke.pid); \
+	sleep 0.4; \
+	echo "→ Triggering n8n voice agent ingest"; \
+	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest -H 'content-type: application/json' \
+	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Reply with a short greeting."}' | jq -e '.published_id != null' >/dev/null; \
+	echo "→ Waiting for voice-follow to receive one message"; \
+	pid=$$(cat .pmoves_voice_follow_smoke.pid); \
+	for i in $$(seq 1 120); do \
+	  if ! kill -0 "$$pid" >/dev/null 2>&1; then break; fi; \
+	  sleep 0.25; \
+	done; \
+	if kill -0 "$$pid" >/dev/null 2>&1; then \
+	  echo "✖ voice-follow did not exit; see .pmoves_voice_follow_smoke.log"; \
+	  kill "$$pid" >/dev/null 2>&1 || true; \
+	  exit 1; \
+	fi; \
+	new_lines=$$(wc -l < .pmoves_voice_speaker.log 2>/dev/null || echo 0); \
+	if [ "$$new_lines" -le "$$start_lines" ]; then \
+	  echo "✖ voice-speaker log did not grow; expected a /say call"; \
+	  tail -n 50 .pmoves_voice_speaker.log || true; \
+	  exit 1; \
+	fi; \
+	tail -n +$$((start_lines+1)) .pmoves_voice_speaker.log | grep -q 'POST /say' || { \
+	  echo "✖ voice-speaker did not receive POST /say"; \
+	  tail -n 80 .pmoves_voice_speaker.log || true; \
+	  exit 1; \
+	}; \
+	$(MAKE) voice-speaker-stop >/dev/null 2>&1 || true; \
+	echo "✔ voice-follow-smoke OK"
+
+voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (text)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-agent-discord-smoke" && exit 1)
+	@echo "[Ultimate] tts-studio-smoke" && $(MAKE) tts-studio-smoke >/dev/null && echo OK
+	@set -euo pipefail; \
+	echo "[Voice→Discord] Trigger voice agent via n8n webhook"; \
+	resp=$$(mktemp); \
+	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest -H 'content-type: application/json' \
+	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Give a 1-sentence greeting for Discord."}' > "$$resp"; \
+	text=$$(jq -r '.response_text // empty' "$$resp"); \
+	if [ -z "$$text" ]; then echo "✖ no response_text from voice agent"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
+	short=$$(python3 -c 'import sys; s=sys.argv[1]; print((s[:1800] + "…") if len(s)>1800 else s)' "$$text"); \
+	rm -f "$$resp"; \
+	echo "[Voice→Discord] Publishing to publisher-discord"; \
+	content=$$'🗣️ Voice Agent (smoke)\\n\\n'"$$short"; \
+	payload=$$(jq -n --arg content "$$content" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}] }'); \
+	curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' \
+	  -d "$$payload" \
+	  | jq -e '.ok==true or .success==true' >/dev/null && echo "✔ Discord publish OK" || (echo "✖ Discord publish failed" && exit 1)
 
 # Toggle Single‑User (Owner) Mode for the console and restart dev server
 .PHONY: ui-single-user ui-single-user-on ui-single-user-off
@@ -2269,9 +2328,14 @@ discord-smoke: ## Smoke test Discord publisher: health + direct publish + NATS e
 	  nats pub ingest.file.added.v1 '{"video_id":"smoke-test-'$$(date +%s)'","title":"Smoke Test Video","url":"https://example.com/test","source":"smoke-test"}' 2>/dev/null && echo "  ✓ NATS event published (check Discord for notification)"; \
 	elif [ -f tools/nats_publish.py ] && python3 -c "import nats" 2>/dev/null; then \
 	  python3 tools/nats_publish.py ingest.file.added.v1 '{"video_id":"smoke-test","title":"Smoke Test Video","url":"https://example.com/test","source":"smoke-test"}' 2>/dev/null && echo "  ✓ NATS event published via Python (check Discord for notification)"; \
-	else \
-	  echo "  ℹ NATS event test skipped (nats CLI not available). Discord health check passed."; \
-	fi
+		else \
+		  echo "  ℹ NATS event test skipped (nats CLI not available). Discord health check passed."; \
+		fi
+
+.PHONY: discord-smoke-full
+discord-smoke-full: ## Discord smoke + voice-agent-discord-smoke (posts voice agent response)
+	@$(MAKE) discord-smoke
+	@$(MAKE) voice-agent-discord-smoke
 
 .PHONY: voice-agent-smoke
 voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero publish -> NATS)
