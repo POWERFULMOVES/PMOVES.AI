@@ -6,6 +6,7 @@ services:
     build: null
     image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
   archon-ui:
+    build: null
     image: ${ARCHON_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon-ui:pmoves-latest}
     profiles: ["agents"]
     environment:

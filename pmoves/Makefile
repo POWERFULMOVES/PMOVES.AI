@@ -431,25 +431,25 @@ up-workers:
 
 # YouTube ingest + whisper stack
 up-yt:
-	docker compose -p $(PROJECT) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 
 .PHONY: up-yt-published
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
 
 .PHONY: up-agents-hardened up-yt-hardened
 up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 	@echo "✔ Agents started (hardened overrides applied)."
 
 up-yt-hardened: ## Start YT stack with hardened security options (published images)
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started (hardened overrides applied)."
 
 # Optional media analyzers (video+audio)
 up-media:
-	docker compose -p $(PROJECT) --profile data --profile workers up -d media-video media-audio
+	@$(DC) --profile data --profile workers up -d media-video media-audio
 
 .PHONY: up-invidious
 up-invidious:
@@ -459,10 +459,10 @@ up-invidious:
 # TensorZero model gateway stack
 .PHONY: up-tensorzero down-tensorzero
 up-tensorzero:
-	docker compose -p $(PROJECT) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
 
 down-tensorzero:
-	docker compose -p $(PROJECT) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || true
+	@$(DC) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || true
 	@echo "✔ TensorZero stack stopped."
 
 # -------- Monitoring stack (Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor) --------
@@ -727,7 +727,10 @@ voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (te
 	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Give a 1-sentence greeting for Discord."}' > "$$resp"; \
 	text=$$(jq -r '.response_text // empty' "$$resp"); \
 	if [ -z "$$text" ]; then echo "✖ no response_text from voice agent"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
-	if [ "$$text" = "Sorry, I could not generate a response." ]; then echo "✖ voice agent returned fallback response (LLM likely unavailable)"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
+	case "$$text" in \
+	  *"could not generate a response"*|*"Could not generate a response"* ) \
+	    echo "✖ voice agent returned fallback response (LLM likely unavailable / timed out)"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1 ;; \
+	esac; \
 	short=$$(python3 -c 'import sys; s=sys.argv[1]; print((s[:1800] + "…") if len(s)>1800 else s)' "$$text"); \
 	rm -f "$$resp"; \
 	echo "[Voice→Discord] Publishing to publisher-discord"; \
@@ -804,7 +807,7 @@ agents-headless-smoke: ## Check Agent Zero and Archon headless services
 
 .PHONY: up-agents-published
 up-agents-published: ## Start Agents (NATS, Agent Zero, Archon, etc.) using published images where available
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord
+	@$(DC) -f docker-compose.agents.images.yml --profile agents up -d --pull $(PULL) nats agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord
 	@echo "✔ Agents started (published images where available). For production, use PULL=always and pin *_IMAGE tags."
 
 .PHONY: up-agents-ui
@@ -986,8 +989,8 @@ deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a resu
 .PHONY: deepresearch-smoke-in-net
 deepresearch-smoke-in-net: ## Run DeepResearch NATS smoke inside the compose network (reliable visibility)
 	@echo "[DeepResearch] In-network NATS smoke (compose cp+exec)"
-	@docker compose -p $(PROJECT) cp tools/dr_smoke_in_net.py deepresearch:/tmp/dr_smoke_in_net.py >/dev/null
-	@docker compose -p $(PROJECT) exec -T deepresearch python /tmp/dr_smoke_in_net.py
+	@$(DC) cp tools/dr_smoke_in_net.py deepresearch:/tmp/dr_smoke_in_net.py >/dev/null
+	@$(DC) exec -T deepresearch python /tmp/dr_smoke_in_net.py
 
 .PHONY: agents-integrations-clone agents-integrations-pull build-agents-integrations up-agents-integrations
 agents-integrations-clone: ## Clone your forks into $(INTEGRATIONS_WORKSPACE)
@@ -1006,11 +1009,11 @@ agents-integrations-pull: ## Pull latest from your forks
 	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
 
 build-agents-integrations: ## Build agent images from your forks
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon archon-ui
+	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon archon-ui
 
 
 up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRATIONS_WORKSPACE))
-	@docker compose -p $(PROJECT) -f docker-compose.yml -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
+	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
 	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
 .PHONY: up-n8n
@@ -1583,8 +1586,8 @@ test-discord-format:
 
 .PHONY: up-legacy
 up-legacy:
-	docker compose -p $(PROJECT) --profile data up -d qdrant neo4j minio meilisearch presign
-	docker compose -p $(PROJECT) --profile workers up -d hi-rag-gateway retrieval-eval render-webhook
+	@$(DC) --profile data up -d qdrant neo4j minio meilisearch presign >/dev/null 2>&1 || true
+	@$(DC) --profile workers up -d hi-rag-gateway retrieval-eval render-webhook >/dev/null 2>&1 || true
 
 .PHONY: discord-ping
 discord-ping:
@@ -2343,9 +2346,14 @@ discord-smoke-full: ## Discord smoke + voice-agent-discord-smoke (posts voice ag
 .PHONY: voice-agent-smoke
 voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero publish -> NATS)
 	@which jq >/dev/null 2>&1 || (echo "jq is required" && exit 1)
+	@echo "[Voice] Warmup TensorZero chat (best-effort; avoids first-run cold-start timeouts)"; \
+	curl -fsS --max-time 120 -X POST http://localhost:3030/openai/v1/chat/completions \
+	  -H 'content-type: application/json' \
+	  --data-binary '{"model":"tensorzero::model_name::qwen2_5_14b","messages":[{"role":"user","content":"ping"}],"max_tokens":4}' \
+	  >/dev/null 2>&1 || true
 	@echo "[Voice] Subscribing to voice.agent.response.v1 (via nats-box)"; \
 	OUT=$$(mktemp); \
-	( timeout 90 docker run --rm --network pmoves_bus natsio/nats-box:0.18.0 nats sub 'voice.agent.>' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
+	( timeout 180 docker run --rm --network pmoves_bus natsio/nats-box:0.18.0 nats sub 'voice.agent.>' -s nats://nats:4222 --count 1 > "$$OUT" 2>&1 ) & \
 	PID=$$!; \
 	for i in $$(seq 1 30); do \
 	  if grep -q 'Subscribing on voice\\.agent\\.>' "$$OUT" 2>/dev/null; then break; fi; \
@@ -2358,6 +2366,13 @@ voice-agent-smoke: ## Smoke test voice agent router (n8n webhook -> Agent Zero p
 	  -H 'content-type: application/json' \
 	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Reply with a short greeting."}' > "$$RESP"; \
 	cat "$$RESP" | jq .; \
+	TEXT=$$(jq -r '.response_text // empty' "$$RESP"); \
+	case "$$TEXT" in \
+	  *"could not generate a response"*|*"Could not generate a response"* ) \
+	    echo "  ✗ voice agent returned fallback response (LLM unavailable / timed out)"; \
+	    rm -f "$$OUT" "$$RESP"; \
+	    exit 1 ;; \
+	esac; \
 	PUB_ID=$$(jq -r '.published_id // empty' "$$RESP"); \
 	wait $$PID || true; \
 	echo "[Voice] NATS output:"; \

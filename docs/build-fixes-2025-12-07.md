@@ -15,18 +15,27 @@ Following Phase 2 Security Hardening completion, we identified and resolved crit
 - Dockerfile used absolute paths `COPY services/deepresearch/...` which looked for `services/services/deepresearch/...`
 - Unnecessary `COPY contracts` directive for module not imported by DeepResearch
 
-**Fix Applied** (commit 3147c52):
+**Fix Applied** (commit 4a2a36a6):
 ```diff
-# In pmoves/services/deepresearch/Dockerfile
-- COPY services/deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
-+ COPY deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
+# In pmoves/docker-compose.yml
+- context: ./services
+- dockerfile: deepresearch/Dockerfile
++ context: .
++ dockerfile: services/deepresearch/Dockerfile
 
-- COPY services /app/services
-- COPY contracts /app/contracts
-+ COPY deepresearch /app/services/deepresearch
+# In pmoves/services/deepresearch/Dockerfile
+- COPY deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
++ COPY services/deepresearch/requirements.txt /tmp/deepresearch-requirements.txt
+ 
++ COPY services/deepresearch /app/services/deepresearch
++ COPY services/common /app/services/common
++ COPY services/__init__.py /app/services/__init__.py
++ COPY contracts /app/contracts
++
++ ENV PMOVES_CONTRACTS_DIR=/app/contracts
 ```
 
-**Files Modified**: `pmoves/services/deepresearch/Dockerfile`
+**Files Modified**: `pmoves/docker-compose.yml`, `pmoves/services/deepresearch/Dockerfile`
 
 **Impact**: DeepResearch container now builds successfully and can be deployed alongside other orchestration services.
 
@@ -38,13 +47,7 @@ Following Phase 2 Security Hardening completion, we identified and resolved crit
 - Application code expected `contracts/` directory to exist at runtime
 - Previous fix removed `COPY contracts` but didn't address runtime dependency
 
-**Fix Applied** (commit 4a2a36a):
-```diff
-# In pmoves/services/deepresearch/Dockerfile
-+ COPY contracts /app/contracts
-```
-
-**Files Modified**: `pmoves/services/deepresearch/Dockerfile`
+**Fix Applied**: Addressed in the same change set as the build context alignment (commit `4a2a36a6`) by restoring `contracts/` at runtime and setting `PMOVES_CONTRACTS_DIR`.
 
 **Impact**: DeepResearch now runs successfully without restart loops.
 
@@ -58,7 +61,7 @@ Following Phase 2 Security Hardening completion, we identified and resolved crit
 - Build context included `jellyfin-ai/redis/appendonlydir` and `jellyfin-ai/neo4j/import` directories with restricted permissions
 - Docker build process couldn't read these directories
 
-**Fix Applied** (commit 714681d):
+**Fix Applied** (commit 714681db):
 ```dockerignore
 # In .dockerignore (repo root)
 jellyfin-ai/
@@ -115,9 +118,8 @@ The fixes were applied using a systematic approach:
 - `pmoves/services/media-audio/requirements.*` (dependency alignment; later lockfile consolidation)
 
 **Commits**:
-- 3147c52: DeepResearch Dockerfile build context alignment
-- 4a2a36a: DeepResearch container restart loop fix
-- 714681d: FFmpeg-Whisper build context scoping
+- 4a2a36a6: DeepResearch build context alignment + contracts runtime fix
+- 714681db: FFmpeg-Whisper build context scoping
 - a3d74f41: Media-audio dependency alignment (later lockfile consolidation)
 
 ## Testing & Validation
@@ -189,6 +191,6 @@ When fixing build issues:
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-12-07
+**Document Version**: 1.1
+**Last Updated**: 2025-12-15 (corrected commit IDs + diff snippets)
 **Maintainer**: PMOVES.AI Team

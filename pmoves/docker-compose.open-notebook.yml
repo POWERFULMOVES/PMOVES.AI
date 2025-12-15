@@ -8,7 +8,6 @@ services:
       - env.shared.generated
       - env.shared
       - .env.generated
-      - .env
       - .env.local
     environment:
       # UI talks to API on localhost inside container.
@@ -26,6 +25,12 @@ services:
         aliases:
           - cataclysm-open-notebook
           - open-notebook
+      pmoves_api:
+        aliases:
+          - open-notebook
+      pmoves_app:
+        aliases:
+          - open-notebook
 networks:
   cataclysm:
     external: true
@@ -33,3 +38,11 @@ networks:
   pmoves:
     external: true
     name: pmoves-net
+  # Open Notebook uses TensorZero + Ollama for embeddings/LLM routing. Those services live on the tiered
+  # Compose networks (pmoves_api / pmoves_app), not the shared pmoves-net bridge.
+  pmoves_api:
+    external: true
+    name: pmoves_api
+  pmoves_app:
+    external: true
+    name: pmoves_app

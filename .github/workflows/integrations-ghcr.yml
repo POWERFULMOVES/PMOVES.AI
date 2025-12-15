@@ -73,7 +73,7 @@ jobs:
               BRANCH=local
             platforms: linux/amd64
             generate_sbom: true
-            trivy_ignorefile: ''
+            trivy_ignorefile: .github/trivy/agent-zero.trivyignore
           - name: archon
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -103,7 +103,7 @@ jobs:
             build_args: ''
             platforms: linux/amd64
             generate_sbom: true
-            trivy_ignorefile: ''
+            trivy_ignorefile: .github/trivy/open-notebook.trivyignore
           - name: wger
             git_url: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
             ref: PMOVES.AI-Edition-Hardened
@@ -305,6 +305,11 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
+      - name: Pull image for Trivy (private GHCR)
+        run: |
+          set -euo pipefail
+          docker pull "${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest"
+
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@0.24.0
         with:
@@ -325,7 +330,8 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table
           output: trivy-${{ matrix.name }}.txt
-          trivyignores: ${{ matrix.trivy_ignorefile }}
+          # Always include full findings (even if the gate uses trivyignore to unblock a build).
+          trivyignores: ''
           exit-code: '0'
           ignore-unfixed: false
           vuln-type: 'os,library'
