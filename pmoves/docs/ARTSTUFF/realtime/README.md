@@ -64,6 +64,17 @@ Notes:
 - The speaker runs on `http://127.0.0.1:8120` by default and is meant for local development.
 - Playback prefers `ffplay` (install `ffmpeg` if you don’t have it).
 
+### Follow agent responses (auto-speak)
+
+To auto-speak responses as they arrive on NATS:
+
+```bash
+make -C pmoves voice-speaker-start
+make -C pmoves voice-follow-start
+```
+
+Now any `voice.agent.response.v1` (and `agent.response.v1`) messages will be spoken locally.
+
 Below, `BASE_URL` is the server root, for example:
 
 - `http://127.0.0.1:<PORT>` (local direct access), or
