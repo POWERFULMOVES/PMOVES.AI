@@ -3,7 +3,7 @@
 This starter explains how to pick embedding/rerank models, switch providers at runtime, and bring up Agent Zero and Archon UIs for orchestration.
 
 ## Embeddings
-- Local (Ollama): set `USE_OLLAMA_EMBED=true`, `OLLAMA_URL=http://pmoves-ollama:11434`, and pick `OLLAMA_EMBED_MODEL=qwen3-embedding:4b` (Jetson/low VRAM: `qwen3-embedding:0.6b` or `embeddinggemma:300m`).
+- Local (Ollama): set `USE_OLLAMA_EMBED=true`, `OLLAMA_URL=http://ollama:11434`, and pick `OLLAMA_EMBED_MODEL=qwen3-embedding:4b` (Jetson/low VRAM: `qwen3-embedding:0.6b` or `embeddinggemma:300m`).
 - Remote (TensorZero): set `EMBEDDING_BACKEND=tensorzero`, `TENSORZERO_BASE_URL=http://<remote>:3000`, and choose `TENSORZERO_EMBED_MODEL` (default `tensorzero::embedding_model_name::qwen3_embedding_4b_local`).
 - Fallback: without providers, hi-rag uses `all-MiniLM-L6-v2` via sentence-transformers.
 

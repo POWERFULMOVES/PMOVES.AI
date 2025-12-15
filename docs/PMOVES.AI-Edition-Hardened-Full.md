@@ -1024,7 +1024,7 @@ routing = ["ollama_local"]
 
 [models.qwen2_5_14b.providers.ollama_local]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://ollama:11434/v1"
 model_name = "qwen2.5:14b"
 api_key_location = "none"
 
@@ -1033,7 +1033,7 @@ routing = ["ollama_local_embedding"]
 
 [embedding_models.qwen3_embedding_4b_local.providers.ollama_local_embedding]
 type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
+api_base = "http://ollama:11434/v1"
 model_name = "qwen3-embedding:4b"
 api_key_location = "none"
 ```
