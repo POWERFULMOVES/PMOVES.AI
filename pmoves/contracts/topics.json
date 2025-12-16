@@ -150,6 +150,46 @@
     "agent.rl.model.deployed.v1": {
       "schema": "schemas/agent-rl/model.deployed.v1.schema.json",
       "description": "New RL-trained model deployed to serving"
+    },
+    "creative.generation.request.v1": {
+      "schema": "schemas/creative/generation.request.v1.schema.json",
+      "description": "Request content generation via ComfyUI (image, video, voice)"
+    },
+    "creative.generation.complete.v1": {
+      "schema": "schemas/creative/generation.complete.v1.schema.json",
+      "description": "Content generation completed with asset URL"
+    },
+    "social.publish.request.v1": {
+      "schema": "schemas/social/publish.request.v1.schema.json",
+      "description": "Request multi-platform social publishing"
+    },
+    "social.publish.complete.v1": {
+      "schema": "schemas/social/publish.complete.v1.schema.json",
+      "description": "Social publishing completed across platforms"
+    },
+    "notebook.content.synced.v1": {
+      "schema": "schemas/notebook/content.synced.v1.schema.json",
+      "description": "Open Notebook content synced and indexed"
+    },
+    "analysis.video.v1": {
+      "schema": "schemas/analysis/video.v1.schema.json",
+      "description": "Video analysis results (transcription, frames, objects)"
+    },
+    "jellyfin.item.added.v1": {
+      "schema": "schemas/jellyfin/item.added.v1.schema.json",
+      "description": "New item added to Jellyfin media library"
+    },
+    "jellyfin.playback.v1": {
+      "schema": "schemas/jellyfin/playback.v1.schema.json",
+      "description": "Jellyfin playback event for engagement tracking"
+    },
+    "channel.new.content.v1": {
+      "schema": "schemas/channel/new.content.v1.schema.json",
+      "description": "New content detected by Channel Monitor"
+    },
+    "content.draft.created.v1": {
+      "schema": "schemas/content/draft.created.v1.schema.json",
+      "description": "Content draft created in studio_board"
     }
   }
 }

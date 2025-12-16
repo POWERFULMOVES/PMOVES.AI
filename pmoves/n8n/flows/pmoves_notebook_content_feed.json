@@ -1,0 +1,193 @@
+[
+  {
+    "name": "PMOVES Notebook Content Feed",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "notebook/content-sync",
+          "options": {
+            "responseData": "{\"ok\":true,\"message\":\"Content sync processed\"}"
+          },
+          "httpMethod": "POST"
+        },
+        "id": "wh_notebook",
+        "name": "Notebook Sync Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [200, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const body = $json;\n\n// Notebook sync sends content updates\nconst result = {\n  note_id: body.id || body.note_id,\n  title: body.title || body.name || 'Untitled',\n  content: body.content || body.text || body.body || '',\n  content_type: body.content_type || body.type || 'note',\n  tags: body.tags || [],\n  folder: body.folder || body.path || '/',\n  created_at: body.created_at || body.created,\n  updated_at: body.updated_at || body.modified || new Date().toISOString(),\n  source: body.source || 'open-notebook',\n  namespace: body.namespace || 'pmoves',\n  publishable: body.publishable || body.status === 'ready',\n  metadata: body.metadata || {}\n};\n\nreturn [{ json: result }];"
+        },
+        "id": "parse_content",
+        "name": "Parse Notebook Content",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ subject: 'notebook.content.synced.v1', data: $json }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "publish_sync",
+        "name": "Publish Sync Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [720, 200]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $node['Parse Notebook Content'].json.publishable }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "is_publishable",
+        "name": "Is Publishable?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [720, 400]
+      },
+      {
+        "parameters": {
+          "functionCode": "const note = $json;\n\n// Generate social snippets from note content\nconst content = note.content || '';\nconst title = note.title || 'PMOVES Update';\n\n// Extract first meaningful paragraph for snippet\nconst paragraphs = content.split(/\\n\\n+/).filter(p => p.trim().length > 20);\nconst snippet = paragraphs[0]?.slice(0, 280) || content.slice(0, 280);\n\n// Generate hashtags from tags\nconst hashtags = note.tags\n  .slice(0, 5)\n  .map(t => `#${t.replace(/[^a-zA-Z0-9]/g, '')}`)\n  .join(' ');\n\nconst socialSnippet = {\n  twitter: {\n    text: snippet.length > 250 ? snippet.slice(0, 250) + '...' : snippet,\n    hashtags: hashtags\n  },\n  discord: {\n    title: title,\n    description: snippet,\n    color: 0x7C3AED\n  }\n};\n\nreturn [{ json: { note: note, social: socialSnippet } }];"
+        },
+        "id": "generate_snippets",
+        "name": "Generate Social Snippets",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [980, 400]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\nconst note = data.note;\nconst social = data.social;\n\n// Create studio_board draft entry\nconst draft = {\n  title: note.title,\n  content_type: 'note',\n  status: 'draft',\n  source_id: note.note_id,\n  source_type: 'notebook',\n  namespace: note.namespace,\n  text: note.content?.slice(0, 4000),\n  snippets: social,\n  tags: note.tags,\n  metadata: {\n    folder: note.folder,\n    original_created: note.created_at,\n    synced_at: new Date().toISOString()\n  },\n  created_at: new Date().toISOString()\n};\n\nreturn [{ json: draft }];"
+        },
+        "id": "create_draft",
+        "name": "Create Studio Board Draft",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1240, 400]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPA_REST_URL }}/studio_board",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {"name": "content-type", "value": "application/json"},
+              {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"},
+              {"name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"},
+              {"name": "Prefer", "value": "return=representation"}
+            ]
+          },
+          "sendBody": true,
+          "body": "={{ JSON.stringify($json) }}",
+          "options": {"timeout": 10000}
+        },
+        "id": "save_draft",
+        "name": "Save to Studio Board",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1500, 400]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\nconst note = $node['Parse Notebook Content'].json;\n\n// Build CGP envelope for Hi-RAG indexing\nconst now = new Date().toISOString();\nconst slug = note.note_id || note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50);\n\nconst constellation = {\n  id: `notebook.${slug}`,\n  summary: note.content?.slice(0, 300) || note.title,\n  spectrum: [0.8, 0.6],\n  points: [\n    {\n      id: `note:${slug}`,\n      modality: 'text',\n      ref_id: note.note_id,\n      proj: 1.0,\n      summary: note.title\n    }\n  ],\n  meta: {\n    namespace: note.namespace,\n    source: 'notebook',\n    tags: note.tags,\n    folder: note.folder\n  }\n};\n\nconst cgp = {\n  spec: 'chit.cgp.v0.1',\n  summary: `Notebook: ${note.title}`,\n  created_at: now,\n  super_nodes: [\n    {\n      id: `notebook:${note.namespace}`,\n      label: 'Notebook',\n      summary: 'Open Notebook content',\n      constellations: [constellation]\n    }\n  ],\n  meta: {\n    source: 'n8n.notebook.feed',\n    namespace: note.namespace,\n    pipeline: 'notebook_sync'\n  }\n};\n\nreturn [{ json: { type: 'geometry.cgp.v1', data: cgp } }];"
+        },
+        "id": "build_cgp",
+        "name": "Build CGP Envelope",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [720, 600]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://hi-rag-gateway-v2:8086/geometry/event",
+          "sendBody": true,
+          "body": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 30000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "index_hirag",
+        "name": "Index to Hi-RAG",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [980, 600]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ subject: 'content.draft.created.v1', data: { studio_board_id: $json[0]?.id, title: $node['Create Studio Board Draft'].json.title, source: 'notebook' } }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "publish_draft",
+        "name": "Publish Draft Created Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1760, 400]
+      }
+    ],
+    "connections": {
+      "Notebook Sync Webhook": {
+        "main": [[{"node": "Parse Notebook Content", "type": "main", "index": 0}]]
+      },
+      "Parse Notebook Content": {
+        "main": [[
+          {"node": "Publish Sync Event", "type": "main", "index": 0},
+          {"node": "Is Publishable?", "type": "main", "index": 0},
+          {"node": "Build CGP Envelope", "type": "main", "index": 0}
+        ]]
+      },
+      "Is Publishable?": {
+        "main": [
+          [{"node": "Generate Social Snippets", "type": "main", "index": 0}],
+          []
+        ]
+      },
+      "Generate Social Snippets": {
+        "main": [[{"node": "Create Studio Board Draft", "type": "main", "index": 0}]]
+      },
+      "Create Studio Board Draft": {
+        "main": [[{"node": "Save to Studio Board", "type": "main", "index": 0}]]
+      },
+      "Save to Studio Board": {
+        "main": [[{"node": "Publish Draft Created Event", "type": "main", "index": 0}]]
+      },
+      "Build CGP Envelope": {
+        "main": [[{"node": "Index to Hi-RAG", "type": "main", "index": 0}]]
+      }
+    },
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "description": "Open Notebook content feed: syncs notebook content, creates studio_board drafts, indexes to Hi-RAG"
+    },
+    "pinData": null,
+    "versionId": "notebook-feed-v1",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": ["pmoves", "notebook", "content", "publishing"]
+  }
+]

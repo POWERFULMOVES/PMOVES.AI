@@ -1,8 +1,4 @@
-# custom n8n image with sqlite-cli for inspecting workflow metadata
-# Updated: 2025-12-11 from 1.115.3 -> 1.123.4 (latest stable 1.x)
-FROM n8nio/n8n:1.123.4
-
-USER root
-RUN set -eux; \
-    apk add --no-cache sqlite
-USER node
+# n8n 2.x image (minimal BusyBox-based, no package manager)
+# Updated: 2025-12-16 from 1.123.4 -> 2.1.0 (latest stable 2.x)
+# Note: n8n 2.x uses minimal base image without apk; sqlite inspection removed
+FROM n8nio/n8n:2.1.0

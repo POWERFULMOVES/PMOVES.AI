@@ -3,6 +3,7 @@
 from .base import VoiceProvider
 from .vibevoice import VibeVoiceBusyError, VibeVoiceNoAudioError, VibeVoiceProvider
 from .whisper import WhisperProvider
+from .ultimate_tts import UltimateTTSError, UltimateTTSProvider
 
 __all__ = [
     "VoiceProvider",
@@ -10,4 +11,6 @@ __all__ = [
     "VibeVoiceNoAudioError",
     "VibeVoiceBusyError",
     "WhisperProvider",
+    "UltimateTTSProvider",
+    "UltimateTTSError",
 ]
