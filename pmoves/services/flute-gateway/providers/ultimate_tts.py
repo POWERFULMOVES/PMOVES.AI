@@ -31,12 +31,23 @@ class UltimateTTSProvider(VoiceProvider):
     Audio format: WAV, 24kHz sample rate (varies by engine).
     """
 
+    # Engine name mapping (internal -> API)
+    ENGINE_NAMES = {
+        "kitten_tts": "KittenTTS",
+        "kokoro": "Kokoro TTS",
+        "f5_tts": "F5-TTS",
+        "indextts2": "IndexTTS2",
+        "fish": "Fish Speech",
+        "chatterbox": "ChatterboxTTS",
+        "voxcpm": "VoxCPM",
+    }
+
     # Default voices per engine
     DEFAULT_VOICES = {
         "kitten_tts": "expr-voice-2-f",
-        "f5_tts": "default",
         "kokoro": "af_bella",
-        "indextts2": "default",
+        "f5_tts": None,
+        "indextts2": None,
     }
 
     # Available KittenTTS voices
@@ -118,6 +129,115 @@ class UltimateTTSProvider(VoiceProvider):
             logger.warning("Failed to load %s model: %s", engine, exc)
             return False
 
+    def _build_params(
+        self,
+        text: str,
+        engine: str,
+        voice: Optional[str] = None
+    ) -> list:
+        """Build the full 92-parameter list for generate_unified_tts."""
+        api_engine = self.ENGINE_NAMES.get(engine, engine)
+
+        # Total 92 parameters
+        data: list = [None] * 92
+
+        # Core params
+        data[0] = text          # text_input
+        data[1] = api_engine    # tts_engine
+        data[2] = "wav"         # audio_format
+
+        # Chatterbox params (3-8)
+        data[4] = 0.5    # exaggeration
+        data[5] = 0.8    # temperature
+        data[6] = 0.5    # cfg_weight
+        data[7] = 300    # chunk_size
+        data[8] = 0      # seed
+
+        # Chatterbox MTL params (9-18)
+        data[10] = "en"
+        data[11] = 0.5
+        data[12] = 0.8
+        data[13] = 0.5
+        data[14] = 2.0
+        data[15] = 0.05
+        data[16] = 1.0
+        data[17] = 300
+        data[18] = 0
+
+        # Kokoro (19-20)
+        data[19] = voice if engine == "kokoro" else "af_heart"
+        data[20] = 1.0
+
+        # Fish (21-27)
+        data[22] = ""
+        data[23] = 0.8
+        data[24] = 0.8
+        data[25] = 1.1
+        data[26] = 1024
+
+        # IndexTTS (28-30)
+        data[29] = 0.8
+
+        # IndexTTS2 (31-50)
+        data[32] = "audio_reference"
+        data[34] = ""     # indextts2_emotion_description (REQUIRED)
+        data[35] = 1.0
+        data[43] = 1      # calm
+        data[44] = 0.8
+        data[45] = 0.9
+        data[46] = 50
+        data[47] = 1.1
+        data[48] = 1500
+        data[50] = False
+
+        # F5 (51-56)
+        data[53] = 1.0
+        data[54] = 0.15
+        data[55] = False
+        data[56] = 0
+
+        # Higgs (57-66)
+        data[58] = ""
+        data[59] = "EMPTY"
+        data[60] = ""
+        data[61] = 1.0
+        data[62] = 0.95
+        data[63] = 50
+        data[64] = 1024
+        data[65] = 7
+        data[66] = 2
+
+        # KittenTTS voice (67)
+        data[67] = voice if engine == "kitten_tts" else "expr-voice-2-f"
+
+        # VoxCPM (68-77)
+        data[70] = 2.0
+        data[71] = 10
+        data[72] = True
+        data[73] = True
+        data[74] = True
+        data[75] = 3
+        data[76] = 6.0
+        data[77] = -1
+
+        # Audio effects (78-91)
+        data[78] = 0      # gain_db
+        data[79] = False  # enable_eq
+        data[80] = 0
+        data[81] = 0
+        data[82] = 0
+        data[83] = False  # enable_reverb
+        data[84] = 0.3
+        data[85] = 0.5
+        data[86] = 0.3
+        data[87] = False  # enable_echo
+        data[88] = 0.3
+        data[89] = 0.5
+        data[90] = False  # enable_pitch
+        data[91] = 0
+
+        return data
+
     async def synthesize(
         self,
         text: str,
@@ -135,26 +255,15 @@ class UltimateTTSProvider(VoiceProvider):
             WAV audio as bytes
         """
         engine = kwargs.get("engine", self._default_engine)
-        voice = voice or self.DEFAULT_VOICES.get(engine, "default")
+        voice = voice or self.DEFAULT_VOICES.get(engine)
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             # Ensure model is loaded
             await self._load_model(client, engine)
 
-            # Build payload for generate_unified_tts
-            # Signature: (text, tab, voice, ref_audio, emotion_desc, style_mode, ...)
-            payload = {
-                "data": [
-                    text,           # text
-                    f"{engine}_tab" if engine != "kitten_tts" else "kitten_tab",
-                    voice,          # voice
-                    "",             # ref_audio (empty for non-cloning)
-                    "",             # emotion description
-                    "",             # style mode
-                    "",             # extra param
-                    None,           # reference file
-                ]
-            }
+            # Build full parameter list
+            data = self._build_params(text, engine, voice)
+            payload = {"data": data}
 
             try:
                 # Start generation
@@ -178,6 +287,7 @@ class UltimateTTSProvider(VoiceProvider):
                 )
 
                 audio_url = None
+                error_msg = None
                 for line in result_resp.iter_lines():
                     if line.startswith("data:"):
                         try:
@@ -188,13 +298,17 @@ class UltimateTTSProvider(VoiceProvider):
                                 status = data[1] if len(data) > 1 else ""
 
                                 if isinstance(status, str) and "❌" in status:
-                                    raise UltimateTTSError(status)
+                                    error_msg = status
+                                    break
 
                                 if isinstance(audio_info, dict) and "url" in audio_info:
                                     audio_url = audio_info["url"]
                                     break
                         except json.JSONDecodeError:
                             continue
+
+                if error_msg:
+                    raise UltimateTTSError(error_msg)
 
                 if not audio_url:
                     raise UltimateTTSError("No audio URL in response")
