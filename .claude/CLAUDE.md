@@ -323,8 +323,10 @@ docker compose --profile agents --profile workers up -d
 
 **Submodules:**
 - `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES.YT`
-- `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Supaserch`
-- Plus health/wealth integrations
+- `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Deep-Serch`
+- `PMOVES-BoTZ`, `PMOVES-DoX`, `PMOVES-HiRAG`
+- Plus health/wealth integrations and more (20 total)
+- **See:** `.claude/context/submodules.md` for complete catalog
 
 **CI/CD:**
 - GitHub Actions for multi-arch builds (amd64, arm64)
@@ -364,6 +366,7 @@ See `.claude/context/testing-strategy.md` for detailed testing guidelines.
 
 See `.claude/context/` for detailed documentation:
 - `services-catalog.md` - Complete service listing with all details
+- `submodules.md` - Complete submodules catalog (20 submodules)
 - `nats-subjects.md` - Comprehensive NATS subject catalog
 - `mcp-api.md` - Agent Zero MCP API reference
 - `testing-strategy.md` - Testing workflow and PR requirements
