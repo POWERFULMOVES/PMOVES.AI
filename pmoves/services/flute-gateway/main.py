@@ -21,7 +21,7 @@ import logging
 import os
 import wave
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -59,11 +59,6 @@ WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7860")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
-
-# CHIT integration configuration
-CHIT_VOICE_ATTRIBUTION = os.getenv("CHIT_VOICE_ATTRIBUTION", "false").lower() == "true"
-CHIT_NAMESPACE = os.getenv("CHIT_NAMESPACE", "pmoves.voice")
-CHIT_GEOMETRY_SUBJECT = os.getenv("CHIT_GEOMETRY_SUBJECT", "tokenism.geometry.event.v1")
 
 
 def _pcm16_to_wav_bytes(pcm16: bytes, sample_rate: int) -> bytes:
@@ -135,42 +130,6 @@ vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
 nats_client = None
-
-
-async def _publish_chit_voice_event(
-    provider: str,
-    text_length: int,
-    audio_duration: float,
-    voice: Optional[str] = None,
-) -> None:
-    """Publish voice synthesis event to CHIT geometry bus (best-effort).
-
-    Only publishes if CHIT_VOICE_ATTRIBUTION is enabled.
-    Non-blocking: errors are logged but don't fail the request.
-    """
-    if not CHIT_VOICE_ATTRIBUTION or not nats_client:
-        return
-    try:
-        payload = {
-            "namespace": CHIT_NAMESPACE,
-            "modality": "voice_synthesis",
-            "provider": provider,
-            "text_length": text_length,
-            "audio_duration_seconds": audio_duration,
-            "voice": voice,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        }
-        await nats_client.publish(
-            CHIT_GEOMETRY_SUBJECT,
-            json.dumps(payload).encode("utf-8"),
-        )
-        logger.debug("chit_voice_event_published", extra={"subject": CHIT_GEOMETRY_SUBJECT})
-    except Exception as exc:
-        logger.warning(
-            "chit_voice_event_failed",
-            extra={"error": str(exc), "exc_type": type(exc).__name__},
-            exc_info=True
-        )
 
 
 # Pydantic models
@@ -317,8 +276,7 @@ async def health_check():
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{SUPABASE_URL}/rest/v1/")
             supabase_status = "connected" if resp.status_code in [200, 401] else "error"
-    except Exception as exc:
-        logger.warning("Supabase health check failed: %s", exc)
+    except Exception:
         supabase_status = "disconnected"
 
     REQUESTS_TOTAL.labels(endpoint="/healthz", status="200").inc()
@@ -328,7 +286,7 @@ async def health_check():
         providers=providers,
         nats=nats_status,
         supabase=supabase_status,
-        timestamp=datetime.now(timezone.utc).isoformat()
+        timestamp=datetime.utcnow().isoformat()
     )
 
 
@@ -390,14 +348,6 @@ async def synthesize_speech(request: SynthesizeRequest):
 
             REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
 
-            # Publish CHIT voice attribution event (best-effort)
-            await _publish_chit_voice_event(
-                provider="vibevoice",
-                text_length=len(request.text),
-                audio_duration=audio_duration,
-                voice=request.voice,
-            )
-
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
                 sample_rate=24000,
@@ -418,14 +368,6 @@ async def synthesize_speech(request: SynthesizeRequest):
             audio_duration = len(audio_data) / 48000
 
             REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
-
-            # Publish CHIT voice attribution event (best-effort)
-            await _publish_chit_voice_event(
-                provider="ultimate_tts",
-                text_length=len(request.text),
-                audio_duration=audio_duration,
-                voice=request.voice,
-            )
 
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
@@ -615,11 +557,7 @@ async def list_personas() -> List[Dict[str, Any]]:
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="200").inc()
                 return resp.json()
             else:
-                logger.warning(
-                    "Supabase persona query failed: status=%s body=%s",
-                    resp.status_code, resp.text[:200] if resp.text else "empty"
-                )
-                REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status=str(resp.status_code)).inc()
+                logger.warning("Supabase query failed: %s", resp.text)
                 return []
     except Exception:
         logger.exception("Failed to fetch personas")
