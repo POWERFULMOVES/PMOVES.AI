@@ -32,7 +32,14 @@ from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 # Provider imports
-from providers import VibeVoiceBusyError, VibeVoiceNoAudioError, VibeVoiceProvider, WhisperProvider
+from providers import (
+    VibeVoiceBusyError,
+    VibeVoiceNoAudioError,
+    VibeVoiceProvider,
+    WhisperProvider,
+    UltimateTTSError,
+    UltimateTTSProvider,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +56,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 # Default to the host-gateway URL so the Flute stack is voice-ready by default.
 VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:3000").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
+ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7860")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
 
@@ -120,6 +128,7 @@ STT_DURATION = Histogram(
 # Provider instances (initialized on startup)
 vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
+ultimate_tts_provider: Optional[UltimateTTSProvider] = None
 nats_client = None
 
 
@@ -128,8 +137,9 @@ class SynthesizeRequest(BaseModel):
     """Request for TTS synthesis."""
     text: str = Field(..., description="Text to synthesize", max_length=5000)
     persona_id: Optional[str] = Field(None, description="Voice persona ID or slug")
-    provider: Optional[str] = Field(None, description="Provider override (vibevoice, elevenlabs)")
+    provider: Optional[str] = Field(None, description="Provider override (vibevoice, ultimate_tts, elevenlabs)")
     voice: Optional[str] = Field(None, description="Voice preset for provider")
+    engine: Optional[str] = Field(None, description="TTS engine for ultimate_tts (kitten_tts, f5_tts, kokoro)")
     output_format: str = Field("wav", description="Output format: wav, mp3, pcm")
 
 
@@ -181,7 +191,7 @@ class ConfigResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
-    global vibevoice_provider, whisper_provider, nats_client
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, nats_client
 
     logger.info("Starting Flute Gateway...")
 
@@ -197,6 +207,14 @@ async def lifespan(app: FastAPI):
         vibevoice_provider = None
         logger.info("VibeVoice disabled (set VIBEVOICE_URL to enable realtime TTS).")
     whisper_provider = WhisperProvider(WHISPER_URL)
+
+    # Initialize Ultimate-TTS provider (optional)
+    if ULTIMATE_TTS_URL:
+        ultimate_tts_provider = UltimateTTSProvider(ULTIMATE_TTS_URL)
+        logger.info("Ultimate-TTS provider enabled at %s", ULTIMATE_TTS_URL)
+    else:
+        ultimate_tts_provider = None
+        logger.info("Ultimate-TTS disabled (set ULTIMATE_TTS_URL to enable).")
 
     # Initialize NATS (optional)
     try:
@@ -243,6 +261,12 @@ async def health_check():
     else:
         providers["whisper"] = False
 
+    # Check Ultimate-TTS
+    if ultimate_tts_provider:
+        providers["ultimate_tts"] = await ultimate_tts_provider.health_check()
+    else:
+        providers["ultimate_tts"] = False
+
     # Check NATS
     nats_status = "connected" if nats_client and nats_client.is_connected else "disconnected"
 
@@ -275,6 +299,8 @@ async def get_config():
     providers: List[str] = ["whisper", "elevenlabs"]
     if vibevoice_provider:
         providers.insert(0, "vibevoice")
+    if ultimate_tts_provider:
+        providers.append("ultimate_tts")
 
     return ConfigResponse(
         providers=providers,
@@ -327,15 +353,41 @@ async def synthesize_speech(request: SynthesizeRequest):
                 sample_rate=24000,
                 format="pcm16"
             )
+        elif provider_name == "ultimate_tts" and ultimate_tts_provider:
+            audio_data = await ultimate_tts_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                engine=request.engine or "kitten_tts",
+            )
+            if not audio_data:
+                raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio.")
+            duration = time.time() - start_time
+            TTS_DURATION.labels(provider="ultimate_tts").observe(duration)
+
+            # Estimate audio duration from WAV (24kHz assumed)
+            audio_duration = len(audio_data) / 48000
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
+
+            return SynthesizeResponse(
+                duration_seconds=audio_duration,
+                sample_rate=24000,
+                format="wav"
+            )
         else:
             if provider_name == "vibevoice" and not vibevoice_provider:
                 raise HTTPException(
                     status_code=503,
                     detail="VibeVoice provider not configured (set VIBEVOICE_URL to the running server URL).",
                 )
+            if provider_name == "ultimate_tts" and not ultimate_tts_provider:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Ultimate-TTS provider not configured (set ULTIMATE_TTS_URL to the running studio URL).",
+                )
             raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
 
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
@@ -386,13 +438,48 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 headers={"Content-Disposition": 'attachment; filename="flute_tts.wav"'},
             )
 
+        elif provider_name == "ultimate_tts" and ultimate_tts_provider:
+            # Ultimate-TTS returns WAV directly
+            wav_bytes = await ultimate_tts_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                engine=request.engine or "kitten_tts",
+            )
+            if not wav_bytes:
+                raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio.")
+
+            if output_format == "pcm":
+                # Extract PCM from WAV
+                try:
+                    with io.BytesIO(wav_bytes) as buf:
+                        with wave.open(buf, "rb") as wf:
+                            pcm_data = wf.readframes(wf.getnframes())
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=pcm_data, media_type="application/octet-stream")
+                except wave.Error:
+                    # If not a valid WAV, return as-is
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=wav_bytes, media_type="application/octet-stream")
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+            return Response(
+                content=wav_bytes,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="ultimate_tts.wav"'},
+            )
+
         if provider_name == "vibevoice" and not vibevoice_provider:
             raise HTTPException(
                 status_code=503,
                 detail="VibeVoice provider not configured (set VIBEVOICE_URL to the running server URL).",
             )
+        if provider_name == "ultimate_tts" and not ultimate_tts_provider:
+            raise HTTPException(
+                status_code=503,
+                detail="Ultimate-TTS provider not configured (set ULTIMATE_TTS_URL to the running studio URL).",
+            )
         raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError) as exc:
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
