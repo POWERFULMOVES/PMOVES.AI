@@ -131,8 +131,13 @@ def _play_wav_via_windows(wav_bytes: bytes) -> bool:
             return False
         # Use SoundPlayer (WAV only) and block until completion.
         cmd = f"(New-Object Media.SoundPlayer '{win_path}').PlaySync();"
-        subprocess.run([powershell, "-NoProfile", "-Command", cmd], check=False)
-        return True
+        try:
+            subprocess.run([powershell, "-NoProfile", "-Command", cmd], check=False)
+            return True
+        except OSError:
+            # Some environments (nested shells, hardened WSL, no interop) cannot execute Windows binaries.
+            # Fall back to Linux audio playback instead of failing the request.
+            return False
     finally:
         try:
             os.unlink(tmp_path)

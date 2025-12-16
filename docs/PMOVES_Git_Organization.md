@@ -18,7 +18,7 @@ This document provides a comprehensive guide to PMOVES.AI's GitHub organization,
 
 ## Contributor Guidance
 - Operational/stabilization rules live in the root `AGENTS.md`; service-level coding norms for the `pmoves/` subtree live in `pmoves/AGENTS.md`. Read both before opening PRs and keep edits in sync.
-- Submodules are the source of truth for hardened integrations (Archon, Agent Zero, PMOVES.YT, etc.). Pin the intended branch/ref in `.gitmodules`, align with `docs/PMOVES.AI-Edition-Hardened.md`, and note any temporary divergence in PR notes.
+- Submodules are the source of truth for hardened integrations (Archon, Agent Zero, PMOVES.YT, etc.). Pin the intended branch/ref in `.gitmodules`, align with `docs/PMOVES.AI-Edition-Hardened-Full.md`, and note any temporary divergence in PR notes.
 
 ---
 
