@@ -12,8 +12,6 @@ Key features:
 
 from __future__ import annotations
 
-from typing import List
-
 from .types import BoundaryType, ProsodicChunk
 from .syllable_counter import estimate_syllables
 from .boundary_detector import detect_boundary
@@ -24,7 +22,7 @@ def parse_prosodic(
     first_chunk_words: int = 2,
     max_syllables_before_breath: int = 10,
     min_words_per_chunk: int = 2,
-) -> List[ProsodicChunk]:
+) -> list[ProsodicChunk]:
     """Parse text into prosodically-aware chunks for TTS synthesis.
 
     Strategy:
@@ -58,7 +56,7 @@ def parse_prosodic(
     if not words:
         return []
 
-    chunks: List[ProsodicChunk] = []
+    chunks: list[ProsodicChunk] = []
     total_words = len(words)
 
     # === FIRST CHUNK: Minimal for ultra-low TTFS ===
@@ -91,7 +89,7 @@ def parse_prosodic(
         return chunks
 
     # === REMAINING CHUNKS: Prosodic boundaries ===
-    current_words: List[str] = []
+    current_words: list[str] = []
     syllables_since_break = 0
 
     for i in range(n_first, len(words)):
