@@ -45,9 +45,11 @@ export default function ChatDashboardPage() {
   useEffect(() => {
     let isMounted = true;
     let pollingInterval: NodeJS.Timeout | null = null;
-    setStatus('connecting');
 
     const setupRealtime = async () => {
+      // Set connecting status at start of async operation
+      if (isMounted) setStatus('connecting');
+
       try {
         // Initial fetch
         const initialMsgs = await fetchMessages();
