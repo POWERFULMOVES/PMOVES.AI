@@ -31,7 +31,19 @@ try:
     PIPECAT_AVAILABLE = True
 except ImportError:
     PIPECAT_AVAILABLE = False
-    FrameProcessor = object
+
+    # Stub classes for when pipecat not installed (type hints only)
+    class FrameProcessor:  # type: ignore[no-redef]
+        """Stub FrameProcessor for when pipecat not installed."""
+
+        async def cancel(self) -> None:
+            """Stub cancel method."""
+            pass
+
+        async def cleanup(self) -> None:
+            """Stub cleanup method."""
+            pass
+
     Frame = object
     FrameDirection = None
 
@@ -256,8 +268,12 @@ class TensorZeroLLMProcessor(FrameProcessor):
             yield frame
 
     async def cancel(self) -> None:
-        """Cancel ongoing generation."""
+        """Cancel ongoing generation and cleanup resources."""
         self._generating = False
+        # Close HTTP client to prevent resource leaks on cancellation
+        if self._client:
+            await self._client.aclose()
+            self._client = None
         await super().cancel()
 
     async def cleanup(self) -> None:

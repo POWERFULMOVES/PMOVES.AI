@@ -36,8 +36,19 @@ try:
     PIPECAT_AVAILABLE = True
 except ImportError:
     PIPECAT_AVAILABLE = False
-    # Stub types for when pipecat not installed
-    FrameProcessor = object
+
+    # Stub classes for when pipecat not installed (type hints only)
+    class FrameProcessor:  # type: ignore[no-redef]
+        """Stub FrameProcessor for when pipecat not installed."""
+
+        async def cancel(self) -> None:
+            """Stub cancel method."""
+            pass
+
+        async def cleanup(self) -> None:
+            """Stub cleanup method."""
+            pass
+
     Frame = object
     FrameDirection = None
 
