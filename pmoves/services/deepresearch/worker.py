@@ -267,9 +267,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from nats.aio.client import Client as NATS
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 import uvicorn
 from nats.aio.msg import Msg
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 from services.common.events import envelope
 from .parser import parse_model_output, prepare_result
@@ -282,11 +283,38 @@ logging.basicConfig(
 
 REQUEST_SUBJECT = "research.deepresearch.request.v1"
 RESULT_SUBJECT = "research.deepresearch.result.v1"
+CGP_SUBJECT = "tokenism.cgp.ready.v1"
+
+# Enable CGP publishing via environment variable (default: enabled)
+CGP_PUBLISH_ENABLED = os.getenv("DEEPRESEARCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
 DEFAULT_MODE = "openrouter"
+
+# Prometheus metrics
+FALLBACK_COUNTER = Counter(
+    "deepresearch_model_fallback_total",
+    "Model fallback invocations grouped by reason",
+    labelnames=("reason",),
+)
+REQUEST_COUNTER = Counter(
+    "deepresearch_requests_total",
+    "Total research requests processed",
+    labelnames=("mode", "status"),
+)
 
 
 @dataclass
 class ResearchRequest:
+    """Incoming research request from NATS message bus.
+
+    Attributes:
+        query: The research question or topic to investigate.
+        mode: Execution mode (tensorzero, openrouter, or local).
+        max_steps: Maximum research iterations allowed.
+        context: Additional context for the research task.
+        metadata: Request metadata (correlation_id, timestamps, etc.).
+        notebook_overrides: Override settings for Open Notebook publishing.
+    """
+
     query: str
     mode: str
     max_steps: Optional[int]
@@ -297,6 +325,23 @@ class ResearchRequest:
 
 @dataclass
 class ResearchResult:
+    """Completed research result ready for publishing.
+
+    Attributes:
+        query: Original research query.
+        status: Execution status (success, error, timeout).
+        summary: Generated research summary.
+        notes: Key findings and bullet points.
+        sources: Ranked list of source citations.
+        mode: Execution mode used.
+        metadata: Request metadata propagated from input.
+        raw_log: Optional reasoning/debug log.
+        error: Error message if status is error.
+        iterations: Research steps/iterations performed.
+        duration_ms: Total execution time in milliseconds.
+        notebook_entry_id: Open Notebook entry ID if published.
+    """
+
     query: str
     status: str
     summary: str
@@ -311,6 +356,7 @@ class ResearchResult:
     notebook_entry_id: Optional[str] = None
 
     def as_payload(self) -> Dict[str, Any]:
+        """Convert result to dictionary payload for NATS publishing."""
         payload: Dict[str, Any] = {
             "query": self.query,
             "status": self.status,
@@ -337,6 +383,18 @@ class ResearchResult:
 
 @dataclass(slots=True, frozen=True)
 class NotebookPublishConfig:
+    """Configuration for Open Notebook publishing.
+
+    Attributes:
+        enabled: Whether notebook publishing is enabled.
+        base_url: Open Notebook API base URL.
+        token: API authentication token.
+        notebook_id: Target notebook UUID.
+        title_prefix: Prefix for entry titles.
+        embed: Whether to generate embeddings.
+        async_processing: Use async processing queue.
+    """
+
     enabled: bool
     base_url: str
     token: str
@@ -351,6 +409,109 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
+def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, Any]:
+    """Build a CGP (CHIT Geometry Packet) from research results.
+
+    Converts DeepResearch output into the GEOMETRY BUS standard format
+    for attribution and knowledge graph integration.
+
+    Args:
+        result: The completed research result
+        request_id: Unique request identifier (correlation_id or parent_id)
+
+    Returns:
+        Dict conforming to chit.cgp.v0.1 schema
+    """
+    from datetime import datetime, timezone
+
+    # Build points from iterations (research steps)
+    points: List[Dict[str, Any]] = []
+    if result.iterations:
+        for i, step in enumerate(result.iterations):
+            # Type validation: skip non-dict entries with a warning
+            if not isinstance(step, dict):
+                LOGGER.warning("Skipping non-dict iteration step at index %d: %r", i, type(step).__name__)
+                continue
+            points.append({
+                "id": f"step:{i}",
+                "modality": "text",
+                "proj": 1.0 if result.status == "success" else 0.5,
+                "conf": 0.9,
+                "summary": shorten(step.get("summary", step.get("action", "")), width=200),
+                "ref_id": step.get("source_url", step.get("url", "")),
+                "meta": {
+                    "step_type": step.get("type", "search"),
+                    "step_index": i,
+                }
+            })
+
+    # Add sources as additional points
+    if result.sources:
+        for i, src in enumerate(result.sources):
+            # Type validation: skip non-dict entries with a warning
+            if not isinstance(src, dict):
+                LOGGER.warning("Skipping non-dict source at index %d: %r", i, type(src).__name__)
+                continue
+            points.append({
+                "id": f"source:{i}",
+                "modality": "text",
+                "proj": 0.8,
+                "conf": src.get("confidence", 0.7),
+                "summary": shorten(src.get("title", src.get("snippet", "")), width=200),
+                "ref_id": src.get("url", src.get("link", "")),
+                "meta": {
+                    "source_type": src.get("type", "web"),
+                    "domain": src.get("domain", ""),
+                }
+            })
+
+    # Build spectrum from result quality metrics
+    spectrum = [
+        1.0 if result.status == "success" else 0.0,  # Completion
+        len(result.sources) / 10.0 if result.sources else 0.0,  # Source richness
+        len(result.iterations) / 5.0 if result.iterations else 0.0,  # Iteration depth
+    ]
+    # Clamp to [0, 1]
+    spectrum = [max(0.0, min(1.0, v)) for v in spectrum]
+
+    return {
+        "spec": "chit.cgp.v0.1",
+        "summary": f"DeepResearch: {shorten(result.query, width=100)}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "super_nodes": [
+            {
+                "id": f"research:{request_id}",
+                "label": "deepresearch",
+                "summary": shorten(result.summary, width=300) if result.summary else "Research complete",
+                "x": 0.0,
+                "y": 0.0,
+                "r": 0.3,
+                "constellations": [
+                    {
+                        "id": f"research.steps.{request_id}",
+                        "summary": f"Research steps ({len(points)} points)",
+                        "anchor": [0.5, 0.5, 0.5],
+                        "spectrum": spectrum,
+                        "points": points,
+                        "meta": {
+                            "namespace": "research",
+                            "query": result.query,
+                            "duration_ms": result.duration_ms,
+                            "mode": result.mode,
+                        }
+                    }
+                ],
+            }
+        ],
+        "meta": {
+            "source": RESULT_SUBJECT,
+            "mode": result.mode,
+            "status": result.status,
+            "tags": ["deepresearch", "ai-research"],
+        }
+    }
 
 
 class NotebookPublisher:
@@ -452,7 +613,19 @@ class NotebookPublisher:
 
 
 class DeepResearchRunner:
+    """Executes deep research queries via multiple backend modes.
+
+    Supports three execution modes:
+    - tensorzero: Local Ollama inference via TensorZero gateway
+    - openrouter: Cloud inference via OpenRouter API
+    - local: External research API (e.g., Tongyi DeepResearch)
+
+    The runner handles LLM inference, response parsing, and result
+    normalization across all backends.
+    """
+
     def __init__(self) -> None:
+        """Initialize runner with configuration from environment variables."""
         self.mode = (os.getenv("DEEPRESEARCH_MODE") or DEFAULT_MODE).lower()
         self.timeout = float(os.getenv("DEEPRESEARCH_TIMEOUT", "600"))
         self.openrouter_model = os.getenv("DEEPRESEARCH_OPENROUTER_MODEL", "tongyi-deepresearch")
@@ -462,6 +635,15 @@ class DeepResearchRunner:
         self.openrouter_site = os.getenv("DEEPRESEARCH_OPENROUTER_SITE", "https://pmoves.ai")
         self.api_base = (os.getenv("DEEPRESEARCH_API_BASE") or "http://deepresearch:8080").rstrip("/")
         self.planning_endpoint = os.getenv("DEEPRESEARCH_PLANNING_ENDPOINT", "/api/research")
+        # TensorZero/Ollama configuration
+        self.tensorzero_base = (
+            os.getenv("DEEPRESEARCH_TENSORZERO_BASE_URL")
+            or os.getenv("TENSORZERO_BASE_URL")
+            or "http://tensorzero-gateway:3030"
+        ).rstrip("/")
+        self.tensorzero_model = os.getenv("DEEPRESEARCH_TENSORZERO_MODEL", "nemotron-3-nano:30b")
+        self.tensorzero_fallback_model = os.getenv("DEEPRESEARCH_TENSORZERO_FALLBACK_MODEL", "qwen3-vl:8b")
+        self.tensorzero_key = os.getenv("TENSORZERO_API_KEY") or ""
 
     async def run(self, request: ResearchRequest) -> ResearchResult:
         start = time.perf_counter()
@@ -471,6 +653,10 @@ class DeepResearchRunner:
         try:
             if mode == "openrouter":
                 summary, notes, sources, iterations, raw_log = await self._run_openrouter(request)
+                status = "success"
+                error = None
+            elif mode == "tensorzero":
+                summary, notes, sources, iterations, raw_log = await self._run_tensorzero(request)
                 status = "success"
                 error = None
             else:
@@ -559,6 +745,82 @@ class DeepResearchRunner:
         parsed = parse_model_output(content)
         return prepare_result(parsed)
 
+    async def _run_tensorzero(
+        self, request: ResearchRequest
+    ) -> Tuple[str, List[str], List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[str]]:
+        """Run research using TensorZero gateway (Ollama/local models)."""
+        url = f"{self.tensorzero_base}/openai/v1/chat/completions"
+
+        system_prompt = (
+            "You are a research planner operating inside the PMOVES agent mesh. "
+            "Analyze the query and return a JSON object with these keys: "
+            "summary (string with main findings), "
+            "notes (array of actionable insight strings), "
+            "sources (array of {title, url, snippet, confidence}), "
+            "steps (array describing each research iteration). "
+            "Focus on actionable findings with confidence between 0 and 1."
+        )
+
+        user_content = f"Research query: {request.query}"
+        if request.context:
+            user_content += f"\nContext: {request.context}"
+        if request.max_steps:
+            user_content += f"\nMax iterations: {request.max_steps}"
+
+        payload = {
+            "model": self.tensorzero_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+
+        headers = {"Content-Type": "application/json"}
+        if self.tensorzero_key:
+            headers["Authorization"] = f"Bearer {self.tensorzero_key}"
+
+        timeout = httpx.Timeout(self.timeout, connect=30.0)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            # Try fallback model if primary fails
+            if self.tensorzero_fallback_model and self.tensorzero_fallback_model != self.tensorzero_model:
+                LOGGER.warning(
+                    "Primary model %s failed (%s), trying fallback %s",
+                    self.tensorzero_model, exc.response.status_code, self.tensorzero_fallback_model
+                )
+                FALLBACK_COUNTER.labels(reason="http_error").inc()
+                payload["model"] = self.tensorzero_fallback_model
+                try:
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(url, json=payload, headers=headers)
+                        response.raise_for_status()
+                        data = response.json()
+                except httpx.HTTPStatusError as fallback_exc:
+                    LOGGER.error(
+                        "Fallback model %s also failed: HTTP %s",
+                        self.tensorzero_fallback_model, fallback_exc.response.status_code
+                    )
+                    raise RuntimeError(
+                        f"Both primary ({self.tensorzero_model}) and fallback "
+                        f"({self.tensorzero_fallback_model}) models failed"
+                    ) from fallback_exc
+                except (httpx.TimeoutException, httpx.ConnectError) as network_exc:
+                    LOGGER.error("Network error during fallback request: %s", network_exc)
+                    raise RuntimeError(
+                        f"Fallback model network error: {network_exc}"
+                    ) from network_exc
+            else:
+                raise
+
+        content = _extract_message_content(data)
+        parsed = parse_model_output(content)
+        return prepare_result(parsed)
+
     async def _run_local(
         self, request: ResearchRequest
     ) -> Tuple[str, List[str], List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[str]]:
@@ -605,8 +867,43 @@ async def _handle_request(msg: Msg, runner: DeepResearchRunner, publisher: Noteb
     await nc.publish(RESULT_SUBJECT, json.dumps(env).encode("utf-8"))
     LOGGER.info("Published result for correlation_id=%s", data.get("correlation_id"))
 
+    # Publish CGP packet for GEOMETRY BUS integration
+    if CGP_PUBLISH_ENABLED:
+        request_id = data.get("correlation_id") or data.get("id") or "unknown"
+        cgp_packet = None
+        try:
+            cgp_packet = _build_cgp_packet(result, request_id)
+        except (TypeError, AttributeError, KeyError) as build_exc:
+            # Building errors indicate bugs in _build_cgp_packet - log at ERROR
+            LOGGER.error(
+                "CGP packet build failed (bug in _build_cgp_packet): %s (request_id=%s)",
+                build_exc, request_id, exc_info=True
+            )
+        except Exception as build_exc:  # pylint: disable=broad-except
+            LOGGER.error(
+                "Unexpected error building CGP packet: %s (request_id=%s)",
+                build_exc, request_id, exc_info=True
+            )
+
+        if cgp_packet is not None:
+            try:
+                await nc.publish(CGP_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
+                LOGGER.info("Published CGP packet to %s for request_id=%s", CGP_SUBJECT, request_id)
+            except Exception as pub_exc:  # pylint: disable=broad-except
+                # Publishing errors indicate infrastructure issues - log at WARNING
+                LOGGER.warning(
+                    "Failed to publish CGP packet to NATS: %s (request_id=%s, nats_connected=%s)",
+                    pub_exc, request_id, nc.is_connected if nc else False
+                )
+
 
 async def main() -> None:
+    """Entry point for DeepResearch NATS worker service.
+
+    Initializes the research runner, connects to NATS, and subscribes
+    to research.deepresearch.request.v1 for incoming queries. Also
+    starts a health server for Kubernetes probes.
+    """
     nats_url = os.getenv("NATS_URL", "nats://nats:4222")
     runner = DeepResearchRunner()
     publisher = NotebookPublisher()
@@ -617,10 +914,19 @@ async def main() -> None:
 
     @app.get("/healthz")
     async def healthz():  # type: ignore[override]
+        """Health check endpoint for Kubernetes liveness/readiness probes."""
         return {
             "status": "ok",
             "nats_connected": bool(nc.is_connected),
         }
+
+    @app.get("/metrics")
+    async def metrics():  # type: ignore[override]
+        """Prometheus metrics endpoint for observability."""
+        return Response(
+            content=generate_latest(),
+            media_type=CONTENT_TYPE_LATEST,
+        )
 
     async def _serve_health():
         port = int(os.getenv("DEEPRESEARCH_HEALTH_PORT", "8098"))

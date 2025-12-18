@@ -1,19 +1,11 @@
 # TensorZero gateway config (chat + embeddings). Model keys double as UI aliases.
 
 [gateway]
-# Observability is disabled by default; the ClickHouse block is pre-populated
-# for the bundled PMOVES ClickHouse. See
-# pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md for
-# opt-in steps and env overrides.
-observability.enabled = false
-
-[gateway.observability.clickhouse]
-# PMOVES-branded defaults assume the bundled ClickHouse instance from
-# `make -C pmoves up-tensorzero` (see env.shared.example for values).
-url = "env::TENSORZERO_OBS_CLICKHOUSE_URL"
-database = "env::TENSORZERO_OBS_CLICKHOUSE_DB"
-username = "env::TENSORZERO_OBS_CLICKHOUSE_USER"
-password = "env::TENSORZERO_OBS_CLICKHOUSE_PASSWORD"
+# Observability enabled for production monitoring and cost tracking
+# ClickHouse connection is configured via the TENSORZERO_CLICKHOUSE_URL environment variable.
+# See pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md for details.
+# Example: TENSORZERO_CLICKHOUSE_URL=http://user:pass@tensorzero-clickhouse:8123/default
+observability.enabled = true
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
 
@@ -80,6 +72,66 @@ api_base = "http://pmoves-ollama:11434/v1"
 model_name = "llama3.1"
 api_key_location = "none"
 
+# Qwen2.5 32B - Flagship general-purpose model (from Open-Source Model Recommendations)
+[models.qwen2_5_32b]
+routing = ["ollama_local"]
+
+[models.qwen2_5_32b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2.5:32b"
+api_key_location = "none"
+
+# Qwen2.5 14B - Efficient alternative for resource-constrained environments
+[models.qwen2_5_14b]
+routing = ["ollama_local"]
+
+[models.qwen2_5_14b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2.5:14b"
+api_key_location = "none"
+
+# Qwen2-VL 7B - Multimodal vision-language model for image analysis
+[models.qwen2_vl_7b]
+routing = ["ollama_local"]
+
+[models.qwen2_vl_7b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen2-vl:7b"
+api_key_location = "none"
+
+# Qwen3 Reranker 4B - Cross-encoder reranking for Hi-RAG v2
+[models.qwen3_reranker_4b]
+routing = ["ollama_local"]
+
+[models.qwen3_reranker_4b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-reranker:4b"
+api_key_location = "none"
+
+# Nemotron Mini - NVIDIA efficient research model for DeepResearch
+[models.nemotron_mini]
+routing = ["ollama_local"]
+
+[models.nemotron_mini.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "nemotron-mini"
+api_key_location = "none"
+
+# Qwen3 8B - Research fallback model for DeepResearch
+[models.qwen3_8b]
+routing = ["ollama_local"]
+
+[models.qwen3_8b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3:8b"
+api_key_location = "none"
+
 # --- Chat models: Cloud and hosted backbones -------------------------------
 
 [models.chat_openai_platform]
@@ -90,6 +142,15 @@ type = "openai"
 api_base = "https://api.openai.com/v1"
 model_name = "gpt-4o-mini"
 api_key_location = "env::OPENAI_API_KEY"
+
+[models.chat_groq]
+routing = ["groq_primary"]
+
+[models.chat_groq.providers.groq_primary]
+type = "openai"
+api_base = "https://api.groq.com/openai/v1"
+model_name = "llama-3.1-8b-instant"
+api_key_location = "env::GROQ_API_KEY"
 
 [models.chat_moonshot]
 routing = ["moonshot_primary"]
@@ -106,7 +167,9 @@ routing = ["openrouter_primary"]
 [models.chat_openrouter.providers.openrouter_primary]
 type = "openai"
 api_base = "https://openrouter.ai/api/v1"
-model_name = "anthropic/claude-3.5-sonnet"
+# NOTE: Some OpenRouter accounts restrict provider availability for certain models.
+# Keep this set to a broadly available model for production defaults.
+model_name = "openai/gpt-4o-mini"
 api_key_location = "env::OPENROUTER_API_KEY"
 
 [models.chat_venice]
@@ -137,6 +200,15 @@ model_name = "@cf/openai/gpt-oss-20b"
 api_key_location = "env::CLOUDFLARE_API_TOKEN"
 
 # --- Embedding models ------------------------------------------------------
+
+[embedding_models.qwen3_embedding_4b_local]
+routing = ["ollama_local_embedding"]
+
+[embedding_models.qwen3_embedding_4b_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-embedding:4b"
+api_key_location = "none"
 
 [embedding_models.gemma_embed_local]
 routing = ["ollama_local_embedding"]
@@ -301,3 +373,162 @@ model = "chat_together"
 [functions.langextract.variants.langextract_gpt_oss]
 type = "chat_completion"
 model = "chat_cloudflare_gpt_oss"
+
+# --- PMOVES Agent Zero Subordinate Functions ---------------------------------
+# These functions route LLM calls for PMOVES specialized subordinate agents
+# Each subordinate uses different models optimized for their specific tasks
+
+# Agent Zero Subordinates (use lighter models for cost efficiency)
+[functions.agent_zero_subordinate]
+type = "chat"
+
+[functions.agent_zero_subordinate.variants.local_qwen14b]
+type = "chat_completion"
+model = "qwen2_5_14b"
+
+[functions.agent_zero_subordinate.variants.local_mistral7b]
+type = "chat_completion"
+model = "agent_zero_mistral7b_local"
+
+[functions.agent_zero_subordinate.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.agent_zero_subordinate.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
+
+# PMOVES Media Processor Subordinate (optimized for transcription analysis)
+[functions.pmoves_media_processor]
+type = "chat"
+
+[functions.pmoves_media_processor.variants.local_qwen14b]
+type = "chat_completion"
+model = "qwen2_5_14b"
+
+[functions.pmoves_media_processor.variants.local_mistral7b]
+type = "chat_completion"
+model = "agent_zero_mistral7b_local"
+
+[functions.pmoves_media_processor.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
+
+# PMOVES Log Analyzer Subordinate (metrics and monitoring analysis)
+[functions.pmoves_log_analyzer]
+type = "chat"
+
+[functions.pmoves_log_analyzer.variants.local_qwen14b]
+type = "chat_completion"
+model = "qwen2_5_14b"
+
+[functions.pmoves_log_analyzer.variants.local_mistral7b]
+type = "chat_completion"
+model = "agent_zero_mistral7b_local"
+
+[functions.pmoves_log_analyzer.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
+
+# PMOVES Research Coordinator Subordinate (complex research synthesis)
+[functions.pmoves_research_coordinator]
+type = "chat"
+
+[functions.pmoves_research_coordinator.variants.local_qwen32b]
+type = "chat_completion"
+model = "qwen2_5_32b"
+
+[functions.pmoves_research_coordinator.variants.local_qwen14b]
+type = "chat_completion"
+model = "qwen2_5_14b"
+
+[functions.pmoves_research_coordinator.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.pmoves_research_coordinator.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
+
+# PMOVES Knowledge Manager Subordinate (RAG and indexing operations)
+[functions.pmoves_knowledge_manager]
+type = "chat"
+
+[functions.pmoves_knowledge_manager.variants.local_qwen14b]
+type = "chat_completion"
+model = "qwen2_5_14b"
+
+[functions.pmoves_knowledge_manager.variants.local_mistral7b]
+type = "chat_completion"
+model = "agent_zero_mistral7b_local"
+
+[functions.pmoves_knowledge_manager.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
+
+# --- Archon Agent Work Orders Functions --------------------------------------
+# Functions for Archon's autonomous workflow execution
+
+[functions.archon_work_orders]
+type = "chat"
+
+[functions.archon_work_orders.variants.local_qwen32b]
+type = "chat_completion"
+model = "qwen2_5_32b"
+
+[functions.archon_work_orders.variants.local_qwen14b]
+type = "chat_completion"
+model = "qwen2_5_14b"
+
+[functions.archon_work_orders.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.archon_work_orders.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
+
+# Archon Code Review (for PR review step)
+[functions.archon_code_review]
+type = "chat"
+
+[functions.archon_code_review.variants.local_qwen32b]
+type = "chat_completion"
+model = "qwen2_5_32b"
+
+[functions.archon_code_review.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+# --- Hi-RAG Reranking Function -----------------------------------------------
+[functions.hirag_rerank]
+type = "chat"
+
+[functions.hirag_rerank.variants.local_reranker]
+type = "chat_completion"
+model = "qwen3_reranker_4b"
+
+[functions.hirag_rerank.variants.local_qwen14b]
+type = "chat_completion"
+model = "qwen2_5_14b"
+
+# --- DeepResearch Function ---------------------------------------------------
+# Research planning and synthesis using Nemotron Mini with Qwen3 fallback
+[functions.deepresearch]
+type = "chat"
+
+[functions.deepresearch.variants.nemotron_mini]
+type = "chat_completion"
+model = "nemotron_mini"
+
+[functions.deepresearch.variants.qwen3_8b]
+type = "chat_completion"
+model = "qwen3_8b"
+
+[functions.deepresearch.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.deepresearch.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
