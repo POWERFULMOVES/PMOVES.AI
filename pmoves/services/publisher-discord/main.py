@@ -667,6 +667,34 @@ async def _post_discord_with_file(
     return False
 
 
+def _safe_format_number(
+    value: Any,
+    fmt: str = ".2f",
+    prefix: str = "",
+    suffix: str = "",
+    fallback: str = "N/A",
+) -> str:
+    """Safely format a numeric value with defensive error handling.
+
+    Args:
+        value: The value to format (should be numeric).
+        fmt: Format specifier (e.g., ".2f", ",.0f", ".4f").
+        prefix: String to prepend (e.g., "$").
+        suffix: String to append (e.g., "%").
+        fallback: Value to return if formatting fails.
+
+    Returns:
+        Formatted string or fallback if value is not numeric.
+    """
+    if value is None:
+        return fallback
+    try:
+        formatted = f"{float(value):{fmt}}"
+        return f"{prefix}{formatted}{suffix}"
+    except (TypeError, ValueError):
+        return fallback
+
+
 def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     name = name.strip()
     emb = {"title": name, "fields": []}
@@ -832,7 +860,7 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if payload.get("action"):
             emb["fields"].append({"name": "Action", "value": str(payload["action"]), "inline": True})
         if payload.get("amount") is not None:
-            emb["fields"].append({"name": "Amount", "value": f"${payload['amount']:,.2f}", "inline": True})
+            emb["fields"].append({"name": "Amount", "value": _safe_format_number(payload["amount"], ",.2f", "$"), "inline": True})
         if payload.get("week") is not None:
             emb["fields"].append({"name": "Week", "value": str(payload["week"]), "inline": True})
         if payload.get("merkle_root"):
@@ -842,11 +870,16 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         emb["title"] = f"ToKenism Week {week} CGP Ready"
         emb["description"] = f"New CGP packet with {payload.get('super_node_count', 0)} super nodes generated."
         if payload.get("gini") is not None:
-            emb["fields"].append({"name": "Gini", "value": f"{payload['gini']:.4f}", "inline": True})
+            emb["fields"].append({"name": "Gini", "value": _safe_format_number(payload["gini"], ".4f"), "inline": True})
         if payload.get("poverty_rate") is not None:
-            emb["fields"].append({"name": "Poverty Rate", "value": f"{payload['poverty_rate']*100:.1f}%", "inline": True})
+            # Multiply by 100 for percentage display, with defensive handling
+            try:
+                pct_value = float(payload["poverty_rate"]) * 100
+                emb["fields"].append({"name": "Poverty Rate", "value": f"{pct_value:.1f}%", "inline": True})
+            except (TypeError, ValueError):
+                emb["fields"].append({"name": "Poverty Rate", "value": "N/A", "inline": True})
         if payload.get("total_wealth") is not None:
-            emb["fields"].append({"name": "Total Wealth", "value": f"${payload['total_wealth']:,.0f}", "inline": True})
+            emb["fields"].append({"name": "Total Wealth", "value": _safe_format_number(payload["total_wealth"], ",.0f", "$"), "inline": True})
         if payload.get("total_attributions") is not None:
             emb["fields"].append({"name": "Attributions", "value": str(payload["total_attributions"]), "inline": True})
         if payload.get("cgp_spec"):
@@ -865,13 +898,17 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if payload.get("generations"):
             emb["fields"].append({"name": "Generations", "value": str(payload["generations"]), "inline": True})
         if payload.get("best_fitness") is not None:
-            emb["fields"].append({"name": "Best Fitness", "value": f"{payload['best_fitness']:.4f}", "inline": True})
+            emb["fields"].append({"name": "Best Fitness", "value": _safe_format_number(payload["best_fitness"], ".4f"), "inline": True})
         if payload.get("avg_fitness") is not None:
-            emb["fields"].append({"name": "Avg Fitness", "value": f"{payload['avg_fitness']:.4f}", "inline": True})
+            emb["fields"].append({"name": "Avg Fitness", "value": _safe_format_number(payload["avg_fitness"], ".4f"), "inline": True})
         if payload.get("fitness_improvement") is not None:
-            imp = payload["fitness_improvement"]
-            sign = "+" if imp > 0 else ""
-            emb["fields"].append({"name": "Improvement", "value": f"{sign}{imp:.4f}", "inline": True})
+            # Format improvement with sign prefix, defensive handling
+            try:
+                imp = float(payload["fitness_improvement"])
+                sign = "+" if imp > 0 else ""
+                emb["fields"].append({"name": "Improvement", "value": f"{sign}{imp:.4f}", "inline": True})
+            except (TypeError, ValueError):
+                emb["fields"].append({"name": "Improvement", "value": "N/A", "inline": True})
         if payload.get("optimization_target"):
             emb["fields"].append({"name": "Target", "value": str(payload["optimization_target"]), "inline": True})
     else:

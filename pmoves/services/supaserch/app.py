@@ -103,13 +103,15 @@ def _build_cgp_packet(
         Dict conforming to chit.cgp.v0.1 schema
     """
     # Build points from pipeline stages
+    # Status-to-projection mapping for readability
+    status_proj_map = {"complete": 1.0, "pending": 0.5}
     points = []
     for i, stage in enumerate(plan):
         status = stage.get("status", "pending")
         points.append({
             "id": f"stage:{stage.get('stage', f'step-{i}')}",
             "modality": "latent",
-            "proj": 1.0 if status == "complete" else (0.5 if status == "pending" else 0.0),
+            "proj": status_proj_map.get(status, 0.0),
             "conf": 0.9 if status == "complete" else 0.5,
             "summary": stage.get("summary", "")[:200],
             "meta": {

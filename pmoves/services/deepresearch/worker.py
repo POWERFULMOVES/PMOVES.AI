@@ -263,6 +263,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -285,8 +286,21 @@ REQUEST_SUBJECT = "research.deepresearch.request.v1"
 RESULT_SUBJECT = "research.deepresearch.result.v1"
 CGP_SUBJECT = "tokenism.cgp.ready.v1"
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable.
+
+    Accepts: 1, true, t, yes, y, on (case-insensitive) as True.
+    Returns default if the variable is not set.
+    """
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
 # Enable CGP publishing via environment variable (default: enabled)
-CGP_PUBLISH_ENABLED = os.getenv("DEEPRESEARCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
+CGP_PUBLISH_ENABLED = _env_bool("DEEPRESEARCH_CGP_PUBLISH", default=True)
 DEFAULT_MODE = "openrouter"
 
 # Prometheus metrics
@@ -404,13 +418,6 @@ class NotebookPublishConfig:
     async_processing: bool
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
-
-
 def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, Any]:
     """Build a CGP (CHIT Geometry Packet) from research results.
 
@@ -424,8 +431,6 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
     Returns:
         Dict conforming to chit.cgp.v0.1 schema
     """
-    from datetime import datetime, timezone
-
     # Build points from iterations (research steps)
     points: List[Dict[str, Any]] = []
     if result.iterations:
