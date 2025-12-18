@@ -21,8 +21,16 @@ async function fetchMessages(): Promise<FetchResult> {
   try {
     const res = await fetch('/api/chat/messages', { cache: 'no-store' });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const errorMsg = body.error || getErrorMessage(res.status);
+      let body: Record<string, unknown> = {};
+      try {
+        body = await res.json();
+      } catch (parseError) {
+        logForDebugging('Failed to parse error response JSON', parseError, {
+          component: 'chat/page',
+          status: res.status,
+        });
+      }
+      const errorMsg = (body.error as string) || getErrorMessage(res.status);
       logForDebugging('fetchMessages failed', new Error(errorMsg), {
         component: 'chat/page',
         status: res.status,
@@ -50,8 +58,16 @@ async function sendMessage(content: string, agentId?: string): Promise<SendResul
       body: JSON.stringify({ content, role: 'user', agent: agentId })
     });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { ok: false, error: body.error || getErrorMessage(res.status) };
+      let body: Record<string, unknown> = {};
+      try {
+        body = await res.json();
+      } catch (parseError) {
+        logForDebugging('Failed to parse send error response', parseError, {
+          component: 'chat/page',
+          status: res.status,
+        });
+      }
+      return { ok: false, error: (body.error as string) || getErrorMessage(res.status) };
     }
     const body = await res.json();
     return { ok: body.ok ?? true, error: body.error ?? null };
@@ -109,26 +125,47 @@ export default function ChatDashboardPage() {
 
         const channel = subscribeToChatMessages(client, ownerId, {
           onInsert: (message) => {
-            if (isMounted) {
-              setMsgs((prev) => {
-                // Avoid duplicates
-                if (prev.some((m) => m.id === message.id)) {
-                  return prev;
-                }
-                return [...prev, message];
+            try {
+              if (isMounted) {
+                setMsgs((prev) => {
+                  // Avoid duplicates
+                  if (prev.some((m) => m.id === message.id)) {
+                    return prev;
+                  }
+                  return [...prev, message];
+                });
+              }
+            } catch (callbackError) {
+              logForDebugging('Realtime onInsert callback error', callbackError, {
+                component: 'chat/page',
+                messageId: message?.id,
               });
             }
           },
           onUpdate: (message) => {
-            if (isMounted) {
-              setMsgs((prev) =>
-                prev.map((m) => (m.id === message.id ? message : m))
-              );
+            try {
+              if (isMounted) {
+                setMsgs((prev) =>
+                  prev.map((m) => (m.id === message.id ? message : m))
+                );
+              }
+            } catch (callbackError) {
+              logForDebugging('Realtime onUpdate callback error', callbackError, {
+                component: 'chat/page',
+                messageId: message?.id,
+              });
             }
           },
           onDelete: (message) => {
-            if (isMounted) {
-              setMsgs((prev) => prev.filter((m) => m.id !== message.id));
+            try {
+              if (isMounted) {
+                setMsgs((prev) => prev.filter((m) => m.id !== message.id));
+              }
+            } catch (callbackError) {
+              logForDebugging('Realtime onDelete callback error', callbackError, {
+                component: 'chat/page',
+                messageId: message?.id,
+              });
             }
           },
         });
@@ -136,7 +173,7 @@ export default function ChatDashboardPage() {
         channelRef.current = channel;
         setStatus('connected');
       } catch (error) {
-        console.error('Failed to setup realtime:', error);
+        logForDebugging('Failed to setup realtime', error, { component: 'chat/page' });
         if (isMounted) {
           setStatus('error');
           // Fallback to polling when realtime fails
