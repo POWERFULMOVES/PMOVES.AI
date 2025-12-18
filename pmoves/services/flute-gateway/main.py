@@ -21,7 +21,7 @@ import logging
 import os
 import wave
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -158,7 +158,7 @@ async def _publish_chit_voice_event(
             "text_length": text_length,
             "audio_duration_seconds": audio_duration,
             "voice": voice,
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat(),
         }
         await nats_client.publish(
             CHIT_GEOMETRY_SUBJECT,
@@ -166,7 +166,11 @@ async def _publish_chit_voice_event(
         )
         logger.debug("chit_voice_event_published", extra={"subject": CHIT_GEOMETRY_SUBJECT})
     except Exception as exc:
-        logger.warning("chit_voice_event_failed", extra={"error": str(exc)})
+        logger.warning(
+            "chit_voice_event_failed",
+            extra={"error": str(exc), "exc_type": type(exc).__name__},
+            exc_info=True
+        )
 
 
 # Pydantic models

@@ -417,6 +417,10 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
     points: List[Dict[str, Any]] = []
     if result.iterations:
         for i, step in enumerate(result.iterations):
+            # Type validation: skip non-dict entries with a warning
+            if not isinstance(step, dict):
+                LOGGER.warning("Skipping non-dict iteration step at index %d: %r", i, type(step).__name__)
+                continue
             points.append({
                 "id": f"step:{i}",
                 "modality": "text",
@@ -433,6 +437,10 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
     # Add sources as additional points
     if result.sources:
         for i, src in enumerate(result.sources):
+            # Type validation: skip non-dict entries with a warning
+            if not isinstance(src, dict):
+                LOGGER.warning("Skipping non-dict source at index %d: %r", i, type(src).__name__)
+                continue
             points.append({
                 "id": f"source:{i}",
                 "modality": "text",
@@ -772,11 +780,27 @@ class DeepResearchRunner:
                     "Primary model %s failed (%s), trying fallback %s",
                     self.tensorzero_model, exc.response.status_code, self.tensorzero_fallback_model
                 )
+                FALLBACK_COUNTER.labels(reason="http_error").inc()
                 payload["model"] = self.tensorzero_fallback_model
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(url, json=payload, headers=headers)
-                    response.raise_for_status()
-                    data = response.json()
+                try:
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(url, json=payload, headers=headers)
+                        response.raise_for_status()
+                        data = response.json()
+                except httpx.HTTPStatusError as fallback_exc:
+                    LOGGER.error(
+                        "Fallback model %s also failed: HTTP %s",
+                        self.tensorzero_fallback_model, fallback_exc.response.status_code
+                    )
+                    raise RuntimeError(
+                        f"Both primary ({self.tensorzero_model}) and fallback "
+                        f"({self.tensorzero_fallback_model}) models failed"
+                    ) from fallback_exc
+                except (httpx.TimeoutException, httpx.ConnectError) as network_exc:
+                    LOGGER.error("Network error during fallback request: %s", network_exc)
+                    raise RuntimeError(
+                        f"Fallback model network error: {network_exc}"
+                    ) from network_exc
             else:
                 raise
 
@@ -832,13 +856,32 @@ async def _handle_request(msg: Msg, runner: DeepResearchRunner, publisher: Noteb
 
     # Publish CGP packet for GEOMETRY BUS integration
     if CGP_PUBLISH_ENABLED:
+        request_id = data.get("correlation_id") or data.get("id") or "unknown"
+        cgp_packet = None
         try:
-            request_id = data.get("correlation_id") or data.get("id") or "unknown"
             cgp_packet = _build_cgp_packet(result, request_id)
-            await nc.publish(CGP_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
-            LOGGER.info("Published CGP packet to %s for request_id=%s", CGP_SUBJECT, request_id)
-        except Exception as cgp_exc:  # pylint: disable=broad-except
-            LOGGER.warning("Failed to publish CGP packet: %s", cgp_exc)
+        except (TypeError, AttributeError, KeyError) as build_exc:
+            # Building errors indicate bugs in _build_cgp_packet - log at ERROR
+            LOGGER.error(
+                "CGP packet build failed (bug in _build_cgp_packet): %s (request_id=%s)",
+                build_exc, request_id, exc_info=True
+            )
+        except Exception as build_exc:  # pylint: disable=broad-except
+            LOGGER.error(
+                "Unexpected error building CGP packet: %s (request_id=%s)",
+                build_exc, request_id, exc_info=True
+            )
+
+        if cgp_packet is not None:
+            try:
+                await nc.publish(CGP_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
+                LOGGER.info("Published CGP packet to %s for request_id=%s", CGP_SUBJECT, request_id)
+            except Exception as pub_exc:  # pylint: disable=broad-except
+                # Publishing errors indicate infrastructure issues - log at WARNING
+                LOGGER.warning(
+                    "Failed to publish CGP packet to NATS: %s (request_id=%s, nats_connected=%s)",
+                    pub_exc, request_id, nc.is_connected if nc else False
+                )
 
 
 async def main() -> None:

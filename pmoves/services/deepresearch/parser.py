@@ -76,9 +76,22 @@ def prepare_result(
 ) -> Tuple[str, List[str], List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[str]]:
     """Prepare the final result payload consumed by downstream services.
 
-    Returns a tuple of (summary, notes, sources, iterations, raw_log) as expected
-    by the DeepResearchRunner caller.
+    Args:
+        parsed: Dictionary from parse_model_output containing raw LLM response data.
+
+    Returns:
+        A tuple containing:
+        - summary (str): Main research finding from 'summary', 'answer', or 'result' keys.
+        - notes (List[str]): Actionable findings from 'notes' or 'findings' keys.
+        - sources (List[Dict]): Normalized source dicts with keys: title, url, score, excerpt.
+        - iterations (Optional[List[Dict]]): Research step dicts from 'iterations'/'steps', or None.
+        - raw_log (Optional[str]): Debug/reasoning log from 'raw_log'/'reasoning', or None.
+
+    Raises:
+        TypeError: If parsed is not a dictionary (from parse_model_output failure).
     """
+    if not isinstance(parsed, dict):
+        raise TypeError(f"Expected dict from parse_model_output, got {type(parsed).__name__}")
 
     summary = str(
         parsed.get("summary")

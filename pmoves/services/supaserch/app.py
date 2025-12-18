@@ -172,7 +172,11 @@ async def _emit_cgp_packet(
 ) -> bool:
     """Emit CGP packet to GEOMETRY BUS.
 
-    Returns True if successfully published, False otherwise.
+    Returns True if successfully published, False if:
+    - CGP_PUBLISH_ENABLED is False
+    - NATS client is not connected
+    - Building the CGP packet failed (logged at ERROR)
+    - Publishing raised an exception (logged at WARNING)
     """
     if not CGP_PUBLISH_ENABLED:
         return False
@@ -182,13 +186,33 @@ async def _emit_cgp_packet(
         logger.warning("Cannot publish CGP: NATS not connected")
         return False
 
+    # Build the CGP packet (errors here indicate bugs)
+    cgp_packet = None
     try:
         cgp_packet = _build_cgp_packet(query, context, plan, fallback)
+    except (TypeError, AttributeError, KeyError) as build_exc:
+        logger.error(
+            "CGP packet build failed (bug in _build_cgp_packet): %s (request_id=%s)",
+            build_exc, context.request_id, exc_info=True
+        )
+        return False
+    except Exception as build_exc:  # noqa: BLE001
+        logger.error(
+            "Unexpected error building CGP packet: %s (request_id=%s)",
+            build_exc, context.request_id, exc_info=True
+        )
+        return False
+
+    # Publish to NATS (errors here indicate infrastructure issues)
+    try:
         await nc.publish(CGP_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
         logger.info("Published CGP packet to %s for request_id=%s", CGP_SUBJECT, context.request_id)
         return True
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to publish CGP packet: %s", exc)
+    except Exception as pub_exc:  # noqa: BLE001
+        logger.warning(
+            "Failed to publish CGP packet to NATS: %s (request_id=%s, nats_connected=%s)",
+            pub_exc, context.request_id, nc.is_connected if nc else False
+        )
         return False
 
 
