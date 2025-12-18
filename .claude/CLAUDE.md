@@ -362,6 +362,32 @@ docker compose --profile agents --profile workers up -d
 
 See `.claude/context/testing-strategy.md` for detailed testing guidelines.
 
+## UI Development Checklist
+
+Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2025.md`):
+
+### Security
+- [ ] User identity from JWT only, never from request body/query params
+- [ ] Proper base64url decoding for JWT payloads (`-` → `+`, `_` → `/`)
+- [ ] No query parameter fallbacks that bypass authentication
+
+### Privacy
+- [ ] No PII (userId, email) in error logging interfaces
+- [ ] Use `logError()` not raw `console.error` for production
+- [ ] Generic user-facing error messages with digest IDs for support
+
+### Accessibility (WCAG 2.1)
+- [ ] Skip links as first focusable element (`sr-only focus:not-sr-only` pattern)
+- [ ] Skip link target has `tabIndex={-1}` for programmatic focus
+- [ ] ARIA live regions: `assertive` (critical errors) / `polite` (normal errors)
+- [ ] Tailwind classes statically analyzable (use lookup objects, not interpolation)
+
+### Code Quality
+- [ ] Consistent error response shapes: `{ok, error}` or `{items, error}`
+- [ ] HTTP status codes: 401 (auth failure), 400 (bad request), 500 (server error)
+- [ ] Shared utilities extracted (no duplicate functions like `ownerFromJwt`)
+- [ ] Unused imports removed
+
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
