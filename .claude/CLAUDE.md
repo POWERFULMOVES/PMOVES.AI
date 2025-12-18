@@ -368,8 +368,15 @@ See `.claude/context/` for detailed documentation:
 - `services-catalog.md` - Complete service listing with all details
 - `submodules.md` - Complete submodules catalog (20 submodules)
 - `nats-subjects.md` - Comprehensive NATS subject catalog
+- `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference
 - `testing-strategy.md` - Testing workflow and PR requirements
+
+**GEOMETRY BUS & CHIT Integration:**
+- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
+- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
+- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
+- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
 ## Meta-Instruction for Claude Code CLI
 
