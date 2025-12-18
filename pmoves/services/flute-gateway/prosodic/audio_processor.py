@@ -11,18 +11,23 @@ All functions operate on float32 audio arrays normalized to [-1, 1].
 
 from __future__ import annotations
 
+import logging
 import numpy as np
 from typing import Optional
 import random
 
 from .types import BoundaryType, get_pause_config
 
+logger = logging.getLogger(__name__)
+
 # Optional scipy for better breath sound filtering
 try:
     import scipy.signal as signal
     HAS_SCIPY = True
+    logger.info("scipy.signal available - using Butterworth filter for breath sounds")
 except ImportError:
     HAS_SCIPY = False
+    logger.info("scipy.signal not available - using moving average fallback for breath sounds")
 
 
 def silence(duration_ms: float, sample_rate: int = 22050) -> np.ndarray:
