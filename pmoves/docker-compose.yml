@@ -347,7 +347,7 @@ services:
       # VibeVoice is typically run outside Docker (Pinokio/host); reach it via host-gateway.
       - VIBEVOICE_URL=${VIBEVOICE_URL:-http://host.docker.internal:3000}
       - WHISPER_URL=${WHISPER_URL:-http://ffmpeg-whisper:8078}
-      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7863}
+      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
       - FLUTE_HTTP_PORT=8055
