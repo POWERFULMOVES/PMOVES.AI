@@ -47,7 +47,7 @@ async function sendMessage(content: string, agentId?: string): Promise<SendResul
     const res = await fetch('/api/chat/send', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content, role: 'user', agent_id: agentId })
+      body: JSON.stringify({ content, role: 'user', agent: agentId })
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

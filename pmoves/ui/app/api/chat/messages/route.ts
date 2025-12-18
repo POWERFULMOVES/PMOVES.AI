@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
 import { getBootJwt } from '@/lib/supabaseClient';
-import { logForDebugging } from '@/lib/errorUtils';
+import { logError, logForDebugging } from '@/lib/errorUtils';
 
 function ownerFromJwt(): { ownerId: string | null; error?: string } {
   try {
@@ -11,14 +11,14 @@ function ownerFromJwt(): { ownerId: string | null; error?: string } {
     }
     const parts = token.split('.');
     if (parts.length !== 3) {
-      logForDebugging('Invalid JWT format', new Error('JWT must have 3 parts'), { component: 'chat/messages' });
+      logError('Invalid JWT format', new Error('JWT must have 3 parts'), 'warning', { component: 'chat/messages' });
       return { ownerId: null, error: 'Invalid JWT format' };
     }
     const payload = parts[1];
     const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
     return { ownerId: typeof json.sub === 'string' ? json.sub : null };
   } catch (e) {
-    logForDebugging('JWT parsing failed', e, { component: 'chat/messages' });
+    logError('JWT parsing failed', e, 'error', { component: 'chat/messages' });
     return { ownerId: null, error: 'Failed to parse JWT' };
   }
 }
@@ -43,7 +43,16 @@ export async function GET(req: NextRequest) {
     .eq('owner_id', ownerId)
     .order('created_at', { ascending: false })
     .limit(50);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    logError('Failed to fetch chat messages', error, 'error', {
+      component: 'chat/messages',
+      ownerId,
+    });
+    return NextResponse.json(
+      { error: 'Failed to load messages. Please try again.' },
+      { status: 500 }
+    );
+  }
   return NextResponse.json({ items: data ?? [] });
 }
 
