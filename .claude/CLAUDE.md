@@ -323,8 +323,10 @@ docker compose --profile agents --profile workers up -d
 
 **Submodules:**
 - `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES.YT`
-- `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Supaserch`
-- Plus health/wealth integrations
+- `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Deep-Serch`
+- `PMOVES-BoTZ`, `PMOVES-DoX`, `PMOVES-HiRAG`
+- Plus health/wealth integrations and more (20 total)
+- **See:** `.claude/context/submodules.md` for complete catalog
 
 **CI/CD:**
 - GitHub Actions for multi-arch builds (amd64, arm64)
@@ -336,12 +338,71 @@ docker compose --profile agents --profile workers up -d
 - Feature branches: `feature/*`
 - PR target: `main`
 
+## Testing Workflow
+
+### Before PR Submission
+1. Run `/test:pr` to execute standard test suite
+2. Copy generated Testing section to PR description
+3. Ensure docstring coverage ≥80% on new/modified Python code
+
+### Test Commands
+| Command | Description |
+|---------|-------------|
+| `cd pmoves && make verify-all` | Full verification (smoke tests, health checks) |
+| `/health:check-all` | Check all service health endpoints |
+| `/test:pr` | PR testing workflow with documentation |
+| `/deploy:smoke-test` | Deployment smoke tests |
+| `pytest pmoves/tests/` | Integration tests |
+
+### CI Requirements
+- **CodeQL Analysis** - Security scanning (must pass)
+- **CHIT Contract Check** - Schema validation (must pass)
+- **SQL Policy Lint** - Migration validation (must pass)
+- **CodeRabbit Review** - Docstring coverage ≥80%
+
+See `.claude/context/testing-strategy.md` for detailed testing guidelines.
+
+## UI Development Checklist
+
+Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2025.md`):
+
+### Security
+- [ ] User identity from JWT only, never from request body/query params
+- [ ] Proper base64url decoding for JWT payloads (`-` → `+`, `_` → `/`)
+- [ ] No query parameter fallbacks that bypass authentication
+
+### Privacy
+- [ ] No PII (userId, email) in error logging interfaces
+- [ ] Use `logError()` not raw `console.error` for production
+- [ ] Generic user-facing error messages with digest IDs for support
+
+### Accessibility (WCAG 2.1)
+- [ ] Skip links as first focusable element (`sr-only focus:not-sr-only` pattern)
+- [ ] Skip link target has `tabIndex={-1}` for programmatic focus
+- [ ] ARIA live regions: `assertive` (critical errors) / `polite` (normal errors)
+- [ ] Tailwind classes statically analyzable (use lookup objects, not interpolation)
+
+### Code Quality
+- [ ] Consistent error response shapes: `{ok, error}` or `{items, error}`
+- [ ] HTTP status codes: 401 (auth failure), 400 (bad request), 500 (server error)
+- [ ] Shared utilities extracted (no duplicate functions like `ownerFromJwt`)
+- [ ] Unused imports removed
+
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
 - `services-catalog.md` - Complete service listing with all details
+- `submodules.md` - Complete submodules catalog (20 submodules)
 - `nats-subjects.md` - Comprehensive NATS subject catalog
+- `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference
+- `testing-strategy.md` - Testing workflow and PR requirements
+
+**GEOMETRY BUS & CHIT Integration:**
+- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
+- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
+- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
+- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
 ## Meta-Instruction for Claude Code CLI
 
@@ -351,5 +412,6 @@ When developing features for PMOVES.AI:
 3. **Expose health/metrics** - Follow observability patterns
 4. **Check health first** - Always verify service status before use
 5. **Consult context docs** - Reference `.claude/context/` for details
+6. **Test before PR** - Run `/test:pr` and document results
 
 PMOVES.AI is a sophisticated production system. Your role is to build features that integrate with this ecosystem, not replace it.
