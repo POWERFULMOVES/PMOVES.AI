@@ -39,7 +39,8 @@ DISCORD_AVATAR_URL = os.environ.get("DISCORD_AVATAR_URL", "")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SUBJECTS = os.environ.get(
     "DISCORD_SUBJECTS",
-    "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1",
+    "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,"
+    "tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.cgp.ready.v1,tokenism.swarm.population.v1",
 ).split(",")
 
 JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "")
@@ -673,6 +674,11 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         "ingest.summary.ready.v1": 0xf59e0b,
         "ingest.chapters.ready.v1": 0x8b5cf6,
         "content.published.v1": 0x22c55e,
+        # CHIT / ToKenism colors (teal/cyan spectrum)
+        "tokenism.attribution.recorded.v1": 0x00d4aa,
+        "tokenism.cgp.weekly.v1": 0x06b6d4,
+        "tokenism.cgp.ready.v1": 0x0891b2,
+        "tokenism.swarm.population.v1": 0x14b8a6,
     }
     emb["color"] = color_map.get(name, 0x94a3b8)  # default slate-400
     thumb = _pick_thumbnail(payload)
@@ -815,6 +821,57 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
                     )
             else:
                 emb["fields"].append({"name": "Summary", "value": summary_text[:1024], "inline": False})
+    # CHIT / ToKenism event handlers
+    elif name == "tokenism.attribution.recorded.v1":
+        chit_id = payload.get("chit_id") or payload.get("chitId")
+        emb["title"] = f"Attribution Recorded: {chit_id}"
+        if payload.get("address"):
+            emb["fields"].append({"name": "Address", "value": f"`{payload['address']}`", "inline": True})
+        if payload.get("action"):
+            emb["fields"].append({"name": "Action", "value": str(payload["action"]), "inline": True})
+        if payload.get("amount") is not None:
+            emb["fields"].append({"name": "Amount", "value": f"${payload['amount']:,.2f}", "inline": True})
+        if payload.get("week") is not None:
+            emb["fields"].append({"name": "Week", "value": str(payload["week"]), "inline": True})
+        if payload.get("merkle_root"):
+            emb["fields"].append({"name": "Merkle Root", "value": f"`{payload['merkle_root'][:16]}...`", "inline": False})
+    elif name == "tokenism.cgp.weekly.v1":
+        week = payload.get("week")
+        emb["title"] = f"ToKenism Week {week} CGP Ready"
+        emb["description"] = f"New CGP packet with {payload.get('super_node_count', 0)} super nodes generated."
+        if payload.get("gini") is not None:
+            emb["fields"].append({"name": "Gini", "value": f"{payload['gini']:.4f}", "inline": True})
+        if payload.get("poverty_rate") is not None:
+            emb["fields"].append({"name": "Poverty Rate", "value": f"{payload['poverty_rate']*100:.1f}%", "inline": True})
+        if payload.get("total_wealth") is not None:
+            emb["fields"].append({"name": "Total Wealth", "value": f"${payload['total_wealth']:,.0f}", "inline": True})
+        if payload.get("total_attributions") is not None:
+            emb["fields"].append({"name": "Attributions", "value": str(payload["total_attributions"]), "inline": True})
+        if payload.get("cgp_spec"):
+            emb["fields"].append({"name": "Spec", "value": f"`{payload['cgp_spec']}`", "inline": True})
+    elif name == "tokenism.cgp.ready.v1":
+        emb["title"] = f"CGP Packet Ready"
+        emb["description"] = "CHIT Geometry Packet available for consumption."
+        if payload.get("week"):
+            emb["fields"].append({"name": "Week", "value": str(payload["week"]), "inline": True})
+        if payload.get("super_node_count"):
+            emb["fields"].append({"name": "Super Nodes", "value": str(payload["super_node_count"]), "inline": True})
+    elif name == "tokenism.swarm.population.v1":
+        pop_name = payload.get("name") or payload.get("population_id")
+        emb["title"] = f"Swarm Population: {pop_name}"
+        emb["description"] = "ToKenism swarm optimization update."
+        if payload.get("generations"):
+            emb["fields"].append({"name": "Generations", "value": str(payload["generations"]), "inline": True})
+        if payload.get("best_fitness") is not None:
+            emb["fields"].append({"name": "Best Fitness", "value": f"{payload['best_fitness']:.4f}", "inline": True})
+        if payload.get("avg_fitness") is not None:
+            emb["fields"].append({"name": "Avg Fitness", "value": f"{payload['avg_fitness']:.4f}", "inline": True})
+        if payload.get("fitness_improvement") is not None:
+            imp = payload["fitness_improvement"]
+            sign = "+" if imp > 0 else ""
+            emb["fields"].append({"name": "Improvement", "value": f"{sign}{imp:.4f}", "inline": True})
+        if payload.get("optimization_target"):
+            emb["fields"].append({"name": "Target", "value": str(payload["optimization_target"]), "inline": True})
     else:
         desc = json.dumps(payload)[:1800]
         emb["description"] = f"```json\n{desc}\n```"

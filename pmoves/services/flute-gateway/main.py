@@ -60,6 +60,11 @@ ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:786
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
 
+# CHIT integration configuration
+CHIT_VOICE_ATTRIBUTION = os.getenv("CHIT_VOICE_ATTRIBUTION", "false").lower() == "true"
+CHIT_NAMESPACE = os.getenv("CHIT_NAMESPACE", "pmoves.voice")
+CHIT_GEOMETRY_SUBJECT = os.getenv("CHIT_GEOMETRY_SUBJECT", "tokenism.geometry.event.v1")
+
 
 def _pcm16_to_wav_bytes(pcm16: bytes, sample_rate: int) -> bytes:
     buf = io.BytesIO()
@@ -130,6 +135,38 @@ vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
 nats_client = None
+
+
+async def _publish_chit_voice_event(
+    provider: str,
+    text_length: int,
+    audio_duration: float,
+    voice: Optional[str] = None,
+) -> None:
+    """Publish voice synthesis event to CHIT geometry bus (best-effort).
+
+    Only publishes if CHIT_VOICE_ATTRIBUTION is enabled.
+    Non-blocking: errors are logged but don't fail the request.
+    """
+    if not CHIT_VOICE_ATTRIBUTION or not nats_client:
+        return
+    try:
+        payload = {
+            "namespace": CHIT_NAMESPACE,
+            "modality": "voice_synthesis",
+            "provider": provider,
+            "text_length": text_length,
+            "audio_duration_seconds": audio_duration,
+            "voice": voice,
+            "ts": datetime.utcnow().isoformat() + "Z",
+        }
+        await nats_client.publish(
+            CHIT_GEOMETRY_SUBJECT,
+            json.dumps(payload).encode("utf-8"),
+        )
+        logger.debug("chit_voice_event_published", extra={"subject": CHIT_GEOMETRY_SUBJECT})
+    except Exception as exc:
+        logger.warning("chit_voice_event_failed", extra={"error": str(exc)})
 
 
 # Pydantic models
@@ -348,6 +385,14 @@ async def synthesize_speech(request: SynthesizeRequest):
 
             REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
 
+            # Publish CHIT voice attribution event (best-effort)
+            await _publish_chit_voice_event(
+                provider="vibevoice",
+                text_length=len(request.text),
+                audio_duration=audio_duration,
+                voice=request.voice,
+            )
+
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
                 sample_rate=24000,
@@ -368,6 +413,14 @@ async def synthesize_speech(request: SynthesizeRequest):
             audio_duration = len(audio_data) / 48000
 
             REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
+
+            # Publish CHIT voice attribution event (best-effort)
+            await _publish_chit_voice_event(
+                provider="ultimate_tts",
+                text_length=len(request.text),
+                audio_duration=audio_duration,
+                voice=request.voice,
+            )
 
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
