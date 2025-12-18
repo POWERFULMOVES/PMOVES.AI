@@ -16,6 +16,31 @@ const SERVICE_COLORS: Record<string, string> = {
   'firefly': 'gold',
 };
 
+// Lookup objects for Tailwind JIT - all class names must be statically analyzable
+const TAG_CLASSES: Record<string, string> = {
+  cyan: 'tag tag-cyan',
+  ember: 'tag tag-ember',
+  violet: 'tag tag-violet',
+  forest: 'tag tag-forest',
+  gold: 'tag tag-gold',
+};
+
+const ICON_BG_CLASSES: Record<string, string> = {
+  cyan: 'bg-cata-cyan/10',
+  ember: 'bg-cata-ember/10',
+  violet: 'bg-cata-violet/10',
+  forest: 'bg-cata-forest/10',
+  gold: 'bg-cata-gold/10',
+};
+
+const BORDER_CLASSES: Record<string, string> = {
+  cyan: 'border-cata-cyan/30 hover:border-cata-cyan group-hover:text-cata-cyan',
+  ember: 'border-cata-ember/30 hover:border-cata-ember group-hover:text-cata-ember',
+  violet: 'border-cata-violet/30 hover:border-cata-violet group-hover:text-cata-violet',
+  forest: 'border-cata-forest/30 hover:border-cata-forest group-hover:text-cata-forest',
+  gold: 'border-cata-gold/30 hover:border-cata-gold group-hover:text-cata-gold',
+};
+
 export default function ServicesIndexPage() {
   return (
     <DashboardShell
@@ -33,29 +58,22 @@ export default function ServicesIndexPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {INTEGRATION_SERVICES.map((service) => {
             const color = SERVICE_COLORS[service.slug] || 'cyan';
-            const colorClasses: Record<string, string> = {
-              cyan: 'border-cata-cyan/30 hover:border-cata-cyan group-hover:text-cata-cyan',
-              ember: 'border-cata-ember/30 hover:border-cata-ember group-hover:text-cata-ember',
-              violet: 'border-cata-violet/30 hover:border-cata-violet group-hover:text-cata-violet',
-              forest: 'border-cata-forest/30 hover:border-cata-forest group-hover:text-cata-forest',
-              gold: 'border-cata-gold/30 hover:border-cata-gold group-hover:text-cata-gold',
-            };
 
             return (
               <Link
                 key={service.slug}
                 href={`/dashboard/services/${service.slug}`}
-                className={`group card-brutal p-6 flex flex-col gap-4 border ${colorClasses[color]}`}
+                className={`group card-brutal p-6 flex flex-col gap-4 border ${BORDER_CLASSES[color]}`}
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <span className={`tag tag-${color}`}>Integration</span>
-                    <h2 className={`font-display font-bold text-xl mt-2 transition-colors ${colorClasses[color]}`}>
+                    <span className={TAG_CLASSES[color]}>Integration</span>
+                    <h2 className={`font-display font-bold text-xl mt-2 transition-colors ${BORDER_CLASSES[color]}`}>
                       {service.title}
                     </h2>
                   </div>
-                  <div className={`w-12 h-12 flex items-center justify-center bg-${color === 'cyan' ? 'cata-cyan' : color === 'ember' ? 'cata-ember' : color === 'violet' ? 'cata-violet' : color === 'forest' ? 'cata-forest' : 'cata-gold'}/10 font-display font-bold text-lg opacity-50 group-hover:opacity-100 transition-opacity`}>
+                  <div className={`w-12 h-12 flex items-center justify-center ${ICON_BG_CLASSES[color]} font-display font-bold text-lg opacity-50 group-hover:opacity-100 transition-opacity`}>
                     {service.title.charAt(0)}
                   </div>
                 </div>
