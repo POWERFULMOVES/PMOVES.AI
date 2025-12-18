@@ -360,12 +360,12 @@ export default function IngestionQueuePage() {
                         </p>
                       )}
                       <div className="flex items-center gap-4 mt-2 text-xs text-neutral-400">
-                        {item.source_meta?.channel_name && (
+                        {item.source_meta?.channel_name ? (
                           <span>Channel: {String(item.source_meta.channel_name)}</span>
-                        )}
-                        {item.source_meta?.uploader && (
+                        ) : null}
+                        {item.source_meta?.uploader ? (
                           <span>By: {String(item.source_meta.uploader)}</span>
-                        )}
+                        ) : null}
                         <span>{formatTimeAgo(item.created_at)}</span>
                       </div>
                     </div>

@@ -27,9 +27,7 @@ const initialFormState: FormState = {
 
 const sanitizeRedirect = (input?: string): string => {
   if (!input) return '/';
-  if (!input.startsWith('/')) {
-    return '/';
-  }
+  if (!input.startsWith('/')) return '/';
   return input;
 };
 
@@ -65,7 +63,7 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
         return;
       }
 
-      setStatus('Signed in! Redirecting…');
+      setStatus('Signed in! Redirecting...');
       router.replace(targetPath);
     },
     [formState, router, signInWithPassword, targetPath]
@@ -85,9 +83,7 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
 
       const response = await signInWithOAuth({
         provider: providerKey as Provider,
-        options: {
-          redirectTo: redirectUrl.toString()
-        }
+        options: { redirectTo: redirectUrl.toString() }
       });
 
       if (response.error) {
@@ -100,14 +96,11 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
   );
 
   return (
-    <div className="flex w-full max-w-md flex-col gap-8">
+    <div className="w-full max-w-md space-y-6">
       {passwordEnabled && (
-        <form
-          onSubmit={handlePasswordLogin}
-          className="flex flex-col gap-4 rounded-2xl border border-brand-border bg-[rgba(16,43,47,0.85)] p-6 text-brand-inverse shadow-lg shadow-[rgba(16,43,47,0.25)]"
-        >
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium" htmlFor="email">
+        <form onSubmit={handlePasswordLogin} className="card-brutal p-6 space-y-5">
+          <div className="space-y-2">
+            <label className="block text-sm font-mono uppercase tracking-wider text-ink-muted" htmlFor="email">
               Email
             </label>
             <input
@@ -118,11 +111,13 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
               value={formState.email}
               onChange={handleChange}
               required
-              className="w-full rounded-lg border border-brand-border bg-[rgba(16,43,47,0.6)] px-4 py-3 text-sm text-brand-inverse placeholder:text-brand-subtle focus:outline-none focus:ring-2 focus:ring-brand-sky"
+              className="w-full px-4 py-3 bg-void border border-border-subtle text-ink-primary font-mono text-sm placeholder:text-ink-muted focus:outline-none focus:border-cata-cyan focus:ring-2 focus:ring-cata-cyan/30 transition-colors"
+              placeholder="you@example.com"
             />
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium" htmlFor="password">
+
+          <div className="space-y-2">
+            <label className="block text-sm font-mono uppercase tracking-wider text-ink-muted" htmlFor="password">
               Password
             </label>
             <input
@@ -133,46 +128,61 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
               value={formState.password}
               onChange={handleChange}
               required
-              className="w-full rounded-lg border border-brand-border bg-[rgba(16,43,47,0.6)] px-4 py-3 text-sm text-brand-inverse placeholder:text-brand-subtle focus:outline-none focus:ring-2 focus:ring-brand-sky"
+              className="w-full px-4 py-3 bg-void border border-border-subtle text-ink-primary font-mono text-sm placeholder:text-ink-muted focus:outline-none focus:border-cata-cyan focus:ring-2 focus:ring-cata-cyan/30 transition-colors"
+              placeholder="••••••••"
             />
           </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="rounded-full bg-brand-sky px-4 py-3 text-sm font-semibold text-brand-ink-strong transition hover:bg-brand-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 focus-visible:ring-offset-brand-inverse disabled:opacity-70"
+            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
       )}
 
       {providers.length > 0 && (
-        <div className="flex flex-col gap-3 text-brand-inverse">
-          <span className="text-sm text-brand-subtle">Or sign in with</span>
-          <div className="flex flex-col gap-2">
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="flex-1 h-px bg-border-subtle" />
+            <span className="text-xs text-ink-muted uppercase tracking-wider">Or continue with</span>
+            <div className="flex-1 h-px bg-border-subtle" />
+          </div>
+
+          <div className="space-y-3">
             {providers.map((provider) => (
               <button
                 key={provider.key}
                 onClick={() => handleOAuthLogin(provider.key)}
                 type="button"
-                className="rounded-xl border border-brand-border bg-[rgba(16,43,47,0.6)] px-4 py-3 text-sm font-medium text-brand-inverse transition hover:border-brand-sky hover:text-brand-inverse focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-sky"
+                className="w-full px-4 py-3 border border-border-subtle bg-void-elevated text-ink-primary font-display font-semibold text-sm uppercase tracking-wider hover:border-cata-cyan hover:text-cata-cyan transition-colors focus:outline-none focus:border-cata-cyan focus:ring-2 focus:ring-cata-cyan/30"
               >
-                Continue with {provider.label}
+                {provider.label}
               </button>
             ))}
           </div>
         </div>
       )}
 
+      {/* Error state */}
       {(formError || error) && (
-        <div className="rounded-xl border border-brand-crimson bg-[rgba(219,69,69,0.15)] p-4 text-sm text-brand-crimson">
-          {formError || error}
+        <div className="p-4 border border-cata-ember bg-cata-ember/10 flex items-start gap-3">
+          <div className="w-6 h-6 flex items-center justify-center bg-cata-ember/20 text-cata-ember font-bold flex-shrink-0">
+            !
+          </div>
+          <p className="text-sm text-cata-ember">{formError || error}</p>
         </div>
       )}
 
+      {/* Success state */}
       {status && (
-        <div className="rounded-xl border border-brand-forest bg-[rgba(46,139,87,0.18)] p-4 text-sm text-brand-forest">
-          {status}
+        <div className="p-4 border border-cata-forest bg-cata-forest/10 flex items-start gap-3">
+          <div className="w-6 h-6 flex items-center justify-center bg-cata-forest/20 text-cata-forest font-bold flex-shrink-0">
+            ✓
+          </div>
+          <p className="text-sm text-cata-forest">{status}</p>
         </div>
       )}
     </div>
