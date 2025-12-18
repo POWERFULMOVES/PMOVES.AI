@@ -370,7 +370,7 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
     Returns:
         Dict conforming to chit.cgp.v0.1 schema
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     # Build points from iterations (research steps)
     points: List[Dict[str, Any]] = []
@@ -417,7 +417,7 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
     return {
         "spec": "chit.cgp.v0.1",
         "summary": f"DeepResearch: {shorten(result.query, width=100)}",
-        "created_at": datetime.utcnow().isoformat() + "Z",
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "super_nodes": [
             {
                 "id": f"research:{request_id}",
@@ -561,6 +561,15 @@ class DeepResearchRunner:
         self.openrouter_site = os.getenv("DEEPRESEARCH_OPENROUTER_SITE", "https://pmoves.ai")
         self.api_base = (os.getenv("DEEPRESEARCH_API_BASE") or "http://deepresearch:8080").rstrip("/")
         self.planning_endpoint = os.getenv("DEEPRESEARCH_PLANNING_ENDPOINT", "/api/research")
+        # TensorZero/Ollama configuration
+        self.tensorzero_base = (
+            os.getenv("DEEPRESEARCH_TENSORZERO_BASE_URL")
+            or os.getenv("TENSORZERO_BASE_URL")
+            or "http://tensorzero-gateway:3030"
+        ).rstrip("/")
+        self.tensorzero_model = os.getenv("DEEPRESEARCH_TENSORZERO_MODEL", "nemotron-3-nano:30b")
+        self.tensorzero_fallback_model = os.getenv("DEEPRESEARCH_TENSORZERO_FALLBACK_MODEL", "qwen3-vl:8b")
+        self.tensorzero_key = os.getenv("TENSORZERO_API_KEY") or ""
 
     async def run(self, request: ResearchRequest) -> ResearchResult:
         start = time.perf_counter()
@@ -570,6 +579,10 @@ class DeepResearchRunner:
         try:
             if mode == "openrouter":
                 summary, notes, sources, iterations, raw_log = await self._run_openrouter(request)
+                status = "success"
+                error = None
+            elif mode == "tensorzero":
+                summary, notes, sources, iterations, raw_log = await self._run_tensorzero(request)
                 status = "success"
                 error = None
             else:
@@ -653,6 +666,66 @@ class DeepResearchRunner:
             response = await client.post("/v1/chat/completions", json=json_payload)
             response.raise_for_status()
             data = response.json()
+
+        content = _extract_message_content(data)
+        parsed = parse_model_output(content)
+        return prepare_result(parsed)
+
+    async def _run_tensorzero(
+        self, request: ResearchRequest
+    ) -> Tuple[str, List[str], List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[str]]:
+        """Run research using TensorZero gateway (Ollama/local models)."""
+        url = f"{self.tensorzero_base}/openai/v1/chat/completions"
+
+        system_prompt = (
+            "You are a research planner operating inside the PMOVES agent mesh. "
+            "Analyze the query and return a JSON object with these keys: "
+            "summary (string with main findings), "
+            "notes (array of actionable insight strings), "
+            "sources (array of {title, url, snippet, confidence}), "
+            "steps (array describing each research iteration). "
+            "Focus on actionable findings with confidence between 0 and 1."
+        )
+
+        user_content = f"Research query: {request.query}"
+        if request.context:
+            user_content += f"\nContext: {request.context}"
+        if request.max_steps:
+            user_content += f"\nMax iterations: {request.max_steps}"
+
+        payload = {
+            "model": self.tensorzero_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+
+        headers = {"Content-Type": "application/json"}
+        if self.tensorzero_key:
+            headers["Authorization"] = f"Bearer {self.tensorzero_key}"
+
+        timeout = httpx.Timeout(self.timeout, connect=30.0)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            # Try fallback model if primary fails
+            if self.tensorzero_fallback_model and self.tensorzero_fallback_model != self.tensorzero_model:
+                LOGGER.warning(
+                    "Primary model %s failed (%s), trying fallback %s",
+                    self.tensorzero_model, exc.response.status_code, self.tensorzero_fallback_model
+                )
+                payload["model"] = self.tensorzero_fallback_model
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url, json=payload, headers=headers)
+                    response.raise_for_status()
+                    data = response.json()
+            else:
+                raise
 
         content = _extract_message_content(data)
         parsed = parse_model_output(content)

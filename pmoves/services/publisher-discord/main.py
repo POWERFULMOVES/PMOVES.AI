@@ -850,7 +850,7 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if payload.get("cgp_spec"):
             emb["fields"].append({"name": "Spec", "value": f"`{payload['cgp_spec']}`", "inline": True})
     elif name == "tokenism.cgp.ready.v1":
-        emb["title"] = f"CGP Packet Ready"
+        emb["title"] = "CGP Packet Ready"
         emb["description"] = "CHIT Geometry Packet available for consumption."
         if payload.get("week"):
             emb["fields"].append({"name": "Week", "value": str(payload["week"]), "inline": True})

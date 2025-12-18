@@ -298,9 +298,8 @@ async def run_pipeline(query: str, context: SupaSerchContext, *, envelope: Optio
     fallback = await run_http_fallback(query, request_id=context.request_id)
     plan[-1]["status"] = "complete" if fallback.get("status") == "ok" else "error"
 
-    # Emit CGP packet and update geometry_cgp stage (index -2)
+    # Emit CGP packet and update geometry_cgp stage
     cgp_success = await _emit_cgp_packet(query, context, plan, fallback)
-    # Find and update the geometry_cgp stage
     for stage in plan:
         if stage.get("stage") == "geometry_cgp":
             stage["status"] = "complete" if cgp_success else "error"
