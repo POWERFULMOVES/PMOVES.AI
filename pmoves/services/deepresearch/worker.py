@@ -282,6 +282,10 @@ logging.basicConfig(
 
 REQUEST_SUBJECT = "research.deepresearch.request.v1"
 RESULT_SUBJECT = "research.deepresearch.result.v1"
+CGP_SUBJECT = "tokenism.cgp.ready.v1"
+
+# Enable CGP publishing via environment variable (default: enabled)
+CGP_PUBLISH_ENABLED = os.getenv("DEEPRESEARCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
 DEFAULT_MODE = "openrouter"
 
 
@@ -351,6 +355,101 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
+def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, Any]:
+    """Build a CGP (CHIT Geometry Packet) from research results.
+
+    Converts DeepResearch output into the GEOMETRY BUS standard format
+    for attribution and knowledge graph integration.
+
+    Args:
+        result: The completed research result
+        request_id: Unique request identifier (correlation_id or parent_id)
+
+    Returns:
+        Dict conforming to chit.cgp.v0.1 schema
+    """
+    from datetime import datetime
+
+    # Build points from iterations (research steps)
+    points: List[Dict[str, Any]] = []
+    if result.iterations:
+        for i, step in enumerate(result.iterations):
+            points.append({
+                "id": f"step:{i}",
+                "modality": "text",
+                "proj": 1.0 if result.status == "success" else 0.5,
+                "conf": 0.9,
+                "summary": shorten(step.get("summary", step.get("action", "")), width=200),
+                "ref_id": step.get("source_url", step.get("url", "")),
+                "meta": {
+                    "step_type": step.get("type", "search"),
+                    "step_index": i,
+                }
+            })
+
+    # Add sources as additional points
+    if result.sources:
+        for i, src in enumerate(result.sources):
+            points.append({
+                "id": f"source:{i}",
+                "modality": "text",
+                "proj": 0.8,
+                "conf": src.get("confidence", 0.7),
+                "summary": shorten(src.get("title", src.get("snippet", "")), width=200),
+                "ref_id": src.get("url", src.get("link", "")),
+                "meta": {
+                    "source_type": src.get("type", "web"),
+                    "domain": src.get("domain", ""),
+                }
+            })
+
+    # Build spectrum from result quality metrics
+    spectrum = [
+        1.0 if result.status == "success" else 0.0,  # Completion
+        len(result.sources) / 10.0 if result.sources else 0.0,  # Source richness
+        len(result.iterations) / 5.0 if result.iterations else 0.0,  # Iteration depth
+    ]
+    # Clamp to [0, 1]
+    spectrum = [max(0.0, min(1.0, v)) for v in spectrum]
+
+    return {
+        "spec": "chit.cgp.v0.1",
+        "summary": f"DeepResearch: {shorten(result.query, width=100)}",
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "super_nodes": [
+            {
+                "id": f"research:{request_id}",
+                "label": "deepresearch",
+                "summary": shorten(result.summary, width=300) if result.summary else "Research complete",
+                "x": 0.0,
+                "y": 0.0,
+                "r": 0.3,
+                "constellations": [
+                    {
+                        "id": f"research.steps.{request_id}",
+                        "summary": f"Research steps ({len(points)} points)",
+                        "anchor": [0.5, 0.5, 0.5],
+                        "spectrum": spectrum,
+                        "points": points,
+                        "meta": {
+                            "namespace": "research",
+                            "query": result.query,
+                            "duration_ms": result.duration_ms,
+                            "mode": result.mode,
+                        }
+                    }
+                ],
+            }
+        ],
+        "meta": {
+            "source": RESULT_SUBJECT,
+            "mode": result.mode,
+            "status": result.status,
+            "tags": ["deepresearch", "ai-research"],
+        }
+    }
 
 
 class NotebookPublisher:
@@ -604,6 +703,16 @@ async def _handle_request(msg: Msg, runner: DeepResearchRunner, publisher: Noteb
     )
     await nc.publish(RESULT_SUBJECT, json.dumps(env).encode("utf-8"))
     LOGGER.info("Published result for correlation_id=%s", data.get("correlation_id"))
+
+    # Publish CGP packet for GEOMETRY BUS integration
+    if CGP_PUBLISH_ENABLED:
+        try:
+            request_id = data.get("correlation_id") or data.get("id") or "unknown"
+            cgp_packet = _build_cgp_packet(result, request_id)
+            await nc.publish(CGP_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
+            LOGGER.info("Published CGP packet to %s for request_id=%s", CGP_SUBJECT, request_id)
+        except Exception as cgp_exc:  # pylint: disable=broad-except
+            LOGGER.warning("Failed to publish CGP packet: %s", cgp_exc)
 
 
 async def main() -> None:
