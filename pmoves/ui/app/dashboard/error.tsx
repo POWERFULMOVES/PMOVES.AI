@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { logError } from '@/lib/errorUtils';
 
 export default function DashboardError({
   error,
@@ -11,14 +12,24 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[DashboardError]', error);
+    logError('Dashboard error boundary caught error', error, 'error', {
+      component: 'DashboardErrorBoundary',
+      digest: error.digest,
+    });
   }, [error]);
 
   return (
-    <div className="min-h-[400px] flex items-center justify-center p-6">
+    <div
+      role="alert"
+      aria-live="polite"
+      className="min-h-[400px] flex items-center justify-center p-6"
+    >
       <div className="max-w-md text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cata-ember/10 flex items-center justify-center">
-          <span className="text-2xl">!</span>
+        <div
+          className="w-16 h-16 mx-auto mb-4 rounded-full bg-cata-ember/10 flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <span className="text-2xl text-cata-ember">!</span>
         </div>
         <h2 className="text-xl font-display font-semibold text-ink-primary mb-2">
           Dashboard Error
