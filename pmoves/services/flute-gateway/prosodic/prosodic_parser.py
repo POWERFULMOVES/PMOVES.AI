@@ -118,7 +118,9 @@ def parse_prosodic(
             and len(current_words) >= 3
         ):
             # Force breath point if no natural break for too long
-            boundary = BoundaryType.BREATH
+            # Preserve natural boundaries if present, only force BREATH for NONE
+            if boundary == BoundaryType.NONE:
+                boundary = BoundaryType.BREATH
             should_break = True
 
         if should_break:

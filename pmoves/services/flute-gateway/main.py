@@ -631,13 +631,15 @@ async def analyze_prosodic(request: ProsodicAnalyzeRequest):
     Returns the chunking structure that would be used for prosodic TTS,
     useful for debugging and understanding how text will be split.
     """
-    REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="200").inc()
-
     chunks = parse_prosodic(
         request.text,
         first_chunk_words=request.first_chunk_words,
         max_syllables_before_breath=request.max_syllables_before_breath,
     )
+
+    if not chunks:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="400").inc()
+        raise HTTPException(status_code=400, detail="No text to analyze (empty or whitespace-only input)")
 
     chunk_responses = [
         ProsodicChunkResponse(
@@ -652,10 +654,12 @@ async def analyze_prosodic(request: ProsodicAnalyzeRequest):
     ]
 
     # Estimate TTFS benefit: compare first chunk vs full text word count
-    total_words = len(request.text.split())
-    first_chunk_words = len(chunks[0].text.split()) if chunks else 0
+    total_words = len(request.text.strip().split())
+    first_chunk_words = len(chunks[0].text.split())
     ratio = first_chunk_words / total_words if total_words > 0 else 1.0
     benefit = f"~{int((1 - ratio) * 100)}% faster TTFS (first {first_chunk_words}/{total_words} words)"
+
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="200").inc()
 
     return ProsodicAnalyzeResponse(
         chunks=chunk_responses,
@@ -882,7 +886,8 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
     except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except HTTPException:
+    except HTTPException as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status=str(exc.status_code)).inc()
         raise
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="500").inc()
