@@ -150,6 +150,11 @@ PROSODIC_CHUNKS = Histogram(
     "Number of prosodic chunks per synthesis",
     buckets=(1, 2, 3, 4, 5, 7, 10, 15)
 )
+PROSODIC_CHUNKS_FAILED = Counter(
+    "flute_prosodic_chunks_failed_total",
+    "Number of prosodic chunks that failed to synthesize",
+    ["provider", "reason"]
+)
 
 # Provider instances (initialized on startup)
 vibevoice_provider: Optional[VibeVoiceProvider] = None
@@ -704,10 +709,19 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
                     text=chunk.text,
                     voice=request.voice,
                 )
-                if pcm:
-                    audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-                    audio_chunks.append(audio)
-                    boundaries.append(chunks[chunk_idx - 1].boundary_after)
+                if not pcm:
+                    logger.error(
+                        "VibeVoice returned empty audio for chunk %d/%d: %r",
+                        chunk_idx + 1, len(chunks), chunk.text[:50]
+                    )
+                    PROSODIC_CHUNKS_FAILED.labels(provider="vibevoice", reason="empty_audio").inc()
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"VibeVoice failed to synthesize chunk {chunk_idx + 1}/{len(chunks)}"
+                    )
+                audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                audio_chunks.append(audio)
+                boundaries.append(chunks[chunk_idx - 1].boundary_after)
 
             # Stitch with prosodic transitions
             if len(audio_chunks) > 1:
@@ -776,13 +790,33 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
                     voice=request.voice,
                     engine=request.engine or "kitten_tts",
                 )
-                if wav_data:
+                if not wav_data:
+                    logger.error(
+                        "Ultimate-TTS returned empty audio for chunk %d/%d: %r",
+                        chunk_idx + 1, len(chunks), chunk.text[:50]
+                    )
+                    PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="empty_audio").inc()
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Ultimate-TTS failed to synthesize chunk {chunk_idx + 1}/{len(chunks)}"
+                    )
+                try:
                     with io.BytesIO(wav_data) as buf:
                         with wave.open(buf, "rb") as wf:
                             pcm_data = wf.readframes(wf.getnframes())
-                    audio = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
-                    audio_chunks.append(audio)
-                    boundaries.append(chunks[chunk_idx - 1].boundary_after)
+                except wave.Error as wav_err:
+                    logger.error(
+                        "WAV parsing failed for chunk %d/%d (%d bytes): %s",
+                        chunk_idx + 1, len(chunks), len(wav_data), wav_err
+                    )
+                    PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="wav_parse_error").inc()
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"WAV parsing failed for chunk {chunk_idx + 1}/{len(chunks)}"
+                    ) from wav_err
+                audio = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
+                audio_chunks.append(audio)
+                boundaries.append(chunks[chunk_idx - 1].boundary_after)
 
             # Stitch with prosodic transitions
             if len(audio_chunks) > 1:

@@ -56,6 +56,18 @@ class PauseConfig(NamedTuple):
     can_breath: bool
     breath_probability: float
 
+    def __new__(
+        cls, pause_ms: float, can_breath: bool, breath_probability: float
+    ) -> "PauseConfig":
+        """Create PauseConfig with validated invariants."""
+        if pause_ms < 0:
+            raise ValueError(f"PauseConfig.pause_ms must be non-negative, got {pause_ms}")
+        if not 0.0 <= breath_probability <= 1.0:
+            raise ValueError(
+                f"PauseConfig.breath_probability must be in [0.0, 1.0], got {breath_probability}"
+            )
+        return super().__new__(cls, pause_ms, can_breath, breath_probability)
+
 
 # Pause configuration lookup table for each boundary type
 PAUSE_CONFIGS: dict[BoundaryType, PauseConfig] = {
@@ -122,6 +134,19 @@ class ProsodicChunk:
     is_final: bool = False
     position_ratio: float = 0.0
     estimated_syllables: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        if not self.text or not self.text.strip():
+            raise ValueError("ProsodicChunk.text cannot be empty")
+        if not 0.0 <= self.position_ratio <= 1.0:
+            raise ValueError(
+                f"ProsodicChunk.position_ratio must be in [0.0, 1.0], got {self.position_ratio}"
+            )
+        if self.estimated_syllables < 0:
+            raise ValueError(
+                f"ProsodicChunk.estimated_syllables must be non-negative, got {self.estimated_syllables}"
+            )
 
     @property
     def pause_after(self) -> float:
