@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
 import { getBootJwt } from '@/lib/supabaseClient';
-import { logError, logForDebugging } from '@/lib/errorUtils';
+import { logError } from '@/lib/errorUtils';
 
 function ownerFromJwt(): { ownerId: string | null; error?: string } {
   try {
