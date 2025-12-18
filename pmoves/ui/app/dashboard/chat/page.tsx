@@ -8,22 +8,57 @@ import {
   subscribeToChatMessages,
   type ChatMessage,
 } from "../../../lib/realtimeClient";
+import { logForDebugging, getErrorMessage } from "../../../lib/errorUtils";
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-async function fetchMessages(): Promise<ChatMessage[]> {
-  const res = await fetch('/api/chat/messages', { cache: 'no-store' });
-  if (!res.ok) return [];
-  const j = await res.json();
-  return (j.items ?? []) as ChatMessage[];
+type FetchResult = {
+  data: ChatMessage[];
+  error: string | null;
+};
+
+async function fetchMessages(): Promise<FetchResult> {
+  try {
+    const res = await fetch('/api/chat/messages', { cache: 'no-store' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const errorMsg = body.error || getErrorMessage(res.status);
+      logForDebugging('fetchMessages failed', new Error(errorMsg), {
+        component: 'chat/page',
+        status: res.status,
+      });
+      return { data: [], error: errorMsg };
+    }
+    const j = await res.json();
+    return { data: (j.items ?? []) as ChatMessage[], error: null };
+  } catch (e) {
+    logForDebugging('fetchMessages network error', e, { component: 'chat/page' });
+    return { data: [], error: 'Network error. Please check your connection.' };
+  }
 }
 
-async function sendMessage(content: string, agentId?: string): Promise<void> {
-  await fetch('/api/chat/send', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, role: 'user', agent_id: agentId })
-  });
+type SendResult = {
+  ok: boolean;
+  error: string | null;
+};
+
+async function sendMessage(content: string, agentId?: string): Promise<SendResult> {
+  try {
+    const res = await fetch('/api/chat/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content, role: 'user', agent_id: agentId })
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { ok: false, error: body.error || getErrorMessage(res.status) };
+    }
+    const body = await res.json();
+    return { ok: body.ok ?? true, error: body.error ?? null };
+  } catch (e) {
+    logForDebugging('sendMessage network error', e, { component: 'chat/page' });
+    return { ok: false, error: 'Network error. Please try again.' };
+  }
 }
 
 export default function ChatDashboardPage() {
@@ -31,6 +66,8 @@ export default function ChatDashboardPage() {
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [targetAgent, setTargetAgent] = useState<string>('agent-zero');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof subscribeToChatMessages> | null>(null);
 
@@ -52,9 +89,12 @@ export default function ChatDashboardPage() {
 
       try {
         // Initial fetch
-        const initialMsgs = await fetchMessages();
+        const { data: initialMsgs, error: fetchError } = await fetchMessages();
         if (isMounted) {
           setMsgs(initialMsgs);
+          if (fetchError) {
+            setErrorMsg(fetchError);
+          }
         }
 
         // Setup Realtime subscription
@@ -99,13 +139,12 @@ export default function ChatDashboardPage() {
         console.error('Failed to setup realtime:', error);
         if (isMounted) {
           setStatus('error');
-          // Fallback to polling
+          // Fallback to polling when realtime fails
           const load = async () => {
-            try {
-              const m = await fetchMessages();
-              if (isMounted) setMsgs(m);
-            } catch (e) {
-              console.error('Polling failed:', e);
+            const { data: m, error } = await fetchMessages();
+            if (isMounted) {
+              setMsgs(m);
+              if (error) setErrorMsg(error);
             }
           };
           pollingInterval = setInterval(load, 3000);
@@ -132,20 +171,29 @@ export default function ChatDashboardPage() {
   const handleSend = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const content = input.trim();
-    if (!content) return;
+    if (!content || sending) return;
 
-    setInput('');
+    // Clear any previous error
+    setErrorMsg(null);
+    setSending(true);
 
-    try {
-      await sendMessage(content, targetAgent);
-      // Optimistic update will be handled by Realtime
-      // but fetch to ensure message is visible even if Realtime fails
-      const m = await fetchMessages();
+    const result = await sendMessage(content, targetAgent);
+
+    if (result.ok) {
+      // Only clear input after successful send
+      setInput('');
+      // Fetch messages to show the new message immediately
+      // (Realtime subscription will also receive it, but fetch ensures visibility)
+      const { data: m, error: fetchError } = await fetchMessages();
       setMsgs(m);
-    } catch (error) {
-      console.error('Failed to send message:', error);
+      if (fetchError) setErrorMsg(fetchError);
+    } else {
+      // Keep input so user can retry, show error
+      setErrorMsg(result.error || 'Failed to send message. Please try again.');
     }
-  }, [input, targetAgent]);
+
+    setSending(false);
+  }, [input, targetAgent, sending]);
 
   const statusColor = {
     connecting: 'bg-yellow-400',
@@ -243,11 +291,26 @@ export default function ChatDashboardPage() {
 
           {/* Input Area */}
           <div className="border-t border-neutral-200 p-4">
+            {/* Error banner */}
+            {errorMsg && (
+              <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+                <span className="text-sm text-red-700">{errorMsg}</span>
+                <button
+                  type="button"
+                  onClick={() => setErrorMsg(null)}
+                  className="text-red-400 hover:text-red-600 text-lg leading-none"
+                  aria-label="Dismiss error"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSend} className="flex gap-2">
               <select
                 value={targetAgent}
                 onChange={(e) => setTargetAgent(e.target.value)}
-                className="rounded-lg border border-neutral-200 px-3 py-2 text-sm bg-white"
+                disabled={sending}
+                className="rounded-lg border border-neutral-200 px-3 py-2 text-sm bg-white disabled:opacity-50"
               >
                 <option value="agent-zero">Agent Zero</option>
                 <option value="archon">Archon</option>
@@ -259,16 +322,17 @@ export default function ChatDashboardPage() {
                 name="chatMessage"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                disabled={sending}
                 placeholder="Type a message..."
-                className="flex-1 rounded-lg border border-neutral-200 px-4 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                className="flex-1 rounded-lg border border-neutral-200 px-4 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
                 autoComplete="off"
               />
               <button
                 type="submit"
-                disabled={!input.trim()}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={!input.trim() || sending}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-w-[72px]"
               >
-                Send
+                {sending ? 'Sending...' : 'Send'}
               </button>
             </form>
             <p className="mt-2 text-xs text-neutral-400">
