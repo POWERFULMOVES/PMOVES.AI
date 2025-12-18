@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
 
   if (!owner) {
     return NextResponse.json(
-      { ok: false, error: jwtError || 'ownerId missing' },
-      { status: 400 }
+      { ok: false, error: jwtError || 'Authentication required' },
+      { status: 401 }
     );
   }
   if (!content || typeof content !== 'string') {
