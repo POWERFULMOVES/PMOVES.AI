@@ -28,6 +28,12 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="PMOVES-SUPASERCH", version="0.1.0")
 
+# CGP NATS subject for GEOMETRY BUS integration
+CGP_SUBJECT = "tokenism.cgp.ready.v1"
+
+# Enable CGP publishing via environment variable (default: enabled)
+CGP_PUBLISH_ENABLED = os.getenv("SUPASERCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
+
 
 # Prometheus metrics -------------------------------------------------------
 REQUEST_COUNTER = Counter(
@@ -63,9 +69,151 @@ NATS_CONNECTION_GAUGE = Gauge(
 
 @dataclass
 class SupaSerchContext:
+    """Context for a SupaSerch request.
+
+    Attributes:
+        request_id: Unique identifier for this search request.
+        channel: Source channel (e.g., nats, http).
+        correlation_id: Optional correlation ID for tracing.
+    """
+
     request_id: str
     channel: str
     correlation_id: Optional[str]
+
+
+def _build_cgp_packet(
+    query: str,
+    context: SupaSerchContext,
+    plan: list,
+    fallback: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build a CGP (CHIT Geometry Packet) from SupaSerch aggregation results.
+
+    Converts multimodal search orchestration into the GEOMETRY BUS standard format
+    for downstream attribution and knowledge graph integration.
+
+    Args:
+        query: Original search query
+        context: Request context with IDs
+        plan: Pipeline stage execution plan
+        fallback: HTTP fallback result
+
+    Returns:
+        Dict conforming to chit.cgp.v0.1 schema
+    """
+    # Build points from pipeline stages
+    points = []
+    for i, stage in enumerate(plan):
+        status = stage.get("status", "pending")
+        points.append({
+            "id": f"stage:{stage.get('stage', f'step-{i}')}",
+            "modality": "latent",
+            "proj": 1.0 if status == "complete" else (0.5 if status == "pending" else 0.0),
+            "conf": 0.9 if status == "complete" else 0.5,
+            "summary": stage.get("summary", "")[:200],
+            "meta": {
+                "stage_name": stage.get("stage"),
+                "status": status,
+                "step_index": i,
+            }
+        })
+
+    # Compute spectrum from stage completion
+    completed_count = sum(1 for s in plan if s.get("status") == "complete")
+    spectrum = [
+        completed_count / len(plan) if plan else 0.0,  # Pipeline completion ratio
+        1.0 if fallback.get("status") == "ok" else 0.0,  # Fallback success
+        min(1.0, len(query) / 100.0),  # Query complexity (normalized)
+    ]
+
+    return {
+        "spec": "chit.cgp.v0.1",
+        "summary": f"SupaSerch multimodal aggregation: {query[:100]}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "super_nodes": [
+            {
+                "id": f"supaserch:{context.request_id}",
+                "label": context.channel,
+                "summary": "Multimodal research aggregation",
+                "x": 0.0,
+                "y": 0.0,
+                "r": 0.3,
+                "constellations": [
+                    {
+                        "id": f"supaserch.plan.{context.request_id}",
+                        "summary": f"Aggregation pipeline ({len(points)} stages)",
+                        "anchor": [0.5, 0.5, 0.5],
+                        "spectrum": spectrum,
+                        "points": points,
+                        "meta": {
+                            "namespace": "supaserch",
+                            "channel": context.channel,
+                            "correlation_id": context.correlation_id,
+                            "query": query,
+                        }
+                    }
+                ],
+            }
+        ],
+        "meta": {
+            "source": "supaserch.result.v1",
+            "fallback_status": fallback.get("status"),
+            "tags": ["supaserch", "multimodal", "aggregation"],
+        }
+    }
+
+
+async def _emit_cgp_packet(
+    query: str,
+    context: SupaSerchContext,
+    plan: list,
+    fallback: Dict[str, Any],
+) -> bool:
+    """Emit CGP packet to GEOMETRY BUS.
+
+    Returns True if successfully published, False if:
+    - CGP_PUBLISH_ENABLED is False
+    - NATS client is not connected
+    - Building the CGP packet failed (logged at ERROR)
+    - Publishing raised an exception (logged at WARNING)
+    """
+    if not CGP_PUBLISH_ENABLED:
+        return False
+
+    nc: Optional[NATS] = getattr(app.state, "nats", None)
+    if nc is None or not nc.is_connected:
+        logger.warning("Cannot publish CGP: NATS not connected")
+        return False
+
+    # Build the CGP packet (errors here indicate bugs)
+    cgp_packet = None
+    try:
+        cgp_packet = _build_cgp_packet(query, context, plan, fallback)
+    except (TypeError, AttributeError, KeyError) as build_exc:
+        logger.error(
+            "CGP packet build failed (bug in _build_cgp_packet): %s (request_id=%s)",
+            build_exc, context.request_id, exc_info=True
+        )
+        return False
+    except Exception as build_exc:  # noqa: BLE001
+        logger.error(
+            "Unexpected error building CGP packet: %s (request_id=%s)",
+            build_exc, context.request_id, exc_info=True
+        )
+        return False
+
+    # Publish to NATS (errors here indicate infrastructure issues)
+    try:
+        await nc.publish(CGP_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
+        logger.info("Published CGP packet to %s for request_id=%s", CGP_SUBJECT, context.request_id)
+        return True
+    except Exception as pub_exc:  # noqa: BLE001
+        logger.warning(
+            "Failed to publish CGP packet to NATS: %s (request_id=%s, nats_connected=%s)",
+            pub_exc, context.request_id, nc.is_connected if nc else False
+        )
+        return False
 
 
 def _default_fallback_url() -> str:
@@ -182,6 +330,13 @@ async def run_pipeline(query: str, context: SupaSerchContext, *, envelope: Optio
     fallback = await run_http_fallback(query, request_id=context.request_id)
     plan[-1]["status"] = "complete" if fallback.get("status") == "ok" else "error"
 
+    # Emit CGP packet and update geometry_cgp stage
+    cgp_success = await _emit_cgp_packet(query, context, plan, fallback)
+    for stage in plan:
+        if stage.get("stage") == "geometry_cgp":
+            stage["status"] = "complete" if cgp_success else "error"
+            break
+
     return {
         "request_id": context.request_id,
         "query": query,
@@ -238,12 +393,14 @@ async def _connect_nats() -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    """Initialize NATS connection on application startup."""
     app.state.nats = None
     asyncio.create_task(_connect_nats())
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
+    """Clean up NATS connection on application shutdown."""
     nc: Optional[NATS] = getattr(app.state, "nats", None)
     if nc is not None and not nc.is_closed:
         try:
@@ -254,6 +411,7 @@ async def on_shutdown() -> None:
 
 @app.get("/healthz")
 async def healthz() -> Dict[str, Any]:
+    """Health check endpoint for Kubernetes probes."""
     nc: Optional[NATS] = getattr(app.state, "nats", None)
     return {
         "status": "ok",
@@ -265,11 +423,13 @@ async def healthz() -> Dict[str, Any]:
 
 @app.get("/metrics")
 async def metrics() -> Response:
+    """Prometheus metrics endpoint."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/v1/search")
 async def search(q: str = Query(..., min_length=1, description="Search query")) -> Dict[str, Any]:
+    """Execute multimodal holographic search via HTTP."""
     channel = "http"
     REQUEST_COUNTER.labels(channel=channel).inc()
     start = time.perf_counter()
