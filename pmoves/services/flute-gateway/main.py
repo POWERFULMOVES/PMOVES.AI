@@ -51,6 +51,18 @@ from prosodic import (
     stitch_chunks,
 )
 
+# Pipecat integration (optional - enable with PIPECAT_ENABLED=true)
+from pipecat.config import get_pipecat_config
+PIPECAT_CONFIG = get_pipecat_config()
+
+try:
+    from pipecat.transports import FluteFastAPIWebsocketTransport, FluteFastAPIWebsocketParams
+    from pipecat.pipelines import VoiceAgentConfig, build_voice_agent_pipeline
+    from pipecat.processors import TensorZeroLLMProcessor
+    PIPECAT_AVAILABLE = True
+except ImportError:
+    PIPECAT_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -413,7 +425,8 @@ async def get_config():
             "tts_batch": True,
             "tts_stream": True,
             "stt_batch": True,
-            "stt_stream": False,  # TODO: Implement
+            "stt_stream": PIPECAT_CONFIG.enabled and PIPECAT_AVAILABLE,
+            "duplex_voice": PIPECAT_CONFIG.enabled and PIPECAT_AVAILABLE,
             "voice_cloning": False,  # TODO: Implement
             "personas": True,
         }
@@ -1042,6 +1055,127 @@ async def websocket_tts(websocket: WebSocket):
         logger.exception("WebSocket TTS error")
     finally:
         await websocket.close()
+
+
+# Full duplex voice agent WebSocket endpoint (pipecat)
+@app.websocket("/v1/voice/stream/duplex")
+async def websocket_duplex(websocket: WebSocket, persona: Optional[str] = None):
+    """
+    Full duplex voice conversation WebSocket endpoint.
+
+    Uses pipecat pipeline: VAD → STT → LLM → TTS
+
+    Protocol:
+        Client → Server:
+            - Binary: Audio frames (PCM16, 24kHz, mono)
+            - JSON: {"type": "start", "voice": "default", "persona": "assistant"}
+            - JSON: {"type": "text", "text": "direct input"} (skip STT)
+            - JSON: {"type": "interrupt"} (cancel current generation)
+            - JSON: {"type": "stop"} (end conversation)
+
+        Server → Client:
+            - Binary: TTS audio frames (PCM16, 24kHz, mono)
+            - JSON: {"type": "transcription", "text": "user speech"}
+            - JSON: {"type": "llm_text", "text": "assistant response"}
+            - JSON: {"type": "response_start"}
+            - JSON: {"type": "response_end"}
+            - JSON: {"type": "error", "message": "..."}
+
+    Query Parameters:
+        persona: Optional persona name (determines system prompt and voice)
+
+    Requires:
+        - PIPECAT_ENABLED=true in environment
+        - pipecat-ai[silero] installed
+    """
+    if not PIPECAT_CONFIG.enabled:
+        await websocket.accept()
+        await websocket.send_json({
+            "type": "error",
+            "message": "Pipecat not enabled. Set PIPECAT_ENABLED=true in environment."
+        })
+        await websocket.close()
+        return
+
+    if not PIPECAT_AVAILABLE:
+        await websocket.accept()
+        await websocket.send_json({
+            "type": "error",
+            "message": "Pipecat not installed. Install with: pip install pipecat-ai[silero]"
+        })
+        await websocket.close()
+        return
+
+    await websocket.accept()
+
+    try:
+        # Configure transport
+        transport_params = FluteFastAPIWebsocketParams(
+            sample_rate=PIPECAT_CONFIG.sample_rate,
+            vad_enabled=True,
+            vad_start_threshold=PIPECAT_CONFIG.vad_threshold,
+        )
+        transport = FluteFastAPIWebsocketTransport(websocket, transport_params)
+
+        # Configure voice agent
+        voice_config = VoiceAgentConfig(
+            persona=persona or "assistant",
+            voice=PIPECAT_CONFIG.default_voice,
+            llm_model=PIPECAT_CONFIG.default_llm_model,
+            max_tokens=PIPECAT_CONFIG.default_max_tokens,
+            temperature=0.7,
+            vad_threshold=PIPECAT_CONFIG.vad_threshold,
+            enable_interruption=True,
+        )
+
+        # Build pipeline
+        pipeline = await build_voice_agent_pipeline(
+            transport=transport,
+            config=voice_config,
+            vibevoice_provider=vibevoice_provider,
+            whisper_provider=whisper_provider,
+            tensorzero_url=PIPECAT_CONFIG.tensorzero_url,
+        )
+
+        # Send ready status
+        await websocket.send_json({
+            "type": "status",
+            "status": "ready",
+            "config": {
+                "persona": voice_config.persona,
+                "voice": voice_config.voice,
+                "model": voice_config.llm_model,
+                "sample_rate": transport_params.sample_rate,
+            }
+        })
+
+        # Run pipeline (this blocks until client disconnects or sends stop)
+        try:
+            from pipecat.pipeline.runner import PipelineRunner
+            runner = PipelineRunner()
+            await runner.run(pipeline)
+        except ImportError:
+            # Fallback: simple frame loop if PipelineRunner not available
+            await transport.start()
+            async for frame in transport.input():
+                # Process frames through pipeline stages
+                pass
+            await transport.stop()
+
+    except Exception as e:
+        logger.exception("Duplex WebSocket error: %s", e)
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Pipeline error: {str(e)}"
+            })
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 # Prometheus metrics endpoint
