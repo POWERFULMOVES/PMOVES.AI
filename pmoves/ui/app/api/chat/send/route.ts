@@ -38,15 +38,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { content, role = 'user', agent, avatar_url, ownerId: bodyOwnerId } = body as {
+  const { content, role = 'user', agent, avatar_url } = body as {
     content?: string;
     role?: string;
     agent?: string;
     avatar_url?: string;
-    ownerId?: string;
   };
+  // Security: User identity must come from JWT only, never from request body
   const { ownerId: jwtOwner, error: jwtError } = ownerFromJwt();
-  const owner = bodyOwnerId ?? jwtOwner;
+  const owner = jwtOwner;
 
   if (!owner) {
     return NextResponse.json(
