@@ -605,7 +605,7 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
 
 
 # Prosodic analysis endpoint
-@app.post("/v1/voice/analyze/prosodic", response_model=ProsodicAnalyzeResponse)
+@app.post("/v1/voice/analyze/prosodic", response_model=ProsodicAnalyzeResponse, dependencies=[Depends(verify_api_key)])
 async def analyze_prosodic(request: ProsodicAnalyzeRequest):
     """
     Analyze text for prosodic chunking without synthesizing.
@@ -699,7 +699,7 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
             audio_chunks = [first_audio]
             boundaries = []
 
-            for chunk in chunks[1:]:
+            for chunk_idx, chunk in enumerate(chunks[1:], start=1):
                 pcm = await vibevoice_provider.synthesize(
                     text=chunk.text,
                     voice=request.voice,
@@ -707,7 +707,7 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
                 if pcm:
                     audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
                     audio_chunks.append(audio)
-                    boundaries.append(chunks[audio_chunks.index(audio) - 1].boundary_after)
+                    boundaries.append(chunks[chunk_idx - 1].boundary_after)
 
             # Stitch with prosodic transitions
             if len(audio_chunks) > 1:
@@ -761,7 +761,6 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
                 raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio")
 
             # Extract PCM from WAV and convert to float32
-            import wave
             with io.BytesIO(first_wav) as buf:
                 with wave.open(buf, "rb") as wf:
                     sample_rate = wf.getframerate()
@@ -771,7 +770,7 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
             audio_chunks = [first_audio]
             boundaries = []
 
-            for chunk in chunks[1:]:
+            for chunk_idx, chunk in enumerate(chunks[1:], start=1):
                 wav_data = await ultimate_tts_provider.synthesize(
                     text=chunk.text,
                     voice=request.voice,
@@ -783,7 +782,7 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
                             pcm_data = wf.readframes(wf.getnframes())
                     audio = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
                     audio_chunks.append(audio)
-                    boundaries.append(chunks[audio_chunks.index(audio) - 1].boundary_after)
+                    boundaries.append(chunks[chunk_idx - 1].boundary_after)
 
             # Stitch with prosodic transitions
             if len(audio_chunks) > 1:
@@ -833,7 +832,7 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="500").inc()
         logger.exception("Prosodic TTS synthesis failed")
-        raise HTTPException(status_code=500, detail="Prosodic TTS synthesis failed")
+        raise HTTPException(status_code=500, detail="Prosodic TTS synthesis failed") from None
 
 
 # STT recognition endpoint

@@ -61,7 +61,7 @@ def estimate_syllables(word: str) -> int:
     if word.endswith("e") and count > 1:
         # Check if it's likely a silent-e word
         # Don't subtract for words ending in -le, -re, -ne where e is pronounced
-        if len(word) >= 2 and word[-2] not in "lr":
+        if len(word) >= 2 and word[-2] not in "lrn":
             count -= 1
 
     return max(1, count)

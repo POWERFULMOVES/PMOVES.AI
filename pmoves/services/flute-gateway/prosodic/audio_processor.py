@@ -286,7 +286,7 @@ def stitch_chunks(
     rng = random.Random(seed) if seed is not None else None
 
     result = audio_chunks[0]
-    for i, (chunk, boundary) in enumerate(zip(audio_chunks[1:], boundaries)):
+    for chunk, boundary in zip(audio_chunks[1:], boundaries, strict=True):
         result = prosodic_stitch(result, chunk, boundary, sample_rate=sample_rate, rng=rng)
 
     return result
