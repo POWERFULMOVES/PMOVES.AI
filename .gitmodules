@@ -76,3 +76,6 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
 	ignore = all
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-Pipecat"]
+	path = PMOVES-Pipecat
+	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
