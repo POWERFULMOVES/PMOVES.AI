@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
 import { getBootJwt } from '@/lib/supabaseClient';
-import { logError, logForDebugging } from '@/lib/errorUtils';
+import { logError } from '@/lib/errorUtils';
 
 function ownerFromJwt(): { ownerId: string | null; error?: string } {
   try {
@@ -25,9 +25,9 @@ function ownerFromJwt(): { ownerId: string | null; error?: string } {
 
 export async function GET(req: NextRequest) {
   const supabase = getServiceSupabaseClient();
+  // Security: User identity must come from JWT only, never from query params
   const { ownerId: jwtOwner, error: jwtError } = ownerFromJwt();
-  const queryOwner = req.nextUrl.searchParams.get('ownerId');
-  const ownerId = jwtOwner || queryOwner;
+  const ownerId = jwtOwner;
 
   if (!ownerId) {
     // Return 401 when no owner ID is available - don't silently return empty array
