@@ -317,7 +317,8 @@ async def health_check():
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{SUPABASE_URL}/rest/v1/")
             supabase_status = "connected" if resp.status_code in [200, 401] else "error"
-    except Exception:
+    except Exception as exc:
+        logger.warning("Supabase health check failed: %s", exc)
         supabase_status = "disconnected"
 
     REQUESTS_TOTAL.labels(endpoint="/healthz", status="200").inc()
@@ -614,7 +615,11 @@ async def list_personas() -> List[Dict[str, Any]]:
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="200").inc()
                 return resp.json()
             else:
-                logger.warning("Supabase query failed: %s", resp.text)
+                logger.warning(
+                    "Supabase persona query failed: status=%s body=%s",
+                    resp.status_code, resp.text[:200] if resp.text else "empty"
+                )
+                REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status=str(resp.status_code)).inc()
                 return []
     except Exception:
         logger.exception("Failed to fetch personas")
