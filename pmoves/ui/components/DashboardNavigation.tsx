@@ -156,7 +156,7 @@ export function DashboardShell({ children, title, subtitle, active, actions }: D
     <div className="min-h-screen bg-void text-ink-primary">
       <div className="noise-overlay" />
       <DashboardHeader title={title} subtitle={subtitle} active={active} actions={actions} />
-      <main className="relative">
+      <main id="main-content" className="relative">
         {children}
       </main>
     </div>
