@@ -180,7 +180,7 @@ body {
   text-transform: uppercase;
 }
 
-/* Exo 2 - Elegant serif-like contrast for headlines */
+/* Exo 2 - Light italic style for elegant headline contrast (sans-serif) */
 .heading-serif {
   font-family: var(--font-body);
   font-weight: 300;

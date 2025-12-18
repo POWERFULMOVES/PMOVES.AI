@@ -56,6 +56,13 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="min-h-screen bg-void text-ink-primary antialiased">
+        {/* Skip link for keyboard navigation - WCAG 2.1 SC 2.4.1 Bypass Blocks (Level A) */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-cata-cyan focus:text-void focus:rounded-md focus:font-medium focus:outline-2 focus:outline-offset-2 focus:outline-void"
+        >
+          Skip to main content
+        </a>
         {children}
       </body>
     </html>
