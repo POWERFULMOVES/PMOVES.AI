@@ -267,9 +267,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from nats.aio.client import Client as NATS
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 import uvicorn
 from nats.aio.msg import Msg
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 from services.common.events import envelope
 from .parser import parse_model_output, prepare_result
@@ -287,6 +288,18 @@ CGP_SUBJECT = "tokenism.cgp.ready.v1"
 # Enable CGP publishing via environment variable (default: enabled)
 CGP_PUBLISH_ENABLED = os.getenv("DEEPRESEARCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
 DEFAULT_MODE = "openrouter"
+
+# Prometheus metrics
+FALLBACK_COUNTER = Counter(
+    "deepresearch_model_fallback_total",
+    "Model fallback invocations grouped by reason",
+    labelnames=("reason",),
+)
+REQUEST_COUNTER = Counter(
+    "deepresearch_requests_total",
+    "Total research requests processed",
+    labelnames=("mode", "status"),
+)
 
 
 @dataclass
@@ -906,6 +919,14 @@ async def main() -> None:
             "status": "ok",
             "nats_connected": bool(nc.is_connected),
         }
+
+    @app.get("/metrics")
+    async def metrics():  # type: ignore[override]
+        """Prometheus metrics endpoint for observability."""
+        return Response(
+            content=generate_latest(),
+            media_type=CONTENT_TYPE_LATEST,
+        )
 
     async def _serve_health():
         port = int(os.getenv("DEEPRESEARCH_HEALTH_PORT", "8098"))

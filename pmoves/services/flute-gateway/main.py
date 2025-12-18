@@ -327,7 +327,7 @@ async def health_check():
         providers=providers,
         nats=nats_status,
         supabase=supabase_status,
-        timestamp=datetime.utcnow().isoformat()
+        timestamp=datetime.now(timezone.utc).isoformat()
     )
 
 
