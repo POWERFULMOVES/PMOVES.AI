@@ -10,10 +10,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies (locked deps with hash verification)
 COPY services/flute-gateway/requirements.txt .
 COPY services/flute-gateway/requirements.lock .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Pipecat deps separately (no hash verification - external package)
+COPY services/flute-gateway/requirements-pipecat.txt .
+RUN pip install --no-cache-dir -r requirements-pipecat.txt
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash pmoves
