@@ -112,6 +112,26 @@ api_base = "http://pmoves-ollama:11434/v1"
 model_name = "qwen3-reranker:4b"
 api_key_location = "none"
 
+# Nemotron Mini - NVIDIA efficient research model for DeepResearch
+[models.nemotron_mini]
+routing = ["ollama_local"]
+
+[models.nemotron_mini.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "nemotron-mini"
+api_key_location = "none"
+
+# Qwen3 8B - Research fallback model for DeepResearch
+[models.qwen3_8b]
+routing = ["ollama_local"]
+
+[models.qwen3_8b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3:8b"
+api_key_location = "none"
+
 # --- Chat models: Cloud and hosted backbones -------------------------------
 
 [models.chat_openai_platform]
@@ -491,3 +511,24 @@ model = "qwen3_reranker_4b"
 [functions.hirag_rerank.variants.local_qwen14b]
 type = "chat_completion"
 model = "qwen2_5_14b"
+
+# --- DeepResearch Function ---------------------------------------------------
+# Research planning and synthesis using Nemotron Mini with Qwen3 fallback
+[functions.deepresearch]
+type = "chat"
+
+[functions.deepresearch.variants.nemotron_mini]
+type = "chat_completion"
+model = "nemotron_mini"
+
+[functions.deepresearch.variants.qwen3_8b]
+type = "chat_completion"
+model = "qwen3_8b"
+
+[functions.deepresearch.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.deepresearch.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"

@@ -839,12 +839,16 @@ services:
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
+      - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
       - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
       - DEEPRESEARCH_API_BASE=${DEEPRESEARCH_API_BASE:-http://deepresearch-local:8080}
       - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
       - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
       - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
+      # TensorZero/Ollama configuration (default mode) - use host.docker.internal since on different network
+      - DEEPRESEARCH_TENSORZERO_BASE_URL=${DEEPRESEARCH_TENSORZERO_BASE_URL:-http://host.docker.internal:3030}
+      - DEEPRESEARCH_TENSORZERO_MODEL=${DEEPRESEARCH_TENSORZERO_MODEL:-tensorzero::model_name::nemotron_mini}
+      - DEEPRESEARCH_TENSORZERO_FALLBACK_MODEL=${DEEPRESEARCH_TENSORZERO_FALLBACK_MODEL:-tensorzero::model_name::qwen3_8b}
       - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
       - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
       - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
