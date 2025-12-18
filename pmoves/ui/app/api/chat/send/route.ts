@@ -1,27 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
-import { getBootJwt } from '@/lib/supabaseClient';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 import { logError, logForDebugging } from '@/lib/errorUtils';
-
-function ownerFromJwt(): { ownerId: string | null; error?: string } {
-  try {
-    const token = getBootJwt();
-    if (!token) {
-      return { ownerId: null, error: 'No JWT token available' };
-    }
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      logError('Invalid JWT format', new Error('JWT must have 3 parts'), 'warning', { component: 'chat/send' });
-      return { ownerId: null, error: 'Invalid JWT format' };
-    }
-    const payload = parts[1];
-    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
-    return { ownerId: typeof json.sub === 'string' ? json.sub : null };
-  } catch (e) {
-    logError('JWT parsing failed', e, 'error', { component: 'chat/send' });
-    return { ownerId: null, error: 'Failed to parse JWT' };
-  }
-}
 
 export async function POST(req: NextRequest) {
   const supabase = getServiceSupabaseClient();
@@ -45,7 +25,7 @@ export async function POST(req: NextRequest) {
     avatar_url?: string;
   };
   // Security: User identity must come from JWT only, never from request body
-  const { ownerId: jwtOwner, error: jwtError } = ownerFromJwt();
+  const { ownerId: jwtOwner, error: jwtError } = ownerFromJwt('chat/send');
   const owner = jwtOwner;
 
   if (!owner) {
@@ -75,4 +55,3 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({ ok: true, message: data });
 }
-
