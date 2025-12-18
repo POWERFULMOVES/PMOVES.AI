@@ -775,10 +775,18 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
                 raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio")
 
             # Extract PCM from WAV and convert to float32
-            with io.BytesIO(first_wav) as buf:
-                with wave.open(buf, "rb") as wf:
-                    sample_rate = wf.getframerate()
-                    first_pcm = wf.readframes(wf.getnframes())
+            try:
+                with io.BytesIO(first_wav) as buf:
+                    with wave.open(buf, "rb") as wf:
+                        sample_rate = wf.getframerate()
+                        first_pcm = wf.readframes(wf.getnframes())
+            except wave.Error as wav_err:
+                logger.error("WAV parsing failed for first chunk (%d bytes): %s", len(first_wav), wav_err)
+                PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="wav_parse_error").inc()
+                raise HTTPException(
+                    status_code=502,
+                    detail="WAV parsing failed for first chunk"
+                ) from wav_err
             first_audio = np.frombuffer(first_pcm, dtype=np.int16).astype(np.float32) / 32768.0
 
             audio_chunks = [first_audio]
@@ -935,12 +943,15 @@ async def list_personas() -> List[Dict[str, Any]]:
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="200").inc()
                 return resp.json()
             else:
-                logger.warning(
+                logger.error(
                     "Supabase persona query failed: status=%s body=%s",
                     resp.status_code, resp.text[:200] if resp.text else "empty"
                 )
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status=str(resp.status_code)).inc()
-                return []
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to fetch personas from database (status {resp.status_code})"
+                )
     except Exception:
         logger.exception("Failed to fetch personas")
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="500").inc()
