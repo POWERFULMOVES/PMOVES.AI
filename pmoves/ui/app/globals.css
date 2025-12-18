@@ -1,76 +1,655 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;600&family=Exo+2:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   POWERFULMOVES Design System — Megaman × Transformers
+   Cataclysm Studios Inc.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  color-scheme: light;
-  --color-brand-sky: #1fb8cd;
-  --color-brand-crimson: #db4545;
-  --color-brand-forest: #2e8b57;
-  --color-brand-slate: #5d878f;
-  --color-brand-gold: #d2ba4c;
-  --color-brand-rust: #b4413c;
+  color-scheme: dark;
 
-  --color-brand-surface: #f3fafc;
-  --color-brand-surface-muted: #e6f2f4;
-  --color-brand-ink: #102b2f;
-  --color-brand-ink-strong: #050f11;
-  --color-brand-muted: #3f6a72;
-  --color-brand-subtle: #6c8f97;
-  --color-brand-border: #c2d8dd;
-  --color-brand-inverse: #ffffff;
-  --cataclysm-void: #050b1a;
-  --cataclysm-ember: var(--color-brand-crimson);
-  --cataclysm-aurora: #7c3aed;
-  --cataclysm-horizon: var(--color-brand-sky);
-  --cataclysm-foam: var(--color-brand-inverse);
+  /* ─── Core Palette ─────────────────────────────────────────────────────── */
+  --void: #050508;
+  --void-elevated: #0a0a0f;
+  --void-soft: #12121a;
+
+  /* Cataclysm Signature Colors - Enhanced Saturation */
+  --cata-cyan: #00e5ff;
+  --cata-cyan-dim: #0097a7;
+  --cata-ember: #ff3d3d;
+  --cata-ember-dim: #b22828;
+  --cata-forest: #00ff88;
+  --cata-forest-dim: #00a858;
+  --cata-gold: #ffd700;
+  --cata-gold-dim: #b8860b;
+  --cata-violet: #a855f7;
+  --cata-violet-dim: #7c3aed;
+
+  /* Typography Colors */
+  --ink-primary: #f8f8f8;
+  --ink-secondary: #a0a0a8;
+  --ink-muted: #606068;
+  --ink-inverse: #050508;
+
+  /* UI Surface */
+  --surface-glass: rgba(255, 255, 255, 0.03);
+  --surface-glass-hover: rgba(255, 255, 255, 0.06);
+  --surface-card: rgba(18, 18, 26, 0.8);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  /* ─── Typography Scale ─────────────────────────────────────────────────── */
+  --font-display: 'Orbitron', system-ui, sans-serif;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-body: 'Exo 2', system-ui, -apple-system, sans-serif;
+
+  /* ─── Spacing Scale ────────────────────────────────────────────────────── */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+  --space-4xl: 6rem;
+
+  /* ─── Animation ────────────────────────────────────────────────────────── */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+
+  /* Legacy compat */
+  --color-brand-surface: var(--void);
+  --color-brand-ink: var(--ink-primary);
+  --cataclysm-cyan: var(--cata-cyan);
+  --cataclysm-ember: var(--cata-ember);
+  --cataclysm-forest: var(--cata-forest);
+  --cataclysm-gold: var(--cata-gold);
+  --cataclysm-slate: var(--ink-muted);
 }
 
-.bg-cataclysm-void {
-  background-color: var(--cataclysm-void);
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base Styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.text-cataclysm-ember {
-  color: var(--cataclysm-ember);
-}
-
-.border-cataclysm-ember {
-  border-color: var(--cataclysm-ember);
-}
-
-.hover\:border-cataclysm-ember:hover {
-  border-color: var(--cataclysm-ember);
-}
-
-.hover\:text-cataclysm-ember:hover {
-  color: var(--cataclysm-ember);
-}
-
-.cataclysm-gradient {
-  background-image: radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.35), transparent 55%),
-    radial-gradient(circle at 80% 10%, rgba(34, 211, 238, 0.3), transparent 60%),
-    linear-gradient(180deg, rgba(5, 11, 26, 0.95), rgba(5, 11, 26, 0.75));
-  /* Cataclysm Studios brand palette */
-  --cataclysm-cyan: #1fb8cd;
-  --cataclysm-ember: #db4545;
-  --cataclysm-forest: #2e8b57;
-  --cataclysm-gold: #d2ba4c;
-  --cataclysm-slate: #5d878f;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: var(--color-brand-surface);
-  color: var(--color-brand-ink);
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--void);
+  color: var(--ink-primary);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  overflow-x: hidden;
 }
 
-button {
-  font: inherit;
+/* ═══════════════════════════════════════════════════════════════════════════
+   Cymatic Background Patterns
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.cymatic-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    /* Radial glow */
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 229, 255, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(255, 61, 61, 0.05), transparent),
+    /* Grid lines */
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(var(--border-subtle) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 80px 80px, 80px 80px;
+}
+
+.cymatic-waves {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.cymatic-waves::before,
+.cymatic-waves::after {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.02;
+  animation: drift 60s linear infinite;
+}
+
+.cymatic-waves::after {
+  animation-delay: -30s;
+  animation-direction: reverse;
+}
+
+@keyframes drift {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Noise texture overlay */
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.015;
+  mix-blend-mode: overlay;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Typography
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Orbitron - Angular Transformers style */
+.heading-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+/* Press Start 2P - Retro pixel Megaman style */
+.heading-pixel {
+  font-family: var(--font-pixel);
+  font-size: 0.75em;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* Exo 2 - Elegant serif-like contrast for headlines */
+.heading-serif {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.85em;
+  letter-spacing: -0.02em;
+}
+
+/* Gradient text */
+.text-gradient-cyan {
+  background: linear-gradient(135deg, var(--cata-cyan) 0%, var(--cata-forest) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-ember {
+  background: linear-gradient(135deg, var(--cata-ember) 0%, var(--cata-gold) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-violet {
+  background: linear-gradient(135deg, var(--cata-violet) 0%, var(--cata-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Chrome/metallic text effect */
+.text-chrome {
+  background: linear-gradient(
+    180deg,
+    #fff 0%,
+    #a8a8a8 25%,
+    #fff 50%,
+    #6e6e6e 75%,
+    #fff 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Brutalist Components
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Hard-edge cards */
+.card-brutal {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(20px);
+  transition: all var(--duration-normal) var(--ease-out-expo);
+}
+
+.card-brutal:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow:
+    0 20px 40px -20px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--border-strong);
+}
+
+/* Glass morphism card */
+.card-glass {
+  background: var(--surface-glass);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(12px) saturate(150%);
+  transition: all var(--duration-normal) var(--ease-out-expo);
+}
+
+.card-glass:hover {
+  background: var(--surface-glass-hover);
+  border-color: var(--cata-cyan);
+  box-shadow:
+    0 0 30px -10px var(--cata-cyan),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Mech panel - Transformers style */
+.card-mech {
+  position: relative;
+  background: linear-gradient(135deg, var(--void-elevated) 0%, var(--void) 100%);
+  border: 2px solid var(--border-strong);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.card-mech::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--cata-cyan), var(--cata-violet));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Buttons
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 2rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ink-inverse);
+  background: var(--cata-cyan);
+  border: none;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  cursor: pointer;
+  overflow: hidden;
+  transition: all var(--duration-normal) var(--ease-out-expo);
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.5s;
+}
+
+.btn-primary:hover {
+  background: var(--cata-forest);
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 30px -10px var(--cata-cyan),
+    0 0 0 2px var(--cata-cyan);
+}
+
+.btn-primary:hover::before {
+  transform: translateX(100%);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 2rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ink-primary);
+  background: transparent;
+  border: 2px solid var(--border-strong);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out-expo);
+}
+
+.btn-secondary:hover {
+  color: var(--cata-ember);
+  border-color: var(--cata-ember);
+  background: rgba(255, 61, 61, 0.1);
+  transform: translateY(-2px);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: var(--ink-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+
+.btn-ghost:hover {
+  color: var(--cata-cyan);
+}
+
+/* Pixel button - Megaman style */
+.btn-pixel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: var(--ink-inverse);
+  background: var(--cata-cyan);
+  border: none;
+  box-shadow:
+    4px 4px 0 var(--cata-cyan-dim),
+    inset -2px -2px 0 rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.btn-pixel:hover {
+  transform: translate(2px, 2px);
+  box-shadow:
+    2px 2px 0 var(--cata-cyan-dim),
+    inset -2px -2px 0 rgba(0,0,0,0.2);
+}
+
+.btn-pixel:active {
+  transform: translate(4px, 4px);
+  box-shadow:
+    0 0 0 var(--cata-cyan-dim),
+    inset -2px -2px 0 rgba(0,0,0,0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tags & Badges
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 1px solid currentColor;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+  transition: all var(--duration-fast);
+}
+
+.tag-cyan {
+  color: var(--cata-cyan);
+  background: rgba(0, 229, 255, 0.1);
+}
+
+.tag-ember {
+  color: var(--cata-ember);
+  background: rgba(255, 61, 61, 0.1);
+}
+
+.tag-gold {
+  color: var(--cata-gold);
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.tag-forest {
+  color: var(--cata-forest);
+  background: rgba(0, 255, 136, 0.1);
+}
+
+/* Health badges */
+.badge-healthy {
+  color: var(--cata-forest);
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid var(--cata-forest);
+}
+
+.badge-down {
+  color: var(--cata-ember);
+  background: rgba(255, 61, 61, 0.15);
+  border: 1px solid var(--cata-ember);
+}
+
+.badge-pending {
+  color: var(--cata-gold);
+  background: rgba(255, 215, 0, 0.15);
+  border: 1px solid var(--cata-gold);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Animations
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+    filter: blur(40px);
+  }
+  50% {
+    opacity: 0.8;
+    filter: blur(60px);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(2deg);
+  }
+}
+
+/* Scanline effect */
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+.scanline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(transparent, rgba(0, 229, 255, 0.1), transparent);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s var(--ease-out-expo) forwards;
+}
+
+.animate-fade-in-left {
+  animation: fadeInLeft 0.8s var(--ease-out-expo) forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.6s var(--ease-out-expo) forwards;
+}
+
+/* Stagger delays */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+.delay-600 { animation-delay: 600ms; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Scrollbar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--void);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cata-cyan);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Selection
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+::selection {
+  background: var(--cata-cyan);
+  color: var(--void);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Links
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--duration-fast);
+}
+
+a:hover {
+  color: var(--cata-cyan);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Focus States
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:focus-visible {
+  outline: 2px solid var(--cata-cyan);
+  outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Utility Classes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.glow-cyan {
+  box-shadow: 0 0 40px -10px var(--cata-cyan);
+}
+
+.glow-ember {
+  box-shadow: 0 0 40px -10px var(--cata-ember);
+}
+
+.border-gradient {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--void), var(--void)) padding-box,
+    linear-gradient(135deg, var(--cata-cyan), var(--cata-violet)) border-box;
+}
+
+/* Decorative line */
+.line-accent {
+  height: 2px;
+  background: linear-gradient(90deg, var(--cata-cyan), var(--cata-violet), var(--cata-ember));
+}
+
+/* Mech corner decoration */
+.corner-cut {
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
 }
