@@ -150,11 +150,6 @@ PROSODIC_CHUNKS = Histogram(
     "Number of prosodic chunks per synthesis",
     buckets=(1, 2, 3, 4, 5, 7, 10, 15)
 )
-PROSODIC_CHUNKS_FAILED = Counter(
-    "flute_prosodic_chunks_failed_total",
-    "Number of prosodic chunks that failed to synthesize",
-    ["provider", "reason"]
-)
 
 # Provider instances (initialized on startup)
 vibevoice_provider: Optional[VibeVoiceProvider] = None
@@ -610,7 +605,7 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
 
 
 # Prosodic analysis endpoint
-@app.post("/v1/voice/analyze/prosodic", response_model=ProsodicAnalyzeResponse, dependencies=[Depends(verify_api_key)])
+@app.post("/v1/voice/analyze/prosodic", response_model=ProsodicAnalyzeResponse)
 async def analyze_prosodic(request: ProsodicAnalyzeRequest):
     """
     Analyze text for prosodic chunking without synthesizing.
@@ -618,15 +613,13 @@ async def analyze_prosodic(request: ProsodicAnalyzeRequest):
     Returns the chunking structure that would be used for prosodic TTS,
     useful for debugging and understanding how text will be split.
     """
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="200").inc()
+
     chunks = parse_prosodic(
         request.text,
         first_chunk_words=request.first_chunk_words,
         max_syllables_before_breath=request.max_syllables_before_breath,
     )
-
-    if not chunks:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="400").inc()
-        raise HTTPException(status_code=400, detail="No text to analyze (empty or whitespace-only input)")
 
     chunk_responses = [
         ProsodicChunkResponse(
@@ -641,12 +634,10 @@ async def analyze_prosodic(request: ProsodicAnalyzeRequest):
     ]
 
     # Estimate TTFS benefit: compare first chunk vs full text word count
-    total_words = len(request.text.strip().split())
-    first_chunk_words = len(chunks[0].text.split())
+    total_words = len(request.text.split())
+    first_chunk_words = len(chunks[0].text.split()) if chunks else 0
     ratio = first_chunk_words / total_words if total_words > 0 else 1.0
     benefit = f"~{int((1 - ratio) * 100)}% faster TTFS (first {first_chunk_words}/{total_words} words)"
-
-    REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="200").inc()
 
     return ProsodicAnalyzeResponse(
         chunks=chunk_responses,
@@ -708,24 +699,15 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
             audio_chunks = [first_audio]
             boundaries = []
 
-            for chunk_idx, chunk in enumerate(chunks[1:], start=1):
+            for chunk in chunks[1:]:
                 pcm = await vibevoice_provider.synthesize(
                     text=chunk.text,
                     voice=request.voice,
                 )
-                if not pcm:
-                    logger.error(
-                        "VibeVoice returned empty audio for chunk %d/%d: %r",
-                        chunk_idx + 1, len(chunks), chunk.text[:50]
-                    )
-                    PROSODIC_CHUNKS_FAILED.labels(provider="vibevoice", reason="empty_audio").inc()
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"VibeVoice failed to synthesize chunk {chunk_idx + 1}/{len(chunks)}"
-                    )
-                audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-                audio_chunks.append(audio)
-                boundaries.append(chunks[chunk_idx - 1].boundary_after)
+                if pcm:
+                    audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                    audio_chunks.append(audio)
+                    boundaries.append(chunks[audio_chunks.index(audio) - 1].boundary_after)
 
             # Stitch with prosodic transitions
             if len(audio_chunks) > 1:
@@ -779,56 +761,29 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
                 raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio")
 
             # Extract PCM from WAV and convert to float32
-            try:
-                with io.BytesIO(first_wav) as buf:
-                    with wave.open(buf, "rb") as wf:
-                        sample_rate = wf.getframerate()
-                        first_pcm = wf.readframes(wf.getnframes())
-            except wave.Error as wav_err:
-                logger.error("WAV parsing failed for first chunk (%d bytes): %s", len(first_wav), wav_err)
-                PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="wav_parse_error").inc()
-                raise HTTPException(
-                    status_code=502,
-                    detail="WAV parsing failed for first chunk"
-                ) from wav_err
+            import wave
+            with io.BytesIO(first_wav) as buf:
+                with wave.open(buf, "rb") as wf:
+                    sample_rate = wf.getframerate()
+                    first_pcm = wf.readframes(wf.getnframes())
             first_audio = np.frombuffer(first_pcm, dtype=np.int16).astype(np.float32) / 32768.0
 
             audio_chunks = [first_audio]
             boundaries = []
 
-            for chunk_idx, chunk in enumerate(chunks[1:], start=1):
+            for chunk in chunks[1:]:
                 wav_data = await ultimate_tts_provider.synthesize(
                     text=chunk.text,
                     voice=request.voice,
                     engine=request.engine or "kitten_tts",
                 )
-                if not wav_data:
-                    logger.error(
-                        "Ultimate-TTS returned empty audio for chunk %d/%d: %r",
-                        chunk_idx + 1, len(chunks), chunk.text[:50]
-                    )
-                    PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="empty_audio").inc()
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"Ultimate-TTS failed to synthesize chunk {chunk_idx + 1}/{len(chunks)}"
-                    )
-                try:
+                if wav_data:
                     with io.BytesIO(wav_data) as buf:
                         with wave.open(buf, "rb") as wf:
                             pcm_data = wf.readframes(wf.getnframes())
-                except wave.Error as wav_err:
-                    logger.error(
-                        "WAV parsing failed for chunk %d/%d (%d bytes): %s",
-                        chunk_idx + 1, len(chunks), len(wav_data), wav_err
-                    )
-                    PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="wav_parse_error").inc()
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"WAV parsing failed for chunk {chunk_idx + 1}/{len(chunks)}"
-                    ) from wav_err
-                audio = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
-                audio_chunks.append(audio)
-                boundaries.append(chunks[chunk_idx - 1].boundary_after)
+                    audio = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
+                    audio_chunks.append(audio)
+                    boundaries.append(chunks[audio_chunks.index(audio) - 1].boundary_after)
 
             # Stitch with prosodic transitions
             if len(audio_chunks) > 1:
@@ -873,13 +828,12 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
     except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except HTTPException as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status=str(exc.status_code)).inc()
+    except HTTPException:
         raise
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="500").inc()
         logger.exception("Prosodic TTS synthesis failed")
-        raise HTTPException(status_code=500, detail="Prosodic TTS synthesis failed") from None
+        raise HTTPException(status_code=500, detail="Prosodic TTS synthesis failed")
 
 
 # STT recognition endpoint
@@ -948,15 +902,12 @@ async def list_personas() -> List[Dict[str, Any]]:
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="200").inc()
                 return resp.json()
             else:
-                logger.error(
+                logger.warning(
                     "Supabase persona query failed: status=%s body=%s",
                     resp.status_code, resp.text[:200] if resp.text else "empty"
                 )
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status=str(resp.status_code)).inc()
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Failed to fetch personas from database (status {resp.status_code})"
-                )
+                return []
     except Exception:
         logger.exception("Failed to fetch personas")
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="500").inc()
