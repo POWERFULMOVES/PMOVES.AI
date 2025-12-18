@@ -79,3 +79,4 @@
 [submodule "PMOVES-Pipecat"]
 	path = PMOVES-Pipecat
 	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
+	ignore = all
