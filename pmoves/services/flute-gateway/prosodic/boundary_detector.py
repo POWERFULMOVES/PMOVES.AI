@@ -49,8 +49,11 @@ def detect_boundary(word: str, next_word: Optional[str] = None) -> BoundaryType:
         return BoundaryType.NONE
 
     # Check for sentence endings (highest priority)
-    # Note: This also handles ellipsis (...) since it ends with '.'
     if re.search(r"[.!?]$", word):
+        return BoundaryType.SENTENCE
+
+    # Check for ellipsis (treated as sentence-level)
+    if word.endswith("..."):
         return BoundaryType.SENTENCE
 
     # Check for phrase boundary BEFORE checking clause punctuation
