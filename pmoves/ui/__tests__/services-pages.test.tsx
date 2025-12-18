@@ -20,6 +20,8 @@ jest.mock('next/navigation', () => ({
   notFound: jest.fn(() => {
     throw new Error('not found');
   }),
+  usePathname: jest.fn(() => '/dashboard/services'),
+  useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn() })),
 }));
 
 describe('Services dashboards', () => {
@@ -36,10 +38,11 @@ describe('Services dashboards', () => {
       screen.getByRole('heading', { name: /integration services/i })
     ).toBeInTheDocument();
 
+    // Use getAllByRole since the new design may have multiple links per service
+    // (service card + quick links section)
     INTEGRATION_SERVICES.forEach((service) => {
-      expect(
-        screen.getByRole('link', { name: new RegExp(service.title, 'i') })
-      ).toBeInTheDocument();
+      const links = screen.getAllByRole('link', { name: new RegExp(service.title, 'i') });
+      expect(links.length).toBeGreaterThan(0);
     });
   });
 
