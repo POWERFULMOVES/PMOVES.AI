@@ -1,31 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
 import { getBootJwt } from '@/lib/supabaseClient';
+import { logError, logForDebugging } from '@/lib/errorUtils';
 
-function ownerFromJwt(): string | null {
+function ownerFromJwt(): { ownerId: string | null; error?: string } {
   try {
     const token = getBootJwt();
-    if (!token) return null;
-    const [, payload] = token.split('.') as [string, string, string];
+    if (!token) {
+      return { ownerId: null, error: 'No JWT token available' };
+    }
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      logError('Invalid JWT format', new Error('JWT must have 3 parts'), 'warning', { component: 'chat/messages' });
+      return { ownerId: null, error: 'Invalid JWT format' };
+    }
+    const payload = parts[1];
     const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
-    return typeof json.sub === 'string' ? json.sub : null;
-  } catch {
-    return null;
+    return { ownerId: typeof json.sub === 'string' ? json.sub : null };
+  } catch (e) {
+    logError('JWT parsing failed', e, 'error', { component: 'chat/messages' });
+    return { ownerId: null, error: 'Failed to parse JWT' };
   }
 }
 
 export async function GET(req: NextRequest) {
   const supabase = getServiceSupabaseClient();
-  const owner = ownerFromJwt();
-  const ownerId = owner || req.nextUrl.searchParams.get('ownerId');
-  if (!ownerId) return NextResponse.json({ items: [] });
+  const { ownerId: jwtOwner, error: jwtError } = ownerFromJwt();
+  const queryOwner = req.nextUrl.searchParams.get('ownerId');
+  const ownerId = jwtOwner || queryOwner;
+
+  if (!ownerId) {
+    // Return 401 when no owner ID is available - don't silently return empty array
+    return NextResponse.json(
+      { error: jwtError || 'Authentication required', items: [] },
+      { status: 401 }
+    );
+  }
+
   const { data, error } = await supabase
     .from('chat_messages')
     .select('id,role,agent,avatar_url,content,created_at')
     .eq('owner_id', ownerId)
     .order('created_at', { ascending: false })
     .limit(50);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    logError('Failed to fetch chat messages', error, 'error', {
+      component: 'chat/messages',
+      ownerId,
+    });
+    return NextResponse.json(
+      { error: 'Failed to load messages. Please try again.' },
+      { status: 500 }
+    );
+  }
   return NextResponse.json({ items: data ?? [] });
 }
 
