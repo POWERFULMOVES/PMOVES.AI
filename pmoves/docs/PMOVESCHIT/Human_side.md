@@ -135,9 +135,9 @@ Your attributions contribute to these metrics. When the cooperative does well, e
 
 ## Getting Help
 
-- **Dashboard**: View your attributions at `dashboard.pmoves.ai/attribution`
+- **Dashboard**: View your attributions at `dashboard.pmoves.ai/attribution` *(coming soon)*
 - **Discord**: Ask questions in `#tokenism-support`
-- **Documentation**: Technical details at `docs.pmoves.ai/chit`
+- **Documentation**: Technical details at `docs.pmoves.ai/chit` *(coming soon)*
 
 ---
 
