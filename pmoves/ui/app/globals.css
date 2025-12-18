@@ -180,6 +180,15 @@ body {
   text-transform: uppercase;
 }
 
+/* Exo 2 - Elegant serif-like contrast for headlines */
+.heading-serif {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
 .text-mono {
   font-family: var(--font-mono);
   font-weight: 500;

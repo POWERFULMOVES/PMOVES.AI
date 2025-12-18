@@ -111,7 +111,7 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
               value={formState.email}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 bg-void border border-border-subtle text-ink-primary font-mono text-sm placeholder:text-ink-muted focus:outline-none focus:border-cata-cyan transition-colors"
+              className="w-full px-4 py-3 bg-void border border-border-subtle text-ink-primary font-mono text-sm placeholder:text-ink-muted focus:outline-none focus:border-cata-cyan focus:ring-2 focus:ring-cata-cyan/30 transition-colors"
               placeholder="you@example.com"
             />
           </div>
@@ -128,7 +128,7 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
               value={formState.password}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 bg-void border border-border-subtle text-ink-primary font-mono text-sm placeholder:text-ink-muted focus:outline-none focus:border-cata-cyan transition-colors"
+              className="w-full px-4 py-3 bg-void border border-border-subtle text-ink-primary font-mono text-sm placeholder:text-ink-muted focus:outline-none focus:border-cata-cyan focus:ring-2 focus:ring-cata-cyan/30 transition-colors"
               placeholder="••••••••"
             />
           </div>
@@ -157,7 +157,7 @@ export const LoginForm = ({ providers, passwordEnabled, callbackUrl, nextPath, i
                 key={provider.key}
                 onClick={() => handleOAuthLogin(provider.key)}
                 type="button"
-                className="w-full px-4 py-3 border border-border-subtle bg-void-elevated text-ink-primary font-display font-semibold text-sm uppercase tracking-wider hover:border-cata-cyan hover:text-cata-cyan transition-colors focus:outline-none focus:border-cata-cyan"
+                className="w-full px-4 py-3 border border-border-subtle bg-void-elevated text-ink-primary font-display font-semibold text-sm uppercase tracking-wider hover:border-cata-cyan hover:text-cata-cyan transition-colors focus:outline-none focus:border-cata-cyan focus:ring-2 focus:ring-cata-cyan/30"
               >
                 {provider.label}
               </button>
