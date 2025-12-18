@@ -13,8 +13,50 @@ interface ErrorContext {
 }
 
 /**
+ * Structured log entry format for Loki/Promtail ingestion.
+ * In production, emitted as JSON to stdout where Promtail picks up docker logs.
+ */
+interface StructuredLogEntry {
+  timestamp: string;
+  level: ErrorSeverity;
+  message: string;
+  error?: {
+    name: string;
+    message: string;
+    stack?: string;
+  };
+  component?: string;
+  action?: string;
+  context?: Record<string, unknown>;
+}
+
+/**
+ * Emit structured log entry.
+ * Production: JSON to stdout for Promtail/Loki ingestion.
+ * Development: Pretty console output for debugging.
+ */
+function emitStructuredLog(entry: StructuredLogEntry): void {
+  if (process.env.NODE_ENV === 'production') {
+    // JSON format for Promtail to parse and send to Loki
+    console.log(JSON.stringify(entry));
+  } else {
+    // Pretty output for development
+    const levelColors: Record<ErrorSeverity, string> = {
+      debug: '\x1b[90m',   // gray
+      info: '\x1b[36m',    // cyan
+      warning: '\x1b[33m', // yellow
+      error: '\x1b[31m',   // red
+      critical: '\x1b[35m' // magenta
+    };
+    const reset = '\x1b[0m';
+    const color = levelColors[entry.level] || '';
+    console.log(`${color}[${entry.level.toUpperCase()}]${reset} ${entry.message}`, entry);
+  }
+}
+
+/**
  * Log error for debugging (development only, or with flag)
- * Use for errors that help developers but shouldn't go to Sentry
+ * Use for errors that help developers but shouldn't go to production monitoring
  */
 export function logForDebugging(
   message: string,
@@ -27,7 +69,7 @@ export function logForDebugging(
 }
 
 /**
- * Log error to error reporting service (Sentry when configured)
+ * Log error to structured logging system (Loki via Promtail)
  * Use for errors that should be tracked in production
  */
 export function logError(
@@ -38,17 +80,21 @@ export function logError(
 ): void {
   const errorObj = error instanceof Error ? error : new Error(String(error));
 
-  // Always log to console in development
-  if (process.env.NODE_ENV === 'development') {
-    console.error(`[${severity.toUpperCase()}] ${message}`, { error: errorObj, context });
-  }
+  const entry: StructuredLogEntry = {
+    timestamp: new Date().toISOString(),
+    level: severity,
+    message,
+    error: {
+      name: errorObj.name,
+      message: errorObj.message,
+      stack: errorObj.stack,
+    },
+    component: context?.component,
+    action: context?.action,
+    context: context ? { ...context } : undefined,
+  };
 
-  // TODO: Integrate with Sentry when configured
-  // Sentry.captureException(errorObj, {
-  //   level: severity,
-  //   tags: { component: context?.component, action: context?.action },
-  //   extra: context,
-  // });
+  emitStructuredLog(entry);
 }
 
 /**
