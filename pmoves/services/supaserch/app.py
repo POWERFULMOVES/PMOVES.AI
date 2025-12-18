@@ -69,6 +69,14 @@ NATS_CONNECTION_GAUGE = Gauge(
 
 @dataclass
 class SupaSerchContext:
+    """Context for a SupaSerch request.
+
+    Attributes:
+        request_id: Unique identifier for this search request.
+        channel: Source channel (e.g., nats, http).
+        correlation_id: Optional correlation ID for tracing.
+    """
+
     request_id: str
     channel: str
     correlation_id: Optional[str]
@@ -361,12 +369,14 @@ async def _connect_nats() -> None:
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    """Initialize NATS connection on application startup."""
     app.state.nats = None
     asyncio.create_task(_connect_nats())
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
+    """Clean up NATS connection on application shutdown."""
     nc: Optional[NATS] = getattr(app.state, "nats", None)
     if nc is not None and not nc.is_closed:
         try:
@@ -377,6 +387,7 @@ async def on_shutdown() -> None:
 
 @app.get("/healthz")
 async def healthz() -> Dict[str, Any]:
+    """Health check endpoint for Kubernetes probes."""
     nc: Optional[NATS] = getattr(app.state, "nats", None)
     return {
         "status": "ok",
@@ -388,11 +399,13 @@ async def healthz() -> Dict[str, Any]:
 
 @app.get("/metrics")
 async def metrics() -> Response:
+    """Prometheus metrics endpoint."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/v1/search")
 async def search(q: str = Query(..., min_length=1, description="Search query")) -> Dict[str, Any]:
+    """Execute multimodal holographic search via HTTP."""
     channel = "http"
     REQUEST_COUNTER.labels(channel=channel).inc()
     start = time.perf_counter()

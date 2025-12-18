@@ -291,6 +291,17 @@ DEFAULT_MODE = "openrouter"
 
 @dataclass
 class ResearchRequest:
+    """Incoming research request from NATS message bus.
+
+    Attributes:
+        query: The research question or topic to investigate.
+        mode: Execution mode (tensorzero, openrouter, or local).
+        max_steps: Maximum research iterations allowed.
+        context: Additional context for the research task.
+        metadata: Request metadata (correlation_id, timestamps, etc.).
+        notebook_overrides: Override settings for Open Notebook publishing.
+    """
+
     query: str
     mode: str
     max_steps: Optional[int]
@@ -301,6 +312,23 @@ class ResearchRequest:
 
 @dataclass
 class ResearchResult:
+    """Completed research result ready for publishing.
+
+    Attributes:
+        query: Original research query.
+        status: Execution status (success, error, timeout).
+        summary: Generated research summary.
+        notes: Key findings and bullet points.
+        sources: Ranked list of source citations.
+        mode: Execution mode used.
+        metadata: Request metadata propagated from input.
+        raw_log: Optional reasoning/debug log.
+        error: Error message if status is error.
+        iterations: Research steps/iterations performed.
+        duration_ms: Total execution time in milliseconds.
+        notebook_entry_id: Open Notebook entry ID if published.
+    """
+
     query: str
     status: str
     summary: str
@@ -315,6 +343,7 @@ class ResearchResult:
     notebook_entry_id: Optional[str] = None
 
     def as_payload(self) -> Dict[str, Any]:
+        """Convert result to dictionary payload for NATS publishing."""
         payload: Dict[str, Any] = {
             "query": self.query,
             "status": self.status,
@@ -341,6 +370,18 @@ class ResearchResult:
 
 @dataclass(slots=True, frozen=True)
 class NotebookPublishConfig:
+    """Configuration for Open Notebook publishing.
+
+    Attributes:
+        enabled: Whether notebook publishing is enabled.
+        base_url: Open Notebook API base URL.
+        token: API authentication token.
+        notebook_id: Target notebook UUID.
+        title_prefix: Prefix for entry titles.
+        embed: Whether to generate embeddings.
+        async_processing: Use async processing queue.
+    """
+
     enabled: bool
     base_url: str
     token: str
@@ -551,7 +592,19 @@ class NotebookPublisher:
 
 
 class DeepResearchRunner:
+    """Executes deep research queries via multiple backend modes.
+
+    Supports three execution modes:
+    - tensorzero: Local Ollama inference via TensorZero gateway
+    - openrouter: Cloud inference via OpenRouter API
+    - local: External research API (e.g., Tongyi DeepResearch)
+
+    The runner handles LLM inference, response parsing, and result
+    normalization across all backends.
+    """
+
     def __init__(self) -> None:
+        """Initialize runner with configuration from environment variables."""
         self.mode = (os.getenv("DEEPRESEARCH_MODE") or DEFAULT_MODE).lower()
         self.timeout = float(os.getenv("DEEPRESEARCH_TIMEOUT", "600"))
         self.openrouter_model = os.getenv("DEEPRESEARCH_OPENROUTER_MODEL", "tongyi-deepresearch")
@@ -789,6 +842,12 @@ async def _handle_request(msg: Msg, runner: DeepResearchRunner, publisher: Noteb
 
 
 async def main() -> None:
+    """Entry point for DeepResearch NATS worker service.
+
+    Initializes the research runner, connects to NATS, and subscribes
+    to research.deepresearch.request.v1 for incoming queries. Also
+    starts a health server for Kubernetes probes.
+    """
     nats_url = os.getenv("NATS_URL", "nats://nats:4222")
     runner = DeepResearchRunner()
     publisher = NotebookPublisher()
@@ -799,6 +858,7 @@ async def main() -> None:
 
     @app.get("/healthz")
     async def healthz():  # type: ignore[override]
+        """Health check endpoint for Kubernetes liveness/readiness probes."""
         return {
             "status": "ok",
             "nats_connected": bool(nc.is_connected),

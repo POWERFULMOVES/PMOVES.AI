@@ -368,6 +368,7 @@ async def _nats_resilience_loop() -> None:
 
 @app.get("/healthz")
 async def healthz():
+    """Health check endpoint for Kubernetes probes."""
     return {
         "ok": True,
         "webhook": bool(DISCORD_WEBHOOK_URL),
@@ -378,6 +379,7 @@ async def healthz():
 
 @app.get("/metrics")
 async def metrics():
+    """Metrics endpoint for webhook and telemetry statistics."""
     return {
         "webhook": _webhook_snapshot(),
         "telemetry": _telemetry_metrics.summary(),
@@ -1048,6 +1050,7 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
 
 @app.on_event("startup")
 async def startup():
+    """Initialize NATS connection on application startup."""
     global _nats_loop_task
     if _nats_loop_task and _nats_loop_task.done():
         try:
@@ -1067,6 +1070,7 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
+    """Clean up NATS connection on application shutdown."""
     global _nats_loop_task, _nc
     if _nats_loop_task:
         _nats_loop_task.cancel()
@@ -1080,6 +1084,7 @@ async def shutdown():
 
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):
+    """Test endpoint for publishing messages to Discord webhook."""
     content = body.get("content") or "PMOVES test message"
     embeds = body.get("embeds")
     raw_file = body.get("file")
