@@ -206,6 +206,8 @@ SUPABASE_REALTIME_KEY = (
 )
 GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
 GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
+GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))
+GEOMETRY_REALTIME_STARTUP_GRACE = float(os.environ.get("GEOMETRY_REALTIME_STARTUP_GRACE", "120.0"))
 
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
@@ -878,11 +880,15 @@ async def _phoenix_heartbeat(ws, interval: float = 25.0) -> None:
 
 
 async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
+    import time
     try:
         import websockets
     except ImportError:
         logger.warning("websockets not installed; skipping Supabase realtime subscription")
         return
+
+    startup_time = time.monotonic()
+    current_backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
 
     while True:
         full_url = ws_url
@@ -913,6 +919,8 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                 }
                 await ws.send(json.dumps(join_payload))
                 logger.info("Subscribed to Supabase realtime geometry.cgp.v1 channel")
+                # Reset backoff on successful connection
+                current_backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
                 heartbeat = asyncio.create_task(_phoenix_heartbeat(ws))
                 try:
                     async for raw in ws:
@@ -950,11 +958,21 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                         await heartbeat
         except asyncio.CancelledError:
             break
-        except Exception:
-            logger.exception(
-                "Supabase realtime listener error; retrying in %.1fs", max(1.0, GEOMETRY_REALTIME_BACKOFF)
-            )
-            await asyncio.sleep(max(1.0, GEOMETRY_REALTIME_BACKOFF))
+        except Exception as e:
+            elapsed = time.monotonic() - startup_time
+            # During startup grace period, use WARNING level (less alarming in logs)
+            if elapsed < GEOMETRY_REALTIME_STARTUP_GRACE:
+                logger.warning(
+                    "Supabase realtime not ready (startup grace %.0fs/%.0fs); retrying in %.1fs: %s",
+                    elapsed, GEOMETRY_REALTIME_STARTUP_GRACE, current_backoff, str(e)
+                )
+            else:
+                logger.exception(
+                    "Supabase realtime listener error; retrying in %.1fs", current_backoff
+                )
+            await asyncio.sleep(current_backoff)
+            # Exponential backoff with cap
+            current_backoff = min(current_backoff * 2, GEOMETRY_REALTIME_MAX_BACKOFF)
 
 
 @app.on_event("startup")
