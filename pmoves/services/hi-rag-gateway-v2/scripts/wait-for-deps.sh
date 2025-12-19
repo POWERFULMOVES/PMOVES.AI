@@ -49,7 +49,10 @@ echo "[wait-for-deps] Waiting for Supabase realtime at $HEALTH_URL..."
 start_time=$(date +%s)
 
 while true; do
-    if curl -sf "$HEALTH_URL" -o /dev/null 2>&1; then
+    # Use timeouts to prevent curl from hanging indefinitely
+    # --connect-timeout: max time for connection establishment (5s)
+    # --max-time: max time for entire operation including transfer (10s)
+    if curl -sf --connect-timeout 5 --max-time 10 "$HEALTH_URL" -o /dev/null 2>&1; then
         echo "[wait-for-deps] Supabase realtime is ready!"
         break
     fi

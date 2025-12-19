@@ -888,7 +888,7 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         return
 
     startup_time = time.monotonic()
-    current_backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
+    current_backoff = GEOMETRY_REALTIME_BACKOFF
 
     while True:
         full_url = ws_url
@@ -926,7 +926,8 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                     async for raw in ws:
                         try:
                             msg = json.loads(raw)
-                        except Exception:
+                        except json.JSONDecodeError as e:
+                            logger.debug("Supabase realtime: failed to parse message: %s", e)
                             continue
                         if msg.get("topic") != "realtime:geometry.cgp.v1":
                             continue
@@ -958,17 +959,22 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                         await heartbeat
         except asyncio.CancelledError:
             break
-        except Exception as e:
+        except Exception as exc:
             elapsed = time.monotonic() - startup_time
-            # During startup grace period, use WARNING level (less alarming in logs)
             if elapsed < GEOMETRY_REALTIME_STARTUP_GRACE:
+                # During startup grace period, use WARNING to reduce log noise
                 logger.warning(
-                    "Supabase realtime not ready (startup grace %.0fs/%.0fs); retrying in %.1fs: %s",
-                    elapsed, GEOMETRY_REALTIME_STARTUP_GRACE, current_backoff, str(e)
+                    "Supabase realtime not ready (%s: %s); retrying in %.1fs (grace period: %.0fs remaining)",
+                    type(exc).__name__,
+                    str(exc)[:100],
+                    current_backoff,
+                    GEOMETRY_REALTIME_STARTUP_GRACE - elapsed,
                 )
             else:
                 logger.exception(
-                    "Supabase realtime listener error; retrying in %.1fs", current_backoff
+                    "Supabase realtime listener error (%s); retrying in %.1fs",
+                    type(exc).__name__,
+                    current_backoff,
                 )
             await asyncio.sleep(current_backoff)
             # Exponential backoff with cap
