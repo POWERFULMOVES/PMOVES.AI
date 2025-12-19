@@ -14,11 +14,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    # WSL2/CUDA compatibility settings
+    CUDA_FORCE_PTX_JIT=1 \
+    CUDA_DEVICE_ORDER=PCI_BUS_ID \
+    TORCH_CUDA_ARCH_LIST="5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0" \
+    TORCH_CUDNN_V8_API_ENABLED=1
 
 WORKDIR /build
 
-# System deps for audio + build utilities
+# System deps for audio + build utilities (cmake/protobuf for onnx)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ffmpeg \
       espeak-ng \
@@ -33,6 +38,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
       curl \
       build-essential \
+      cmake \
+      protobuf-compiler \
+      libprotobuf-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone from PMOVES fork (synced with upstream engine fixes)
@@ -41,7 +49,9 @@ RUN git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Stu
 WORKDIR /build/app
 
 # Install Python deps using repo's requirements.txt (has all 7 engines)
+# Pre-install onnx with binary wheel to avoid build failures on WSL2
 RUN python -m pip install --upgrade pip && \
+    python -m pip install onnx --only-binary=:all: && \
     python -m pip install -r requirements.txt
 
 # Install phonemizer-fork (must replace phonemizer)
@@ -61,9 +71,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     GRADIO_SERVER_NAME=0.0.0.0 \
     GRADIO_SERVER_PORT=7861 \
+    GRADIO_MCP_SERVER=true \
     HF_HOME=/data/hf \
     HUGGINGFACE_HUB_CACHE=/data/hf \
-    XDG_CACHE_HOME=/data/cache
+    XDG_CACHE_HOME=/data/cache \
+    # WSL2/CUDA compatibility settings
+    CUDA_FORCE_PTX_JIT=1 \
+    CUDA_DEVICE_ORDER=PCI_BUS_ID \
+    TORCH_CUDA_ARCH_LIST="5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0" \
+    TORCH_CUDNN_V8_API_ENABLED=1
 
 # Runtime system dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
