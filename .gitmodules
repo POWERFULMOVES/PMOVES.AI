@@ -80,3 +80,6 @@
 	path = PMOVES-Pipecat
 	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
 	ignore = all
+[submodule "PMOVES-Ultimate-TTS-Studio"]
+	path = PMOVES-Ultimate-TTS-Studio
+	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
