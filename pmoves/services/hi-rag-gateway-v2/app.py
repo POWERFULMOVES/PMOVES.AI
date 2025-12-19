@@ -205,7 +205,10 @@ SUPABASE_REALTIME_KEY = (
     _jwt_service_key or _explicit_realtime_key or SUPABASE_ANON_KEY
 )
 GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
-GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
+# Realtime connection retry configuration
+GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))  # Initial retry delay (seconds)
+GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))  # Max retry delay cap (seconds)
+GEOMETRY_REALTIME_STARTUP_GRACE = float(os.environ.get("GEOMETRY_REALTIME_STARTUP_GRACE", "120.0"))  # Use WARNING (not ERROR) for this duration
 
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
@@ -878,11 +881,15 @@ async def _phoenix_heartbeat(ws, interval: float = 25.0) -> None:
 
 
 async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
+    import time
     try:
         import websockets
     except ImportError:
         logger.warning("websockets not installed; skipping Supabase realtime subscription")
         return
+
+    startup_time = time.monotonic()
+    current_backoff = GEOMETRY_REALTIME_BACKOFF
 
     while True:
         full_url = ws_url
@@ -913,12 +920,15 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                 }
                 await ws.send(json.dumps(join_payload))
                 logger.info("Subscribed to Supabase realtime geometry.cgp.v1 channel")
+                # Reset backoff on successful connection
+                current_backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
                 heartbeat = asyncio.create_task(_phoenix_heartbeat(ws))
                 try:
                     async for raw in ws:
                         try:
                             msg = json.loads(raw)
-                        except Exception:
+                        except json.JSONDecodeError as e:
+                            logger.debug("Supabase realtime: failed to parse message: %s", e)
                             continue
                         if msg.get("topic") != "realtime:geometry.cgp.v1":
                             continue
@@ -950,11 +960,29 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                         await heartbeat
         except asyncio.CancelledError:
             break
-        except Exception:
-            logger.exception(
-                "Supabase realtime listener error; retrying in %.1fs", max(1.0, GEOMETRY_REALTIME_BACKOFF)
-            )
-            await asyncio.sleep(max(1.0, GEOMETRY_REALTIME_BACKOFF))
+        except Exception as exc:
+            elapsed = time.monotonic() - startup_time
+            if elapsed < GEOMETRY_REALTIME_STARTUP_GRACE:
+                # During startup grace period, use WARNING (not ERROR with stack trace)
+                # because Supabase realtime may still be initializing - this is expected behavior
+                logger.warning(
+                    "Supabase realtime not ready (%s: %s); retrying in %.1fs (grace period: %.0fs remaining)",
+                    type(exc).__name__,
+                    str(exc)[:100],
+                    current_backoff,
+                    GEOMETRY_REALTIME_STARTUP_GRACE - elapsed,
+                )
+                # Still log stack trace at DEBUG for troubleshooting unexpected errors
+                logger.debug("Stack trace for startup grace period warning:", exc_info=True)
+            else:
+                logger.exception(
+                    "Supabase realtime listener error (%s); retrying in %.1fs",
+                    type(exc).__name__,
+                    current_backoff,
+                )
+            await asyncio.sleep(current_backoff)
+            # Exponential backoff with cap
+            current_backoff = min(current_backoff * 2, GEOMETRY_REALTIME_MAX_BACKOFF)
 
 
 @app.on_event("startup")

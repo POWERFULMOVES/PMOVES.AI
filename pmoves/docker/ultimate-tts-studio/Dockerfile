@@ -1,131 +1,81 @@
 # PMOVES.AI Hardened Ultimate-TTS-Studio
-# Multi-engine TTS with all 7 engines pre-installed
+# Multi-engine TTS with all 7 engines (KittenTTS, Kokoro, F5-TTS, IndexTTS2, Fish, Chatterbox, VoxCPM)
+# Clones from PMOVES fork: github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio
 # Following PMOVES.AI security standards: non-root, health checks, minimal surface
 
 ARG CUDA_VERSION=12.4.1
-ARG PYTHON_VERSION=3.10
 
 # =============================================================================
 # Stage 1: Builder - Install all dependencies
 # =============================================================================
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu22.04 AS builder
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
 
-# System dependencies for TTS engines
+WORKDIR /build
+
+# System deps for audio + build utilities
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    wget \
-    build-essential \
-    espeak-ng \
-    libespeak-ng1 \
-    libespeak-ng-dev \
-    portaudio19-dev \
-    libportaudio2 \
-    libaio-dev \
-    ffmpeg \
-    libsndfile1 \
-    libsox-dev \
-    sox \
-    python3.10 \
-    python3.10-venv \
-    python3.10-dev \
-    python3-pip \
+      ffmpeg \
+      espeak-ng \
+      libespeak-ng1 \
+      libespeak-ng-dev \
+      libsndfile1 \
+      libportaudio2 \
+      portaudio19-dev \
+      libaio-dev \
+      libsox-dev \
+      sox \
+      git \
+      curl \
+      build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
-RUN python3.10 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Upgrade pip and install build tools
-RUN pip install --no-cache-dir --upgrade pip wheel setuptools
-
-# Clone Ultimate-TTS-Studio
-WORKDIR /build
-RUN git clone --depth 1 https://github.com/SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition.git app
+# Clone from PMOVES fork (synced with upstream engine fixes)
+RUN git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git app
 
 WORKDIR /build/app
 
-# Install core dependencies first (order matters for compatibility)
-RUN pip install --no-cache-dir \
-    torch==2.5.1 \
-    torchaudio==2.5.1 \
-    --index-url https://download.pytorch.org/whl/cu124
+# Install Python deps using repo's requirements.txt (has all 7 engines)
+RUN python -m pip install --upgrade pip && \
+    python -m pip install -r requirements.txt
 
-# Install TTS engines explicitly (these are the 7 we need)
-RUN pip install --no-cache-dir \
-    gradio>=5.0.0 \
-    transformers>=4.40.0 \
-    accelerate \
-    einops \
-    librosa \
-    soundfile \
-    scipy \
-    numpy \
-    pydub \
-    resampy
-
-# Install KittenTTS from wheel (KittenML official release)
-RUN pip install --no-cache-dir \
-    https://github.com/KittenML/KittenTTS/releases/download/0.1/kittentts-0.1.0-py3-none-any.whl || \
-    echo "WARNING: KittenTTS wheel unavailable, skipping"
-
-# Install Kokoro TTS (Japanese/English high-quality)
-RUN pip install --no-cache-dir kokoro misaki || \
-    echo "WARNING: Kokoro TTS unavailable, skipping"
-
-# Install F5-TTS (natural prosody)
-RUN pip install --no-cache-dir f5-tts || \
-    echo "WARNING: F5-TTS unavailable, skipping"
-
-# Install VoxCPM (voice cloning) and Whisper (STT)
-RUN pip install --no-cache-dir voxcpm openai-whisper || \
-    pip install --no-cache-dir openai-whisper || \
-    echo "WARNING: VoxCPM/Whisper unavailable, skipping"
-
-# Install remaining requirements (skip already installed)
-COPY requirements-ultimate-tts.txt /build/
-RUN pip install --no-cache-dir -r /build/requirements-ultimate-tts.txt 2>/dev/null || true
-
-# Install phonemizer-fork (must be after phonemizer uninstall)
+# Install phonemizer-fork (must replace phonemizer)
 RUN pip uninstall -y phonemizer 2>/dev/null || true && \
-    pip install --no-cache-dir phonemizer-fork
-
-# Install onnxruntime-gpu
-RUN pip install --no-cache-dir --upgrade --force-reinstall onnxruntime-gpu==1.22.0
+    pip install phonemizer-fork
 
 # Download spacy model
-RUN pip install --no-cache-dir spacy && \
-    python -m spacy download en_core_web_sm || true
+RUN python -m spacy download en_core_web_sm || true
 
 # =============================================================================
 # Stage 2: Runtime - Minimal production image
 # =============================================================================
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn-runtime-ubuntu22.04 AS runtime
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime AS runtime
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PATH="/opt/venv/bin:$PATH"
-ENV GRADIO_SERVER_NAME="0.0.0.0"
-ENV GRADIO_SERVER_PORT="7861"
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    GRADIO_SERVER_NAME=0.0.0.0 \
+    GRADIO_SERVER_PORT=7861 \
+    HF_HOME=/data/hf \
+    HUGGINGFACE_HUB_CACHE=/data/hf \
+    XDG_CACHE_HOME=/data/cache
 
 # Runtime system dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    espeak-ng \
-    libespeak-ng1 \
-    portaudio19-dev \
-    libportaudio2 \
-    libaio1 \
-    ffmpeg \
-    libsndfile1 \
-    libsox3 \
-    sox \
-    python3.10 \
-    curl \
+      ffmpeg \
+      espeak-ng \
+      libespeak-ng1 \
+      libsndfile1 \
+      libportaudio2 \
+      libaio1 \
+      libsox3 \
+      sox \
+      curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -133,28 +83,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -g 65532 pmoves && \
     useradd -u 65532 -g pmoves -d /app -s /bin/bash pmoves
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
+# Copy Python environment from builder (includes all installed packages)
+COPY --from=builder /opt/conda /opt/conda
 
 # Copy application code
 COPY --from=builder /build/app /app
 
 # Create directories for models and checkpoints
-RUN mkdir -p /app/checkpoints /app/outputs /app/models && \
-    chown -R pmoves:pmoves /app
+RUN mkdir -p /app/checkpoints /app/outputs /app/models /data/hf /data/cache && \
+    chown -R pmoves:pmoves /app /data
 
-# Set working directory
 WORKDIR /app
 
 # Switch to non-root user
 USER pmoves
 
-# Expose Gradio port
 EXPOSE 7861
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+# Health check (start-period allows time for model loading)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
     CMD curl -f http://localhost:7861/gradio_api/info || exit 1
 
-# Launch script
-CMD ["python", "launch.py", "--share=false", "--listen"]
+CMD ["python", "launch.py"]
