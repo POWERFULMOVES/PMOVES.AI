@@ -38,9 +38,19 @@ COPY services/common /app/services/common
 # Make wait-for-deps.sh executable
 RUN chmod +x /app/scripts/wait-for-deps.sh
 
-# Create a wrapper entrypoint that waits for deps, then runs NVIDIA entrypoint
-RUN printf '#!/bin/bash\nset -e\n# Run wait-for-deps with a dummy command that exits successfully\n/app/scripts/wait-for-deps.sh /bin/true\n# Now run the actual command via NVIDIA entrypoint\nexec /opt/nvidia/nvidia_entrypoint.sh "$@"\n' > /app/entrypoint-wrapper.sh && \
+# Create wrapper entrypoint that:
+#   1. Runs wait-for-deps.sh to wait for Supabase realtime
+#   2. Passes /bin/true as the command (wait-for-deps needs a command to exec)
+#   3. Then delegates to NVIDIA entrypoint for GPU initialization
+RUN printf '#!/bin/bash\nset -e\n/app/scripts/wait-for-deps.sh /bin/true\nexec /opt/nvidia/nvidia_entrypoint.sh "$@"\n' > /app/entrypoint-wrapper.sh && \
     chmod +x /app/entrypoint-wrapper.sh
+
+# Security: Run as non-root user (GPU services need video group for device access)
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves -G video --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
 
 ENV HIRAG_HTTP_PORT=8086
 EXPOSE 8086
