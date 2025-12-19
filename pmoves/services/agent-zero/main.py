@@ -646,8 +646,27 @@ async def _controller_connect_loop() -> None:
             break
 
 
+def _warn_missing_notebook_config() -> None:
+    """Log startup warnings for missing Open Notebook configuration."""
+    nb_url = service_config.open_notebook_api_url
+    nb_token = service_config.open_notebook_token_present
+    if not nb_url:
+        logger.warning(
+            "OPEN_NOTEBOOK_API_URL not configured; notebook.search MCP command will fail. "
+            "Set OPEN_NOTEBOOK_API_URL to enable notebook integration."
+        )
+    elif not nb_token:
+        logger.warning(
+            "OPEN_NOTEBOOK_API_TOKEN not configured; notebook.search MCP command will fail. "
+            "Set OPEN_NOTEBOOK_API_TOKEN to enable notebook integration."
+        )
+    elif nb_url and nb_token:
+        logger.info("Open Notebook integration configured: %s", nb_url)
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
+    _warn_missing_notebook_config()
     await process_manager.start()
     global _controller_task
     _controller_shutdown.clear()

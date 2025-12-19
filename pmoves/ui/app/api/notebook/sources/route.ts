@@ -1,25 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-let NB = (process.env.OPEN_NOTEBOOK_API_URL || process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL || '').replace(/\/$/, '');
-if (NB.includes('cataclysm-open-notebook')) {
-  NB = 'http://localhost:5055';
-}
+// Open Notebook API endpoint - documented in docs/services/open-notebook/
+const NOTEBOOK_API_URL = (
+  process.env.OPEN_NOTEBOOK_API_URL ||
+  process.env.NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL ||
+  ''
+).replace(/\/$/, '');
+
+const NOTEBOOK_API_TOKEN = process.env.OPEN_NOTEBOOK_API_TOKEN || '';
 
 export async function GET(_req: NextRequest) {
-  if (!NB) return NextResponse.json({ items: [], error: 'OPEN_NOTEBOOK_API_URL not set' }, { status: 200 });
-  // Try a few likely endpoints; return first that works
-  const attempts = [
-    `${NB}/sources?limit=10`,
-    `${NB}/items?limit=10`,
-  ];
-  for (const url of attempts) {
-    try {
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) continue;
-      const json = await res.json();
-      const items = Array.isArray(json?.items) ? json.items : Array.isArray(json) ? json : [];
-      if (items.length) return NextResponse.json({ items, endpoint: url });
-    } catch {}
+  // Check configuration
+  if (!NOTEBOOK_API_URL) {
+    return NextResponse.json(
+      { items: [], error: 'OPEN_NOTEBOOK_API_URL not configured' },
+      { status: 200 }
+    );
   }
-  return NextResponse.json({ items: [] }, { status: 200 });
+
+  const endpoint = `${NOTEBOOK_API_URL}/api/sources`;
+
+  try {
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+    };
+    if (NOTEBOOK_API_TOKEN) {
+      headers['Authorization'] = `Bearer ${NOTEBOOK_API_TOKEN}`;
+    }
+
+    const res = await fetch(`${endpoint}?limit=10`, {
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => 'Unknown error');
+      console.error('[notebook-sources-api]', `HTTP ${res.status}:`, errorText, { endpoint });
+      return NextResponse.json(
+        { items: [], error: `Open Notebook API returned ${res.status}` },
+        { status: 200 }
+      );
+    }
+
+    const json = await res.json();
+    // Handle both array response and { items: [...] } wrapper
+    const items = Array.isArray(json?.items)
+      ? json.items
+      : Array.isArray(json)
+        ? json
+        : [];
+
+    return NextResponse.json({ items, endpoint });
+  } catch (err) {
+    console.error('[notebook-sources-api]', 'Fetch error:', err, { endpoint });
+    return NextResponse.json(
+      { items: [], error: 'Failed to fetch sources from Open Notebook' },
+      { status: 200 }
+    );
+  }
 }
