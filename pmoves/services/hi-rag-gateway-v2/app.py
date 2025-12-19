@@ -205,9 +205,10 @@ SUPABASE_REALTIME_KEY = (
     _jwt_service_key or _explicit_realtime_key or SUPABASE_ANON_KEY
 )
 GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
-GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
-GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))
-GEOMETRY_REALTIME_STARTUP_GRACE = float(os.environ.get("GEOMETRY_REALTIME_STARTUP_GRACE", "120.0"))
+# Realtime connection retry configuration
+GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))  # Initial retry delay (seconds)
+GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))  # Max retry delay cap (seconds)
+GEOMETRY_REALTIME_STARTUP_GRACE = float(os.environ.get("GEOMETRY_REALTIME_STARTUP_GRACE", "120.0"))  # Use WARNING (not ERROR) for this duration
 
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
@@ -962,7 +963,8 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         except Exception as exc:
             elapsed = time.monotonic() - startup_time
             if elapsed < GEOMETRY_REALTIME_STARTUP_GRACE:
-                # During startup grace period, use WARNING to reduce log noise
+                # During startup grace period, use WARNING (not ERROR with stack trace)
+                # because Supabase realtime may still be initializing - this is expected behavior
                 logger.warning(
                     "Supabase realtime not ready (%s: %s); retrying in %.1fs (grace period: %.0fs remaining)",
                     type(exc).__name__,
@@ -970,6 +972,8 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                     current_backoff,
                     GEOMETRY_REALTIME_STARTUP_GRACE - elapsed,
                 )
+                # Still log stack trace at DEBUG for troubleshooting unexpected errors
+                logger.debug("Stack trace for startup grace period warning:", exc_info=True)
             else:
                 logger.exception(
                     "Supabase realtime listener error (%s); retrying in %.1fs",
