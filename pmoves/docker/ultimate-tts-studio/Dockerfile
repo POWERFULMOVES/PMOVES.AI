@@ -49,10 +49,12 @@ RUN git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Stu
 WORKDIR /build/app
 
 # Install Python deps using repo's requirements.txt (has all 7 engines)
-# Pre-install onnx with binary wheel to avoid build failures on WSL2
+# Pre-install onnx with pinned version (has pre-built wheels)
+# Use constraints to prevent source builds during requirements.txt
 RUN python -m pip install --upgrade pip && \
-    python -m pip install onnx --only-binary=:all: && \
-    python -m pip install -r requirements.txt
+    echo "onnx==1.16.0" > /tmp/constraints.txt && \
+    python -m pip install onnx==1.16.0 && \
+    PIP_CONSTRAINT=/tmp/constraints.txt python -m pip install -r requirements.txt
 
 # Install phonemizer-fork (must replace phonemizer)
 RUN pip uninstall -y phonemizer 2>/dev/null || true && \
