@@ -1,8 +1,9 @@
+
 import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading
-import importlib.util
+import os, time, math, json, logging, re, sys, contextlib, ipaddress, importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect, Response
+from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
@@ -29,11 +30,6 @@ ALPHA = float(os.environ.get("ALPHA", "0.7"))
 # Collect rerank validation notes so startup logs and admin routes can expose them.
 _RERANK_CONFIG_ERRORS: List[str] = []
 _RERANK_CONFIG_WARNINGS: List[str] = []
-
-# Configure logging early for use in helper functions
-logging.basicConfig(level=logging.INFO)
-logging.getLogger().setLevel(logging.INFO)
-logger = logging.getLogger("hirag.gateway.v2")
 
 
 def _parse_bool(name: str, default: bool) -> bool:
@@ -64,17 +60,6 @@ def _parse_positive_int(name: str, default: int) -> int:
         _RERANK_CONFIG_ERRORS.append(f"{name} must be positive; received {value}")
         return default
     return value
-
-
-def _parse_int_env(name: str, default: int) -> int:
-    """Parse integer environment variable with validation and fallback."""
-    raw = os.environ.get(name, str(default))
-    try:
-        return int(raw)
-    except (TypeError, ValueError) as exc:
-        # Use logger for general config warnings, not rerank-specific list
-        logger.warning("%s value %r invalid, using default %s: %s", name, raw, default, exc)
-        return default
 
 
 def _parse_optional_bool(name: str) -> Optional[bool]:
@@ -183,10 +168,10 @@ GRAPH_BOOST = float(os.environ.get("GRAPH_BOOST","0.15"))
 NEO4J_URL = (os.environ.get("NEO4J_URL","bolt://neo4j:7687") or "").strip()
 NEO4J_USER = os.environ.get("NEO4J_USER","neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD","neo4j")
-NEO4J_DICT_REFRESH_SEC = _parse_int_env("NEO4J_DICT_REFRESH_SEC", 60)
-NEO4J_DICT_LIMIT = _parse_int_env("NEO4J_DICT_LIMIT", 50000)
-ENTITY_CACHE_TTL = _parse_int_env("ENTITY_CACHE_TTL", 60)
-ENTITY_CACHE_MAX = _parse_int_env("ENTITY_CACHE_MAX", 1000)
+NEO4J_DICT_REFRESH_SEC = int(os.environ.get("NEO4J_DICT_REFRESH_SEC","60"))
+NEO4J_DICT_LIMIT = int(os.environ.get("NEO4J_DICT_LIMIT","50000"))
+ENTITY_CACHE_TTL = int(os.environ.get("ENTITY_CACHE_TTL","60"))
+ENTITY_CACHE_MAX = int(os.environ.get("ENTITY_CACHE_MAX","1000"))
 
 SUPABASE_REST_URL = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL")
 # Optional internal REST base explicitly pointing at host-gateway; prefer for derivations
@@ -219,19 +204,22 @@ SUPABASE_REALTIME_KEY = (
     SUPABASE_ANON_KEY if _is_jwt(SUPABASE_ANON_KEY) else
     _jwt_service_key or _explicit_realtime_key or SUPABASE_ANON_KEY
 )
-GEOMETRY_CACHE_WARM_LIMIT = _parse_int_env("GEOMETRY_CACHE_WARM_LIMIT", 64)
-# Realtime connection retry configuration
-GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))  # Initial retry delay (seconds)
-GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))  # Max retry delay cap (seconds)
-GEOMETRY_REALTIME_STARTUP_GRACE = float(os.environ.get("GEOMETRY_REALTIME_STARTUP_GRACE", "120.0"))  # Use WARNING (not ERROR) for this duration
+GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
+GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
+GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))
+GEOMETRY_REALTIME_STARTUP_GRACE = float(os.environ.get("GEOMETRY_REALTIME_STARTUP_GRACE", "120.0"))
 
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
 TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIES", "").split(",") if c.strip()]
 
-HTTP_PORT = _parse_int_env("HIRAG_HTTP_PORT", 8086)
+HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
 NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","pmoves")
+
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
+logger = logging.getLogger("hirag.gateway.v2")
 
 if RERANK_ENABLE:
     logger.info(
@@ -545,17 +533,6 @@ class QueryResp(BaseModel):
     hits: List[QueryHit]
 
 app = FastAPI(title="PMOVES Hi-RAG Gateway v2 (hybrid + rerank)", version="2.1.0")
-
-# Prometheus metrics
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-
-http_requests_total = Counter('hirag_v2_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-http_request_duration = Histogram('hirag_v2_http_request_duration_seconds', 'HTTP request duration')
-search_queries_total = Counter('hirag_v2_search_queries_total', 'Search queries performed', ['rerank_enabled'])
-search_results_total = Counter('hirag_v2_search_results_total', 'Search results returned', ['source'])
-rerank_operations_total = Counter('hirag_v2_rerank_operations_total', 'Reranking operations')
-cache_hits_total = Counter('hirag_v2_cache_hits_total', 'Cache hits')
-cache_misses_total = Counter('hirag_v2_cache_misses_total', 'Cache misses')
 
 # ensure repo root on sys.path for importing shared tools
 try:
@@ -903,6 +880,7 @@ async def _phoenix_heartbeat(ws, interval: float = 25.0) -> None:
 
 
 async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
+    import time
     try:
         import websockets
     except ImportError:
@@ -910,7 +888,7 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         return
 
     startup_time = time.monotonic()
-    current_backoff = GEOMETRY_REALTIME_BACKOFF
+    current_backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
 
     while True:
         full_url = ws_url
@@ -919,14 +897,16 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         if "apikey=" not in full_url:
             sep = "&" if "?" in full_url else "?"
             full_url = f"{full_url}{sep}apikey={api_key}&vsn=1.0.0"
-        # Note: extra_headers not supported with uvloop; pass Authorization via URL if needed
-        # The apikey parameter above provides authentication for Supabase realtime
+        headers = {}
+        if SUPABASE_REALTIME_KEY:
+            headers["Authorization"] = f"Bearer {SUPABASE_REALTIME_KEY}"
         try:
             async with websockets.connect(
                 full_url,
                 ping_interval=20,
                 ping_timeout=20,
                 max_queue=None,
+                extra_headers=headers or None,
             ) as ws:
                 join_payload = {
                     "topic": "realtime:geometry.cgp.v1",
@@ -946,8 +926,7 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                     async for raw in ws:
                         try:
                             msg = json.loads(raw)
-                        except json.JSONDecodeError as e:
-                            logger.debug("Supabase realtime: failed to parse message: %s", e)
+                        except Exception:
                             continue
                         if msg.get("topic") != "realtime:geometry.cgp.v1":
                             continue
@@ -979,29 +958,64 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                         await heartbeat
         except asyncio.CancelledError:
             break
-        except Exception as exc:
+        except Exception as e:
             elapsed = time.monotonic() - startup_time
+            # During startup grace period, use WARNING level (less alarming in logs)
             if elapsed < GEOMETRY_REALTIME_STARTUP_GRACE:
-                # During startup grace period, use WARNING (not ERROR with stack trace)
-                # because Supabase realtime may still be initializing - this is expected behavior
                 logger.warning(
-                    "Supabase realtime not ready (%s: %s); retrying in %.1fs (grace period: %.0fs remaining)",
-                    type(exc).__name__,
-                    str(exc)[:100],
-                    current_backoff,
-                    GEOMETRY_REALTIME_STARTUP_GRACE - elapsed,
+                    "Supabase realtime not ready (startup grace %.0fs/%.0fs); retrying in %.1fs: %s",
+                    elapsed, GEOMETRY_REALTIME_STARTUP_GRACE, current_backoff, str(e)
                 )
-                # Still log stack trace at DEBUG for troubleshooting unexpected errors
-                logger.debug("Stack trace for startup grace period warning:", exc_info=True)
             else:
                 logger.exception(
-                    "Supabase realtime listener error (%s); retrying in %.1fs",
-                    type(exc).__name__,
-                    current_backoff,
+                    "Supabase realtime listener error; retrying in %.1fs", current_backoff
                 )
             await asyncio.sleep(current_backoff)
             # Exponential backoff with cap
             current_backoff = min(current_backoff * 2, GEOMETRY_REALTIME_MAX_BACKOFF)
+
+
+@app.on_event("startup")
+async def _on_startup() -> None:
+    if shape_store is None:
+        logger.info("ShapeStore unavailable; geometry cache warm skipped")
+        return
+    await _warm_shapes_from_supabase()
+    global _geometry_realtime_task
+    if _geometry_realtime_task is None:
+        ws_url = _derive_realtime_url()
+        api_key = SUPABASE_REALTIME_KEY
+        if ws_url and api_key:
+            _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
+            logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
+        else:
+            logger.info("Supabase realtime subscription skipped; missing URL or API key")
+    global _geometry_swarm_task
+    if _geometry_swarm_task is None and NATS_URL:
+        if hasattr(nats, "connect"):
+            _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
+            logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+        else:
+            logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    global _geometry_realtime_task
+    if _geometry_realtime_task is not None:
+        _geometry_realtime_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_realtime_task
+        _geometry_realtime_task = None
+    global _geometry_swarm_task, _geometry_swarm_stop
+    if _geometry_swarm_stop is not None:
+        _geometry_swarm_stop.set()
+    if _geometry_swarm_task is not None:
+        _geometry_swarm_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_swarm_task
+        _geometry_swarm_task = None
+    _geometry_swarm_stop = None
 
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower()=="true"
 CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
@@ -1016,7 +1030,7 @@ CHIT_PERSIST_DB = os.environ.get("CHIT_PERSIST_DB","false").lower()=="true"
 GAN_SIDECAR_ENABLED = os.environ.get("GAN_SIDECAR_ENABLED", "false").lower()=="true"
 
 PGHOST = os.environ.get("PGHOST")
-PGPORT = _parse_int_env("PGPORT", 5432)
+PGPORT = int(os.environ.get("PGPORT","5432"))
 PGUSER = os.environ.get("PGUSER")
 PGPASSWORD = os.environ.get("PGPASSWORD")
 PGDATABASE = os.environ.get("PGDATABASE")
@@ -1253,7 +1267,6 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         logger.warning("hirag.query hits=%d namespace=%s ip=%s", len(hits), req.namespace, client_ip)
     except Exception as e:
         logger.exception("Qdrant search error")
-        http_requests_total.labels(method='POST', endpoint='/hirag/query', status='503').inc()
         raise HTTPException(503, f"Qdrant search error: {e}")
 
     # lexical scores
@@ -1340,13 +1353,6 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
     if not used:
         base = sorted(base, key=lambda x: x["score"], reverse=True)[:req.k]
 
-    # Track metrics
-    search_queries_total.labels(rerank_enabled=str(used)).inc()
-    search_results_total.labels(source='qdrant').inc(len(hits))
-    if used:
-        rerank_operations_total.inc()
-    http_requests_total.labels(method='POST', endpoint='/hirag/query', status='200').inc()
-
     return {
         "query": req.query,
         "k": len(base),
@@ -1368,21 +1374,7 @@ def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
 
 @app.get("/")
 def index(_=Depends(require_tailscale)):
-    http_requests_total.labels(method='GET', endpoint='/', status='200').inc()
     return {"ok": True, "service": "hi-rag-gateway-v2", "hint": "POST /hirag/query"}
-
-
-@app.get("/healthz")
-def healthz():
-    """Health check endpoint (no auth required)."""
-    http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
-    return {"ok": True, "service": "hi-rag-gateway-v2"}
-
-
-@app.get("/metrics")
-def metrics():
-    """Prometheus metrics endpoint (no auth required)."""
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/mindmap/{constellation_id}")
@@ -1649,41 +1641,58 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
     top_pts = pts[:k]
 
-    # Mode handling: "learned" (T5 summarization), "swarm" (EvoSwarm GAN), or default (geometry points)
     if mode == "learned":
         try:
             from transformers import pipeline  # type: ignore
-        except (ImportError, ModuleNotFoundError) as exc:
-            raise HTTPException(500, f"transformers not available: {type(exc).__name__}")
+        except Exception:
+            raise HTTPException(500, "transformers not installed")
         texts = []
         cb = _load_codebook(CHIT_CODEBOOK_PATH)
         for rec in cb[: min(64, len(cb))]:
             t = rec.get("text") or rec.get("summary")
-            if t:
-                texts.append(t)
+            if t: texts.append(t)
         if const:
-            s = const.get("summary")
-            if s:
-                texts.insert(0, s)
+            s = const.get("summary");
+            if s: texts.insert(0, s)
         if not texts:
             raise HTTPException(400, "no codebook or constellation text available")
         nlp = pipeline("summarization", model=CHIT_T5_MODEL)
         out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
-        summary = out[0].get("summary_text", "")
-        # Apply HRM refinement to learned mode summary
-        summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
         return {
             "mode": mode,
-            "summary": summary,
+            "summary": out[0].get("summary_text", ""),
             "used": len(texts),
-            "hrm": hrm_info,
             "namespace": namespace,
             "modality": modality,
             "builder_pack": builder_pack,
         }
-
-    elif mode == "swarm":
-        # EvoSwarm mode: GAN sidecar reviews and re-ranks candidates
+        summary = out[0].get("summary_text", "")
+        summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
+        return {"mode": mode, "summary": summary, "used": len(texts), "hrm": hrm_info, "namespace": namespace}
+    else:
+        pts = []
+        if const:
+            for p in const.get("points", []) or []:
+                cid = p.get("id");
+                if not cid: continue
+                pts.append({
+                    "id": cid,
+                    "text": p.get("text"),
+                    "proj": p.get("proj"),
+                    "conf": p.get("conf")
+                })
+        pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
+        return {
+            "mode": mode,
+            "points": pts[:k],
+            "namespace": namespace,
+            "modality": modality,
+            "builder_pack": builder_pack,
+        }
+        hrm_info = _hrm_controller.status(namespace)
+        return {"mode": mode, "points": pts[:k], "hrm": hrm_info, "namespace": namespace}
+        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
+    if mode == "swarm":
         sidecar = _get_gan_sidecar()
         accept_threshold = float(body.get("accept_threshold", 0.55))
         max_edits = int(body.get("max_edits", 1))
@@ -1698,9 +1707,6 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
                     "decision": "unavailable",
                     "threshold": accept_threshold,
                 },
-                "namespace": namespace,
-                "modality": modality,
-                "builder_pack": builder_pack,
             }
         review = sidecar.review_text_candidates(
             top_pts,
@@ -1710,23 +1716,8 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
         )
         review["mode"] = mode
         review["raw_points"] = top_pts
-        review["namespace"] = namespace
-        review["modality"] = modality
-        review["builder_pack"] = builder_pack
         return review
-
-    else:
-        # Default geometry mode: return top-k points with HRM status
-        # Use pre-computed top_pts (already sorted and sliced at line 1650)
-        hrm_info = _hrm_controller.status(namespace)
-        return {
-            "mode": mode,
-            "points": top_pts,
-            "hrm": hrm_info,
-            "namespace": namespace,
-            "modality": modality,
-            "builder_pack": builder_pack,
-        }
+    return {"mode": mode, "points": top_pts}
 
 @app.post("/geometry/calibration/report")
 def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):
