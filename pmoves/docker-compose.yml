@@ -574,7 +574,7 @@ services:
         condition: service_started
       neo4j:
         condition: service_healthy
-    networks: [app_tier, data_tier, api_tier, monitoring_tier]
+    networks: [app_tier, data_tier, api_tier, monitoring_tier, supabase_net]
 
   # GPU-enabled variant of legacy v1 gateway (optional)
   hi-rag-gateway-gpu:
@@ -692,7 +692,7 @@ services:
       neo4j:
         condition: service_healthy
         required: false
-    networks: [app_tier, data_tier, api_tier, monitoring_tier]
+    networks: [app_tier, data_tier, api_tier, monitoring_tier, supabase_net]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -1286,3 +1286,9 @@ networks:
   cataclysm:
     external: true
     name: cataclysm-net
+
+  # Bridge to Supabase CLI stack for direct container-to-container communication
+  # Enables services to connect directly to supabase_realtime without host.docker.internal
+  supabase_net:
+    external: true
+    name: pmoves-net
