@@ -90,6 +90,24 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Access via `OPEN_NOTEBOOK_API_URL` + API token
 - Used by DeepResearch for persistent storage
 
+### Voice & Speech Services
+
+**Flute-Gateway** [Port 8055 HTTP, 8056 WebSocket]
+- Multimodal voice communication layer with Pipecat integration
+- Prosodic synthesis with natural pauses and emphasis
+- WebSocket streaming for real-time audio
+- API: `POST http://localhost:8055/v1/voice/synthesize/prosodic`
+- Health: `GET http://localhost:8055/healthz`
+- **Use for:** TTS synthesis, real-time voice sessions, audio streaming
+- **See:** `.claude/context/flute-gateway.md` for API reference
+
+**Ultimate-TTS-Studio** [Port 7861]
+- Multi-engine TTS with 7 engines (Kokoro, F5-TTS, KittenTTS, VoxCPM, etc.)
+- Gradio web interface for interactive synthesis
+- GPU-accelerated (CUDA 12.4)
+- Health: `GET http://localhost:7861/gradio_api/info`
+- **Use for:** High-quality TTS, voice cloning, multi-language synthesis
+
 ### Media Ingestion & Processing
 
 **PMOVES.YT** [Port 8077]

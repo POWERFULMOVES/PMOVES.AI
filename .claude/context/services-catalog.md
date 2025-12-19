@@ -111,6 +111,53 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Used By:** DeepResearch, notebook-sync
 - **Status:** External submodule integration
 
+## Voice & Speech Services
+
+### Flute-Gateway
+- **Ports:** 8055 (HTTP), 8056 (WebSocket)
+- **Purpose:** Multimodal voice communication layer with Pipecat integration
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `POST /v1/voice/synthesize/prosodic` - Prosodic TTS synthesis
+  - `POST /v1/voice/analyze/prosodic` - Text analysis for TTS
+  - `POST /v1/sessions` - Create voice session
+- **Features:**
+  - Pipecat pipeline for real-time audio
+  - Prosodic synthesis with natural pauses/emphasis
+  - WebSocket streaming for duplex communication
+  - Multiple TTS backend support (VibeVoice, Ultimate-TTS)
+- **Metrics:** `GET http://localhost:8055/metrics` (Prometheus)
+- **Dependencies:** NATS, Ultimate-TTS-Studio (optional), FFmpeg-Whisper
+- **Environment:**
+  - `FLUTE_API_KEY` - API authentication
+  - `ULTIMATE_TTS_URL` - Backend TTS service
+  - `VIBEVOICE_URL` - Alternative TTS backend
+- **Docker Image:** Custom build from `services/flute-gateway`
+- **Compose Profile:** `workers`, `orchestration`
+
+### Ultimate-TTS-Studio
+- **Ports:** 7861
+- **Purpose:** Multi-engine TTS with 7 engines pre-installed
+- **Key APIs:**
+  - `GET /gradio_api/info` - Service info and health
+  - Gradio Python client for synthesis
+- **Engines:**
+  - KittenTTS - Fast neural TTS
+  - Kokoro - High-quality Japanese/English
+  - F5-TTS - Natural prosody
+  - VoxCPM - Voice cloning
+  - Whisper - Speech-to-text input
+  - espeak-ng - Phoneme generation
+  - pynini - G2P and phonetic rules
+- **Features:**
+  - CUDA GPU acceleration
+  - Gradio web interface
+  - Multiple voice styles
+- **Security:** Non-root user (UID 65532)
+- **Metrics:** Gradio-based (no native Prometheus /metrics endpoint)
+- **Docker Image:** Custom build from `docker/ultimate-tts-studio`
+- **Compose Profile:** `gpu`, `tts`
+
 ## Media Ingestion & Processing
 
 ### PMOVES.YT
@@ -320,6 +367,11 @@ http://localhost:8086/healthz  # Hi-RAG v2 CPU
 http://localhost:8087/healthz  # Hi-RAG v2 GPU
 http://localhost:8099/healthz  # SupaSerch
 http://localhost:8098/healthz  # DeepResearch
+
+# Voice & Speech
+http://localhost:8055/healthz  # Flute-Gateway
+http://localhost:8055/metrics  # Flute-Gateway (Prometheus)
+http://localhost:7861/gradio_api/info  # Ultimate-TTS-Studio
 
 # Media Processing
 http://localhost:8077/healthz  # PMOVES.YT

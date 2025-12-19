@@ -15,7 +15,7 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 ├── settings.local.json           # 131 allowed bash command patterns
 ├── test-self-hosting.sh          # NATS + Hi-RAG integration test
 │
-├── commands/                     # 43 custom slash commands
+├── commands/                     # 50 custom slash commands
 │   ├── agents/ (2)               # Agent Zero orchestration
 │   │   ├── status.md             # /agents:status - service health
 │   │   └── mcp-query.md          # /agents:mcp-query - MCP API calls
@@ -82,6 +82,8 @@ PMOVES.AI has a sophisticated multi-agent infrastructure (Agent Zero, NATS, Hi-R
 | `/search:*` | 3 | Hi-RAG, SupaSerch, DeepResearch |
 | `/test:*` | 1 | PR testing workflow |
 | `/yt:*` | 10 | YouTube ingestion pipeline |
+| `/tts:*` | 3 | Text-to-speech synthesis |
+| `/pipecat:*` | 2 | Voice communication sessions |
 | `/deploy:*` | 3 | Service deployment and smoke tests |
 | `/worktree:*` | 4 | TAC parallel development |
 | `/health:*` | 2 | Platform-wide health checks |
@@ -120,6 +122,15 @@ Slash commands provide quick access to production services:
 
 # Run smoke tests
 /deploy:smoke-test
+
+# Text-to-Speech synthesis
+/tts:status              # Check TTS service health
+/tts:voices              # List available voices
+/tts:synthesize          # Generate speech from text
+
+# Real-time voice sessions
+/pipecat:status          # Check Pipecat health
+/pipecat:connect         # Create voice session
 ```
 
 ### 3. Reference Context Documentation
@@ -128,6 +139,7 @@ Detailed references in `.claude/context/`:
 - **services-catalog.md** - Every service, port, API, dependency
 - **nats-subjects.md** - All NATS event subjects with examples
 - **mcp-api.md** - Agent Zero MCP API documentation
+- **flute-gateway.md** - Voice/TTS API and Pipecat integration
 - **chit-geometry-bus.md** - Structured data format for multimodal workflows
 - **evoswarm.md** - Evolutionary optimization for CHIT parameters
 

@@ -173,9 +173,10 @@ pmoves/ui/
 
 | Item | Priority | Status |
 |------|----------|--------|
-| Extract `ownerFromJwt` to `lib/jwtUtils.ts` | Medium | TODO |
+| Extract `ownerFromJwt` to `lib/jwtUtils.ts` | Medium | COMPLETED (PR #330) |
 | Implement Sentry in `logError` | Medium | TODO |
-| Audit all API routes for auth bypass | High | TODO |
+| Audit all API routes for auth bypass | High | COMPLETED (PR #329) |
+| Wire logError to Loki/Promtail | Medium | COMPLETED (PR #331) |
 
 ---
 

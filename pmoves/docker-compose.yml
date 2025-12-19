@@ -334,6 +334,37 @@ services:
     profiles: ["workers","orchestration"]
     networks: [bus_tier, data_tier, monitoring_tier]
 
+  ultimate-tts-studio:
+    build:
+      context: docker/ultimate-tts-studio
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7861
+    ports: ["7861:7861"]
+    profiles: ["gpu","tts"]
+    networks: [api_tier, monitoring_tier]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:7861/gradio_api/info || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    volumes:
+      - ultimate-tts-checkpoints:/app/checkpoints
+      - ultimate-tts-outputs:/app/outputs
+
   flute-gateway:
     build:
       context: .
@@ -1207,6 +1238,8 @@ volumes:
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
   archon-worktrees: {}
+  ultimate-tts-checkpoints: {}
+  ultimate-tts-outputs: {}
 networks:
   # 5-Tier Network Architecture for Defense in Depth
   api_tier:
