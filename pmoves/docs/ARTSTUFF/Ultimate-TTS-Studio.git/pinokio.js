@@ -70,6 +70,10 @@ module.exports = {
           text: "Start",
           href: "start.js",
         }, {
+          icon: "fa-solid fa-vial",
+          text: "Test Engines",
+          href: "test.js",
+        }, {
           icon: "fa-solid fa-plug",
           text: "Update",
           href: "update.js",

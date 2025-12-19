@@ -7,7 +7,7 @@ module.exports = {
       method: "shell.run",
       params: {
         message: [
-          "git clone https://github.com/SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition app",
+          "git clone https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio app",
         ]
       }
     },
