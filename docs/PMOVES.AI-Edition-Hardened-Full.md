@@ -6,7 +6,7 @@
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
-### Status (2025-12-14)
+### Status (2025-12-18)
 - Hardened self-hosted multi-arch builds + Trivy gating shipped (`.github/workflows/self-hosted-builds-hardened.yml`); pmoves-yt yt-dlp bump workflow live; env pins warn on `:pmoves-latest`.
 - Arm/Jetson path covered via `pmoves/docker-compose.arm64.override.yml`; GPU smoke still red when NVIDIA runtime is missing—rerun `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` once GPU is exposed.
 - Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
@@ -23,7 +23,11 @@ The deployment model synthesizes Microsoft Azure's agent orchestration research,
 - Optional: VibeVoice can also be run in Docker for local bring-up (`VOICE_REALTIME=1 make -C pmoves up-vibevoice`). On RTX 5090 / SM_120, the container auto-falls back to `--device cpu` until a compatible PyTorch wheel is available.
 - Invidious companion may log `HTMLCanvasElement.prototype.getContext` from jsdom; this is expected and not a functional error.
 - Open Notebook externals default to `OPEN_NOTEBOOK_IMAGE` (see `pmoves/env.shared.example`). External bring-up targets load `env.shared` so image pins apply consistently.
-- Local “everything up” baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
+- Local "everything up" baseline: `make -C pmoves up-all` (core + agents UI + bots + n8n + monitoring), then `make -C pmoves smoke`.
+- **Prosodic TTS sidecar merged (PR #328)**: Natural boundary-aware text chunking with TTFS optimization (91% faster time-to-first-sound). Endpoints: `/tts/prosodic/analyze`, `/tts/prosodic/synthesize`.
+- **Pipecat multimodal layer Phase 1 merged (PR #332)**: Voice agent pipelines with `WhisperSTTProcessor`, `VibeVoiceTTSProcessor`, `TensorZeroLLMProcessor`. Enable with `PIPECAT_ENABLED=true`.
+- Flute Gateway now uses split deps: `requirements.txt` (locked with hashes) + `requirements-pipecat.txt` (external pipecat deps without hash verification).
+- UI security hardening (PRs #325-331): Error boundaries, silent failure elimination, JWT utils refactor, ownerId bypass removal, accessibility fixes, structured JSON logging for Loki.
 
 ---
 
@@ -885,6 +889,77 @@ docker compose ps
 
 # View logs for specific service
 docker compose logs -f hi-rag-gateway-v2
+```
+
+### Flute Gateway Voice Agent Infrastructure
+
+Flute Gateway (`ports 8055-8056`) provides realtime multimodal ingress with voice agent capabilities, integrating STT, LLM, and TTS pipelines.
+
+#### Prosodic TTS Sidecar (PR #328)
+
+Natural speech chunking with boundary-aware text processing for improved time-to-first-sound (TTFS):
+
+**Boundary Types:**
+- `SENTENCE` - Full sentence breaks (longest pause, 500ms)
+- `CLAUSE` - Clause boundaries with comma/semicolon (medium pause, 300ms)
+- `PHRASE` - Phrase boundaries with conjunctions (short pause, 150ms)
+- `BREATH` - Optimal breath points (minimal pause, 100ms)
+
+**API Endpoints:**
+```bash
+# Analyze text for prosodic boundaries
+curl -X POST http://localhost:8055/tts/prosodic/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello world. How are you today?"}'
+
+# Synthesize with prosodic chunking (streams first chunk 91% faster)
+curl -X POST http://localhost:8055/tts/prosodic/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello world.", "voice": "default"}' \
+  --output speech.wav
+```
+
+#### Pipecat Multimodal Layer (PR #332)
+
+Voice agent pipeline framework for realtime STT → LLM → TTS workflows:
+
+**Processors:**
+| Processor | Function | Backend Service |
+|-----------|----------|-----------------|
+| `WhisperSTTProcessor` | Speech-to-text | FFmpeg-Whisper (port 8078) |
+| `VibeVoiceTTSProcessor` | Streaming TTS | VibeVoice (host:PORT) |
+| `TensorZeroLLMProcessor` | LLM routing | TensorZero (port 3030) |
+
+**Transports:**
+- `DailyTransport` - WebRTC via Daily.co rooms
+- `WebSocketTransport` - Direct WebSocket connections
+- `SIPTransport` - SIP/VoIP integration (planned)
+
+**Enable Pipecat:**
+```bash
+# In docker-compose or .env
+PIPECAT_ENABLED=true
+
+# Dependencies installed separately (no hash verification)
+# See: pmoves/services/flute-gateway/requirements-pipecat.txt
+```
+
+**Pipeline Example:**
+```python
+from pipecat.pipelines import Pipeline
+from flute_gateway.pipecat.processors import (
+    WhisperSTTProcessor,
+    TensorZeroLLMProcessor,
+    VibeVoiceTTSProcessor,
+)
+
+pipeline = Pipeline([
+    transport.input(),
+    stt_processor,      # WhisperSTTProcessor
+    llm_processor,      # TensorZeroLLMProcessor
+    tts_processor,      # VibeVoiceTTSProcessor
+    transport.output(),
+])
 ```
 
 ---
