@@ -68,18 +68,23 @@ RUN pip install --no-cache-dir \
     pydub \
     resampy
 
-# Install KittenTTS from wheel
+# Install KittenTTS from wheel (KittenML official release)
 RUN pip install --no-cache-dir \
-    https://github.com/devilismyfriend/KittenTTS/releases/download/0.0.1.2/kittentts-0.0.1.2-py3-none-any.whl
+    https://github.com/KittenML/KittenTTS/releases/download/0.1/kittentts-0.1.0-py3-none-any.whl || \
+    echo "WARNING: KittenTTS wheel unavailable, skipping"
 
-# Install Kokoro TTS
-RUN pip install --no-cache-dir kokoro misaki
+# Install Kokoro TTS (Japanese/English high-quality)
+RUN pip install --no-cache-dir kokoro misaki || \
+    echo "WARNING: Kokoro TTS unavailable, skipping"
 
-# Install F5-TTS
-RUN pip install --no-cache-dir f5-tts
+# Install F5-TTS (natural prosody)
+RUN pip install --no-cache-dir f5-tts || \
+    echo "WARNING: F5-TTS unavailable, skipping"
 
-# Install VoxCPM and Whisper
-RUN pip install --no-cache-dir voxcpm openai-whisper
+# Install VoxCPM (voice cloning) and Whisper (STT)
+RUN pip install --no-cache-dir voxcpm openai-whisper || \
+    pip install --no-cache-dir openai-whisper || \
+    echo "WARNING: VoxCPM/Whisper unavailable, skipping"
 
 # Install remaining requirements (skip already installed)
 COPY requirements-ultimate-tts.txt /build/

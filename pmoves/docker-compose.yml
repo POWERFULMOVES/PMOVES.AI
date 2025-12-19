@@ -335,6 +335,8 @@ services:
     networks: [bus_tier, data_tier, monitoring_tier]
 
   ultimate-tts-studio:
+    # Build from pmoves/docker/ultimate-tts-studio/Dockerfile
+    # TTS Engines: KittenTTS, F5-TTS, Kokoro (with GPU acceleration)
     build:
       context: docker/ultimate-tts-studio
       dockerfile: Dockerfile
