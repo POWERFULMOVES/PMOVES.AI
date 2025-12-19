@@ -1,6 +1,5 @@
-
 import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading
-import os, time, math, json, logging, re, sys, contextlib, ipaddress, importlib.util
+import importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
@@ -881,7 +880,6 @@ async def _phoenix_heartbeat(ws, interval: float = 25.0) -> None:
 
 
 async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
-    import time
     try:
         import websockets
     except ImportError:
