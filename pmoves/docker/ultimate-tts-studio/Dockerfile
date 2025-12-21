@@ -58,13 +58,13 @@ RUN git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Stu
 
 WORKDIR /build/app
 
-# Step 3: Install gradio and devicetorch FIRST (Pinokio: line 22)
+# Step 3: Install gradio and devicetorch FIRST (matches Pinokio pre-install step)
 # This establishes correct dependency versions before requirements.txt
 RUN pip install --upgrade pip && \
     pip install gradio devicetorch
 
 # Step 4: Pin huggingface-hub to <1.0 BEFORE requirements.txt
-# CRITICAL: Many TTS engines require huggingface-hub>=0.30.0,<1.0
+# CRITICAL: Many TTS engines require huggingface-hub>=0.25.0,<1.0
 # If we don't pin this, pip will install 1.2.3+ which breaks everything
 RUN pip install "huggingface-hub>=0.25.0,<1.0"
 
@@ -90,17 +90,17 @@ RUN pip install -c /tmp/constraints.txt -r requirements.txt || \
 # Step 5d: Skipped deepspeed compilation (removing it later to avoid runtime crashes)
 
 
-# Step 6: WeTextProcessing without deps (Pinokio: line 24)
+# Step 6: WeTextProcessing without deps (matches Pinokio WeTextProcessing step)
 RUN pip install WeTextProcessing --no-deps || true
 
-# Step 7: Fix phonemizer-fork (Pinokio: lines 25-26)
+# Step 7: Fix phonemizer-fork (matches Pinokio phonemizer replacement)
 RUN pip uninstall -y phonemizer 2>/dev/null || true && \
     pip install phonemizer-fork
 
-# Step 8: Upgrade onnxruntime-gpu to 1.22.0 (Pinokio: line 27)
+# Step 8: Upgrade onnxruntime-gpu (matches Pinokio onnxruntime step)
 RUN pip install -c /tmp/constraints.txt --upgrade --force-reinstall --no-deps --no-cache-dir onnxruntime-gpu==1.22.0
 
-# Step 9: voxcpm and openai-whisper without deps (Pinokio: line 28)
+# Step 9: voxcpm and openai-whisper without deps (matches Pinokio voxcpm step)
 RUN pip install -c /tmp/constraints.txt voxcpm openai-whisper --no-deps || true
 
 # Step 10: Triton for GPU (from Pinokio torch.js) - with constraints
@@ -113,19 +113,18 @@ RUN pip install -c /tmp/constraints.txt mcp
 # Step 12: Download spacy model
 RUN python -m spacy download en_core_web_sm || true
 
-# Step 12b: FINAL FIX - Ensure scipy/numpy ABI compatibility and version constraints
-# Use pip to forcefully overwrite any mixed conda/pip state with standard wheels
-# Step 12b: FINAL FIX - Ensure scipy/numpy ABI compatibility and version constraints
-# Use pip to forcefully overwrite, and explicitly nuke _core artifact if it survives
-# AND remove deepspeed to prevent transformers from crashing on missing ops
-# ALSO upgrade numba/llvmlite to fix runtime deprecation error
+# Step 12b: FINAL FIX - Ensure scipy/numpy ABI compatibility
+# - Force reinstall numpy/scipy to fix mixed conda/pip state
+# - Remove deepspeed to prevent transformers runtime crashes
+# - Upgrade numba/llvmlite to fix deprecation errors
+# - Nuke numpy/_core artifact if it survives reinstall
 RUN pip uninstall -y numpy deepspeed || true && \
     rm -rf /opt/conda/lib/python3.11/site-packages/numpy* && \
     pip install --force-reinstall "numpy==1.26.4" "scipy==1.11.4" && \
     pip install --upgrade numba llvmlite && \
     rm -rf /opt/conda/lib/python3.11/site-packages/numpy/_core
 
-# Step 13: Pre-download model checkpoints (Pinokio: line 47)
+# Step 13: Pre-download model checkpoints (matches Pinokio model download)
 RUN huggingface-cli download cocktailpeanut/oa --local-dir ./checkpoints/openaudio-s1-mini --quiet || \
     echo "Model download will happen at runtime"
 

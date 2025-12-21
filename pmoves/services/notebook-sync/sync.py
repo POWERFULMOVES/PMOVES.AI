@@ -456,14 +456,20 @@ def _load_syncer() -> NotebookSyncer:
     base_url = os.getenv("OPEN_NOTEBOOK_API_URL")
     mode = os.getenv("NOTEBOOK_SYNC_MODE", "live").lower()
 
-    # Graceful degradation: if OPEN_NOTEBOOK_API_URL is missing, run in offline mode
+    # If OPEN_NOTEBOOK_API_URL is missing, check if graceful degradation is enabled
     if not base_url:
-        LOGGER.warning(
-            "OPEN_NOTEBOOK_API_URL not set; notebook-sync will run in offline mode. "
-            "Set OPEN_NOTEBOOK_API_URL to enable syncing."
-        )
-        mode = "offline"
-        base_url = "http://localhost:5055"  # Placeholder URL for offline mode
+        if os.getenv("NOTEBOOK_SYNC_GRACEFUL_DEGRADATION", "").lower() == "true":
+            LOGGER.warning(
+                "OPEN_NOTEBOOK_API_URL not set; running in DEGRADED offline mode. "
+                "Syncing is disabled. Set OPEN_NOTEBOOK_API_URL to enable."
+            )
+            mode = "offline"
+            base_url = ""  # Empty - don't pretend we have a valid URL
+        else:
+            raise RuntimeError(
+                "OPEN_NOTEBOOK_API_URL must be set for notebook-sync. "
+                "Set NOTEBOOK_SYNC_GRACEFUL_DEGRADATION=true to start in offline mode."
+            )
 
     cursor_path = os.getenv("NOTEBOOK_SYNC_DB_PATH", "data/notebook_sync.db")
     interval = int(os.getenv("NOTEBOOK_SYNC_INTERVAL_SECONDS", "300"))

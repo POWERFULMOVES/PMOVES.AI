@@ -1649,12 +1649,12 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
     top_pts = pts[:k]
 
-    # Mode handling: learned (summarization), swarm (GAN review), or default (geometry points)
+    # Mode handling: "learned" (T5 summarization), "swarm" (EvoSwarm GAN), or default (geometry points)
     if mode == "learned":
         try:
             from transformers import pipeline  # type: ignore
-        except Exception:
-            raise HTTPException(500, "transformers not installed")
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise HTTPException(500, f"transformers not available: {type(exc).__name__}")
         texts = []
         cb = _load_codebook(CHIT_CODEBOOK_PATH)
         for rec in cb[: min(64, len(cb))]:
@@ -1717,23 +1717,11 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
 
     else:
         # Default geometry mode: return top-k points with HRM status
-        pts = []
-        if const:
-            for p in const.get("points", []) or []:
-                cid = p.get("id")
-                if not cid:
-                    continue
-                pts.append({
-                    "id": cid,
-                    "text": p.get("text"),
-                    "proj": p.get("proj"),
-                    "conf": p.get("conf"),
-                })
-        pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
+        # Use pre-computed top_pts (already sorted and sliced at line 1650)
         hrm_info = _hrm_controller.status(namespace)
         return {
             "mode": mode,
-            "points": pts[:k],
+            "points": top_pts,
             "hrm": hrm_info,
             "namespace": namespace,
             "modality": modality,
