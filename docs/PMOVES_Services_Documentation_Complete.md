@@ -35,7 +35,7 @@ PMOVES.AI is a comprehensive, multi-service platform designed for content creati
 
 ### Directory Organization
 
-```
+```text
 PMOVES.AI/
 ├── pmoves/                    # Core workspace
 │   ├── services/               # Microservice implementations
@@ -360,12 +360,6 @@ make env-setup              # Initialize environment
 - **API Port:** 8091
 - **MCP Port:** 8051
 - **Health:** `curl http://localhost:8091/healthz`
-
-#### DeepResearch
-- **Purpose:** Research automation and synthesis
-- **Port:** 8098
-- **Modes:** TensorZero, OpenRouter, Local API
-- **Health:** `curl http://localhost:8098/healthz`
 
 #### DeepResearch
 - **Purpose:** Research automation and synthesis
@@ -909,5 +903,5 @@ This documentation serves as the definitive reference for PMOVES.AI services, pr
 
 ---
 
-*Last Updated: 2025-01-19*
+*Last Updated: 2025-12-21*
 *Version: 1.0*

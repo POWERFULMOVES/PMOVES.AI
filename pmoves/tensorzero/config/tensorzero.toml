@@ -540,8 +540,6 @@ model = "nemotron_mini"
 
 # --- New BoTZ Models (Added 2025-12-21) ---
 
-# --- New BoTZ Models (Added 2025-12-21) ---
-
 [models.coding_qwen3_local]
 routing = ["ollama_local"]
 [models.coding_qwen3_local.providers.ollama_local]
