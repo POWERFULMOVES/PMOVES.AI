@@ -725,6 +725,8 @@ services:
       - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
       - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
+      # Open Notebook API for notebook.search MCP command (host.docker.internal for container-to-host)
+      - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
     depends_on: [nats]
     # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
     # and keep 8080 mapped for the API when enabled by the runtime.

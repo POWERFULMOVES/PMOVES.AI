@@ -1649,58 +1649,41 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
     top_pts = pts[:k]
 
+    # Mode handling: "learned" (T5 summarization), "swarm" (EvoSwarm GAN), or default (geometry points)
     if mode == "learned":
         try:
             from transformers import pipeline  # type: ignore
-        except Exception:
-            raise HTTPException(500, "transformers not installed")
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise HTTPException(500, f"transformers not available: {type(exc).__name__}")
         texts = []
         cb = _load_codebook(CHIT_CODEBOOK_PATH)
         for rec in cb[: min(64, len(cb))]:
             t = rec.get("text") or rec.get("summary")
-            if t: texts.append(t)
+            if t:
+                texts.append(t)
         if const:
-            s = const.get("summary");
-            if s: texts.insert(0, s)
+            s = const.get("summary")
+            if s:
+                texts.insert(0, s)
         if not texts:
             raise HTTPException(400, "no codebook or constellation text available")
         nlp = pipeline("summarization", model=CHIT_T5_MODEL)
         out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
-        return {
-            "mode": mode,
-            "summary": out[0].get("summary_text", ""),
-            "used": len(texts),
-            "namespace": namespace,
-            "modality": modality,
-            "builder_pack": builder_pack,
-        }
         summary = out[0].get("summary_text", "")
+        # Apply HRM refinement to learned mode summary
         summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
-        return {"mode": mode, "summary": summary, "used": len(texts), "hrm": hrm_info, "namespace": namespace}
-    else:
-        pts = []
-        if const:
-            for p in const.get("points", []) or []:
-                cid = p.get("id");
-                if not cid: continue
-                pts.append({
-                    "id": cid,
-                    "text": p.get("text"),
-                    "proj": p.get("proj"),
-                    "conf": p.get("conf")
-                })
-        pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
         return {
             "mode": mode,
-            "points": pts[:k],
+            "summary": summary,
+            "used": len(texts),
+            "hrm": hrm_info,
             "namespace": namespace,
             "modality": modality,
             "builder_pack": builder_pack,
         }
-        hrm_info = _hrm_controller.status(namespace)
-        return {"mode": mode, "points": pts[:k], "hrm": hrm_info, "namespace": namespace}
-        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
-    if mode == "swarm":
+
+    elif mode == "swarm":
+        # EvoSwarm mode: GAN sidecar reviews and re-ranks candidates
         sidecar = _get_gan_sidecar()
         accept_threshold = float(body.get("accept_threshold", 0.55))
         max_edits = int(body.get("max_edits", 1))
@@ -1715,6 +1698,9 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
                     "decision": "unavailable",
                     "threshold": accept_threshold,
                 },
+                "namespace": namespace,
+                "modality": modality,
+                "builder_pack": builder_pack,
             }
         review = sidecar.review_text_candidates(
             top_pts,
@@ -1724,8 +1710,23 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
         )
         review["mode"] = mode
         review["raw_points"] = top_pts
+        review["namespace"] = namespace
+        review["modality"] = modality
+        review["builder_pack"] = builder_pack
         return review
-    return {"mode": mode, "points": top_pts}
+
+    else:
+        # Default geometry mode: return top-k points with HRM status
+        # Use pre-computed top_pts (already sorted and sliced at line 1650)
+        hrm_info = _hrm_controller.status(namespace)
+        return {
+            "mode": mode,
+            "points": top_pts,
+            "hrm": hrm_info,
+            "namespace": namespace,
+            "modality": modality,
+            "builder_pack": builder_pack,
+        }
 
 @app.post("/geometry/calibration/report")
 def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):

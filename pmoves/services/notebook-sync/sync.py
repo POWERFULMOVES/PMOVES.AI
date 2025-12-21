@@ -454,8 +454,22 @@ class NotebookSyncer:
 
 def _load_syncer() -> NotebookSyncer:
     base_url = os.getenv("OPEN_NOTEBOOK_API_URL")
+    mode = os.getenv("NOTEBOOK_SYNC_MODE", "live").lower()
+
+    # If OPEN_NOTEBOOK_API_URL is missing, check if graceful degradation is enabled
     if not base_url:
-        raise RuntimeError("OPEN_NOTEBOOK_API_URL must be set for notebook-sync")
+        if os.getenv("NOTEBOOK_SYNC_GRACEFUL_DEGRADATION", "").lower() == "true":
+            LOGGER.warning(
+                "OPEN_NOTEBOOK_API_URL not set; running in DEGRADED offline mode. "
+                "Syncing is disabled. Set OPEN_NOTEBOOK_API_URL to enable."
+            )
+            mode = "offline"
+            base_url = ""  # Empty - don't pretend we have a valid URL
+        else:
+            raise RuntimeError(
+                "OPEN_NOTEBOOK_API_URL must be set for notebook-sync. "
+                "Set NOTEBOOK_SYNC_GRACEFUL_DEGRADATION=true to start in offline mode."
+            )
 
     cursor_path = os.getenv("NOTEBOOK_SYNC_DB_PATH", "data/notebook_sync.db")
     interval = int(os.getenv("NOTEBOOK_SYNC_INTERVAL_SECONDS", "300"))
@@ -463,7 +477,7 @@ def _load_syncer() -> NotebookSyncer:
     langextract_url = os.getenv("LANGEXTRACT_URL", "http://langextract:8084")
     extract_worker_url = os.getenv("EXTRACT_WORKER_URL", "http://extract-worker:8083")
     token = os.getenv("OPEN_NOTEBOOK_API_TOKEN")
-    mode = os.getenv("NOTEBOOK_SYNC_MODE", "live").lower()
+    # Validate mode only if not already forced to offline (e.g., missing URL)
     if mode not in VALID_MODES:
         LOGGER.warning("Invalid NOTEBOOK_SYNC_MODE=%s; defaulting to 'live'", mode)
         mode = "live"
