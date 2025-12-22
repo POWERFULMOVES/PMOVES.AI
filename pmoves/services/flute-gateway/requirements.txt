@@ -1,7 +1,4 @@
 -r requirements.lock
 
-# Pipecat multimodal voice agent framework
-# Optional - enable with PIPECAT_ENABLED=true
-pipecat-ai[silero]>=0.0.44
-aiortc>=1.9.0
-av>=12.0.0
+# Note: Pipecat deps are installed separately via requirements-pipecat.txt
+# to avoid hash verification conflicts
