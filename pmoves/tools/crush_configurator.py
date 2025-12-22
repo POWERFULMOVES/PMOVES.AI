@@ -74,80 +74,48 @@ class ProviderSpec:
     default_small: Optional[str] = None
 
 
-PROVIDER_SPECS: List[ProviderSpec] = [
-    ProviderSpec(
-        id="openai",
-        name="OpenAI",
-        base_url="https://api.openai.com/v1",
-        type="openai",
-        env_var="OPENAI_API_KEY",
-        models=[
-            ModelSpec(id="gpt-4o", name="GPT-4o", role="large", context_window=128000),
-            ModelSpec(id="gpt-4o-mini", name="GPT-4o mini", role="small", context_window=128000),
-        ],
-        default_large="gpt-4o",
-        default_small="gpt-4o-mini",
-    ),
-    ProviderSpec(
-        id="anthropic",
-        name="Anthropic",
-        base_url="https://api.anthropic.com/v1",
-        type="anthropic",
-        env_var="ANTHROPIC_API_KEY",
-        extra_headers={"anthropic-version": "2023-06-01"},
-        models=[
-            ModelSpec(id="claude-3.5-sonnet-20240620", name="Claude 3.5 Sonnet", role="large", context_window=200000, default_max_tokens=4000, can_reason=True),
-            ModelSpec(id="claude-3-haiku-20240307", name="Claude 3 Haiku", role="small", context_window=200000, default_max_tokens=4000),
-        ],
-        default_large="claude-3.5-sonnet-20240620",
-        default_small="claude-3-haiku-20240307",
-    ),
-    ProviderSpec(
-        id="gemini",
-        name="Gemini",
-        base_url="https://generativelanguage.googleapis.com/v1beta",
-        type="gemini",
-        env_var="GEMINI_API_KEY",
-        models=[
-            ModelSpec(id="gemini-2.0-pro-exp-02-05", name="Gemini 2.0 Pro Exp", role="large"),
-            ModelSpec(id="gemini-2.0-flash-exp", name="Gemini 2.0 Flash", role="small"),
-        ],
-        default_large="gemini-2.0-pro-exp-02-05",
-        default_small="gemini-2.0-flash-exp",
-    ),
-    ProviderSpec(
-        id="tensorzero",
-        name="TensorZero Gateway",
-        base_url="http://localhost:3030/openai/v1",
-        type="openai",
-    ),
-    ProviderSpec(
-        id="deepseek",
-        name="DeepSeek",
-        base_url="https://api.deepseek.com/v1",
-        type="openai",
-        env_var="DEEPSEEK_API_KEY",
-        models=[
-            ModelSpec(id="deepseek-chat", name="DeepSeek Chat", role="large", context_window=64000),
-            ModelSpec(id="deepseek-reasoner", name="DeepSeek Reasoner", role="small", context_window=64000, can_reason=True),
-        ],
-        default_large="deepseek-chat",
-        default_small="deepseek-reasoner",
-    ),
-    ProviderSpec(
-        id="ollama",
-        name="Ollama",
-        base_url="http://localhost:11434/v1",
-        type="openai",
-        env_var=None,  # no key required
-        models=[
-            ModelSpec(id="qwen2.5:7b", name="Qwen 2.5 7B", role="small"),
-            ModelSpec(id="llama3.1:70b", name="LLaMA 3.1 70B", role="large"),
-        ],
-        default_large="llama3.1:70b",
-        default_small="qwen2.5:7b",
-    ),
-]
+# TensorZero is the ONLY provider - it routes to all backends
+# Models are discovered dynamically from TensorZero, not hardcoded here
+TENSORZERO_SPEC = ProviderSpec(
+    id="tensorzero",
+    name="TensorZero Gateway",
+    base_url="http://localhost:3030/v1",
+    type="openai",
+    env_var=None,  # TensorZero handles auth internally
+)
+
+
+def _fetch_tensorzero_models() -> List[ModelSpec]:
+    """Fetch available models from TensorZero API.
+
+    Returns dynamically discovered models instead of hardcoded list.
+    """
+    import urllib.request
+    import urllib.error
+
+    base_url = os.getenv("TENSORZERO_BASE_URL", "http://localhost:3030")
+    try:
+        with urllib.request.urlopen(f"{base_url}/v1/models", timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            models = []
+            for model in data.get("data", []):
+                model_id = model.get("id", "")
+                # Infer role from model name patterns
+                role = "small"
+                if any(x in model_id.lower() for x in ["32b", "70b", "claude", "gpt-4o"]):
+                    role = "large"
+                models.append(ModelSpec(id=model_id, name=model_id, role=role))
+            return models
+    except (urllib.error.URLError, TimeoutError):
+        # Fallback defaults if TensorZero not reachable
+        return [
+            ModelSpec(id="qwen3_8b", name="Qwen3 8B (Local)", role="small"),
+            ModelSpec(id="claude-sonnet-4-5", name="Claude Sonnet 4.5", role="large", can_reason=True),
+        ]
+
+
+# Legacy provider specs - only used if TensorZero unavailable
+PROVIDER_SPECS: List[ProviderSpec] = [TENSORZERO_SPEC]
 
 
 @dataclass
@@ -192,9 +160,23 @@ MCP_SPECS: List[MCPSpec] = [
 
 
 def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str, List[ModelSpec]]) -> Dict[str, Dict[str, str]]:
+    """Select models - TensorZero is the ONLY gateway for all providers.
+
+    TensorZero routes internally to: Ollama (local) → Anthropic → Gemini Flash
+    All model calls go through TensorZero for unified observability.
+    """
+    # TensorZero is the single gateway - all models route through it
+    if "tensorzero" in available:
+        tz_spec = available["tensorzero"]
+        return {
+            "large": {"provider": "tensorzero", "model": tz_spec.default_large or "claude-sonnet-4-5"},
+            "small": {"provider": "tensorzero", "model": tz_spec.default_small or "qwen3_8b_local"},
+        }
+
+    # Fallback only if TensorZero not available
     large: Optional[Tuple[str, str]] = None
     small: Optional[Tuple[str, str]] = None
-    priority = ["tensorzero", "openai", "anthropic", "deepseek", "gemini", "ollama"]
+    priority = ["ollama", "anthropic", "gemini"]
     for provider_id in priority:
         if provider_id not in available:
             continue
@@ -218,78 +200,47 @@ def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str
 
 
 def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
+    """Build Crush config with TensorZero as the ONLY provider.
+
+    All models are discovered dynamically from TensorZero API.
+    No hardcoded model lists - TensorZero is the single source of truth.
+    """
     env_cache = {path: _load_env_file(path) for path in ENV_CANDIDATES}
-    providers_dict: Dict[str, object] = {}
-    available_specs: Dict[str, ProviderSpec] = {}
-    provider_models: Dict[str, List[ModelSpec]] = {}
 
-    for spec in PROVIDER_SPECS:
-        if spec.id == "tensorzero":
-            base_url_env = _lookup_env("TENSORZERO_BASE_URL", env_cache)
-            if not base_url_env:
-                continue
-            base_url = f"{base_url_env.rstrip('/')}/openai/v1"
-            large_model_id = _lookup_env("TENSORZERO_LARGE_MODEL", env_cache) or "openai::gpt-4o"
-            small_model_id = _lookup_env("TENSORZERO_SMALL_MODEL", env_cache) or "openai::gpt-4o-mini"
-            models = [
-                ModelSpec(id=large_model_id, name=large_model_id, role="large"),
-                ModelSpec(id=small_model_id, name=small_model_id, role="small"),
-            ]
-            entry = {
-                "name": spec.name,
-                "base_url": base_url,
-                "type": spec.type,
-                "models": [model.to_dict() for model in models],
-            }
-            api_key = _lookup_env("TENSORZERO_API_KEY", env_cache)
-            extra_headers = dict(spec.extra_headers)
-            if api_key:
-                entry["api_key"] = "$TENSORZERO_API_KEY"
-                extra_headers = dict(extra_headers)
-                extra_headers.setdefault("Authorization", "Bearer $TENSORZERO_API_KEY")
-            if extra_headers:
-                entry["extra_headers"] = extra_headers
-            providers_dict[spec.id] = entry
-            available_specs[spec.id] = ProviderSpec(
-                id=spec.id,
-                name=spec.name,
-                base_url=base_url,
-                type=spec.type,
-                env_var="TENSORZERO_API_KEY" if api_key else None,
-                extra_headers=extra_headers,
-                models=models,
-                default_large=large_model_id,
-                default_small=small_model_id,
-            )
-            provider_models[spec.id] = models
-            continue
-        if spec.env_var:
-            value = _lookup_env(spec.env_var, env_cache)
-            if not value:
-                continue
-        entry = {
-            "name": spec.name,
-            "base_url": spec.base_url,
-            "type": spec.type,
-            "models": [model.to_dict() for model in spec.models],
-        }
-        if spec.env_var:
-            entry["api_key"] = f"${spec.env_var}"
-        if spec.extra_headers:
-            entry["extra_headers"] = spec.extra_headers
-        providers_dict[spec.id] = entry
-        available_specs[spec.id] = spec
-        provider_models[spec.id] = spec.models
+    # TensorZero is the ONLY provider
+    base_url_env = _lookup_env("TENSORZERO_BASE_URL", env_cache) or "http://localhost:3030"
+    base_url = f"{base_url_env.rstrip('/')}/v1"
 
-    if not providers_dict:
-        providers_dict["ollama"] = {
-            "name": "Ollama",
-            "base_url": "http://localhost:11434/v1",
+    # Fetch models dynamically from TensorZero
+    models = _fetch_tensorzero_models()
+
+    # Find large and small models from dynamic list
+    large_models = [m for m in models if m.role == "large"]
+    small_models = [m for m in models if m.role == "small"]
+    default_large = large_models[0].id if large_models else "claude-sonnet-4-5"
+    default_small = small_models[0].id if small_models else "qwen3_8b"
+
+    providers_dict: Dict[str, object] = {
+        "tensorzero": {
+            "name": "TensorZero Gateway",
+            "base_url": base_url,
             "type": "openai",
-            "models": [model.to_dict() for model in PROVIDER_SPECS[-1].models],
+            "models": [model.to_dict() for model in models],
         }
-        available_specs["ollama"] = PROVIDER_SPECS[-1]
-        provider_models["ollama"] = PROVIDER_SPECS[-1].models
+    }
+
+    tensorzero_spec = ProviderSpec(
+        id="tensorzero",
+        name="TensorZero Gateway",
+        base_url=base_url,
+        type="openai",
+        models=models,
+        default_large=default_large,
+        default_small=default_small,
+    )
+
+    available_specs = {"tensorzero": tensorzero_spec}
+    provider_models = {"tensorzero": models}
 
     models_config = _select_models(available_specs, provider_models)
 
