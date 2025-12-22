@@ -1,3 +1,15 @@
+> [!NOTE]
+> **Implementation Status: SPECIFICATION ONLY**
+>
+> This document describes the decoder specification. The Python implementation exists as embedded code examples but is not deployed as a standalone service.
+>
+> **Current Implementation:**
+> - TypeScript CGP modules: ✅ Complete (see `PMOVES-ToKenism-Multi/integrations/contracts/chit/`)
+> - Python decoder service: ⏳ Not deployed
+> - See `IMPLEMENTATION_STATUS.md` for full status.
+
+---
+
 Absolutely—we need the **decoder** to complete the CHIT loop (encode → transmit geometry → decode). Below is a practical, working **CHIT Decoder v0.1** you can drop into your repo. It supports two modes:
 
 * **Exact decode (lossless):** if the CGP carries `points` with embedded `text`, it reconstructs the original dataset directly.
