@@ -338,7 +338,7 @@ services:
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - HEALTH_PORT=8102
       - AGENT_RESPONSE_SUBJECT=agent.response.v1
@@ -399,7 +399,7 @@ services:
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       # VibeVoice is typically run outside Docker (Pinokio/host); reach it via host-gateway.
       - VIBEVOICE_URL=${VIBEVOICE_URL:-http://host.docker.internal:3000}
@@ -445,7 +445,9 @@ services:
     networks: [ app_tier, data_tier, monitoring_tier ]
 
   media-video:
-    build: ./services/media-video
+    build:
+      context: .
+      dockerfile: services/media-video/Dockerfile
     restart: unless-stopped
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
     environment:
@@ -468,7 +470,9 @@ services:
     networks: [ app_tier, data_tier, monitoring_tier ]
 
   media-audio:
-    build: ./services/media-audio
+    build:
+      context: .
+      dockerfile: services/media-audio/Dockerfile
     restart: unless-stopped
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
     environment:
@@ -757,6 +761,8 @@ services:
       - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
       - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
       - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+      # Settings persistence (settings.json lives in /a0/tmp)
+      - ${AGENT_ZERO_TMP_DIR:-./data/agent-zero/tmp}:/a0/tmp
     profiles: [ "agents" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
 
@@ -821,10 +827,12 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - LOG_LEVEL=${AGENT_WORK_ORDERS_LOG_LEVEL:-INFO}
       # Supabase connection - use internal Docker network hostname
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       # Git configuration for worktrees
       - GIT_WORKTREE_BASE=${GIT_WORKTREE_BASE:-/worktrees}
+      # Python path for archon vendor sources
+      - PYTHONPATH=/app/vendor/archon/python
     depends_on:
       archon:
         condition: service_healthy
@@ -845,7 +853,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/healthz').getcode()==200 else sys.exit(1)\"" ]
+      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/health').getcode()==200 else sys.exit(1)\"" ]
       interval: 10s
       timeout: 5s
       retries: 12
