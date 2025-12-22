@@ -83,3 +83,15 @@
 [submodule "PMOVES-Ultimate-TTS-Studio"]
 	path = PMOVES-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
+[submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
+	path = PMOVES-Pinokio-Ultimate-TTS-Studio
+	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
+	ignore = all
+[submodule "PMOVES-tensorzero"]
+	path = PMOVES-tensorzero
+	url = https://github.com/POWERFULMOVES/PMOVES-tensorzero.git
+	ignore = all
+[submodule "Pmoves-hyperdimensions"]
+	path = Pmoves-hyperdimensions
+	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
+	ignore = all
