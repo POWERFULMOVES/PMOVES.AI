@@ -1,0 +1,21 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "The query to search for. Be specific."
+        },
+        "num_results": {
+            "type": "integer",
+            "description": "Number of results to return.",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+        }
+    },
+    "required": [
+        "query"
+    ],
+    "additionalProperties": false
+}
