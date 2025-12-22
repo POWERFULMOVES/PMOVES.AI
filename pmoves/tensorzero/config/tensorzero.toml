@@ -1,11 +1,17 @@
 # TensorZero gateway config (chat + embeddings). Model keys double as UI aliases.
 
 [gateway]
-# Observability enabled for production monitoring and cost tracking
-# ClickHouse connection is configured via the TENSORZERO_CLICKHOUSE_URL environment variable.
-# See pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md for details.
-# Example: TENSORZERO_CLICKHOUSE_URL=http://user:pass@tensorzero-clickhouse:8123/default
-observability.enabled = true
+
+
+
+
+[gateway.observability]
+enabled = true
+async_writes = true
+
+[gateway.export.otlp.traces]
+enabled = true
+format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
 
@@ -54,13 +60,14 @@ api_base = "http://jetson-ollama:11434/v1"
 model_name = "phi3:3.8b-mini-128k-instruct"
 api_key_location = "none"
 
+# Using qwen3:8b which is available in Ollama
 [models.langextract_qwen7b_local]
 routing = ["ollama_local"]
 
 [models.langextract_qwen7b_local.providers.ollama_local]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
-model_name = "qwen:7b"
+model_name = "qwen3:8b"
 api_key_location = "none"
 
 [models.chat_ollama_llama3]
@@ -208,6 +215,16 @@ routing = ["ollama_local_embedding"]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
 model_name = "qwen3-embedding:4b"
+api_key_location = "none"
+
+# 8B model for 4096-dimension high-quality embeddings (RTX 5090)
+[embedding_models.qwen3_embedding_8b_local]
+routing = ["ollama_local_embedding"]
+
+[embedding_models.qwen3_embedding_8b_local.providers.ollama_local_embedding]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-embedding:8b"
 api_key_location = "none"
 
 [embedding_models.gemma_embed_local]
@@ -521,14 +538,116 @@ type = "chat"
 type = "chat_completion"
 model = "nemotron_mini"
 
-[functions.deepresearch.variants.qwen3_8b]
-type = "chat_completion"
-model = "qwen3_8b"
+# --- New BoTZ Models (Added 2025-12-21) ---
 
-[functions.deepresearch.variants.hosted_openrouter]
-type = "chat_completion"
-model = "chat_openrouter"
+[models.coding_qwen3_local]
+routing = ["ollama_local"]
+[models.coding_qwen3_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-coder:latest"
+api_key_location = "none"
 
-[functions.deepresearch.variants.hosted_together]
+[models.coding_functiongemma_local]
+routing = ["ollama_local"]
+[models.coding_functiongemma_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "functiongemma:latest"
+api_key_location = "none"
+
+[models.coding_llama3_cloud]
+routing = ["cloudflare_workers"]
+[models.coding_llama3_cloud.providers.cloudflare_workers]
+type = "openai"
+api_base = "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+model_name = "@cf/meta/llama-3.1-8b-instruct"
+api_key_location = "env::CLOUDFLARE_API_TOKEN"
+
+[models.orchestrator_gemma3_local]
+routing = ["ollama_local"]
+[models.orchestrator_gemma3_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "gemma3:12b"
+api_key_location = "none"
+
+[models.orchestrator_nemotron_local]
+routing = ["ollama_local"]
+[models.orchestrator_nemotron_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "nemotron-3-nano:latest"
+api_key_location = "none"
+
+[models.orchestrator_qwen3next_local]
+routing = ["ollama_local"]
+[models.orchestrator_qwen3next_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-next:latest"
+api_key_location = "none"
+
+[models.vl_sentinel_qwen3vl_local]
+routing = ["ollama_local"]
+[models.vl_sentinel_qwen3vl_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-vl:8b"
+api_key_location = "none"
+
+
+
+
+# --- New BoTZ Tools ---
+
+[tools.web_search]
+description = "Search the web for information."
+parameters = "tools/web_search.json"
+
+# --- New BoTZ Functions ---
+
+# Function: Coding
+[functions.coding]
+type = "chat"
+[functions.coding.variants.primary_local]
 type = "chat_completion"
-model = "chat_together"
+model = "coding_qwen3_local"
+weight = 1.0
+[functions.coding.variants.specialized_local]
+type = "chat_completion"
+model = "coding_functiongemma_local"
+weight = 0.0
+[functions.coding.variants.fallback_cloud]
+type = "chat_completion"
+model = "coding_llama3_cloud"
+weight = 0.0
+
+# Function: Orchestrator
+[functions.orchestrator]
+type = "chat"
+tools = ["web_search"]
+
+[functions.orchestrator.experimentation]
+type = "static_weights"
+candidate_variants = { primary_cloud = 1.0 }
+fallback_variants = ["local_fallback"]
+
+[functions.orchestrator.variants.primary_cloud]
+type = "chat_completion"
+model = "chat_openai_platform"
+
+[functions.orchestrator.variants.local_fallback]
+type = "chat_completion"
+model = "orchestrator_qwen3next_local"
+
+# Function: Vision Sentinel
+[functions.vl_sentinel]
+type = "chat"
+
+[functions.vl_sentinel.variants.primary_local]
+type = "chat_completion"
+model = "vl_sentinel_qwen3vl_local"
+weight = 1.0
+
+

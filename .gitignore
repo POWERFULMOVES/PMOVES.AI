@@ -100,3 +100,16 @@ pmoves/ui/.pmoves_ui_dev.pid
 pmoves/ui/.pmoves_ui_dev.log
 docs/notes.md
 notes.md
+
+# Claude Code user-specific settings
+.claude/settings.json
+.claude/settings.local.json
+
+# External AI tool configs (full directories)
+.kilocode/
+
+# Temporary PR body templates
+pmoves/PR_BODY_*.md
+
+# Research notes (local only)
+research/
