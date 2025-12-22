@@ -418,6 +418,34 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # PMOVES.AI Unified Portal - Main Dashboard
+  pmoves-ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_FLUTE_GATEWAY_URL=http://flute-gateway:8055
+      - NEXT_PUBLIC_FLUTE_WS_URL=ws://flute-gateway:8056
+      - AGENT_ZERO_URL=http://agent-zero:8080
+      - ARCHON_URL=http://archon:8091
+      - HIRAG_URL=http://hi-rag-gateway-v2:8086
+    ports:
+      - "4482:3000"
+    # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
+    networks: [ app_tier, api_tier, supabase_net ]
+    profiles: [ "ui" ]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   ffmpeg-whisper:
     build:
       context: ..
