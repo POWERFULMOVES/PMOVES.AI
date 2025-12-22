@@ -83,6 +83,7 @@
 [submodule "PMOVES-Ultimate-TTS-Studio"]
 	path = PMOVES-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
+	ignore = all
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
