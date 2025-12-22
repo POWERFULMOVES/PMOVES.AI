@@ -91,7 +91,7 @@
       },
       "targets": [
         {
-          "expr": "probe_success{instance=\"http://host.docker.internal:${HIRAG_V2_GPU_HOST_PORT:-8087}/hirag/healthz\"}",
+          "expr": "probe_success{job=\"blackbox_http\",instance=\"http://host.docker.internal:8087/\"}",
           "legendFormat": "hi-rag-v2-gpu"
         }
       ]
@@ -107,7 +107,7 @@
       },
       "targets": [
         {
-          "expr": "probe_success{instance=\"http://host.docker.internal:${HIRAG_V2_HOST_PORT:-8086}/hirag/healthz\"}",
+          "expr": "probe_success{job=\"blackbox_http\",instance=\"http://host.docker.internal:8086/\"}",
           "legendFormat": "hi-rag-v2"
         }
       ]
@@ -153,7 +153,7 @@
       },
       "targets": [
         {
-          "expr": "probe_success{job=\"deepresearch\",instance=\"http://host.docker.internal:8098/healthz\"}"
+          "expr": "probe_success{job=\"blackbox_http\",instance=\"http://host.docker.internal:8098/healthz\"}"
         }
       ]
     },
@@ -168,7 +168,7 @@
       },
       "targets": [
         {
-          "expr": "probe_success{job=\"supaserch\",instance=\"http://host.docker.internal:8099/healthz\"}"
+          "expr": "probe_success{job=\"blackbox_http\",instance=\"http://host.docker.internal:8099/healthz\"}"
         }
       ]
     },
