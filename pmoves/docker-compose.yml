@@ -429,8 +429,8 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - NEXT_PUBLIC_FLUTE_GATEWAY_URL=http://flute-gateway:8055
-      - NEXT_PUBLIC_FLUTE_WS_URL=ws://flute-gateway:8056
+      - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
+      - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
       - AGENT_ZERO_URL=http://agent-zero:8080
       - ARCHON_URL=http://archon:8091
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
@@ -880,7 +880,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/health').getcode()==200 else sys.exit(1)\"" ]
+      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/healthz').getcode()==200 else sys.exit(1)\"" ]
       interval: 10s
       timeout: 5s
       retries: 12
