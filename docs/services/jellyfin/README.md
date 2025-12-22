@@ -1,0 +1,3 @@
+# Jellyfin Integration
+
+Documentation pending.
