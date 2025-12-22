@@ -1,4 +1,21 @@
-You’re onto something rich. Let’s turn your scratch UI + CHIT idea into a working, end‑to‑end loop that (a) computes real “constellations” from data, (b) emits a geometric packet (your CHIT message), and (c) renders it as cymatic/fractal structure with drill‑down.
+> [!TIP]
+> **Implementation Cross-Reference**
+>
+> This is the core PMOVESCHIT specification document. For current implementation status, see:
+>
+> | Resource | Location |
+> |----------|----------|
+> | **Implementation Status** | `IMPLEMENTATION_STATUS.md` |
+> | **TypeScript Modules** | `PMOVES-ToKenism-Multi/integrations/contracts/chit/` |
+> | **NATS Subjects** | `.claude/context/geometry-nats-subjects.md` |
+> | **Hi-RAG Integration** | `GEOMETRY_BUS_INTEGRATION.md` |
+> | **TAC Commands** | `/chit:encode`, `/chit:decode`, `/chit:visualize`, `/chit:bus` |
+>
+> **Implementation Status:** CGP v0.1/v0.2 encoder ✅ | Decoder ⏳ | NATS ✅ | Visualization ⏳
+
+---
+
+You're onto something rich. Let's turn your scratch UI + CHIT idea into a working, end‑to‑end loop that (a) computes real "constellations" from data, (b) emits a geometric packet (your CHIT message), and (c) renders it as cymatic/fractal structure with drill‑down.
 
 Below I give you:
 
