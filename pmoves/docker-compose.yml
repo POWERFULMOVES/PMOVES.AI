@@ -427,7 +427,7 @@ services:
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
       - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
@@ -880,7 +880,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/healthz').getcode()==200 else sys.exit(1)\"" ]
+      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/health').getcode()==200 else sys.exit(1)\"" ]
       interval: 10s
       timeout: 5s
       retries: 12
