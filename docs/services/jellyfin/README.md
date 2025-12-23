@@ -1,3 +1,1 @@
-# Jellyfin Integration
-
-Documentation pending.
+# Jellyfin Service
