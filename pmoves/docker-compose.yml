@@ -830,6 +830,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -1019,23 +1020,26 @@ services:
 
   # Docker MCP Gateway: Open-standard gateway for AI model tool access
   # Provides access to 200+ tools (GitHub, Notion, Stripe, etc.)
-  docker-mcp-gateway:
-    image: mcp/gateway:latest
-    restart: unless-stopped
-    environment:
-      - MCP_GATEWAY_PORT=8811
-      - MCP_CATALOG_PATH=/catalog
-      - MCP_AUTH_TOKEN=${MCP_GATEWAY_AUTH_TOKEN:-}
-    volumes:
-      - ./config/mcp-catalog:/catalog:ro
-    ports: [ "8811:8811" ]
-    profiles: [ "botz", "mcp" ]
-    networks: [ api_tier, app_tier ]
-    healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8811/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # TODO: Image mcp/gateway:latest does not exist yet - requires Docker MCP GA release
+  # See: https://www.docker.com/products/docker-mcp
+  # docker-mcp-gateway:
+  #   image: mcp/gateway:latest
+  #   restart: unless-stopped
+  #   environment:
+  #     - MCP_GATEWAY_PORT=8811
+  #     - MCP_CATALOG_PATH=/catalog
+  #     - MCP_AUTH_TOKEN=${MCP_GATEWAY_AUTH_TOKEN:-}
+  #   volumes:
+  #     - ./config/mcp-catalog:/catalog:ro
+  #   ports: [ "8811:8811" ]
+  #   profiles: [ "botz", "mcp" ]
+  #   networks: [ api_tier, app_tier ]
+  #   healthcheck:
+  #     test: [ "CMD", "curl", "-sf", "http://localhost:8811/health" ]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 15s
 
   mesh-agent:
     build: ./services/mesh-agent
