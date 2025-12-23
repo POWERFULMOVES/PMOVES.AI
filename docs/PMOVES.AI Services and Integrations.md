@@ -73,7 +73,62 @@ If a detail here disagrees with those files, prefer the compose + env pins and u
 
 **External – Wger (Health)** – *Self-hosted fitness tracker integration.* Wger is an open-source workout and nutrition tracking web app. PMOVES includes **Pmoves-Health-wger** as a submodule and provides a container image for it (published as ghcr.io/.../pmoves-health-wger:pmoves-latest)[\[135\]](https://github.com/POWERFULMOVES/PMOVES-BoTZ/blob/28f16227d711898ca7ea6543ab6119ae82a8350a/docs/PMOVES.AI-Edition-Hardened.md#L16-L19). This suggests the wger app is deployed as part of PMOVES for personal data logging that the agents can use. **Path:** Submodule **Pmoves-Health-wger** (likely containing a Dockerfile overlay or data for wger). **Image:** Based on official wger image, pinned and security-hardened, tagged pmoves-health-wger. **Ports:** Typically wger runs on port 8000 (Django app). It might be exposed on a convenient port (e.g. 3567 or similar) in compose. **Env:** Database connection (likely uses the main Postgres or its own). Possibly integrated with PMOVES via API tokens if an agent reads workout data. **Depends on:** Postgres (could use the same supabase Postgres or a separate DB). This integration is optional (profiles “health”). It allows Agent Zero or others to query fitness data or log workout events via the CHIT bus or MCP.
 
-**External – Firefly III (Wealth)** – *Self-hosted finance manager integration.* Firefly III is an open-source personal finance manager. PMOVES includes **PMOVES-Wealth** as a submodule, similarly providing a customized container (ghcr.io/.../pmoves-firefly-iii:pmoves-latest)[\[135\]](https://github.com/POWERFULMOVES/PMOVES-BoTZ/blob/28f16227d711898ca7ea6543ab6119ae82a8350a/docs/PMOVES.AI-Edition-Hardened.md#L16-L19). **Path:** Submodule **PMOVES-Wealth**. **Image:** Based on Firefly III, published as pmoves-firefly-iii. **Ports:** Firefly’s web UI/API usually on 8080; in compose it would be exposed on some port (perhaps 8080 or another if conflict). **Env:** MySQL/Postgres connection for Firefly DB, and API token if PMOVES agents access it. **Depends on:** a SQL database (likely the main Postgres or a separate one). This integration lets the agent network retrieve financial data or record transactions as part of the multi-domain “life automation” scope. (E.g., an agent could analyze spending or automate budget logging.)
+**External – Firefly III (Wealth)** – *Self-hosted finance manager integration.* Firefly III is an open-source personal finance manager. PMOVES includes **PMOVES-Wealth** as a submodule, similarly providing a customized container (ghcr.io/.../pmoves-firefly-iii:pmoves-latest)[\[135\]](https://github.com/POWERFULMOVES/PMOVES-BoTZ/blob/28f16227d711898ca7ea6543ab6119ae82a8350a/docs/PMOVES.AI-Edition-Hardened.md#L16-L19). **Path:** Submodule **PMOVES-Wealth**. **Image:** Based on Firefly III, published as pmoves-firefly-iii. **Ports:** Firefly's web UI/API usually on 8080; in compose it would be exposed on some port (perhaps 8080 or another if conflict). **Env:** MySQL/Postgres connection for Firefly DB, and API token if PMOVES agents access it. **Depends on:** a SQL database (likely the main Postgres or a separate one). This integration lets the agent network retrieve financial data or record transactions as part of the multi-domain "life automation" scope. (E.g., an agent could analyze spending or automate budget logging.)
+
+## Model Gateway & Observability
+
+**TensorZero Gateway** – *Centralized LLM orchestration layer and secrets fence.* TensorZero Gateway is the unified model provider routing service that all PMOVES services use for LLM and embedding requests. It acts as a **secrets fence** – only TensorZero needs external API keys (Anthropic, OpenAI, Gemini, etc.), while all other services simply call TensorZero's internal endpoint. **Path:** Submodule **PMOVES-tensorzero** or official image. **Image:** tensorzero/gateway:latest. **Ports:** **3030** (host) → **3000** (container) for API, **4000** for TensorZero UI dashboard. **Env:** All LLM provider keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.) are configured ONLY in the `env.tier-llm` tier file – this is the **ONLY tier with external API keys**. Services like Hi-RAG, Agent Zero, and Archon call `http://tensorzero:3000` internally rather than external providers directly. **Usage:** All model inference requests (chat completions, embeddings) are routed through TensorZero, which tracks usage metrics in ClickHouse. Example: Hi-RAG calls TensorZero for embeddings with model `tensorzero::embedding_model_name::qwen3_embedding_4b_local`. **Depends on:** tensorzero-clickhouse. The gateway configuration is stored in `pmoves/tensorzero/config/tensorzero.toml` with function definitions in `pmoves/tensorzero/config/functions/`.
+
+**TensorZero ClickHouse** – *Observability metrics storage.* ClickHouse stores all TensorZero request/response logs, token usage, and latency metrics for analysis and optimization. **Image:** clickhouse/clickhouse-server:latest. **Ports:** **8123** for HTTP API. **Env:** Credentials set via CLICKHOUSE_USER/CLICKHOUSE_PASSWORD. **Usage:** Query metrics via `docker exec -it tensorzero-clickhouse clickhouse-client --user tensorzero --password tensorzero --query "SELECT model, COUNT(*) FROM requests GROUP BY model"`.
+
+**TensorZero UI** – *Metrics dashboard and admin interface.* Provides a web interface for viewing request logs, token usage analytics, and model performance metrics. **Image:** tensorzero/ui:latest. **Ports:** **4000** for web dashboard. **Env:** Connects to ClickHouse for data retrieval. **Usage:** Access at `http://localhost:4000` for real-time request inspection and usage analytics.
+
+**Ollama** – *Local LLM model server.* Ollama provides offline/private LLM inference for local models, allowing PMOVES to operate without external API dependencies when needed. **Image:** ollama/ollama:latest. **Ports:** **11434** for API. **Env:** GPU enabled via NVIDIA_VISIBLE_DEVICES. **Usage:** TensorZero routes requests to Ollama for local models (e.g., Qwen, Llama). Models are loaded on startup via `ollama pull` commands.
+
+## Additional Agent & Worker Services
+
+**Consciousness Service** – *Agent state and context orchestration.* Manages agent awareness and coordination state. **Path:** pmoves/services/consciousness-service. **Ports:** **8096** for HTTP API. **Depends on:** NATS for event coordination.
+
+**Session Context Worker** – *Session state management.* Handles user session context persistence and retrieval for multi-turn agent interactions. **Path:** pmoves/services/session-context-worker. **Ports:** **8100** for HTTP API. **Depends on:** Supabase for state persistence.
+
+**Messaging Gateway** – *NATS event consumer gateway.* Provides HTTP gateway for NATS message bus operations. **Path:** pmoves/services/messaging-gateway. **Ports:** **8101** for HTTP API. **Depends on:** NATS.
+
+**Chat Relay** – *NATS-to-Supabase relay.* Bridges NATS events to Supabase for persistence and real-time subscriptions. **Path:** pmoves/services/chat-relay. **Ports:** **8102** for HTTP API. **Depends on:** NATS, Supabase.
+
+**Botz Gateway** – *PMOVES-BoTZ MCP tools gateway.* Provides MCP-compatible tools interface for CHIT encoding, secrets management, and hardware profiles. **Path:** Submodule **PMOVES-BoTZ**. **Image:** ghcr.io/powerfulmoves/pmoves-botz:pmoves-latest. **Ports:** **8054** for HTTP API. **Env:** CHIT configuration for encoding/decoding. **Usage:** Accessed via `/botz:*` Claude Code commands.
+
+## Network Architecture (5-Tier Defense in Depth)
+
+PMOVES implements a **5-tier network architecture** for defense in depth, isolating services by function and limiting blast radius of potential compromises:
+
+| Tier | Network | CIDR | Internal | Services |
+|------|---------|------|----------|----------|
+| **API** | pmoves_api | 172.30.1.0/24 | No | PostgREST, Hi-RAG, TensorZero, Flute Gateway |
+| **App** | pmoves_app | 172.30.2.0/24 | Yes | Extract Worker, LangExtract, media processors |
+| **Bus** | pmoves_bus | 172.30.3.0/24 | Yes | NATS, Agent Zero, Archon, mesh-agent |
+| **Data** | pmoves_data | 172.30.4.0/24 | Yes | Postgres, Qdrant, Neo4j, Meilisearch, MinIO |
+| **Monitoring** | pmoves_monitoring | 172.30.5.0/24 | No | Prometheus, Grafana, Loki, Promtail |
+
+**Key Principles:**
+- **`internal: true`** networks (App, Bus, Data) are not reachable from external hosts
+- Services only join tiers they need – e.g., Extract Worker joins App + Data tiers but NOT Bus tier
+- TensorZero Gateway is on API tier but can reach Data tier for ClickHouse metrics
+- Monitoring tier spans all others for metrics scraping (read-only access)
+
+## Docker Hardening & Tier-Based Secrets
+
+PMOVES follows **tier-based secrets isolation** via specialized environment files:
+
+| Tier File | Services | Secrets Scope |
+|-----------|----------|---------------|
+| `env.tier-data` | postgres, qdrant, neo4j, minio | Infrastructure only, NO API keys |
+| `env.tier-api` | postgrest, hi-rag-v2, presign | Data tier + internal TensorZero (NO external keys) |
+| `env.tier-worker` | extract-worker, langextract | Processing credentials |
+| `env.tier-agent` | agent-zero, archon, nats | Agent coordination |
+| `env.tier-media` | pmoves-yt, whisper, media-* | Media processing |
+| `env.tier-llm` | **tensorzero-gateway ONLY** | **External LLM API keys** |
+
+**Critical:** Only `env.tier-llm` contains external provider keys (Anthropic, OpenAI, Gemini, etc.). All other tiers access LLMs via TensorZero's internal endpoint.
 
 ## Core Data & Infrastructure Components
 

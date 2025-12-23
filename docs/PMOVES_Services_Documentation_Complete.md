@@ -19,15 +19,23 @@
 
 ## Executive Summary
 
-PMOVES.AI is a comprehensive, multi-service platform designed for content creation, analysis, and automation. The system consists of 30+ microservices orchestrated through Docker Compose, with support for both local development and production deployments across multiple architectures (amd64, arm64).
+PMOVES.AI is a comprehensive, multi-service platform designed for content creation, analysis, and automation. The system consists of **58+ microservices** orchestrated through Docker Compose, with support for both local development and production deployments across multiple architectures (amd64, arm64).
 
 **Key Findings:**
-- **Technical Accuracy Score:** 85/100
-- **Architecture:** Modern microservices with 5-tier network isolation
+- **Technical Accuracy Score:** 90/100 (updated 2025-12-23)
+- **Architecture:** Modern microservices with strict 5-tier network isolation
 - **Deployment Flexibility:** Supports local, cloud, and hybrid deployments
 - **Multi-Architecture:** Full support for x86_64 and ARM64 (Jetson) platforms
-- **Monitoring Stack:** Comprehensive observability with Prometheus, Grafana, and Loki
-- **Security:** Hardened configurations available for production deployments
+- **Monitoring Stack:** Comprehensive observability with Prometheus, Grafana, Loki, and TensorZero ClickHouse
+- **Security:** Hardened Docker configurations following CIS Docker Benchmark
+- **Model Gateway:** TensorZero provides centralized LLM routing with request/response observability
+
+**Core Service Categories:**
+- **Data Tier:** PostgreSQL (Supabase), Qdrant, Neo4j, Meilisearch, MinIO, NATS
+- **Agent Tier:** Agent Zero, Archon (API + UI), SupaSerch, DeepResearch, BoTZ Gateway
+- **Worker Tier:** Hi-RAG v2, Extract Worker, LangExtract, media processors
+- **Voice Tier:** Flute Gateway, Ultimate TTS Studio, VibeVoice
+- **Monitoring Tier:** Prometheus, Grafana, Loki, TensorZero observability
 
 ---
 
@@ -50,10 +58,43 @@ PMOVES.AI/
 ### Architecture Principles
 
 1. **Microservices Pattern:** Each service has a single responsibility with clear interfaces
-2. **5-Tier Network Isolation:** Defense-in-depth network segmentation (Public, Gateway, App, Bus, Data/Infra). Validation: ensure critical data stores (Data Tier) are NOT reachable from Public Tier without passing through App/Gateway.
-3. **Environment-First Configuration:** Single-file environment management
+2. **5-Tier Network Isolation:** Defense-in-depth network segmentation (API, App, Bus, Data, Monitoring). Validation: ensure critical data stores (Data Tier) are NOT reachable from Public Tier without passing through App/Gateway.
+3. **Environment-First Configuration:** Single-file environment management with tier-based secrets isolation
 4. **Multi-Architecture Support:** First-class support for x86_64 and ARM64
 5. **Observable by Design:** Comprehensive monitoring and logging
+6. **Docker Hardening:** CIS Docker Benchmark compliance, non-root users, read-only filesystems
+
+### Docker Hardening Practices
+
+All PMOVES services follow these Docker hardening standards:
+
+**Container Security:**
+- `USER pmoves` - Non-root user in all containers
+- `readonly: true` - Read-only root filesystem where possible
+- `cap_drop: [ALL]` - Drop all Linux capabilities by default
+- `security_opt: [no-new-privileges:true]` - Prevent privilege escalation
+- `healthcheck` - All services expose health endpoints
+
+**Network Isolation:**
+- Services only join networks they require
+- Data tier (Postgres, Qdrant, Neo4j) isolated from public access
+- API tier exposes only HTTP ports
+- Bus tier (NATS) isolated to agent communication
+
+**Secrets Management:**
+- Tier-based `env_file` (env.tier-*.example templates)
+- TensorZero acts as secrets fence - only service with direct LLM API keys
+- BuildKit secret mounts during build (never in final image)
+- No `docker history` exposure of credentials
+
+**5-Tier Network Matrix:**
+| Tier | Network | Services | Allowed Access |
+|------|---------|----------|----------------|
+| API | pmoves_api | PostgREST, Hi-RAG, TensorZero | Public HTTP |
+| App | pmoves_app | Workers, Archon | API tier only |
+| Bus | pmoves_bus | NATS, Agent Zero | App tier only |
+| Data | pmoves_data | Postgres, Qdrant, Neo4j, MinIO | Bus/App tier only |
+| Monitoring | pmoves_monitoring | Prometheus, Grafana, Loki | All tiers (metrics scrape) |
 
 ---
 
@@ -356,10 +397,14 @@ make env-setup              # Initialize environment
 - **Health:** `curl http://localhost:8080/healthz`
 
 #### Archon
-- **Purpose:** Repository management and orchestration
+- **Purpose:** Repository management, orchestration, and agent form management
 - **API Port:** 8091
-- **MCP Port:** 8051
+- **UI Port:** 3737 (React/Vite dashboard)
+- **MCP Port:** 8051 (Model Control Protocol)
+- **Agents Port:** 8052
+- **Work Orders Port:** 8053 (task management)
 - **Health:** `curl http://localhost:8091/healthz`
+- **UI Start:** `docker compose -f docker-compose.yml -f docker-compose.agents.images.yml up -d archon-ui`
 
 #### DeepResearch
 - **Purpose:** Research automation and synthesis
@@ -693,31 +738,84 @@ groups:
 
 ### Appendix A: Service Port Matrix
 
+**Core Infrastructure**
 | Service | Port | Protocol | Notes |
 |---------|------|----------|-------|
 | Supabase CLI | 65421 | HTTP/REST | Primary database backend |
+| Supabase Studio | 65433 | HTTP | Database admin UI |
 | Qdrant | 6333 | HTTP | Vector database |
 | Neo4j HTTP | 7474 | HTTP | Graph database UI |
 | Neo4j Bolt | 7687 | Bolt | Graph database protocol |
 | Meilisearch | 7700 | HTTP | Search engine |
-| MinIO | 9000/9001 | HTTP/S3 | Object storage |
-| Hi-RAG v2 CPU | 8086 | HTTP | Hybrid search |
-| Hi-RAG v2 GPU | 8087 | HTTP | GPU-accelerated search |
-| Extract Worker | 8083 | HTTP | Document processing |
+| MinIO API | 9000 | S3/HTTP | Object storage API |
+| MinIO Console | 9001 | HTTP | Object storage UI |
+| NATS | 4222 | NATS | Message broker |
+
+**TensorZero (Model Gateway)**
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
+| TensorZero Gateway | 3030 | HTTP | Unified LLM gateway |
+| TensorZero UI | 4000 | HTTP | Metrics dashboard |
+| TensorZero ClickHouse | 8123 | HTTP | Observability storage |
+
+**Agent Services**
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
 | Agent Zero API | 8080 | HTTP | Conversational agent |
 | Agent Zero UI | 8081 | HTTP | Agent Zero interface |
 | Archon API | 8091 | HTTP | Repository management |
+| Archon UI | 3737 | HTTP | Archon visual interface |
 | Archon MCP | 8051 | HTTP | Model Control Protocol |
+| Archon Agents | 8052 | HTTP | Agent endpoints |
 | Archon Work Orders | 8053 | HTTP | Task management |
+| BoTZ Gateway | 8054 | HTTP | CHIT encoding gateway |
 | DeepResearch | 8098 | HTTP | Research automation |
-| NATS | 4222 | NATS | Message broker |
+| SupaSerch | 8099 | HTTP | Holographic deep research |
+
+**Worker Services**
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
+| Hi-RAG v2 CPU | 8086 | HTTP | Hybrid search |
+| Hi-RAG v2 GPU | 8087 | HTTP | GPU-accelerated search |
+| Extract Worker | 8083 | HTTP | Document processing |
+| LangExtract | 8084 | HTTP | Language detection |
+| Render Webhook | 8085 | HTTP | ComfyUI callback handler |
+| Presign | 8088 | HTTP | MinIO URL presigner |
+
+**Voice & TTS**
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
+| Flute Gateway HTTP | 8055 | HTTP | Voice synthesis API |
+| Flute Gateway WS | 8056 | WebSocket | Realtime audio streaming |
+| Ultimate TTS Studio | 7861 | HTTP | Multi-engine TTS (Gradio) |
+| VibVoice | 3000 | HTTP | Microsoft VibeVoice |
+
+**Media Services**
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
+| PMOVES.YT | 8077 | HTTP | YouTube ingestion |
+| FFmpeg-Whisper | 8078 | HTTP | Media transcription |
+| Media Video | 8079 | HTTP | Video analysis (YOLO) |
+| Media Audio | 8082 | HTTP | Audio analysis |
+| Channel Monitor | 8097 | HTTP | Content watcher |
+
+**External Integrations**
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
 | Wger | 8000 | HTTP | Health management |
 | Firefly III | 8082 | HTTP | Financial management |
 | Open Notebook API | 5055 | HTTP | Research notebook |
 | Open Notebook UI | 8503 | HTTP | Notebook interface |
 | Jellyfin | 8096 | HTTP | Media server |
-| Prometheus | 9090 | HTTP | Monitoring |
-| Grafana | 3002 | HTTP | Monitoring dashboard |
+| n8n | 5678 | HTTP | Workflow automation |
+| Publisher Discord | 8094 | HTTP | Discord notifications |
+| Jellyfin Bridge | 8093 | HTTP | Jellyfin metadata sync |
+
+**Monitoring**
+| Service | Port | Protocol | Notes |
+|---------|------|----------|-------|
+| Prometheus | 9090 | HTTP | Metrics collection |
+| Grafana | 3000 | HTTP | Monitoring dashboard |
 | Loki | 3100 | HTTP | Log aggregation |
 
 ### Appendix B: Environment Variable Reference
