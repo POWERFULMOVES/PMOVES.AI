@@ -1,0 +1,43 @@
+version: '3.8'
+
+networks:
+  app_tier:
+    external: true
+    name: pmoves_app
+  bus_tier:
+    external: true
+    name: pmoves_bus
+  api_tier:
+    external: true
+    name: pmoves_api
+  monitoring_tier:
+    external: true
+    name: pmoves_monitoring
+
+volumes:
+  huggingface-cache:
+
+
+services:
+  agentgym-coordinator:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8114:8114"
+    environment:
+      - NATS_URL=nats://nats:4222
+      - PORT=8114
+      - HF_TOKEN=${HF_TOKEN}
+      - HF_HOME=/home/nonroot/.cache/huggingface
+    volumes:
+      - huggingface-cache:/home/nonroot/.cache/huggingface
+    networks:
+      - app_tier
+      - bus_tier
+      - api_tier
+      - monitoring_tier
+    # Security Hardening
+    user: "65532:65532" # Non-root distroless
+    read_only: true
+    cap_drop:
+      - ALL
