@@ -3,22 +3,22 @@
 # Each tier receives ONLY the secrets it needs (principle of least privilege)
 # =============================================================================
 x-env-tier-data: &env-tier-data
-  env_file: [ env.tier-data, .env.local ]
+  env_file: [ env.tier-data?, .env.local ]  # ? = optional, won't fail if missing
 
 x-env-tier-api: &env-tier-api
-  env_file: [ env.tier-api, .env.local ]
+  env_file: [ env.tier-api?, .env.local ]  # ? = optional, won't fail if missing
 
 x-env-tier-worker: &env-tier-worker
-  env_file: [ env.tier-worker, .env.local ]
+  env_file: [ env.tier-worker?, .env.local ]  # ? = optional, won't fail if missing
 
 x-env-tier-agent: &env-tier-agent
-  env_file: [ env.tier-agent, .env.local ]
+  env_file: [ env.tier-agent?, .env.local ]  # ? = optional, won't fail if missing
 
 x-env-tier-media: &env-tier-media
-  env_file: [ env.tier-media, .env.local ]
+  env_file: [ env.tier-media?, .env.local ]  # ? = optional, won't fail if missing
 
 x-env-tier-llm: &env-tier-llm
-  env_file: [ env.tier-llm, .env.local ]
+  env_file: [ env.tier-llm?, .env.local ]  # ? = optional, won't fail if missing
 
 # Legacy: Full env for services not yet migrated to tier-based
 x-env-legacy: &env-legacy
@@ -90,7 +90,7 @@ services:
     profiles: [ "supabase-cli-rest" ]
     networks: [ api_tier, monitoring_tier ]
   qdrant:
-    image: qdrant/qdrant:v1.15.0
+    image: qdrant/qdrant:v1.16.2
     restart: unless-stopped
     ports: [ "6333:6333" ]
     profiles: [ "data", "qdrant-local" ]
@@ -975,7 +975,7 @@ services:
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero:3030}
       - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
