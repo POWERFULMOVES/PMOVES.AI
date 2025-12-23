@@ -14,7 +14,6 @@ RUN groupadd -r pmoves --gid=65532 && \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-USER pmoves
-
+# NOTE: Do NOT set USER here - entrypoint needs root for chown, then drops to pmoves via su
 EXPOSE 8095
 ENTRYPOINT ["/entrypoint.sh"]
