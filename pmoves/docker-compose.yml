@@ -418,6 +418,56 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # PMOVES.AI Unified Portal - Main Dashboard
+  pmoves-ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    environment:
+      - NODE_ENV=production
+      # Supabase
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:3010}
+      # Voice/TTS
+      - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
+      - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
+      # Agent Services (client-side needs localhost)
+      - NEXT_PUBLIC_AGENT_ZERO_URL=${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}
+      - NEXT_PUBLIC_AGENT_ZERO_UI_URL=${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}
+      - NEXT_PUBLIC_ARCHON_URL=${NEXT_PUBLIC_ARCHON_URL:-http://localhost:8091}
+      - NEXT_PUBLIC_ARCHON_UI_URL=${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}
+      # Knowledge & Search
+      - NEXT_PUBLIC_HIRAG_URL=${NEXT_PUBLIC_HIRAG_URL:-http://localhost:8086}
+      - NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL=${NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL:-http://localhost:8503}
+      - NEXT_PUBLIC_TENSORZERO_UI_URL=${NEXT_PUBLIC_TENSORZERO_UI_URL:-http://localhost:4000}
+      # Media & Ingestion
+      - NEXT_PUBLIC_PRESIGN_URL=${NEXT_PUBLIC_PRESIGN_URL:-http://localhost:8088}
+      - NEXT_PUBLIC_PMOVES_YT_BASE_URL=${NEXT_PUBLIC_PMOVES_YT_BASE_URL:-http://localhost:8077}
+      - NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL=${NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL:-http://localhost:8097/api/monitor/stats}
+      # Monitoring Stack
+      - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3002}
+      - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
+      - NEXT_PUBLIC_LOKI_URL=${NEXT_PUBLIC_LOKI_URL:-http://localhost:3100}
+      # Server-side only (Docker hostnames OK)
+      - POSTGREST_URL=http://postgrest:3000
+      - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
+      - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
+      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:8503}
+    ports:
+      - "4482:3000"
+    # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
+    networks: [ app_tier, api_tier, supabase_net ]
+    profiles: [ "ui" ]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   ffmpeg-whisper:
     build:
       context: ..
