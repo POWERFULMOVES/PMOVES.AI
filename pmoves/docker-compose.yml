@@ -409,7 +409,7 @@ services:
       context: docker/ultimate-tts-studio
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
       - GRADIO_SERVER_PORT=7861
@@ -446,7 +446,7 @@ services:
       context: .
       dockerfile: services/flute-gateway/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
@@ -524,7 +524,7 @@ services:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -550,7 +550,7 @@ services:
       context: .
       dockerfile: services/media-video/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -575,7 +575,7 @@ services:
       context: .
       dockerfile: services/media-audio/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -637,7 +637,7 @@ services:
   channel-monitor:
     build: ./services/channel-monitor
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
@@ -1321,7 +1321,7 @@ services:
   invidious-companion:
     image: quay.io/invidious/invidious-companion:latest
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       PORT: 8282
       HOST: 0.0.0.0
@@ -1345,7 +1345,7 @@ services:
   invidious:
     image: quay.io/invidious/invidious:latest
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       INVIDIOUS_CONFIG: |
         db:
@@ -1388,7 +1388,7 @@ services:
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
       - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
@@ -1403,7 +1403,7 @@ services:
   grayjay-server:
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
       - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
