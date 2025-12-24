@@ -73,7 +73,7 @@ services:
     image: postgrest/postgrest:latest
     restart: unless-stopped
     depends_on: [ postgres ]
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
@@ -194,7 +194,7 @@ services:
   retrieval-eval:
     build: ./services/retrieval-eval
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - HIRAG_URL=http://hi-rag-gateway-v2:8086
       - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
@@ -211,7 +211,7 @@ services:
   presign:
     build: ./services/presign
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
