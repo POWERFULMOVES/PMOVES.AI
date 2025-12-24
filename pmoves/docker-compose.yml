@@ -419,6 +419,7 @@ services:
       - CUDA_DEVICE_ORDER=PCI_BUS_ID
       - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
       - TORCH_CUDNN_V8_API_ENABLED=1
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: [ "7861:7861" ]
     profiles: [ "gpu", "tts" ]
     networks: [ api_tier, monitoring_tier ]
@@ -736,6 +737,7 @@ services:
       - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
       - RERANK_TOPN=${RERANK_TOPN:-50}
       - RERANK_K=${RERANK_K:-10}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     deploy:
       resources:
         reservations:
@@ -805,6 +807,7 @@ services:
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
       - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     gpus: all
     deploy:
       resources:
@@ -840,6 +843,7 @@ services:
       - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
       - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
       - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
       - ./config/gpu-models.yaml:/app/config/gpu-models.yaml:ro
     ports: [ "8200:8200" ]
@@ -849,6 +853,13 @@ services:
         condition: service_started
         required: false
     networks: [ api_tier, bus_tier, monitoring_tier ]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-sf", "http://localhost:8200/healthz" ]
       interval: 30s

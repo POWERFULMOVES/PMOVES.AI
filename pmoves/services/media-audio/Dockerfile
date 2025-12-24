@@ -1,8 +1,21 @@
-FROM python:3.11-slim
+# Media Audio Analyzer - GPU-enabled for PyTorch/Whisper
+# Uses CUDA runtime for emotion detection and audio analysis models
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+# Install Python 3.11 and required system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3-pip python3.11-dev \
+    ffmpeg libsndfile1 ca-certificates curl && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 ca-certificates && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir --upgrade pip
+
 # With build context at pmoves/ root
 COPY services/common /app/services/common
 COPY services/media-audio/requirements.txt ./
