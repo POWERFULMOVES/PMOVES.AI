@@ -122,7 +122,7 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.8
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-data
     environment:
       - MEILI_ENV=production
     ports: [ "7700:7700" ]
@@ -131,7 +131,7 @@ services:
   neo4j:
     image: neo4j:5.22
     restart: unless-stopped
-    env_file: [ .env.generated ]
+    <<: *env-tier-data
     environment:
       - NEO4J_AUTH=${NEO4J_AUTH}
       - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
