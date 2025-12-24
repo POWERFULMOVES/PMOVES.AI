@@ -68,6 +68,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   postgrest:
     image: postgrest/postgrest:v12.2.3
@@ -171,7 +172,7 @@ services:
     profiles: [ "data", "orchestration", "workers", "agents" ]
     networks: [ data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "mc", "ready", "local" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -308,7 +309,8 @@ services:
     profiles: [ "orchestration", "workers" ]
     networks: [ bus_tier, data_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import sys; sys.exit(0)" ]
+      # Verify the watcher module can be imported (tests all dependencies)
+      test: [ "CMD", "python3", "-c", "from watcher import load_state; load_state()" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1016,7 +1018,7 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
-    command: [ "-js" ]
+    command: [ "-js", "-m", "8222" ]
     restart: unless-stopped
     ports: [ "4222:4222" ]
     profiles: [ "agents", "orchestration", "workers" ]
@@ -1210,6 +1212,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
 
   # Docker MCP Gateway: Open-standard gateway for AI model tool access
   # Provides access to 200+ tools (GitHub, Notion, Stripe, etc.)
@@ -1246,7 +1249,8 @@ services:
     profiles: [ "agents" ]
     networks: [ app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import sys; sys.exit(0)" ]
+      # Verify main module imports and NATS client is available
+      test: [ "CMD", "python3", "-c", "from main import NODE_NAME, NATS_URL; import nats" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1334,6 +1338,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
 
   # NATS echo subscribers for diagnostics
   nats-echo-req:
@@ -1540,6 +1545,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 15s
     profiles: [ "invidious" ]
     networks: [ data_tier, monitoring_tier ]
 
