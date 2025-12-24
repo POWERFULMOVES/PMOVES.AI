@@ -2,7 +2,7 @@ FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
 RUN pip install --no-cache-dir --upgrade pip
-COPY services/pdf-ingest/requirements.txt ./
+COPY services/pdf-ingest/requirements.txt services/pdf-ingest/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY libs /app/libs
 COPY services/common /app/services/common

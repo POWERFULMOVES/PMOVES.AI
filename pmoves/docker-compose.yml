@@ -1,3 +1,30 @@
+# =============================================================================
+# PMOVES Tier-Based Environment File Anchors
+# Each tier receives ONLY the secrets it needs (principle of least privilege)
+# =============================================================================
+x-env-tier-data: &env-tier-data
+  env_file: [ env.tier-data?, .env.local ]  # ? = optional, won't fail if missing
+
+x-env-tier-api: &env-tier-api
+  env_file: [ env.tier-api?, .env.local ]  # ? = optional, won't fail if missing
+
+x-env-tier-worker: &env-tier-worker
+  env_file: [ env.tier-worker?, .env.local ]  # ? = optional, won't fail if missing
+
+x-env-tier-agent: &env-tier-agent
+  env_file: [ env.tier-agent?, .env.local ]  # ? = optional, won't fail if missing
+
+x-env-tier-media: &env-tier-media
+  env_file: [ env.tier-media?, .env.local ]  # ? = optional, won't fail if missing
+
+x-env-tier-llm: &env-tier-llm
+  env_file: [ env.tier-llm?, .env.local ]  # ? = optional, won't fail if missing
+
+# Legacy: Full env for services not yet migrated to tier-based
+x-env-legacy: &env-legacy
+  env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+
+# =============================================================================
 services:
   postgres:
     image: ankane/pgvector
@@ -63,7 +90,7 @@ services:
     profiles: [ "supabase-cli-rest" ]
     networks: [ api_tier, monitoring_tier ]
   qdrant:
-    image: qdrant/qdrant:v1.10.0
+    image: qdrant/qdrant:v1.16.2
     restart: unless-stopped
     ports: [ "6333:6333" ]
     profiles: [ "data", "qdrant-local" ]
@@ -218,7 +245,7 @@ services:
   extract-worker:
     build: ./services/extract-worker
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
@@ -338,7 +365,7 @@ services:
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - HEALTH_PORT=8102
       - AGENT_RESPONSE_SUBJECT=agent.response.v1
@@ -399,7 +426,7 @@ services:
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       # VibeVoice is typically run outside Docker (Pinokio/host); reach it via host-gateway.
       - VIBEVOICE_URL=${VIBEVOICE_URL:-http://host.docker.internal:3000}
@@ -548,7 +575,7 @@ services:
       args:
         - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -611,7 +638,7 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
@@ -641,7 +668,7 @@ services:
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
-      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_pmoves.ai:8000/realtime/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_PMOVES.AI:8000/realtime/v1}
       # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -691,7 +718,7 @@ services:
           devices:
             - capabilities: [ gpu ]
               count: ${GPU_COUNT:-all}
-    ports: [ "8090:8086" ]
+    ports: [ "8110:8086" ]
     profiles: [ "gpu", "legacy" ]
     depends_on:
       qdrant:
@@ -746,7 +773,7 @@ services:
       - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
       - PGDATABASE=${POSTGRES_DB:-pmoves}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
-      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_pmoves.ai:8000/realtime/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_PMOVES.AI:8000/realtime/v1}
       # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
@@ -774,6 +801,39 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # GPU Orchestrator: VRAM management, model lifecycle, priority queue
+  gpu-orchestrator:
+    build:
+      context: ./services/gpu-orchestrator
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    <<: *env-tier-api
+    environment:
+      - PORT=8200
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://pmoves-vllm:8000}
+      - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
+      - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
+      - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
+    volumes:
+      - ./config/gpu-models.yaml:/app/config/gpu-models.yaml:ro
+    ports: [ "8200:8200" ]
+    profiles: [ "gpu" ]
+    depends_on:
+      nats:
+        condition: service_started
+        required: false
+    networks: [ api_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8200/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
@@ -788,7 +848,7 @@ services:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -824,7 +884,7 @@ services:
         - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
         - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - PORT=8091
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
@@ -833,9 +893,9 @@ services:
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      # Use container DNS for Supabase (same as Hi-RAG fix)
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase_kong_pmoves.ai:8000}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_pmoves.ai:8000/rest/v1}
+      # Use container DNS for Supabase (matches supabase_kong_PMOVES.AI container name)
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_PMOVES.AI:8000/rest/v1}
       # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
     depends_on:
       nats:
@@ -868,6 +928,7 @@ services:
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
     environment:
       - PORT=8053
+      - ENABLE_AGENT_WORK_ORDERS=${ENABLE_AGENT_WORK_ORDERS:-true}
       - AGENT_WORK_ORDERS_PORT=${AGENT_WORK_ORDERS_PORT:-8053}
       - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://archon:8091}
       - ARCHON_MCP_URL=${ARCHON_MCP_URL:-http://archon:8051}
@@ -876,7 +937,7 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - LOG_LEVEL=${AGENT_WORK_ORDERS_LOG_LEVEL:-INFO}
       # Supabase connection - use internal Docker network hostname
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       # Git configuration for worktrees
       - GIT_WORKTREE_BASE=${GIT_WORKTREE_BASE:-/worktrees}
@@ -914,7 +975,7 @@ services:
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero:3030}
       - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
@@ -935,6 +996,50 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+
+  # E2B Sandbox Runner: Isolated code execution environment
+  pmz-e2b-runner:
+    build:
+      context: ../PMOVES-BoTZ/features/e2b
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /app
+    command: uvicorn app_e2b:app --host 0.0.0.0 --port 7071
+    environment:
+      - PORT=7071
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - MCP_GATEWAY_URL=${MCP_GATEWAY_URL:-http://docker-mcp-gateway:8811}
+    ports: [ "7071:7071" ]
+    profiles: [ "workers", "botz" ]
+    networks: [ api_tier, app_tier ]
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7071/health', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Docker MCP Gateway: Open-standard gateway for AI model tool access
+  # Provides access to 200+ tools (GitHub, Notion, Stripe, etc.)
+  # TODO: Image mcp/gateway:latest does not exist yet - requires Docker MCP GA release
+  # See: https://www.docker.com/products/docker-mcp
+  # docker-mcp-gateway:
+  #   image: mcp/gateway:latest
+  #   restart: unless-stopped
+  #   environment:
+  #     - MCP_GATEWAY_PORT=8811
+  #     - MCP_CATALOG_PATH=/catalog
+  #     - MCP_AUTH_TOKEN=${MCP_GATEWAY_AUTH_TOKEN:-}
+  #   volumes:
+  #     - ./config/mcp-catalog:/catalog:ro
+  #   ports: [ "8811:8811" ]
+  #   profiles: [ "botz", "mcp" ]
+  #   networks: [ api_tier, app_tier ]
+  #   healthcheck:
+  #     test: [ "CMD", "curl", "-sf", "http://localhost:8811/health" ]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 15s
 
   mesh-agent:
     build: ./services/mesh-agent
@@ -999,8 +1104,8 @@ services:
 
   consciousness-service:
     build:
-      context: ./services
-      dockerfile: consciousness-service/Dockerfile
+      context: ./services/consciousness-service
+      dockerfile: Dockerfile
     image: ${CONSCIOUSNESS_SERVICE_IMAGE:-}
     restart: unless-stopped
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
@@ -1131,7 +1236,9 @@ services:
     image: tensorzero/gateway:latest
     restart: unless-stopped
     command: [ "--config-file", "/app/config/tensorzero.toml" ]
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-llm
+    # NOTE: This is the ONLY service with access to LLM API keys!
+    # All other services call TensorZero internally, not providers directly.
     environment:
       - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
       - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}
