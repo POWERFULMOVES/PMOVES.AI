@@ -227,7 +227,7 @@ services:
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
@@ -245,7 +245,7 @@ services:
       context: .
       dockerfile: services/comfy-watcher/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # comfy-watcher uses the MinIO Python client, which requires a host:port endpoint (no path prefix).
@@ -292,7 +292,7 @@ services:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -316,7 +316,7 @@ services:
       context: .
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       # Orchestrator provider settings (set LANGEXTRACT_PROVIDER=orchestrator to enable)
       - LANGEXTRACT_PROVIDER=${LANGEXTRACT_PROVIDER:-tensorzero}
@@ -340,7 +340,7 @@ services:
   notebook-sync:
     build: ./services/notebook-sync
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       # Open Notebook runs outside this compose project's networks; reach it via host-gateway + published port.
       # Keep env.shared's OPEN_NOTEBOOK_API_URL=http://localhost:5055 for host-side scripts.
@@ -369,7 +369,7 @@ services:
       context: .
       dockerfile: services/session-context-worker/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HEALTH_PORT=8100
