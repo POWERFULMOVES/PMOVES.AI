@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 import nats
 from fastapi import FastAPI
 from nats.aio.client import Client as NATS
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
 # Configure logging
 logging.basicConfig(
@@ -220,7 +221,7 @@ async def _handle_session_context(msg):
 
     Transforms the context and publishes to kb.upsert.request.v1.
     """
-    _metrics["messages_received"] += 1
+    messages_received.labels(SESSION_CONTEXT_SUBJECT).inc()
 
     try:
         # Parse message
@@ -228,7 +229,7 @@ async def _handle_session_context(msg):
 
         if not isinstance(data, dict):
             logger.warning(f"Invalid message format: expected dict, got {type(data)}")
-            _metrics["messages_failed"] += 1
+            messages_failed.labels("invalid_format").inc()
             return
 
         session_id = data.get("session_id", "unknown")
@@ -251,7 +252,7 @@ async def _handle_session_context(msg):
                 KB_UPSERT_SUBJECT,
                 json.dumps(kb_upsert).encode("utf-8")
             )
-            _metrics["kb_upserts_published"] += 1
+            kb_upserts_published.labels("claude-code-sessions").inc()
             logger.info(
                 f"Published KB upsert for session {session_id}",
                 extra={
@@ -262,17 +263,17 @@ async def _handle_session_context(msg):
             )
         else:
             logger.warning("NATS client not connected, skipping publish")
-            _metrics["messages_failed"] += 1
+            messages_failed.labels("invalid_format").inc()
             return
 
-        _metrics["messages_processed"] += 1
+        messages_processed.labels(context_type).inc()
 
     except json.JSONDecodeError as e:
         logger.error(f"Failed to decode JSON: {e}")
-        _metrics["messages_failed"] += 1
+        messages_failed.labels("json_decode_error").inc()
     except Exception as e:
         logger.error(f"Error processing session context: {e}", exc_info=True)
-        _metrics["messages_failed"] += 1
+        messages_failed.labels("processing_error").inc()
 
 
 async def _register_nats_subscriptions(nc: NATS) -> None:
@@ -374,14 +375,14 @@ async def healthz():
     return {
         "ok": True,
         "nats_connected": _nc is not None,
-        "metrics": _metrics,
     }
 
 
 @app.get("/metrics")
 async def metrics():
     """Prometheus-compatible metrics endpoint."""
-    return _metrics
+    from fastapi.responses import Response
+    return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.on_event("startup")

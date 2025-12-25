@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException, Request
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
 from platforms.discord import DiscordPlatform
 from platforms.telegram import TelegramPlatform
@@ -47,6 +48,28 @@ discord_platform = DiscordPlatform(
 telegram_platform = TelegramPlatform(bot_token=TELEGRAM_BOT_TOKEN)
 whatsapp_platform = WhatsAppPlatform(access_token=WHATSAPP_ACCESS_TOKEN)
 
+# Prometheus metrics
+messages_sent = Counter(
+    'messaging_gateway_messages_sent_total',
+    'Total number of messages sent to platforms',
+    ['platform', 'status']
+)
+nats_messages_received = Counter(
+    'messaging_gateway_nats_messages_received_total',
+    'Total number of messages received from NATS',
+    ['subject']
+)
+api_requests = Counter(
+    'messaging_gateway_api_requests_total',
+    'Total number of API requests',
+    ['endpoint', 'status']
+)
+request_duration = Histogram(
+    'messaging_gateway_request_duration_seconds',
+    'Request processing duration',
+    ['endpoint']
+)
+
 
 class SendMessageRequest(BaseModel):
     """Request model for unified send endpoint."""
@@ -71,6 +94,13 @@ async def healthz():
     }
 
 
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    from fastapi.responses import Response
+    return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.post("/v1/send")
 async def send_message(request: SendMessageRequest):
     """
@@ -86,6 +116,7 @@ async def send_message(request: SendMessageRequest):
         ]
     }
     """
+    api_requests.labels("/v1/send", "started").inc()
     results = {}
 
     for platform in request.platforms:
@@ -96,26 +127,32 @@ async def send_message(request: SendMessageRequest):
                 buttons=request.buttons,
             )
             results["discord"] = {"success": success}
+            messages_sent.labels("discord", "success" if success else "failed").inc()
         elif platform == "telegram":
             success = await telegram_platform.send(
                 content=request.content,
                 buttons=request.buttons,
             )
             results["telegram"] = {"success": success}
+            messages_sent.labels("telegram", "success" if success else "failed").inc()
         elif platform == "whatsapp":
             success = await whatsapp_platform.send(
                 content=request.content,
                 buttons=request.buttons,
             )
             results["whatsapp"] = {"success": success}
+            messages_sent.labels("whatsapp", "success" if success else "failed").inc()
         else:
             results[platform] = {"success": False, "error": "unknown_platform"}
+            messages_sent.labels(platform, "failed").inc()
 
     # Return 200 if at least one platform succeeded
     any_success = any(r.get("success", False) for r in results.values())
     if not any_success:
+        api_requests.labels("/v1/send", "failed").inc()
         raise HTTPException(status_code=502, detail="All platforms failed")
 
+    api_requests.labels("/v1/send", "success").inc()
     return {"ok": True, "results": results}
 
 
@@ -153,6 +190,7 @@ async def telegram_webhook(payload: dict):
 
 async def _handle_nats_message(msg):
     """Handle NATS events and auto-forward to configured platforms."""
+    nats_messages_received.labels(msg.subject).inc()
     try:
         data = json.loads(msg.data.decode("utf-8"))
         envelope: Dict[str, Any] = data if isinstance(data, dict) else {}
