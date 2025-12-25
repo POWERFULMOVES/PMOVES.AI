@@ -18,6 +18,14 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
       - uses: actions/checkout@v4
       - name: Grep for unsafe policy patterns
         shell: bash
@@ -30,6 +38,18 @@ jobs:
             "pmoves/supabase/migrations/2025-09-08_geometry_bus_rls.sql"
             "pmoves/supabase/migrations/2025-09-09_pmoves_yt_jobs.sql"
             "pmoves/supabase/migrations/2025-09-10_media_analysis_rls.sql"
+            "pmoves/supabase/migrations/2025-10-18_geometry_swarm.sql"
+            "pmoves/supabase/migrations/2025-10-18_health_finance.sql"
+            "pmoves/supabase/migrations/2025-10-20_persona_avatar.sql"
+            "pmoves/supabase/migrations/2025-10-20_geometry_cgp_views.sql"
+            "pmoves/supabase/migrations/2025-12-08_archon_work_orders.sql"
+            "pmoves/supabase/migrations/2025-12-08_botz_work_items.sql"
+            "pmoves/supabase/migrations/2025-12-08_claude_sessions.sql"
+            "pmoves/supabase/migrations/2025-12-10_voice_personas.sql"
+            "pmoves/supabase/migrations/2025-12-11_work_orders_schema_compatibility.sql"
+            "pmoves/supabase/migrations/20251216_social_scheduler.sql"
+            "pmoves/supabase/migrations/20251225_agentgym_rl.sql"
+            "pmoves/supabase/migrations/20251225_voice_cloning.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev

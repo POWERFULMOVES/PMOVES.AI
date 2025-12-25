@@ -1,8 +1,5 @@
-fastapi==0.114.2
-uvicorn[standard]==0.30.6
-minio==7.2.7
-PyMuPDF==1.24.9
-requests==2.32.4
-nats-py==2.7.2
-jsonschema==4.22.0
-lxml 
+# Prometheus metrics
+prometheus-client==0.21.0 \
+    --hash=sha256:4fa6b4dd0ac16d58bb587c04b1caae65b8c5043e85f778f42f5f632f6af2e166
+
+-r requirements.lock
