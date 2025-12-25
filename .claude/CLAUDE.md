@@ -350,6 +350,7 @@ docker compose --profile agents --profile workers up -d
 **Security Posture (as of 2025-12-23):**
 - CODEOWNERS: 24/24 (100%) - All submodules have code owners
 - Dependabot: 24/24 (100%) - All submodules have automated security updates
+- Branch Protection: 24/24 (100%) - All submodules have branch protection rules
 - **See:** `.claude/learnings/submodule-security-audit-2025-12.md`
 
 **CI/CD:**
@@ -364,6 +365,9 @@ docker compose --profile agents --profile workers up -d
 - Feature branches: `feature/*`
 - Hardened branches: `PMOVES.AI-Edition-Hardened` (in submodules)
 - PR target: `main`
+- **NEVER delete branches after merging** - User needs them for review
+  - Use `gh pr merge --squash` without `--delete-branch`
+  - Branches are cleaned up manually by user
 
 ## Testing Workflow
 
