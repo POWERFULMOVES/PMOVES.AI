@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import nats
@@ -20,6 +20,33 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from nats.aio.client import Client as NATS
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+
+# Prometheus metrics
+messages_received = Counter(
+    'session_context_worker_messages_received_total',
+    'Total number of messages received',
+    ['subject']
+)
+messages_processed = Counter(
+    'session_context_worker_messages_processed_total',
+    'Total number of messages successfully processed',
+    ['context_type']
+)
+messages_failed = Counter(
+    'session_context_worker_messages_failed_total',
+    'Total number of messages that failed processing',
+    ['error_type']
+)
+kb_upserts_published = Counter(
+    'session_context_worker_kb_upserts_published_total',
+    'Total number of KB upsert requests published',
+    ['namespace']
+)
+processing_duration = Histogram(
+    'session_context_worker_processing_duration_seconds',
+    'Time spent processing session context messages',
+    ['context_type']
+)
 
 # Configure logging
 logging.basicConfig(
@@ -60,15 +87,6 @@ KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 # Global state
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
-
-
-def _nats_loop_done(task: asyncio.Task) -> None:
-    """Callback for NATS resilience loop task completion."""
-    if not task.cancelled():
-        exc = task.exception()
-        if exc:
-            logger.error("NATS resilience loop crashed unexpectedly: %s", exc, exc_info=True)
-
 
 # FastAPI app for health endpoint
 @asynccontextmanager
@@ -281,13 +299,15 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     return kb_upsert
 
 
-async def _handle_session_context(msg: Msg) -> None:
+async def _handle_session_context(msg: NATS.Msg) -> None:
     """
     Handle incoming session context messages.
 
     Transforms the context and publishes to kb.upsert.request.v1.
     """
     messages_received.labels(SESSION_CONTEXT_SUBJECT).inc()
+    start_time = time.time()
+    context_type = "unknown"
 
     try:
         # Parse message
@@ -296,6 +316,7 @@ async def _handle_session_context(msg: Msg) -> None:
         if not isinstance(data, dict):
             logger.warning(f"Invalid message format: expected dict, got {type(data)}")
             messages_failed.labels("invalid_format").inc()
+            processing_duration.labels("unknown").observe(time.time() - start_time)
             return
 
         # Validate incoming payload against schema (prevents schema drift)
@@ -359,17 +380,21 @@ async def _handle_session_context(msg: Msg) -> None:
             )
         else:
             logger.warning("NATS client not connected, skipping publish")
-            messages_failed.labels("invalid_format").inc()
+            messages_failed.labels("nats_not_connected").inc()
+            processing_duration.labels(context_type).observe(time.time() - start_time)
             return
 
         messages_processed.labels(context_type).inc()
+        processing_duration.labels(context_type).observe(time.time() - start_time)
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to decode JSON: {e}")
+        logger.exception("Failed to decode JSON")
         messages_failed.labels("json_decode_error").inc()
+        processing_duration.labels(context_type).observe(time.time() - start_time)
     except Exception as e:
         logger.error(f"Error processing session context: {e}", exc_info=True)
         messages_failed.labels("processing_error").inc()
+        processing_duration.labels(context_type).observe(time.time() - start_time)
 
 
 async def _register_nats_subscriptions(nc: NATS) -> None:
