@@ -2,6 +2,10 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Alert rules configuration
+rule_files:
+  - "alert.rules.yml"
+
 scrape_configs:
   - job_name: prometheus
     static_configs:
@@ -27,11 +31,9 @@ scrape_configs:
     static_configs:
       - targets: ["flute-gateway:8055"]
 
-  # DISABLED: TensorZero gateway doesn't expose /metrics endpoint
-  # Use ClickHouse metrics instead via TensorZero UI
-  # - job_name: tensorzero-gateway
-  #   static_configs:
-  #     - targets: ["tensorzero-gateway:3000"]
+  - job_name: tensorzero-gateway
+    static_configs:
+      - targets: ["tensorzero-gateway:3000"]
 
   - job_name: deepresearch-metrics
     static_configs:
@@ -40,6 +42,54 @@ scrape_configs:
   - job_name: supaserch-metrics
     static_configs:
       - targets: ["supaserch:8099"]
+
+  - job_name: gpu-orchestrator
+    static_configs:
+      - targets: ["gpu-orchestrator:8200"]
+
+  # === Tier 2 Services (Added 2025-12-24) ===
+
+  - job_name: hi-rag-gateway-v2
+    static_configs:
+      - targets: ["hi-rag-gateway-v2:8086"]
+
+  - job_name: extract-worker
+    static_configs:
+      - targets: ["extract-worker:8083"]
+
+  - job_name: pmoves-yt
+    static_configs:
+      - targets: ["pmoves-yt:8077"]
+
+  - job_name: agent-zero
+    static_configs:
+      - targets: ["agent-zero:8080"]
+
+  - job_name: archon
+    static_configs:
+      - targets: ["archon:8091"]
+
+  # === Tier 3 Services (Added 2025-12-24) ===
+
+  - job_name: jellyfin-bridge
+    static_configs:
+      - targets: ["jellyfin-bridge:8093"]
+
+  - job_name: pdf-ingest
+    static_configs:
+      - targets: ["pdf-ingest:8092"]
+
+  - job_name: notebook-sync
+    static_configs:
+      - targets: ["notebook-sync:8095"]
+
+  - job_name: langextract
+    static_configs:
+      - targets: ["langextract:8084"]
+
+  - job_name: presign
+    static_configs:
+      - targets: ["presign:8088"]
 
   # === Blackbox HTTP probes ===
   # Health check probes for services without /metrics

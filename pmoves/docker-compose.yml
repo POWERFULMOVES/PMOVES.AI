@@ -164,8 +164,8 @@ services:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     ports: [ "9000:9000", "9001:9001" ]
     volumes:
       - minio-data:/data
@@ -1353,6 +1353,13 @@ services:
     depends_on: [ nats ]
     profiles: [ "agents", "diag" ]
     networks: [ bus_tier ]
+    healthcheck:
+      # Verify module imports and NATS client is available (no HTTP endpoint)
+      test: [ "CMD", "python", "-c", "import nats_echo; import nats" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   nats-echo-res:
     build:
@@ -1366,6 +1373,13 @@ services:
     depends_on: [ nats ]
     profiles: [ "agents", "diag" ]
     networks: [ bus_tier ]
+    healthcheck:
+      # Verify module imports and NATS client is available (no HTTP endpoint)
+      test: [ "CMD", "python", "-c", "import nats_echo; import nats" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   publisher-discord:
     build:
@@ -1566,10 +1580,13 @@ services:
       - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
       - "${INVIDIOUS_COMPANION_LISTEN:-127.0.0.1:8282}:8282"
-    # The upstream image does not ship common shell utilities (wget/curl),
-    # so docker-level health checks misreport the service as unhealthy even
-    # when the /healthz endpoint is serving 200s. Rely on the invidious smoke
-    # target for runtime verification instead.
+    # Health check using Node.js http module (no curl/wget in upstream image)
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:8282/healthz', r => r.statusCode === 200 ? process.exit(0) : process.exit(1))" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     profiles: [ "invidious" ]
     networks: [ app_tier, monitoring_tier ]
 
@@ -1682,6 +1699,13 @@ services:
       - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
     profiles: [ "cloudflare" ]
     networks: [ api_tier ]
+    healthcheck:
+      # Check if cloudflared tunnel process is running (minimal image, no curl/wget)
+      test: [ "CMD-SHELL", "pgrep -x cloudflared" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   invidious-companion-proxy:
     build: ./services/invidious-companion-proxy
@@ -1692,6 +1716,13 @@ services:
     ports: [ "8281:80" ]
     profiles: [ "invidious" ]
     networks: [ api_tier, app_tier ]
+    healthcheck:
+      # Check nginx is serving the status endpoint
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:80/api/v1/status | grep -q ok" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 volumes:
   neo4j-data: {}
   minio-data: {}
