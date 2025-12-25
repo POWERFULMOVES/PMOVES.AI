@@ -439,11 +439,6 @@ http://localhost:8080/healthz  # Agent Zero
 http://localhost:8091/healthz  # Archon
 http://localhost:8097/healthz  # Channel Monitor
 
-# Token Economy & Agent UI
-http://localhost:8103/healthz  # Tokenism Simulator
-http://localhost:8103/metrics  # Tokenism Simulator (Prometheus)
-http://localhost:9224/healthz  # A2UI NATS Bridge
-
 # Retrieval & Knowledge
 http://localhost:8086/healthz  # Hi-RAG v2 CPU
 http://localhost:8087/healthz  # Hi-RAG v2 GPU
