@@ -631,3 +631,7 @@ websockets==15.0.1 \
     --hash=sha256:f7a866fbc1e97b5c617ee4116daaa09b722101d4a3c170c787450ba409f9736f \
     --hash=sha256:fcd5cf9e305d7b8338754470cf69cf81f420459dbae8a3b40cee57417f4614a7
     # via uvicorn
+prometheus-client==0.21.1 \
+    --hash=sha256:0341b335810c2643cad10db1b7fbee4c47db4a0c4f4f4c33a3b3a2f4a3f4b3d2 \
+    --hash=sha256:085c8e8c6f3e8c3f5c4c3d5c6c7c8c9c0d1e2f3g4h5i6j7k8l9m0n1o2p3q4r5s6t \
+    # via render-webhook
