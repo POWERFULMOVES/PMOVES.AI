@@ -74,7 +74,10 @@ class VoiceCloningProvider:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=30.0)
+            self._client = httpx.AsyncClient(
+                timeout=30.0,
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            )
         return self._client
 
     async def close(self):
@@ -258,7 +261,7 @@ class VoiceCloningProvider:
             raise ValueError("No voice sample registered. Use /v1/voice/clone/register first.")
 
         # Step 2: Update status to training
-        await client.patch(
+        update_resp = await client.patch(
             f"{self.supabase_url}/rest/v1/voice_persona?id=eq.{persona_id}",
             headers=self._headers,
             json={
@@ -268,6 +271,8 @@ class VoiceCloningProvider:
                 "training_started_at": datetime.now(timezone.utc).isoformat(),
             },
         )
+        if update_resp.status_code not in [200, 204]:
+            raise RuntimeError(f"Failed to update persona status: {update_resp.text}")
 
         # Step 3: Trigger training job via NATS
         training_event = {
@@ -489,7 +494,7 @@ class VoiceCloningProvider:
                 params={"select": "id", "limit": "1"},
             )
             return resp.status_code == 200
-        except Exception:
+        except (httpx.HTTPError, httpx.TimeoutException):
             return False
 
 

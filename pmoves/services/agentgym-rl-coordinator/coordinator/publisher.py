@@ -177,7 +177,7 @@ class HuggingFacePublisher:
             session_id = traj.get("session_id", "")
 
             # Extract events and format as dataset entries
-            for event_key, event_val in traj_data.items():
+            for _event_key, event_val in traj_data.items():
                 if isinstance(event_val, dict) and "data" in event_val:
                     data = event_val["data"]
                     dataset_rows.append({
@@ -214,6 +214,7 @@ Dataset generated from AgentGym RL training trajectories.
 
 - Trajectories: {len(trajectories)}
 - Total Events: {sum(t.get('event_count', 0) for t in trajectories)}
+- Rows: {len(dataset_rows)}
 - Generated: {datetime.now().isoformat()}
 
 ## Usage

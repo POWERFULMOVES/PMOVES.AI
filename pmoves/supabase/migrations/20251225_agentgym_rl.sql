@@ -287,20 +287,6 @@ CREATE POLICY agentgym_training_runs_service_role
     USING (true)
     WITH CHECK (true);
 
-DROP POLICY IF EXISTS agentgym_trajectories_authenticated_select ON public.agentgym_trajectories;
-CREATE POLICY agentgym_trajectories_authenticated_select
-    ON public.agentgym_trajectories
-    FOR SELECT
-    TO authenticated
-    USING (true);
-
-DROP POLICY IF EXISTS agentgym_training_runs_authenticated_select ON public.agentgym_training_runs;
-CREATE POLICY agentgym_training_runs_authenticated_select
-    ON public.agentgym_training_runs
-    FOR SELECT
-    TO authenticated
-    USING (true);
-
 -- ============================================================================
 -- Enable realtime
 -- ============================================================================

@@ -247,7 +247,7 @@ class PPOTrainingOrchestrator:
             logger.info("Training job cancelled for run_id=%s", run_id)
             await self._update_run_status(run_id, "cancelled")
         except Exception as e:
-            logger.exception("Training job failed for run_id=%s: %s", run_id, e)
+            logger.exception("Training job failed for run_id=%s", run_id)
             await self._update_run_status(
                 run_id,
                 "failed",
@@ -385,6 +385,8 @@ class PPOTrainingOrchestrator:
         task = self._running_jobs.get(run_id)
         if task and not task.done():
             task.cancel()
-            await self._update_run_status(run_id, "cancelled")
+            # Note: Status update is handled by the CancelledError handler in _run_training_job
+            # to avoid race conditions where the status update occurs before the task catches
+            # the cancellation signal.
             return True
         return False

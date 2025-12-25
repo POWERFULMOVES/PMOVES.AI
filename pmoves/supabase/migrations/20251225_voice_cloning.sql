@@ -161,10 +161,13 @@ COMMENT ON FUNCTION update_voice_cloning_status IS
     'Update voice cloning training status and progress';
 
 -- ============================================================================
--- Grant execute permissions to authenticated users
+-- Grant execute permissions
 -- ============================================================================
 
-GRANT EXECUTE ON FUNCTION register_voice_cloning(text, text) TO authenticated;
+-- Voice cloning registration is service-only (requires service role for security)
+GRANT EXECUTE ON FUNCTION register_voice_cloning(text, text) TO service_role;
+
+-- Training status updates are service-only (GPU service callback)
 GRANT EXECUTE ON FUNCTION update_voice_cloning_status(uuid, text, int, text, text, text) TO service_role;
 
 -- ============================================================================
