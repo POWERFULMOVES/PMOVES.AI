@@ -365,7 +365,16 @@ async def lifespan(app: FastAPI):
         ultimate_tts_provider = None
         logger.info("Ultimate-TTS disabled (set ULTIMATE_TTS_URL to enable).")
 
-    # Initialize NATS (optional) - must be before cloning_provider
+    # Initialize Voice Cloning provider
+    cloning_provider = VoiceCloningProvider(
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_KEY,
+        ultimate_tts_url=ULTIMATE_TTS_URL,
+        presign_url=PRESIGN_URL,
+    )
+    logger.info("Voice Cloning provider enabled")
+
+    # Initialize NATS (optional)
     try:
         import nats
         nats_client = await nats.connect(NATS_URL)
@@ -1109,7 +1118,7 @@ async def register_voice_sample(
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="500").inc()
         logger.exception("Voice sample registration failed")
-        raise HTTPException(status_code=500, detail="Failed to register voice sample") from None
+        raise HTTPException(status_code=500, detail="Failed to register voice sample")
 
 
 @app.post("/v1/voice/clone/train", dependencies=[Depends(verify_api_key)])
@@ -1137,7 +1146,7 @@ async def start_voice_training(request: VoiceCloneTrainRequest):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="500").inc()
         logger.exception("Voice training start failed")
-        raise HTTPException(status_code=500, detail="Failed to start voice training") from None
+        raise HTTPException(status_code=500, detail="Failed to start voice training")
 
 
 @app.get("/v1/voice/clone/status/{persona_id}", response_model=VoiceCloneStatusResponse, dependencies=[Depends(verify_api_key)])
@@ -1195,7 +1204,7 @@ async def list_voice_training_jobs(status: Optional[str] = None):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="500").inc()
         logger.exception("Failed to list training jobs")
-        raise HTTPException(status_code=500, detail="Failed to list training jobs") from None
+        raise HTTPException(status_code=500, detail="Failed to list training jobs")
 
 
 @app.post("/v1/voice/clone/synthesize", dependencies=[Depends(verify_api_key)])

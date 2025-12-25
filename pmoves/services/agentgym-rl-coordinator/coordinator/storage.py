@@ -301,11 +301,6 @@ class SupabaseStorage:
         )
 
         if resp.status_code != 200:
-            logger.warning(
-                "Failed to list trajectories: status=%s, body=%s",
-                resp.status_code,
-                resp.text[:200] if resp.text else "empty",
-            )
             return []
 
         return resp.json()
@@ -346,11 +341,6 @@ class SupabaseStorage:
         )
 
         if resp.status_code != 200:
-            logger.warning(
-                "Failed to list training runs: status=%s, body=%s",
-                resp.status_code,
-                resp.text[:200] if resp.text else "empty",
-            )
             return []
 
         return resp.json()
@@ -361,32 +351,22 @@ class SupabaseStorage:
         Returns:
             Dict with trajectory and training run counts
         """
-        client = await self._get_client()
-
-        def parse_count(resp) -> int:
-            """Parse count from Supabase Content-Range header."""
-            content_range = resp.headers.get("Content-Range", "")
-            if "/" in content_range:
-                return int(content_range.split("/")[-1])
-            return 0
-
-        # Use HEAD request with Prefer: count=exact header for efficient counting
-        count_headers = {**self._headers, "Prefer": "count=exact"}
-
         # Get trajectory count
-        traj_resp = await client.head(
+        traj_resp = await self._get_client().get(
             f"{self.supabase_url}/rest/v1/agentgym_trajectories",
-            headers=count_headers,
+            headers=self._headers,
+            params={"select": "id",},
         )
 
         # Get training run count
-        run_resp = await client.head(
+        run_resp = await self._get_client().get(
             f"{self.supabase_url}/rest/v1/agentgym_training_runs",
-            headers=count_headers,
+            headers=self._headers,
+            params={"select": "id",},
         )
 
-        trajectory_count = parse_count(traj_resp) if traj_resp.status_code in [200, 206] else 0
-        training_run_count = parse_count(run_resp) if run_resp.status_code in [200, 206] else 0
+        trajectory_count = len(traj_resp.json()) if traj_resp.status_code == 200 else 0
+        training_run_count = len(run_resp.json()) if run_resp.status_code == 200 else 0
 
         return {
             "trajectory_count": trajectory_count,

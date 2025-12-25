@@ -37,18 +37,6 @@ ALTER TABLE public.voice_persona
 ADD COLUMN IF NOT EXISTS training_completed_at timestamptz;
 
 -- ============================================================================
--- Add completion validation constraint
--- ============================================================================
-
--- Ensure completed training has model URIs set
-ALTER TABLE public.voice_persona
-ADD CONSTRAINT voice_persona_completion_check
-CHECK (
-    voice_cloning_status IS DISTINCT FROM 'completed'
-    OR (rvc_model_uri IS NOT NULL AND rvc_index_uri IS NOT NULL)
-);
-
--- ============================================================================
 -- Indexes for voice cloning queries
 -- ============================================================================
 
@@ -161,13 +149,10 @@ COMMENT ON FUNCTION update_voice_cloning_status IS
     'Update voice cloning training status and progress';
 
 -- ============================================================================
--- Grant execute permissions
+-- Grant execute permissions to authenticated users
 -- ============================================================================
 
--- Voice cloning registration is service-only (requires service role for security)
-GRANT EXECUTE ON FUNCTION register_voice_cloning(text, text) TO service_role;
-
--- Training status updates are service-only (GPU service callback)
+GRANT EXECUTE ON FUNCTION register_voice_cloning(text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION update_voice_cloning_status(uuid, text, int, text, text, text) TO service_role;
 
 -- ============================================================================

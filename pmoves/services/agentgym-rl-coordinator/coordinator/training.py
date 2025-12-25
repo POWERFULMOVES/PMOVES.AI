@@ -8,7 +8,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,9 +17,6 @@ from uuid import UUID, uuid4
 import httpx
 
 logger = logging.getLogger("agentgym.training")
-
-# Validation constants: run_id must match HuggingFace dataset naming conventions
-RUN_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 
 class PPOTrainingOrchestrator:
@@ -120,25 +116,12 @@ class PPOTrainingOrchestrator:
         """Start PPO training for a run.
 
         Args:
-            run_id: Training run ID (alphanumeric, dash, underscore only)
+            run_id: Training run ID
             config: Optional PPO configuration override
 
         Returns:
             Training start confirmation
-
-        Raises:
-            ValueError: If run_id format is invalid
         """
-        # Validate run_id format
-        if not run_id or not isinstance(run_id, str):
-            raise ValueError("run_id must be a non-empty string")
-        if not RUN_ID_PATTERN.match(run_id):
-            raise ValueError(
-                f"Invalid run_id '{run_id}'. Use only alphanumeric, dash, underscore."
-            )
-        if len(run_id) > 100:
-            raise ValueError("run_id too long (maximum 100 characters)")
-
         # Default PPO config
         default_config = {
             "actor_rollout_ref": {
@@ -196,16 +179,8 @@ class PPOTrainingOrchestrator:
             config: PPO configuration
         """
         try:
-            # Sanitize run_id for filename (validated upstream, but double-check here)
-            # Using only first 64 chars and safe chars to prevent any path traversal issues
-            safe_run_id = re.sub(r'[^a-zA-Z0-9_-]', '_', run_id[:64])
-            config_path = f"/tmp/agentgym_{safe_run_id}_config.yaml"
-
-            # Ensure path stays within /tmp (defense in depth)
-            config_path = os.path.normpath(config_path)
-            if not config_path.startswith("/tmp/"):
-                raise ValueError(f"Invalid config path: {config_path}")
-
+            # Write config to file
+            config_path = f"/tmp/agentgym_{run_id}_config.yaml"
             with open(config_path, "w") as f:
                 # Convert to YAML-like format (simplified)
                 f.write(f"run_id: {run_id}\n")
@@ -247,7 +222,7 @@ class PPOTrainingOrchestrator:
             logger.info("Training job cancelled for run_id=%s", run_id)
             await self._update_run_status(run_id, "cancelled")
         except Exception as e:
-            logger.exception("Training job failed for run_id=%s", run_id)
+            logger.exception("Training job failed for run_id=%s: %s", run_id, e)
             await self._update_run_status(
                 run_id,
                 "failed",
@@ -385,8 +360,6 @@ class PPOTrainingOrchestrator:
         task = self._running_jobs.get(run_id)
         if task and not task.done():
             task.cancel()
-            # Note: Status update is handled by the CancelledError handler in _run_training_job
-            # to avoid race conditions where the status update occurs before the task catches
-            # the cancellation signal.
+            await self._update_run_status(run_id, "cancelled")
             return True
         return False

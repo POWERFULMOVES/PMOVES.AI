@@ -26,17 +26,11 @@ CREATE TABLE IF NOT EXISTS public.agentgym_trajectories (
 
     -- Timestamps
     created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now(),
-
-    -- Constraints
-    CONSTRAINT agentgym_trajectories_event_count_check CHECK (event_count >= 0),
-    CONSTRAINT agentgym_trajectories_publishing_check CHECK (
-        published_to_hf = false OR hf_dataset_id IS NOT NULL
-    )
+    updated_at timestamptz DEFAULT now()
 );
 
 -- Indexes
-CREATE UNIQUE INDEX IF NOT EXISTS idx_agentgym_trajectories_session_unique
+CREATE INDEX IF NOT EXISTS idx_agentgym_trajectories_session
     ON public.agentgym_trajectories(session_id);
 
 CREATE INDEX IF NOT EXISTS idx_agentgym_trajectories_agent
@@ -81,12 +75,7 @@ CREATE TABLE IF NOT EXISTS public.agentgym_training_runs (
 
     -- Error tracking
     error_message text,
-    exit_code int,
-
-    -- Constraints
-    CONSTRAINT agentgym_training_runs_epoch_bounds_check CHECK (
-        current_epoch <= total_epochs OR total_epochs IS NULL
-    )
+    exit_code int
 );
 
 -- Indexes
@@ -286,6 +275,20 @@ CREATE POLICY agentgym_training_runs_service_role
     TO service_role
     USING (true)
     WITH CHECK (true);
+
+DROP POLICY IF EXISTS agentgym_trajectories_authenticated_select ON public.agentgym_trajectories;
+CREATE POLICY agentgym_trajectories_authenticated_select
+    ON public.agentgym_trajectories
+    FOR SELECT
+    TO authenticated
+    USING (true);
+
+DROP POLICY IF EXISTS agentgym_training_runs_authenticated_select ON public.agentgym_training_runs;
+CREATE POLICY agentgym_training_runs_authenticated_select
+    ON public.agentgym_training_runs
+    FOR SELECT
+    TO authenticated
+    USING (true);
 
 -- ============================================================================
 -- Enable realtime

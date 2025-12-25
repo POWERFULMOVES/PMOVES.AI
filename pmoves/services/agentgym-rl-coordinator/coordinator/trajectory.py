@@ -76,7 +76,7 @@ class TrajectoryAccumulator:
             logger.error("Failed to decode geometry event: %s", e)
             return None
         except Exception as e:
-            logger.exception("Failed to process geometry event")
+            logger.exception("Failed to process geometry event: %s", e)
             return None
 
     async def _accumulate_event(
