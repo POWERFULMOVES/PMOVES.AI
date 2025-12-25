@@ -44,7 +44,7 @@ CodeRabbit's review (via Ruff F821) identified:
 ## Impact
 
 When `session-context-worker` processes its first NATS message, it will crash with:
-```
+```text
 NameError: name 'messages_received' is not defined
 ```
 

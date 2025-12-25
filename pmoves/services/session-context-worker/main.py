@@ -237,7 +237,7 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     return kb_upsert
 
 
-async def _handle_session_context(msg):
+async def _handle_session_context(msg: NATS.Msg) -> None:
     """
     Handle incoming session context messages.
 
@@ -296,7 +296,7 @@ async def _handle_session_context(msg):
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to decode JSON: {e}")
+        logger.exception("Failed to decode JSON")
         messages_failed.labels("json_decode_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
     except Exception as e:
