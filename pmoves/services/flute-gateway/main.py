@@ -39,6 +39,7 @@ from providers import (
     WhisperProvider,
     UltimateTTSError,
     UltimateTTSProvider,
+    VoiceCloningProvider,
 )
 
 # Prosodic sidecar imports
@@ -79,6 +80,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:3000").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7860")
+PRESIGN_URL = os.getenv("PRESIGN_URL", "http://presign:8088")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
 
@@ -172,6 +174,7 @@ PROSODIC_CHUNKS_FAILED = Counter(
 vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
+cloning_provider: Optional[VoiceCloningProvider] = None
 nats_client = None
 
 
@@ -301,10 +304,43 @@ class ConfigResponse(BaseModel):
     features: Dict[str, bool]
 
 
+# Voice cloning request/response models
+class VoiceCloneRegisterResponse(BaseModel):
+    """Response for voice sample registration."""
+    persona_id: str
+    status: str
+    sample_uri: str
+    message: str
+
+
+class VoiceCloneTrainRequest(BaseModel):
+    """Request to start voice cloning training."""
+    persona_id: str = Field(..., description="Voice persona UUID")
+
+
+class VoiceCloneStatusResponse(BaseModel):
+    """Response for voice cloning status."""
+    persona_id: str
+    voice_cloning_status: Optional[str] = None
+    training_progress: Optional[int] = None
+    training_message: Optional[str] = None
+    rvc_model_uri: Optional[str] = None
+    rvc_index_uri: Optional[str] = None
+    training_started_at: Optional[str] = None
+    training_completed_at: Optional[str] = None
+
+
+class VoiceCloneSynthesizeRequest(BaseModel):
+    """Request to synthesize with cloned voice."""
+    text: str = Field(..., description="Text to synthesize", max_length=5000)
+    persona_id: str = Field(..., description="Voice persona UUID with trained model")
+    output_format: str = Field("wav", description="Output format: wav, pcm")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
-    global vibevoice_provider, whisper_provider, ultimate_tts_provider, nats_client
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, cloning_provider, nats_client
 
     logger.info("Starting Flute Gateway...")
 
@@ -329,7 +365,7 @@ async def lifespan(app: FastAPI):
         ultimate_tts_provider = None
         logger.info("Ultimate-TTS disabled (set ULTIMATE_TTS_URL to enable).")
 
-    # Initialize NATS (optional)
+    # Initialize NATS (optional) - must be before cloning_provider
     try:
         import nats
         nats_client = await nats.connect(NATS_URL)
@@ -338,6 +374,16 @@ async def lifespan(app: FastAPI):
         logger.warning("NATS connection failed: %s (continuing without NATS)", e)
         nats_client = None
 
+    # Initialize Voice Cloning provider (after NATS for nats_client)
+    cloning_provider = VoiceCloningProvider(
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_KEY,
+        ultimate_tts_url=ULTIMATE_TTS_URL,
+        presign_url=PRESIGN_URL,
+        nats_client=nats_client,
+    )
+    logger.info("Voice Cloning provider enabled")
+
     logger.info("Flute Gateway started successfully")
     yield
 
@@ -345,6 +391,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Flute Gateway...")
     if nats_client:
         await nats_client.close()
+    if cloning_provider:
+        await cloning_provider.close()
 
 
 # Create FastAPI app
@@ -427,7 +475,7 @@ async def get_config():
             "stt_batch": True,
             "stt_stream": PIPECAT_CONFIG.enabled and PIPECAT_AVAILABLE,
             "duplex_voice": PIPECAT_CONFIG.enabled and PIPECAT_AVAILABLE,
-            "voice_cloning": False,  # TODO: Implement
+            "voice_cloning": True,
             "personas": True,
         }
     )
@@ -530,7 +578,7 @@ async def synthesize_speech(request: SynthesizeRequest):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
         logger.exception("TTS synthesis failed")
-        raise HTTPException(status_code=500, detail="TTS synthesis failed")
+        raise HTTPException(status_code=500, detail="TTS synthesis failed") from None
 
 
 @app.post("/v1/voice/synthesize/audio", dependencies=[Depends(verify_api_key)])
@@ -619,7 +667,7 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
         logger.exception("TTS synthesis (audio) failed")
-        raise HTTPException(status_code=500, detail="TTS synthesis failed")
+        raise HTTPException(status_code=500, detail="TTS synthesis failed") from None
 
 
 # Prosodic analysis endpoint
@@ -940,7 +988,7 @@ async def recognize_speech(
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="500").inc()
         logger.exception("STT recognition failed")
-        raise HTTPException(status_code=500, detail="STT recognition failed")
+        raise HTTPException(status_code=500, detail="STT recognition failed") from None
 
 
 # Voice personas endpoints
@@ -1001,6 +1049,201 @@ async def get_persona(persona_id: str) -> Dict[str, Any]:
     except (httpx.HTTPError, httpx.RequestError) as exc:
         logger.exception("Failed to fetch persona")
         raise HTTPException(status_code=500, detail="Failed to fetch persona") from exc
+
+
+# ============================================================================
+# Voice Cloning Endpoints
+# ============================================================================
+
+@app.post("/v1/voice/clone/register", response_model=VoiceCloneRegisterResponse, dependencies=[Depends(verify_api_key)])
+async def register_voice_sample(
+    persona_slug: str = Form(...),
+    audio: UploadFile = File(...),
+):
+    """
+    Register a voice sample for cloning.
+
+    Uploads a voice sample and queues it for RVC training.
+    The sample should be 10-30 seconds of clear speech.
+
+    Args:
+        persona_slug: Voice persona slug to attach the sample to
+        audio: Audio file (WAV or MP3 format, 10-30 seconds recommended)
+
+    Returns:
+        Registration confirmation with persona_id and status
+    """
+    import time
+    start_time = time.time()
+
+    try:
+        # Read audio data
+        audio_data = await audio.read()
+        audio_format = audio.filename.split(".")[-1].lower() if audio.filename else "wav"
+
+        if audio_format not in {"wav", "mp3"}:
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="400").inc()
+            raise HTTPException(status_code=400, detail="Audio format must be WAV or MP3")
+
+        # Validate audio size (max 10MB)
+        if len(audio_data) > 10 * 1024 * 1024:
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="400").inc()
+            raise HTTPException(status_code=400, detail="Audio file too large (max 10MB)")
+
+        # Register sample
+        result = await cloning_provider.register_voice_sample(
+            persona_slug=persona_slug,
+            sample_audio_data=audio_data,
+            sample_format=audio_format,
+        )
+
+        duration = time.time() - start_time
+        logger.info("Voice sample registered for %s in %.2fs", persona_slug, duration)
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="200").inc()
+
+        return VoiceCloneRegisterResponse(**result)
+
+    except ValueError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="400").inc()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="500").inc()
+        logger.exception("Voice sample registration failed")
+        raise HTTPException(status_code=500, detail="Failed to register voice sample") from None
+
+
+@app.post("/v1/voice/clone/train", dependencies=[Depends(verify_api_key)])
+async def start_voice_training(request: VoiceCloneTrainRequest):
+    """
+    Start RVC training for a registered voice sample.
+
+    Triggers the GPU training job for the registered voice sample.
+    Training typically takes 10-30 minutes depending on GPU availability.
+
+    Args:
+        request: Training request with persona_id
+
+    Returns:
+        Training job confirmation
+    """
+    try:
+        result = await cloning_provider.start_training(request.persona_id)
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="200").inc()
+        return result
+
+    except ValueError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="400").inc()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="500").inc()
+        logger.exception("Voice training start failed")
+        raise HTTPException(status_code=500, detail="Failed to start voice training") from None
+
+
+@app.get("/v1/voice/clone/status/{persona_id}", response_model=VoiceCloneStatusResponse, dependencies=[Depends(verify_api_key)])
+async def get_voice_training_status(persona_id: str):
+    """
+    Get training status for a voice clone.
+
+    Returns the current training status, progress, and model URIs.
+
+    Args:
+        persona_id: Voice persona UUID
+
+    Returns:
+        Training status with progress and model URIs (if completed)
+    """
+    try:
+        result = await cloning_provider.get_training_status(persona_id)
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/status", status="200").inc()
+        return VoiceCloneStatusResponse(**result)
+
+    except ValueError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/status", status="404").inc()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/status", status="500").inc()
+        logger.exception("Failed to get training status")
+        raise HTTPException(status_code=500, detail="Failed to get training status")
+
+
+@app.get("/v1/voice/clone/jobs", dependencies=[Depends(verify_api_key)])
+async def list_voice_training_jobs(status: Optional[str] = None):
+    """
+    List all voice cloning training jobs.
+
+    Args:
+        status: Optional filter by status (pending, training, completed, failed)
+
+    Returns:
+        List of training job summaries
+    """
+    try:
+        if status and status not in {"pending", "training", "completed", "failed"}:
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="400").inc()
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid status. Must be one of: pending, training, completed, failed"
+            )
+
+        jobs = await cloning_provider.list_training_jobs(status=status)
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="200").inc()
+        return {"jobs": jobs, "count": len(jobs)}
+
+    except HTTPException:
+        raise
+    except Exception:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="500").inc()
+        logger.exception("Failed to list training jobs")
+        raise HTTPException(status_code=500, detail="Failed to list training jobs") from None
+
+
+@app.post("/v1/voice/clone/synthesize", dependencies=[Depends(verify_api_key)])
+async def synthesize_cloned_voice(request: VoiceCloneSynthesizeRequest):
+    """
+    Synthesize speech using a trained cloned voice.
+
+    Requires the voice training to be completed before synthesis.
+
+    Args:
+        request: Synthesis request with text and persona_id
+
+    Returns:
+        Audio file (WAV or PCM format)
+    """
+    import time
+    start_time = time.time()
+
+    try:
+        audio_data = await cloning_provider.synthesize_cloned(
+            text=request.text,
+            persona_id=request.persona_id,
+        )
+
+        duration = time.time() - start_time
+        logger.info("Cloned voice synthesis completed in %.2fs", duration)
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="200").inc()
+
+        output_format = request.output_format.lower()
+        if output_format == "pcm":
+            return Response(content=audio_data, media_type="application/octet-stream")
+        else:
+            return Response(
+                content=audio_data,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="cloned_voice.wav"'},
+            )
+
+    except ValueError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="400").inc()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="501").inc()
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="500").inc()
+        logger.exception("Cloned voice synthesis failed")
+        raise HTTPException(status_code=500, detail="Cloned voice synthesis failed")
 
 
 # WebSocket TTS streaming endpoint
@@ -1169,13 +1412,13 @@ async def websocket_duplex(websocket: WebSocket, persona: Optional[str] = None):
                 "type": "error",
                 "message": f"Pipeline error: {str(e)}"
             })
-        except Exception:
-            pass
+        except Exception as close_err:
+            logger.error("Failed to send error to WebSocket: %s", close_err)
     finally:
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as close_err:
+            logger.warning("Failed to close WebSocket: %s", close_err)
 
 
 # Prometheus metrics endpoint
