@@ -91,6 +91,12 @@ scrape_configs:
     static_configs:
       - targets: ["presign:8088"]
 
+  # === Tier 4 Services (Added 2025-12-25) ===
+
+  - job_name: render-webhook
+    static_configs:
+      - targets: ["render-webhook:8085"]
+
   # === Blackbox HTTP probes ===
   # Health check probes for services without /metrics
 
