@@ -365,16 +365,7 @@ async def lifespan(app: FastAPI):
         ultimate_tts_provider = None
         logger.info("Ultimate-TTS disabled (set ULTIMATE_TTS_URL to enable).")
 
-    # Initialize Voice Cloning provider
-    cloning_provider = VoiceCloningProvider(
-        supabase_url=SUPABASE_URL,
-        supabase_key=SUPABASE_KEY,
-        ultimate_tts_url=ULTIMATE_TTS_URL,
-        presign_url=PRESIGN_URL,
-    )
-    logger.info("Voice Cloning provider enabled")
-
-    # Initialize NATS (optional)
+    # Initialize NATS (optional) - must be before cloning_provider
     try:
         import nats
         nats_client = await nats.connect(NATS_URL)
@@ -382,6 +373,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("NATS connection failed: %s (continuing without NATS)", e)
         nats_client = None
+
+    # Initialize Voice Cloning provider (after NATS for nats_client)
+    cloning_provider = VoiceCloningProvider(
+        supabase_url=SUPABASE_URL,
+        supabase_key=SUPABASE_KEY,
+        ultimate_tts_url=ULTIMATE_TTS_URL,
+        presign_url=PRESIGN_URL,
+        nats_client=nats_client,
+    )
+    logger.info("Voice Cloning provider enabled")
 
     logger.info("Flute Gateway started successfully")
     yield
@@ -1409,13 +1410,13 @@ async def websocket_duplex(websocket: WebSocket, persona: Optional[str] = None):
                 "type": "error",
                 "message": f"Pipeline error: {str(e)}"
             })
-        except Exception:
-            pass
+        except Exception as close_err:
+            logger.error("Failed to send error to WebSocket: %s", close_err)
     finally:
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as close_err:
+            logger.warning("Failed to close WebSocket: %s", close_err)
 
 
 # Prometheus metrics endpoint

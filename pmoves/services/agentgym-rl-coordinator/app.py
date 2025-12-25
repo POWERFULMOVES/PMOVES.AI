@@ -1,9 +1,11 @@
 import os
 import json
 import logging
+import re
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
+from uuid import UUID
 from fastapi import FastAPI, HTTPException
 import nats
 from nats.errors import ConnectionClosedError, TimeoutError, NoServersError
@@ -27,6 +29,10 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 HF_TOKEN = os.getenv("HF_TOKEN")
 HF_ORG = os.getenv("HF_ORG", "pmoves")
 PORT = int(os.getenv("PORT", 8114))
+
+# Validation constants
+VALID_STATUSES = {"pending", "running", "completed", "failed", "cancelled"}
+DATASET_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 # Global state
 nc = None
@@ -194,6 +200,15 @@ async def get_trajectory_stats():
 @app.get("/agentgym/trajectories/{trajectory_id}")
 async def get_trajectory(trajectory_id: str):
     """Get a specific trajectory by ID."""
+    # Validate trajectory_id is a UUID
+    try:
+        UUID(trajectory_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid trajectory_id format. Must be a valid UUID."
+        )
+
     if not trajectory_accumulator:
         raise HTTPException(status_code=503, detail="Trajectory accumulator not available")
 
@@ -254,6 +269,13 @@ async def list_training_jobs(
         status: Filter by status (pending, running, completed, failed, cancelled)
         limit: Max results
     """
+    # Validate status parameter
+    if status and status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {', '.join(sorted(VALID_STATUSES))}"
+        )
+
     if not training_orchestrator:
         raise HTTPException(status_code=503, detail="Training orchestrator not available")
 
@@ -297,6 +319,18 @@ async def publish_dataset(
         session_id: Alternative: include all trajectories from a session
         private: Whether to create a private dataset
     """
+    # Validate dataset_name (HuggingFace naming conventions)
+    if not DATASET_NAME_PATTERN.match(dataset_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid dataset_name. Use alphanumeric, dash, underscore only (max 100 chars)"
+        )
+    if len(dataset_name) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Dataset name too long (maximum 100 characters)"
+        )
+
     if not hf_publisher:
         raise HTTPException(status_code=503, detail="HuggingFace publisher not available")
 
