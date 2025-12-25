@@ -301,6 +301,7 @@ class SupabaseStorage:
         )
 
         if resp.status_code != 200:
+            logger.error("Failed to list trajectories: status=%s %s", resp.status_code, resp.text[:200])
             return []
 
         return resp.json()
@@ -341,6 +342,7 @@ class SupabaseStorage:
         )
 
         if resp.status_code != 200:
+            logger.error("Failed to list training runs: status=%s %s", resp.status_code, resp.text[:200])
             return []
 
         return resp.json()

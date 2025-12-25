@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,9 @@ from uuid import UUID, uuid4
 import httpx
 
 logger = logging.getLogger("agentgym.training")
+
+# Validation constants: run_id must match HuggingFace dataset naming conventions
+RUN_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 
 class PPOTrainingOrchestrator:
@@ -116,12 +120,25 @@ class PPOTrainingOrchestrator:
         """Start PPO training for a run.
 
         Args:
-            run_id: Training run ID
+            run_id: Training run ID (alphanumeric, dash, underscore only)
             config: Optional PPO configuration override
 
         Returns:
             Training start confirmation
+
+        Raises:
+            ValueError: If run_id format is invalid
         """
+        # Validate run_id format
+        if not run_id or not isinstance(run_id, str):
+            raise ValueError("run_id must be a non-empty string")
+        if not RUN_ID_PATTERN.match(run_id):
+            raise ValueError(
+                f"Invalid run_id '{run_id}'. Use only alphanumeric, dash, underscore."
+            )
+        if len(run_id) > 100:
+            raise ValueError("run_id too long (maximum 100 characters)")
+
         # Default PPO config
         default_config = {
             "actor_rollout_ref": {

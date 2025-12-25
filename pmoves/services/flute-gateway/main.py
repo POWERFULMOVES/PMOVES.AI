@@ -365,16 +365,7 @@ async def lifespan(app: FastAPI):
         ultimate_tts_provider = None
         logger.info("Ultimate-TTS disabled (set ULTIMATE_TTS_URL to enable).")
 
-    # Initialize Voice Cloning provider
-    cloning_provider = VoiceCloningProvider(
-        supabase_url=SUPABASE_URL,
-        supabase_key=SUPABASE_KEY,
-        ultimate_tts_url=ULTIMATE_TTS_URL,
-        presign_url=PRESIGN_URL,
-    )
-    logger.info("Voice Cloning provider enabled")
-
-    # Initialize NATS (optional)
+    # Initialize NATS (optional) - must be before cloning_provider
     try:
         import nats
         nats_client = await nats.connect(NATS_URL)

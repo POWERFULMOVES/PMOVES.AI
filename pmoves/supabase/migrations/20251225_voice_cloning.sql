@@ -37,6 +37,18 @@ ALTER TABLE public.voice_persona
 ADD COLUMN IF NOT EXISTS training_completed_at timestamptz;
 
 -- ============================================================================
+-- Add completion validation constraint
+-- ============================================================================
+
+-- Ensure completed training has model URIs set
+ALTER TABLE public.voice_persona
+ADD CONSTRAINT voice_persona_completion_check
+CHECK (
+    voice_cloning_status IS DISTINCT FROM 'completed'
+    OR (rvc_model_uri IS NOT NULL AND rvc_index_uri IS NOT NULL)
+);
+
+-- ============================================================================
 -- Indexes for voice cloning queries
 -- ============================================================================
 
