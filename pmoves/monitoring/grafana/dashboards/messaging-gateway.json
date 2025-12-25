@@ -95,12 +95,12 @@
     },
     {
       "type": "timeseries",
-      "title": "Cumulative API Requests by Endpoint",
+      "title": "API Requests Total by Endpoint",
       "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "sum(messaging_gateway_api_requests_total) by (endpoint)", "legendFormat": "{{endpoint}}" }
+        { "expr": "sum(rate(messaging_gateway_api_requests_total[5m])) by (endpoint)", "legendFormat": "{{endpoint}}" }
       ],
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 30 } } }
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 30 } } }
     },
     {
       "type": "timeseries",
