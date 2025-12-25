@@ -1109,7 +1109,7 @@ async def register_voice_sample(
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="500").inc()
         logger.exception("Voice sample registration failed")
-        raise HTTPException(status_code=500, detail="Failed to register voice sample")
+        raise HTTPException(status_code=500, detail="Failed to register voice sample") from None
 
 
 @app.post("/v1/voice/clone/train", dependencies=[Depends(verify_api_key)])
@@ -1137,7 +1137,7 @@ async def start_voice_training(request: VoiceCloneTrainRequest):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="500").inc()
         logger.exception("Voice training start failed")
-        raise HTTPException(status_code=500, detail="Failed to start voice training")
+        raise HTTPException(status_code=500, detail="Failed to start voice training") from None
 
 
 @app.get("/v1/voice/clone/status/{persona_id}", response_model=VoiceCloneStatusResponse, dependencies=[Depends(verify_api_key)])
@@ -1195,7 +1195,7 @@ async def list_voice_training_jobs(status: Optional[str] = None):
     except Exception:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="500").inc()
         logger.exception("Failed to list training jobs")
-        raise HTTPException(status_code=500, detail="Failed to list training jobs")
+        raise HTTPException(status_code=500, detail="Failed to list training jobs") from None
 
 
 @app.post("/v1/voice/clone/synthesize", dependencies=[Depends(verify_api_key)])

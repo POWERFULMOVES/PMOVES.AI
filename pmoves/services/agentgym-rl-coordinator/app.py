@@ -41,8 +41,6 @@ training_orchestrator: Optional[PPOTrainingOrchestrator] = None
 hf_publisher: Optional[HuggingFacePublisher] = None
 storage: Optional[SupabaseStorage] = None
 
-# Track running jobs
-running_training_jobs = {}
 
 
 @asynccontextmanager
@@ -84,7 +82,7 @@ async def lifespan(app: FastAPI):
                             result.get("trajectory_id"),
                         )
                 except Exception as e:
-                    logger.exception("Failed to process geometry event: %s", e)
+                    logger.exception("Failed to process geometry event")
 
         # Subscribe to geometry events
         await nc.subscribe("geometry.event.v1", cb=geometry_message_handler)
@@ -92,7 +90,7 @@ async def lifespan(app: FastAPI):
         logger.info("Subscribed to geometry event subjects")
 
     except Exception as e:
-        logger.error("Failed to connect to NATS: %s", e)
+        logger.exception("Failed to connect to NATS")
 
     yield
 
@@ -100,8 +98,8 @@ async def lifespan(app: FastAPI):
     if nc:
         try:
             await nc.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error closing NATS connection: %s", e)
 
     if trajectory_accumulator:
         await trajectory_accumulator.close()
@@ -343,9 +341,9 @@ async def publish_dataset(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to publish dataset: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to publish dataset: {e!s}") from e
 
 
 @app.get("/agentgym/datasets")
