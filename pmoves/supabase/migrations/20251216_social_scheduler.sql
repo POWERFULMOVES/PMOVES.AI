@@ -86,19 +86,42 @@ create index if not exists idx_studio_board_status_publish on studio_board(statu
 create index if not exists idx_social_posts_platform on social_posts(platform, status);
 create index if not exists idx_social_posts_studio_board on social_posts(studio_board_id);
 
--- Grant permissions
-grant select, insert, update, delete on table social_posts to anon, authenticated, service_role;
-grant usage, select on sequence social_posts_id_seq to anon, authenticated, service_role;
-grant select, insert, update, delete on table brand_assets to anon, authenticated, service_role;
-grant usage, select on sequence brand_assets_id_seq to anon, authenticated, service_role;
-grant select on content_schedule to anon, authenticated, service_role;
+-- Grant permissions (removed anon for security - only authenticated and service_role)
+grant select, insert, update, delete on table social_posts to authenticated, service_role;
+grant usage, select on sequence social_posts_id_seq to authenticated, service_role;
+grant select, insert, update, delete on table brand_assets to authenticated, service_role;
+grant usage, select on sequence brand_assets_id_seq to authenticated, service_role;
+grant select on content_schedule to authenticated, service_role;
 
 -- RLS policies
 alter table social_posts enable row level security;
 alter table brand_assets enable row level security;
 
-create policy social_posts_all on social_posts for all to anon using (true) with check (true);
-create policy brand_assets_all on brand_assets for all to anon using (true) with check (true);
+-- Policy: Users can see their own namespace's posts (namespace from auth.uid())
+create policy social_posts_select_own on social_posts for select
+  to authenticated
+  using (
+    studio_board_id in (
+      select id from studio_board where namespace = current_user
+    )
+  );
+
+-- Policy: Service role can do anything
+create policy social_posts_service_all on social_posts for all
+  to service_role
+  using (true)
+  with check (true);
+
+-- Policy: Users can see their own brand assets
+create policy brand_assets_select_own on brand_assets for select
+  to authenticated
+  using (namespace = current_user);
+
+-- Policy: Service role full access to brand_assets
+create policy brand_assets_service_all on brand_assets for all
+  to service_role
+  using (true)
+  with check (true);
 
 -- Insert default PMOVES brand
 insert into brand_assets (namespace, brand_name, about_brand, content_pillars)

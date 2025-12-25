@@ -196,8 +196,16 @@ class PPOTrainingOrchestrator:
             config: PPO configuration
         """
         try:
-            # Write config to file
-            config_path = f"/tmp/agentgym_{run_id}_config.yaml"
+            # Sanitize run_id for filename (validated upstream, but double-check here)
+            # Using only first 64 chars and safe chars to prevent any path traversal issues
+            safe_run_id = re.sub(r'[^a-zA-Z0-9_-]', '_', run_id[:64])
+            config_path = f"/tmp/agentgym_{safe_run_id}_config.yaml"
+
+            # Ensure path stays within /tmp (defense in depth)
+            config_path = os.path.normpath(config_path)
+            if not config_path.startswith("/tmp/"):
+                raise ValueError(f"Invalid config path: {config_path}")
+
             with open(config_path, "w") as f:
                 # Convert to YAML-like format (simplified)
                 f.write(f"run_id: {run_id}\n")
