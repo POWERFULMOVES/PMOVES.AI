@@ -1,8 +1,8 @@
 import asyncio
-import asyncio
 import logging
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -11,11 +11,45 @@ import httpx
 from dateutil import parser as date_parser
 from fastapi import FastAPI, HTTPException
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
 
 LOGGER = logging.getLogger("pmoves.notebook_sync")
 logging.basicConfig(
     level=getattr(logging, os.getenv("NOTEBOOK_SYNC_LOG_LEVEL", "INFO").upper()),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Metrics
+# ─────────────────────────────────────────────────────────────────────────────
+NOTEBOOK_SYNC_CYCLES = Counter(
+    "notebook_sync_cycles_total",
+    "Total sync cycles executed",
+    ["status"]
+)
+NOTEBOOK_SYNC_ITEMS = Counter(
+    "notebook_sync_items_total",
+    "Total items synced",
+    ["resource"]
+)
+NOTEBOOK_SYNC_CHUNKS = Counter(
+    "notebook_sync_chunks_indexed_total",
+    "Total chunks indexed from notebooks"
+)
+NOTEBOOK_SYNC_LATENCY = Histogram(
+    "notebook_sync_cycle_latency_seconds",
+    "Sync cycle latency in seconds",
+    buckets=[1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]
+)
+NOTEBOOK_SYNC_ERRORS = Counter(
+    "notebook_sync_errors_total",
+    "Total sync errors",
+    ["stage"]
+)
+NOTEBOOK_SYNC_ACTIVE = Gauge(
+    "notebook_sync_active",
+    "Whether a sync is currently active"
 )
 
 VALID_MODES = {"live", "offline"}
@@ -158,24 +192,36 @@ class NotebookSyncer:
 
     async def _sync_cycle(self, manual: bool = False) -> None:
         async with self._lock:
+            NOTEBOOK_SYNC_ACTIVE.set(1)
             start = datetime.now(timezone.utc)
-            if not self.enabled_resources:
-                LOGGER.info("No notebook resources enabled; skipping sync")
-                return
-            LOGGER.info(
-                "Starting %s notebook sync (resources=%s)",
-                "manual" if manual else "scheduled",
-                ",".join(self.enabled_resources),
-            )
-            for resource in self.enabled_resources:
-                try:
-                    await self._sync_resource(resource)
-                except Exception:  # pylint: disable=broad-except
-                    LOGGER.exception("Failed to sync resource '%s'", resource)
-            self.last_sync_time = datetime.now(timezone.utc)
-            LOGGER.info(
-                "Completed notebook sync in %.2fs", (self.last_sync_time - start).total_seconds()
-            )
+            cycle_status = "success"
+            try:
+                if not self.enabled_resources:
+                    LOGGER.info("No notebook resources enabled; skipping sync")
+                    return
+                LOGGER.info(
+                    "Starting %s notebook sync (resources=%s)",
+                    "manual" if manual else "scheduled",
+                    ",".join(self.enabled_resources),
+                )
+                for resource in self.enabled_resources:
+                    try:
+                        await self._sync_resource(resource)
+                    except Exception:  # pylint: disable=broad-except
+                        LOGGER.exception("Failed to sync resource '%s'", resource)
+                        NOTEBOOK_SYNC_ERRORS.labels(stage="resource").inc()
+                        cycle_status = "partial"
+                self.last_sync_time = datetime.now(timezone.utc)
+                LOGGER.info(
+                    "Completed notebook sync in %.2fs", (self.last_sync_time - start).total_seconds()
+                )
+            except Exception:
+                cycle_status = "error"
+                raise
+            finally:
+                NOTEBOOK_SYNC_ACTIVE.set(0)
+                NOTEBOOK_SYNC_CYCLES.labels(status=cycle_status).inc()
+                NOTEBOOK_SYNC_LATENCY.observe((datetime.now(timezone.utc) - start).total_seconds())
 
     async def _sync_resource(self, resource: str) -> None:
         cursor = self.cursor_store.get_cursor(resource)
@@ -236,6 +282,7 @@ class NotebookSyncer:
             extract_result = response.json()
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("LangExtract failed for %s %s", resource, normalized["id"])
+            NOTEBOOK_SYNC_ERRORS.labels(stage="langextract").inc()
             metadata = self._build_metadata(resource, normalized)
             error_payload = {
                 "message": str(exc),
@@ -250,11 +297,15 @@ class NotebookSyncer:
         chunks = [self._enrich_chunk(chunk, metadata, tags) for chunk in extract_result.get("chunks", [])]
         errors = [self._enrich_error(err, metadata) for err in extract_result.get("errors", [])]
 
+        NOTEBOOK_SYNC_ITEMS.labels(resource=resource).inc()
+        NOTEBOOK_SYNC_CHUNKS.inc(len(chunks))
+
         ingest_body = {"chunks": chunks, "errors": errors}
         try:
             await self._request(self.extract_client, "POST", "/ingest", json=ingest_body)
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("Failed to ingest chunks for %s %s", resource, normalized["id"])
+            NOTEBOOK_SYNC_ERRORS.labels(stage="ingest").inc()
             failure = {
                 "message": str(exc),
                 "stage": "ingest",
@@ -523,6 +574,10 @@ async def healthz() -> Dict[str, Any]:
         else None,
         "interval_seconds": syncer.interval_seconds,
     }
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/sync")

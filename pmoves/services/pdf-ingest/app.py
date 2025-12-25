@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 import fitz  # type: ignore
@@ -12,6 +13,8 @@ from fastapi import Body, FastAPI, HTTPException
 from minio import Minio
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
 
 try:
     from services.common.events import envelope  # type: ignore
@@ -39,6 +42,38 @@ from libs.langextract import extract_text
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="PMOVES PDF Ingest", version="0.1.0")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Metrics
+# ─────────────────────────────────────────────────────────────────────────────
+PDF_INGEST_REQUESTS = Counter(
+    "pdf_ingest_requests_total",
+    "Total PDF ingest requests",
+    ["status"]
+)
+PDF_INGEST_CHUNKS = Counter(
+    "pdf_ingest_chunks_total",
+    "Total chunks extracted from PDFs"
+)
+PDF_INGEST_BYTES = Counter(
+    "pdf_ingest_bytes_total",
+    "Total bytes processed from PDFs"
+)
+PDF_INGEST_LATENCY = Histogram(
+    "pdf_ingest_latency_seconds",
+    "PDF ingest processing latency in seconds",
+    buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]
+)
+PDF_MINIO_OPS = Counter(
+    "pdf_ingest_minio_ops_total",
+    "Total MinIO operations",
+    ["operation", "status"]
+)
+PDF_NATS_PUBLISHED = Counter(
+    "pdf_ingest_nats_published_total",
+    "Total NATS events published",
+    ["topic"]
+)
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
@@ -227,76 +262,103 @@ def _pdf_to_text(data: bytes) -> str:
 def healthz() -> Dict[str, bool]:
     return {"ok": True}
 
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 @app.post("/pdf/ingest")
 def ingest_pdf(body: PDFIngestRequest = Body(...)) -> Dict[str, Any]:
-    bucket = body.bucket or DEFAULT_BUCKET
-    namespace = body.namespace or DEFAULT_NAMESPACE
-    if not body.key:
-        raise HTTPException(status_code=400, detail="key is required")
-    data = _read_pdf_bytes(bucket, body.key)
-    checksum = hashlib.sha256(data).hexdigest()
-    size_bytes = len(data)
-    doc_base = body.doc_id or f"pdf:{_slugify(os.path.splitext(os.path.basename(body.key))[0])}"
-    file_id = body.file_id or doc_base
-    text = _pdf_to_text(data)
-    extracted = extract_text(text, namespace=namespace, doc_id=doc_base)
-    chunks = extracted.get("chunks") or []
-    errors = extracted.get("errors") or []
-
-    for idx, chunk in enumerate(chunks):
-        chunk.setdefault("doc_id", doc_base)
-        chunk.setdefault("namespace", namespace)
-        if not chunk.get("chunk_id"):
-            chunk["chunk_id"] = f"{doc_base}:{idx}"
-        payload = chunk.get("payload") or {}
-        if "source" not in payload:
-            payload["source"] = "pdf"
-        chunk["payload"] = payload
-
-    ingest_payload = {"chunks": chunks, "errors": errors}
+    start = time.time()
     try:
-        resp = requests.post(EXTRACT_URL, headers={"content-type": "application/json"}, data=json.dumps(ingest_payload), timeout=60)
-        resp.raise_for_status()
-        ingest_result = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {"status": resp.status_code}
-    except Exception as exc:  # pragma: no cover - network failure
-        raise HTTPException(status_code=502, detail=f"extract-worker ingest failed: {exc}")
+        bucket = body.bucket or DEFAULT_BUCKET
+        namespace = body.namespace or DEFAULT_NAMESPACE
+        if not body.key:
+            raise HTTPException(status_code=400, detail="key is required")
 
-    uri = f"s3://{bucket}/{body.key}"
-    if body.publish_events:
-        meta = {"namespace": namespace, "doc_id": doc_base}
-        if body.title:
-            meta["title"] = body.title
-        file_event = {
-            "file_id": file_id,
-            "uri": uri,
-            "kind": "document",
-            "checksum": checksum,
-            "size_bytes": size_bytes,
-            "meta": meta,
-        }
-        _publish_event("ingest.file.added.v1", file_event)
-        doc_event = {
+        # Read PDF from MinIO
+        PDF_MINIO_OPS.labels(operation="get", status="attempt").inc()
+        data = _read_pdf_bytes(bucket, body.key)
+        PDF_MINIO_OPS.labels(operation="get", status="success").inc()
+
+        checksum = hashlib.sha256(data).hexdigest()
+        size_bytes = len(data)
+        PDF_INGEST_BYTES.inc(size_bytes)
+
+        doc_base = body.doc_id or f"pdf:{_slugify(os.path.splitext(os.path.basename(body.key))[0])}"
+        file_id = body.file_id or doc_base
+        text = _pdf_to_text(data)
+        extracted = extract_text(text, namespace=namespace, doc_id=doc_base)
+        chunks = extracted.get("chunks") or []
+        errors = extracted.get("errors") or []
+
+        PDF_INGEST_CHUNKS.inc(len(chunks))
+
+        for idx, chunk in enumerate(chunks):
+            chunk.setdefault("doc_id", doc_base)
+            chunk.setdefault("namespace", namespace)
+            if not chunk.get("chunk_id"):
+                chunk["chunk_id"] = f"{doc_base}:{idx}"
+            payload = chunk.get("payload") or {}
+            if "source" not in payload:
+                payload["source"] = "pdf"
+            chunk["payload"] = payload
+
+        ingest_payload = {"chunks": chunks, "errors": errors}
+        try:
+            resp = requests.post(EXTRACT_URL, headers={"content-type": "application/json"}, data=json.dumps(ingest_payload), timeout=60)
+            resp.raise_for_status()
+            ingest_result = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {"status": resp.status_code}
+        except Exception as exc:  # pragma: no cover - network failure
+            raise HTTPException(status_code=502, detail=f"extract-worker ingest failed: {exc}")
+
+        uri = f"s3://{bucket}/{body.key}"
+        if body.publish_events:
+            meta = {"namespace": namespace, "doc_id": doc_base}
+            if body.title:
+                meta["title"] = body.title
+            file_event = {
+                "file_id": file_id,
+                "uri": uri,
+                "kind": "document",
+                "checksum": checksum,
+                "size_bytes": size_bytes,
+                "meta": meta,
+            }
+            _publish_event("ingest.file.added.v1", file_event)
+            PDF_NATS_PUBLISHED.labels(topic="ingest.file.added.v1").inc()
+
+            doc_event = {
+                "doc_id": doc_base,
+                "namespace": namespace,
+                "uri": uri,
+                "chunk_count": len(chunks),
+                "file_id": file_id,
+                "title": body.title,
+                "checksum": checksum,
+                "size_bytes": size_bytes,
+                "preview": (chunks[0].get("text") or "")[:240] if chunks else "",
+            }
+            if errors:
+                doc_event["meta"] = {"errors": len(errors)}
+            _publish_event("ingest.document.ready.v1", doc_event)
+            PDF_NATS_PUBLISHED.labels(topic="ingest.document.ready.v1").inc()
+
+        PDF_INGEST_REQUESTS.labels(status="success").inc()
+        return {
+            "ok": True,
             "doc_id": doc_base,
-            "namespace": namespace,
-            "uri": uri,
-            "chunk_count": len(chunks),
             "file_id": file_id,
-            "title": body.title,
-            "checksum": checksum,
-            "size_bytes": size_bytes,
-            "preview": (chunks[0].get("text") or "")[:240] if chunks else "",
+            "uri": uri,
+            "chunks": len(chunks),
+            "errors": len(errors),
+            "ingest": ingest_result,
         }
-        if errors:
-            doc_event["meta"] = {"errors": len(errors)}
-        _publish_event("ingest.document.ready.v1", doc_event)
-
-    return {
-        "ok": True,
-        "doc_id": doc_base,
-        "file_id": file_id,
-        "uri": uri,
-        "chunks": len(chunks),
-        "errors": len(errors),
-        "ingest": ingest_result,
-    }
+    except HTTPException:
+        PDF_INGEST_REQUESTS.labels(status="error").inc()
+        raise
+    except Exception:
+        PDF_INGEST_REQUESTS.labels(status="error").inc()
+        raise
+    finally:
+        PDF_INGEST_LATENCY.observe(time.time() - start)
