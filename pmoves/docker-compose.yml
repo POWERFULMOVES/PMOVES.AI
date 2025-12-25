@@ -56,7 +56,7 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-pmoves}
       - POSTGRES_USER=${POSTGRES_USER:-pmoves}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pmoves}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports: [ "5432:5432" ]
     volumes:
       - supabase-data:/var/lib/postgresql/data
@@ -68,14 +68,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   postgrest:
-    image: postgrest/postgrest:latest
+    image: postgrest/postgrest:v12.2.3
     restart: unless-stopped
     depends_on: [ postgres ]
     <<: *env-tier-api
     environment:
-      - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
+      - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-pmoves}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
       - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
       - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
@@ -101,7 +102,7 @@ services:
   # Optional: PostgREST against Supabase CLI database (host.docker.internal:65432)
   # Use profile 'supabase-cli-rest' and set POSTGREST_URL=http://localhost:3011 for console fallbacks.
   postgrest-cli:
-    image: postgrest/postgrest:latest
+    image: postgrest/postgrest:v12.2.3
     restart: unless-stopped
     <<: *env-tier-api
     environment:
@@ -119,6 +120,12 @@ services:
     ports: [ "6333:6333" ]
     profiles: [ "data", "qdrant-local" ]
     networks: [ data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:6333/readyz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   meilisearch:
     image: getmeili/meilisearch:v1.8
     restart: unless-stopped
@@ -128,6 +135,12 @@ services:
     ports: [ "7700:7700" ]
     profiles: [ "data", "meili-local" ]
     networks: [ data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:7700/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   neo4j:
     image: neo4j:5.22
     restart: unless-stopped
@@ -148,7 +161,7 @@ services:
       retries: 12
       start_period: 20s
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-}
@@ -158,6 +171,12 @@ services:
       - minio-data:/data
     profiles: [ "data", "orchestration", "workers", "agents" ]
     networks: [ data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
   hi-rag-gateway:
     build:
       context: ./services
@@ -191,6 +210,12 @@ services:
         condition: service_healthy
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   retrieval-eval:
     build: ./services/retrieval-eval
     restart: unless-stopped
@@ -207,6 +232,12 @@ services:
     networks: [ app_tier, monitoring_tier ]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8090/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   presign:
     build: ./services/presign
@@ -223,6 +254,12 @@ services:
     ports: [ "8088:8080" ]
     profiles: [ "data", "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   render-webhook:
     build: ./services/render-webhook
@@ -239,6 +276,12 @@ services:
     extra_hosts:
       - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8085/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   comfy-watcher:
     build:
@@ -265,6 +308,13 @@ services:
       - comfy-watcher-state:/state
     profiles: [ "orchestration", "workers" ]
     networks: [ bus_tier, data_tier ]
+    healthcheck:
+      # Verify the watcher module can be imported (tests all dependencies)
+      test: [ "CMD", "python3", "-c", "from watcher import load_state; load_state()" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   extract-worker:
     build: ./services/extract-worker
@@ -287,6 +337,12 @@ services:
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8083/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   pdf-ingest:
     build:
       context: .
@@ -311,6 +367,12 @@ services:
     ports: [ "8092:8092" ]
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   langextract:
     build:
       context: .
@@ -336,6 +398,12 @@ services:
     ports: [ "8084:8084" ]
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, api_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8084/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   notebook-sync:
     build: ./services/notebook-sync
@@ -360,6 +428,12 @@ services:
         condition: service_started
     ports: [ "8095:8095" ]
     profiles: [ "workers", "orchestration" ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8095/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     volumes:
       - notebook-sync-data:/data
     networks: [ app_tier, monitoring_tier ]
@@ -379,6 +453,12 @@ services:
     ports: [ "8100:8100" ]
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8100/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   chat-relay:
     build:
@@ -401,6 +481,12 @@ services:
     ports: [ "8102:8102" ]
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, data_tier, monitoring_tier, supabase_net ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8102/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   ultimate-tts-studio:
     # Build from pmoves/docker/ultimate-tts-studio/Dockerfile
@@ -419,6 +505,7 @@ services:
       - CUDA_DEVICE_ORDER=PCI_BUS_ID
       - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
       - TORCH_CUDNN_V8_API_ENABLED=1
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: [ "7861:7861" ]
     profiles: [ "gpu", "tts" ]
     networks: [ api_tier, monitoring_tier ]
@@ -468,6 +555,12 @@ services:
     networks: [ api_tier, bus_tier, data_tier, monitoring_tier, supabase_net ]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8055/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # PMOVES.AI Unified Portal - Main Dashboard
   pmoves-ui:
@@ -544,6 +637,12 @@ services:
     ports: [ "8078:8078" ]
     profiles: [ "workers", "orchestration", "agents" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8078/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   media-video:
     build:
@@ -569,6 +668,12 @@ services:
     ports: [ "8079:8079" ]
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8079/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   media-audio:
     build:
@@ -592,6 +697,12 @@ services:
     ports: [ "8082:8082" ]
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8082/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   pmoves-yt:
     image: ${PMOVES_YT_IMAGE:-ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest}
     build:
@@ -625,6 +736,12 @@ services:
     ports: [ "8077:8077" ]
     profiles: [ "orchestration", "workers", "agents" ]
     networks: [ api_tier, app_tier, bus_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8077/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
@@ -633,6 +750,12 @@ services:
       - PORT=4416
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, app_tier ] # api_tier added for external DNS/googleapis access
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:4416/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   channel-monitor:
     build: ./services/channel-monitor
@@ -655,6 +778,12 @@ services:
     ports: [ "8097:8097" ]
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8097/api/monitor/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # Optional: experimental v2 gateway with rerank providers
   hi-rag-gateway-v2:
@@ -704,6 +833,12 @@ services:
       neo4j:
         condition: service_healthy
     networks: [ app_tier, data_tier, api_tier, monitoring_tier, supabase_net ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
 
   # GPU-enabled variant of legacy v1 gateway (optional)
   hi-rag-gateway-gpu:
@@ -736,6 +871,7 @@ services:
       - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
       - RERANK_TOPN=${RERANK_TOPN:-50}
       - RERANK_K=${RERANK_K:-10}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     deploy:
       resources:
         reservations:
@@ -752,6 +888,12 @@ services:
         condition: service_healthy
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # GPU-enabled variant of v2 gateway with CLAP/torch installed
   hi-rag-gateway-v2-gpu:
@@ -794,7 +936,7 @@ services:
       - PGHOST=${PGHOST:-postgres}
       - PGPORT=${PGPORT:-5432}
       - PGUSER=${POSTGRES_USER:-pmoves}
-      - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
+      - PGPASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - PGDATABASE=${POSTGRES_DB:-pmoves}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_PMOVES.AI:8000/realtime/v1}
@@ -805,6 +947,7 @@ services:
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
       - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     gpus: all
     deploy:
       resources:
@@ -824,6 +967,12 @@ services:
     networks: [ app_tier, data_tier, api_tier, monitoring_tier, supabase_net ]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
 
   # GPU Orchestrator: VRAM management, model lifecycle, priority queue
   gpu-orchestrator:
@@ -840,6 +989,7 @@ services:
       - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
       - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
       - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
       - ./config/gpu-models.yaml:/app/config/gpu-models.yaml:ro
     ports: [ "8200:8200" ]
@@ -849,6 +999,13 @@ services:
         condition: service_started
         required: false
     networks: [ api_tier, bus_tier, monitoring_tier ]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-sf", "http://localhost:8200/healthz" ]
       interval: 30s
@@ -861,11 +1018,17 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
-    command: [ "-js" ]
+    command: [ "-js", "-m", "8222" ]
     restart: unless-stopped
     ports: [ "4222:4222" ]
     profiles: [ "agents", "orchestration", "workers" ]
     networks: [ bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   agent-zero:
     build:
@@ -899,6 +1062,14 @@ services:
       - ${AGENT_ZERO_TMP_DIR:-./data/agent-zero/tmp}:/a0/tmp
     profiles: [ "agents" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   archon:
     build:
@@ -1041,6 +1212,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
 
   # Docker MCP Gateway: Open-standard gateway for AI model tool access
   # Provides access to 200+ tools (GitHub, Notion, Stripe, etc.)
@@ -1076,6 +1248,13 @@ services:
     depends_on: [ nats ]
     profiles: [ "agents" ]
     networks: [ app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      # Verify main module imports and NATS client is available
+      test: [ "CMD", "python3", "-c", "from main import NODE_NAME, NATS_URL; import nats" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   deepresearch:
     build:
@@ -1109,6 +1288,12 @@ services:
     volumes:
       - ./contracts:/app/contracts:ro
     networks: [ app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8098/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   supaserch:
     build:
@@ -1125,6 +1310,12 @@ services:
     ports: [ "${SUPASERCH_HOST_PORT:-8099}:8099" ]
     profiles: [ "agents", "workers" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8099/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   consciousness-service:
     build:
@@ -1147,6 +1338,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
 
   # NATS echo subscribers for diagnostics
   nats-echo-req:
@@ -1188,6 +1380,12 @@ services:
     ports: [ "8094:8092" ]
     profiles: [ "orchestration", "agents" ]
     networks: [ app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   messaging-gateway:
     build: ./services/messaging-gateway
@@ -1200,6 +1398,12 @@ services:
     ports: [ "8101:8101" ]
     profiles: [ "workers" ]
     networks: [ api_tier, bus_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8101/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
@@ -1211,9 +1415,15 @@ services:
     ports: [ "8093:8093" ]
     profiles: [ "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier, cataclysm ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8093/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   pmoves-ollama:
-    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:latest}
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.5.4}
     restart: unless-stopped
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
@@ -1235,6 +1445,12 @@ services:
         aliases: [ ollama ]
       api_tier:
         aliases: [ ollama ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:11434/api/tags" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   tensorzero-clickhouse:
     image: clickhouse/clickhouse-server:24.12-alpine
@@ -1257,7 +1473,7 @@ services:
     networks: [ data_tier, monitoring_tier ]
 
   tensorzero-gateway:
-    image: tensorzero/gateway:latest
+    image: tensorzero/gateway:2024.12.18
     restart: unless-stopped
     command: [ "--config-file", "/app/config/tensorzero.toml" ]
     <<: *env-tier-llm
@@ -1278,9 +1494,15 @@ services:
     networks: [ api_tier, data_tier, monitoring_tier ]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   tensorzero-ui:
-    image: tensorzero/ui:latest
+    image: tensorzero/ui:2024.12.18
     restart: unless-stopped
     <<: *env-tier-llm
     environment:
@@ -1298,6 +1520,14 @@ services:
     ports: [ "4000:4000" ]
     profiles: [ "tensorzero" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:4000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   invidious-db:
     image: postgres:14
@@ -1315,11 +1545,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+      start_period: 15s
     profiles: [ "invidious" ]
     networks: [ data_tier, monitoring_tier ]
 
   invidious-companion:
-    image: quay.io/invidious/invidious-companion:latest
+    image: quay.io/invidious/invidious-companion:2024.12.20
     restart: unless-stopped
     <<: *env-tier-media
     environment:
@@ -1343,7 +1574,7 @@ services:
     networks: [ app_tier, monitoring_tier ]
 
   invidious:
-    image: quay.io/invidious/invidious:latest
+    image: quay.io/invidious/invidious:2024.12.09
     restart: unless-stopped
     <<: *env-tier-media
     environment:
@@ -1399,9 +1630,15 @@ services:
     ports: [ "9096:8080" ]
     profiles: [ "grayjay" ]
     networks: [ api_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   grayjay-server:
-    image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
+    image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:2024.11.01
     restart: unless-stopped
     <<: *env-tier-media
     environment:
@@ -1414,6 +1651,12 @@ services:
         condition: service_started
     profiles: [ "grayjay" ]
     networks: [ api_tier, app_tier ]
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:9095/healthz" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   cloudflared:
     image: cloudflare/cloudflared:2024.8.0
