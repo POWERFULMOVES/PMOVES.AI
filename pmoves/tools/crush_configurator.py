@@ -1,4 +1,4 @@
-"""Generate Crush CLI configuration tailored for PMOVES."""
+"""Generate PMOVES CLI configuration tailored for PMOVES deployment."""
 
 from __future__ import annotations
 

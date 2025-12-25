@@ -84,7 +84,7 @@ secrets_app = typer.Typer(help="CHIT secret operations")
 profile_app = typer.Typer(help="Hardware profile management")
 mcp_app = typer.Typer(help="Manage MCP toolkits")
 automations_app = typer.Typer(help="n8n automations")
-crush_app = typer.Typer(help="Crush CLI integration")
+crush_app = typer.Typer(help="PMOVES CLI integration")
 deps_app = typer.Typer(help="Host tooling dependency helpers")
 tailscale_app = typer.Typer(help="Tailscale helpers")
 app.add_typer(secrets_app, name="secrets")
@@ -1049,7 +1049,7 @@ def automations_channels(channel: str) -> None:
         typer.echo(f"{automation.id}: {automation.name}")
 
 
-@crush_app.command("setup", help="Generate Crush configuration for PMOVES.")
+@crush_app.command("setup", help="Generate PMOVES CLI configuration for deployment.")
 def crush_setup(
     path: Optional[Path] = typer.Option(
         None,
@@ -1060,11 +1060,11 @@ def crush_setup(
 ) -> None:
     target = path or crush_configurator.DEFAULT_CONFIG_PATH
     config_path, providers = crush_configurator.write_config(target)
-    typer.echo(f"Wrote Crush config to {config_path}")
+    typer.echo(f"Wrote PMOVES CLI config to {config_path}")
     typer.echo("Providers configured: " + ", ".join(sorted(providers.keys())))
 
 
-@crush_app.command("status", help="Show Crush configuration details.")
+@crush_app.command("status", help="Show PMOVES CLI configuration details.")
 def crush_status(
     path: Optional[Path] = typer.Option(
         None,
@@ -1081,7 +1081,7 @@ def crush_status(
     typer.echo("Providers: " + (", ".join(providers) if providers else "(none)"))
 
 
-@crush_app.command("preview", help="Print generated Crush configuration JSON.")
+@crush_app.command("preview", help="Print generated PMOVES CLI configuration JSON.")
 def crush_preview() -> None:
     config, providers = crush_configurator.build_config()
     typer.echo(json.dumps(config, indent=2))
