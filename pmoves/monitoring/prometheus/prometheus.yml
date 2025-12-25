@@ -97,6 +97,14 @@ scrape_configs:
     static_configs:
       - targets: ["render-webhook:8085"]
 
+  - job_name: session-context-worker
+    static_configs:
+      - targets: ["session-context-worker:8100"]
+
+  - job_name: messaging-gateway
+    static_configs:
+      - targets: ["messaging-gateway:8101"]
+
   # === Blackbox HTTP probes ===
   # Health check probes for services without /metrics
 
