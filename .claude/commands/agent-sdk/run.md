@@ -2,42 +2,46 @@
 
 Execute a task using a PMOVES Agent with full ecosystem access.
 
-## Arguments
+## Usage
 
-- `$ARGUMENTS` - Task description to execute
+Use this command when:
+- Running a task with an existing agent instance
+- Executing code analysis, research, or media processing
+- Streaming agent output with tool execution visibility
 
-## Instructions
+## Implementation
 
-1. Parse the task from arguments
-2. If no active agent, create a general-purpose agent
-3. Execute task with streaming output:
+Execute via PMOVES CLI:
 
-```python
-from pmoves_botz.features.agent_sdk import PMOVESAgent
+```bash
+pmoves agent-sdk run <agent-id> <task>
+# Execute task with streaming output
 
-agent = PMOVESAgent(agent_id="pmoves-general-{timestamp}", role="general")
-await agent.connect()
+# With custom model:
+pmoves agent-sdk run research-agent "Analyze PMOVES architecture" --model openai::gpt-4o
 
-async for message in agent.execute(task="$ARGUMENTS"):
-    if message.type == "assistant":
-        print(message.content)
-    elif message.type == "tool_use":
-        print(f"Using tool: {message.tool_name}")
-    elif message.type == "result":
-        print(f"Result: {message.result}")
+# Resume from session:
+pmoves agent-sdk run research-agent "Continue analysis" --session session-abc123
 ```
 
-4. Track execution metrics:
-   - Tools used
-   - Token consumption
-   - Duration
-   - Subagent delegations
+### Arguments
 
-5. Publish completion event:
-   ```
-   Subject: botz.work.completed.v1
-   Payload: {"agent_id": "...", "task": "...", "success": true, "metrics": {...}}
-   ```
+- `agent-id` - Agent identifier (required)
+- `task` - Task description to execute (required)
+
+### Options
+
+- `--model, -m` - Override model (default: agent's configured model)
+- `--session` - Session ID to resume from
+
+## What It Does
+
+- ✅ Loads agent configuration and context
+- ✅ Executes task with streaming output
+- ✅ Shows tool usage in real-time
+- ✅ Tracks execution metrics (tokens, duration, tools)
+- ✅ Publishes completion event: `botz.work.completed.v1`
+- ✅ Returns structured results
 
 ## Model Selection
 
@@ -52,8 +56,50 @@ The agent uses TensorZero with dynamic model routing:
 ## Example
 
 ```bash
-/agent-sdk:run "Analyze the authentication flow in services/gateway"
-# Agent executes with full PMOVES access
-# Uses Hi-RAG for context, Grep/Read for code analysis
-# Returns structured analysis
+$ pmoves agent-sdk run pmoves-researcher-1735123456 "Analyze the authentication flow in services/gateway"
+
+🎯 Executing task with 'pmoves-researcher-1735123456'...
+📝 Task: Analyze the authentication flow in services/gateway
+
+🔍 Searching for authentication-related files...
+📖 Reading services/gateway/main.py...
+🔧 Using: hirag_query
+🤖 Based on my analysis, the authentication flow...
+
+✅ Result: Analysis complete
+📊 Metrics:
+   - Tokens: 1,234
+   - Duration: 12.5s
+   - Tools: hirag_query, Read, Grep
 ```
+
+## Related Commands
+
+- `pmoves agent-sdk create` - Create new agent instance
+- `pmoves agent-sdk list` - List all agents
+- `pmoves agent-sdk status` - Check agent status
+- `pmoves agent-sdk resume` - Resume existing session
+
+## Notes
+
+- **Agent ID Required**: Agent must be created first with `pmoves agent-sdk create`
+- **Session Persistence**: Use `--session` to resume from previous checkpoint
+- **Streaming Output**: Output streams in real-time as agent processes task
+- **Event Bus**: Agent publishes events to NATS for observability
+
+## Troubleshooting
+
+**"Agent not found"**
+- Check agent exists: `pmoves agent-sdk list`
+- Verify agent ID is correct (include timestamp)
+
+**"Connection failed"**
+- Check service health:
+  ```bash
+  curl http://localhost:4222  # NATS
+  curl http://localhost:3030/healthz  # TensorZero
+  ```
+
+**"Model not available"**
+- Verify model is configured in TensorZero
+- Check provider credentials (OpenAI, Anthropic, etc.)
