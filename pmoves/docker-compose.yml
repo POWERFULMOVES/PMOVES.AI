@@ -104,7 +104,7 @@ services:
   postgrest-cli:
     image: postgrest/postgrest:v12.2.3
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - PGRST_DB_URI=postgres://${SUPABASE_DB_USER:-postgres}:${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:${SUPABASE_DB_PORT:-65432}/${SUPABASE_DB_NAME:-postgres}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
@@ -182,7 +182,7 @@ services:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
@@ -264,7 +264,7 @@ services:
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
@@ -288,7 +288,7 @@ services:
       context: .
       dockerfile: services/comfy-watcher/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # comfy-watcher uses the MinIO Python client, which requires a host:port endpoint (no path prefix).
@@ -348,7 +348,7 @@ services:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -378,7 +378,7 @@ services:
       context: .
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       # Orchestrator provider settings (set LANGEXTRACT_PROVIDER=orchestrator to enable)
       - LANGEXTRACT_PROVIDER=${LANGEXTRACT_PROVIDER:-tensorzero}
@@ -408,7 +408,7 @@ services:
   notebook-sync:
     build: ./services/notebook-sync
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       # Open Notebook runs outside this compose project's networks; reach it via host-gateway + published port.
       # Keep env.shared's OPEN_NOTEBOOK_API_URL=http://localhost:5055 for host-side scripts.
@@ -443,7 +443,7 @@ services:
       context: .
       dockerfile: services/session-context-worker/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HEALTH_PORT=8100
@@ -465,7 +465,7 @@ services:
       context: .
       dockerfile: services/chat-relay/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
@@ -495,7 +495,7 @@ services:
       context: docker/ultimate-tts-studio
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
       - GRADIO_SERVER_PORT=7861
@@ -533,7 +533,7 @@ services:
       context: .
       dockerfile: services/flute-gateway/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
@@ -617,7 +617,7 @@ services:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -649,7 +649,7 @@ services:
       context: .
       dockerfile: services/media-video/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -680,7 +680,7 @@ services:
       context: .
       dockerfile: services/media-audio/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
@@ -760,7 +760,7 @@ services:
   channel-monitor:
     build: ./services/channel-monitor
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
@@ -849,7 +849,7 @@ services:
         - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu128}
         - TORCH_SKIP_CUDA=0
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION}
@@ -907,7 +907,7 @@ services:
     runtime: nvidia
     restart: unless-stopped
     command: [ "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086" ]
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
@@ -1120,7 +1120,7 @@ services:
         - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
         - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - PORT=8053
       - ENABLE_AGENT_WORK_ORDERS=${ENABLE_AGENT_WORK_ORDERS:-true}
@@ -1167,7 +1167,7 @@ services:
   botz-gateway:
     build: ./services/botz-gateway
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
@@ -1240,7 +1240,7 @@ services:
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
@@ -1262,7 +1262,7 @@ services:
       dockerfile: services/deepresearch/Dockerfile
     image: ${DEEPRESEARCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-deepresearch:pmoves-latest}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local, ../.env ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
@@ -1301,7 +1301,7 @@ services:
       dockerfile: supaserch/Dockerfile
     image: ${SUPASERCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-supaserch:pmoves-latest}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -1323,7 +1323,7 @@ services:
       dockerfile: Dockerfile
     image: ${CONSCIOUSNESS_SERVICE_IMAGE:-}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - SERVICE_NAME=consciousness-service
       - SERVICE_PORT=8096
@@ -1372,7 +1372,7 @@ services:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,claude.code.session.start.v1,claude.code.session.context.v1,claude.code.session.end.v1}
@@ -1390,7 +1390,7 @@ services:
   messaging-gateway:
     build: ./services/messaging-gateway
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - MESSAGING_SUBJECTS=${MESSAGING_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1}
@@ -1408,7 +1408,7 @@ services:
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       JELLYFIN_URL: ${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
       SUPA_REST_URL: ${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
@@ -1552,7 +1552,7 @@ services:
   invidious-companion:
     image: quay.io/invidious/invidious-companion:2024.12.20
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       PORT: 8282
       HOST: 0.0.0.0
@@ -1576,7 +1576,7 @@ services:
   invidious:
     image: quay.io/invidious/invidious:2024.12.09
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       INVIDIOUS_CONFIG: |
         db:
@@ -1619,7 +1619,7 @@ services:
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
       - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
@@ -1640,7 +1640,7 @@ services:
   grayjay-server:
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:2024.11.01
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
       - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
       - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
