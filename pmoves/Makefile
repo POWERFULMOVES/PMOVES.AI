@@ -1943,27 +1943,27 @@ channel-monitor-up:
 .PHONY: test-smoke
 test-smoke: ## Run pytest smoke tests for all services (5-30s)
 	@echo "Running pytest smoke tests..."
-	pytest tests/smoke/ -v -m smoke --tb=short
+	cd pmoves && pytest tests/smoke/ -v -m smoke --tb=short
 
 .PHONY: test-smoke-quick
 test-smoke-quick: ## Run pytest smoke tests with minimal output (fail fast)
 	@echo "Running quick smoke tests..."
-	pytest tests/smoke/ -m smoke -q --maxfail=5
+	cd pmoves && pytest tests/smoke/ -m smoke -q --maxfail=5
 
 .PHONY: test-smoke-health
 test-smoke-health: ## Run pytest smoke tests for health endpoints only
 	@echo "Testing all service health endpoints..."
-	pytest tests/smoke/test_health_endpoints.py -v -m smoke
+	cd pmoves && pytest tests/smoke/test_health_endpoints.py -v -m smoke
 
 .PHONY: test-smoke-critical
 test-smoke-critical: ## Run pytest smoke tests for critical dependency path
 	@echo "Testing critical dependency path..."
-	pytest tests/smoke/test_critical_path.py -v -m smoke
+	cd pmoves && pytest tests/smoke/test_critical_path.py -v -m smoke
 
 .PHONY: test-smoke-parallel
 test-smoke-parallel: ## Run pytest smoke tests in parallel (faster)
 	@echo "Running smoke tests in parallel..."
-	pytest tests/smoke/ -v -m smoke -n auto
+	cd pmoves && pytest tests/smoke/ -v -m smoke -n auto
 
 .PHONY: channel-monitor-smoke
 channel-monitor-smoke:
