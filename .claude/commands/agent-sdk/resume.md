@@ -2,6 +2,37 @@
 
 Resume a previous agent session with full context preservation.
 
+## Prerequisites
+
+Before resuming sessions, ensure:
+
+1. **Submodules initialized:**
+   ```bash
+   git submodule update --init --recursive PMOVES-BoTZ
+   ```
+
+2. **Dependencies installed:**
+   ```bash
+   pip install -r pmoves/requirements.txt
+   ```
+
+3. **Services running:**
+   ```bash
+   # Check NATS
+   curl http://localhost:4222
+
+   # Check TensorZero
+   curl http://localhost:3030/v1/models
+
+   # Check Hi-RAG v2
+   curl http://localhost:8086/healthz
+   ```
+
+4. **Storage backend accessible:**
+   - **File:** Check `~/.pmoves/sessions/` exists
+   - **Supabase:** Test connection with curl (see Storage Backends below)
+   - **SurrealDB:** Verify Open Notebook is running
+
 ## Usage
 
 Use this command when:
@@ -54,9 +85,48 @@ pmoves agent-sdk resume session-abc123 "Continue the analysis"
 ### Storage Backends
 
 Sessions are stored based on `SESSION_STORAGE` env var:
-- `file` (default): `~/.pmoves/sessions/`
-- `supabase`: `agent_sessions` table
-- `surrealdb`: Open Notebook integration
+
+**File System** (default):
+```bash
+export SESSION_STORAGE=file
+# Sessions stored in: ~/.pmoves/sessions/
+# No additional configuration required
+```
+
+**Supabase:**
+```bash
+export SESSION_STORAGE=supabase
+export SUPABASE_URL=http://localhost:3010
+export SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# Verify connection:
+curl http://localhost:3010/rest/v1/agent_sessions?limit=1 \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}"
+```
+
+**SurrealDB (Open Notebook):**
+```bash
+export SESSION_STORAGE=surrealdb
+export OPEN_NOTEBOOK_API_URL=http://localhost:8085
+export OPEN_NOTEBOOK_API_TOKEN=your_api_token
+# Verify connection:
+curl ${OPEN_NOTEBOOK_API_URL}/health \
+  -H "Authorization: Bearer ${OPEN_NOTEBOOK_API_TOKEN}"
+```
+
+## Timeouts
+
+- **Session load:** 30 seconds default
+- **Context restoration:** 60 seconds default
+- **HTTP requests:** 30 seconds
+- **NATS connection:** 10 seconds
+
+Configure via environment variables:
+```bash
+export AGENT_SESSION_LOAD_TIMEOUT=30      # Session load timeout in seconds
+export AGENT_CONTEXT_RESTORE_TIMEOUT=60   # Context restoration timeout in seconds
+export AGENT_HTTP_TIMEOUT=30              # HTTP timeout in seconds
+export AGENT_NATS_TIMEOUT=10              # NATS connection timeout in seconds
+```
 
 ## Example
 

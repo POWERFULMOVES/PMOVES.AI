@@ -1212,12 +1212,21 @@ def agent_sdk_create(
             # Connect to services
             typer.echo("🔗 Connecting to PMOVES services...")
             try:
-                await agent.connect()
+                await agent.connect(require_services=True)
                 typer.echo("✅ Connected to NATS")
                 typer.echo("✅ HTTP client initialized")
-            except Exception as e:
-                typer.echo(f"⚠️  Connection warning: {e}")
-                typer.echo("   Agent created but some services may be unavailable.")
+            except ConnectionError as e:
+                typer.echo(f"❌ Connection failed: {e}")
+                typer.echo("   Agent NOT created due to service unavailability.")
+                typer.echo("\n🔧 Troubleshooting:")
+                typer.echo("   1. Start NATS: docker compose up -d nats")
+                typer.echo("   2. Check health: curl http://localhost:4222")
+                typer.echo("   3. Create agent without --connect flag to skip connection")
+                raise typer.Exit(1)
+            except RuntimeError as e:
+                typer.echo(f"❌ Configuration error: {e}")
+                typer.echo("   Agent NOT created due to missing dependencies.")
+                raise typer.Exit(1)
 
         # Display configuration
         typer.echo("\n" + "╔" + "═" * 68 + "╗")
@@ -1315,22 +1324,58 @@ def agent_sdk_run(
         raise typer.Exit(1)
 
     async def execute_task():
-        typer.echo(f"🎯 Executing task with '{agent_id}'...")
-        typer.echo(f"📝 Task: {task}")
-        typer.echo()
+        """Execute task with comprehensive error handling."""
+        # Outer layer: Agent initialization errors
+        try:
+            typer.echo(f"🎯 Executing task with '{agent_id}'...")
+            typer.echo(f"📝 Task: {task}")
+            typer.echo()
 
-        async with PMOVESAgent(agent_id=agent_id, role="general") as agent:
+            # Pass model to constructor for cleaner initialization
+            agent_kwargs = {"agent_id": agent_id, "role": "general"}
             if model:
-                agent.model = model
+                agent_kwargs["model"] = model
 
-            async for message in agent.execute(task, session_id=session):
-                if hasattr(message, 'type'):
-                    if message.type == "assistant":
-                        typer.echo(f"🤖 {message.content}")
-                    elif message.type == "result":
-                        typer.echo(f"✅ Result: {message.result}")
-                    elif message.type == "tool_use":
-                        typer.echo(f"🔧 Using: {message.name}")
+            async with PMOVESAgent(**agent_kwargs) as agent:
+                # Inner layer: Task execution errors
+                try:
+                    async for message in agent.execute(task, session_id=session):
+                        if hasattr(message, 'type'):
+                            if message.type == "assistant":
+                                typer.echo(f"🤖 {message.content}")
+                            elif message.type == "result":
+                                typer.echo(f"✅ Result: {message.result}")
+                            elif message.type == "tool_use":
+                                typer.echo(f"🔧 Using: {message.name}")
+
+                except ConnectionError as e:
+                    typer.echo(f"\n❌ Connection failed during execution: {e}")
+                    typer.echo("\n🔧 Troubleshooting:")
+                    typer.echo("   1. Check service health: curl http://localhost:8086/healthz  # Hi-RAG")
+                    typer.echo("   2. Check TensorZero: curl http://localhost:3030/v1/models")
+                    typer.echo("   3. Check NATS: docker compose ps nats")
+                    raise typer.Exit(1)
+
+                except TimeoutError as e:
+                    typer.echo(f"\n⏱️  Task timed out: {e}")
+                    typer.echo("   Try breaking the task into smaller steps or increase timeout.")
+                    raise typer.Exit(1)
+
+                except ValueError as e:
+                    typer.echo(f"\n❌ Invalid input: {e}")
+                    typer.echo("   Check your agent ID, model format, and task description.")
+                    raise typer.Exit(1)
+
+        except ImportError as e:
+            typer.echo(f"❌ Failed to import PMOVESAgent: {e}")
+            typer.echo("   Ensure PMOVES-BoTZ submodule is initialized:")
+            typer.echo("   git submodule update --init --recursive PMOVES-BoTZ")
+            raise typer.Exit(1)
+
+        except ValueError as e:
+            typer.echo(f"❌ Agent configuration error: {e}")
+            typer.echo("   Check agent_id format and model configuration.")
+            raise typer.Exit(1)
 
     asyncio.run(execute_task())
 
@@ -1346,12 +1391,34 @@ def agent_sdk_list(
         pmoves agent-sdk list
         pmoves agent-sdk list --status active --limit 50
     """
-    typer.echo("📋 Listing agents...")
-    typer.echo(f"Status filter: {status}")
-    typer.echo(f"Limit: {limit}")
+    typer.echo("📋 PMOVES Agent List")
+    typer.echo("=" * 60)
     typer.echo()
-    typer.echo("⚠️  Session listing requires SessionManager integration.")
-    typer.echo("   This feature will be available in a future update.")
+    typer.echo("⚠️  Agent listing requires SessionManager backend.")
+    typer.echo()
+    typer.echo("🔧 Manual Workarounds:")
+    typer.echo()
+    typer.echo("1. **Monitor active agents via NATS heartbeat:**")
+    typer.echo("   nats sub \"botz.agent.heartbeat.v1\"")
+    typer.echo()
+    typer.echo("2. **Check completed work items:**")
+    typer.echo("   nats sub \"botz.work.completed.v1\"")
+    typer.echo()
+    typer.echo("3. **Query Supabase for agent records:**")
+    typer.echo("   psql $DATABASE_URL -c \"SELECT agent_id, role, created_at FROM agent_sessions ORDER BY created_at DESC LIMIT 10;\"")
+    typer.echo()
+    typer.echo("4. **List local session files:**")
+    typer.echo("   ls -lt ~/.pmoves/sessions/ | head -20")
+    typer.echo()
+    typer.echo("📊 Implementation Status:")
+    typer.echo("   ✅ Agent creation: Implemented (pmoves agent-sdk create)")
+    typer.echo("   ✅ Task execution: Implemented (pmoves agent-sdk run)")
+    typer.echo("   ✅ Session resume: Implemented (pmoves agent-sdk resume)")
+    typer.echo("   🚧 Agent listing: Requires SessionManager (planned)")
+    typer.echo("   🚧 Status checking: Requires SessionManager (planned)")
+    typer.echo()
+    typer.echo("💡 For full agent lifecycle management, see:")
+    typer.echo("   pmoves/PMOVES-BoTZ/features/agent_sdk/README.md")
 
 
 @agent_sdk_app.command("status", help="Check agent status")
@@ -1363,13 +1430,33 @@ def agent_sdk_status(
     Example:
         pmoves agent-sdk status research-agent
     """
-    typer.echo(f"🔍 Checking status of '{agent_id}'...")
+    typer.echo(f"🔍 Agent Status: {agent_id}")
+    typer.echo("=" * 60)
     typer.echo()
-    typer.echo("⚠️  Agent status checking requires SessionManager integration.")
-    typer.echo("   This feature will be available in a future update.")
+    typer.echo("⚠️  Agent status checking requires SessionManager backend.")
     typer.echo()
-    typer.echo("💡 To monitor agent activity:")
-    typer.echo("   nats sub \"botz.agent.heartbeat.v1\"")
+    typer.echo("🔧 Manual Status Checks:")
+    typer.echo()
+    typer.echo("1. **Monitor agent heartbeat events:**")
+    typer.echo(f"   nats sub \"botz.agent.heartbeat.v1\" | grep {agent_id}")
+    typer.echo()
+    typer.echo("2. **Check for task completion events:**")
+    typer.echo(f"   nats sub \"botz.work.completed.v1\" | grep {agent_id}")
+    typer.echo()
+    typer.echo("3. **Query TensorZero for model usage:**")
+    typer.echo('   curl -s http://localhost:3030/v1/inferences | jq \'.[] | select(.model | contains("qwen") or contains("claude"))\' | head -20')
+    typer.echo()
+    typer.echo("4. **Check service health:**")
+    typer.echo("   curl http://localhost:4222   # NATS")
+    typer.echo("   curl http://localhost:3030/healthz  # TensorZero")
+    typer.echo("   curl http://localhost:8086/healthz  # Hi-RAG v2")
+    typer.echo()
+    typer.echo("5. **View agent session data (if file-based):**")
+    typer.echo(f"   ls -lh ~/.pmoves/sessions/ | grep {agent_id}")
+    typer.echo(f"   cat ~/.pmoves/sessions/{agent_id}*.json 2>/dev/null | jq '.state'")
+    typer.echo()
+    typer.echo("💡 Tip: Subscribe to all agent events:")
+    typer.echo("   nats sub \"botz.**\"")
 
 
 def main() -> None:

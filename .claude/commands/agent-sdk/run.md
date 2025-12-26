@@ -2,6 +2,37 @@
 
 Execute a task using a PMOVES Agent with full ecosystem access.
 
+## Prerequisites
+
+Before running agents, ensure:
+
+1. **Submodules initialized:**
+   ```bash
+   git submodule update --init --recursive PMOVES-BoTZ
+   ```
+
+2. **Dependencies installed:**
+   ```bash
+   pip install -r pmoves/requirements.txt
+   ```
+
+3. **Services running:**
+   ```bash
+   # Check NATS
+   curl http://localhost:4222
+
+   # Check TensorZero
+   curl http://localhost:3030/v1/models
+
+   # Check Hi-RAG v2
+   curl http://localhost:8086/healthz
+   ```
+
+4. **Agent created:**
+   ```bash
+   pmoves agent-sdk list  # Verify agent exists
+   ```
+
 ## Usage
 
 Use this command when:
@@ -40,7 +71,7 @@ pmoves agent-sdk run research-agent "Continue analysis" --session session-abc123
 - ✅ Executes task with streaming output
 - ✅ Shows tool usage in real-time
 - ✅ Tracks execution metrics (tokens, duration, tools)
-- ✅ Publishes completion event: `botz.work.completed.v1`
+- ✅ Publishes events: `botz.agent.heartbeat.v1`, `agent.task.start.v1`, `botz.work.completed.v1`
 - ✅ Returns structured results
 
 ## Model Selection
@@ -50,8 +81,21 @@ The agent uses TensorZero with dynamic model routing:
 | Task Type | Default Model | Override |
 |-----------|---------------|----------|
 | Simple queries | `openai::qwen3:8b` | Local Ollama |
-| Complex reasoning | `anthropic::claude-sonnet-4-5-20250514` | Cloud |
+| Complex reasoning | `anthropic::claude-sonnet-4-5` | Cloud |
 | Embeddings | `openai::nomic-embed-text` | Local |
+
+## Timeouts
+
+- **Task execution:** 300 seconds (5 minutes) default
+- **HTTP requests:** 30 seconds
+- **NATS connection:** 10 seconds
+
+Configure via environment variables:
+```bash
+export AGENT_TASK_TIMEOUT=300    # Task timeout in seconds
+export AGENT_HTTP_TIMEOUT=30     # HTTP timeout in seconds
+export AGENT_NATS_TIMEOUT=10     # NATS connection timeout in seconds
+```
 
 ## Example
 
@@ -86,6 +130,7 @@ $ pmoves agent-sdk run pmoves-researcher-1735123456 "Analyze the authentication 
 - **Session Persistence**: Use `--session` to resume from previous checkpoint
 - **Streaming Output**: Output streams in real-time as agent processes task
 - **Event Bus**: Agent publishes events to NATS for observability
+- **Timeouts**: Long-running tasks may timeout. Break complex tasks into smaller steps.
 
 ## Troubleshooting
 
@@ -98,8 +143,15 @@ $ pmoves agent-sdk run pmoves-researcher-1735123456 "Analyze the authentication 
   ```bash
   curl http://localhost:4222  # NATS
   curl http://localhost:3030/healthz  # TensorZero
+  curl http://localhost:8086/healthz  # Hi-RAG
   ```
 
 **"Model not available"**
 - Verify model is configured in TensorZero
 - Check provider credentials (OpenAI, Anthropic, etc.)
+- List available models: `curl http://localhost:3030/v1/models`
+
+**"Task timed out"**
+- Break task into smaller steps
+- Increase timeout: `export AGENT_TASK_TIMEOUT=600`
+- Check for infinite loops in tool calls
