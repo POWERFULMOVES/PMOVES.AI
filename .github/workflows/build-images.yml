@@ -13,7 +13,7 @@ env:
 
 jobs:
   setup-matrix:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vps]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -38,7 +38,7 @@ jobs:
 
   build:
     needs: setup-matrix
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vps]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
