@@ -96,3 +96,10 @@
 	path = Pmoves-hyperdimensions
 	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
 	ignore = all
+[submodule "pmoves/pmoves/vendor/e2b"]
+	path = pmoves/pmoves/vendor/e2b
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+[submodule "research/A2UI"]
+	path = research/A2UI
+	url = https://github.com/google/A2UI.git
+	ignore = all
