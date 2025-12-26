@@ -54,7 +54,7 @@ env:
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vps]
     permissions:
       contents: read
       packages: write
