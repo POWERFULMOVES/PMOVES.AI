@@ -20,6 +20,9 @@ on:
       - 'pmoves/docs/SUPABASE_*.md'
       - '.github/workflows/chit-contract.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
