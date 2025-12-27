@@ -1,0 +1,207 @@
+# PMOVES VPS Override - CPU-only Cloud Deployment
+# For KVM4/KVM2 VPS nodes without GPU
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d
+#
+# Node Types:
+#   - KVM4-1: API Gateway, TensorZero, Agent Zero, Hi-RAG CPU
+#   - KVM4-2: Database (Supabase, Qdrant, Neo4j, Meilisearch)
+#   - KVM2: Exit node, Nginx reverse proxy, SSL termination
+
+x-cpu-only: &cpu-only
+  deploy:
+    resources:
+      limits:
+        cpus: '2'
+        memory: 2G
+
+x-vps-healthcheck: &vps-healthcheck
+  healthcheck:
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 30s
+
+services:
+  # ============================================================================
+  # KVM4-1: API Gateway Node
+  # ============================================================================
+
+  tensorzero:
+    <<: [*cpu-only, *vps-healthcheck]
+    environment:
+      # Route GPU-intensive requests to home network via WireGuard
+      - OLLAMA_BASE_URL=${HOME_OLLAMA_URL:-http://10.0.0.1:11434}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # Default to cloud models on VPS
+      - TENSORZERO_DEFAULT_PROVIDER=anthropic
+
+  agent-zero:
+    <<: [*cpu-only, *vps-healthcheck]
+    build:
+      dockerfile: Dockerfile  # CPU-only version
+    environment:
+      - AGENTZERO_MODE=api
+      - TENSORZERO_URL=http://tensorzero:3030
+
+  hi-rag-gateway-v2:
+    <<: [*cpu-only, *vps-healthcheck]
+    # CPU version, no GPU reranking
+    build:
+      dockerfile: services/hi-rag-gateway-v2/Dockerfile
+
+  archon-server:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  mesh-agent:
+    <<: *cpu-only
+    environment:
+      - NODE_TYPE=vps
+      - NODE_CAPABILITIES=cpu-only,api-gateway
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+
+  # ============================================================================
+  # KVM4-2: Database Node
+  # ============================================================================
+
+  supabase-db:
+    <<: *vps-healthcheck
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    volumes:
+      - supabase-data:/var/lib/postgresql/data
+
+  supabase-rest:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  qdrant:
+    <<: *vps-healthcheck
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  neo4j:
+    <<: *vps-healthcheck
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    volumes:
+      - neo4j-data:/data
+
+  meilisearch:
+    <<: [*cpu-only, *vps-healthcheck]
+    volumes:
+      - meili-data:/meili_data
+
+  nats:
+    <<: [*cpu-only, *vps-healthcheck]
+    volumes:
+      - nats-data:/data
+
+  # ============================================================================
+  # KVM2: Exit Node / Reverse Proxy
+  # ============================================================================
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - letsencrypt:/etc/letsencrypt
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # WireGuard for home network tunnel
+  wireguard:
+    image: linuxserver/wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ./wireguard:/config
+      - /lib/modules:/lib/modules:ro
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ============================================================================
+  # GPU Services - DISABLED on VPS
+  # ============================================================================
+
+  hi-rag-gateway-v2-gpu:
+    profiles:
+      - gpu-only
+
+  ffmpeg-whisper:
+    profiles:
+      - gpu-only
+
+  ultimate-tts-studio:
+    profiles:
+      - gpu-only
+
+  ollama:
+    profiles:
+      - gpu-only
+
+  vllm:
+    profiles:
+      - gpu-only
+
+  comfyui:
+    profiles:
+      - gpu-only
+
+  media-video:
+    profiles:
+      - gpu-only
+
+  media-audio:
+    profiles:
+      - gpu-only
+
+volumes:
+  supabase-data:
+  qdrant-data:
+  neo4j-data:
+  meili-data:
+  nats-data:
+  letsencrypt:
+
+networks:
+  pmoves-net:
+    driver: bridge
+  wireguard-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24

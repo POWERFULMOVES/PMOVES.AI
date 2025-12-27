@@ -1,0 +1,92 @@
+[
+  {
+    "name": "PMOVES Echo Ingest v1",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "pmoves/ingest",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "Webhook",
+        "name": "Webhook: Ingest Transcript",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "webhookId": "pmoves-ingest",
+        "position": [
+          260,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "authentication": "none",
+          "requestMethod": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "jsonParameters": true,
+          "options": {},
+          "sendBody": true,
+          "bodyParametersJson": "{\"topic\":\"ingest.transcript.ready.v1\",\"payload\":{{$json}}}"
+        },
+        "id": "HTTP",
+        "name": "HTTP → Agent Zero",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [
+          560,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "options": {},
+          "responseBody": "Ingest accepted"
+        },
+        "id": "Resp",
+        "name": "Respond",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.0,
+        "position": [
+          860,
+          300
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook: Ingest Transcript": {
+        "main": [
+          [
+            {
+              "node": "HTTP → Agent Zero",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP → Agent Zero": {
+        "main": [
+          [
+            {
+              "node": "Respond",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "instanceId": "pmoves-demo"
+    },
+    "pinData": null,
+    "versionId": "920c9991-7073-4eb3-9b71-958a6aed7da1",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": []
+  }
+]

@@ -1,0 +1,123 @@
+{
+  "title": "Flute Gateway",
+  "description": "Voice synthesis gateway - TTS requests, prosodic chunks, and WebSocket sessions",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "flute-gateway",
+  "tags": ["tts", "voice", "flute", "audio"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Gateway Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Gateway Status",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "up{job=\"flute-gateway\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Requests",
+      "gridPos": { "x": 4, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(flute_requests_total)", "legendFormat": "Requests" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "TTS Requests/sec",
+      "gridPos": { "x": 9, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(rate(flute_requests_total{endpoint!=\"/healthz\"}[5m]))", "legendFormat": "Rate" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } }
+    },
+    {
+      "type": "stat",
+      "title": "Prosodic Chunks",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "flute_prosodic_chunks_count", "legendFormat": "Chunks" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "purple", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Memory (RSS)",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "process_resident_memory_bytes{job=\"flute-gateway\"}", "legendFormat": "Memory" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 536870912 }, { "color": "red", "value": 1073741824 }] } } }
+    },
+    {
+      "type": "row",
+      "title": "Request Metrics",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests by Endpoint",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "flute_requests_total", "legendFormat": "{{endpoint}} ({{status}})" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 20 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate by Status",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(flute_requests_total{status=\"200\"}[5m]))", "legendFormat": "Success (200)" },
+        { "expr": "sum(rate(flute_requests_total{status!=\"200\"}[5m]))", "legendFormat": "Errors" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 30 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Success (200)" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Prosodic Synthesis",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "histogram",
+      "title": "Prosodic Chunks Distribution",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 6 },
+      "targets": [{ "expr": "flute_prosodic_chunks_bucket", "legendFormat": "{{le}}" }],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 80 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Process CPU & Memory",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "rate(process_cpu_seconds_total{job=\"flute-gateway\"}[5m]) * 100", "legendFormat": "CPU %" },
+        { "expr": "process_resident_memory_bytes{job=\"flute-gateway\"} / 1024 / 1024", "legendFormat": "Memory MB" }
+      ],
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "CPU %" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "custom.axisPlacement", "value": "left" }] },
+          { "matcher": { "id": "byName", "options": "Memory MB" }, "properties": [{ "id": "unit", "value": "decmbytes" }, { "id": "custom.axisPlacement", "value": "right" }] }
+        ]
+      }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" }
+}

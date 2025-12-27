@@ -1,0 +1,131 @@
+[
+  {
+    "name": "Finance Firefly Sync (stub)",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "GET",
+          "url": "={{$env.FIREFLY_BASE_URL || 'http://cataclysm-firefly:8080'}}/api/v1/transactions?limit=25",
+          "options": {
+            "headers": {
+              "Authorization": "=Bearer {{$env.FIREFLY_ACCESS_TOKEN}}"
+            }
+          }
+        },
+        "id": "FireflyFetch",
+        "name": "Fetch Transactions",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          300,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "functionCode": "// Map Firefly transactions to finance_transactions upsert shape\nconst data = $json.data || [];\nreturn data.map(d => { const t = d.attributes || {}; return { json: {\n  namespace: 'pmoves',\n  source: 'firefly',\n  external_id: String(d.id),\n  occurred_at: t.date || new Date().toISOString(),\n  amount: Number(t.amount || 0),\n  currency: t.currency_code || t.currency_symbol || 'USD',\n  description: t.description || null,\n  category: (t.category_name || null),\n  counterparty: (t.external_url || t.destination_name || null),\n  raw: d\n}}; });"
+        },
+        "id": "MapToUpsert",
+        "name": "Map → upsert rows",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 1,
+        "position": [
+          580,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "url": "={{$env.SUPA_REST_URL}}/finance_transactions",
+          "options": {
+            "headers": {
+              "apikey": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}",
+              "Authorization": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}",
+              "Content-Type": "application/json",
+              "Prefer": "resolution=merge-duplicates"
+            }
+          },
+          "sendBody": true,
+          "jsonParameters": true,
+          "specifyBody": "json",
+          "body": "={{$json}}"
+        },
+        "id": "UpsertSupabase",
+        "name": "Upsert Supabase",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          860,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "url": "={{$env.AGENT_ZERO_BASE_URL || 'http://agent-zero:8080'}}/events/publish",
+          "sendBody": true,
+          "jsonParameters": true,
+          "specifyBody": "json",
+          "body": {
+            "topic": "finance.transactions.ingested.v1",
+            "source": "firefly-sync",
+            "payload": "={{$json}}"
+          }
+        },
+        "id": "PublishEvent",
+        "name": "Publish Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1140,
+          200
+        ]
+      }
+    ],
+    "connections": {
+      "Fetch Transactions": {
+        "main": [
+          [
+            {
+              "node": "Map → upsert rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Map → upsert rows": {
+        "main": [
+          [
+            {
+              "node": "Upsert Supabase",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upsert Supabase": {
+        "main": [
+          [
+            {
+              "node": "Publish Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {},
+    "pinData": null,
+    "versionId": "599fd7cb-d154-4d25-a648-91a9c8282563",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": []
+  }
+]

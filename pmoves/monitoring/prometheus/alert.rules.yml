@@ -1,0 +1,230 @@
+# PMOVES Alert Rules
+# Generated: 2025-12-24
+# Purpose: Critical alerting for PMOVES infrastructure
+
+groups:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Service Health Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: service_health
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 1 minute."
+
+      - alert: ServiceHighRestartRate
+        expr: changes(up[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service {{ $labels.job }} is restarting frequently"
+          description: "{{ $labels.job }} has restarted more than 3 times in the last 15 minutes."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Error Rate Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: error_rates
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum by (job) (rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "{{ $labels.job }} has error rate > 5% for 5 minutes. Current: {{ $value | humanizePercentage }}"
+
+      - alert: HiRAGHighErrorRate
+        expr: |
+          sum(rate(hirag_db_errors_total[5m]))
+          /
+          (sum(rate(hirag_queries_total[5m])) + 0.001) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hi-RAG v2 database errors elevated"
+          description: "Hi-RAG v2 is experiencing high database error rate (>10%)."
+
+      - alert: ExtractWorkerErrors
+        expr: sum(rate(ingest_errors_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Extract Worker experiencing errors"
+          description: "Extract Worker ingest errors are elevated."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Latency Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: latency
+    rules:
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (job, le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency on {{ $labels.job }}"
+          description: "{{ $labels.job }} P95 latency is above 2 seconds. Current: {{ $value | humanizeDuration }}"
+
+      - alert: HiRAGSlowQueries
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(hirag_query_latency_seconds_bucket[5m]))
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hi-RAG v2 queries are slow"
+          description: "Hi-RAG v2 P95 query latency is above 3 seconds."
+
+      - alert: YouTubeIngestSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(yt_ingest_duration_seconds_bucket[5m]))
+          ) > 120
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "YouTube ingestion is slow"
+          description: "PMOVES.YT P95 ingest duration exceeds 2 minutes."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Resource Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: resources
+    rules:
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.job }}"
+          description: "{{ $labels.job }} CPU usage is above 80% for 10 minutes."
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes > 2e9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.job }}"
+          description: "{{ $labels.job }} is using more than 2GB of memory."
+
+      - alert: ContainerMemoryHigh
+        expr: |
+          (container_memory_usage_bytes{name!=""}
+          / container_spec_memory_limit_bytes{name!=""}) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} memory usage high"
+          description: "Container is using more than 90% of its memory limit."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Agent & Orchestration Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: agents
+    rules:
+      - alert: AgentZeroHighSessions
+        expr: agent_zero_active_sessions > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent Zero has many active sessions"
+          description: "Agent Zero has more than 50 active sessions, which may indicate a resource leak."
+
+      - alert: ArchonKnowledgeOpsErrors
+        expr: |
+          sum(rate(archon_knowledge_ops_total{status="error"}[5m]))
+          /
+          (sum(rate(archon_knowledge_ops_total[5m])) + 0.001) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Archon knowledge operations failing"
+          description: "Archon knowledge operations have >10% error rate."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Data Pipeline Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: data_pipeline
+    rules:
+      - alert: NotebookSyncStalled
+        expr: |
+          time() - notebook_sync_last_success_timestamp > 1800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notebook sync has stalled"
+          description: "Notebook sync has not completed successfully in 30+ minutes."
+
+      - alert: PDFIngestErrors
+        expr: |
+          sum(rate(pdf_ingest_requests_total{status="error"}[5m]))
+          /
+          (sum(rate(pdf_ingest_requests_total[5m])) + 0.001) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PDF Ingest experiencing high error rate"
+          description: "More than 20% of PDF ingestion requests are failing."
+
+      - alert: YouTubeDownloadsFailing
+        expr: |
+          sum(rate(yt_downloads_succeeded_total[5m]))
+          /
+          (sum(rate(yt_download_requests_total[5m])) + 0.001) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "YouTube downloads success rate low"
+          description: "Less than 80% of YouTube download requests are succeeding."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Security Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: security
+    rules:
+      - alert: PresignAuthFailuresHigh
+        expr: sum(rate(presign_auth_failures_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High presign authentication failures"
+          description: "Presign service seeing elevated auth failures - possible attack."
+
+      - alert: BucketAccessDenials
+        expr: sum by (bucket) (rate(presign_bucket_denials_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Bucket access denials for {{ $labels.bucket }}"
+          description: "Clients attempting to access unauthorized bucket {{ $labels.bucket }}."

@@ -1,0 +1,715 @@
+{
+  "title": "GPU Orchestrator",
+  "description": "GPU VRAM monitoring, model lifecycle tracking, and resource optimization for PMOVES.AI",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "gpu-orchestrator",
+  "tags": ["gpu", "vram", "models", "orchestration"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "GPU Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "gauge",
+      "title": "VRAM Usage",
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpu_vram_used_bytes{gpu_index=\"0\"} / gpu_vram_total_bytes{gpu_index=\"0\"} * 100",
+          "legendFormat": "Used %"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 60 },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "VRAM Free",
+      "gridPos": { "x": 6, "y": 1, "w": 4, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_vram_free_bytes{gpu_index=\"0\"}",
+          "legendFormat": "Free"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "orange", "value": 4294967296 },
+              { "color": "green", "value": 8589934592 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "VRAM Used",
+      "gridPos": { "x": 10, "y": 1, "w": 4, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_vram_used_bytes{gpu_index=\"0\"}",
+          "legendFormat": "Used"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 21474836480 },
+              { "color": "red", "value": 28991029248 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "GPU Utilization",
+      "gridPos": { "x": 14, "y": 1, "w": 4, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_utilization_percent{gpu_index=\"0\"}",
+          "legendFormat": "Utilization"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": 0 },
+              { "color": "green", "value": 20 },
+              { "color": "yellow", "value": 80 },
+              { "color": "red", "value": 95 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "GPU Temperature",
+      "gridPos": { "x": 18, "y": 1, "w": 3, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_temperature_celsius{gpu_index=\"0\"}",
+          "legendFormat": "Temp"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": 0 },
+              { "color": "green", "value": 40 },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 80 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Orchestrator Status",
+      "gridPos": { "x": 21, "y": 1, "w": 3, "h": 3 },
+      "targets": [
+        {
+          "expr": "up{job=\"gpu-orchestrator\"}",
+          "legendFormat": "Status"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Loaded Models",
+      "gridPos": { "x": 6, "y": 4, "w": 4, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_loaded_models_count",
+          "legendFormat": "Models"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": 0 },
+              { "color": "green", "value": 1 },
+              { "color": "yellow", "value": 4 },
+              { "color": "red", "value": 6 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Idle Models",
+      "gridPos": { "x": 10, "y": 4, "w": 4, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_idle_models_count",
+          "legendFormat": "Idle"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 2 },
+              { "color": "orange", "value": 3 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Load Queue Depth",
+      "gridPos": { "x": 14, "y": 4, "w": 4, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_model_load_queue_depth",
+          "legendFormat": "Queue"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 3 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Active Sessions",
+      "gridPos": { "x": 18, "y": 4, "w": 3, "h": 3 },
+      "targets": [
+        {
+          "expr": "gpu_active_sessions",
+          "legendFormat": "Sessions"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": 0 },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "VRAM Timeline",
+      "gridPos": { "x": 0, "y": 7, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "VRAM Usage Over Time",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "gpu_vram_used_bytes{gpu_index=\"0\"}",
+          "legendFormat": "Used"
+        },
+        {
+          "expr": "gpu_vram_free_bytes{gpu_index=\"0\"}",
+          "legendFormat": "Free"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "stacking": { "mode": "none" }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Used" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Free" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "GPU Utilization & Temperature",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "gpu_utilization_percent{gpu_index=\"0\"}",
+          "legendFormat": "Utilization %"
+        },
+        {
+          "expr": "gpu_temperature_celsius{gpu_index=\"0\"}",
+          "legendFormat": "Temperature C"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Utilization %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } },
+              { "id": "custom.axisPlacement", "value": "left" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Temperature C" },
+            "properties": [
+              { "id": "unit", "value": "celsius" },
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Model Memory Breakdown",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "piechart",
+      "title": "VRAM by Model",
+      "gridPos": { "x": 0, "y": 17, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "gpu_model_vram_bytes",
+          "legendFormat": "{{model_id}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "pieType": "donut",
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Per-Model VRAM Over Time",
+      "gridPos": { "x": 8, "y": 17, "w": 16, "h": 8 },
+      "targets": [
+        {
+          "expr": "gpu_model_vram_bytes",
+          "legendFormat": "{{model_id}} ({{provider}})"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 40,
+            "stacking": { "mode": "normal" },
+            "showPoints": "never"
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Model Operations",
+      "gridPos": { "x": 0, "y": 25, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Model Load/Unload Events",
+      "gridPos": { "x": 0, "y": 26, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "increase(gpu_model_loads_total[5m])",
+          "legendFormat": "Loads ({{model_id}})"
+        },
+        {
+          "expr": "increase(gpu_model_unloads_total[5m])",
+          "legendFormat": "Unloads ({{model_id}})"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "none" }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "Loads.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "Unloads.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Loaded Models (Current)",
+      "gridPos": { "x": 12, "y": 26, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpu_model_vram_bytes > 0",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Value" }]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": {
+              "model_id": "Model",
+              "provider": "Provider",
+              "Value": "VRAM (bytes)"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "VRAM (bytes)" },
+            "properties": [{ "id": "unit", "value": "bytes" }]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Container GPU Memory",
+      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "bargauge",
+      "title": "GPU Memory by Container",
+      "gridPos": { "x": 0, "y": 33, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpu_container_vram_bytes",
+          "legendFormat": "{{container_name}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 8589934592 },
+              { "color": "red", "value": 17179869184 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "GPU Processes",
+      "gridPos": { "x": 12, "y": 33, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "gpu_process_vram_bytes",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "VRAM" }]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true },
+            "renameByName": {
+              "pid": "PID",
+              "process_name": "Process",
+              "container_id": "Container",
+              "Value": "VRAM"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "VRAM" },
+            "properties": [{ "id": "unit", "value": "bytes" }]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Alerts & Recommendations",
+      "gridPos": { "x": 0, "y": 39, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "VRAM Warning",
+      "gridPos": { "x": 0, "y": 40, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "(gpu_vram_used_bytes{gpu_index=\"0\"} / gpu_vram_total_bytes{gpu_index=\"0\"}) > 0.8",
+          "legendFormat": "Warning"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" } } },
+            { "type": "value", "options": { "1": { "text": "HIGH USAGE", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thermal Warning",
+      "gridPos": { "x": 6, "y": 40, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "gpu_temperature_celsius{gpu_index=\"0\"} > 80",
+          "legendFormat": "Thermal"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" } } },
+            { "type": "value", "options": { "1": { "text": "HOT!", "color": "red" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "text",
+      "title": "Quick Actions",
+      "gridPos": { "x": 12, "y": 40, "w": 12, "h": 4 },
+      "options": {
+        "mode": "markdown",
+        "content": "## GPU Management Commands\n\n| Command | Description |\n|---------|-------------|\n| `/gpu:status` | Show current VRAM usage and loaded models |\n| `/gpu:optimize` | Auto-unload idle models to free VRAM |\n| `/model:unload <model>` | Manually unload a specific model |\n| `/model:load <model>` | Load a model with priority queue |\n\n**API Endpoints:**\n- `GET http://localhost:8200/api/gpu/status` - Full GPU status\n- `POST http://localhost:8200/api/gpu/optimize` - Trigger optimization"
+      }
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Model Events",
+        "datasource": "Prometheus",
+        "enable": true,
+        "expr": "changes(gpu_model_loads_total[1m]) > 0 or changes(gpu_model_unloads_total[1m]) > 0",
+        "step": "60s",
+        "titleFormat": "Model Event",
+        "textFormat": "Model loaded/unloaded"
+      }
+    ]
+  }
+}
