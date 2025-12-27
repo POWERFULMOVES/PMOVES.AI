@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
-import { hiragQuery, hiragHealth } from "../../../lib/api/hirag";
-import type { HiragResult } from "../../../lib/api/hirag";
+import { SearchBar } from "../../../components/search/SearchBar";
+import { SearchResults } from "../../../components/search/SearchResults";
+import { SearchFilters } from "../../../components/search/SearchFilters";
+import { hiragQuery, hiragHealth, exportToNotebook } from "../../../lib/api/hirag";
+import type { HiragResult, HiragFilters } from "../../../lib/api/hirag";
 
 export default function SearchDashboardPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<HiragResult[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [queryTime, setQueryTime] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthy, setHealthy] = useState(false);
+  const [filters, setFilters] = useState<HiragFilters>({});
+  const [showFilters, setShowFilters] = useState(false);
+  const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
 
   useEffect(() => {
     // Check Hi-RAG health on mount
@@ -25,27 +33,50 @@ export default function SearchDashboardPage() {
       });
   }, []);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const handleSearch = useCallback(async (searchQuery: string, searchFilters?: HiragFilters) => {
+    if (!searchQuery.trim()) return;
 
     setLoading(true);
     setError(null);
+    setQuery(searchQuery);
 
-    const result = await hiragQuery(query, {
-      topK: 10,
+    const result = await hiragQuery(searchQuery, {
+      topK: 20,
       rerank: true,
+      filters: searchFilters || filters,
     });
 
     if (result.ok) {
       setResults(result.data.results);
+      setTotal(result.data.total);
+      setQueryTime(result.data.queryTime);
     } else {
       setError(result.error);
       setResults([]);
+      setTotal(0);
     }
 
     setLoading(false);
-  };
+  }, [filters]);
+
+  const handleExport = useCallback(async (result: HiragResult) => {
+    // For now, just show a notification
+    // In production, this would prompt for notebook selection
+    const exportResult = await exportToNotebook([result], "default");
+    if (exportResult.ok) {
+      setCopiedNotification("Exported to notebook");
+      setTimeout(() => setCopiedNotification(null), 2000);
+    }
+  }, []);
+
+  const handleCopy = useCallback((content: string) => {
+    setCopiedNotification("Copied to clipboard");
+    setTimeout(() => setCopiedNotification(null), 2000);
+  }, []);
+
+  const hasActiveFilters = Object.keys(filters).some(
+    (key) => filters[key as keyof HiragFilters] !== undefined
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -67,77 +98,76 @@ export default function SearchDashboardPage() {
           >
             Hi-RAG v2: {healthy ? "Connected" : "Disconnected"}
           </span>
+          <kbd className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 text-neutral-500 bg-neutral-100 rounded border border-neutral-200">
+            <span>⌘</span>K to focus
+          </kbd>
         </div>
       </header>
 
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search knowledge base..."
-          className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm"
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          disabled={loading || !query.trim()}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          {loading ? "Searching..." : "Search"}
-        </button>
-      </form>
+      {/* Search Bar */}
+      <SearchBar
+        onSearch={handleSearch}
+        loading={loading}
+        placeholder="Search knowledge base..."
+        defaultValue={query}
+        hasActiveFilters={hasActiveFilters}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+      />
 
+      {/* Error Display */}
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800">
-          {error}
-        </div>
-      )}
-
-      {results.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-medium">
-            Found {results.length} results
-          </h2>
-          <div className="space-y-3">
-            {results.map((result, index) => (
-              <div
-                key={`${result.id}-${index}`}
-                className="rounded border border-neutral-200 bg-white p-4"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-sm text-neutral-800">
-                      {result.content}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-500">
-                      <span className="rounded bg-neutral-100 px-2 py-0.5">
-                        {result.source}
-                      </span>
-                      <span>Score: {(result.score * 100).toFixed(1)}%</span>
-                      {result.metadata.title && (
-                        <span>📄 {result.metadata.title}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert" aria-live="assertive">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <span>{error}</span>
           </div>
         </div>
       )}
 
-      {results.length === 0 && !loading && !error && query && (
-        <div className="rounded border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500">
-          No results found. Try a different search query.
+      {/* Copy/Export Notification */}
+      {copiedNotification && (
+        <div className="fixed bottom-4 right-4 bg-neutral-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-fade-in">
+          {copiedNotification}
         </div>
       )}
 
-      {!query && (
-        <div className="rounded border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500">
-          Enter a search query to search the PMOVES knowledge base.
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Filters Sidebar */}
+        {showFilters && (
+          <aside className="lg:col-span-1">
+            <SearchFilters
+              filters={filters}
+              onChange={setFilters}
+              isOpen={showFilters}
+              onToggle={() => setShowFilters(false)}
+            />
+          </aside>
+        )}
+
+        {/* Results Area */}
+        <main className={showFilters ? "lg:col-span-3" : "lg:col-span-4"}>
+          {!query && !loading && (
+            <div className="rounded border border-dashed border-neutral-300 p-12 text-center text-sm text-neutral-500">
+              <div className="text-4xl mb-4">🔍</div>
+              <p className="font-medium mb-2">Search the PMOVES knowledge base</p>
+              <p>Enter a query above to search across videos, notebooks, PDFs, and more.</p>
+            </div>
+          )}
+
+          {query && (
+            <SearchResults
+              results={results}
+              total={total}
+              queryTime={queryTime}
+              onExport={handleExport}
+              onCopy={handleCopy}
+              verbose
+            />
+          )}
+        </main>
+      </div>
     </div>
   );
 }
