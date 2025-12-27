@@ -22,6 +22,9 @@ on:
       - 'pmoves/tests/**'
       - '.github/workflows/python-tests.yml'
 
+permissions:
+  contents: read
+
 jobs:
   tests:
     runs-on: ubuntu-latest
