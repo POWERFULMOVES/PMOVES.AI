@@ -9,8 +9,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { SystemStatsBar } from './SystemStatsBar';
 import { TierOverviewGrid } from '../services/TierOverview';
-import { useServiceHealth, type ServiceHealthMap } from '@/lib/useServiceHealth';
-import type { ServiceCategory, TierStats } from '@/lib/serviceCatalog';
+import { useServiceHealth } from '@/lib/useServiceHealth';
+import type { ServiceHealthMap } from '@/lib/serviceHealth';
+import type { ServiceCategory } from '@/lib/serviceCatalog';
+import type { TierStats } from '../services/TierOverview';
 
 export interface SystemHubData {
   stats: {

@@ -1,17 +1,14 @@
+'use client';
+
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import type { Metadata } from 'next';
 import { DashboardShell } from '../../../components/DashboardNavigation';
 import { SystemStatsBar } from '../../../components/hub/SystemStatsBar';
 import { TierNavigation } from '../../../components/services/TierNavigation';
 import { ServiceHealthIndicator } from '../../../components/services/ServiceHealthIndicator';
-import { useServiceHealth, type ServiceHealthMap } from '../../../lib/useServiceHealth';
+import { useServiceHealth } from '../../../lib/useServiceHealth';
 import { SERVICE_CATALOG, type ServiceCategory, type ServiceColor } from '../../../lib/serviceCatalog';
-
-export const metadata: Metadata = {
-  title: 'Services',
-  description: 'Browse all PMOVES services with real-time health monitoring and tier-based filtering.',
-};
+import type { ServiceHealthMap } from '../../../lib/serviceHealth';
 
 // Lookup objects for Tailwind JIT - all class names must be statically analyzable
 const TAG_CLASSES: Record<string, string> = {
@@ -56,7 +53,7 @@ export default function ServicesIndexPage() {
   const [activeTier, setActiveTier] = useState<ServiceCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { health, isChecking, lastUpdate, refresh } = useServiceHealth({
+  const { health, isPolling, lastUpdate, refresh } = useServiceHealth({
     pollInterval: 30000,
     enabled: true,
   });
@@ -133,7 +130,7 @@ export default function ServicesIndexPage() {
           unhealthyCount={overallStats.unhealthy}
           unknownCount={overallStats.unknown}
           percentage={overallStats.percentage}
-          isChecking={isChecking}
+          isChecking={isPolling}
           lastUpdate={lastUpdate}
           onRefresh={refresh}
         />
@@ -170,9 +167,9 @@ export default function ServicesIndexPage() {
             const color = service.color as string;
             const serviceHealth = health[service.slug];
             const status = serviceHealth?.status || 'unknown';
-            const href = service.endpoints[0]?.url
+            const href = service.endpoints.length > 0
               ? `/dashboard/services/${service.slug}`
-              : service.endpoints[0]?.url || '#';
+              : '#';
 
             return (
               <Link
@@ -228,7 +225,7 @@ export default function ServicesIndexPage() {
                     {service.slug}
                   </span>
                   <span className="text-xs font-mono text-ink-muted group-hover:text-cata-cyan transition-colors flex items-center gap-1">
-                    {service.endpoints[0]?.url ? 'View details' : 'External link'}
+                    {service.endpoints.length > 0 ? 'View details' : 'External link'}
                     <span className="transform group-hover:translate-x-1 transition-transform">&rarr;</span>
                   </span>
                 </div>
