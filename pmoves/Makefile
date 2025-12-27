@@ -42,6 +42,7 @@ export COMPOSE_PROFILES
 
 PYTHON ?= python3
 SINGLE_ENV_MODE ?= 1
+SCRIPTS := scripts
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
@@ -66,6 +67,15 @@ ensure-env-shared:
 		touch "$(ENV_SHARED_FILE)"; \
 		fi; \
 	fi
+
+# -------- Standard Makefile targets ----------
+.PHONY: all
+all: help ## Default target - show help
+
+.PHONY: test
+test: test-smoke ## Run pytest smoke tests
+
+.DEFAULT_GOAL := help
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
@@ -1932,27 +1942,27 @@ channel-monitor-up:
 .PHONY: test-smoke
 test-smoke: ## Run pytest smoke tests for all services (5-30s)
 	@echo "Running pytest smoke tests..."
-	cd pmoves && pytest tests/smoke/ -v -m smoke --tb=short
+	pytest tests/smoke/ -v -m smoke --tb=short
 
 .PHONY: test-smoke-quick
 test-smoke-quick: ## Run pytest smoke tests with minimal output (fail fast)
 	@echo "Running quick smoke tests..."
-	cd pmoves && pytest tests/smoke/ -m smoke -q --maxfail=5
+	pytest tests/smoke/ -m smoke -q --maxfail=5
 
 .PHONY: test-smoke-health
 test-smoke-health: ## Run pytest smoke tests for health endpoints only
 	@echo "Testing all service health endpoints..."
-	cd pmoves && pytest tests/smoke/test_health_endpoints.py -v -m smoke
+	pytest tests/smoke/test_health_endpoints.py -v -m smoke
 
 .PHONY: test-smoke-critical
 test-smoke-critical: ## Run pytest smoke tests for critical dependency path
 	@echo "Testing critical dependency path..."
-	cd pmoves && pytest tests/smoke/test_critical_path.py -v -m smoke
+	pytest tests/smoke/test_critical_path.py -v -m smoke
 
 .PHONY: test-smoke-parallel
 test-smoke-parallel: ## Run pytest smoke tests in parallel (faster)
 	@echo "Running smoke tests in parallel..."
-	cd pmoves && pytest tests/smoke/ -v -m smoke -n auto
+	pytest tests/smoke/ -v -m smoke -n auto
 
 .PHONY: channel-monitor-smoke
 channel-monitor-smoke:

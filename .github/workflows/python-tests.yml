@@ -22,6 +22,9 @@ on:
       - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   workflow_dispatch:
+permissions:
+  contents: read
+
 
 jobs:
   tests:
