@@ -18,8 +18,6 @@ Architecture:
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-
 import asyncio
 import json
 import os
@@ -28,8 +26,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Security
-from fastapi.security import APIKeyHeader
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 import uvicorn
 
@@ -47,74 +44,13 @@ TENSORZERO_URL = os.environ.get("TENSORZERO_URL", "http://tensorzero-gateway:303
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 PORT = int(os.environ.get("PORT", "8100"))
-GATEWAY_API_KEY = os.environ.get("GATEWAY_API_KEY", "")
-
-# ============================================================================
-# Authentication
-# ============================================================================
-
-API_KEY_NAME = "X-Gateway-API-Key"
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
-
-
-async def get_api_key(api_key_header: str = Security(api_key_header)) -> Optional[str]:
-    """
-    Verify API key for protected endpoints.
-
-    If GATEWAY_API_KEY is set, the request must include a matching X-Gateway-API-Key header.
-    If GATEWAY_API_KEY is not set, authentication is disabled (for development only).
-
-    Returns:
-        The API key string if authenticated, None if auth is disabled.
-
-    Raises:
-        HTTPException: If GATEWAY_API_KEY is set but header doesn't match.
-    """
-    if GATEWAY_API_KEY:
-        if api_key_header != GATEWAY_API_KEY:
-            raise HTTPException(
-                status_code=403,
-                detail="Invalid or missing API Key. Provide X-Gateway-API-Key header."
-            )
-        return api_key_header
-
-    # Auth disabled - warn in production-like environments
-    if os.environ.get("ENV", "production") != "development":
-        logger.warning("GATEWAY_API_KEY not set - authentication disabled for gateway-agent")
-
-    return None
 
 # FastAPI app
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Lifecycle Management
-# ─────────────────────────────────────────────────────────────────────────────
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifespan for Gateway Agent."""
-    # Startup
-    logger.info("Gateway Agent starting up...")
-    logger.info(f"Agent Zero URL: {AGENT_ZERO_URL}")
-    logger.info(f"Cipher URL: {CIPHER_URL}")
-    logger.info(f"TensorZero URL: {TENSORZERO_URL}")
-
-    # Initial tool discovery
-    await tool_registry.discover_tools(force_refresh=True)
-
-    # Log available secrets count
-    secrets = SecretManager.get_all_credentials()
-    logger.info(f"Loaded {len(secrets)} service credentials from environment")
-
-    yield
-
-    # Shutdown
-    logger.info("Gateway Agent shutting down...")
-
 app = FastAPI(
     title="PMOVES Gateway Agent",
     description="Orchestrates 100+ MCP tools with Cipher memory integration",
     version="1.0.0"
-, lifespan=lifespan)
+)
 
 
 # ============================================================================
@@ -440,15 +376,8 @@ async def list_tools(category: str = None, force_refresh: bool = False):
 
 
 @app.post("/tools/execute", response_model=ToolExecuteResponse)
-async def execute_tool(
-    request: ToolExecuteRequest,
-    _auth: Optional[str] = Depends(get_api_key)
-):
-    """
-    Execute an MCP tool via the Gateway.
-
-    Requires authentication when GATEWAY_API_KEY is set.
-    """
+async def execute_tool(request: ToolExecuteRequest):
+    """Execute an MCP tool via the Gateway"""
     start_time = datetime.now()
 
     try:
@@ -507,16 +436,8 @@ async def _route_to_upstream(tool: ToolDefinition, parameters: Dict[str, Any]) -
 
 
 @app.post("/skills/store", response_model=dict)
-async def store_skill(
-    request: SkillStoreRequest,
-    background_tasks: BackgroundTasks,
-    _auth: Optional[str] = Depends(get_api_key)
-):
-    """
-    Store a learned skill pattern in Cipher memory.
-
-    Requires authentication when GATEWAY_API_KEY is set.
-    """
+async def store_skill(request: SkillStoreRequest, background_tasks: BackgroundTasks):
+    """Store a learned skill pattern in Cipher memory"""
     try:
         # Store in Cipher memory
         skill_data = {
@@ -544,15 +465,8 @@ async def store_skill(
 
 
 @app.post("/skills/search", response_model=dict)
-async def search_skills(
-    request: SkillSearchRequest,
-    _auth: Optional[str] = Depends(get_api_key)
-):
-    """
-    Search for skills in Cipher memory.
-
-    Requires authentication when GATEWAY_API_KEY is set.
-    """
+async def search_skills(request: SkillSearchRequest):
+    """Search for skills in Cipher memory"""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             params = {"query": request.query, "limit": request.limit}
@@ -571,14 +485,9 @@ async def search_skills(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/secrets", response_model=Dict[str, str], dependencies=[Depends(get_api_key)])
+@app.get("/secrets", response_model=Dict[str, str])
 async def list_secrets():
-    """
-    List available service credentials (masked for security).
-
-    **Requires Authentication**: X-Gateway-API-Key header must be provided
-    if GATEWAY_API_KEY is set in the environment.
-    """
+    """List available secrets (masked)"""
     return SecretManager.get_all_credentials()
 
 
@@ -586,9 +495,26 @@ async def list_secrets():
 # Main Entry Point
 # ============================================================================
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize tool registry on startup"""
+    logger.info("Gateway Agent starting up...")
+    logger.info(f"Agent Zero URL: {AGENT_ZERO_URL}")
+    logger.info(f"Cipher URL: {CIPHER_URL}")
+    logger.info(f"TensorZero URL: {TENSORZERO_URL}")
+
+    # Initial tool discovery
+    await tool_registry.discover_tools(force_refresh=True)
+
+    # Log available secrets count
+    secrets = SecretManager.get_all_credentials()
+    logger.info(f"Loaded {len(secrets)} service credentials from environment")
 
 
-
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    logger.info("Gateway Agent shutting down...")
 
 
 if __name__ == "__main__":
