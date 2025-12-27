@@ -41,6 +41,7 @@ COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_
 export COMPOSE_PROFILES
 
 PYTHON ?= python3
+SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
 SCRIPTS := scripts
 BOOTSTRAP_FLAGS ?=
