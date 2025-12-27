@@ -1,0 +1,199 @@
+[
+  {
+    "name": "PMOVES Channel Monitor Integration",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "channel-monitor/new-content",
+          "options": {
+            "responseData": "{\"ok\":true,\"message\":\"Content queued for processing\"}"
+          },
+          "httpMethod": "POST"
+        },
+        "id": "wh_channel",
+        "name": "Channel Monitor Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [200, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const body = $json;\n\n// Channel Monitor sends notifications about new videos\nconst result = {\n  video_id: body.video_id || body.id,\n  channel_id: body.channel_id,\n  channel_name: body.channel_name || body.channel_title,\n  title: body.title || body.video_title,\n  description: body.description || '',\n  url: body.url || `https://www.youtube.com/watch?v=${body.video_id}`,\n  thumbnail: body.thumbnail || body.thumbnail_url,\n  published_at: body.published_at || body.publish_date,\n  duration: body.duration || null,\n  tags: body.tags || [],\n  namespace: body.namespace || 'pmoves',\n  auto_ingest: body.auto_ingest !== false,\n  auto_research: body.auto_research || false,\n  received_at: new Date().toISOString()\n};\n\nreturn [{ json: result }];"
+        },
+        "id": "parse_notification",
+        "name": "Parse Channel Notification",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ subject: 'channel.new.content.v1', data: $json }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "publish_event",
+        "name": "Publish Channel Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [720, 200]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $node['Parse Channel Notification'].json.auto_ingest }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "check_ingest",
+        "name": "Auto Ingest?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [720, 400]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://pmoves-yt:8077/yt/ingest",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ url: $node['Parse Channel Notification'].json.url, namespace: $node['Parse Channel Notification'].json.namespace, metadata: { channel_id: $node['Parse Channel Notification'].json.channel_id, channel_name: $node['Parse Channel Notification'].json.channel_name, source: 'channel-monitor' } }) }}",
+          "options": {
+            "timeout": 30000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "trigger_ingest",
+        "name": "Trigger PMOVES.YT Ingest",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [980, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const notification = $node['Parse Channel Notification'].json;\nconst ingestResult = $json;\n\nconst result = {\n  video_id: notification.video_id,\n  channel_name: notification.channel_name,\n  title: notification.title,\n  ingest_status: ingestResult.status || 'queued',\n  job_id: ingestResult.job_id || null,\n  s3_uri: ingestResult.s3_uri || null,\n  namespace: notification.namespace,\n  auto_research: notification.auto_research\n};\n\nreturn [{ json: result }];"
+        },
+        "id": "track_ingest",
+        "name": "Track Ingest Job",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1240, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\n\n// Build Discord notification embed\nconst embed = {\n  title: `New Video: ${data.title}`,\n  description: `Channel: ${data.channel_name}`,\n  color: 0xFF0000,\n  fields: [\n    {\n      name: 'Status',\n      value: data.ingest_status,\n      inline: true\n    },\n    {\n      name: 'Video ID',\n      value: data.video_id,\n      inline: true\n    }\n  ],\n  timestamp: new Date().toISOString()\n};\n\nif (data.job_id) {\n  embed.fields.push({\n    name: 'Job ID',\n    value: data.job_id,\n    inline: true\n  });\n}\n\nconst discordPayload = {\n  content: `New content detected from **${data.channel_name}**`,\n  embeds: [embed]\n};\n\nreturn [{ json: { data: data, discord_payload: discordPayload } }];"
+        },
+        "id": "build_preview",
+        "name": "Build Social Preview",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1500, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
+          "sendBody": true,
+          "body": "={{ JSON.stringify($json.discord_payload) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "post_preview",
+        "name": "Post Preview to Discord",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1760, 200]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $node['Track Ingest Job'].json.auto_research }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "check_research",
+        "name": "Auto Research?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1760, 400]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://n8n:5678/webhook/pmoves/deepresearch",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ query: 'Research topics and context for: ' + $node['Parse Channel Notification'].json.title + ' - ' + $node['Parse Channel Notification'].json.description?.slice(0, 500), source: 'channel-monitor', context: { video_id: $node['Parse Channel Notification'].json.video_id, channel: $node['Parse Channel Notification'].json.channel_name } }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "trigger_research",
+        "name": "Trigger DeepResearch",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [2020, 400]
+      }
+    ],
+    "connections": {
+      "Channel Monitor Webhook": {
+        "main": [[{"node": "Parse Channel Notification", "type": "main", "index": 0}]]
+      },
+      "Parse Channel Notification": {
+        "main": [[
+          {"node": "Publish Channel Event", "type": "main", "index": 0},
+          {"node": "Auto Ingest?", "type": "main", "index": 0}
+        ]]
+      },
+      "Auto Ingest?": {
+        "main": [
+          [{"node": "Trigger PMOVES.YT Ingest", "type": "main", "index": 0}],
+          []
+        ]
+      },
+      "Trigger PMOVES.YT Ingest": {
+        "main": [[{"node": "Track Ingest Job", "type": "main", "index": 0}]]
+      },
+      "Track Ingest Job": {
+        "main": [[{"node": "Build Social Preview", "type": "main", "index": 0}]]
+      },
+      "Build Social Preview": {
+        "main": [[
+          {"node": "Post Preview to Discord", "type": "main", "index": 0},
+          {"node": "Auto Research?", "type": "main", "index": 0}
+        ]]
+      },
+      "Auto Research?": {
+        "main": [
+          [{"node": "Trigger DeepResearch", "type": "main", "index": 0}],
+          []
+        ]
+      }
+    },
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "description": "YouTube Channel Monitor integration: receives new content alerts, triggers PMOVES.YT ingestion, posts social preview"
+    },
+    "pinData": null,
+    "versionId": "channel-monitor-v1",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": ["pmoves", "youtube", "channel-monitor", "ingestion"]
+  }
+]
