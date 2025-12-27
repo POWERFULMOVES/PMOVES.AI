@@ -43,6 +43,7 @@ export COMPOSE_PROFILES
 PYTHON ?= python3
 SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
+SCRIPTS := scripts
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
@@ -77,7 +78,6 @@ test: test-smoke ## Run pytest smoke tests
 
 .DEFAULT_GOAL := help
 
-# -------- Updates ----------
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
