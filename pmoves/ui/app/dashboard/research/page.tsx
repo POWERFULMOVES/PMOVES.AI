@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
+import { TaskInitiationForm, type ResearchOptions } from "../../../components/research/TaskInitiationForm";
+import { ResearchTaskList } from "../../../components/research/ResearchTaskList";
+import { ResearchResults } from "../../../components/research/ResearchResults";
 import {
   initiateResearch,
   listResearchTasks,
@@ -16,21 +19,34 @@ export default function ResearchDashboardPage() {
   const [tasks, setTasks] = useState<ResearchTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<ResearchTask | null>(null);
   const [results, setResults] = useState<ResearchResult | null>(null);
-  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthy, setHealthy] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | ResearchTask["status"]>("all");
 
   useEffect(() => {
     refreshTasks();
     checkHealth();
-  }, []);
+    // Poll for updates on running tasks
+    const interval = setInterval(() => {
+      const hasRunning = tasks.some(t => t.status === "running");
+      if (hasRunning) {
+        refreshTasks();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [tasks]);
 
   const refreshTasks = async () => {
-    const result = await listResearchTasks({ limit: 20 });
+    setRefreshing(true);
+    const result = await listResearchTasks({ limit: 50 });
     if (result.ok) {
       setTasks(result.data);
     }
+    setRefreshing(false);
   };
 
   const checkHealth = async () => {
@@ -40,26 +56,18 @@ export default function ResearchDashboardPage() {
     }
   };
 
-  const handleInitiate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    setLoading(true);
+  const handleInitiate = async (query: string, options: ResearchOptions) => {
+    setStarting(true);
     setError(null);
 
-    const result = await initiateResearch(query, {
-      mode: "tensorzero",
-      maxIterations: 10,
-    });
-
+    const result = await initiateResearch(query, options);
     if (result.ok) {
-      setQuery("");
       await refreshTasks();
     } else {
       setError(result.error);
     }
 
-    setLoading(false);
+    setStarting(false);
   };
 
   const handleSelectTask = async (task: ResearchTask) => {
@@ -83,16 +91,17 @@ export default function ResearchDashboardPage() {
 
   const handlePublish = async () => {
     if (!selectedTask) return;
-    // For now, just show success - actual implementation needs notebook selection
-    alert("Research results would be published to Open Notebook");
-  };
+    setPublishing(true);
 
-  const statusColors: Record<ResearchTask["status"], string> = {
-    pending: "bg-gray-100 text-gray-800",
-    running: "bg-blue-100 text-blue-800",
-    completed: "bg-green-100 text-green-800",
-    failed: "bg-red-100 text-red-800",
-    cancelled: "bg-yellow-100 text-yellow-800",
+    const result = await publishToNotebook(selectedTask.id, "default");
+    if (result.ok) {
+      setError("Results published to notebook");
+      setTimeout(() => setError(null), 3000);
+    } else {
+      setError(result.error);
+    }
+
+    setPublishing(false);
   };
 
   return (
@@ -114,82 +123,50 @@ export default function ResearchDashboardPage() {
           >
             DeepResearch: {healthy ? "Connected" : "Disconnected"}
           </span>
+          {tasks.filter(t => t.status === "running").length > 0 && (
+            <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 flex items-center gap-1">
+              <span className="animate-pulse">●</span>
+              {tasks.filter(t => t.status === "running").length} running
+            </span>
+          )}
         </div>
       </header>
 
-      {/* New Research Form */}
-      <section className="rounded border border-neutral-200 bg-white p-4">
-        <h2 className="text-lg font-medium mb-4">Start New Research</h2>
-        <form onSubmit={handleInitiate} className="flex gap-2">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Enter research question..."
-            className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm"
-            disabled={loading}
-          />
-          <button
-            type="submit"
-            disabled={loading || !query.trim()}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {loading ? "Starting..." : "Start Research"}
-          </button>
-        </form>
-        {error && (
-          <div className="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-            {error}
+      {/* Error Display */}
+      {error && (
+        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert" aria-live="assertive">
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800"
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
           </div>
-        )}
-      </section>
+        </div>
+      )}
+
+      {/* Task Initiation Form */}
+      <TaskInitiationForm
+        onSubmit={handleInitiate}
+        loading={starting}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Task List */}
-        <section className="lg:col-span-1 rounded border border-neutral-200 bg-white p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium">Research Tasks</h2>
-            <button
-              onClick={refreshTasks}
-              className="text-xs text-blue-600 hover:text-blue-800"
-            >
-              Refresh
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                onClick={() => handleSelectTask(task)}
-                className={`p-3 rounded cursor-pointer transition ${
-                  selectedTask?.id === task.id
-                    ? "bg-blue-50 border-2 border-blue-500"
-                    : "bg-neutral-50 border-2 border-transparent hover:bg-neutral-100"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium line-clamp-2">
-                    {task.query}
-                  </p>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${statusColors[task.status]}`}
-                  >
-                    {task.status}
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-500 mt-1">
-                  {new Date(task.createdAt).toLocaleString()}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {tasks.length === 0 && (
-            <div className="text-center text-sm text-neutral-500 py-8">
-              No research tasks yet. Start one above!
-            </div>
-          )}
+        <section className="lg:col-span-1">
+          <ResearchTaskList
+            tasks={tasks}
+            selectedId={selectedTask?.id}
+            onSelect={handleSelectTask}
+            onCancel={handleCancel}
+            onRefresh={refreshTasks}
+            refreshing={refreshing}
+            statusFilter={statusFilter}
+            onStatusFilter={setStatusFilter}
+          />
         </section>
 
         {/* Task Details */}
@@ -197,14 +174,24 @@ export default function ResearchDashboardPage() {
           {selectedTask ? (
             <div className="space-y-4">
               <div className="flex items-start justify-between">
-                <div>
+                <div className="flex-1">
                   <h2 className="text-lg font-medium">Task Details</h2>
-                  <p className="text-sm text-neutral-600 mt-1">
+                  <p className="text-sm text-neutral-600 mt-1 line-clamp-2">
                     {selectedTask.query}
                   </p>
                 </div>
                 <span
-                  className={`text-sm px-3 py-1 rounded ${statusColors[selectedTask.status]}`}
+                  className={`text-sm px-3 py-1 rounded ${
+                    selectedTask.status === "pending"
+                      ? "bg-gray-100 text-gray-800"
+                      : selectedTask.status === "running"
+                      ? "bg-blue-100 text-blue-800"
+                      : selectedTask.status === "completed"
+                      ? "bg-green-100 text-green-800"
+                      : selectedTask.status === "failed"
+                      ? "bg-red-100 text-red-800"
+                      : "bg-yellow-100 text-yellow-800"
+                  }`}
                 >
                   {selectedTask.status}
                 </span>
@@ -237,6 +224,18 @@ export default function ResearchDashboardPage() {
                 )}
               </div>
 
+              {/* Running task progress */}
+              {selectedTask.status === "running" && (
+                <div className="flex items-center gap-2 text-sm text-blue-600">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Research in progress...
+                  {selectedTask.iterations && ` (${selectedTask.iterations} iterations)`}
+                </div>
+              )}
+
               {selectedTask.status === "running" && (
                 <button
                   onClick={() => handleCancel(selectedTask.id)}
@@ -247,49 +246,13 @@ export default function ResearchDashboardPage() {
               )}
 
               {results && (
-                <div className="space-y-4 border-t pt-4">
-                  <h3 className="font-medium">Research Results</h3>
-                  <div className="bg-neutral-50 rounded p-4">
-                    <p className="text-sm">{results.summary}</p>
-                  </div>
-                  {results.notes.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Notes</h4>
-                      <ul className="space-y-2">
-                        {results.notes.map((note, i) => (
-                          <li
-                            key={i}
-                            className="text-sm bg-neutral-50 rounded p-2"
-                          >
-                            {note}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {results.sources.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Sources</h4>
-                      <ul className="space-y-1">
-                        {results.sources.map((source, i) => (
-                          <li
-                            key={i}
-                            className="text-sm text-blue-600 hover:underline"
-                          >
-                            <a href={source.url} target="_blank" rel="noreferrer">
-                              {source.title}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <button
-                    onClick={handlePublish}
-                    className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-                  >
-                    Publish to Notebook
-                  </button>
+                <div className="border-t pt-4">
+                  <h3 className="font-medium mb-4">Research Results</h3>
+                  <ResearchResults
+                    result={results}
+                    onPublish={handlePublish}
+                    publishing={publishing}
+                  />
                 </div>
               )}
 
@@ -306,7 +269,8 @@ export default function ResearchDashboardPage() {
             </div>
           ) : (
             <div className="text-center py-12 text-neutral-500">
-              Select a task to view details
+              <div className="text-4xl mb-4">🔬</div>
+              <p>Select a task to view details</p>
             </div>
           )}
         </section>
