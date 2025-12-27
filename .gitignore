@@ -72,3 +72,10 @@ temp*.mp4
 pmoves/ui/.pmoves_ui_dev.pid
 pmoves/ui/.pmoves_ui_dev.log
 docs/notes.md
+
+# Agent Zero runtime data
+pmoves/data/agent-zero/instruments/
+pmoves/data/agent-zero/runtime/agents/
+pmoves/data/agent-zero/memory/
+pmoves/data/agent-zero/tmp/
+
