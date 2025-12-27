@@ -16,7 +16,7 @@ on:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vps]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python

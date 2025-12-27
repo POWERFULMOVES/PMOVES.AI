@@ -1,0 +1,21 @@
+# PMOVES Gateway Agent Requirements
+# Python 3.11+
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# HTTP Client
+httpx>=0.25.0
+
+# Data Validation
+pydantic>=2.0.0
+
+# Async Support
+asyncio-mqtt>=0.14.0
+
+# Logging
+python-json-logger>=2.0.0
+
+# Environment
+python-dotenv>=1.0.0
