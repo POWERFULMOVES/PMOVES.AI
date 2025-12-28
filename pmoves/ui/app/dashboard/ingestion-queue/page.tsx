@@ -182,7 +182,9 @@ export default function IngestionQueuePage() {
       await approveIngestion(client, id, priority);
       // Realtime will update the list
     } catch (error) {
-      console.error('Failed to approve:', error);
+      const message = error instanceof Error ? error.message : 'Failed to approve item';
+      setError(`Failed to approve: ${message}`);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setProcessing((prev) => {
         const next = new Set(prev);
@@ -199,7 +201,9 @@ export default function IngestionQueuePage() {
       await rejectIngestion(client, id, reason);
       // Realtime will update the list
     } catch (error) {
-      console.error('Failed to reject:', error);
+      const message = error instanceof Error ? error.message : 'Failed to reject item';
+      setError(`Failed to reject: ${message}`);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setProcessing((prev) => {
         const next = new Set(prev);

@@ -87,8 +87,9 @@ export function SearchResults({
       if (onCopy) {
         onCopy(content);
       }
-    } catch {
-      // Silently fail if clipboard is unavailable
+    } catch (error) {
+      // Log but don't interrupt UX - clipboard may be unavailable in some contexts
+      console.warn('Clipboard access denied:', error);
     }
   };
 
@@ -265,7 +266,7 @@ export function SearchResults({
                           <a
                             href={result.metadata.url}
                             target="_blank"
-                            rel="noreferrer"
+                            rel="noopener noreferrer"
                             className="text-blue-600 hover:underline break-all"
                           >
                             {result.metadata.url}

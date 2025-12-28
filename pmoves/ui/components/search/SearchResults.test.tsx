@@ -280,7 +280,7 @@ describe('SearchResults', () => {
       const link = screen.getByText('https://youtube.com/watch?v=abc123');
       expect(link).toBeInTheDocument();
       expect(link.closest('a')).toHaveAttribute('target', '_blank');
-      expect(link.closest('a')).toHaveAttribute('rel', 'noreferrer');
+      expect(link.closest('a')).toHaveAttribute('rel', 'noopener noreferrer');
     });
   });
 });

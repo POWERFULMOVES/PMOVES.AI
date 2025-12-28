@@ -37,6 +37,9 @@ export default function ResearchDashboardPage() {
     const result = await listResearchTasks({ limit: 50 });
     if (result.ok) {
       setTasks(result.data);
+    } else {
+      setError(result.error);
+      setTimeout(() => setError(null), 5000);
     }
     setRefreshing(false);
   }, []);
