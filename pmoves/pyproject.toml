@@ -24,6 +24,7 @@ markers = [
     "performance: Load benchmarks and latency tests (5-30m)",
     "slow: Tests that take >10s to run",
     "gpu: Tests requiring GPU acceleration",
+    "dependency: Tests using pytest-dependency for ordering",
 ]
 
 # Async test mode

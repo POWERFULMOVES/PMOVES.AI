@@ -4,6 +4,14 @@ import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
 import {
+  BulkApprovalActions,
+  BulkSelectionCheckbox,
+} from "../../../components/ingestion/BulkApprovalActions";
+import {
+  ApprovalRulesConfig,
+  type ApprovalRule,
+} from "../../../components/ingestion/ApprovalRulesConfig";
+import {
   getSupabaseRealtimeClient,
   subscribeToIngestionQueue,
   fetchIngestionQueue,
@@ -66,6 +74,11 @@ export default function IngestionQueuePage() {
   const [filter, setFilter] = useState<IngestionStatus | 'all'>('pending');
   const [sourceFilter, setSourceFilter] = useState<IngestionSourceType | 'all'>('all');
   const [processing, setProcessing] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [rules, setRules] = useState<ApprovalRule[]>([]);
+  const [showRules, setShowRules] = useState(false);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ pending: number; approved: number; processing: number; completed: number }>({
     pending: 0,
     approved: 0,
@@ -169,7 +182,9 @@ export default function IngestionQueuePage() {
       await approveIngestion(client, id, priority);
       // Realtime will update the list
     } catch (error) {
-      console.error('Failed to approve:', error);
+      const message = error instanceof Error ? error.message : 'Failed to approve item';
+      setError(`Failed to approve: ${message}`);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setProcessing((prev) => {
         const next = new Set(prev);
@@ -186,7 +201,9 @@ export default function IngestionQueuePage() {
       await rejectIngestion(client, id, reason);
       // Realtime will update the list
     } catch (error) {
-      console.error('Failed to reject:', error);
+      const message = error instanceof Error ? error.message : 'Failed to reject item';
+      setError(`Failed to reject: ${message}`);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setProcessing((prev) => {
         const next = new Set(prev);
@@ -203,6 +220,96 @@ export default function IngestionQueuePage() {
     }
   }, [items, handleApprove]);
 
+  // Bulk actions
+  const handleBulkApprove = useCallback(async (ids: string[], options?: { priority?: number }) => {
+    setBulkProcessing(true);
+    setError(null);
+    try {
+      const client = getSupabaseRealtimeClient();
+      for (const id of ids) {
+        await approveIngestion(client, id, options?.priority);
+      }
+      setSelectedIds(new Set());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to bulk approve items';
+      setError(`Bulk approval failed: ${message}`);
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  }, []);
+
+  const handleBulkReject = useCallback(async (ids: string[], reason?: string) => {
+    setBulkProcessing(true);
+    setError(null);
+    try {
+      const client = getSupabaseRealtimeClient();
+      for (const id of ids) {
+        await rejectIngestion(client, id, reason);
+      }
+      setSelectedIds(new Set());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to bulk reject items';
+      setError(`Bulk rejection failed: ${message}`);
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setBulkProcessing(false);
+    }
+  }, []);
+
+  // Escape CSV cells to prevent formula injection
+  // Cells starting with =, +, -, @ can trigger formulas in Excel/Sheets
+  const escapeCSVCell = useCallback((cell: string): string => {
+    const cellStr = String(cell);
+    // Check if cell starts with formula-inducing characters
+    if (/^[=+\-@]/.test(cellStr)) {
+      // Prepend with single quote to prevent formula execution
+      return `"'" + cellStr.replace(/"/g, '""') + '"';
+    }
+    return '"' + cellStr.replace(/"/g, '""') + '"';
+  }, []);
+
+  const handleExport = useCallback((ids: string[]) => {
+    const selectedItems = items.filter(item => ids.includes(item.id));
+    const headers = ['ID', 'Title', 'Source Type', 'Source URL', 'Status', 'Created At'];
+    const rows = selectedItems.map(item => [
+      item.id,
+      item.title || 'Untitled',
+      item.source_type,
+      item.source_url || '',
+      item.status,
+      item.created_at,
+    ]);
+
+    const csv = [headers.join(','), ...rows.map(row => row.map(cell => escapeCSVCell(cell)).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ingestion-queue-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [items]);
+
+  // Approval rules handlers
+  const handleCreateRule = useCallback((rule: Omit<ApprovalRule, 'id' | 'createdAt' | 'matchCount' | 'lastMatchedAt'>) => {
+    const newRule: ApprovalRule = {
+      ...rule,
+      id: `rule-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      matchCount: 0,
+    };
+    setRules(prev => [...prev, newRule]);
+  }, []);
+
+  const handleUpdateRule = useCallback((id: string, updates: Partial<ApprovalRule>) => {
+    setRules(prev => prev.map(rule => rule.id === id ? { ...rule, ...updates } : rule));
+  }, []);
+
+  const handleDeleteRule = useCallback((id: string) => {
+    setRules(prev => prev.filter(rule => rule.id !== id));
+  }, []);
+
   const statusColor = {
     connecting: 'bg-yellow-400',
     connected: 'bg-green-500',
@@ -211,8 +318,26 @@ export default function IngestionQueuePage() {
   }[status];
 
   return (
-    <div className="p-6 space-y-6">
-      <DashboardNavigation active="ingest" />
+    <>
+      {/* Skip link target - WCAG 2.1 SC 2.4.1 Bypass Blocks */}
+      <main id="main-content" tabIndex={-1} className="p-6 space-y-6">
+        <DashboardNavigation active="ingest" />
+
+      {/* Error Display */}
+      {error && (
+        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert" aria-live="assertive">
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800"
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       <header className="space-y-2">
         <div className="flex items-center justify-between">
@@ -225,19 +350,45 @@ export default function IngestionQueuePage() {
               </span>
             </div>
           </div>
-          {filter === 'pending' && items.length > 0 && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleApproveAll}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+              onClick={() => setShowRules(!showRules)}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                showRules
+                  ? 'bg-purple-600 text-white hover:bg-purple-700'
+                  : 'border border-purple-600 text-purple-600 hover:bg-purple-50'
+              }`}
+              type="button"
             >
-              Approve All ({items.length})
+              {showRules ? 'Hide Rules' : 'Approval Rules'}
+              {rules.length > 0 && ` (${rules.filter(r => r.enabled).length})`}
             </button>
-          )}
+            {filter === 'pending' && items.length > 0 && (
+              <button
+                onClick={handleApproveAll}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+                type="button"
+              >
+                Approve All ({items.length})
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-sm text-neutral-600">
           Review and approve content for ingestion. YouTube videos, PDFs, and URLs await your decision.
         </p>
       </header>
+
+      {/* Approval Rules Panel */}
+      {showRules && (
+        <ApprovalRulesConfig
+          rules={rules}
+          onCreateRule={handleCreateRule}
+          onUpdateRule={handleUpdateRule}
+          onDeleteRule={handleDeleteRule}
+          processing={bulkProcessing}
+        />
+      )}
 
       {/* Stats Bar */}
       <div className="grid grid-cols-4 gap-4">
@@ -296,6 +447,19 @@ export default function IngestionQueuePage() {
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      <BulkApprovalActions
+        items={items}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        onApprove={handleBulkApprove}
+        onReject={handleBulkReject}
+        onExport={handleExport}
+        processing={bulkProcessing}
+        statusFilter={filter}
+        sourceFilter={sourceFilter}
+      />
+
       {/* Queue Items */}
       <div className="space-y-4">
         {items.length === 0 ? (
@@ -309,7 +473,11 @@ export default function IngestionQueuePage() {
           items.map((item) => (
             <div
               key={item.id}
-              className="rounded-lg border border-neutral-200 bg-white shadow-sm overflow-hidden"
+              className={`rounded-lg bg-white shadow-sm overflow-hidden transition ${
+                selectedIds.has(item.id)
+                  ? 'border-2 border-blue-500'
+                  : 'border border-neutral-200'
+              }`}
             >
               <div className="flex">
                 {/* Thumbnail */}
@@ -337,6 +505,21 @@ export default function IngestionQueuePage() {
                 {/* Content */}
                 <div className="flex-1 p-4">
                   <div className="flex items-start justify-between gap-4">
+                    {/* Selection Checkbox */}
+                    <BulkSelectionCheckbox
+                      checked={selectedIds.has(item.id)}
+                      selectable={item.status === 'pending'}
+                      onToggle={() => {
+                        const newSelection = new Set(selectedIds);
+                        if (newSelection.has(item.id)) {
+                          newSelection.delete(item.id);
+                        } else {
+                          newSelection.add(item.id);
+                        }
+                        setSelectedIds(newSelection);
+                      }}
+                    />
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]}`}>
@@ -416,6 +599,7 @@ export default function IngestionQueuePage() {
           ))
         )}
       </div>
-    </div>
+      </main>
+    </>
   );
 }

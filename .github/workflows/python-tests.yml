@@ -139,5 +139,4 @@ jobs:
             pmoves/services/hi-rag-gateway-v2/tests \
             pmoves/services/jellyfin-bridge/tests \
             --ignore=pmoves/services/media-audio/tests \
-            --ignore=pmoves/services/media-video/tests \
-            || true  # Don't fail on test errors initially
+            --ignore=pmoves/services/media-video/tests

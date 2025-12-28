@@ -447,7 +447,7 @@ class VoiceCloningProvider:
         #     rvc_index=index_uri,
         # )
 
-        # For now, return empty bytes as placeholder
+        # TODO: Integrate with Ultimate-TTS RVC synthesis endpoint
         raise NotImplementedError(
             "Cloned voice synthesis requires GPU service integration. "
             "Use Ultimate-TTS directly with the trained model for now."
