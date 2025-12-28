@@ -78,6 +78,7 @@ export default function IngestionQueuePage() {
   const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [showRules, setShowRules] = useState(false);
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ pending: number; approved: number; processing: number; completed: number }>({
     pending: 0,
     approved: 0,
@@ -218,14 +219,17 @@ export default function IngestionQueuePage() {
   // Bulk actions
   const handleBulkApprove = useCallback(async (ids: string[], options?: { priority?: number }) => {
     setBulkProcessing(true);
+    setError(null);
     try {
       const client = getSupabaseRealtimeClient();
       for (const id of ids) {
         await approveIngestion(client, id, options?.priority);
       }
       setSelectedIds(new Set());
-    } catch (error) {
-      console.error('Failed to bulk approve:', error);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to bulk approve items';
+      setError(`Bulk approval failed: ${message}`);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setBulkProcessing(false);
     }
@@ -233,14 +237,17 @@ export default function IngestionQueuePage() {
 
   const handleBulkReject = useCallback(async (ids: string[], reason?: string) => {
     setBulkProcessing(true);
+    setError(null);
     try {
       const client = getSupabaseRealtimeClient();
       for (const id of ids) {
         await rejectIngestion(client, id, reason);
       }
       setSelectedIds(new Set());
-    } catch (error) {
-      console.error('Failed to bulk reject:', error);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to bulk reject items';
+      setError(`Bulk rejection failed: ${message}`);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setBulkProcessing(false);
     }
@@ -295,8 +302,26 @@ export default function IngestionQueuePage() {
   }[status];
 
   return (
-    <div className="p-6 space-y-6">
-      <DashboardNavigation active="ingest" />
+    <>
+      {/* Skip link target - WCAG 2.1 SC 2.4.1 Bypass Blocks */}
+      <main id="main-content" tabIndex={-1} className="p-6 space-y-6">
+        <DashboardNavigation active="ingest" />
+
+      {/* Error Display */}
+      {error && (
+        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert" aria-live="assertive">
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800"
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       <header className="space-y-2">
         <div className="flex items-center justify-between">
@@ -558,6 +583,7 @@ export default function IngestionQueuePage() {
           ))
         )}
       </div>
-    </div>
+      </main>
+    </>
   );
 }

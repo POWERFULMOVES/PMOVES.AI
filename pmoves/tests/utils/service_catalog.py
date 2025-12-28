@@ -515,8 +515,8 @@ LOKI = ServiceDefinition(
 
 CADVISOR = ServiceDefinition(
     name="cadvisor",
-    port=8080,
-    health_path="/healthz",
+    port=8081,
+    health_path="/",
     health_type=HealthCheckType.STANDARD,
     expected_status=200,
     profile="monitoring",

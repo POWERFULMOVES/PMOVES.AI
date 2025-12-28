@@ -235,7 +235,7 @@ class TestJellyfinIntegration:
                 assert "videosLinked" in data
                 assert "pendingBackfill" in data
 
-    @pytest.asyncio
+    @pytest.mark.asyncio
     @pytest.mark.integration
     @pytest.mark.requires("orchestration")
     async def test_jellyfin_search_empty(self):

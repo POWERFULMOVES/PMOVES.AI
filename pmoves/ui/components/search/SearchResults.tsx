@@ -65,6 +65,7 @@ export function SearchResults({
   verbose = false,
 }: SearchResultsProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -81,6 +82,8 @@ export function SearchResults({
   const handleCopy = async (content: string, id: string) => {
     try {
       await navigator.clipboard.writeText(content);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
       if (onCopy) {
         onCopy(content);
       }
@@ -183,17 +186,32 @@ export function SearchResults({
                       {onCopy && (
                         <button
                           onClick={() => handleCopy(result.content, result.id)}
-                          className="p-1 text-neutral-400 hover:text-neutral-600 rounded hover:bg-neutral-100"
-                          aria-label="Copy to clipboard"
+                          className={`p-1 rounded hover:bg-neutral-100 ${
+                            copiedId === result.id
+                              ? "text-green-600"
+                              : "text-neutral-400 hover:text-neutral-600"
+                          }`}
+                          aria-label={copiedId === result.id ? "Copied!" : "Copy to clipboard"}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                            />
-                          </svg>
+                          {copiedId === result.id ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                              />
+                            </svg>
+                          )}
                         </button>
                       )}
 

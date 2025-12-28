@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
 import { TaskInitiationForm, type ResearchOptions } from "../../../components/research/TaskInitiationForm";
 import { ResearchTaskList } from "../../../components/research/ResearchTaskList";
@@ -27,34 +27,38 @@ export default function ResearchDashboardPage() {
   const [healthy, setHealthy] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | ResearchTask["status"]>("all");
 
-  useEffect(() => {
-    refreshTasks();
-    checkHealth();
-    // Poll for updates on running tasks
-    const interval = setInterval(() => {
-      const hasRunning = tasks.some(t => t.status === "running");
-      if (hasRunning) {
-        refreshTasks();
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [tasks]);
+  // Ref to track current tasks for polling check (prevents stale closure issues)
+  const tasksRef = useRef<ResearchTask[]>([]);
+  tasksRef.current = tasks;
 
-  const refreshTasks = async () => {
+  const refreshTasks = useCallback(async () => {
     setRefreshing(true);
     const result = await listResearchTasks({ limit: 50 });
     if (result.ok) {
       setTasks(result.data);
     }
     setRefreshing(false);
-  };
+  }, []);
 
-  const checkHealth = async () => {
+  const checkHealth = useCallback(async () => {
     const result = await researchHealth();
     if (result.ok) {
       setHealthy(result.data.healthy);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    refreshTasks();
+    checkHealth();
+    // Poll for updates on running tasks - uses ref to avoid dependency on tasks state
+    const interval = setInterval(() => {
+      const hasRunning = tasksRef.current.some(t => t.status === "running");
+      if (hasRunning) {
+        refreshTasks();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [refreshTasks, checkHealth]);
 
   const handleInitiate = async (query: string, options: ResearchOptions) => {
     setStarting(true);
@@ -105,8 +109,10 @@ export default function ResearchDashboardPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <DashboardNavigation active="research" />
+    <>
+      {/* Skip link target - WCAG 2.1 SC 2.4.1 Bypass Blocks */}
+      <main id="main-content" tabIndex={-1} className="p-6 space-y-6">
+        <DashboardNavigation active="research" />
 
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Deep Research</h1>
@@ -275,6 +281,7 @@ export default function ResearchDashboardPage() {
           )}
         </section>
       </div>
-    </div>
+      </main>
+    </>
   );
 }

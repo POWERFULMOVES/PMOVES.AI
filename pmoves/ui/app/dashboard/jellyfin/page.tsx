@@ -100,8 +100,10 @@ export default function JellyfinDashboardPage() {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      <DashboardNavigation active="jellyfin" />
+    <>
+      {/* Skip link target - WCAG 2.1 SC 2.4.1 Bypass Blocks */}
+      <main id="main-content" tabIndex={-1} className="p-6 space-y-6">
+        <DashboardNavigation active="jellyfin" />
 
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">Jellyfin Integration</h1>
@@ -182,6 +184,7 @@ export default function JellyfinDashboardPage() {
           />
         </section>
       </div>
-    </div>
+      </main>
+    </>
   );
 }

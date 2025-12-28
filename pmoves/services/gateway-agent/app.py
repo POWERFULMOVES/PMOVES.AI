@@ -309,14 +309,12 @@ class SecretManager:
 
     @classmethod
     def get_all_credentials(cls) -> Dict[str, str]:
-        """Get all available credentials (masked for logging)"""
+        """Get all available credentials (presence check only, no values exposed)"""
         creds = {}
         for env_var, service in cls.SECRETS_MAP.items():
             value = os.environ.get(env_var)
-            if value:
-                # Mask the value for logs
-                masked = value[:8] + "..." if len(value) > 8 else "***"
-                creds[service] = masked
+            # Only report presence, never expose partial values
+            creds[service] = "SET" if value else "NOT_SET"
         return creds
 
 

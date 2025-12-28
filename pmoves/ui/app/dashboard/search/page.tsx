@@ -146,8 +146,8 @@ export default function SearchDashboardPage() {
           </aside>
         )}
 
-        {/* Results Area */}
-        <main className={showFilters ? "lg:col-span-3" : "lg:col-span-4"}>
+        {/* Results Area - Skip link target for WCAG 2.1 SC 2.4.1 */}
+        <main id="main-content" tabIndex={-1} className={showFilters ? "lg:col-span-3" : "lg:col-span-4"}>
           {!query && !loading && (
             <div className="rounded border border-dashed border-neutral-300 p-12 text-center text-sm text-neutral-500">
               <div className="text-4xl mb-4">🔍</div>
