@@ -52,6 +52,10 @@ export default function NotebookRuntimePage() {
       const res = await fetch('/api/notebook/runtime/sync', {
         method: 'POST',
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'HTTP ' + res.status);
+      }
       const data = await res.json();
       setSyncResult(data);
       if (data.ok) {
@@ -153,8 +157,9 @@ export default function NotebookRuntimePage() {
             >
               Refresh
             </button>
-            <label className="flex items-center gap-2 text-sm text-neutral-600">
+            <label htmlFor="auto-refresh-toggle" className="flex items-center gap-2 text-sm text-neutral-600">
               <input
+                id="auto-refresh-toggle"
                 type="checkbox"
                 checked={autoRefresh}
                 onChange={(e) => setAutoRefresh(e.target.checked)}

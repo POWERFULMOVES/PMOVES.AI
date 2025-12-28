@@ -42,12 +42,14 @@ export function AlertBanner({
 }: AlertBannerProps) {
   const baseClasses = "rounded border p-4 text-sm flex items-center justify-between";
   const variantClasses = VARIANT_CLASSES[variant];
+  // Use assertive for errors (interrupts immediately), polite for other variants
+  const ariaLive = variant === "error" ? "assertive" : "polite";
 
   return (
     <div
       className={`${baseClasses} ${variantClasses} ${className || ""}`}
       role="alert"
-      aria-live="assertive"
+      aria-live={ariaLive}
       {...props}
     >
       <span>{message}</span>

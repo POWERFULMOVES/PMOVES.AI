@@ -3,6 +3,8 @@
    Reusable modal for confirming destructive or critical actions
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { useEffect, useRef } from "react";
+
 export interface ConfirmDialogProps {
   /** Whether the dialog is visible */
   isOpen: boolean;
@@ -56,6 +58,46 @@ export function ConfirmDialog({
   onCancel,
   variant = "danger",
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  // Focus management: store previous focus and restore on close
+  useEffect(
+    () => {
+      if (isOpen) {
+        // Store the element that had focus before opening
+        previousActiveElement.current = document.activeElement as HTMLElement;
+
+        // Move focus to the cancel button (safest default)
+        cancelRef.current?.focus();
+
+        return () => {
+          // Restore focus when dialog closes
+          previousActiveElement.current?.focus();
+        };
+      }
+    },
+    [isOpen]
+  );
+
+  // Escape key handler for WCAG 2.1 SC 2.1.2 (No Keyboard Trap)
+  useEffect(
+    () => {
+      if (!isOpen) return;
+
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          onCancel();
+        }
+      };
+
+      document.addEventListener("keydown", handleEscape);
+      return () => document.removeEventListener("keydown", handleEscape);
+    },
+    [isOpen, onCancel]
+  );
+
   if (!isOpen) return null;
 
   const handleConfirm = () => {
@@ -64,6 +106,8 @@ export function ConfirmDialog({
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center"
       role="dialog"
       aria-modal="true"
@@ -94,6 +138,7 @@ export function ConfirmDialog({
 
         <div className="flex justify-end gap-3">
           <button
+            ref={cancelRef}
             type="button"
             onClick={onCancel}
             className="px-4 py-2 rounded border border-neutral-300 text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:ring-offset-2"
