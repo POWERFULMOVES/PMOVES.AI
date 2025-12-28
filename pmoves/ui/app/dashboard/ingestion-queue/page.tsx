@@ -21,6 +21,8 @@ import {
   type IngestionStatus,
   type IngestionSourceType,
 } from "../../../lib/realtimeClient";
+import { formatTimeAgo } from "@/lib/timeUtils";
+import { AlertBanner } from "@/components/common";
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -50,22 +52,6 @@ function formatDuration(seconds: number | null): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
 }
 
 export default function IngestionQueuePage() {
@@ -324,20 +310,7 @@ export default function IngestionQueuePage() {
         <DashboardNavigation active="ingest" />
 
       {/* Error Display */}
-      {error && (
-        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert" aria-live="assertive">
-          <div className="flex items-center justify-between">
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-600 hover:text-red-800"
-              aria-label="Dismiss error"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {error && <AlertBanner message={error} variant="error" onDismiss={() => setError(null)} />}
 
       <header className="space-y-2">
         <div className="flex items-center justify-between">

@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from "react";
 import type { IngestionSourceType } from "@/lib/realtimeClient";
+import { ConfirmDialog } from "@/components/common";
 
 // Tailwind JIT static class lookup objects
 const MODAL_OVERLAY_CLASSES = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
@@ -107,6 +108,11 @@ export function ApprovalRulesConfig({
   const [showLog, setShowLog] = useState(false);
   const [executionLog, setExecutionLog] = useState<Array<{ ruleId: string; ruleName: string; itemId: string; action: string; timestamp: string }>>([]);
   const [testResult, setTestResult] = useState<{ matched: number; total: number } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; ruleId: string | null; ruleName: string }>({
+    isOpen: false,
+    ruleId: null,
+    ruleName: '',
+  });
 
   // Form state for new/edit rule
   const [formData, setFormData] = useState({
@@ -181,9 +187,23 @@ export function ApprovalRulesConfig({
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this rule?')) {
-      onDeleteRule(id);
+    const rule = rules.find(r => r.id === id);
+    setDeleteConfirm({
+      isOpen: true,
+      ruleId: id,
+      ruleName: rule?.name || 'this rule',
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirm.ruleId) {
+      onDeleteRule(deleteConfirm.ruleId);
     }
+    setDeleteConfirm({ isOpen: false, ruleId: null, ruleName: '' });
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirm({ isOpen: false, ruleId: null, ruleName: '' });
   };
 
   const handleTestRule = async () => {
@@ -657,6 +677,18 @@ export function ApprovalRulesConfig({
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Rule"
+        message={`Are you sure you want to delete "${deleteConfirm.ruleName}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        variant="danger"
+      />
     </>
   );
 }
