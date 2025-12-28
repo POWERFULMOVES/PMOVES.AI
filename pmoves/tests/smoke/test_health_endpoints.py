@@ -8,6 +8,7 @@ Target execution time: <30s for all services (with pytest-xdist parallel executi
 """
 
 import asyncio
+import os
 import socket
 import subprocess
 from typing import AsyncGenerator
@@ -303,6 +304,47 @@ async def check_socket_health(
 
 
 # ============================================================================
+# GPU DETECTION HELPER
+# ============================================================================
+
+def _gpu_available() -> bool:
+    """Check if GPU is available for testing.
+
+    Returns True if:
+    - GPU_COUNT env var is set to non-zero
+    - nvidia-smi is available and returns valid output
+    - PyTorch CUDA is available
+
+    This allows tests to skip GPU-dependent services when no GPU is present.
+    """
+    # Check environment variable override
+    if os.environ.get("GPU_COUNT", "0") != "0":
+        return True
+
+    # Check nvidia-smi
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Check PyTorch CUDA
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        pass
+
+    return False
+
+
+# ============================================================================
 # PARAMETRIZED TESTS
 # ============================================================================
 
@@ -329,8 +371,8 @@ async def test_service_health_endpoint(
     """
     # Skip GPU services if GPU not available
     if service.gpu_required:
-        # TODO: Add GPU detection logic
-        pytest.skip("GPU required - skipping in non-GPU environment")
+        if not _gpu_available():
+            pytest.skip("GPU required - skipping in non-GPU environment")
 
     # Check health based on service type
     match service.health_type:

@@ -81,8 +81,12 @@ async def lifespan(app: FastAPI):
                             "Processed geometry event: trajectory_id=%s",
                             result.get("trajectory_id"),
                         )
+                except json.JSONDecodeError as e:
+                    logger.error("Invalid JSON in geometry event: %s", e)
+                except (KeyError, TypeError) as e:
+                    logger.error("Invalid geometry event structure: %s", e)
                 except Exception as e:
-                    logger.exception("Failed to process geometry event")
+                    logger.exception("Unexpected error processing geometry event")
 
         # Subscribe to geometry events
         await nc.subscribe("geometry.event.v1", cb=geometry_message_handler)

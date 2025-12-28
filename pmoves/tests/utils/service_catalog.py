@@ -39,6 +39,15 @@ class ServiceDefinition:
     gpu_required: bool = False      # Requires GPU
     description: str = ""           # Human-readable description
 
+    def __post_init__(self):
+        """Validate service definition fields."""
+        if not self.name:
+            raise ValueError("Service name cannot be empty")
+        if self.port < 0 or self.port > 65535:
+            raise ValueError(f"Invalid port: {self.port}")
+        if self.timeout <= 0:
+            raise ValueError(f"Invalid timeout: {self.timeout}")
+
 
 # ============================================================================
 # AGENT COORDINATION & ORCHESTRATION

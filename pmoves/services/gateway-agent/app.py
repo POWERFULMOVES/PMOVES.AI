@@ -192,15 +192,20 @@ class ToolRegistry:
                                     enabled=True
                                 ))
                 except Exception as e:
-                    logger.debug(f"No MCP catalog available: {e}")
+                    logger.warning(f"No MCP catalog available: {e}")
 
                 logger.info(f"Discovered {len(tools)} tools from Agent Zero MCP")
                 return tools
 
         except Exception as e:
             logger.error(f"Failed to fetch tools from Agent Zero: {e}")
-            # Return fallback tools based on known services
-            return self._get_fallback_tools()
+            # Only use fallback tools if explicitly enabled
+            if os.environ.get("USE_FALLBACK_TOOLS", "false").lower() == "true":
+                logger.warning("Using fallback tools (USE_FALLBACK_TOOLS=true)")
+                return self._get_fallback_tools()
+            raise RuntimeError(
+                "Agent Zero tool discovery failed. Set USE_FALLBACK_TOOLS=true for fallback."
+            ) from e
 
     def _infer_category(self, tool_name: str) -> str:
         """Infer category from tool name"""
