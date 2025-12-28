@@ -173,7 +173,7 @@ export function BulkApprovalActions({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
           {pendingSelected.length > 0 && (
             <>
               <button

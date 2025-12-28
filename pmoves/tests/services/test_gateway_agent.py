@@ -150,7 +150,8 @@ class TestSecretManager:
         """Should return None for missing credentials"""
         # Ensure no hostinger key is set
         monkeypatch.delenv("HOSTINGER_API_KEY", raising=False)
-        assert SecretManager.get_credential("hostinger") is None or SecretManager.get_credential("hostinger") == ""
+        # os.environ.get() returns None when env var is not set
+        assert SecretManager.get_credential("hostinger") is None
 
     def test_get_all_credentials_masks_values(self, monkeypatch):
         """Should mask sensitive values in credentials list"""

@@ -447,9 +447,11 @@ describe('ResearchTaskList', () => {
     });
 
     it('should show filter empty state when filter matches nothing', () => {
+      // Provide tasks but none match the "running" filter
+      const nonRunningTasks = mockTasks.filter(t => t.status !== 'running');
       const { container } = render(
         <ResearchTaskList
-          tasks={[]}
+          tasks={nonRunningTasks}
           onSelect={mockOnSelect}
           onRefresh={mockOnRefresh}
           statusFilter="running"
@@ -457,8 +459,8 @@ describe('ResearchTaskList', () => {
         />
       );
 
-      // Component shows general empty state when no tasks exist
-      expect(container.textContent).toContain('No research tasks yet');
+      // Should show "No matching tasks" when filter yields no results
+      expect(container.textContent).toContain('No matching tasks');
     });
   });
 

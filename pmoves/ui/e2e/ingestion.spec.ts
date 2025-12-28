@@ -693,8 +693,8 @@ test.describe('Enhanced Video Approval', () => {
     // Select status filter
     await page.selectOption('[data-testid="queue-status-filter"]', 'pending');
 
-    // Wait for filter to apply
-    await page.waitForTimeout(500);
+    // Wait for filter to apply by waiting for table to update
+    await page.waitForSelector('[data-testid="ingestion-queue-table"]', { state: 'visible' });
 
     // Queue table should still be visible
     await expect(page.locator('[data-testid="ingestion-queue-table"]')).toBeVisible();

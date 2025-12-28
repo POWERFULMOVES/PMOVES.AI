@@ -8,6 +8,7 @@ Expected runtime: <5s
 
 import pytest
 import httpx
+from typing import AsyncGenerator
 from pmoves.tests.utils.service_catalog import TENSORZERO_GATEWAY, TENSORZERO_CLICKHOUSE
 
 
@@ -16,23 +17,25 @@ from pmoves.tests.utils.service_catalog import TENSORZERO_GATEWAY, TENSORZERO_CL
 # ============================================================================
 
 @pytest.fixture(scope="session")
-async def tensorzero_client() -> httpx.AsyncClient:
+async def tensorzero_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """TensorZero Gateway HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(
+    async with httpx.AsyncClient(
         base_url=f"http://localhost:{TENSORZERO_GATEWAY.port}",
         timeout=timeout
-    )
+    ) as client:
+        yield client
 
 
 @pytest.fixture(scope="session")
-async def clickhouse_client() -> httpx.AsyncClient:
+async def clickhouse_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """TensorZero ClickHouse HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(
+    async with httpx.AsyncClient(
         base_url=f"http://localhost:{TENSORZERO_CLICKHOUSE.port}",
         timeout=timeout
-    )
+    ) as client:
+        yield client
 
 
 # ============================================================================

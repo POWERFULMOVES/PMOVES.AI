@@ -24,6 +24,7 @@ export default function ResearchDashboardPage() {
   const [publishing, setPublishing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [healthy, setHealthy] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | ResearchTask["status"]>("all");
 
@@ -99,8 +100,8 @@ export default function ResearchDashboardPage() {
 
     const result = await publishToNotebook(selectedTask.id, "default");
     if (result.ok) {
-      setError("Results published to notebook");
-      setTimeout(() => setError(null), 3000);
+      setSuccessMessage("Results published to notebook");
+      setTimeout(() => setSuccessMessage(null), 3000);
     } else {
       setError(result.error);
     }
@@ -147,6 +148,22 @@ export default function ResearchDashboardPage() {
               onClick={() => setError(null)}
               className="text-red-600 hover:text-red-800"
               aria-label="Dismiss error"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Success Message Display */}
+      {successMessage && (
+        <div className="rounded border border-green-300 bg-green-50 p-4 text-sm text-green-800" role="status" aria-live="polite">
+          <div className="flex items-center justify-between">
+            <span>{successMessage}</span>
+            <button
+              onClick={() => setSuccessMessage(null)}
+              className="text-green-600 hover:text-green-800"
+              aria-label="Dismiss success message"
             >
               ×
             </button>

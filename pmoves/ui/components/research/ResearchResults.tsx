@@ -35,10 +35,16 @@ export function ResearchResults({
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   const handleCopy = (content: string, section: string) => {
-    navigator.clipboard.writeText(content);
-    setCopiedSection(section);
-    setTimeout(() => setCopiedSection(null), 2000);
-    if (onCopy) onCopy();
+    navigator.clipboard.writeText(content)
+      .then(() => {
+        setCopiedSection(section);
+        setTimeout(() => setCopiedSection(null), 2000);
+        if (onCopy) onCopy();
+      })
+      .catch((err) => {
+        console.error('Failed to copy to clipboard:', err);
+        // Optionally show user-facing error feedback
+      });
   };
 
   const formatDuration = (ms: number) => {

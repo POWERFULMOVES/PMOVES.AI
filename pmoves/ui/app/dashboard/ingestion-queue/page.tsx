@@ -253,6 +253,18 @@ export default function IngestionQueuePage() {
     }
   }, []);
 
+  // Escape CSV cells to prevent formula injection
+  // Cells starting with =, +, -, @ can trigger formulas in Excel/Sheets
+  const escapeCSVCell = useCallback((cell: string): string => {
+    const cellStr = String(cell);
+    // Check if cell starts with formula-inducing characters
+    if (/^[=+\-@]/.test(cellStr)) {
+      // Prepend with single quote to prevent formula execution
+      return `"'" + cellStr.replace(/"/g, '""') + '"';
+    }
+    return '"' + cellStr.replace(/"/g, '""') + '"';
+  }, []);
+
   const handleExport = useCallback((ids: string[]) => {
     const selectedItems = items.filter(item => ids.includes(item.id));
     const headers = ['ID', 'Title', 'Source Type', 'Source URL', 'Status', 'Created At'];
@@ -265,7 +277,7 @@ export default function IngestionQueuePage() {
       item.created_at,
     ]);
 
-    const csv = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
+    const csv = [headers.join(','), ...rows.map(row => row.map(cell => escapeCSVCell(cell)).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

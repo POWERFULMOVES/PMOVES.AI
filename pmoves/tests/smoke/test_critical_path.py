@@ -17,6 +17,7 @@ import asyncio
 import subprocess
 import pytest
 import httpx
+from typing import AsyncGenerator
 from pmoves.tests.utils.service_catalog import (
     POSTGRES,
     POSTGREST,
@@ -32,10 +33,11 @@ from pmoves.tests.utils.service_catalog import (
 # ============================================================================
 
 @pytest.fixture(scope="session")
-async def http_client() -> httpx.AsyncClient:
+async def http_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Shared HTTP client for critical path tests."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(timeout=timeout)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        yield client
 
 
 # ============================================================================

@@ -353,14 +353,14 @@ ALTER TABLE jellyfin_sync_log REPLICA IDENTITY FULL;
 ```
 
 ### Checklist
-- [ ] Create JellyfinMediaBrowser component
-- [ ] Create SyncStatus component
-- [ ] Create BackfillControls component
-- [ ] Implement real-time sync status (Supabase)
-- [ ] Add error handling with retry
-- [ ] Add playback URL generation
-- [ ] Create database migrations if needed
-- [ ] Add CORS to Jellyfin bridge service
+- [x] Create JellyfinMediaBrowser component
+- [x] Create SyncStatus component
+- [x] Create BackfillControls component
+- [x] Implement real-time sync status (Supabase)
+- [x] Add error handling with retry
+- [x] Add playback URL generation
+- [x] Create database migrations if needed
+- [x] Add CORS to Jellyfin bridge service
 
 ---
 

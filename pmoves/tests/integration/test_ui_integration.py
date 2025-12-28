@@ -446,7 +446,7 @@ class TestDeepResearchIntegration:
 
             assert response.status_code == 200
             data = response.json()
-            assert "healthy" in data
+            assert data.get("healthy") is True, f"DeepResearch unhealthy: {data}"
 
     @pytest.mark.asyncio
     @pytest.mark.integration
@@ -567,7 +567,9 @@ class TestCrossServiceWorkflows:
         hirag_healthy = await service_healthy(HIRAG_V2_URL)
         research_healthy = await service_healthy(DEEPRESEARCH_URL)
 
-        assert hirag_healthy or not hirag_healthy  # At least verify connection works
+        # Skip if Hi-RAG is not available (optional dependency)
+        if not hirag_healthy:
+            pytest.skip("Hi-RAG v2 not available for cross-service test")
         assert research_healthy
 
 

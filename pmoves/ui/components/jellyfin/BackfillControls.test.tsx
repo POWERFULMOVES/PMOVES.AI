@@ -266,11 +266,10 @@ describe('BackfillControls', () => {
       expect(mockOnCancel).toHaveBeenCalledTimes(1);
     });
 
-    it('should not show cancel button when onCancel not provided', () => {
+    it('should show cancel button when running even without onCancel handler', () => {
       render(<BackfillControls onStart={mockOnStart} running={true} />);
 
-      // Component shows cancel button when running even without onCancel
-      // The click handler simply won't do anything if onCancel is not provided
+      // Cancel button displays but click handler won't do anything if onCancel is not provided
       expect(screen.getByText('Cancel Backfill')).toBeInTheDocument();
     });
   });

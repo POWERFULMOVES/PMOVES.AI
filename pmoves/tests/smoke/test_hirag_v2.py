@@ -8,6 +8,7 @@ Expected runtime: <5s
 
 import pytest
 import httpx
+from typing import AsyncGenerator
 from pmoves.tests.utils.service_catalog import HIRAG_V2, QDRANT, NEO4J, MEILISEARCH
 
 
@@ -16,31 +17,35 @@ from pmoves.tests.utils.service_catalog import HIRAG_V2, QDRANT, NEO4J, MEILISEA
 # ============================================================================
 
 @pytest.fixture(scope="session")
-async def hirag_v2_client() -> httpx.AsyncClient:
+async def hirag_v2_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Hi-RAG v2 HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{HIRAG_V2.port}", timeout=timeout)
+    async with httpx.AsyncClient(base_url=f"http://localhost:{HIRAG_V2.port}", timeout=timeout) as client:
+        yield client
 
 
 @pytest.fixture(scope="session")
-async def qdrant_client() -> httpx.AsyncClient:
+async def qdrant_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Qdrant HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{QDRANT.port}", timeout=timeout)
+    async with httpx.AsyncClient(base_url=f"http://localhost:{QDRANT.port}", timeout=timeout) as client:
+        yield client
 
 
 @pytest.fixture(scope="session")
-async def neo4j_client() -> httpx.AsyncClient:
+async def neo4j_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Neo4j HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{NEO4J.port}", timeout=timeout)
+    async with httpx.AsyncClient(base_url=f"http://localhost:{NEO4J.port}", timeout=timeout) as client:
+        yield client
 
 
 @pytest.fixture(scope="session")
-async def meilisearch_client() -> httpx.AsyncClient:
+async def meilisearch_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Meilisearch HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{MEILISEARCH.port}", timeout=timeout)
+    async with httpx.AsyncClient(base_url=f"http://localhost:{MEILISEARCH.port}", timeout=timeout) as client:
+        yield client
 
 
 # ============================================================================

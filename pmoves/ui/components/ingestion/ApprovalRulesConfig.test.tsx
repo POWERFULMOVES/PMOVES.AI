@@ -222,18 +222,11 @@ describe('ApprovalRulesConfig', () => {
       fireEvent.change(nameInput, { target: { value: 'New test rule' } });
 
       // Select action - click the button for auto_approve (in the action selection area)
-      const actionButtons = container.querySelectorAll('button');
-      // Find the button that contains "Auto-Approve" text
-      for (const btn of Array.from(actionButtons)) {
-        if (btn.textContent === 'Auto-Approve') {
-          fireEvent.click(btn);
-          break;
-        }
-      }
+      // Use getByRole for robust button selection
+      fireEvent.click(screen.getByRole('button', { name: /auto-approve/i }));
 
-      // Set conditions - labels don't have htmlFor, so query by placeholder or text content
-      // Source Type is the text "Source Type" before the select
-      const sourceSelect = container.querySelector('select') as HTMLSelectElement;
+      // Set conditions - use getByLabelText for robust form element selection
+      const sourceSelect = screen.getByLabelText('Source Type') as HTMLSelectElement;
       fireEvent.change(sourceSelect, { target: { value: 'youtube' } });
 
       const channelInput = screen.getByPlaceholderText('e.g., TED, PBS, NatGeo');

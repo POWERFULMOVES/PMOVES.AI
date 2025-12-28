@@ -1192,6 +1192,48 @@ services:
       retries: 12
       start_period: 15s
 
+  # Gateway Agent: Orchestrates 100+ MCP tools via Agent Zero MCP API
+  gateway-agent:
+    build: ./services/gateway-agent
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - PORT=8100
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+      - CIPHER_URL=${CIPHER_URL:-http://pmoves-botz-cipher:8000}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+      # API Keys (from GitHub Secrets or environment)
+      - HOSTINGER_API_KEY=${HOSTINGER_API_KEY}
+      - TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TAILSCALE_API_KEY=${TAILSCALE_API_KEY}
+      - N8N_API_KEY=${N8N_API_KEY}
+      - POSTMAN_API_KEY=${POSTMAN_API_KEY}
+      - E2B_API_KEY=${E2B_API_KEY}
+      - VENICE_API_KEY=${VENICE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8100:8100"
+    depends_on:
+      agent-zero:
+        condition: service_healthy
+    profiles: [ "agents", "gateway" ]
+    networks:
+      api_tier:
+      bus_tier:
+      data_tier:
+      monitoring_tier:
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # E2B Sandbox Runner: Isolated code execution environment
   pmz-e2b-runner:
     build:

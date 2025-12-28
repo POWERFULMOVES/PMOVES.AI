@@ -188,16 +188,27 @@ export function ApprovalRulesConfig({
 
   const handleTestRule = async () => {
     if (onTestRule) {
-      const result = await onTestRule(formData.conditions);
-      setTestResult(result);
+      try {
+        const result = await onTestRule(formData.conditions);
+        setTestResult(result);
+      } catch (error) {
+        console.error('Failed to test rule:', error);
+        setTestResult(null);
+        // Consider adding user-facing error state
+      }
     }
   };
 
   const handleFetchLog = async () => {
     if (onFetchLog) {
-      const log = await onFetchLog();
-      setExecutionLog(log);
-      setShowLog(true);
+      try {
+        const log = await onFetchLog();
+        setExecutionLog(log);
+        setShowLog(true);
+      } catch (error) {
+        console.error('Failed to fetch log:', error);
+        // Consider adding user-facing error state
+      }
     }
   };
 

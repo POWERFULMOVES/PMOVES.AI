@@ -61,7 +61,7 @@ class TestPPOTrainingOrchestrator:
     @pytest.mark.asyncio
     async def test_start_training_validates_run_id_invalid(self, orchestrator):
         """start_training should raise ValueError for invalid run_id characters"""
-        with pytest.raises(ValueError, match="run_id contains invalid characters"):
+        with pytest.raises(ValueError, match=r"Invalid run_id.*Use only alphanumeric"):
             await orchestrator.start_training("test run with spaces")
 
     @pytest.mark.asyncio

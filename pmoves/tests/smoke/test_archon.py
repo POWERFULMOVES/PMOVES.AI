@@ -8,6 +8,7 @@ Expected runtime: <5s
 
 import pytest
 import httpx
+from typing import AsyncGenerator
 from pmoves.tests.utils.service_catalog import ARCHON
 
 
@@ -16,10 +17,11 @@ from pmoves.tests.utils.service_catalog import ARCHON
 # ============================================================================
 
 @pytest.fixture(scope="session")
-async def archon_client() -> httpx.AsyncClient:
+async def archon_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Archon HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{ARCHON.port}", timeout=timeout)
+    async with httpx.AsyncClient(base_url=f"http://localhost:{ARCHON.port}", timeout=timeout) as client:
+        yield client
 
 
 # ============================================================================
