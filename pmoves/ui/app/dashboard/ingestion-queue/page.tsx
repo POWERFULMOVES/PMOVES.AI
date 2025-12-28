@@ -94,11 +94,14 @@ export default function IngestionQueuePage() {
         });
 
         if (isMounted) {
-          setItems(data);
+          // Defensive: ensure data is always an array
+          setItems(Array.isArray(data) ? data : []);
 
           // Calculate stats
           const allItems = await fetchIngestionQueue(client, { limit: 1000 });
-          const statsMap = allItems.reduce((acc, item) => {
+          // Defensive: ensure allItems is always an array before reduce
+          const safeAllItems = Array.isArray(allItems) ? allItems : [];
+          const statsMap = safeAllItems.reduce((acc, item) => {
             acc[item.status] = (acc[item.status] || 0) + 1;
             return acc;
           }, {} as Record<string, number>);
@@ -114,13 +117,15 @@ export default function IngestionQueuePage() {
         // Subscribe to realtime changes
         const channel = subscribeToIngestionQueue(client, {
           onInsert: (item) => {
-            if (isMounted) {
+            if (isMounted && item && item.id) {
               setItems((prev) => {
-                if (prev.some((i) => i.id === item.id)) return prev;
+                // Defensive: ensure prev is always an array
+                const safePrev = Array.isArray(prev) ? prev : [];
+                if (safePrev.some((i) => i.id === item.id)) return safePrev;
                 // Add to list if matches filter
-                if (filter !== 'all' && item.status !== filter) return prev;
-                if (sourceFilter !== 'all' && item.source_type !== sourceFilter) return prev;
-                return [item, ...prev];
+                if (filter !== 'all' && item.status !== filter) return safePrev;
+                if (sourceFilter !== 'all' && item.source_type !== sourceFilter) return safePrev;
+                return [item, ...safePrev];
               });
               setStats((prev) => ({
                 ...prev,
@@ -129,19 +134,25 @@ export default function IngestionQueuePage() {
             }
           },
           onUpdate: (item) => {
-            if (isMounted) {
+            if (isMounted && item && item.id) {
               setItems((prev) => {
+                // Defensive: ensure prev is always an array
+                const safePrev = Array.isArray(prev) ? prev : [];
                 // If item no longer matches filter, remove it
                 if (filter !== 'all' && item.status !== filter) {
-                  return prev.filter((i) => i.id !== item.id);
+                  return safePrev.filter((i) => i.id !== item.id);
                 }
-                return prev.map((i) => (i.id === item.id ? item : i));
+                return safePrev.map((i) => (i.id === item.id ? item : i));
               });
             }
           },
           onDelete: (item) => {
-            if (isMounted) {
-              setItems((prev) => prev.filter((i) => i.id !== item.id));
+            if (isMounted && item && item.id) {
+              setItems((prev) => {
+                // Defensive: ensure prev is always an array
+                const safePrev = Array.isArray(prev) ? prev : [];
+                return safePrev.filter((i) => i.id !== item.id);
+              });
             }
           },
         });
@@ -264,7 +275,9 @@ export default function IngestionQueuePage() {
   };
 
   const handleExport = useCallback((ids: string[]) => {
-    const selectedItems = items.filter(item => ids.includes(item.id));
+    // Defensive: ensure items is always an array
+    const safeItems = Array.isArray(items) ? items : [];
+    const selectedItems = safeItems.filter(item => ids.includes(item.id));
     const headers = ['ID', 'Title', 'Source Type', 'Source URL', 'Status', 'Created At'];
     const rows = selectedItems.map(item => [
       item.id,
