@@ -202,8 +202,7 @@ export function mockSupabaseClient() {
  */
 export function mockFetch(healthData: Record<string, { status: number; body?: any }> = {}) {
   global.fetch = jest.fn((url: string) => {
-    // Filter empty segments to handle trailing slashes correctly
-    const slug = url.split('/').filter(Boolean).pop();
+    const slug = url.split('/').pop();
     const mock = healthData[slug || ''] || { status: 200, body: { status: 'healthy' } };
 
     return Promise.resolve({

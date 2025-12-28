@@ -8,7 +8,6 @@ Expected runtime: <5s
 
 import pytest
 import httpx
-from typing import AsyncGenerator
 from pmoves.tests.utils.service_catalog import AGENT_ZERO
 
 
@@ -17,11 +16,10 @@ from pmoves.tests.utils.service_catalog import AGENT_ZERO
 # ============================================================================
 
 @pytest.fixture(scope="session")
-async def agent_zero_client() -> AsyncGenerator[httpx.AsyncClient, None]:
+async def agent_zero_client() -> httpx.AsyncClient:
     """Agent Zero HTTP client."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    async with httpx.AsyncClient(base_url=f"http://localhost:{AGENT_ZERO.port}", timeout=timeout) as client:
-        yield client
+    return httpx.AsyncClient(base_url=f"http://localhost:{AGENT_ZERO.port}", timeout=timeout)
 
 
 # ============================================================================

@@ -459,8 +459,8 @@ describe('ResearchTaskList', () => {
         />
       );
 
-      // Should show "No matching tasks" when filter yields no results
-      expect(container.textContent).toContain('No matching tasks');
+      // Should show "No tasks match this filter." when filter yields no results
+      expect(container.textContent).toContain('No tasks match this filter.');
     });
   });
 

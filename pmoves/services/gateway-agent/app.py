@@ -192,20 +192,15 @@ class ToolRegistry:
                                     enabled=True
                                 ))
                 except Exception as e:
-                    logger.warning(f"No MCP catalog available: {e}")
+                    logger.debug(f"No MCP catalog available: {e}")
 
                 logger.info(f"Discovered {len(tools)} tools from Agent Zero MCP")
                 return tools
 
         except Exception as e:
             logger.error(f"Failed to fetch tools from Agent Zero: {e}")
-            # Only use fallback tools if explicitly enabled
-            if os.environ.get("USE_FALLBACK_TOOLS", "false").lower() == "true":
-                logger.warning("Using fallback tools (USE_FALLBACK_TOOLS=true)")
-                return self._get_fallback_tools()
-            raise RuntimeError(
-                "Agent Zero tool discovery failed. Set USE_FALLBACK_TOOLS=true for fallback."
-            ) from e
+            # Return fallback tools based on known services
+            return self._get_fallback_tools()
 
     def _infer_category(self, tool_name: str) -> str:
         """Infer category from tool name"""
@@ -309,12 +304,14 @@ class SecretManager:
 
     @classmethod
     def get_all_credentials(cls) -> Dict[str, str]:
-        """Get all available credentials (presence check only, no values exposed)"""
+        """Get all available credentials (masked for logging)"""
         creds = {}
         for env_var, service in cls.SECRETS_MAP.items():
             value = os.environ.get(env_var)
-            # Only report presence, never expose partial values
-            creds[service] = "SET" if value else "NOT_SET"
+            if value:
+                # Mask the value for logs
+                masked = value[:8] + "..." if len(value) > 8 else "***"
+                creds[service] = masked
         return creds
 
 

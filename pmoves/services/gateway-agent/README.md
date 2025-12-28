@@ -226,7 +226,7 @@ gateway-agent:
   ports: ["8100:8100"]
   environment:
     - AGENT_ZERO_URL=http://agent-zero:8080
-    - CIPHER_URL=http://pmoves-botz-cipher:3025
+    - CIPHER_URL=http://pmoves-botz-cipher:8000
     - TENSORZERO_URL=http://tensorzero-gateway:3030
   profiles: ["agents", "gateway"]
 ```

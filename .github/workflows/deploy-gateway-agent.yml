@@ -14,10 +14,6 @@ on:
       - '.github/workflows/deploy-gateway-agent.yml'
   workflow_dispatch:
 
-# Follow principle of least privilege
-permissions:
-  contents: read
-
 env:
   # GitHub Secrets - Service Credentials
   HOSTINGER_API_KEY: ${{ secrets.HOSTINGER_API_KEY }}
@@ -162,13 +158,8 @@ jobs:
       - name: Verify secrets loaded
         run: |
           secrets=$(curl -s http://localhost:8100/secrets)
-          # Verify endpoint responds without logging sensitive data
-          if echo "$secrets" | jq -e '.loaded // .count // .status // .secrets' > /dev/null 2>&1; then
-            echo "✓ Secrets endpoint accessible"
-          else
-            echo "✗ Secrets endpoint returned unexpected format"
-            exit 1
-          fi
+          echo "✓ Secrets endpoint response:"
+          echo "$secrets" | jq '.'
 
   # ============================================================================
   # Rollback

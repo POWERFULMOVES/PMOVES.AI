@@ -6,25 +6,8 @@ and setting up test scenarios.
 """
 
 import time
-from dataclasses import dataclass
 from typing import Any, Dict, List
 from datetime import datetime, timezone
-
-
-# ============================================================================
-# TEST CONFIGURATION DATACLASS
-# ============================================================================
-
-@dataclass(frozen=True)
-class TestServiceConfig:
-    """Immutable configuration for service testing.
-
-    This frozen dataclass provides a consistent configuration object
-    for test fixtures, preventing accidental modification during tests.
-    """
-    base_url: str
-    api_key: str = ""
-    timeout: float = 5.0
 
 
 def generate_test_notebook_data() -> Dict[str, Any]:
