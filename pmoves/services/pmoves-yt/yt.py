@@ -2,7 +2,7 @@ import os, json, tempfile, shutil, asyncio, time, re, math, uuid, copy, logging,
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
-from fastapi import FastAPI, Body, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Body, HTTPException, BackgroundTasks, Response
 import yt_dlp
 try:
     from yt_dlp.utils import DownloadError, PostProcessingError
@@ -44,6 +44,15 @@ except Exception:  # pragma: no cover - fallback when module unavailable
 
     def clear_cache() -> None:
         return None
+
+# Prometheus metrics
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+http_requests_total = Counter('pmoves_yt_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+http_request_duration = Histogram('pmoves_yt_http_request_duration_seconds', 'HTTP request duration')
+videos_downloaded_total = Counter('pmoves_yt_videos_downloaded_total', 'Videos downloaded')
+transcripts_processed_total = Counter('pmoves_yt_transcripts_processed_total', 'Transcripts processed')
+nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages published', ['subject'])
 
 app = FastAPI(title="PMOVES.YT", version="1.0.0")
 logger = logging.getLogger("pmoves-yt")
@@ -422,6 +431,7 @@ async def shutdown():
 
 @app.get("/healthz")
 def healthz():
+    http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     meta = version_info()
     prov = {
         "channel": os.environ.get("YT_CHANNEL") or os.environ.get("CHANNEL"),
@@ -432,6 +442,11 @@ def healthz():
     # Compact None values
     prov = {k: v for k, v in prov.items() if v}
     return {"ok": True, "yt_dlp": meta, "provenance": prov}
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 def _publish_event(topic: str, payload: Dict[str, Any]):
     nc = _nc
@@ -447,6 +462,7 @@ def _publish_event(topic: str, payload: Dict[str, Any]):
     msg = envelope(topic, payload, source="pmoves-yt")
     try:
         asyncio.create_task(nc.publish(topic, json.dumps(msg).encode()))
+        nats_messages_total.labels(subject=topic.replace('.', '_')).inc()
     except Exception as exc:
         logger.exception("Failed to schedule publish for topic %s: %s", topic, exc)
 
@@ -1454,6 +1470,7 @@ def yt_ingest(body: Dict[str,Any] = Body(...)):
         )
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, str) else json.dumps(exc.detail)
+        http_requests_total.labels(method='POST', endpoint='/yt/ingest', status=str(exc.status_code)).inc()
         _channel_monitor_notify(dl.get('video_id') if dl else None, 'failed', error=detail)
         logger.exception(
             "ingest_failed_http",
@@ -1467,6 +1484,7 @@ def yt_ingest(body: Dict[str,Any] = Body(...)):
         )
         raise
     except Exception as exc:
+        http_requests_total.labels(method='POST', endpoint='/yt/ingest', status='500').inc()
         _channel_monitor_notify(dl.get('video_id') if dl else None, 'failed', error=str(exc))
         logger.exception(
             "ingest_failed",
@@ -1500,6 +1518,10 @@ def yt_ingest(body: Dict[str,Any] = Body(...)):
             "video_id": dl.get('video_id'),
         },
     )
+    # Track metrics
+    videos_downloaded_total.inc()
+    transcripts_processed_total.inc()
+    http_requests_total.labels(method='POST', endpoint='/yt/ingest', status='200').inc()
     return {'ok': True, 'video': dl, 'transcript': tr}
 
 # -------------------- Playlist / Channel ingestion --------------------
