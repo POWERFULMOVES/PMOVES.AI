@@ -52,7 +52,11 @@ data/jellyfin/
 data/open-notebook/
 data/chit/
 cloudflared/
-pmoves/data/agent-zero/
+# Agent Zero runtime data (keep structure, ignore runtime)
+pmoves/data/agent-zero/memory/
+pmoves/data/agent-zero/runtime/
+pmoves/data/agent-zero/tmp/
+pmoves/data/agent-zero/logs/
 
 # Tier environment files (actual secrets - use .example for tracked templates)
 env.tier-api
