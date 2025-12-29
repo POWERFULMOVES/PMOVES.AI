@@ -29,6 +29,9 @@ permissions:
 permissions:
   contents: read
 
+permissions:
+  contents: read
+
 jobs:
   tests:
     runs-on: [self-hosted, vps]

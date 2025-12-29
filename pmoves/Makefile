@@ -78,6 +78,7 @@ test: test-smoke ## Run pytest smoke tests
 
 .DEFAULT_GOAL := help
 
+# -------- Updates ----------
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
