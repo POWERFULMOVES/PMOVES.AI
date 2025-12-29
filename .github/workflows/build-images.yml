@@ -84,7 +84,7 @@ jobs:
         continue-on-error: true
 
       - name: Build & push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
           file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}
