@@ -1046,7 +1046,12 @@ services:
       - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
       # Open Notebook API for notebook.search MCP command (host.docker.internal for container-to-host)
       - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
-    depends_on: [nats]
+      # E2B Configuration for E2B MCP tools (e2b.sandbox.create, e2b.desktop.create, etc.)
+      - E2B_MCP_SERVER_URL=${E2B_MCP_SERVER_URL:-http://e2b-mcp-server:7073}
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+    depends_on: [nats, e2b-mcp-server]
     # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
     # and keep 8080 mapped for the API when enabled by the runtime.
     ports: [ "8080:8080", "8081:80" ]
@@ -1761,6 +1766,89 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  # =============================================================================
+  # E2B Agentic Computer Use Services
+  # =============================================================================
+  # E2B MCP Server - Model Context Protocol bridge for E2B code execution
+  # Provides tools to Agent Zero for secure code execution in E2B sandboxes
+  e2b-mcp-server:
+    build:
+      context: ./pmoves/docker/e2b-mcp-server
+      dockerfile: Dockerfile
+      args:
+        E2B_MCP_BRANCH: PMOVES.AI-Edition-Hardened
+    image: pmoves-e2b-mcp-server:hardened
+    container_name: pmoves-e2b-mcp-server
+    hostname: e2b-mcp-server
+    restart: unless-stopped
+    <<: *env-tier-llm
+    environment:
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_DESKTOP_AUTH_TOKEN=${E2B_DESKTOP_AUTH_TOKEN:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NODE_ENV=production
+      - MCP_SERVER_PORT=7073
+    # stdin_open and tty for Node.js MCP stdio transport
+    stdin_open: true
+    tty: true
+    # No exposed ports - MCP communicates via stdio to Agent Zero
+    # Health check via process presence
+    healthcheck:
+      test: [ "CMD-SHELL", "node --version && test -f /app/build/index.js" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    profiles: [ "e2b", "agents" ]
+    networks: [ bus_tier, llm_tier, monitoring_tier ]
+    # Security hardening (read-only fs for distroless base)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
+  # E2B Surf - Web interface for agentic computer use with OpenAI Computer Use
+  # Next.js application providing virtual desktop control via natural language
+  e2b-surf:
+    build:
+      context: ./pmoves/docker/e2b-surf
+      dockerfile: Dockerfile
+      args:
+        E2B_SURF_BRANCH: PMOVES.AI-Edition-Hardened
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    image: pmoves-e2b-surf:hardened
+    container_name: pmoves-e2b-surf
+    hostname: e2b-surf
+    restart: unless-stopped
+    <<: *env-tier-api
+    environment:
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3080}
+      - NODE_ENV=production
+      - PORT=3000
+    ports: [ "3080:3000" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles: [ "e2b", "ui" ]
+    networks: [ api_tier, app_tier, monitoring_tier ]
+    # Next.js needs writable cache for build
+    volumes:
+      - e2b-surf-cache:/app/.next:rw
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
 volumes:
   neo4j-data: {}
   minio-data: {}
@@ -1776,6 +1864,7 @@ volumes:
   archon-worktrees: {}
   ultimate-tts-checkpoints: {}
   ultimate-tts-outputs: {}
+  e2b-surf-cache: {}
 networks:
   # 5-Tier Network Architecture for Defense in Depth
   api_tier:
