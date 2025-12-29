@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -41,7 +42,7 @@ E2B_DESKTOP_URL = os.environ.get("E2B_DESKTOP_URL", "http://e2b-desktop:6080")
 def load_form(name: str) -> Dict[str, Any]:
     p = FORMS_DIR / f"{name}.yaml"
     if not p.exists():
-        raise RuntimeError(f"form not found: {p}")
+        raise RuntimeError(f"Form not found: {name}")
     return yaml.safe_load(p.read_text(encoding="utf-8"))
 
 
@@ -224,9 +225,93 @@ def _stdout(msg: Dict[str, Any]):
 def _e2b_headers() -> Dict[str, str]:
     """Get headers for E2B API requests."""
     headers = {"Content-Type": "application/json"}
-    if E2B_API_KEY:
+    if E2B_API_KEY and E2B_API_KEY.strip():
         headers["X-E2B-API-Key"] = E2B_API_KEY
     return headers
+
+
+def _generate_error_id() -> str:
+    """Generate unique error ID for tracking."""
+    return str(uuid.uuid4())[:8]
+
+
+def _e2b_request(
+    method: str,
+    url: str,
+    json_body: Dict = None,
+    timeout: int = 30
+) -> Optional[requests.Response]:
+    """
+    Make E2B API request with proper error handling.
+
+    Returns None on network errors, allowing caller to handle gracefully.
+    """
+    try:
+        response = requests.request(
+            method,
+            url,
+            json=json_body,
+            headers=_e2b_headers(),
+            timeout=timeout
+        )
+        return response
+    except requests.exceptions.Timeout:
+        return None
+    except requests.exceptions.ConnectionError:
+        return None
+    except requests.exceptions.RequestException:
+        return None
+
+
+def _e2b_json_response(response: requests.Response, error_context: str) -> Dict[str, Any]:
+    """
+    Safely parse JSON response from E2B API.
+
+    Handles:
+    - 204 No Content responses
+    - Malformed JSON responses
+    - Error responses (>= 400)
+
+    Args:
+        response: The HTTP response object
+        error_context: Context string for error messages (e.g., "sandbox_create")
+
+    Returns:
+        Dict with 'ok' status and response data or error details
+    """
+    # Error responses
+    if response.status_code >= 400:
+        error_id = _generate_error_id()
+        return {
+            "ok": False,
+            "status": response.status_code,
+            "detail": response.text[:300],
+            "error_id": f"e2b_{error_context}_{error_id}"
+        }
+
+    # 204 No Content - no JSON body
+    if response.status_code == 204:
+        return {"ok": True, "data": None}
+
+    # Successful response - parse JSON safely
+    try:
+        result = response.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        error_id = _generate_error_id()
+        return {
+            "ok": False,
+            "status": response.status_code,
+            "detail": f"Invalid JSON response: {str(e)}",
+            "error_id": f"e2b_{error_context}_{error_id}"
+        }
+
+    # Add ok status to result
+    if isinstance(result, dict):
+        result["ok"] = True
+    else:
+        result = {"ok": True, "data": result}
+
+    return result
 
 
 def e2b_sandbox_create(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -241,19 +326,17 @@ def e2b_sandbox_create(payload: Dict[str, Any]) -> Dict[str, Any]:
         "cpu_limit": cpu_limit
     }
 
-    response = requests.post(
+    response = _e2b_request(
+        "POST",
         f"{E2B_MCP_SERVER_URL}/sandbox/create",
-        json=request_body,
-        headers=_e2b_headers(),
+        request_body,
         timeout=30
     )
 
-    if response.status_code >= 400:
-        return {"ok": False, "status": response.status_code, "detail": response.text[:300]}
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
 
-    result = response.json()
-    result["ok"] = True
-    return result
+    return _e2b_json_response(response, "sandbox_create")
 
 
 def e2b_sandbox_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -274,19 +357,17 @@ def e2b_sandbox_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
         "code": code
     }
 
-    response = requests.post(
+    response = _e2b_request(
+        "POST",
         f"{E2B_MCP_SERVER_URL}/sandbox/execute",
-        json=request_body,
-        headers=_e2b_headers(),
+        request_body,
         timeout=120
     )
 
-    if response.status_code >= 400:
-        return {"ok": False, "status": response.status_code, "detail": response.text[:300]}
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
 
-    result = response.json()
-    result["ok"] = True
-    return result
+    return _e2b_json_response(response, "sandbox_execute")
 
 
 def e2b_sandbox_terminate(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -295,16 +376,16 @@ def e2b_sandbox_terminate(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not sandbox_id:
         raise ValueError("'sandbox_id' is required")
 
-    response = requests.delete(
+    response = _e2b_request(
+        "DELETE",
         f"{E2B_MCP_SERVER_URL}/sandbox/{sandbox_id}",
-        headers=_e2b_headers(),
         timeout=10
     )
 
-    if response.status_code >= 400:
-        return {"ok": False, "status": response.status_code, "detail": response.text[:300]}
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
 
-    return {"ok": True, "sandbox_id": sandbox_id, "terminated": True}
+    return _e2b_json_response(response, "sandbox_terminate")
 
 
 def e2b_desktop_create(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -319,22 +400,21 @@ def e2b_desktop_create(payload: Dict[str, Any]) -> Dict[str, Any]:
         "resolution": resolution
     }
 
-    response = requests.post(
+    response = _e2b_request(
+        "POST",
         f"{E2B_MCP_SERVER_URL}/desktop/create",
-        json=request_body,
-        headers=_e2b_headers(),
+        request_body,
         timeout=60
     )
 
-    if response.status_code >= 400:
-        return {"ok": False, "status": response.status_code, "detail": response.text[:300]}
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
 
-    result = response.json()
-    result["ok"] = True
+    result = _e2b_json_response(response, "desktop_create")
 
     # Add NoVNC URL if available
-    if "desktop_id" in result:
-        result["novnc_url"] = f"{E2B_DESKTOP_URL}/desktop/{result['desktop_id']}"
+    if result.get("ok") and isinstance(result.get("data"), dict) and "desktop_id" in result.get("data", {}):
+        result["novnc_url"] = f"{E2B_DESKTOP_URL}/desktop/{result['data']['desktop_id']}"
 
     return result
 
@@ -354,19 +434,17 @@ def e2b_spell_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
         "timeout": timeout
     }
 
-    response = requests.post(
+    response = _e2b_request(
+        "POST",
         f"{E2B_MCP_SERVER_URL}/spell/execute",
-        json=request_body,
-        headers=_e2b_headers(),
+        request_body,
         timeout=timeout + 10
     )
 
-    if response.status_code >= 400:
-        return {"ok": False, "status": response.status_code, "detail": response.text[:300]}
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
 
-    result = response.json()
-    result["ok"] = True
-    return result
+    return _e2b_json_response(response, "spell_execute")
 
 
 def e2b_surf_scrape(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -386,19 +464,17 @@ def e2b_surf_scrape(payload: Dict[str, Any]) -> Dict[str, Any]:
         "follow_links": follow_links
     }
 
-    response = requests.post(
+    response = _e2b_request(
+        "POST",
         f"{E2B_MCP_SERVER_URL}/surf/scrape",
-        json=request_body,
-        headers=_e2b_headers(),
+        request_body,
         timeout=120
     )
 
-    if response.status_code >= 400:
-        return {"ok": False, "status": response.status_code, "detail": response.text[:300]}
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
 
-    result = response.json()
-    result["ok"] = True
-    return result
+    return _e2b_json_response(response, "surf_scrape")
 
 
 COMMAND_REGISTRY: Dict[str, str] = {
@@ -483,7 +559,7 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
         return e2b_spell_execute(payload)
     if cmd == "e2b.surf.scrape":
         return e2b_surf_scrape(payload)
-    raise ValueError(f"unknown_cmd:{cmd}")
+    raise ValueError(f"Unknown E2B command: {cmd}")
 
 
 def list_commands() -> List[Dict[str, Any]]:

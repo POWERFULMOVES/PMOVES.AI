@@ -27,10 +27,8 @@ RUN git clone --depth 1 --branch ${E2B_SURF_BRANCH} \
 
 WORKDIR /build/surf
 
-# Copy package files
-COPY package*.json ./
-
 # Install dependencies with pnpm (required by workspace)
+# Note: package files come from cloned repo, not build context
 RUN npm install -g pnpm@9.15.5 && \
     pnpm install --frozen-lockfile
 

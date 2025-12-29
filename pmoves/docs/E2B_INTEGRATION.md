@@ -158,22 +158,18 @@ See `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` for CHIT usage.
 ```bash
 cd /home/pmoves/PMOVES.AI
 
-# Initialize all E2B submodules
-git submodule update --init --recursive pmoves/pmoves/vendor/e2b-infra
-git submodule update --init --recursive pmoves/pmoves/vendor/e2b
-git submodule update --init --recursive pmoves/pmoves/vendor/e2b-desktop
-git submodule update --init --recursive pmoves/pmoves/vendor/e2b-spells
-git submodule update --init --recursive pmoves/pmoves/vendor/e2b-surf
-git submodule update --init --recursive pmoves/pmoves/vendor/e2b-mcp-server
+# Initialize E2B submodules (only e2b and agentgym-rl are registered)
+git submodule update --init --recursive pmoves/vendor/e2b
+git submodule update --init --recursive pmoves/vendor/agentgym-rl
 
-# Checkout hardened branches
-cd pmoves/pmoves/vendor/e2b-infra && git checkout PMOVES.AI-Edition-Hardened
-cd ../e2b && git checkout PMOVES.AI-Edition-Hardened
-cd ../e2b-desktop && git checkout PMOVES.AI-Edition-Hardened
-cd ../e2b-spells && git checkout PMOVES.AI-Edition-Hardened
-cd ../e2b-surf && git checkout PMOVES.AI-Edition-Hardened
-cd ../e2b-mcp-server && git checkout PMOVES.AI-Edition-Hardened
+# Checkout PMOVES.AI-Edition-Hardened branches (production standard)
+cd pmoves/vendor/e2b && git checkout PMOVES.AI-Edition-Hardened
+cd ../agentgym-rl && git checkout PMOVES.AI-Edition-Hardened
 ```
+
+**Note:** The E2B services (`e2b-mcp-server`, `e2b-surf`, `e2b-desktop`) are **not submodules**. Their Dockerfiles clone directly from PMOVES forks on GitHub with the `PMOVES.AI-Edition-Hardened` branch. See individual Dockerfiles in `pmoves/docker/e2b-*/` for source URLs.
+
+**Production Standard:** All PMOVES.AI services run on the `PMOVES.AI-Edition-Hardened` branch (main repo and all submodules).
 
 ### Step 2: Configure Environment Variables
 

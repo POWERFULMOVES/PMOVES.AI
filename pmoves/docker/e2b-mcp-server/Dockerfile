@@ -27,9 +27,10 @@ RUN git clone --depth 1 --branch ${E2B_MCP_BRANCH} \
 
 WORKDIR /build/mcp-server/packages/js
 
-# Install dependencies and build
-RUN npm ci --omit=dev && \
-    npm run build
+# Install all dependencies (including devDependencies for build)
+RUN npm ci && \
+    npm run build && \
+    npm prune --production
 
 # Verify the build output
 RUN test -f /build/mcp-server/packages/js/build/index.js || \
