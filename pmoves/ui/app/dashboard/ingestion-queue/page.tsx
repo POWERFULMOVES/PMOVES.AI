@@ -3,6 +3,11 @@
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
+
+// Helper function to join className strings (avoids template literals for Turbopack compatibility)
+function cn(...classes: (string | undefined | false)[]): string {
+  return classes.filter(Boolean).join(' ');
+}
 import {
   BulkApprovalActions,
   BulkSelectionCheckbox,
@@ -21,6 +26,8 @@ import {
   type IngestionStatus,
   type IngestionSourceType,
 } from "../../../lib/realtimeClient";
+import { formatTimeAgo } from "@/lib/timeUtils";
+import { AlertBanner } from "@/components/common";
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -49,23 +56,7 @@ function formatDuration(seconds: number | null): string {
   if (seconds === 0) return '0:00';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
+  return mins + ':' + secs.toString().padStart(2, '0');
 }
 
 export default function IngestionQueuePage() {
@@ -103,11 +94,14 @@ export default function IngestionQueuePage() {
         });
 
         if (isMounted) {
-          setItems(data);
+          // Defensive: ensure data is always an array
+          setItems(Array.isArray(data) ? data : []);
 
           // Calculate stats
           const allItems = await fetchIngestionQueue(client, { limit: 1000 });
-          const statsMap = allItems.reduce((acc, item) => {
+          // Defensive: ensure allItems is always an array before reduce
+          const safeAllItems = Array.isArray(allItems) ? allItems : [];
+          const statsMap = safeAllItems.reduce((acc, item) => {
             acc[item.status] = (acc[item.status] || 0) + 1;
             return acc;
           }, {} as Record<string, number>);
@@ -123,13 +117,15 @@ export default function IngestionQueuePage() {
         // Subscribe to realtime changes
         const channel = subscribeToIngestionQueue(client, {
           onInsert: (item) => {
-            if (isMounted) {
+            if (isMounted && item && item.id) {
               setItems((prev) => {
-                if (prev.some((i) => i.id === item.id)) return prev;
+                // Defensive: ensure prev is always an array
+                const safePrev = Array.isArray(prev) ? prev : [];
+                if (safePrev.some((i) => i.id === item.id)) return safePrev;
                 // Add to list if matches filter
-                if (filter !== 'all' && item.status !== filter) return prev;
-                if (sourceFilter !== 'all' && item.source_type !== sourceFilter) return prev;
-                return [item, ...prev];
+                if (filter !== 'all' && item.status !== filter) return safePrev;
+                if (sourceFilter !== 'all' && item.source_type !== sourceFilter) return safePrev;
+                return [item, ...safePrev];
               });
               setStats((prev) => ({
                 ...prev,
@@ -138,19 +134,25 @@ export default function IngestionQueuePage() {
             }
           },
           onUpdate: (item) => {
-            if (isMounted) {
+            if (isMounted && item && item.id) {
               setItems((prev) => {
+                // Defensive: ensure prev is always an array
+                const safePrev = Array.isArray(prev) ? prev : [];
                 // If item no longer matches filter, remove it
                 if (filter !== 'all' && item.status !== filter) {
-                  return prev.filter((i) => i.id !== item.id);
+                  return safePrev.filter((i) => i.id !== item.id);
                 }
-                return prev.map((i) => (i.id === item.id ? item : i));
+                return safePrev.map((i) => (i.id === item.id ? item : i));
               });
             }
           },
           onDelete: (item) => {
-            if (isMounted) {
-              setItems((prev) => prev.filter((i) => i.id !== item.id));
+            if (isMounted && item && item.id) {
+              setItems((prev) => {
+                // Defensive: ensure prev is always an array
+                const safePrev = Array.isArray(prev) ? prev : [];
+                return safePrev.filter((i) => i.id !== item.id);
+              });
             }
           },
         });
@@ -183,7 +185,7 @@ export default function IngestionQueuePage() {
       // Realtime will update the list
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to approve item';
-      setError(`Failed to approve: ${message}`);
+      setError('Failed to approve: ' + message);
       setTimeout(() => setError(null), 5000);
     } finally {
       setProcessing((prev) => {
@@ -202,7 +204,7 @@ export default function IngestionQueuePage() {
       // Realtime will update the list
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to reject item';
-      setError(`Failed to reject: ${message}`);
+      setError('Failed to reject: ' + message);
       setTimeout(() => setError(null), 5000);
     } finally {
       setProcessing((prev) => {
@@ -232,7 +234,7 @@ export default function IngestionQueuePage() {
       setSelectedIds(new Set());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to bulk approve items';
-      setError(`Bulk approval failed: ${message}`);
+      setError('Bulk approval failed: ' + message);
       setTimeout(() => setError(null), 5000);
     } finally {
       setBulkProcessing(false);
@@ -250,7 +252,7 @@ export default function IngestionQueuePage() {
       setSelectedIds(new Set());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to bulk reject items';
-      setError(`Bulk rejection failed: ${message}`);
+      setError('Bulk rejection failed: ' + message);
       setTimeout(() => setError(null), 5000);
     } finally {
       setBulkProcessing(false);
@@ -259,18 +261,23 @@ export default function IngestionQueuePage() {
 
   // Escape CSV cells to prevent formula injection
   // Cells starting with =, +, -, @ can trigger formulas in Excel/Sheets
-  const escapeCSVCell = useCallback((cell: string): string => {
+  const escapeCSVCell = (cell: string): string => {
     const cellStr = String(cell);
     // Check if cell starts with formula-inducing characters
     if (/^[=+\-@]/.test(cellStr)) {
       // Prepend with single quote to prevent formula execution
-      return `"'" + cellStr.replace(/"/g, '""') + '"';
+      const singleQuote = String.fromCharCode(39);
+      const doubleQuote = String.fromCharCode(34);
+      return singleQuote + singleQuote + cellStr.split(doubleQuote).join(doubleQuote + doubleQuote) + doubleQuote;
     }
-    return '"' + cellStr.replace(/"/g, '""') + '"';
-  }, []);
+    const doubleQuote = String.fromCharCode(34);
+    return doubleQuote + cellStr.split(doubleQuote).join(doubleQuote + doubleQuote) + doubleQuote;
+  };
 
   const handleExport = useCallback((ids: string[]) => {
-    const selectedItems = items.filter(item => ids.includes(item.id));
+    // Defensive: ensure items is always an array
+    const safeItems = Array.isArray(items) ? items : [];
+    const selectedItems = safeItems.filter(item => ids.includes(item.id));
     const headers = ['ID', 'Title', 'Source Type', 'Source URL', 'Status', 'Created At'];
     const rows = selectedItems.map(item => [
       item.id,
@@ -286,7 +293,8 @@ export default function IngestionQueuePage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ingestion-queue-${new Date().toISOString().slice(0, 10)}.csv`;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = 'ingestion-queue-' + dateStr + '.csv';
     a.click();
     URL.revokeObjectURL(url);
   }, [items]);
@@ -295,7 +303,7 @@ export default function IngestionQueuePage() {
   const handleCreateRule = useCallback((rule: Omit<ApprovalRule, 'id' | 'createdAt' | 'matchCount' | 'lastMatchedAt'>) => {
     const newRule: ApprovalRule = {
       ...rule,
-      id: `rule-${Date.now()}`,
+      id: 'rule-' + String(Date.now()),
       createdAt: new Date().toISOString(),
       matchCount: 0,
     };
@@ -324,27 +332,14 @@ export default function IngestionQueuePage() {
         <DashboardNavigation active="ingest" />
 
       {/* Error Display */}
-      {error && (
-        <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert" aria-live="assertive">
-          <div className="flex items-center justify-between">
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-600 hover:text-red-800"
-              aria-label="Dismiss error"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {error && <AlertBanner message={error} variant="error" onDismiss={() => setError(null)} />}
 
       <header className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold">Ingestion Queue</h1>
             <div className="flex items-center gap-1.5 text-xs">
-              <span className={`w-2 h-2 rounded-full ${statusColor} animate-pulse`} />
+              <span className={cn('w-2 h-2 rounded-full', statusColor, 'animate-pulse')} />
               <span className="text-neutral-500">
                 {status === 'connected' ? 'Live' : status}
               </span>
@@ -353,15 +348,14 @@ export default function IngestionQueuePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowRules(!showRules)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                showRules
-                  ? 'bg-purple-600 text-white hover:bg-purple-700'
-                  : 'border border-purple-600 text-purple-600 hover:bg-purple-50'
-              }`}
+              className={cn(
+                'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                showRules ? 'bg-purple-600 text-white hover:bg-purple-700' : 'border border-purple-600 text-purple-600 hover:bg-purple-50'
+              )}
               type="button"
             >
               {showRules ? 'Hide Rules' : 'Approval Rules'}
-              {rules.length > 0 && ` (${rules.filter(r => r.enabled).length})`}
+              {rules.length > 0 && ' (' + rules.filter(r => r.enabled).length + ')'}
             </button>
             {filter === 'pending' && items.length > 0 && (
               <button
@@ -403,7 +397,7 @@ export default function IngestionQueuePage() {
             className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"
           >
             <div className="flex items-center gap-2">
-              <span className={`w-3 h-3 rounded-full ${stat.color}`} />
+              <span className={cn('w-3 h-3 rounded-full', stat.color)} />
               <span className="text-sm text-neutral-500">{stat.label}</span>
             </div>
             <div className="mt-1 text-2xl font-semibold">{stat.value}</div>
@@ -466,18 +460,17 @@ export default function IngestionQueuePage() {
           <div className="rounded-lg border border-neutral-200 bg-white p-8 text-center">
             <div className="text-4xl mb-4">📭</div>
             <div className="text-neutral-500">
-              No items in queue{filter !== 'all' ? ` with status "${filter}"` : ''}.
+              No items in queue{filter !== 'all' ? ' with status "' + filter + '"' : ''}.
             </div>
           </div>
         ) : (
           items.map((item) => (
             <div
               key={item.id}
-              className={`rounded-lg bg-white shadow-sm overflow-hidden transition ${
-                selectedIds.has(item.id)
-                  ? 'border-2 border-blue-500'
-                  : 'border border-neutral-200'
-              }`}
+              className={cn(
+                'rounded-lg bg-white shadow-sm overflow-hidden transition',
+                selectedIds.has(item.id) ? 'border-2 border-blue-500' : 'border border-neutral-200'
+              )}
             >
               <div className="flex">
                 {/* Thumbnail */}
@@ -522,7 +515,7 @@ export default function IngestionQueuePage() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status]}`}>
+                        <span className={cn('text-xs px-2 py-0.5 rounded-full', STATUS_COLORS[item.status])}>
                           {item.status}
                         </span>
                         <span className="text-xs text-neutral-400">

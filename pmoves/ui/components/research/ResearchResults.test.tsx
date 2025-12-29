@@ -7,9 +7,9 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ResearchResults } from './ResearchResults';
 import type { ResearchResult } from '@/lib/api/research';
 
-// Mock clipboard API
+// Mock clipboard API - return resolved promise so .then() callbacks execute
 const mockClipboard = {
-  writeText: jest.fn(),
+  writeText: jest.fn(() => Promise.resolve()),
 };
 
 Object.assign(navigator, { clipboard: mockClipboard });
@@ -68,21 +68,29 @@ describe('ResearchResults', () => {
       expect(screen.getByText(mockResult.summary)).toBeInTheDocument();
     });
 
-    it('should copy summary to clipboard', () => {
+    it('should copy summary to clipboard', async () => {
       render(<ResearchResults result={mockResult} onCopy={mockOnCopy} />);
 
       const copyButton = screen.getByText('Copy summary');
-      fireEvent.click(copyButton);
+      await act(async () => {
+        fireEvent.click(copyButton);
+        await Promise.resolve();
+      });
 
       expect(mockClipboard.writeText).toHaveBeenCalledWith(mockResult.summary);
       expect(mockOnCopy).toHaveBeenCalled();
     });
 
-    it('should show "Copied!" feedback after copying', () => {
+    it('should show "Copied!" feedback after copying', async () => {
       render(<ResearchResults result={mockResult} />);
 
       const copyButton = screen.getByText('Copy summary');
-      fireEvent.click(copyButton);
+      // Wrap in act to wait for async state update from promise resolution
+      await act(async () => {
+        fireEvent.click(copyButton);
+        // Wait for microtasks to flush (promise resolution)
+        await Promise.resolve();
+      });
 
       expect(screen.getByText('Copied!')).toBeInTheDocument();
 
@@ -280,11 +288,14 @@ describe('ResearchResults', () => {
   });
 
   describe('Multiple copy feedback states', () => {
-    it('should track separate feedback for each section', () => {
+    it('should track separate feedback for each section', async () => {
       render(<ResearchResults result={mockResult} />);
 
-      // Copy summary first
-      fireEvent.click(screen.getByText('Copy summary'));
+      // Copy summary first - wait for async state update
+      await act(async () => {
+        fireEvent.click(screen.getByText('Copy summary'));
+        await Promise.resolve();
+      });
       expect(screen.getAllByText('Copied!')).toHaveLength(1);
 
       // Copy first note - this should replace the summary's "Copied!" state
@@ -292,7 +303,10 @@ describe('ResearchResults', () => {
       const firstNoteCopy = noteCopyButtons.find(btn =>
         btn.parentElement?.parentElement?.querySelector('p')?.textContent === mockResult.notes[0]
       );
-      fireEvent.click(firstNoteCopy!);
+      await act(async () => {
+        fireEvent.click(firstNoteCopy!);
+        await Promise.resolve();
+      });
 
       // Component tracks only one copied section at a time, so still only 1 "Copied!"
       expect(screen.getAllByText('Copied!')).toHaveLength(1);

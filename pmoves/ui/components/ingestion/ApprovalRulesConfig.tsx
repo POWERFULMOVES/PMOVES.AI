@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from "react";
 import type { IngestionSourceType } from "@/lib/realtimeClient";
+import { ConfirmDialog } from "@/components/common";
 
 // Tailwind JIT static class lookup objects
 const MODAL_OVERLAY_CLASSES = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
@@ -107,6 +108,11 @@ export function ApprovalRulesConfig({
   const [showLog, setShowLog] = useState(false);
   const [executionLog, setExecutionLog] = useState<Array<{ ruleId: string; ruleName: string; itemId: string; action: string; timestamp: string }>>([]);
   const [testResult, setTestResult] = useState<{ matched: number; total: number } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; ruleId: string | null; ruleName: string }>({
+    isOpen: false,
+    ruleId: null,
+    ruleName: '',
+  });
 
   // Form state for new/edit rule
   const [formData, setFormData] = useState({
@@ -181,9 +187,23 @@ export function ApprovalRulesConfig({
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this rule?')) {
-      onDeleteRule(id);
+    const rule = rules.find(r => r.id === id);
+    setDeleteConfirm({
+      isOpen: true,
+      ruleId: id,
+      ruleName: rule?.name || 'this rule',
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirm.ruleId) {
+      onDeleteRule(deleteConfirm.ruleId);
     }
+    setDeleteConfirm({ isOpen: false, ruleId: null, ruleName: '' });
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirm({ isOpen: false, ruleId: null, ruleName: '' });
   };
 
   const handleTestRule = async () => {
@@ -376,10 +396,11 @@ export function ApprovalRulesConfig({
             <div className="p-4 overflow-y-auto flex-1 space-y-4">
               {/* Rule Name */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                <label htmlFor="rule-name" className="block text-sm font-medium text-neutral-700 mb-1">
                   Rule Name
                 </label>
                 <input
+                  id="rule-name"
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
@@ -391,10 +412,11 @@ export function ApprovalRulesConfig({
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                <label htmlFor="rule-description" className="block text-sm font-medium text-neutral-700 mb-1">
                   Description (optional)
                 </label>
                 <textarea
+                  id="rule-description"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe what this rule does..."
@@ -437,8 +459,9 @@ export function ApprovalRulesConfig({
 
                 {/* Source Type */}
                 <div>
-                  <label className="block text-xs text-neutral-600 mb-1">Source Type</label>
+                  <label htmlFor="source-type" className="block text-xs text-neutral-600 mb-1">Source Type</label>
                   <select
+                    id="source-type"
                     value={formData.conditions.sourceType}
                     onChange={(e) => updateCondition('sourceType', e.target.value as IngestionSourceType | 'all')}
                     className="w-full rounded border border-neutral-300 px-3 py-2 text-sm"
@@ -451,8 +474,9 @@ export function ApprovalRulesConfig({
 
                 {/* Channel Contains */}
                 <div>
-                  <label className="block text-xs text-neutral-600 mb-1">Channel name contains</label>
+                  <label htmlFor="channel-contains" className="block text-xs text-neutral-600 mb-1">Channel name contains</label>
                   <input
+                    id="channel-contains"
                     type="text"
                     value={formData.conditions.channelContains ?? ''}
                     onChange={(e) => updateCondition('channelContains', e.target.value || undefined)}
@@ -463,8 +487,9 @@ export function ApprovalRulesConfig({
 
                 {/* Title Contains */}
                 <div>
-                  <label className="block text-xs text-neutral-600 mb-1">Title contains</label>
+                  <label htmlFor="title-contains" className="block text-xs text-neutral-600 mb-1">Title contains</label>
                   <input
+                    id="title-contains"
                     type="text"
                     value={formData.conditions.titleContains ?? ''}
                     onChange={(e) => updateCondition('titleContains', e.target.value || undefined)}
@@ -476,8 +501,9 @@ export function ApprovalRulesConfig({
                 {/* Duration Range */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1">Min duration (seconds)</label>
+                    <label htmlFor="min-duration" className="block text-xs text-neutral-600 mb-1">Min duration (seconds)</label>
                     <input
+                      id="min-duration"
                       type="number"
                       value={formData.conditions.minDuration ?? ''}
                       onChange={(e) => updateCondition('minDuration', e.target.value ? parseInt(e.target.value) : null)}
@@ -487,8 +513,9 @@ export function ApprovalRulesConfig({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-neutral-600 mb-1">Max duration (seconds)</label>
+                    <label htmlFor="max-duration" className="block text-xs text-neutral-600 mb-1">Max duration (seconds)</label>
                     <input
+                      id="max-duration"
                       type="number"
                       value={formData.conditions.maxDuration ?? ''}
                       onChange={(e) => updateCondition('maxDuration', e.target.value ? parseInt(e.target.value) : null)}
@@ -524,10 +551,11 @@ export function ApprovalRulesConfig({
               {/* Priority (for auto-approve) */}
               {formData.action === 'auto_approve' && (
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  <label htmlFor="rule-priority" className="block text-sm font-medium text-neutral-700 mb-1">
                     Priority: {formData.priority}
                   </label>
                   <input
+                    id="rule-priority"
                     type="range"
                     min={1}
                     max={10}
@@ -649,6 +677,18 @@ export function ApprovalRulesConfig({
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        title="Delete Rule"
+        message={`Are you sure you want to delete "${deleteConfirm.ruleName}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+        variant="danger"
+      />
     </>
   );
 }

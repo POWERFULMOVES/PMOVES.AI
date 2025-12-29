@@ -143,10 +143,29 @@ describe('SyncStatus', () => {
       expect(screen.getByText('Last: 2h ago')).toBeInTheDocument();
     });
 
-    it('should show date for older than 24 hours', () => {
+    it('should show days ago for older than 24 hours', () => {
       const oldDate: JellyfinSyncStatusInfo = {
         ...mockSyncStatus,
         lastSync: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+      };
+
+      render(
+        <SyncStatus
+          status={oldDate}
+          onRefresh={mockOnRefresh}
+          onSync={mockOnSync}
+          onBackfill={mockOnBackfill}
+        />
+      );
+
+      // 48 hours = 2 days ago
+      expect(screen.getByText('Last: 2d ago')).toBeInTheDocument();
+    });
+
+    it('should show locale date for older than 7 days', () => {
+      const oldDate: JellyfinSyncStatusInfo = {
+        ...mockSyncStatus,
+        lastSync: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(), // 10 days ago
       };
 
       render(

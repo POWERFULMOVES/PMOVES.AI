@@ -1196,7 +1196,13 @@ services:
   gateway-agent:
     build: ./services/gateway-agent
     restart: unless-stopped
-    <<: *env-tier-agent
+    env_file:
+      - path: env.tier-agent
+        required: false
+      - path: .env.local
+        required: false
+      - env.shared
+      - .env.generated
     environment:
       - PORT=8100
       - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
@@ -1205,17 +1211,7 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
-      # API Keys (from GitHub Secrets or environment)
-      - HOSTINGER_API_KEY=${HOSTINGER_API_KEY}
-      - TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY}
-      - TAILSCALE_API_KEY=${TAILSCALE_API_KEY}
-      - N8N_API_KEY=${N8N_API_KEY}
-      - POSTMAN_API_KEY=${POSTMAN_API_KEY}
-      - E2B_API_KEY=${E2B_API_KEY}
-      - VENICE_API_KEY=${VENICE_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # API Keys loaded from env.shared via env_file
     ports:
       - "8100:8100"
     depends_on:

@@ -57,12 +57,6 @@ describe('ApprovalRulesConfig', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock window.confirm
-    global.confirm = jest.fn(() => true);
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
   });
 
   describe('Rules list display', () => {
@@ -308,16 +302,23 @@ describe('ApprovalRulesConfig', () => {
         />
       );
 
+      // Click the first delete button in the rules list
       const deleteButtons = screen.getAllByText('Delete');
       fireEvent.click(deleteButtons[0]);
 
-      expect(global.confirm).toHaveBeenCalledWith('Are you sure you want to delete this rule?');
+      // ConfirmDialog should be visible
+      expect(screen.getByText('Delete Rule')).toBeInTheDocument();
+
+      // Click confirm button - get the button inside the dialog (after the title)
+      const dialogTitle = screen.getByText('Delete Rule');
+      const dialogParent = dialogTitle.closest('div[role="dialog"]');
+      const confirmButton = dialogParent?.querySelector('button:last-child');
+      if (confirmButton) fireEvent.click(confirmButton);
+
       expect(mockOnDeleteRule).toHaveBeenCalledWith('rule1');
     });
 
     it('should not delete rule when confirmation cancelled', () => {
-      global.confirm = jest.fn(() => false);
-
       render(
         <ApprovalRulesConfig
           rules={mockRules}
@@ -327,10 +328,19 @@ describe('ApprovalRulesConfig', () => {
         />
       );
 
+      // Click the first delete button in the rules list
       const deleteButtons = screen.getAllByText('Delete');
       fireEvent.click(deleteButtons[0]);
 
-      expect(global.confirm).toHaveBeenCalled();
+      // ConfirmDialog should be visible
+      expect(screen.getByText('Delete Rule')).toBeInTheDocument();
+
+      // Click cancel button - get the first button inside the dialog
+      const dialogTitle = screen.getByText('Delete Rule');
+      const dialogParent = dialogTitle.closest('div[role="dialog"]');
+      const cancelButton = dialogParent?.querySelector('button:first-child');
+      if (cancelButton) fireEvent.click(cancelButton);
+
       expect(mockOnDeleteRule).not.toHaveBeenCalled();
     });
   });

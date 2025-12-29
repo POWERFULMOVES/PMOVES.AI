@@ -7,6 +7,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { JellyfinSyncStatusInfo } from "@/lib/api/jellyfin";
+import { formatTimeAgo } from "@/lib/timeUtils";
+import { AlertBanner } from "@/components/common";
 
 // Tailwind JIT static class lookup objects
 const STAT_CARD_CLASSES = "p-3 bg-neutral-50 rounded min-w-0";
@@ -60,20 +62,6 @@ export function SyncStatus({
     onBackfill(50);
   }, [onBackfill]);
 
-  const formatLastSync = () => {
-    if (!status?.lastSync) return "Never";
-    const date = new Date(status.lastSync);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString();
-  };
-
   const hasErrors = status && status.errors > 0;
   const isHealthy = status && (status.status === "idle" || status.status === "completed");
 
@@ -91,7 +79,7 @@ export function SyncStatus({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-neutral-500">
-            Last: {formatLastSync()}
+            Last: {formatTimeAgo(status?.lastSync ?? null)}
           </span>
           <button
             onClick={onRefresh}
@@ -151,8 +139,8 @@ export function SyncStatus({
 
           {/* Sync error */}
           {error && (
-            <div className="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">
-              {error}
+            <div className="mt-4">
+              <AlertBanner message={error} variant="error" />
             </div>
           )}
 
