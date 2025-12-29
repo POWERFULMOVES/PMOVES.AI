@@ -18,6 +18,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/ingest', label: 'Ingestion', key: 'ingest', accent: 'cyan' },
   { href: '/dashboard/ingestion-queue', label: 'Queue', key: 'ingestion-queue' },
   { href: '/dashboard/videos', label: 'Videos', key: 'videos', accent: 'ember' },
+  { href: '/dashboard/search', label: 'Search', key: 'search', accent: 'forest' },
+  { href: '/dashboard/jellyfin', label: 'Jellyfin', key: 'jellyfin', accent: 'violet' },
+  { href: '/dashboard/research', label: 'Research', key: 'research', accent: 'gold' },
   { href: '/dashboard/monitor', label: 'Monitor', key: 'monitor', accent: 'forest' },
   { href: '/dashboard/notebook', label: 'Notebook', key: 'notebook', accent: 'violet' },
   { href: '/dashboard/notebook/runtime', label: 'Runtime', key: 'notebook-runtime' },
@@ -32,6 +35,9 @@ export type NavKey =
   | 'ingest'
   | 'ingestion-queue'
   | 'videos'
+  | 'search'
+  | 'jellyfin'
+  | 'research'
   | 'monitor'
   | 'notebook'
   | 'notebook-runtime'

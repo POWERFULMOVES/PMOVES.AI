@@ -242,6 +242,48 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Open Notebook, LangExtract, Extract Worker
 - **Compose Profile:** `orchestration`
 
+## GPU & Compute Services
+
+### GPU Orchestrator
+- **Ports:** 8200
+- **Purpose:** VRAM management, model lifecycle, and GPU priority queue
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `GET /models` - List loaded models
+  - `POST /models/load` - Load model to GPU
+  - `POST /models/unload` - Unload model from GPU
+- **Features:**
+  - Multi-model VRAM allocation
+  - Priority queue for GPU compute requests
+  - Automatic model eviction on VRAM pressure
+  - Integration with Ollama, vLLM, TTS backends
+- **Environment:**
+  - `GPU_ORCHESTRATOR_MAX_MODELS=3` - Max concurrent models
+  - `GPU_ORCHESTRATOR_VRAM_THRESHOLD=0.9` - Eviction threshold
+  - `OLLAMA_BASE_URL`, `VLLM_BASE_URL`, `TTS_BASE_URL`
+- **Dependencies:** NATS (optional)
+- **Compose Profile:** `gpu`
+- **Env Tier:** `env-tier-api`
+
+### E2B Runner (pmz-e2b-runner)
+- **Ports:** 7071
+- **Purpose:** Isolated code execution sandbox (self-hosted)
+- **Key APIs:**
+  - `GET /health` - Service health
+  - `POST /execute` - Execute code in sandbox
+- **Features:**
+  - Secure code execution in isolated containers
+  - Python, JavaScript, shell code support
+  - MCP gateway integration for tool access
+  - GPU support on ai-lab runner (optional)
+- **Deployment:**
+  - **ai-lab:** Self-hosted with GPU access
+  - **VPS/proxmox:** CPU-only mode
+- **Environment:**
+  - `E2B_API_KEY` - E2B API key (if using cloud fallback)
+  - `MCP_GATEWAY_URL` - Docker MCP gateway endpoint
+- **Compose Profile:** `workers`, `botz`
+
 ## Utility & Integration Services
 
 ### Presign
@@ -352,6 +394,41 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Buckets:** `assets`, `outputs`
 - **Stores:** Videos, audio, images, analysis results
 - **Compose Profile:** Default (always required)
+
+## External Integrations (Optional)
+
+### Firefly III
+- **Ports:** 8080 (internal only - not published to host)
+- **Container:** `cataclysm-firefly`
+- **Purpose:** Personal finance management and budgeting
+- **Key APIs:**
+  - `GET /api/v1/about` - Version and instance info
+  - `GET /api/v1/accounts` - List accounts
+  - `GET /api/v1/transactions` - List transactions
+- **Authentication:** OAuth2 Personal Access Token (Bearer token)
+- **Dependencies:** Supabase (via `finance_*` tables)
+- **Related Tables:**
+  - `finance_accounts` - Account records
+  - `finance_budgets` - Budget tracking
+  - `finance_transactions` - Transaction history
+- **n8n Workflows:** `pmoves/integrations/firefly-iii/*.json`
+- **Documentation:** https://docs.firefly-iii.org/firefly-iii/api
+- **Note:** Internal service, access via Docker network or reverse proxy
+
+### wger (Health Tracking)
+- **Container:** `cataclysm-wger`
+- **Purpose:** Fitness and workout tracking
+- **Related Tables:**
+  - `health_nutrition` - Nutrition logs
+  - `health_weight` - Weight tracking
+  - `health_workouts` - Workout records
+- **n8n Workflows:** `pmoves/integrations/health-wger/*.json`
+
+### Jellyfin
+- **Container:** `cataclysm-jellyfin`
+- **Purpose:** Media server and library management
+- **Integration:** `pmoves-jellyfin-bridge` (port 8093) syncs events to Supabase
+- **Related Submodules:** `PMOVES-Jellyfin`, `Pmoves-Jellyfin-AI-Media-Stack`
 
 ## Quick Reference
 

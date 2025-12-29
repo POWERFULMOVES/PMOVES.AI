@@ -1,4 +1,16 @@
-Awesome—shipping enhancements **1–4** now. You’ll get:
+> [!WARNING]
+> **Implementation Status: NOT IMPLEMENTED**
+>
+> This document describes advanced decoder features that are **not yet implemented**:
+> - Learning-based T5 decoder: ❌ Not implemented
+> - Multimodal CLIP/CLAP decoder: ❌ Not implemented
+> - Security utilities (chit_security.py): ❌ Not implemented
+>
+> These are future enhancements planned for Q2 2026. See `IMPLEMENTATION_STATUS.md` for current status.
+
+---
+
+Awesome—shipping enhancements **1–4** now. You'll get:
 
 * **(1) Learning‑based decoder** (tiny T5 pipeline) that turns CHIT geometry into *generated* summaries, not just retrieval.
 * **(2) Multimodal decode** for images (CLIP) and optional audio (CLAP) using the same geometry‑only idea.

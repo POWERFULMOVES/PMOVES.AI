@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import NamedTuple
+from typing import TYPE_CHECKING  # NamedTuple replaced with dataclass
 
 
 class BoundaryType(Enum):
@@ -43,7 +43,8 @@ class BoundaryType(Enum):
     NONE = 0
 
 
-class PauseConfig(NamedTuple):
+@dataclass(frozen=True)
+class PauseConfig:
     """Configuration for prosodic pause behavior.
 
     Attributes:
@@ -56,17 +57,14 @@ class PauseConfig(NamedTuple):
     can_breath: bool
     breath_probability: float
 
-    def __new__(
-        cls, pause_ms: float, can_breath: bool, breath_probability: float
-    ) -> "PauseConfig":
-        """Create PauseConfig with validated invariants."""
-        if pause_ms < 0:
-            raise ValueError(f"PauseConfig.pause_ms must be non-negative, got {pause_ms}")
-        if not 0.0 <= breath_probability <= 1.0:
+    def __post_init__(self) -> None:
+        """Validate invariants after initialization."""
+        if self.pause_ms < 0:
+            raise ValueError(f"PauseConfig.pause_ms must be non-negative, got {self.pause_ms}")
+        if not 0.0 <= self.breath_probability <= 1.0:
             raise ValueError(
-                f"PauseConfig.breath_probability must be in [0.0, 1.0], got {breath_probability}"
+                f"PauseConfig.breath_probability must be in [0.0, 1.0], got {self.breath_probability}"
             )
-        return super().__new__(cls, pause_ms, can_breath, breath_probability)
 
 
 # Pause configuration lookup table for each boundary type

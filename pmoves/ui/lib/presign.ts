@@ -59,21 +59,21 @@ export async function callPresignService(options: PresignOptions): Promise<Presi
     payload.content_type = contentType;
   }
 
-  const doFetch = (authHeaders: Record<string, string>) => fetch(endpoint, {
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: authHeaders,
+    headers,
     body: JSON.stringify(payload),
   });
 
-  // Try once with configured secret; if unauthorized and a common default is expected, retry with 'change_me'
-  let response = await doFetch(headers);
-  if ((response.status === 401 || response.status === 403) && (!sharedSecret || sharedSecret !== 'change_me')) {
-    const retryHeaders = { ...headers, authorization: 'Bearer change_me' };
-    response = await doFetch(retryHeaders);
-  }
-
   if (!response.ok) {
     const text = await response.text();
+    // Provide actionable error for auth failures
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(
+        `Presign service authentication failed (${response.status}). ` +
+        'Ensure PRESIGN_SHARED_SECRET is configured correctly.'
+      );
+    }
     throw new Error(text || `Presign service request failed (${response.status})`);
   }
 

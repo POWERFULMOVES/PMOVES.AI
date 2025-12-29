@@ -1,4 +1,4 @@
-"""Generate Crush CLI configuration tailored for PMOVES."""
+"""Generate PMOVES CLI configuration tailored for PMOVES deployment."""
 
 from __future__ import annotations
 
@@ -86,9 +86,34 @@ TENSORZERO_SPEC = ProviderSpec(
 
 
 def _fetch_tensorzero_models() -> List[ModelSpec]:
-    """Fetch available models from TensorZero API.
+    """Fetch available models from TensorZero API dynamically.
 
-    Returns dynamically discovered models instead of hardcoded list.
+    Queries the TensorZero Gateway /v1/models endpoint to discover all available
+    models, eliminating the need for hardcoded model lists. Model roles (large/small)
+    are inferred from naming patterns.
+
+    Returns:
+        List of ModelSpec objects representing available models. Each spec includes:
+            - id: Model identifier (e.g., "claude-sonnet-4-5", "qwen3_8b")
+            - name: Human-readable model name
+            - role: Either "large" (complex reasoning) or "small" (fast tasks)
+
+    Raises:
+        urllib.error.URLError: If TensorZero API endpoint is unreachable.
+        TimeoutError: If API request exceeds 5 second timeout.
+        json.JSONDecodeError: If API response is not valid JSON.
+
+    Example:
+        >>> models = _fetch_tensorzero_models()
+        >>> large_models = [m for m in models if m.role == "large"]
+        >>> print(f"Found {len(large_models)} large models")
+
+    Note:
+        - Role inference pattern: Models with "32b", "70b", "claude", "gpt-4o" → "large"
+        - All other models → "small"
+        - Fallback defaults returned if TensorZero unavailable:
+            * qwen3_8b (small)
+            * claude-sonnet-4-5 (large, can_reason=True)
     """
     import urllib.request
     import urllib.error
@@ -202,8 +227,38 @@ def _select_models(available: Dict[str, ProviderSpec], provider_models: Dict[str
 def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     """Build Crush config with TensorZero as the ONLY provider.
 
-    All models are discovered dynamically from TensorZero API.
-    No hardcoded model lists - TensorZero is the single source of truth.
+    This function dynamically discovers all available models from the TensorZero
+    Gateway API, eliminating hardcoded model lists. TensorZero serves as the
+    single source of truth for model routing and observability.
+
+    The configuration includes:
+    - TensorZero as the sole provider (all models route through it)
+    - MCP servers (pmoves-mini, docker, n8n) with auto-detection
+    - Context paths for PMOVES.AI documentation
+    - LSP servers for Python, TypeScript, and Go
+    - Tool permissions and attribution settings
+
+    Returns:
+        A tuple of:
+            - Dict[str, object]: Complete Crush configuration ready for JSON serialization
+            - Dict[str, ProviderSpec]: Mapping of provider IDs to ProviderSpec objects
+                for runtime inspection. Keys: {"tensorzero"}
+
+    Raises:
+        urllib.error.URLError: If TensorZero API is unreachable during model discovery.
+        TimeoutError: If TensorZero API request times out (5 second timeout).
+        json.JSONDecodeError: If TensorZero API returns invalid JSON.
+
+    Example:
+        >>> config, providers = build_config()
+        >>> print(f"Found {len(providers['tensorzero'].models)} models")
+        >>> with open("~/.config/crush/crush.json", "w") as f:
+        ...     json.dump(config, f, indent=2)
+
+    Note:
+        - MCP servers are automatically disabled if required commands or env vars are missing
+        - Context paths are filtered to only include files that exist
+        - Fallback models used if TensorZero unavailable: qwen3_8b, claude-sonnet-4-5
     """
     env_cache = {path: _load_env_file(path) for path in ENV_CANDIDATES}
 
