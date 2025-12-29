@@ -339,6 +339,7 @@ docker compose --profile agents --profile workers up -d
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
+- `tier-architecture.md` - **6-tier environment + 5-tier network architecture (SECURITY)**
 - `services-catalog.md` - Complete service listing with all details
 - `nats-subjects.md` - Comprehensive NATS subject catalog
 - `mcp-api.md` - Agent Zero MCP API reference
