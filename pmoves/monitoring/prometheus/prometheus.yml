@@ -19,14 +19,99 @@ scrape_configs:
     static_configs:
       - targets: ["loki:3100"]
 
+  # === Direct /metrics scraping ===
+  # Services that expose Prometheus metrics endpoint
+
+  - job_name: flute-gateway
+    static_configs:
+      - targets: ["flute-gateway:8055"]
+
+  - job_name: tensorzero-gateway
+    static_configs:
+      - targets: ["tensorzero-gateway:3000"]
+
+  - job_name: deepresearch-metrics
+    static_configs:
+      - targets: ["deepresearch:8098"]
+
+  - job_name: supaserch-metrics
+    static_configs:
+      - targets: ["supaserch:8099"]
+
+  - job_name: gpu-orchestrator
+    static_configs:
+      - targets: ["gpu-orchestrator:8200"]
+
+  # === Tier 2 Services (Added 2025-12-24) ===
+
+  - job_name: hi-rag-gateway-v2
+    static_configs:
+      - targets: ["hi-rag-gateway-v2:8086"]
+
+  - job_name: extract-worker
+    static_configs:
+      - targets: ["extract-worker:8083"]
+
+  - job_name: pmoves-yt
+    static_configs:
+      - targets: ["pmoves-yt:8077"]
+
+  - job_name: agent-zero
+    static_configs:
+      - targets: ["agent-zero:80"]
+
+  - job_name: archon
+    static_configs:
+      - targets: ["archon:8091"]
+
+  # === Tier 3 Services (Added 2025-12-24) ===
+
+  - job_name: jellyfin-bridge
+    static_configs:
+      - targets: ["jellyfin-bridge:8093"]
+
+  - job_name: pdf-ingest
+    static_configs:
+      - targets: ["pdf-ingest:8092"]
+
+  - job_name: notebook-sync
+    static_configs:
+      - targets: ["notebook-sync:8095"]
+
+  - job_name: langextract
+    static_configs:
+      - targets: ["langextract:8084"]
+
+  - job_name: presign
+    static_configs:
+      - targets: ["presign:8088"]
+
+  # === Tier 4 Services (Added 2025-12-25) ===
+
+  - job_name: render-webhook
+    static_configs:
+      - targets: ["render-webhook:8085"]
+
+  - job_name: session-context-worker
+    static_configs:
+      - targets: ["session-context-worker:8100"]
+
+  - job_name: messaging-gateway
+    static_configs:
+      - targets: ["messaging-gateway:8101"]
+
+  # === Blackbox HTTP probes ===
+  # Health check probes for services without /metrics
+
   - job_name: blackbox_http
     metrics_path: /probe
     params:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://host.docker.internal:8086/hirag/healthz  # hi-rag v2 CPU
-          - http://host.docker.internal:8087/hirag/healthz  # hi-rag v2 GPU
+          - http://host.docker.internal:80/healthz         # agent-zero
+          - http://host.docker.internal:8086/              # hi-rag v2 CPU
+          - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://host.docker.internal:8088/healthz        # presign
           - http://host.docker.internal:8091/healthz        # archon
           - http://host.docker.internal:8097/healthz            # channel monitor
