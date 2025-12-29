@@ -63,7 +63,7 @@ scrape_configs:
 
   - job_name: agent-zero
     static_configs:
-      - targets: ["agent-zero:8080"]
+      - targets: ["agent-zero:80"]
 
   - job_name: archon
     static_configs:

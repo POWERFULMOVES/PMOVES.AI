@@ -12,8 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application
+# Create non-root user (PMOVES standard: UID/GID 65532)
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+# Copy application (after user creation, before USER switch)
 COPY app.py .
+
+# Switch to non-root user
+USER pmoves:pmoves
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \

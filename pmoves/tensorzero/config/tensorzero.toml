@@ -188,6 +188,30 @@ api_base = "https://api.venice.ai/api/v1"
 model_name = "venice/gpt-4o-mini"
 api_key_location = "env::VENICE_API_KEY"
 
+# --- Z.ai (Primary OpenAI-Compatible Provider) -------------------------------
+# Z.ai serves as the primary OpenAI-compatible endpoint for PMOVES.AI
+# Endpoint: https://api.z.ai/api/coding/paas/v4
+# Supports: gpt-4o-mini, glm-4-flash, and other OpenAI-compatible models
+
+[models.chat_zai]
+routing = ["zai_primary"]
+
+[models.chat_zai.providers.zai_primary]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "gpt-4o-mini"
+api_key_location = "env::Z_AI_API_KEY"
+
+# Z.ai GLM models (for Chinese LLM capabilities)
+[models.chat_zai_glm]
+routing = ["zai_glm"]
+
+[models.chat_zai_glm.providers.zai_glm]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-4-flash"
+api_key_location = "env::Z_AI_API_KEY"
+
 [models.chat_together]
 routing = ["together_primary"]
 
