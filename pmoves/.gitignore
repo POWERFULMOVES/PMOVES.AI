@@ -53,3 +53,11 @@ data/open-notebook/
 data/chit/
 cloudflared/
 pmoves/data/agent-zero/
+
+# Tier environment files (actual secrets - use .example for tracked templates)
+env.tier-api
+env.tier-agent
+env.tier-data
+env.tier-llm
+env.tier-media
+env.tier-worker
