@@ -26,7 +26,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 import uvicorn
 
@@ -44,6 +45,42 @@ TENSORZERO_URL = os.environ.get("TENSORZERO_URL", "http://tensorzero-gateway:303
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 PORT = int(os.environ.get("PORT", "8100"))
+GATEWAY_API_KEY = os.environ.get("GATEWAY_API_KEY", "")
+
+# ============================================================================
+# Authentication
+# ============================================================================
+
+API_KEY_NAME = "X-Gateway-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+
+async def get_api_key(api_key_header: str = Security(api_key_header)) -> Optional[str]:
+    """
+    Verify API key for protected endpoints.
+
+    If GATEWAY_API_KEY is set, the request must include a matching X-Gateway-API-Key header.
+    If GATEWAY_API_KEY is not set, authentication is disabled (for development only).
+
+    Returns:
+        The API key string if authenticated, None if auth is disabled.
+
+    Raises:
+        HTTPException: If GATEWAY_API_KEY is set but header doesn't match.
+    """
+    if GATEWAY_API_KEY:
+        if api_key_header != GATEWAY_API_KEY:
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid or missing API Key. Provide X-Gateway-API-Key header."
+            )
+        return api_key_header
+
+    # Auth disabled - warn in production-like environments
+    if os.environ.get("ENV", "production") != "development":
+        logger.warning("GATEWAY_API_KEY not set - authentication disabled for gateway-agent")
+
+    return None
 
 # FastAPI app
 app = FastAPI(
@@ -485,9 +522,14 @@ async def search_skills(request: SkillSearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/secrets", response_model=Dict[str, str])
+@app.get("/secrets", response_model=Dict[str, str], dependencies=[Depends(get_api_key)])
 async def list_secrets():
-    """List available secrets (masked)"""
+    """
+    List available service credentials (masked for security).
+
+    **Requires Authentication**: X-Gateway-API-Key header must be provided
+    if GATEWAY_API_KEY is set in the environment.
+    """
     return SecretManager.get_all_credentials()
 
 
