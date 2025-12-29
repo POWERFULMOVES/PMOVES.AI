@@ -110,6 +110,7 @@ agent.voice.speaking.v1  # Agent voice state
 | Document | Path | Purpose |
 |----------|------|---------|
 | Services Catalog | `.claude/context/services-catalog.md` | All 60+ services |
+| **Tier Architecture** | `.claude/context/tier-architecture.md` | **6-tier env + 5-tier network model** |
 | NATS Subjects | `.claude/context/nats-subjects.md` | Event subjects |
 | MCP API | `.claude/context/mcp-api.md` | Agent Zero MCP |
 | Submodules | `.claude/context/submodules.md` | 20+ submodules |

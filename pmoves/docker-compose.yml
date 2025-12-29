@@ -132,11 +132,12 @@ services:
     <<: *env-tier-data
     environment:
       - MEILI_ENV=production
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     ports: [ "7700:7700" ]
     profiles: [ "data", "meili-local" ]
     networks: [ data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:7700/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:7700/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -764,7 +765,6 @@ services:
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
-      # CHANNEL_MONITOR_DATABASE_URL is provided via env_file (env.shared)
       - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     volumes:
       - ./config:/app/config
@@ -1825,4 +1825,4 @@ networks:
   # Enables services to connect directly to supabase_realtime without host.docker.internal
   supabase_net:
     external: true
-    name: pmoves-net
+    name: supabase_network_PMOVES.AI
