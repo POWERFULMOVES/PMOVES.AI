@@ -63,11 +63,11 @@ scrape_configs:
 
   - job_name: agent-zero
     static_configs:
-      - targets: ["agent-zero:80"]
+      - targets: ["agent-zero:8080"]
 
   - job_name: archon
     static_configs:
-      - targets: ["archon:8091"]
+      - targets: ["archon:8181"]
 
   # === Tier 3 Services (Added 2025-12-24) ===
 
@@ -114,11 +114,11 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://host.docker.internal:80/healthz         # agent-zero
+          - http://host.docker.internal:8080/healthz       # agent-zero
           - http://host.docker.internal:8086/              # hi-rag v2 CPU
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://host.docker.internal:8088/healthz        # presign
-          - http://host.docker.internal:8091/healthz        # archon
+          - http://host.docker.internal:8181/health         # archon
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:8055/healthz        # flute-gateway

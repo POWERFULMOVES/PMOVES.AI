@@ -302,3 +302,165 @@ PMOVES leverages the Hugging Face ecosystem to close the "Simulation to Reality"
 3.  **Verify Observability**: access the TensorZero UI and confirm Agent Zero traces are appearing.
 4.  **Launch Math UI**: Verify Hyperdimensions is accessible and rendering default geometry.
 5.  **Authenticate HF**: Set `HF_TOKEN` in `.env.local` and verify `agentgym-rl-coordinator` can push a test dataset.
+
+---
+
+## 8. Audio Model Architecture Extension
+
+### 8.1 Overview
+
+**Design Principle:** All audio/speech models (Whisper, TTS, VLM) route through TensorZero Gateway with GPU Orchestrator managing local providers.
+
+**Status:** ⚠️ **IN PROGRESS** - Architecture defined, implementation pending
+
+### 8.2 Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         PMOVES.AI Services                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
+│  │PMOVES.YT │  │ffmpeg-  │  │flute-    │  │  Hi-RAG V2      │   │
+│  │          │  │whisper  │  │gateway   │  │  (VLM)           │   │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────────────┘   │
+└───────┼─────────────┼─────────────┼───────────────┼─────────────────┘
+        │             │             │               │
+        └─────────────┴─────────────┴───────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    TensorZero Gateway (port 3030)                  │
+│                    - Model routing & fallback                      │
+│                    - Observability & metrics                       │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  GPU Orchestrator (port 8200)                       │
+│                  - Manages local model providers                   │
+│                  - VRAM tracking & optimization                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
+│  │ Ollama   │  │  vLLM    │  │   TTS    │  │  Whisper (TODO) │   │
+│  │          │  │          │  │          │  │                  │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                       ┌──────────────┐
+                       │ GPU (RTX 5090)│
+                       └──────────────┘
+```
+
+### 8.3 Current State Matrix
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| **TensorZero Gateway** | ✅ Running | Port 3030, Chat + Embedding configured |
+| **GPU Orchestrator** | ✅ Running | Port 8200, ollama/vllm/tts providers |
+| **Whisper Support** | ❌ Missing | Need whisper_client.py + TZ config |
+| **TTS Support** | ⚠️ Partial | GPU Orchestrator has tts_client.py |
+| **VLM Support** | ✅ Configured | qwen2_vl_7b via Ollama |
+
+### 8.4 Integration Matrix Update (Audio Services)
+
+| Service | Current | Target | Action |
+|---------|---------|--------|--------|
+| `ffmpeg-whisper` | Independent | TensorZero → GPU Orchestrator | **MIGRATE** |
+| `pmoves-yt` | Direct Whisper API | TensorZero transcription function | **MIGRATE** |
+| `flute-gateway` | Direct TTS Studio | TensorZero TTS routing | **ENHANCE** |
+| `hi-rag-gateway-v2-gpu` | Ollama direct | TensorZero VLM models | **MIGRATE** |
+
+### 8.5 TensorZero Configuration Template
+
+**Whisper Transcription (TODO):**
+```toml
+[models.whisper_small_local]
+routing = ["ollama_local"]
+
+[models.whisper_small_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "whisper-small"
+api_key_location = "none"
+
+[functions.pmoves_yt_transcription]
+type = "chat"
+
+[functions.pmoves_yt_transcription.variants.whisper_small]
+type = "chat_completion"
+model = "whisper_small_local"
+
+[functions.pmoves_yt_transcription.variants.whisper_medium]
+type = "chat_completion"
+model = "whisper_medium_local"
+
+[functions.pmoves_yt_transcription.variants.openai_fallback]
+type = "chat_completion"
+model = "openai_whisper"
+```
+
+**TTS Synthesis (TODO):**
+```toml
+[models.tts_kokoro_local]
+routing = ["gpu_orchestrator"]
+
+[models.tts_kokoro_local.providers.gpu_orchestrator]
+type = "openai"
+api_base = "http://pmoves-gpu-orchestrator:8200/api/tts"
+model_name = "kokoro"
+api_key_location = "none"
+
+[functions.flute_tts_synthesis]
+type = "chat"
+
+[functions.flute_tts_synthesis.variants.kokoro]
+type = "chat_completion"
+model = "tts_kokoro_local"
+
+[functions.flute_tts_synthesis.variants.five_tts]
+type = "chat_completion"
+model = "tts_f5_local"
+
+[functions.flute_tts_synthesis.variants.elevenlabs_fallback]
+type = "chat_completion"
+model = "elevenlabs_multilingual"
+```
+
+### 8.6 Implementation Phases
+
+**Phase 1: GPU Orchestrator Whisper Client**
+- File: `pmoves/services/gpu-orchestrator/services/whisper_client.py`
+- Pattern: Follow `tts_client.py` structure
+- Endpoints: health, transcribe, get_loaded_models
+
+**Phase 2: TensorZero Audio Models**
+- Add Whisper models to `tensorzero.toml`
+- Add TTS models to `tensorzero.toml`
+- Create audio-specific functions
+
+**Phase 3: Service Migration**
+- Update `ffmpeg-whisper` to call TensorZero
+- Update `pmoves-yt` to use TensorZero transcription
+- Update `flute-gateway` to use TensorZero TTS
+
+### 8.7 Environment Variables
+
+```bash
+# Audio Model Configuration
+WHISPER_MODEL=small
+WHISPER_DEVICE=cuda
+WHISPER_COMPUTE_TYPE=float16
+
+# GPU Orchestrator
+GPU_ORCHESTRATOR_URL=http://pmoves-gpu-orchestrator:8200
+
+# TTS Configuration
+ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+TTS_DEFAULT_ENGINE=kokoro
+```
+
+### 8.8 References
+
+- Main documentation: `docs/tz.md` (Section 11: Audio Model Architecture)
+- Implementation review: `docs/TensorZero_Implementation_Review.md` (Section 7)
+- GPU Orchestrator: `pmoves/services/gpu-orchestrator/`
+- TensorZero Config: `pmoves/tensorzero/config/tensorzero.toml`

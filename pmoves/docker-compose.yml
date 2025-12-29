@@ -212,7 +212,7 @@ services:
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -234,7 +234,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8090/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -256,7 +256,7 @@ services:
     profiles: [ "data", "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -278,7 +278,7 @@ services:
       - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8085/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -339,7 +339,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8083/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -369,7 +369,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -400,7 +400,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8084/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -430,7 +430,7 @@ services:
     ports: [ "8095:8095" ]
     profiles: [ "workers", "orchestration" ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8095/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -455,7 +455,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8100/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -483,7 +483,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, data_tier, monitoring_tier, supabase_net ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8102/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8102/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -557,7 +557,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8055/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -639,7 +639,7 @@ services:
     profiles: [ "workers", "orchestration", "agents" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8078/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8078/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -670,7 +670,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8079/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8079/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -699,7 +699,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8082/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -738,7 +738,7 @@ services:
     profiles: [ "orchestration", "workers", "agents" ]
     networks: [ api_tier, app_tier, bus_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8077/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8077/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -779,7 +779,7 @@ services:
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8097/api/monitor/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/api/monitor/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -834,7 +834,7 @@ services:
         condition: service_healthy
     networks: [ app_tier, data_tier, api_tier, monitoring_tier, supabase_net ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -889,7 +889,7 @@ services:
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -968,7 +968,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1007,7 +1007,7 @@ services:
               count: 1
               capabilities: [ gpu ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8200/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1046,7 +1046,12 @@ services:
       - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
       # Open Notebook API for notebook.search MCP command (host.docker.internal for container-to-host)
       - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
-    depends_on: [nats]
+      # E2B Configuration for E2B MCP tools (e2b.sandbox.create, e2b.desktop.create, etc.)
+      - E2B_MCP_SERVER_URL=${E2B_MCP_SERVER_URL:-http://e2b-mcp-server:7073}
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+    depends_on: [nats, e2b-mcp-server]
     # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
     # and keep 8080 mapped for the API when enabled by the runtime.
     ports: [ "8080:8080", "8081:80" ]
@@ -1063,7 +1068,7 @@ services:
     profiles: [ "agents" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1269,7 +1274,7 @@ services:
   #   profiles: [ "botz", "mcp" ]
   #   networks: [ api_tier, app_tier ]
   #   healthcheck:
-  #     test: [ "CMD", "curl", "-sf", "http://localhost:8811/health" ]
+  #     test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8811/health', timeout=5)" ]
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3
@@ -1327,7 +1332,7 @@ services:
       - ./contracts:/app/contracts:ro
     networks: [ app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8098/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1349,7 +1354,7 @@ services:
     profiles: [ "agents", "workers" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8099/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1433,7 +1438,7 @@ services:
     profiles: [ "orchestration", "agents" ]
     networks: [ app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1451,7 +1456,7 @@ services:
     profiles: [ "workers" ]
     networks: [ api_tier, bus_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8101/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1468,7 +1473,7 @@ services:
     profiles: [ "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier, cataclysm ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8093/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1498,7 +1503,7 @@ services:
       api_tier:
         aliases: [ ollama ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:11434/api/tags" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/api/tags', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1525,7 +1530,7 @@ services:
     networks: [ data_tier, monitoring_tier ]
 
   tensorzero-gateway:
-    image: tensorzero/gateway:2024.12.18
+    image: tensorzero/gateway:2025.12.6
     restart: unless-stopped
     command: [ "--config-file", "/app/config/tensorzero.toml" ]
     <<: *env-tier-llm
@@ -1536,6 +1541,9 @@ services:
       - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://host.docker.internal:4317
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TENSORZERO_PG_USER=${TENSORZERO_PG_USER:-tensorzero}
+      - TENSORZERO_PG_PASSWORD=${TENSORZERO_PG_PASSWORD}
+      - TENSORZERO_PG_DB=${TENSORZERO_PG_DB:-tensorzero}
     volumes:
       - ./tensorzero/config:/app/config:ro
     depends_on:
@@ -1547,14 +1555,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:3000/health" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/health', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
   tensorzero-ui:
-    image: tensorzero/ui:2024.12.18
+    image: tensorzero/ui:2025.12.6
     restart: unless-stopped
     <<: *env-tier-llm
     environment:
@@ -1573,7 +1581,7 @@ services:
     profiles: [ "tensorzero" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:4000/" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1686,7 +1694,7 @@ services:
     profiles: [ "grayjay" ]
     networks: [ api_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1761,6 +1769,89 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  # =============================================================================
+  # E2B Agentic Computer Use Services
+  # =============================================================================
+  # E2B MCP Server - Model Context Protocol bridge for E2B code execution
+  # Provides tools to Agent Zero for secure code execution in E2B sandboxes
+  e2b-mcp-server:
+    build:
+      context: ./docker/e2b-mcp-server
+      dockerfile: Dockerfile
+      args:
+        E2B_MCP_BRANCH: PMOVES.AI-Edition-Hardened
+    image: pmoves-e2b-mcp-server:hardened
+    container_name: pmoves-e2b-mcp-server
+    hostname: e2b-mcp-server
+    restart: unless-stopped
+    <<: *env-tier-llm
+    environment:
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_DESKTOP_AUTH_TOKEN=${E2B_DESKTOP_AUTH_TOKEN:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NODE_ENV=production
+      - MCP_SERVER_PORT=7073
+    # stdin_open and tty for Node.js MCP stdio transport
+    stdin_open: true
+    tty: true
+    # No exposed ports - MCP communicates via stdio to Agent Zero
+    # Health check via process presence
+    healthcheck:
+      test: [ "CMD-SHELL", "node --version && test -f /app/build/index.js" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    profiles: [ "e2b", "agents" ]
+    networks: [ bus_tier, api_tier, monitoring_tier ]
+    # Security hardening (read-only fs for distroless base)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
+  # E2B Surf - Web interface for agentic computer use with OpenAI Computer Use
+  # Next.js application providing virtual desktop control via natural language
+  e2b-surf:
+    build:
+      context: ./docker/e2b-surf
+      dockerfile: Dockerfile
+      args:
+        E2B_SURF_BRANCH: PMOVES.AI-Edition-Hardened
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    image: pmoves-e2b-surf:hardened
+    container_name: pmoves-e2b-surf
+    hostname: e2b-surf
+    restart: unless-stopped
+    <<: *env-tier-api
+    environment:
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3080}
+      - NODE_ENV=production
+      - PORT=3000
+    ports: [ "3080:3000" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles: [ "e2b", "ui" ]
+    networks: [ api_tier, app_tier, monitoring_tier ]
+    # Next.js needs writable cache for build
+    volumes:
+      - e2b-surf-cache:/app/.next:rw
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
 volumes:
   neo4j-data: {}
   minio-data: {}
@@ -1776,6 +1867,7 @@ volumes:
   archon-worktrees: {}
   ultimate-tts-checkpoints: {}
   ultimate-tts-outputs: {}
+  e2b-surf-cache: {}
 networks:
   # 5-Tier Network Architecture for Defense in Depth
   api_tier:
