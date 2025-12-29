@@ -43,6 +43,7 @@ export COMPOSE_PROFILES
 PYTHON ?= python3
 SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
+SCRIPTS := scripts
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example

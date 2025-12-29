@@ -422,6 +422,7 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
+- `tier-architecture.md` - **6-tier environment + 5-tier network architecture (SECURITY)**
 - `services-catalog.md` - Complete service listing with all details
 - `submodules.md` - Complete submodules catalog (25 submodules)
 - `ci-runners.md` - Self-hosted runner deployment and configuration

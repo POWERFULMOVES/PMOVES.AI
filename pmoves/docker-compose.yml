@@ -132,11 +132,12 @@ services:
     <<: *env-tier-data
     environment:
       - MEILI_ENV=production
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     ports: [ "7700:7700" ]
     profiles: [ "data", "meili-local" ]
     networks: [ data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:7700/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:7700/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -764,7 +765,6 @@ services:
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
-      # CHANNEL_MONITOR_DATABASE_URL is provided via env_file (env.shared)
       - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     volumes:
       - ./config:/app/config
@@ -1191,6 +1191,44 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+
+  # Gateway Agent: Orchestrates 100+ MCP tools via Agent Zero MCP API
+  gateway-agent:
+    build: ./services/gateway-agent
+    restart: unless-stopped
+    env_file:
+      - path: env.tier-agent
+        required: false
+      - path: .env.local
+        required: false
+      - env.shared
+      - .env.generated
+    environment:
+      - PORT=8100
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+      - CIPHER_URL=${CIPHER_URL:-http://pmoves-botz-cipher:8000}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+      # API Keys loaded from env.shared via env_file
+    ports:
+      - "8100:8100"
+    depends_on:
+      agent-zero:
+        condition: service_healthy
+    profiles: [ "agents", "gateway" ]
+    networks:
+      api_tier:
+      bus_tier:
+      data_tier:
+      monitoring_tier:
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # E2B Sandbox Runner: Isolated code execution environment
   pmz-e2b-runner:
@@ -1787,4 +1825,4 @@ networks:
   # Enables services to connect directly to supabase_realtime without host.docker.internal
   supabase_net:
     external: true
-    name: pmoves-net
+    name: supabase_network_PMOVES.AI

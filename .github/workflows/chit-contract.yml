@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vps]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2

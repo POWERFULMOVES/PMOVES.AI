@@ -9,6 +9,7 @@ import {
   type ChatMessage,
 } from "../../../lib/realtimeClient";
 import { logForDebugging, getErrorMessage } from "../../../lib/errorUtils";
+import { AlertBanner } from "@/components/common";
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -330,16 +331,8 @@ export default function ChatDashboardPage() {
           <div className="border-t border-neutral-200 p-4">
             {/* Error banner */}
             {errorMsg && (
-              <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-                <span className="text-sm text-red-700">{errorMsg}</span>
-                <button
-                  type="button"
-                  onClick={() => setErrorMsg(null)}
-                  className="text-red-400 hover:text-red-600 text-lg leading-none"
-                  aria-label="Dismiss error"
-                >
-                  &times;
-                </button>
+              <div className="mb-3">
+                <AlertBanner message={errorMsg} variant="error" onDismiss={() => setErrorMsg(null)} />
               </div>
             )}
             <form onSubmit={handleSend} className="flex gap-2">
