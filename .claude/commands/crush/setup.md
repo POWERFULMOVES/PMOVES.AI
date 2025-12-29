@@ -1,6 +1,6 @@
-# PMOVES-Crush Setup
+# PMOVES CLI Setup
 
-Set up PMOVES-Crush CLI for the current project.
+Set up PMOVES CLI (Crush) for the current project.
 
 ## Instructions
 
@@ -11,6 +11,8 @@ Set up PMOVES-Crush CLI for the current project.
 
 2. **Generate PMOVES-opinionated crush.json**:
    ```bash
+   pmoves crush setup
+   # Or:
    python3 pmoves/tools/crush_configurator.py --output ./crush.json
    ```
 
@@ -21,6 +23,8 @@ Set up PMOVES-Crush CLI for the current project.
 
 4. **Verify configuration**:
    ```bash
+   pmoves crush status
+   # Or:
    cat crush.json | jq '.options.attribution'
    ```
 
@@ -31,17 +35,18 @@ Set up PMOVES-Crush CLI for the current project.
 
 ## PMOVES-BoTZ Integration
 
-After setup, the crush CLI becomes a PMOVES-BoTZ instance capable of:
+After setup, the PMOVES CLI becomes a PMOVES-BoTZ instance capable of:
 - Claiming work items from the registry
 - Executing TAC commands
 - Coordinating with Agent Zero/Archon via MCP
 
 ## Files Created/Modified
 
-- `./crush.json` - PMOVES-opinionated Crush configuration
+- `./crush.json` - PMOVES-opinionated configuration
 - Context paths configured for PMOVES.AI structure
 
 ## Next Steps
 
-- Run `/workitems:list` to see available work items
-- Run `/crush:status` to check BoTZ registration
+- Run `pmoves workitems list` to see available work items
+- Run `pmoves crush status` to check configuration details
+- Run `pmoves agent-sdk create` to create agents
