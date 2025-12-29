@@ -575,10 +575,10 @@ async def synthesize_speech(request: SynthesizeRequest):
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
+    except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
         logger.exception("TTS synthesis failed")
-        raise HTTPException(status_code=500, detail="TTS synthesis failed") from None
+        raise HTTPException(status_code=500, detail="TTS synthesis failed") from e
 
 
 @app.post("/v1/voice/synthesize/audio", dependencies=[Depends(verify_api_key)])
@@ -664,10 +664,10 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
     except HTTPException as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status=str(exc.status_code)).inc()
         raise
-    except Exception:
+    except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
         logger.exception("TTS synthesis (audio) failed")
-        raise HTTPException(status_code=500, detail="TTS synthesis failed") from None
+        raise HTTPException(status_code=500, detail="TTS synthesis failed") from e
 
 
 # Prosodic analysis endpoint
@@ -937,10 +937,10 @@ async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
     except HTTPException as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status=str(exc.status_code)).inc()
         raise
-    except Exception:
+    except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="500").inc()
         logger.exception("Prosodic TTS synthesis failed")
-        raise HTTPException(status_code=500, detail="Prosodic TTS synthesis failed") from None
+        raise HTTPException(status_code=500, detail="Prosodic TTS synthesis failed") from e
 
 
 # STT recognition endpoint
@@ -985,10 +985,10 @@ async def recognize_speech(
     except NotImplementedError as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="400").inc()
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
+    except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="500").inc()
         logger.exception("STT recognition failed")
-        raise HTTPException(status_code=500, detail="STT recognition failed") from None
+        raise HTTPException(status_code=500, detail="STT recognition failed") from e
 
 
 # Voice personas endpoints
@@ -1106,10 +1106,10 @@ async def register_voice_sample(
     except ValueError as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="400").inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception:
+    except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="500").inc()
         logger.exception("Voice sample registration failed")
-        raise HTTPException(status_code=500, detail="Failed to register voice sample") from None
+        raise HTTPException(status_code=500, detail="Failed to register voice sample") from e
 
 
 @app.post("/v1/voice/clone/train", dependencies=[Depends(verify_api_key)])
@@ -1134,10 +1134,10 @@ async def start_voice_training(request: VoiceCloneTrainRequest):
     except ValueError as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="400").inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception:
+    except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="500").inc()
         logger.exception("Voice training start failed")
-        raise HTTPException(status_code=500, detail="Failed to start voice training") from None
+        raise HTTPException(status_code=500, detail="Failed to start voice training") from e
 
 
 @app.get("/v1/voice/clone/status/{persona_id}", response_model=VoiceCloneStatusResponse, dependencies=[Depends(verify_api_key)])
@@ -1192,10 +1192,10 @@ async def list_voice_training_jobs(status: Optional[str] = None):
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="500").inc()
         logger.exception("Failed to list training jobs")
-        raise HTTPException(status_code=500, detail="Failed to list training jobs") from None
+        raise HTTPException(status_code=500, detail="Failed to list training jobs") from e
 
 
 @app.post("/v1/voice/clone/synthesize", dependencies=[Depends(verify_api_key)])
