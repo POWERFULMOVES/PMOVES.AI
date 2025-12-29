@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN pip install --no-cache-dir --upgrade pip
 
 # Copy and install dependencies
-COPY services/session-context-worker/requirements.txt ./requirements.txt
+COPY services/session-context-worker/requirements.txt services/session-context-worker/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code

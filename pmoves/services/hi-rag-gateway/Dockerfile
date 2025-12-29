@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 # Base deps
 RUN pip install --no-cache-dir --upgrade pip
-COPY hi-rag-gateway/requirements.txt ./
+COPY hi-rag-gateway/requirements.txt hi-rag-gateway/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # --- CUDA-enabled Torch for Qwen reranker (optional) ---

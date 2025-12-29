@@ -20,9 +20,12 @@ on:
       - 'pmoves/docs/SUPABASE_*.md'
       - '.github/workflows/chit-contract.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vps]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2

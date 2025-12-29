@@ -1178,6 +1178,58 @@ os.environ['TENSORZERO_EMBED_MODEL'] = 'tensorzero::embedding_model_name::qwen3_
 # Requests are now tracked in ClickHouse
 ```
 
+### Tier-Based Secrets Architecture (env.tier-*)
+
+PMOVES implements **principle of least privilege** via 6 specialized environment tiers. This is a **hidden strength** – fully implemented in docker-compose.yml but previously undocumented:
+
+| Tier File | Services | Secrets Scope |
+|-----------|----------|---------------|
+| `env.tier-data` | postgres, qdrant, neo4j, minio | Infrastructure only, NO API keys |
+| `env.tier-api` | postgrest, hi-rag-v2, presign | Data tier + internal TensorZero (NO external keys) |
+| `env.tier-worker` | extract-worker, langextract | Processing credentials |
+| `env.tier-agent` | agent-zero, archon, nats | Agent coordination |
+| `env.tier-media` | pmoves-yt, whisper, media-* | Media processing |
+| `env.tier-llm` | **tensorzero-gateway ONLY** | **External LLM API keys** |
+
+**Implementation in docker-compose.yml (lines 5-26):**
+```yaml
+x-env-tier-data: &env-tier-data
+  env_file: [ env.tier-data, .env.local ]
+
+x-env-tier-api: &env-tier-api
+  env_file: [ env.tier-api, .env.local ]
+
+x-env-tier-worker: &env-tier-worker
+  env_file: [ env.tier-worker, .env.local ]
+
+x-env-tier-agent: &env-tier-agent
+  env_file: [ env.tier-agent, .env.local ]
+
+x-env-tier-media: &env-tier-media
+  env_file: [ env.tier-media, .env.local ]
+
+x-env-tier-llm: &env-tier-llm
+  env_file: [ env.tier-llm, .env.local ]
+```
+
+**Security Benefits:**
+1. **Blast Radius Reduction:** Compromised worker cannot access LLM API keys
+2. **Audit Simplicity:** Only one file (`env.tier-llm`) needs external key rotation
+3. **TensorZero as Secrets Fence:** All services call internal `http://tensorzero:3000`, not external providers
+
+**env.tier-llm.example (lines 1-10):**
+```bash
+# Services: tensorzero-gateway ONLY
+# Principle: ONLY TensorZero gateway needs actual LLM API keys
+# All other services should call TensorZero, NOT providers directly
+#
+# IMPORTANT: This is the ONLY tier file with external API keys!
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+GEMINI_API_KEY=
+# ... (13+ provider keys)
+```
+
 ---
 
 ## 6. Cloudflare Workers AI Integration
@@ -1770,6 +1822,27 @@ docker compose -f monitoring/docker-compose.monitoring.yml down
 - ✅ CODEOWNERS enforcement
 - ✅ Comprehensive observability (Prometheus + Grafana + Loki)
 - ✅ NATS JetStream for reliable event delivery
+- ✅ **Tier-based secrets isolation** (env.tier-* files)
+- ✅ **TensorZero as secrets fence** (external API keys in single service)
+
+### Implementation Status: Documentation vs Reality
+
+| Security Practice | Documented | Implemented | Gap Status |
+|-------------------|------------|-------------|------------|
+| 5-Tier Network Isolation | ✅ Lines 390-450 | ✅ Fully | **MATCH** |
+| TensorZero Secrets Fence | ✅ Lines 1067-1179 | ✅ Fully | **MATCH** |
+| Tier-Based Secrets (env.tier-*) | ✅ Lines 1181-1231 | ✅ 6 tiers | **MATCH** |
+| BuildKit Secret Mounts | ✅ Lines 160-190 | ✅ In Dockerfiles | **MATCH** |
+| Health Checks | ✅ Lines 486-490 | ✅ 30+ services | **MATCH** |
+| Non-root User (UID 65532) | ✅ Line 1857 | ⚠️ 1/50 services | **Phase 2.5** |
+| cap_drop: ALL | ✅ Lines 1865-1866 | ⚠️ 0 services | **Phase 2.5** |
+| read_only: true + tmpfs | ✅ Lines 1859-1862 | ⚠️ 0 services | **Phase 2.5** |
+
+**Phase 2.5 Roadmap (Container Hardening):**
+The following container security practices are documented but not yet implemented across all services. They are planned for incremental rollout:
+- `user: "65532:65532"` - Non-root user (distroless UID)
+- `cap_drop: [ALL]` - Drop all Linux capabilities
+- `read_only: true` with `tmpfs: [/tmp]` - Immutable root filesystem
 
 **Phase 3: Zero-Trust Architecture (98/100) - Planned**
 - 🔲 mTLS for all inter-service communication

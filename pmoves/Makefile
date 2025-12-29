@@ -41,7 +41,9 @@ COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_
 export COMPOSE_PROFILES
 
 PYTHON ?= python3
+SCRIPTS := scripts
 SINGLE_ENV_MODE ?= 1
+SCRIPTS := scripts
 BOOTSTRAP_FLAGS ?=
 ENV_SHARED_FILE ?= env.shared
 ENV_SHARED_TEMPLATE ?= env.shared.example
@@ -67,6 +69,16 @@ ensure-env-shared:
 		fi; \
 	fi
 
+# -------- Standard Makefile targets ----------
+.PHONY: all
+all: help ## Default target - show help
+
+.PHONY: test
+test: test-smoke ## Run pytest smoke tests
+
+.DEFAULT_GOAL := help
+
+# -------- Updates ----------
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
@@ -94,6 +106,271 @@ up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
 up-bots: ## Start bot services (BotZ + messaging gateway)
 	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway messaging-gateway
 	@echo "✔ Bots up (botz-gateway + messaging-gateway)."
+
+# =============================================================================
+# OBSERVABILITY-FIRST STARTUP (Tier-based, dependency-ordered)
+# =============================================================================
+
+.PHONY: up-obs
+up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
+	@echo "📊 Starting observability stack (monitoring FIRST)..."
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring up -d
+	@echo "⏳ Waiting for observability to be ready..."
+	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || echo "⚠️ Prometheus not ready (may still be starting)"
+	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || echo "⚠️ Grafana not ready (may still be starting)"
+	@echo "✅ Observability ready - capturing all logs from here on"
+	@echo "   Grafana:      http://localhost:3002 (admin/admin)"
+	@echo "   Prometheus:   http://localhost:9090"
+	@echo "   Loki:         http://localhost:3100"
+
+.PHONY: up-supabase
+up-supabase: ## Start Supabase (Postgres + Kong + Studio)
+	@echo "🗄️ Starting Supabase..."
+	@cd .. && supabase start --network-id pmoves-net
+	@echo "✅ Supabase ready"
+	@echo "   Studio:       http://localhost:65433"
+
+.PHONY: up-data-tier
+up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
+	@echo "💾 Starting data tier..."
+	@$(DC) --profile data up -d
+	@$(MAKE) --no-print-directory wait-data
+	@echo "✅ Data tier ready"
+
+.PHONY: up-bus
+up-bus: ## Start message bus (NATS)
+	@echo "📨 Starting message bus (NATS)..."
+	@$(DC) up -d nats
+	@timeout 30 bash -c 'until docker exec pmoves-nats-1 nc -z localhost 4222 2>/dev/null; do sleep 1; done' || echo "⚠️ NATS may still be starting"
+	@echo "✅ NATS ready"
+
+.PHONY: up-workers
+up-workers: ## Start worker services (extract, langextract, media)
+	@echo "⚙️ Starting worker services..."
+	@$(DC) --profile workers up -d
+	@$(MAKE) --no-print-directory wait-workers
+	@echo "✅ Workers ready"
+
+.PHONY: up-agents
+up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
+	@echo "🤖 Starting agent services..."
+	@$(DC) --profile agents up -d
+	@$(MAKE) --no-print-directory wait-agents
+	@echo "✅ Agents ready"
+
+.PHONY: up-tensorzero
+up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
+	@echo "🧠 Starting TensorZero LLM gateway..."
+	@$(DC) --profile tensorzero up -d
+	@timeout 60 bash -c 'until curl -sf http://localhost:3030/healthz; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
+	@echo "✅ TensorZero ready - LLM calls available"
+	@echo "   Gateway:      http://localhost:3030"
+	@echo "   UI:           http://localhost:4000"
+
+.PHONY: up-integrations
+up-integrations: ## Start external integrations (n8n, TTS)
+	@echo "🔗 Starting external integrations..."
+	@$(MAKE) up-n8n || true
+	@echo "✅ Integrations started"
+
+.PHONY: up-ui
+up-ui: ## Start PMOVES UI (centralized dashboard at port 4482)
+	@echo "🖥️ Starting PMOVES UI..."
+	@$(DC) --profile ui up -d pmoves-ui
+	@timeout 60 bash -c 'until curl -sf http://localhost:4482/api/health; do sleep 2; done' || echo "⚠️ UI may still be starting"
+	@echo "✅ PMOVES UI ready"
+	@echo "   Dashboard:    http://localhost:4482"
+	@echo "   Services:     http://localhost:4482/dashboard/services"
+
+# =============================================================================
+# HIGH-LEVEL STARTUP TARGETS (Observability-First Order)
+# =============================================================================
+
+.PHONY: up-all-new
+up-all-new: ## Start ALL services in dependency order (obs first, then data, bus, workers, agents, tensorzero, ui)
+	@$(MAKE) up-obs
+	@$(MAKE) up-supabase
+	@$(MAKE) up-data-tier
+	@$(MAKE) up-bus
+	@$(MAKE) up-workers
+	@$(MAKE) up-agents
+	@$(MAKE) up-tensorzero
+	@$(MAKE) up-integrations
+	@$(MAKE) up-ui
+	@echo "✅ ALL PMOVES services started"
+	@$(MAKE) --no-print-directory status-all
+
+.PHONY: up-core
+up-core: ## Start core services (obs + supabase + data + bus + workers + agents, no tensorzero/integrations)
+	@$(MAKE) up-obs
+	@$(MAKE) up-supabase
+	@$(MAKE) up-data-tier
+	@$(MAKE) up-bus
+	@$(MAKE) up-workers
+	@$(MAKE) up-agents
+	@echo "✅ Core PMOVES services started (no TensorZero/integrations)"
+
+.PHONY: up-minimal
+up-minimal: ## Start minimal stack (Supabase + Data + Bus only)
+	@$(MAKE) up-supabase
+	@$(MAKE) up-data-tier
+	@$(MAKE) up-bus
+	@echo "✅ Minimal stack ready (Supabase + Data + Bus)"
+
+# =============================================================================
+# GRACEFUL SHUTDOWN (Reverse Dependency Order)
+# =============================================================================
+
+.PHONY: down-all
+down-all: ## Stop ALL services in graceful reverse order
+	@echo "🛑 Graceful shutdown starting..."
+	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
+	@-$(MAKE) --no-print-directory down-tensorzero
+	@-$(MAKE) --no-print-directory down-agents
+	@-$(MAKE) --no-print-directory down-workers
+	@-$(MAKE) --no-print-directory down-bus
+	@-$(MAKE) --no-print-directory down-data
+	@-$(MAKE) --no-print-directory down-obs
+	@-$(MAKE) --no-print-directory down-supabase
+	@echo "✅ All services stopped gracefully"
+
+.PHONY: down-integrations
+down-integrations: ## Stop external integrations
+	@echo "🔗 Stopping integrations..."
+	@-$(MAKE) down-n8n 2>/dev/null || true
+
+.PHONY: down-tensorzero
+down-tensorzero: ## Stop TensorZero gateway
+	@echo "🧠 Stopping TensorZero..."
+	@$(DC) --profile tensorzero down
+
+.PHONY: down-agents
+down-agents: ## Stop agent services
+	@echo "🤖 Stopping agents..."
+	@$(DC) --profile agents down
+
+.PHONY: down-workers
+down-workers: ## Stop worker services
+	@echo "⚙️ Stopping workers..."
+	@$(DC) --profile workers down
+
+.PHONY: down-bus
+down-bus: ## Stop message bus
+	@echo "📨 Stopping NATS..."
+	@$(DC) stop nats || true
+	@$(DC) rm -f nats || true
+
+.PHONY: down-data
+down-data: ## Stop data tier
+	@echo "💾 Stopping data tier..."
+	@$(DC) --profile data down
+
+.PHONY: down-obs
+down-obs: ## Stop observability stack
+	@echo "📊 Stopping observability..."
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring down
+
+.PHONY: down-ui
+down-ui: ## Stop PMOVES UI
+	@echo "🖥️ Stopping PMOVES UI..."
+	@$(DC) --profile ui down pmoves-ui
+
+.PHONY: down-supabase
+down-supabase: ## Stop Supabase
+	@echo "🗄️ Stopping Supabase..."
+	@cd .. && supabase stop
+
+# =============================================================================
+# STATUS & HEALTH TARGETS
+# =============================================================================
+
+.PHONY: status-all
+status-all: ## Show health status of ALL services
+	@echo "📊 PMOVES Service Status"
+	@echo "======================="
+	@echo ""
+	@echo "🔍 OBSERVABILITY:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(prometheus|grafana|loki|promtail|cadvisor|NAMES)" || echo "  (none running)"
+	@echo ""
+	@echo "🗄️ SUPABASE:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep supabase || echo "  (not running - use 'make up-supabase')"
+	@echo ""
+	@echo "💾 DATA TIER:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(qdrant|neo4j|meilisearch|minio)" || echo "  (none running)"
+	@echo ""
+	@echo "📨 BUS:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep nats || echo "  (none running)"
+	@echo ""
+	@echo "⚙️ WORKERS:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(extract|langextract|media|pdf-ingest|notebook-sync|presign|render-webhook)" || echo "  (none running)"
+	@echo ""
+	@echo "🤖 AGENTS:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep -E "(agent-zero|archon|deepresearch|supaserch)" || echo "  (none running)"
+	@echo ""
+	@echo "🧠 TENSORZERO:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" 2>/dev/null | grep tensorzero || echo "  (none running)"
+	@echo ""
+	@$(MAKE) --no-print-directory health-summary
+
+.PHONY: health-summary
+health-summary: ## Run quick health check on all services
+	@echo "🏥 Health Summary:"
+	@python3 tools/flight_check_retro.py || true
+	@echo ""
+	@echo "📁 Full results saved to .validation/"
+
+# =============================================================================
+# WAIT TARGETS (Dependency Satisfaction)
+# =============================================================================
+
+.PHONY: wait-obs
+wait-obs: ## Wait for observability to be ready
+	@echo "⏳ Waiting for observability..."
+	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || true
+	@echo "✅ Observability ready"
+
+.PHONY: wait-data
+wait-data: ## Wait for data tier to be ready
+	@echo "⏳ Waiting for data tier..."
+	@timeout 60 bash -c 'until curl -sf http://localhost:6333/ready; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:7474; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:7700/health; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || true
+	@echo "✅ Data tier ready"
+
+.PHONY: wait-workers
+wait-workers: ## Wait for workers to be ready
+	@echo "⏳ Waiting for workers..."
+	@timeout 60 bash -c 'until curl -sf http://localhost:8083/healthz; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:8084/healthz; do sleep 2; done' || true
+	@echo "✅ Workers ready"
+
+.PHONY: wait-agents
+wait-agents: ## Wait for agents to be ready
+	@echo "⏳ Waiting for agents..."
+	@timeout 60 bash -c 'until curl -sf http://localhost:8080/healthz; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:8091/healthz; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:8098/healthz; do sleep 2; done' || true
+	@echo "✅ Agents ready"
+
+# =============================================================================
+# INVENTORY & VALIDATION TARGETS
+# =============================================================================
+
+.PHONY: inventory
+inventory: ## List all running PMOVES services by tier
+	@echo "📦 PMOVES Service Inventory:"
+	@echo "Data Tier:"; docker ps --format "  {{.Names}}" 2>/dev/null | grep -E "(qdrant|neo4j|meilisearch|minio)" || echo "  (none running)"
+	@echo "Worker Tier:"; docker ps --format "  {{.Names}}" 2>/dev/null | grep -E "(extract|langextract|media)" || echo "  (none running)"
+	@echo "Agent Tier:"; docker ps --format "  {{.Names}}" 2>/dev/null | grep -E "(agent-zero|archon|deepresearch|nats)" || echo "  (none running)"
+	@echo "Monitoring:"; docker ps --format "  {{.Names}}" 2>/dev/null | grep -E "(prometheus|grafana|loki)" || echo "  (none running)"
+
+.PHONY: validate-tier
+validate-tier: ## Validate tier network compliance (backend services should NOT be on pmoves-net)
+	@echo "🔍 Validating tier network compliance..."
+	@echo "Backend services should NOT be on pmoves-net (except UIs)"
+	@docker ps --format "table {{.Names}}\t{{.Networks}}" 2>/dev/null | grep pmoves-net | grep -v "supabase\|archon\|agent-zero" || echo "✅ No unexpected services on pmoves-net"
 
 # -------- PMOVES.YT docs helpers ----------
 .PHONY: yt-docs-sync yt-docs-catalog-smoke
@@ -1660,6 +1937,35 @@ smoke:
 channel-monitor-up:
 	docker compose -p $(PROJECT) --profile yt up -d channel-monitor
 
+# ============================================================================
+# PYTEST-BASED SMOKE TESTS (Unified Testing Framework)
+# ============================================================================
+
+.PHONY: test-smoke
+test-smoke: ## Run pytest smoke tests for all services (5-30s)
+	@echo "Running pytest smoke tests..."
+	pytest tests/smoke/ -v -m smoke --tb=short
+
+.PHONY: test-smoke-quick
+test-smoke-quick: ## Run pytest smoke tests with minimal output (fail fast)
+	@echo "Running quick smoke tests..."
+	pytest tests/smoke/ -m smoke -q --maxfail=5
+
+.PHONY: test-smoke-health
+test-smoke-health: ## Run pytest smoke tests for health endpoints only
+	@echo "Testing all service health endpoints..."
+	pytest tests/smoke/test_health_endpoints.py -v -m smoke
+
+.PHONY: test-smoke-critical
+test-smoke-critical: ## Run pytest smoke tests for critical dependency path
+	@echo "Testing critical dependency path..."
+	pytest tests/smoke/test_critical_path.py -v -m smoke
+
+.PHONY: test-smoke-parallel
+test-smoke-parallel: ## Run pytest smoke tests in parallel (faster)
+	@echo "Running smoke tests in parallel..."
+	pytest tests/smoke/ -v -m smoke -n auto
+
 .PHONY: channel-monitor-smoke
 channel-monitor-smoke:
 	@echo "[Channel Monitor] Triggering check..." && curl -sS -X POST http://localhost:8097/api/monitor/check-now | jq -e '.status=="ok"' >/dev/null && echo OK || (echo FAIL && exit 1)
@@ -2648,3 +2954,37 @@ build-push-deepresearch: buildx-setup docker-login ## Build+push DeepResearch wo
 	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-deepresearch:$(IMAGE_TAG); \
 	 echo "→ Building $$img"; \
 	 docker buildx build --platform $(TARGET_PLATFORMS) -f "$$df" -t "$$img" "$$ctx" --push
+
+# ============================================================================
+# PMOVES Integration Setup Targets
+# Added for TAC 2: Auth & Documentation
+# ============================================================================
+
+.PHONY: setup-all-integrations
+setup-all-integrations: ## Run setup for all PMOVES integrations
+	@echo "🔧 Setting up all PMOVES integrations..."
+	@$(SCRIPTS)/setup-all-integrations.sh status
+
+.PHONY: setup-agent-zero
+setup-agent-zero: ## Run Agent Zero setup
+	@$(SCRIPTS)/setup-agent-zero.sh status
+
+.PHONY: setup-archon
+setup-archon: ## Run Archon setup
+	@$(SCRIPTS)/setup-archon.sh status
+
+.PHONY: setup-supaserch
+setup-supaserch: ## Run SupaSerch setup
+	@$(SCRIPTS)/setup-supaserch.sh status
+
+.PHONY: setup-deepresearch
+setup-deepresearch: ## Run DeepResearch setup
+	@$(SCRIPTS)/setup-deepresearch.sh status
+
+.PHONY: setup-flute-gateway
+setup-flute-gateway: ## Run Flute Gateway setup
+	@$(SCRIPTS)/setup-flute-gateway.sh status
+
+.PHONY: setup-extract-worker
+setup-extract-worker: ## Run Extract Worker setup
+	@$(SCRIPTS)/setup-extract-worker.sh status

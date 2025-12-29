@@ -11,12 +11,41 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import nats
 from fastapi import FastAPI
 from nats.aio.client import Client as NATS
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+
+# Prometheus metrics
+messages_received = Counter(
+    'session_context_worker_messages_received_total',
+    'Total number of messages received',
+    ['subject']
+)
+messages_processed = Counter(
+    'session_context_worker_messages_processed_total',
+    'Total number of messages successfully processed',
+    ['context_type']
+)
+messages_failed = Counter(
+    'session_context_worker_messages_failed_total',
+    'Total number of messages that failed processing',
+    ['error_type']
+)
+kb_upserts_published = Counter(
+    'session_context_worker_kb_upserts_published_total',
+    'Total number of KB upsert requests published',
+    ['namespace']
+)
+processing_duration = Histogram(
+    'session_context_worker_processing_duration_seconds',
+    'Time spent processing session context messages',
+    ['context_type']
+)
 
 # Configure logging
 logging.basicConfig(
@@ -34,12 +63,6 @@ KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 # Global state
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
-_metrics = {
-    "messages_received": 0,
-    "messages_processed": 0,
-    "messages_failed": 0,
-    "kb_upserts_published": 0,
-}
 
 # FastAPI app for health endpoint
 app = FastAPI(title="Session Context Worker", version="0.1.0")
@@ -214,13 +237,15 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     return kb_upsert
 
 
-async def _handle_session_context(msg):
+async def _handle_session_context(msg: NATS.Msg) -> None:
     """
     Handle incoming session context messages.
 
     Transforms the context and publishes to kb.upsert.request.v1.
     """
-    _metrics["messages_received"] += 1
+    messages_received.labels(SESSION_CONTEXT_SUBJECT).inc()
+    start_time = time.time()
+    context_type = "unknown"
 
     try:
         # Parse message
@@ -228,7 +253,8 @@ async def _handle_session_context(msg):
 
         if not isinstance(data, dict):
             logger.warning(f"Invalid message format: expected dict, got {type(data)}")
-            _metrics["messages_failed"] += 1
+            messages_failed.labels("invalid_format").inc()
+            processing_duration.labels("unknown").observe(time.time() - start_time)
             return
 
         session_id = data.get("session_id", "unknown")
@@ -251,7 +277,7 @@ async def _handle_session_context(msg):
                 KB_UPSERT_SUBJECT,
                 json.dumps(kb_upsert).encode("utf-8")
             )
-            _metrics["kb_upserts_published"] += 1
+            kb_upserts_published.labels("claude-code-sessions").inc()
             logger.info(
                 f"Published KB upsert for session {session_id}",
                 extra={
@@ -262,17 +288,21 @@ async def _handle_session_context(msg):
             )
         else:
             logger.warning("NATS client not connected, skipping publish")
-            _metrics["messages_failed"] += 1
+            messages_failed.labels("nats_not_connected").inc()
+            processing_duration.labels(context_type).observe(time.time() - start_time)
             return
 
-        _metrics["messages_processed"] += 1
+        messages_processed.labels(context_type).inc()
+        processing_duration.labels(context_type).observe(time.time() - start_time)
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to decode JSON: {e}")
-        _metrics["messages_failed"] += 1
+        logger.exception("Failed to decode JSON")
+        messages_failed.labels("json_decode_error").inc()
+        processing_duration.labels(context_type).observe(time.time() - start_time)
     except Exception as e:
         logger.error(f"Error processing session context: {e}", exc_info=True)
-        _metrics["messages_failed"] += 1
+        messages_failed.labels("processing_error").inc()
+        processing_duration.labels(context_type).observe(time.time() - start_time)
 
 
 async def _register_nats_subscriptions(nc: NATS) -> None:
@@ -374,14 +404,14 @@ async def healthz():
     return {
         "ok": True,
         "nats_connected": _nc is not None,
-        "metrics": _metrics,
     }
 
 
 @app.get("/metrics")
 async def metrics():
     """Prometheus-compatible metrics endpoint."""
-    return _metrics
+    from fastapi.responses import Response
+    return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.on_event("startup")
