@@ -7,7 +7,7 @@ import os
 import re
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 from clickhouse_driver import Client as ClickHouseClient
@@ -286,7 +286,7 @@ class ConfigChangeLogger:
         )
 
         record = ConfigChangeRecord(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.utcnow(),
             version=version,
             author=author,
             change_type="update",
@@ -315,7 +315,7 @@ class ConfigChangeLogger:
     ) -> str:
         """Log a configuration creation."""
         record = ConfigChangeRecord(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.utcnow(),
             version=version,
             author=author,
             change_type="create",
@@ -342,7 +342,7 @@ class ConfigChangeLogger:
     ) -> str:
         """Log a configuration deletion."""
         record = ConfigChangeRecord(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.utcnow(),
             version=version,
             author=author,
             change_type="delete",
@@ -373,7 +373,7 @@ class ConfigChangeLogger:
         rollback_metadata['rolled_back_from_version'] = from_version
 
         record = ConfigChangeRecord(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.utcnow(),
             version=version,
             author=author,
             change_type="rollback",
@@ -404,7 +404,7 @@ class ConfigChangeLogger:
             reload_metadata['error_message'] = error_message
 
         record = ConfigChangeRecord(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.utcnow(),
             version=version,
             author=author,
             change_type="hot_reload",
