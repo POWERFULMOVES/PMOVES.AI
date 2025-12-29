@@ -55,19 +55,32 @@ API_KEY_NAME = "X-Gateway-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 
-async def get_api_key(api_key_header: str = Security(api_key_header)):
+async def get_api_key(api_key_header: str = Security(api_key_header)) -> Optional[str]:
     """
     Verify API key for protected endpoints.
 
     If GATEWAY_API_KEY is set, the request must include a matching X-Gateway-API-Key header.
-    If GATEWAY_API_KEY is not set, authentication is disabled (for development).
+    If GATEWAY_API_KEY is not set, authentication is disabled (for development only).
+
+    Returns:
+        The API key string if authenticated, None if auth is disabled.
+
+    Raises:
+        HTTPException: If GATEWAY_API_KEY is set but header doesn't match.
     """
-    if GATEWAY_API_KEY and api_key_header != GATEWAY_API_KEY:
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid or missing API Key. Provide X-Gateway-API-Key header."
-        )
-    return api_key_header or True
+    if GATEWAY_API_KEY:
+        if api_key_header != GATEWAY_API_KEY:
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid or missing API Key. Provide X-Gateway-API-Key header."
+            )
+        return api_key_header
+
+    # Auth disabled - warn in production-like environments
+    if os.environ.get("ENV", "production") != "development":
+        logger.warning("GATEWAY_API_KEY not set - authentication disabled for gateway-agent")
+
+    return None
 
 # FastAPI app
 app = FastAPI(

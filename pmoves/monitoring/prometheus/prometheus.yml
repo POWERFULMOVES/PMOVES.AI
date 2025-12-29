@@ -114,7 +114,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://host.docker.internal:8080/healthz        # agent-zero
+          - http://host.docker.internal:80/healthz         # agent-zero
           - http://host.docker.internal:8086/              # hi-rag v2 CPU
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://host.docker.internal:8088/healthz        # presign
