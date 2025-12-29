@@ -1,12 +1,20 @@
 import os, json
 import uuid
 from typing import Dict, Any, List
-from fastapi import FastAPI, Body, HTTPException
+from fastapi import FastAPI, Body, HTTPException, Response
 import requests
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 import numpy as np
+
+# Prometheus metrics
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+http_requests_total = Counter('extract_worker_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+http_request_duration = Histogram('extract_worker_http_request_duration_seconds', 'HTTP request duration')
+qdrant_operations_total = Counter('extract_worker_qdrant_operations_total', 'Qdrant operations', ['operation'])
+embeddings_processed_total = Counter('extract_worker_embeddings_processed_total', 'Embeddings processed')
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks_qwen3")
@@ -102,44 +110,75 @@ def _embed_tensorzero(texts: List[str]):
 
 @app.get("/healthz")
 def healthz():
+    http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     return {"ok": True}
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.post("/ingest")
 def ingest(body: Dict[str, Any] = Body(...)):
-    chunks = body.get('chunks') or []
-    errors = body.get('errors') or []
-    # Upsert chunks to Qdrant + Meili
-    if chunks:
-        texts = [c.get('text','') for c in chunks]
-        vecs = _embed(texts)
-        qc = QdrantClient(url=QDRANT_URL, timeout=30.0)
-        _ensure_qdrant(qc, vecs.shape[1])
-        points: List[PointStruct] = []
-        for i, v in enumerate(vecs):
-            chunk = chunks[i]
-            chunk_id = chunk.get("chunk_id") or chunk.get("id") or f"chunk-{i+1}"
-            # Qdrant point IDs must be uint64 or UUID; arbitrary strings are rejected.
-            if isinstance(chunk_id, int):
-                point_id = chunk_id
-            else:
-                ns = (chunk.get("namespace") or "pmoves").strip()
-                point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{ns}:{chunk_id}"))
-            points.append(PointStruct(id=point_id, vector=v.tolist(), payload=chunk))
-        qc.upsert(collection_name=COLL, points=points)
+    """Ingest text chunks for embedding and indexing to Qdrant + Meilisearch."""
+    with http_request_duration.time():
+        status = "200"
         try:
-            _meili('post','/indexes', json={'uid': COLL, 'primaryKey':'chunk_id'})
+            chunks = body.get('chunks') or []
+            errors = body.get('errors') or []
+
+            # Upsert chunks to Qdrant + Meili
+            if chunks:
+                texts = [c.get('text','') for c in chunks]
+                vecs = _embed(texts)
+                embeddings_processed_total.inc(len(texts))
+
+                qc = QdrantClient(url=QDRANT_URL, timeout=30.0)
+                _ensure_qdrant(qc, vecs.shape[1])
+                points: List[PointStruct] = []
+                for i, v in enumerate(vecs):
+                    chunk = chunks[i]
+                    chunk_id = chunk.get("chunk_id") or chunk.get("id") or f"chunk-{i+1}"
+                    # Qdrant point IDs must be uint64 or UUID; arbitrary strings are rejected.
+                    if isinstance(chunk_id, int):
+                        point_id = chunk_id
+                    else:
+                        ns = (chunk.get("namespace") or "pmoves").strip()
+                        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{ns}:{chunk_id}"))
+                    points.append(PointStruct(id=point_id, vector=v.tolist(), payload=chunk))
+
+                qc.upsert(collection_name=COLL, points=points)
+                qdrant_operations_total.labels(operation='upsert').inc()
+
+                try:
+                    _meili('post','/indexes', json={'uid': COLL, 'primaryKey':'chunk_id'})
+                    qdrant_operations_total.labels(operation='meili_index_create').inc()
+                except Exception:
+                    pass
+                try:
+                    _meili('post', f'/indexes/{COLL}/documents', data=json.dumps(chunks))
+                    qdrant_operations_total.labels(operation='meili_docs_add').inc()
+                except Exception:
+                    pass
+
+            # Insert errors to Supabase
+            inserted = 0
+            for e in errors:
+                try:
+                    r = requests.post(f"{SUPA}/it_errors", headers={'content-type':'application/json'}, data=json.dumps(e), timeout=20)
+                    r.raise_for_status(); inserted += 1
+                    qdrant_operations_total.labels(operation='supabase_error_insert').inc()
+                except Exception:
+                    continue
+
+            http_requests_total.labels(method='POST', endpoint='/ingest', status=status).inc()
+            return {"ok": True, "chunks": len(chunks), "errors_inserted": inserted}
+
+        except HTTPException as e:
+            status = str(e.status_code)
+            http_requests_total.labels(method='POST', endpoint='/ingest', status=status).inc()
+            raise
         except Exception:
-            pass
-        try:
-            _meili('post', f'/indexes/{COLL}/documents', data=json.dumps(chunks))
-        except Exception:
-            pass
-    # Insert errors to Supabase
-    inserted = 0
-    for e in errors:
-        try:
-            r = requests.post(f"{SUPA}/it_errors", headers={'content-type':'application/json'}, data=json.dumps(e), timeout=20)
-            r.raise_for_status(); inserted += 1
-        except Exception:
-            continue
-    return {"ok": True, "chunks": len(chunks), "errors_inserted": inserted}
+            status = "500"
+            http_requests_total.labels(method='POST', endpoint='/ingest', status=status).inc()
+            raise

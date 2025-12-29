@@ -2,7 +2,7 @@ import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, thre
 import importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
@@ -533,6 +533,17 @@ class QueryResp(BaseModel):
     hits: List[QueryHit]
 
 app = FastAPI(title="PMOVES Hi-RAG Gateway v2 (hybrid + rerank)", version="2.1.0")
+
+# Prometheus metrics
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+http_requests_total = Counter('hirag_v2_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+http_request_duration = Histogram('hirag_v2_http_request_duration_seconds', 'HTTP request duration')
+search_queries_total = Counter('hirag_v2_search_queries_total', 'Search queries performed', ['rerank_enabled'])
+search_results_total = Counter('hirag_v2_search_results_total', 'Search results returned', ['source'])
+rerank_operations_total = Counter('hirag_v2_rerank_operations_total', 'Reranking operations')
+cache_hits_total = Counter('hirag_v2_cache_hits_total', 'Cache hits')
+cache_misses_total = Counter('hirag_v2_cache_misses_total', 'Cache misses')
 
 # ensure repo root on sys.path for importing shared tools
 try:
@@ -1275,6 +1286,7 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         logger.warning("hirag.query hits=%d namespace=%s ip=%s", len(hits), req.namespace, client_ip)
     except Exception as e:
         logger.exception("Qdrant search error")
+        http_requests_total.labels(method='POST', endpoint='/hirag/query', status='503').inc()
         raise HTTPException(503, f"Qdrant search error: {e}")
 
     # lexical scores
@@ -1361,6 +1373,13 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
     if not used:
         base = sorted(base, key=lambda x: x["score"], reverse=True)[:req.k]
 
+    # Track metrics
+    search_queries_total.labels(rerank_enabled=str(used)).inc()
+    search_results_total.labels(source='qdrant').inc(len(hits))
+    if used:
+        rerank_operations_total.inc()
+    http_requests_total.labels(method='POST', endpoint='/hirag/query', status='200').inc()
+
     return {
         "query": req.query,
         "k": len(base),
@@ -1382,7 +1401,21 @@ def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
 
 @app.get("/")
 def index(_=Depends(require_tailscale)):
+    http_requests_total.labels(method='GET', endpoint='/', status='200').inc()
     return {"ok": True, "service": "hi-rag-gateway-v2", "hint": "POST /hirag/query"}
+
+
+@app.get("/healthz")
+def healthz():
+    """Health check endpoint (no auth required)."""
+    http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
+    return {"ok": True, "service": "hi-rag-gateway-v2"}
+
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint (no auth required)."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/mindmap/{constellation_id}")
