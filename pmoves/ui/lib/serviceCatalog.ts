@@ -17,7 +17,7 @@ export type ServiceCategory =
   | 'llm'
   | 'ui'
   | 'integration'
-  | 'dox';  // PMOVES-DoX document intelligence
+  | 'dox'  // PMOVES-DoX document intelligence
   | 'mcp';  // Model Context Protocol servers
 
 export type ServiceColor = 'cyan' | 'ember' | 'gold' | 'forest' | 'violet';
@@ -962,6 +962,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     ],
     external: true,
     capabilities: ['Workout tracking', 'Exercise library', 'Nutrition'],
+  },
   // ============================================================================
   // TOKENISM - Token Economy Simulation & Business Model Validation
   // Powered by EVO Swarm Intelligence

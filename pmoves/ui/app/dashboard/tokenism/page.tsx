@@ -148,11 +148,11 @@ export default function TokenismPage() {
 interface CapabilityCardProps {
   title: string;
   description: string;
-  color: string;
+  color: 'gold' | 'cyan' | 'green' | 'red' | 'violet' | 'blue';
 }
 
 function CapabilityCard({ title, description, color }: CapabilityCardProps) {
-  const colorClasses = {
+  const colorClasses: Record<CapabilityCardProps['color'], string> = {
     gold: 'border-gold-500/50 text-gold-400',
     cyan: 'border-cyan-500/50 text-cyan-400',
     green: 'border-green-500/50 text-green-400',
@@ -161,7 +161,7 @@ function CapabilityCard({ title, description, color }: CapabilityCardProps) {
     blue: 'border-blue-500/50 text-blue-400',
   };
 
-  const classes = colorClasses[color as keyof typeof colorClasses] || colorClasses.gold;
+  const classes = colorClasses[color];
 
   return (
     <div className={`border ${classes} p-4 bg-black/30`}>

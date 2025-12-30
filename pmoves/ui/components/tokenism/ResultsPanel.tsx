@@ -93,13 +93,13 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
 
   const { finalAvgWealth, finalGini, systemicRiskScore, weeklyMetrics, scenario, contractType } = result;
 
-  // Calculate trends
-  const wealthTrend = weeklyMetrics.length >= 2
+  // Calculate trends (with safeguards against zero/NaN)
+  const wealthTrend = weeklyMetrics.length >= 2 && weeklyMetrics[0].avgWealth > 0
     ? ((weeklyMetrics[weeklyMetrics.length - 1].avgWealth - weeklyMetrics[0].avgWealth)
       / weeklyMetrics[0].avgWealth) * 100
     : undefined;
 
-  const giniTrend = weeklyMetrics.length >= 2
+  const giniTrend = weeklyMetrics.length >= 2 && weeklyMetrics[0].giniCoefficient > 0
     ? ((weeklyMetrics[weeklyMetrics.length - 1].giniCoefficient - weeklyMetrics[0].giniCoefficient)
       / weeklyMetrics[0].giniCoefficient) * 100
     : undefined;

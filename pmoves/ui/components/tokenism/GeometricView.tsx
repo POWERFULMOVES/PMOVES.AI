@@ -156,11 +156,13 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
       return;
     }
 
+    const abortController = new AbortController();
     setLoading(true);
     setError(null);
 
     tokenism.getGeometry(result.simulationId, week)
       .then((data) => {
+        if (abortController.signal.aborted) return;
         setCgp(data);
 
         // Convert CGP points to Poincaré disk representation
@@ -178,6 +180,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
         setPoints(newPoints);
       })
       .catch((err) => {
+        if (abortController.signal.aborted) return;
         console.error('Failed to load geometry:', err);
         setError(err instanceof Error ? err.message : 'Failed to load geometry');
 
@@ -195,9 +198,14 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
         setPoints(syntheticPoints.slice(0, 100));
       })
       .finally(() => {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       });
-  }, [result, week, tokenism]);
+
+    return () => abortController.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, week]);
 
   // Draw on canvas
   useEffect(() => {
