@@ -1,0 +1,187 @@
+# GitHub Actions Workload Routing Configuration
+# Defines how different workflow types map to runner labels
+
+routing:
+  # GPU-accelerated workloads
+  gpu_training:
+    priority: 1
+    labels: [self-hosted, ai-lab, gpu]
+    runner: ai-lab
+    fallback: null
+    description: "LLM training, GPU builds, CUDA-dependent jobs"
+    examples:
+      - "PyTorch model training"
+      - "Docker builds with CUDA base images"
+      - "Tests requiring GPU acceleration"
+    max_duration: "24h"
+    resource_requirements:
+      gpu: true
+      ram_min: "32GB"
+      disk_min: "50GB"
+
+  # Large Docker builds
+  docker_build_large:
+    priority: 2
+    labels: [self-hosted, vps]
+    runner: vps
+    fallback: cloudstartup
+    description: "Docker image builds >2GB"
+    examples:
+      - "Multi-stage Dockerfiles"
+      - "Images with large dependencies"
+      - "Container registry pushes"
+    max_duration: "2h"
+    resource_requirements:
+      cpu_min: 4
+      ram_min: "8GB"
+      disk_min: "30GB"
+      docker: true
+
+  # Small Docker builds
+  docker_build_small:
+    priority: 3
+    labels: [self-hosted, cloudstartup]
+    runner: cloudstartup
+    fallback: vps
+    description: "Quick Docker builds <2GB"
+    examples:
+      - "Single-stage Dockerfiles"
+      - "Alpine-based images"
+      - "Language runtime images"
+    max_duration: "30m"
+    resource_requirements:
+      cpu_min: 2
+      ram_min: "4GB"
+      disk_min: "10GB"
+      docker: true
+
+  # Integration tests
+  integration_tests:
+    priority: 4
+    labels: [self-hosted, vps]
+    runner: vps
+    fallback: cloudstartup
+    description: "Full-stack integration tests"
+    examples:
+      - "API endpoint tests"
+      - "Database migration tests"
+      - "Service orchestration tests"
+    max_duration: "1h"
+    resource_requirements:
+      cpu_min: 4
+      ram_min: "8GB"
+      disk_min: "20GB"
+      services: ["postgres", "redis", "nats"]
+
+  # Security scans
+  security_scan:
+    priority: 5
+    labels: [self-hosted, vps]
+    runner: vps
+    fallback: null
+    description: "SAST/SCA scanning, dependency audits"
+    examples:
+      - "CodeQL analysis"
+      - "Dependency check scans"
+      - "Container image scanning"
+    max_duration: "45m"
+    resource_requirements:
+      cpu_min: 4
+      ram_min: "8GB"
+      disk_min: "20GB"
+
+  # Unit tests
+  unit_tests:
+    priority: 6
+    labels: [self-hosted, cloudstartup]
+    runner: cloudstartup
+    fallback: vps
+    description: "Fast unit tests and linting"
+    examples:
+      - "pytest unit tests"
+      - "ESLint/TSLint checks"
+      - "mypy type checking"
+    max_duration: "15m"
+    resource_requirements:
+      cpu_min: 2
+      ram_min: "4GB"
+
+  # Documentation builds
+  documentation:
+    priority: 7
+    labels: [self-hosted, cloudstartup]
+    runner: cloudstartup
+    fallback: vps
+    description: "Documentation generation and deployment"
+    examples:
+      - "MkDocs builds"
+      - "Sphinx documentation"
+      - "Docusaurus sites"
+    max_duration: "10m"
+    resource_requirements:
+      cpu_min: 2
+      ram_min: "4GB"
+
+  # Production deployments
+  production_deploy:
+    priority: 0  # Highest priority
+    labels: [self-hosted, kvm4, production]
+    runner: kvm4
+    fallback: null
+    description: "Production deployments only"
+    examples:
+      - "Production database migrations"
+      - "Production service deployments"
+      - "Production configuration updates"
+    max_duration: "1h"
+    resource_requirements:
+      cpu_min: 4
+      ram_min: "8GB"
+      environment: "production"
+
+# Job name patterns for automatic routing
+patterns:
+  - regex: ".*gpu.*|.*cuda.*|.*training.*|.*pytorch.*|.*tensorflow.*"
+    route_to: gpu_training
+
+  - regex: ".*docker.*build.*large|.*multi-stage.*|.*heavy.*"
+    route_to: docker_build_large
+
+  - regex: ".*docker.*|.*container.*|.*image.*"
+    route_to: docker_build_small
+
+  - regex: ".*integration.*|.*e2e.*|.*end-to-end.*"
+    route_to: integration_tests
+
+  - regex: ".*security.*|.*sast.*|.*scan.*|.*audit.*"
+    route_to: security_scan
+
+  - regex: ".*unit.*test.*|.*lint.*|.*type.*check.*"
+    route_to: unit_tests
+
+  - regex: ".*docs? .*|.*documentation.*|.*mkdocs.*|.*sphinx.*"
+    route_to: documentation
+
+  - regex: ".*deploy.*prod.*|.*production.*"
+    route_to: production_deploy
+
+# Default routing for unmatched jobs
+default_route:
+  labels: [self-hosted, cloudstartup]
+  runner: cloudstartup
+  fallback: vps
+  description: "Default workload routing"
+
+# Load balancing configuration
+load_balancing:
+  strategy: "round_robin"  # round_robin, least_busy, random
+  max_parallel_per_runner: 3
+  queue_depth_threshold: 5  # Trigger scaling when queue depth exceeds this
+  scale_up_increment: 1     # Number of cloud runners to add when scaling
+
+# Cost optimization
+cost_optimization:
+  prefer_local: true  # Prefer local runners (ai-lab) over cloud
+  prefer_free: true   # Prefer self-hosted over GitHub-hosted runners
+  shutdown_idle_cloud_runners_after: "15m"
+  max_cloud_runner_cost_per_hour: 0.10

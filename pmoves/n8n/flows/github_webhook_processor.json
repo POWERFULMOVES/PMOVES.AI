@@ -1,0 +1,188 @@
+[
+  {
+    "name": "GitHub • Webhook → NATS v1",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "github/webhooks/runner",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "webhook_receiver",
+        "name": "Webhook: GitHub Runner Events",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "webhookId": "github-runner-webhook",
+        "position": [440, 280]
+      },
+      {
+        "parameters": {
+          "functionCode": "const body = $json;\nconst headers = $input.item.json.headers || {};\n\n// Parse GitHub webhook signature verification would go here\n// For now, just log the event type\nconst eventType = headers['x-github-event'] || body.event || 'unknown';\nconst deliveryId = headers['x-github-delivery'] || 'no-delivery-id';\n\nreturn {\n  json: {\n    event_type: eventType,\n    delivery_id: deliveryId,\n    original_body: body,\n    timestamp: new Date().toISOString(),\n    headers: {\n      'x-github-event': eventType,\n      'x-github-delivery': deliveryId\n    }\n  }\n};"
+        },
+        "id": "parse_webhook",
+        "name": "Parse Webhook Headers",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [660, 280]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $json.event_type }}",
+                "operation": "equal",
+                "value2": "workflow_run"
+              },
+              {
+                "value1": "={{ $json.event_type }}",
+                "operation": "equal",
+                "value2": "workflow_job"
+              },
+              {
+                "value1": "={{ $json.event_type }}",
+                "operation": "equal",
+                "value2": "check_run"
+              }
+            ]
+          },
+          "combineOperation": "any"
+        },
+        "id": "check_event_type",
+        "name": "Check Event Type",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [880, 280]
+      },
+      {
+        "parameters": {
+          "functionCode": "const event = $json;\nconst body = event.original_body || {};\nconst repo = body.repository || {};\nconst workflowRun = body.workflow_job || body.workflow_run || {};\nconst action = body.action || 'queued';\n\n// Determine runner name from labels if available\nconst runnerName = (workflowRun.labels || []).find(l => \n  l.startsWith('self-hosted') && !l.includes('self-hosted-only')\n)?.replace('self-hosted-', '') || 'unknown';\n\n// Create NATS event envelope (PMOVES standard)\nconst natsEvent = {\n  id: $node.id,\n  topic: `github.job.${action}.v1`,\n  ts: event.timestamp,\n  version: 'v1',\n  source: 'github-webhook',\n  payload: {\n    repository: repo.full_name || repo.name || 'unknown',\n    workflow: workflowRun.name || body.workflow || 'unknown',\n    runner: runnerName,\n    job_id: workflowRun.id || body.workflow_job?.id || body.id,\n    status: workflowRun.status || action,\n    started_at: workflowRun.started_at || workflowRun.run_started_at,\n    completed_at: workflowRun.completed_at,\n    conclusion: workflowRun.conclusion,\n    actor: body.sender?.login || body.sender?.name || 'unknown',\n    event_id: event.delivery_id\n  },\n  correlation_id: event.delivery_id,\n  parent_id: null\n};\n\nreturn {\n  json: {\n    nats_subject: natsEvent.topic,\n    nats_payload: natsEvent,\n    github_event: event.event_type\n  }\n};"
+        },
+        "id": "create_nats_event",
+        "name": "Create NATS Event Envelope",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [1100, 120]
+      },
+      {
+        "parameters": {
+          "url": "=http://nats:4222/pub",
+          "authentication": "none",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.nats_payload) }}",
+          "options": {
+            "headerParametersUi": {
+              "parameter": [
+                {"name": "subject", "value": "={{ $json.nats_subject }}"},
+                {"name": "content-type", "value": "application/json"}
+              ]
+            }
+          }
+        },
+        "id": "publish_nats",
+        "name": "Publish to NATS",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [1320, 120]
+      },
+      {
+        "parameters": {
+          "functionCode": "const payload = $json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nlet emoji = '⏳';\nif (status === 'in_progress') emoji = '🔄';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '✅' : conclusion === 'failure' ? '❌' : '⚠️';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: $env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/placeholder',\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
+        },
+        "id": "prepare_notification",
+        "name": "Prepare Discord Notification",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [1540, 120]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.webhookUrl }}",
+          "authentication": "none",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.payload }}",
+          "options": {}
+        },
+        "id": "send_discord",
+        "name": "Send Discord Notification",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [1760, 120]
+      },
+      {
+        "parameters": {
+          "options": {},
+          "responseBody": "{\"status\": \"processed\", \"message\": \"GitHub webhook event processed\"}"
+        },
+        "id": "respond_success",
+        "name": "Respond Success",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [1980, 120]
+      },
+      {
+        "parameters": {
+          "functionCode": "const event = $json;\nreturn {\n  json: {\n    message: `Ignored GitHub event type: ${event.event_type}`,\n    event_type: event.event_type,\n    delivery_id: event.delivery_id\n  }\n};"
+        },
+        "id": "log_ignored",
+        "name": "Log Ignored Event",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [1100, 380]
+      },
+      {
+        "parameters": {
+          "options": {},
+          "responseBody": "{\"status\": \"ignored\", \"message\": \"Event type not tracked\"}"
+        },
+        "id": "respond_ignored",
+        "name": "Respond Ignored",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [1320, 380]
+      }
+    ],
+    "connections": {
+      "Webhook: GitHub Runner Events": {
+        "main": [[{"node": "Parse Webhook Headers", "type": "main", "index": 0}]]
+      },
+      "Parse Webhook Headers": {
+        "main": [[{"node": "Check Event Type", "type": "main", "index": 0}]]
+      },
+      "Check Event Type": {
+        "main": [
+          [{"node": "Create NATS Event Envelope", "type": "main", "index": 0}],
+          [{"node": "Log Ignored Event", "type": "main", "index": 0}]
+        ]
+      },
+      "Create NATS Event Envelope": {
+        "main": [[{"node": "Publish to NATS", "type": "main", "index": 0}]]
+      },
+      "Publish to NATS": {
+        "main": [[{"node": "Prepare Discord Notification", "type": "main", "index": 0}]]
+      },
+      "Prepare Discord Notification": {
+        "main": [[{"node": "Send Discord Notification", "type": "main", "index": 0}]]
+      },
+      "Send Discord Notification": {
+        "main": [[{"node": "Respond Success", "type": "main", "index": 0}]]
+      },
+      "Log Ignored Event": {
+        "main": [[{"node": "Respond Ignored", "type": "main", "index": 0}]]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "instanceId": "pmoves-github"
+    },
+    "tags": ["github", "webhooks", "nats", "ci-cd"]
+  }
+]

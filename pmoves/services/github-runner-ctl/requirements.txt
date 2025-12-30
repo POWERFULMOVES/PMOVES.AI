@@ -1,0 +1,21 @@
+# PMOVES GitHub Runner Controller
+# Python dependencies following PMOVES SDK patterns
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Async HTTP client
+httpx>=0.25.0
+
+# Prometheus metrics
+prometheus-client>=0.19.0
+
+# NATS messaging
+nats-py>=2.6.0
+
+# Configuration
+pyyaml>=6.0
+
+# Data validation
+pydantic>=2.5.0
