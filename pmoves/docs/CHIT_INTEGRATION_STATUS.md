@@ -299,7 +299,7 @@ valid = decoder.validate_cgp(cgp)
 ## NATS Subjects Reference
 
 ### Core Geometry Subjects
-```
+```text
 geometry.cgp.v1              - Direct CGP transport
 geometry.swarm.meta.v1       - Swarm optimization metadata
 geometry.event.v1            - General geometry events
@@ -307,7 +307,7 @@ geometry.>                   - Wildcard for all geometry
 ```
 
 ### Tokenism Subjects
-```
+```text
 tokenism.cgp.ready.v1        - CGP ready for consumption
 tokenism.simulation.result.v1 - Simulation results
 tokenism.calibration.result.v1 - Calibration metrics
@@ -316,7 +316,7 @@ tokenism.geometry.event.v1   - Voice/audio geometry
 ```
 
 ### Service-Specific Subjects
-```
+```text
 persona.publish.result.v1    - Consciousness service
 research.deepresearch.*      - Deep research coordination
 supaserch.*                  - Multimodal search

@@ -167,13 +167,13 @@ function CapabilityCard({ title, description, color }: CapabilityCardProps) {
 }
 
 interface ApiEndpointProps {
-  method: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   endpoint: string;
   description: string;
 }
 
 function ApiEndpoint({ method, endpoint, description }: ApiEndpointProps) {
-  const methodColors = {
+  const methodColors: Record<ApiEndpointProps['method'], string> = {
     GET: 'text-green-400',
     POST: 'text-blue-400',
     PUT: 'text-yellow-400',
@@ -182,7 +182,7 @@ function ApiEndpoint({ method, endpoint, description }: ApiEndpointProps) {
 
   return (
     <div className="flex items-center gap-4 p-2 bg-black/50 rounded">
-      <span className={`font-bold ${methodColors[method as keyof typeof methodColors] || 'text-gray-400'}`}>
+      <span className={`font-bold ${methodColors[method]}`}>
         {method}
       </span>
       <span className="text-gray-300">{endpoint}</span>

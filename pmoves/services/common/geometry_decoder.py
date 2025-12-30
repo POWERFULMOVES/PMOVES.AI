@@ -828,7 +828,8 @@ class GeometryDecoder:
                                 const.get("id", ""),
                                 self._get_passphrase(),
                             )
-                        except Exception:
+                        except Exception as e:
+                            logger.debug("Failed to decrypt anchor for constellation %s: %s", const.get("id", ""), e)
                             continue
 
                 if not anchor:
@@ -843,7 +844,7 @@ class GeometryDecoder:
                 for item in codebook:
                     vec = item.get("vec")
                     if vec:
-                        proj = sum(a * b for a, b in zip(u, vec))
+                        proj = sum(a * b for a, b in zip(u, vec, strict=True))
                         vals.append(proj)
 
                 if not vals:
@@ -969,7 +970,7 @@ class GeometryDecoder:
                 for idx, item in enumerate(codebook):
                     vec = item.get("vec")
                     if vec is not None:
-                        proj = sum(a * b for a, b in zip(u, vec))
+                        proj = sum(a * b for a, b in zip(u, vec, strict=True))
                         projections.append((idx, proj))
 
                 # Apply spectral weighting
