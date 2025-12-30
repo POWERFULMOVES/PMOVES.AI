@@ -185,13 +185,14 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
         setError(err instanceof Error ? err.message : 'Failed to load geometry');
 
         // Generate synthetic visualization from weekly metrics as fallback
-        const syntheticPoints = result.weeklyMetrics.flatMap((metrics, weekIndex) => {
+        const weeklyMetrics = result.weeklyMetrics ?? [];
+        const syntheticPoints = weeklyMetrics.flatMap((metrics, weekIndex) => {
           return Array.from({ length: 5 }, (_, i) => {
             const wealthVariation = 0.5 + Math.random() * 1.5;
             return toPoincareDisk(
               metrics.avgWealth * wealthVariation,
               result.finalAvgWealth * 2,
-              (weekIndex * 5 + i) / (result.weeklyMetrics.length * 5) * Math.PI * 2,
+              (weekIndex * 5 + i) / (weeklyMetrics.length * 5) * Math.PI * 2,
             );
           });
         });
@@ -226,7 +227,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
     };
     const radius = Math.min(canvas.width, canvas.height) / 2 - 20;
 
-    const edges = cgp?.geometry.edges || [];
+    const edges = (cgp?.geometry.edges || []) as [number, number][];
 
     drawPoincareDisk(ctx, points, edges, canvas.width, canvas.height, center, radius);
   }, [points, cgp]);

@@ -99,6 +99,18 @@ const TIER_INFO: Record<ServiceCategory, {
     icon: '⎋',
     description: 'External service integrations',
   },
+  dox: {
+    label: 'Document Intelligence',
+    color: 'forest',
+    icon: '◫',
+    description: 'PMOVES-DoX document processing',
+  },
+  mcp: {
+    label: 'MCP Servers',
+    color: 'gold',
+    icon: '◈',
+    description: 'Model Context Protocol servers',
+  },
 };
 
 const COLOR_CLASSES: Record<string, {

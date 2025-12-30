@@ -156,7 +156,7 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
       </div>
 
       {/* Time Series Charts */}
-      {weeklyMetrics.length > 0 && (
+      {weeklyMetrics?.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Wealth Over Time */}
           <div className="border border-gray-800 bg-black/30 p-4">
