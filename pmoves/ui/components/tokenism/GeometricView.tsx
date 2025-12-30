@@ -263,7 +263,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
       {/* Canvas */}
       <div className="relative flex justify-center items-center bg-black/50 border border-violet-500/30 rounded-lg" style={{ minHeight: '400px' }}>
         <canvas

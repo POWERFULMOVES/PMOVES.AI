@@ -14,6 +14,10 @@ CHIT/Geometry modules:
 
 from .telemetry import *  # noqa: F401,F403
 
+# Ensure __all__ exists before extending (telemetry may not define it)
+if '__all__' not in globals():
+    __all__ = []
+
 # CHIT Geometry exports (optional - graceful import)
 try:
     from .geometry_models import (  # noqa: F401

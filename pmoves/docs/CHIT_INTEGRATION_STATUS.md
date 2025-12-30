@@ -276,13 +276,13 @@ async def subscribe_geometry():
 ### Step 3: Use the Common Decoder
 
 ```python
-from pmoves.services.common.geometry_decoder import GeometryDecoder
+from pmoves.services.common.geometry_decoder import GeometryDecoder, detect_cgp_version
 
 decoder = GeometryDecoder()
 
 # Detect version automatically
 cgp = load_cgp_from_somewhere()
-version = detector.detect_cgp_version(cgp)  # "0.1" or "0.2"
+version = detect_cgp_version(cgp)  # "0.1" or "0.2"
 
 # Extract text
 texts = decoder.extract_text(cgp)

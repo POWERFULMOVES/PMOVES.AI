@@ -17,11 +17,6 @@ import TokenismResultsPanel from '@/components/tokenism/ResultsPanel';
 import TokenismGeometricView from '@/components/tokenism/GeometricView';
 import { SimulationResult } from '@/lib/tokenismClient';
 
-export const metadata = {
-  title: 'Tokenism | PMOVES',
-  description: 'Token economy simulation with business model validation powered by EVO swarm intelligence',
-};
-
 export default function TokenismPage() {
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
 

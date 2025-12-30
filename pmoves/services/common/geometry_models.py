@@ -11,7 +11,7 @@ See Also:
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, ValidationError, field_validator
 
 
 # ============================================================================
