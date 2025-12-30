@@ -64,6 +64,21 @@ logger = logging.getLogger("publisher_discord")
 _session_threads: Dict[str, str] = {}
 
 
+def _extract_webhook_domain(webhook_url: str) -> str:
+    """Extract domain from Discord webhook URL for logging (sanitizes credentials)."""
+    # Discord webhook URLs are: https://discord.com/api/webhooks/<id>/<token>
+    # Extract just the domain for logging
+    try:
+        if "discord.com" in webhook_url:
+            return "discord.com"
+        elif "discord.gg" in webhook_url:
+            return "discord.gg"
+        else:
+            return "unknown"
+    except Exception:
+        return "invalid"
+
+
 def _coerce_tags(raw: Any) -> Iterable[str]:
     if isinstance(raw, str):
         candidates = [part.strip() for part in raw.split(",")]
@@ -1089,6 +1104,17 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
 async def startup():
     """Initialize NATS connection on application startup."""
     global _nats_loop_task
+    # Validate critical environment configuration
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning(
+            "discord_webhook_url_not_configured",
+            extra={"event": "discord_webhook_url_not_configured"},
+        )
+    else:
+        logger.info(
+            "discord_webhook_url_configured",
+            extra={"event": "discord_webhook_url_configured", "domain": _extract_webhook_domain(DISCORD_WEBHOOK_URL)},
+        )
     if _nats_loop_task and _nats_loop_task.done():
         try:
             _nats_loop_task.result()
