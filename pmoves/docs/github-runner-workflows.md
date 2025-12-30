@@ -228,7 +228,7 @@ curl http://localhost:9090/api/v1/query?query=sum(rate(github_runner_jobs_total[
 
 Runner lifecycle events are published on these subjects for integration:
 
-```
+```text
 github.runner.registered.v1      # New runner registered
 github.runner.removed.v1         # Runner decommissioned
 github.runner.enabled.v1         # Runner brought online
