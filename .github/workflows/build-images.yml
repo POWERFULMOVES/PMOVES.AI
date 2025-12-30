@@ -12,24 +12,59 @@ env:
   REGISTRY_DH: powerfulmoves
 
 jobs:
+  setup-matrix:
+    runs-on: [self-hosted, vps]
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
+      - uses: actions/checkout@v6
+
+      - name: Parse image matrix
+        id: set-matrix
+        run: |
+          python3 - <<'EOF'
+          import yaml, json, pathlib
+          data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
+          print(f"matrix={json.dumps(data['images'])}")
+          EOF
+
   build:
-    runs-on: ubuntu-latest
+    needs: setup-matrix
+    runs-on: [self-hosted, vps]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudflare.docker.com:443
+            archive.ubuntu.com:80
+            archive.ubuntu.com:443
+            security.ubuntu.com:80
+            security.ubuntu.com:443
+
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
-
-      - name: Parse image matrix
-        id: matrix
-        run: |
-          python - <<'PY'
-import yaml, json, pathlib
-data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
-print(f"matrix={json.dumps(data['images'])}")
-PY
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -42,14 +77,14 @@ PY
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login DockerHub (optional)
-        if: secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Build & push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
           file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}
@@ -69,6 +104,3 @@ PY
           sbom: true
           build-args: |
             IMAGE_REF=${{ matrix.ref }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(steps.matrix.outputs.matrix) }}
