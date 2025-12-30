@@ -102,4 +102,3 @@
 [submodule "research/A2UI"]
 	path = research/A2UI
 	url = https://github.com/google/A2UI.git
-	ignore = all

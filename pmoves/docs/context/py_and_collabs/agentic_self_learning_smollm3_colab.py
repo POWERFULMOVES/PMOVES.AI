@@ -22,10 +22,10 @@ This notebook demonstrates a small, **Colab-friendly** agentic self-learning loo
 """
 
 # If you're in Colab, enable a GPU: Runtime -> Change runtime type -> GPU (T4 is fine).
-!nvidia-smi || echo "No GPU detected (CPU-only)."
+# nvidia-smi || echo "No GPU detected (CPU-only)."
 
 # Install deps (pinned to reasonably fresh versions)
-!pip -q install "transformers>=4.44.2" "datasets>=2.20.0" "accelerate>=0.34.2"                 "peft>=0.12.0" "bitsandbytes>=0.43.1" "trl>=0.11.4"                 "evaluate>=0.4.2" "wandb>=0.17.9"
+# pip -q install "transformers>=4.44.2" "datasets>=2.20.0" "accelerate>=0.34.2"                 "peft>=0.12.0" "bitsandbytes>=0.43.1" "trl>=0.11.4"                 "evaluate>=0.4.2" "wandb>=0.17.9"
 
 """## Imports & configuration"""
 
