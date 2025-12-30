@@ -1,0 +1,218 @@
+[
+  {
+    "name": "GitHub Runner • Auto-Scaler v1",
+    "nodes": [
+      {
+        "parameters": {
+          "pollTimes": {
+            "item": [
+              {
+                "mode": "everyMinute"
+              }
+            ]
+          },
+          "amount": 1
+        },
+        "id": "schedule_trigger",
+        "name": "Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.1,
+        "position": [480, 240]
+      },
+      {
+        "parameters": {
+          "url": "=http://github-runner-ctl:8100/runners",
+          "authentication": "none",
+          "options": {}
+        },
+        "id": "get_runners",
+        "name": "Get Runner Status",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [700, 240]
+      },
+      {
+        "parameters": {
+          "functionCode": "const runners = $input.all();\nconst result = {\n  json: {\n    total_runners: runners.length,\n    online_runners: runners.filter(r => r.json.status === 'online').length,\n    busy_runners: runners.filter(r => r.json.busy === true).length,\n    total_queue_depth: runners.reduce((sum, r) => sum + (r.json.queue_depth || 0), 0),\n    runners: runners.map(r => ({\n      name: r.json.name,\n      location: r.json.location,\n      status: r.json.status,\n      busy: r.json.busy,\n      queue_depth: r.json.queue_depth,\n      labels: r.json.labels || []\n    }))\n  }\n};\nreturn result;"
+        },
+        "id": "analyze_status",
+        "name": "Analyze Runner Status",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [920, 240]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "number": [
+              {
+                "value1": "={{ $json.total_queue_depth }}",
+                "operation": "larger",
+                "value2": 5
+              },
+              {
+                "value1": "={{ $json.online_runners }}",
+                "operation": "smaller",
+                "value2": "={{ $json.total_runners }}"
+              }
+            ]
+          }
+        },
+        "id": "check_scale_needed",
+        "name": "Check Scale Needed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1140, 240]
+      },
+      {
+        "parameters": {
+          "functionCode": "const status = $json;\nconst cloudRunnerCount = status.runners.filter(r => \n  r.location === 'cloud' && r.status === 'online'\n).length;\n\nconst maxCloudRunners = 3; // Configurable limit\nconst canScale = cloudRunnerCount < maxCloudRunners;\n\nreturn {\n  json: {\n    ...status,\n    cloud_runner_count: cloudRunnerCount,\n    can_scale_up: canScale,\n    scale_reason: canScale \n      ? `Queue depth ${status.total_queue_depth} > threshold, ${cloudRunnerCount}/${maxCloudRunners} cloud runners active`\n      : `Max cloud runners (${maxCloudRunners}) already active`\n  }\n};"
+        },
+        "id": "check_cloud_capacity",
+        "name": "Check Cloud Capacity",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [1380, 120]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.can_scale_up }}",
+                "operation": "true"
+              }
+            ]
+          }
+        },
+        "id": "can_scale",
+        "name": "Can Scale Up?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1600, 120]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\nconst timestamp = new Date().toISOString();\n\n// Determine severity based on queue depth\nconst queueDepth = data.total_queue_depth;\nlet severity = 'info';\nlet color = 0x00FF00; // green\n\nif (queueDepth > 15) {\n  severity = 'critical';\n  color = 0xFF0000; // red\n} else if (queueDepth > 10) {\n  severity = 'warning';\n  color = 0xFFFF00; // yellow\n} else if (queueDepth > 5) {\n  severity = 'info';\n  color = 0x00FFFF; // cyan\n}\n\nconst embed = {\n  title: `🔄 GitHub Runner Scale-Up Alert [${severity.toUpperCase()}]`,\n  description: data.scale_reason,\n  color: color,\n  fields: [\n    {\n      name: 'Queue Depth',\n      value: data.total_queue_depth.toString(),\n      inline: true\n    },\n    {\n      name: 'Online Runners',\n      value: `${data.online_runners}/${data.total_runners}`,\n      inline: true\n    },\n    {\n      name: 'Busy Runners',\n      value: data.busy_runners.toString(),\n      inline: true\n    },\n    {\n      name: 'Cloud Runners',\n      value: `${data.cloud_runner_count}/3`,\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: timestamp,\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: $env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/placeholder',\n    payload: {\n      username: 'PMOVES Runner Auto-Scaler',\n      embeds: [embed]\n    }\n  }\n};"
+        },
+        "id": "prepare_alert",
+        "name": "Prepare Scale Alert",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [1820, 0]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.webhookUrl }}",
+          "authentication": "none",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.payload }}",
+          "options": {}
+        },
+        "id": "send_discord",
+        "name": "Send Discord Alert",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [2040, 0]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\nconst timestamp = new Date().toISOString();\n\nconst embed = {\n  title: '✅ GitHub Runner Status - Normal',\n  description: 'All runners operating within normal parameters',\n  color: 0x00FF00, // green\n  fields: [\n    {\n      name: 'Queue Depth',\n      value: data.total_queue_depth.toString(),\n      inline: true\n    },\n    {\n      name: 'Online Runners',\n      value: `${data.online_runners}/${data.total_runners}`,\n      inline: true\n    },\n    {\n      name: 'Busy Runners',\n      value: data.busy_runners.toString(),\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: timestamp,\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: $env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/placeholder',\n    payload: {\n      username: 'PMOVES Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
+        },
+        "id": "prepare_normal",
+        "name": "Prepare Normal Status",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [1380, 380]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.webhookUrl }}",
+          "authentication": "none",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.payload }}",
+          "options": {}
+        },
+        "id": "send_status",
+        "name": "Send Status Update",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [1600, 380]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\nconst timestamp = new Date().toISOString();\n\nconst embed = {\n  title: '⚠️ GitHub Runner Scale-Up Blocked',\n  description: 'Cannot scale up - maximum cloud runner limit reached',\n  color: 0xFFAA00, // orange\n  fields: [\n    {\n      name: 'Queue Depth',\n      value: data.total_queue_depth.toString(),\n      inline: true\n    },\n    {\n      name: 'Cloud Runners',\n      value: `${data.cloud_runner_count}/3 (max)`,\n      inline: true\n    },\n    {\n      name: 'Reason',\n      value: data.scale_reason,\n      inline: false\n    },\n    {\n      name: 'Action Required',\n      value: 'Manual intervention needed - add more cloud capacity or investigate queue buildup',\n      inline: false\n    },\n    {\n      name: 'Timestamp',\n      value: timestamp,\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: $env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/placeholder',\n    payload: {\n      username: 'PMOVES Runner Auto-Scaler',\n      embeds: [embed]\n    }\n  }\n};"
+        },
+        "id": "prepare_blocked",
+        "name": "Prepare Blocked Alert",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [1820, 240]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.webhookUrl }}",
+          "authentication": "none",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.payload }}",
+          "options": {}
+        },
+        "id": "send_blocked",
+        "name": "Send Blocked Alert",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
+        "position": [2040, 240]
+      }
+    ],
+    "connections": {
+      "Schedule Trigger": {
+        "main": [[{"node": "Get Runner Status", "type": "main", "index": 0}]]
+      },
+      "Get Runner Status": {
+        "main": [[{"node": "Analyze Runner Status", "type": "main", "index": 0}]]
+      },
+      "Analyze Runner Status": {
+        "main": [[{"node": "Check Scale Needed", "type": "main", "index": 0}]]
+      },
+      "Check Scale Needed": {
+        "main": [
+          [{"node": "Check Cloud Capacity", "type": "main", "index": 0}],
+          [{"node": "Prepare Normal Status", "type": "main", "index": 0}]
+        ]
+      },
+      "Check Cloud Capacity": {
+        "main": [[{"node": "Can Scale Up?", "type": "main", "index": 0}]]
+      },
+      "Can Scale Up?": {
+        "main": [
+          [{"node": "Prepare Scale Alert", "type": "main", "index": 0}],
+          [{"node": "Prepare Blocked Alert", "type": "main", "index": 0}]
+        ]
+      },
+      "Prepare Scale Alert": {
+        "main": [[{"node": "Send Discord Alert", "type": "main", "index": 0}]]
+      },
+      "Prepare Normal Status": {
+        "main": [[{"node": "Send Status Update", "type": "main", "index": 0}]]
+      },
+      "Prepare Blocked Alert": {
+        "main": [[{"node": "Send Blocked Alert", "type": "main", "index": 0}]]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "instanceId": "pmoves-github"
+    },
+    "tags": ["github", "runners", "autoscaling", "ci-cd"]
+  }
+]
