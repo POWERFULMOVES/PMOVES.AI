@@ -62,7 +62,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Ollama CUDA
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./services/ollama
           file: ./services/ollama/Dockerfile.cuda
@@ -74,7 +74,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build Hi-RAG GPU
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./services/hirag-gateway
           file: ./services/hirag-gateway/Dockerfile.gpu
@@ -135,7 +135,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build ${{ matrix.service.name }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.service.context }}
           push: ${{ github.event_name != 'pull_request' }}
