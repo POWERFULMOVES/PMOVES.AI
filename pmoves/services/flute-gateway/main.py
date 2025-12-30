@@ -169,6 +169,11 @@ PROSODIC_CHUNKS_FAILED = Counter(
     "Number of prosodic chunks that failed to synthesize",
     ["provider", "reason"]
 )
+CHIT_EVENTS_FAILED = Counter(
+    "flute_chit_events_failed_total",
+    "Number of CHIT geometry bus publish failures",
+    ["reason"]
+)
 
 # Provider instances (initialized on startup)
 vibevoice_provider: Optional[VibeVoiceProvider] = None
@@ -207,11 +212,28 @@ async def _publish_chit_voice_event(
         )
         logger.debug("chit_voice_event_published", extra={"subject": CHIT_GEOMETRY_SUBJECT})
     except Exception as exc:
-        logger.warning(
-            "chit_voice_event_failed",
-            extra={"error": str(exc), "exc_type": type(exc).__name__},
-            exc_info=True
-        )
+        # Track failures in Prometheus for observability
+        reason = "nats_unavailable" if not nats_client else "publish_failed"
+        CHIT_EVENTS_FAILED.labels(reason=reason).inc()
+        # If user explicitly enabled CHIT, they should know it's failing
+        if CHIT_VOICE_ATTRIBUTION:
+            logger.error(
+                "chit_voice_event_failed",
+                extra={
+                    "error": str(exc),
+                    "exc_type": type(exc).__name__,
+                    "provider": provider,
+                },
+                exc_info=True
+            )
+        else:
+            logger.debug(
+                "chit_voice_event_failed",
+                extra={
+                    "error": str(exc),
+                    "exc_type": type(exc).__name__,
+                },
+            )
 
 
 # Pydantic models
@@ -1294,8 +1316,12 @@ async def websocket_tts(websocket: WebSocket):
                     "message": "VibeVoice provider not available"
                 })
 
-    except Exception:
+    except Exception as exc:
         logger.exception("WebSocket TTS error")
+        try:
+            await websocket.send_json({"type": "error", "message": "Internal server error"})
+        except Exception:
+            pass  # WebSocket already closed
     finally:
         await websocket.close()
 

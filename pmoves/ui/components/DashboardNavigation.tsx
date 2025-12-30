@@ -29,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/chat', label: 'Chat', key: 'chat' },
   { href: '/dashboard/services', label: 'Services', key: 'services' },
   { href: '/dashboard/chit', label: 'Chit', key: 'chit', accent: 'cyan' },
+  { href: '/dashboard/tokenism', label: 'Tokenism', key: 'tokenism', accent: 'gold' },
 ];
 
 export type NavKey =
@@ -45,7 +46,8 @@ export type NavKey =
   | 'personas'
   | 'chat'
   | 'services'
-  | 'chit';
+  | 'chit'
+  | 'tokenism';
 
 interface DashboardNavigationProps {
   active?: NavKey;

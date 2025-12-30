@@ -17,7 +17,7 @@ export type ServiceCategory =
   | 'llm'
   | 'ui'
   | 'integration'
-  | 'dox';  // PMOVES-DoX document intelligence
+  | 'dox'  // PMOVES-DoX document intelligence
   | 'mcp';  // Model Context Protocol servers
 
 export type ServiceColor = 'cyan' | 'ember' | 'gold' | 'forest' | 'violet';
@@ -962,6 +962,59 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     ],
     external: true,
     capabilities: ['Workout tracking', 'Exercise library', 'Nutrition'],
+  },
+  // ============================================================================
+  // TOKENISM - Token Economy Simulation & Business Model Validation
+  // Powered by EVO Swarm Intelligence
+  // ============================================================================
+  {
+    slug: 'tokenism',
+    title: 'Tokenism',
+    summary: 'Token economy simulation with business model validation powered by EVO swarm intelligence',
+    category: 'integration',
+    color: 'gold',
+    endpoints: [
+      { name: 'API', port: '8103', path: '/api/v1/simulate', type: 'api' },
+      { name: 'Health', port: '8103', path: '/healthz', type: 'health' },
+      { name: 'Metrics', port: '8103', path: '/metrics', type: 'metrics' },
+      { name: 'Scenarios', port: '8103', path: '/api/v1/scenarios', type: 'api' },
+      { name: 'Contracts', port: '8103', path: '/api/v1/contracts', type: 'api' },
+    ],
+    healthCheck: 'http://localhost:8103/healthz',
+    description: 'Mathematical token economy simulator for validating business models and ideas. Features 5 contract types (GroToken, FoodUSD, GroupPurchase, GroVault, CoopGovernor), CHIT geometry bus integration for wealth visualization, and LLM-powered analysis via TensorZero.',
+    capabilities: [
+      'Token economy simulation',
+      'Business model validation',
+      '5 contract types',
+      'Wealth distribution analysis',
+      'Gini coefficient tracking',
+      'Risk assessment',
+      'EVO swarm optimization',
+      'CHIT geometry visualization',
+      'NATS event publishing',
+    ],
+    dependencies: ['nats', 'tensorzero-gateway', 'postgrest'],
+    profile: 'agents',
+  },
+  {
+    slug: 'tokenism-ui',
+    title: 'Tokenism UI',
+    summary: 'Interactive dashboard for token economy simulation and analysis',
+    category: 'ui',
+    color: 'gold',
+    endpoints: [
+      { name: 'Dashboard', port: '8504', path: '/', type: 'ui' },
+    ],
+    external: true,
+    description: 'Next.js-based interactive UI for running token economy simulations, visualizing wealth distributions, and analyzing business models with EVO swarm intelligence.',
+    capabilities: [
+      'Simulation interface',
+      'Wealth distribution charts',
+      'Time series visualization',
+      'Risk assessment dashboards',
+      'Geometric CHIT visualization',
+    ],
+    dependencies: ['tokenism'],
   },
 ];
 

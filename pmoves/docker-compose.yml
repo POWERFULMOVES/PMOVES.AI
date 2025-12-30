@@ -1485,6 +1485,8 @@ services:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
+    # env.tier-agent and .env.local are optional for local overrides.
+    # DISCORD_WEBHOOK_URL is validated at startup (logs warning if missing).
     env_file:
       - path: env.tier-agent
         required: false
