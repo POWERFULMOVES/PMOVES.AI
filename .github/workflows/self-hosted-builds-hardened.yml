@@ -63,7 +63,7 @@ jobs:
             cuda.repo.nvidia.com:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -217,7 +217,7 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -285,7 +285,7 @@ jobs:
             registry.npmjs.org:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -339,7 +339,7 @@ jobs:
             ghcr.io:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Deploy to staging
         run: |
@@ -377,7 +377,7 @@ jobs:
             discord.com:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Pull latest images
         run: |
@@ -426,7 +426,7 @@ jobs:
             staging:4222
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run TensorZero tests
         run: |
