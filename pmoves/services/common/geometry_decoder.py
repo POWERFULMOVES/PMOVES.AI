@@ -203,6 +203,8 @@ def sign_cgp(
     passphrase = passphrase or CHITConfig.get_passphrase()
     doc = deepcopy(cgp)
     ts = int(datetime.now().timestamp())
+    # Note: SHA256 here is for key ID generation, not password hashing.
+    # The actual cryptographic integrity comes from HMAC-SHA256 below.
     kid = kid or hashlib.sha256(passphrase.encode()).hexdigest()[:16]
 
     meta = {
