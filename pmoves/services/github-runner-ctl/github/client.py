@@ -133,8 +133,18 @@ class GitHubClient:
             return response.json()
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"GitHub API error: {e.response.status_code} {path}")
+            # Log full error details including response body for debugging
+            error_body = e.response.text[:500] if hasattr(e.response, 'text') else 'N/A'
+            logger.error(
+                f"GitHub API error: {e.response.status_code} {path} | "
+                f"Response: {error_body}"
+            )
             GITHUB_API_REQUESTS_TOTAL.labels(endpoint=endpoint, status=str(e.response.status_code)).inc()
+            raise
+        except httpx.RequestError as e:
+            # Network-level errors (timeout, connection refused, etc.)
+            logger.error(f"GitHub API request failed: {e.__class__.__name__} {path} | {str(e)}")
+            GITHUB_API_REQUESTS_TOTAL.labels(endpoint=endpoint, status="network_error").inc()
             raise
 
     async def get_runners(
