@@ -1025,9 +1025,9 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
-    command: [ "-js", "-m", "8222" ]
+    command: [ "-js", "-m", "8222", "-ws", "-ws_port", "4223" ]
     restart: unless-stopped
-    ports: [ "4222:4222" ]
+    ports: [ "4222:4222", "9223:4223" ]
     profiles: [ "agents", "orchestration", "workers" ]
     networks: [ bus_tier, monitoring_tier ]
     healthcheck:
@@ -1305,6 +1305,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  a2ui-nats-bridge:
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+      - PORT=9224
+    ports: [ "9224:9224" ]
+    depends_on: [ nats ]
+    profiles: [ "agents", "orchestration" ]
+    networks: [ api_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
 
   deepresearch:
     build:
