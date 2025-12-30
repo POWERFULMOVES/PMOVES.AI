@@ -109,7 +109,7 @@ jobs:
 
       - name: Upload Trivy results for Ollama CUDA
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-ollama-cuda.sarif
           category: trivy-ollama-cuda
@@ -141,7 +141,7 @@ jobs:
 
       - name: Upload Trivy results for Hi-RAG GPU
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-hirag-gpu.sarif
           category: trivy-hirag-gpu
@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload Trivy results for ${{ matrix.service.name }}
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-${{ matrix.service.name }}.sarif
           category: trivy-${{ matrix.service.name }}
