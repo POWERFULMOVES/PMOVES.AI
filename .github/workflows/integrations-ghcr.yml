@@ -191,7 +191,7 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout (stub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Clone integration repo
         run: |
