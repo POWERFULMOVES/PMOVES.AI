@@ -1,6 +1,6 @@
 services:
   wger:
-    image: ${WGER_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest}
+    image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     container_name: cataclysm-wger
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
@@ -39,7 +39,7 @@ services:
       - ./integrations/pr-kits/wger/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   firefly:
-    image: ${FIREFLY_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-firefly-iii:pmoves-latest}
+    image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     container_name: cataclysm-firefly
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
@@ -78,7 +78,7 @@ services:
       - ./data/open-notebook/surreal_data:/mydata
 
   open-notebook-ext:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:v1-latest}
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
     container_name: cataclysm-open-notebook
     restart: unless-stopped
@@ -102,7 +102,7 @@ services:
       - ./data/open-notebook/notebook_data:/app/data
 
   jellyfin-ext:
-    image: ${JELLYFIN_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest}
+    image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: cataclysm-jellyfin
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]

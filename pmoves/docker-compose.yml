@@ -44,6 +44,13 @@ x-env-tier-llm: &env-tier-llm
     - path: .env.local
       required: false
 
+x-env-tier-ui: &env-tier-ui
+  env_file:
+    - path: env.tier-ui
+      required: false
+    - path: .env.local
+      required: false
+
 # Legacy: Full env for services not yet migrated to tier-based
 x-env-legacy: &env-legacy
   env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
@@ -121,7 +128,7 @@ services:
     profiles: [ "data", "qdrant-local" ]
     networks: [ data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:6333/readyz" ]
+      test: [ "CMD-SHELL", "timeout 5 bash -c ':> /dev/tcp/127.0.0.1/6333' && echo OK || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -752,7 +759,7 @@ services:
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, app_tier ] # api_tier added for external DNS/googleapis access
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:4416/healthz" ]
+      test: [ "CMD-SHELL", "timeout 5 bash -c ':> /dev/tcp/127.0.0.1/4416' && echo OK || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -906,7 +913,7 @@ services:
         TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
     runtime: nvidia
     restart: unless-stopped
-    command: [ "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086" ]
+    command: [ "python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086" ]
     <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
@@ -1343,20 +1350,20 @@ services:
     restart: unless-stopped
     <<: *env-tier-agent
     environment:
-      - PORT=${GITHUB_RUNNER_CTL_PORT:-8100}
+      - PORT=${GITHUB_RUNNER_CTL_PORT:-8104}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
       - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
       - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
     depends_on: [ nats ]
-    ports: [ "8100:8100" ]
+    ports: [ "8104:8104" ]
     volumes:
       - ./services/github-runner-ctl/config:/app/config:ro
     profiles: [ "orchestration", "workers" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1453,7 +1460,12 @@ services:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    <<: *env-tier-agent
+    env_file:
+      - path: env.tier-agent
+        required: false
+      - path: .env.local
+        required: false
+      - env.shared
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,claude.code.session.start.v1,claude.code.session.context.v1,claude.code.session.end.v1}
@@ -1485,6 +1497,70 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # =============================================================================
+  # PMOVES Tokenism Simulator
+  # Token economy simulation service with CHIT/Geometry Bus integration
+  # =============================================================================
+  tokenism-simulator:
+    build:
+      context: ./services/tokenism-simulator
+      dockerfile: Dockerfile
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
+      - TOKENISM_PORT=${TOKENISM_PORT:-8100}
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_CLIENT_NAME=tokenism-simulator
+      - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - TENSORZERO_MODEL=${TENSORZERO_MODEL:-claude-sonnet-4-5}
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
+      - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
+      - CHIT_ENABLED=${CHIT_ENABLED:-true}
+      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:4222}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports: [ "${TOKENISM_HOST_PORT:-8103}:8100" ]
+    profiles: [ "agents", "orchestration" ]
+    depends_on: [ nats, postgrest ]
+    networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # PMOVES Tokenism UI (from ToKenism-Multi submodule)
+  # Interactive dashboard for token economy simulation
+  # Built with Next.js, Recharts for visualization
+  tokenism-ui:
+    build:
+      context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
+      dockerfile: Dockerfile
+    image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
+    restart: unless-stopped
+    <<: *env-tier-ui
+    environment:
+      - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
+      - NODE_ENV=production
+      - PORT=8504
+    ports: [ "${TOKENISM_UI_HOST_PORT:-8504}:8504" ]
+    profiles: [ "ui", "orchestration" ]
+    depends_on: [ tokenism-simulator ]
+    networks: [ app_tier, api_tier ]
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8504" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
@@ -1579,7 +1655,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/health', timeout=5)" ]
+      test: [ "CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -10,6 +10,7 @@ import json
 import logging
 import uuid
 import datetime
+from datetime import timezone
 from typing import Any, Dict, Optional
 
 import nats
@@ -42,7 +43,7 @@ def create_event_envelope(
     return {
         "id": str(uuid.uuid4()),
         "topic": topic,
-        "ts": datetime.datetime.utcnow().isoformat() + "Z",
+        "ts": datetime.datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "version": "v1",
         "source": source,
         "payload": payload,
@@ -129,7 +130,12 @@ class NATSPublisher:
             True if published successfully, False otherwise
         """
         if not self.is_connected:
-            logger.warning(f"NATS not connected, dropping event: {subject}")
+            # Log event details when dropping due to no connection
+            payload_summary = str(payload)[:200] if payload else 'empty'
+            logger.warning(
+                f"NATS not connected, dropping event: {subject} | "
+                f"correlation_id={correlation_id} | payload_preview={payload_summary}"
+            )
             NATS_EVENTS_FAILED.labels(subject=subject, reason="not_connected").inc()
             return False
 
@@ -146,7 +152,13 @@ class NATSPublisher:
             logger.debug(f"Published {subject}: {envelope['id']}")
             return True
         except Exception as e:
-            logger.error(f"Failed to publish {subject}: {e}")
+            # Log full error details including payload for debugging
+            payload_preview = json.dumps(payload, default=str)[:300]
+            logger.error(
+                f"Failed to publish {subject}: {e.__class__.__name__}: {e} | "
+                f"envelope_id={envelope.get('id', 'unknown')} | "
+                f"payload_preview={payload_preview}"
+            )
             NATS_EVENTS_FAILED.labels(subject=subject, reason="publish_error").inc()
             return False
 
@@ -169,7 +181,7 @@ class NATSPublisher:
         subject = f"github.runner.{event_type}.v1"
         payload = {
             "runner": runner,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             **data
         }
         return await self.publish(subject, payload)
@@ -199,7 +211,7 @@ class NATSPublisher:
             "runner": runner,
             "repository": repository,
             "job_id": job_id,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             **(data or {})
         }
         return await self.publish(subject, payload)
@@ -229,7 +241,7 @@ class NATSPublisher:
             "runner": runner,
             "severity": severity,
             "message": message,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             **(data or {})
         }
         return await self.publish(subject, payload)

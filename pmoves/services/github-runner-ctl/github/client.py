@@ -48,20 +48,33 @@ class GitHubClient:
         return self._pat is not None
 
     async def _load_pat(self) -> bool:
-        """Load Personal Access Token from file.
+        """Load Personal Access Token from environment variable or file.
+
+        Priority order:
+        1. GITHUB_PAT environment variable (for development/local setup)
+        2. GITHUB_PAT_FILE file path (for Docker secrets in production)
 
         Returns:
             True if token loaded successfully
         """
+        # First, try environment variable (development/local)
+        env_pat = os.environ.get("GITHUB_PAT")
+        if env_pat:
+            self._pat = env_pat.strip()
+            logger.debug("Loaded GitHub PAT from environment variable")
+            return True
+
+        # Fall back to file (Docker secrets)
         try:
             with open(self.pat_file, "r") as f:
                 self._pat = f.read().strip()
+            logger.debug(f"Loaded GitHub PAT from file: {self.pat_file}")
             return bool(self._pat)
         except FileNotFoundError:
-            logger.error(f"GitHub PAT file not found: {self.pat_file}")
+            logger.error(f"GitHub PAT not found: GITHUB_PAT env var not set and {self.pat_file} not found")
             return False
         except Exception as e:
-            logger.error(f"Failed to load GitHub PAT: {e}")
+            logger.exception(f"Failed to load GitHub PAT from file")
             return False
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -98,19 +111,27 @@ class GitHubClient:
         method: str,
         path: str,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         """Make authenticated request to GitHub API.
 
         Args:
-            method: HTTP method
+            method: HTTP method (GET, POST, PUT, DELETE, etc.)
             path: API path (without base URL)
             **kwargs: Additional arguments for httpx request
 
         Returns:
-            Parsed JSON response
+            Parsed JSON response, or None for DELETE with 204 No Content
 
         Raises:
-            httpx.HTTPStatusError: On API errors
+            httpx.HTTPStatusError: On API errors (4xx, 5xx)
+            httpx.RequestError: On network errors
+
+        Note:
+            HTTP Method Semantics (GitHub API):
+            - DELETE returns 204 No Content (empty body) → returns None
+            - PUT returns 200 OK with response body
+            - POST returns 201 Created with response body
+            - GET returns 200 OK with response body
         """
         client = await self._get_client()
         endpoint = path.split("?")[0]  # Remove query string for metrics
@@ -125,16 +146,28 @@ class GitHubClient:
                 self._rate_limit_remaining[user] = int(remaining)
                 GITHUB_API_RATE_LIMIT.labels(user=user).set(int(remaining))
 
-            # Track request metrics
+            # Track request metrics (increment exactly once per request)
             status = str(response.status_code)
             GITHUB_API_REQUESTS_TOTAL.labels(endpoint=endpoint, status=status).inc()
+
+            # Handle 204 No Content (DELETE responses)
+            if response.status_code == 204:
+                return None
 
             response.raise_for_status()
             return response.json()
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"GitHub API error: {e.response.status_code} {path}")
-            GITHUB_API_REQUESTS_TOTAL.labels(endpoint=endpoint, status=str(e.response.status_code)).inc()
+            # Log full error details including response body for debugging
+            error_body = e.response.text[:500] if hasattr(e.response, 'text') else 'N/A'
+            logger.exception(
+                f"GitHub API error: {e.response.status_code} {path} | "
+                f"Response: {error_body}"
+            )
+            raise
+        except httpx.RequestError as e:
+            # Network-level errors (timeout, connection refused, etc.)
+            logger.exception(f"GitHub API request failed: {e.__class__.__name__} {path}")
             raise
 
     async def get_runners(
@@ -297,10 +330,11 @@ class GitHubClient:
         """
         if org:
             path = f"/orgs/{org}/repos"
+            params = {"per_page": per_page}
         else:
-            path = "/user/repos?type=owner"
+            path = "/user/repos"
+            params = {"type": "owner", "per_page": per_page}
 
-        params = {"per_page": per_page}
         return await self._request("GET", path, params=params)
 
 

@@ -117,7 +117,7 @@ df_opposites_dynamic = pd.DataFrame(opposite_pairs_dynamic, columns=["Word 1", "
 # Display results
 print(df_opposites_dynamic)
 
-pip install transformers torch scipy pandas
+# pip install transformers torch scipy pandas
 
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
@@ -178,7 +178,7 @@ df_opposites_transformer = pd.DataFrame(opposite_pairs_transformer, columns=["Wo
 # Display results
 print(df_opposites_transformer)
 
-pip install transformers torch torchvision pillow scipy pandas
+# pip install transformers torch torchvision pillow scipy pandas
 
 import numpy as np
 import torch
