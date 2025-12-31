@@ -178,21 +178,10 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
         setPoints(newPoints);
       })
       .catch((err) => {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load geometry';
         console.error('Failed to load geometry:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load geometry');
-
-        // Generate synthetic visualization from weekly metrics as fallback
-        const syntheticPoints = result.weeklyMetrics.flatMap((metrics, weekIndex) => {
-          return Array.from({ length: 5 }, (_, i) => {
-            const wealthVariation = 0.5 + Math.random() * 1.5;
-            return toPoincareDisk(
-              metrics.avgWealth * wealthVariation,
-              result.finalAvgWealth * 2,
-              (weekIndex * 5 + i) / (result.weeklyMetrics.length * 5) * Math.PI * 2,
-            );
-          });
-        });
-        setPoints(syntheticPoints.slice(0, 100));
+        setError(errorMessage);
+        setPoints([]);  // Clear points on error - don't show synthetic/fake data
       })
       .finally(() => {
         setLoading(false);

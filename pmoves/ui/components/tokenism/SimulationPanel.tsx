@@ -83,6 +83,25 @@ export function TokenismSimulationPanel({ onSimulationComplete }: SimulationPane
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    // Validate inputs before submission (bypass HTML constraints)
+    const validationErrors: string[] = [];
+
+    if (!Number.isInteger(participants) || participants < 100 || participants > 100000) {
+      validationErrors.push('Participants must be between 100 and 100,000');
+    }
+    if (!Number.isInteger(weeks) || weeks < 4 || weeks > 520) {
+      validationErrors.push('Duration must be between 4 and 520 weeks');
+    }
+    if (isNaN(initialPrice) || initialPrice < 0.01 || initialPrice > 1000) {
+      validationErrors.push('Initial price must be between $0.01 and $1000');
+    }
+
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join('; '));
+      return;
+    }
+
     setIsRunning(true);
     setError(null);
 
