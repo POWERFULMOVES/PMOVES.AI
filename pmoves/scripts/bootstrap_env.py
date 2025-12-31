@@ -181,7 +181,7 @@ class EnvFile:
 
         lines: List[str] = []
         lines.append("# Managed by pmoves/scripts/bootstrap_env.py")
-        lines.append(f"# Generated at {_dt.datetime.utcnow().isoformat()}Z")
+        lines.append(f"# Generated at {_dt.datetime.now(timezone.utc).isoformat()}Z")
         lines.append("")
         for key in self.managed_order:
             value = self.managed_values.get(key, "")

@@ -159,7 +159,7 @@ def _build_metadata(context: Dict[str, Any]) -> Dict[str, Any]:
         "source": "claude-code",
         "session_id": context.get("session_id", ""),
         "context_type": context.get("context_type", "unknown"),
-        "timestamp": context.get("timestamp", datetime.utcnow().isoformat()),
+        "timestamp": context.get("timestamp", datetime.now(timezone.utc).isoformat()),
     }
 
     # Add optional fields if present
@@ -206,7 +206,7 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     session_id = context.get("session_id", "unknown")
     context_type = context.get("context_type", "unknown")
-    timestamp = context.get("timestamp", datetime.utcnow().isoformat())
+    timestamp = context.get("timestamp", datetime.now(timezone.utc).isoformat())
 
     # Generate unique ID for this KB entry
     kb_id = f"claude-session-{session_id}-{context_type}-{timestamp}"
@@ -230,7 +230,7 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
         "meta": {
             "worker": "session-context-worker",
             "version": "0.1.0",
-            "processed_at": datetime.utcnow().isoformat(),
+            "processed_at": datetime.now(timezone.utc).isoformat(),
         }
     }
 

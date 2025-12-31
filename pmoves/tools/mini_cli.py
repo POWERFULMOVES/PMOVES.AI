@@ -160,7 +160,7 @@ def _stage_addon_assets(destination: Path, assets: Dict[Path, Path], label: str)
 
 def _write_provisioning_manifest(destination: Path, addons: Dict[str, dict]) -> None:
     manifest = {
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
         "source": str(CANONICAL_PROVISIONING_SOURCE),
         "addons": addons,
     }
