@@ -599,6 +599,8 @@ services:
       - NEXT_PUBLIC_PRESIGN_URL=${NEXT_PUBLIC_PRESIGN_URL:-http://localhost:8088}
       - NEXT_PUBLIC_PMOVES_YT_BASE_URL=${NEXT_PUBLIC_PMOVES_YT_BASE_URL:-http://localhost:8077}
       - NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL=${NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL:-http://localhost:8097/api/monitor/stats}
+      # Token Economy Simulation
+      - NEXT_PUBLIC_TOKENISM_URL=${NEXT_PUBLIC_TOKENISM_URL:-http://localhost:8103}
       # Monitoring Stack
       - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3002}
       - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
@@ -608,6 +610,7 @@ services:
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:8503}
+      - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
