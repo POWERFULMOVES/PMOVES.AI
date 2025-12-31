@@ -139,11 +139,18 @@ export interface ContractInfo {
  * Provides interfaces for running simulations, retrieving results,
  * and accessing CHIT geometry packets for wealth visualization.
  */
+import { logError } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
+
 export class TokenismClient {
   private readonly httpUrl: string;
 
   constructor(options?: { httpUrl?: string }) {
+    // Server-side: use TOKENISM_URL (Docker internal hostname)
+    // Client-side: use NEXT_PUBLIC_TOKENISM_URL (user-accessible URL)
+    // Fallback: localhost for development
     this.httpUrl = options?.httpUrl
+      || (typeof window === 'undefined' ? process.env.TOKENISM_URL : undefined)
       || process.env.NEXT_PUBLIC_TOKENISM_URL
       || 'http://localhost:8103';
   }
@@ -163,8 +170,20 @@ export class TokenismClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Tokenism simulation failed: ${response.status} - ${error}`);
+      const errorText = await response.text();
+      const { contractType, scenario } = parameters;
+
+      // Provide actionable error messages based on status code
+      let userMessage = 'Simulation failed.';
+      if (response.status === 404) {
+        userMessage = 'Tokenism service not found. Ensure the backend is running.';
+      } else if (response.status === 500 || response.status === 502) {
+        userMessage = 'Tokenism service error. Check server logs.';
+      } else if (response.status === 400) {
+        userMessage = `Invalid parameters for ${contractType} / ${scenario}.`;
+      }
+
+      throw new Error(`${userMessage} (HTTP ${response.status}): ${errorText}`);
     }
 
     const data = await response.json();
@@ -295,7 +314,22 @@ export class TokenismClient {
       });
       return response.ok;
     } catch (error) {
-      console.warn('TokenismClient: Health check failed', error);
+      // Distinguish network errors for better debugging
+      const isNetworkError = error instanceof TypeError;
+      const isTimeout = error instanceof DOMException && error.name === 'TimeoutError';
+
+      logError(
+        'Tokenism health check failed',
+        error,
+        'warning',
+        {
+          errorId: ErrorIds.TOKENISM_HEALTH_CHECK_FAILED,
+          component: 'TokenismClient',
+          url: this.httpUrl,
+          isNetworkError,
+          isTimeout,
+        },
+      );
       return false;
     }
   }

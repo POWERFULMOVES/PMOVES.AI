@@ -8,6 +8,8 @@
 
 import { useState, FormEvent } from 'react';
 import { getTokenismClient, ContractType, ScenarioType, SimulationResult } from '@/lib/tokenismClient';
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 interface SimulationPanelProps {
   onSimulationComplete?: (result: SimulationResult) => void;
@@ -98,7 +100,21 @@ export function TokenismSimulationPanel({ onSimulationComplete }: SimulationPane
       setLastResult(result);
       onSimulationComplete?.(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Simulation failed');
+      const errorMsg = err instanceof Error ? err.message : 'Simulation failed';
+      setError(errorMsg);
+
+      logError(
+        'Tokenism simulation failed',
+        err,
+        'error',
+        {
+          errorId: ErrorIds.TOKENISM_SIMULATION_FAILED,
+          component: 'SimulationPanel',
+          contractType,
+          scenario,
+          participants,
+        },
+      );
     } finally {
       setIsRunning(false);
     }

@@ -9,6 +9,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SimulationResult, getTokenismClient, CGPPacket } from '@/lib/tokenismClient';
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 interface GeometricViewProps {
   result?: SimulationResult | null;
@@ -181,22 +183,21 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
       })
       .catch((err) => {
         if (abortController.signal.aborted) return;
-        console.error('Failed to load geometry:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load geometry');
 
-        // Generate synthetic visualization from weekly metrics as fallback
-        const weeklyMetrics = result.weeklyMetrics ?? [];
-        const syntheticPoints = weeklyMetrics.flatMap((metrics, weekIndex) => {
-          return Array.from({ length: 5 }, (_, i) => {
-            const wealthVariation = 0.5 + Math.random() * 1.5;
-            return toPoincareDisk(
-              metrics.avgWealth * wealthVariation,
-              result.finalAvgWealth * 2,
-              (weekIndex * 5 + i) / (weeklyMetrics.length * 5) * Math.PI * 2,
-            );
-          });
-        });
-        setPoints(syntheticPoints.slice(0, 100));
+        const errorMsg = err instanceof Error ? err.message : 'Failed to load geometry';
+        setError(errorMsg);
+
+        logError(
+          'Tokenism geometry load failed',
+          err,
+          'error',
+          {
+            errorId: ErrorIds.TOKENISM_GEOMETRY_LOAD_FAILED,
+            component: 'GeometricView',
+            simulationId: result.simulationId,
+            week,
+          },
+        );
       })
       .finally(() => {
         if (!abortController.signal.aborted) {
@@ -252,7 +253,9 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
     for (const point of points) {
       const px = center.x + point.x * radius;
       const py = center.y + point.y * radius;
-      const dist = Math.sqrt((mouseX - px) ** 2 + (mouseY - py) ** 2);
+      const dx = mouseX - px;
+      const dy = mouseY - py;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist < 15) {
         found = point;
@@ -288,6 +291,16 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
         {!loading && !result && (
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-gray-500 font-pixel text-sm">Run a simulation to see geometric visualization</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+            <div className="text-center p-6 border border-red-500/50 rounded-lg max-w-md">
+              <p className="text-red-400 font-pixel text-sm mb-2">Visualization Error</p>
+              <p className="text-gray-400 text-xs">{error}</p>
+              <p className="text-gray-600 text-xs mt-3 font-mono">ID: {ErrorIds.TOKENISM_GEOMETRY_LOAD_FAILED}</p>
+            </div>
           </div>
         )}
       </div>

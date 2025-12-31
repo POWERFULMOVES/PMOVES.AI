@@ -1322,7 +1322,9 @@ services:
       - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
       - PORT=9224
     ports: [ "9224:9224" ]
-    depends_on: [ nats ]
+    depends_on:
+      nats:
+        condition: service_healthy
     profiles: [ "agents", "orchestration" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:

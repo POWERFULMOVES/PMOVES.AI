@@ -101,7 +101,7 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
 [submodule "pmoves/vendor/e2b-desktop"]
 	path = pmoves/vendor/e2b-desktop
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
 [submodule "pmoves/vendor/e2b-infra"]
 	path = pmoves/vendor/e2b-infra
 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
@@ -110,7 +110,7 @@
 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
 [submodule "pmoves/vendor/e2b-spells"]
 	path = pmoves/vendor/e2b-spells
-	url = https://github.com/POWERFULMOVES/PMOEVES-E2b-Spells.git
+	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
 [submodule "pmoves/vendor/e2b-surf"]
 	path = pmoves/vendor/e2b-surf
 	url = https://github.com/POWERFULMOVES/pmoves-surf.git

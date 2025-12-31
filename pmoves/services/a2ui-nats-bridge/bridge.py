@@ -26,6 +26,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 import nats
+from nats.js.errors import Error as JSError
 from prometheus_client import Counter, Gauge, generate_latest
 
 # Configuration
@@ -83,9 +84,29 @@ class A2UIEvent:
 
     @classmethod
     def from_a2ui_dict(cls, data: dict[str, Any]) -> "A2UIEvent":
-        """Create A2UIEvent from A2UI dictionary format."""
-        event_type = list(data.keys())[0] if data else "unknown"
-        payload = data[event_type] if event_type else {}
+        """Create A2UIEvent from A2UI dictionary format.
+
+        Args:
+            data: A2UI event dictionary (e.g., {"createSurface": {...}})
+
+        Returns:
+            A2UIEvent instance
+
+        Raises:
+            ValueError: If data is invalid or missing required fields
+            TypeError: If data is not a dictionary
+        """
+        if not isinstance(data, dict):
+            raise TypeError(f"Expected dict, got {type(data).__name__}")
+
+        if not data:
+            raise ValueError("Empty A2UI event data")
+
+        event_type = list(data.keys())[0]
+        payload = data[event_type]
+
+        if not isinstance(payload, dict):
+            raise TypeError(f"Expected payload dict for {event_type}, got {type(payload).__name__}")
 
         # Extract surfaceId from payload
         surface_id = payload.get("surfaceId", "")
@@ -106,7 +127,7 @@ app = FastAPI(
 
 # Global state
 nc: Optional[nats.aio.client.Client] = None
-js: Optional[nats.aio.jetstream.JetStreamContext] = None
+js: Optional["nats.js.client.JetStreamContext"] = None
 active_ws_connections: set[WebSocket] = set()
 connected_a2ui_surfaces: dict[str, str] = {}  # surface_id -> client_id
 
@@ -135,8 +156,13 @@ async def connect_nats():
                     description="A2UI (Agent-to-User Interface) events"
                 )
                 logger.info("Created NATS stream 'A2UI'")
-            except nats.aio.pubsub.errors.Error:
-                logger.info("NATS stream 'A2UI' already exists")
+            except JSError as e:
+                # Stream already exists is not an error - it's expected on restart
+                if "stream name already in use" in str(e).lower() or "already in use" in str(e).lower():
+                    logger.info("NATS stream 'A2UI' already exists")
+                else:
+                    logger.error(f"Failed to create A2UI stream: {e}")
+                    raise
 
             # Subscribe to geometry events for bidirectional communication
             try:
@@ -216,10 +242,17 @@ async def shutdown():
 
 @app.get("/healthz")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint.
+
+    Returns 'healthy' if NATS is connected, 'degraded' otherwise.
+    This allows downstream monitoring to detect connection issues.
+    """
+    nats_status = bool(nc and nc.is_connected())
+    overall_status = "healthy" if nats_status else "degraded"
+
     return {
-        "status": "healthy",
-        "nats_connected": nc is not None and nc.is_connected if nc else False,
+        "status": overall_status,
+        "nats_connected": nats_status,
         "active_websockets": len(active_ws_connections),
         "active_surfaces": list(connected_a2ui_surfaces.keys()),
         "timestamp": datetime.utcnow().isoformat()
@@ -239,7 +272,11 @@ async def a2ui_endpoint(data: dict[str, Any]):
     Accepts A2UI JSON format and publishes to NATS.
     """
     a2ui_events_received.inc()
-    event = A2UIEvent.from_a2ui_dict(data)
+    try:
+        event = A2UIEvent.from_a2ui_dict(data)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     success = await publish_a2ui_event(event)
 
     if not success:
