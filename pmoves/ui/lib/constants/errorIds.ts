@@ -26,12 +26,12 @@ export const ErrorIds = {
   CANVAS_RENDER_FAILED: 'canvas_render_failed',
   VISUALIZATION_FALLBACK: 'visualization_fallback',
 
-  // === AUTHENTICATION/Authorization ERRORS ===
+  // === AUTHENTICATION/AUTHORIZATION ERRORS ===
   JWT_PARSE_FAILED: 'jwt_parse_failed',
-  JWT_MISSING_HEADER: 'jwt_missing_header',
-  JWT_INVALID_SIGNATURE: 'jwt_invalid_signature',
-  SUPABASE_AUTH_FAILED: 'supabase_auth_failed',
-  SUPABASE_QUERY_FAILED: 'supabase_query_failed',
+  JWT_INVALID_FORMAT: 'jwt_invalid_format',
+  // @todo JWT_INVALID_SIGNATURE: 'jwt_invalid_signature',
+  // @todo SUPABASE_AUTH_FAILED: 'supabase_auth_failed',
+  // @todo SUPABASE_QUERY_FAILED: 'supabase_query_failed',
 
   // === CHAT ERRORS ===
   CHAT_SEND_FAILED: 'chat_send_failed',
@@ -69,9 +69,9 @@ export const ErrorIds = {
   ROOT_ERROR_BOUNDARY: 'root_error_boundary',
   DASHBOARD_ERROR_BOUNDARY: 'dashboard_error_boundary',
 
-  // === TENSORZERO ERRORS ===
-  TENSORZERO_REQUEST_FAILED: 'tensorzero_request_failed',
-  TENSORZERO_TIMEOUT: 'tensorzero_timeout',
+  // @todo TENSORZERO REQUESTS - For future TensorZero client integration
+  // @todo TENSORZERO_REQUEST_FAILED: 'tensorzero_request_failed',
+  // @todo TENSORZERO_TIMEOUT: 'tensorzero_timeout',
 } as const;
 
 export type ErrorId = typeof ErrorIds[keyof typeof ErrorIds];

@@ -197,7 +197,14 @@ export async function jellyfinSyncStatus(): Promise<
     );
 
     if (!response.ok) {
-      return err('Failed to fetch sync status');
+      const message = `HTTP ${response.status}: Failed to fetch sync status`;
+      logError('Jellyfin sync status HTTP error', new Error(message), 'warning', {
+        errorId: ErrorIds.JELLYFIN_SYNC_STATUS_FAILED,
+        component: 'jellyfin',
+        action: 'sync-status',
+        status: response.status,
+      });
+      return err(message);
     }
 
     const data = (await response.json()) as JellyfinSyncStatusInfo;
@@ -294,6 +301,12 @@ export async function getJellyfinPlaybackUrl(
 
     if (!response.ok) {
       const message = getErrorMessage(response.status);
+      logError('Jellyfin playback URL HTTP error', new Error(message), 'warning', {
+        errorId: ErrorIds.JELLYFIN_PLAYBACK_URL_FAILED,
+        component: 'jellyfin',
+        action: 'playback-url',
+        status: response.status,
+      });
       return err(message);
     }
 
@@ -330,6 +343,12 @@ export async function triggerJellyfinSync(): Promise<
 
     if (!response.ok) {
       const message = getErrorMessage(response.status);
+      logError('Jellyfin sync trigger HTTP error', new Error(message), 'warning', {
+        errorId: ErrorIds.JELLYFIN_SYNC_TRIGGER_FAILED,
+        component: 'jellyfin',
+        action: 'sync-trigger',
+        status: response.status,
+      });
       return err(message);
     }
 
@@ -371,6 +390,12 @@ export async function triggerBackfill(options: {
 
     if (!response.ok) {
       const message = getErrorMessage(response.status);
+      logError('Jellyfin backfill HTTP error', new Error(message), 'warning', {
+        errorId: ErrorIds.JELLYFIN_BACKFILL_FAILED,
+        component: 'jellyfin',
+        action: 'backfill',
+        status: response.status,
+      });
       return err(message);
     }
 

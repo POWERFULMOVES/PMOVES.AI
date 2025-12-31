@@ -6,7 +6,7 @@
  * @module api/hirag
  */
 
-import { logError, Result, ok, err, getErrorMessage } from '../errorUtils';
+import { logError, logForDebugging, Result, ok, err, getErrorMessage } from '../errorUtils';
 import { ErrorIds } from '../constants/errorIds';
 
 /**
@@ -232,11 +232,10 @@ export async function exportToNotebook(
     // For now, return success with count
     const exported = results.length;
 
-    logError(
+    logForDebugging(
       `Exported ${exported} results to notebook ${notebookId}`,
-      new Error('Export successful'),
-      'info',
-      { component: 'hirag', action: 'export' }
+      undefined,
+      { component: 'hirag', action: 'export', exported, notebookId }
     );
 
     return ok({ exported });

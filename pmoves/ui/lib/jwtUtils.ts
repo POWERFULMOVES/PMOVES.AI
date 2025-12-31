@@ -23,8 +23,8 @@ export function ownerFromJwt(component?: string): OwnerResult {
 
     const parts = token.split('.');
     if (parts.length !== 3) {
-      logError('Invalid JWT format', new Error('JWT must have 3 parts'), 'warning', {
-        errorId: ErrorIds.JWT_MISSING_HEADER,
+      logError('Invalid JWT format (must have 3 parts)', new Error('JWT must have 3 parts'), 'warning', {
+        errorId: ErrorIds.JWT_INVALID_FORMAT,
         component: component || 'jwtUtils',
       });
       return { ownerId: null, error: 'Invalid JWT format' };
