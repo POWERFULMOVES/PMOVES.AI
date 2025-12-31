@@ -77,7 +77,7 @@ async def run() -> None:
                     if state["uploaded"].get(h):
                         continue
 
-                    key = datetime.datetime.utcnow().strftime("comfyui/%Y/%m/%d/") + fn
+                    key = datetime.datetime.now(timezone.utc).strftime("comfyui/%Y/%m/%d/") + fn
                     client.fput_object(BUCKET, key, path, content_type="image/png")
                     state["uploaded"][h] = {"key": key, "ts": time.time(), "size": size}
                     save_state(state)

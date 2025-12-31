@@ -159,7 +159,7 @@ class PersonaGateService:
 
         result = {
             "persona_id": persona_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "passed": all_passed,
             "evaluations": evaluations,
             "summary": {

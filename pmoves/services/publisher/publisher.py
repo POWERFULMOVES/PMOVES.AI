@@ -54,7 +54,7 @@ except Exception:  # pragma: no cover - fallback used in tests without dependenc
             "id": str(uuid.uuid4()),
             "topic": topic,
             "version": "v1",
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.datetime.now(timezone.utc).isoformat() + "Z",
             "source": source,
             "payload": payload,
         }
