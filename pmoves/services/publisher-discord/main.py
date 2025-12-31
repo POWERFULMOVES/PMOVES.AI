@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import asyncio
 import base64
 import contextlib
@@ -30,7 +32,37 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev
 from services.common.telemetry import PublisherMetrics, PublishTelemetry, compute_publish_telemetry
 
 
-app = FastAPI(title="Publisher-Discord", version="0.1.0")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan for Publisher Discord."""
+    global _nats_loop_task, _nc
+    # Startup - Discord webhooks are configured at runtime
+    # Non-blocking, quiet NATS init
+    if YT_NATS_ENABLE and NATS_URL:
+        logger.info(
+            "nats_loop_start",
+            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+        )
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+    yield
+
+    # Shutdown
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        with contextlib.suppress(Exception):
+            await _nats_loop_task
+        _nats_loop_task = None
+    if _nc:
+        with contextlib.suppress(Exception):
+            await _nc.close()
+        _nc = None
+
+
+app = FastAPI(title="Publisher-Discord", version="0.1.0", lifespan=lifespan)
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 # Prefer the n8n-style username if provided, fallback to legacy var
@@ -1100,9 +1132,6 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
     logger.info("claude_session_ended", extra={"session_id": session_id, "end_reason": end_reason})
 
 
-@app.on_event("startup")
-async def startup():
-    """Initialize NATS connection on application startup."""
     global _nats_loop_task
     # Validate critical environment configuration
     if not DISCORD_WEBHOOK_URL:
@@ -1130,20 +1159,6 @@ async def startup():
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Clean up NATS connection on application shutdown."""
-    global _nats_loop_task, _nc
-    if _nats_loop_task:
-        _nats_loop_task.cancel()
-        with contextlib.suppress(Exception):
-            await _nats_loop_task
-        _nats_loop_task = None
-    if _nc:
-        with contextlib.suppress(Exception):
-            await _nc.close()
-        _nc = None
 
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):

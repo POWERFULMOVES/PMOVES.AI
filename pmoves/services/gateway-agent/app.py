@@ -18,6 +18,8 @@ Architecture:
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 import asyncio
 import json
 import os
@@ -83,11 +85,36 @@ async def get_api_key(api_key_header: str = Security(api_key_header)) -> Optiona
     return None
 
 # FastAPI app
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan for Gateway Agent."""
+    # Startup
+    logger.info("Gateway Agent starting up...")
+    logger.info(f"Agent Zero URL: {AGENT_ZERO_URL}")
+    logger.info(f"Cipher URL: {CIPHER_URL}")
+    logger.info(f"TensorZero URL: {TENSORZERO_URL}")
+
+    # Initial tool discovery
+    await tool_registry.discover_tools(force_refresh=True)
+
+    # Log available secrets count
+    secrets = SecretManager.get_all_credentials()
+    logger.info(f"Loaded {len(secrets)} service credentials from environment")
+
+    yield
+
+    # Shutdown
+    logger.info("Gateway Agent shutting down...")
+
 app = FastAPI(
     title="PMOVES Gateway Agent",
     description="Orchestrates 100+ MCP tools with Cipher memory integration",
     version="1.0.0"
-)
+, lifespan=lifespan)
 
 
 # ============================================================================
@@ -559,26 +586,9 @@ async def list_secrets():
 # Main Entry Point
 # ============================================================================
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize tool registry on startup"""
-    logger.info("Gateway Agent starting up...")
-    logger.info(f"Agent Zero URL: {AGENT_ZERO_URL}")
-    logger.info(f"Cipher URL: {CIPHER_URL}")
-    logger.info(f"TensorZero URL: {TENSORZERO_URL}")
-
-    # Initial tool discovery
-    await tool_registry.discover_tools(force_refresh=True)
-
-    # Log available secrets count
-    secrets = SecretManager.get_all_credentials()
-    logger.info(f"Loaded {len(secrets)} service credentials from environment")
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Gateway Agent shutting down...")
+
 
 
 if __name__ == "__main__":
