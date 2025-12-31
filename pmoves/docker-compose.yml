@@ -1030,6 +1030,8 @@ services:
     ports: [ "4222:4222", "9223:4223" ]
     profiles: [ "agents", "orchestration", "workers" ]
     networks: [ bus_tier, monitoring_tier ]
+    environment:
+      - NATS_DEFAULT_PASS=${NATS_DEFAULT_PASS:-pmoves}
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz" ]
       interval: 30s
@@ -1974,6 +1976,33 @@ services:
     # Next.js needs writable cache for build
     volumes:
       - e2b-surf-cache:/app/.next:rw
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
+  # A2UI NATS Bridge - Bridges Google A2UI (Agent-to-User Interface) events to PMOVES geometry bus
+  # A2UI allows agents to generate declarative UIs safely (no code execution)
+  a2ui-nats-bridge:
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+      - PORT=9224
+    ports: [ "9224:9224" ]
+    depends_on: [ nats ]
+    profiles: [ "agents", "orchestration" ]
+    networks: [ api_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     cap_drop: [ ALL ]
     security_opt: [ no-new-privileges:true ]
 
