@@ -61,11 +61,15 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config['SECRET_KEY'] = config.secret_key
 
-    # Enable CORS with configurable allowed origins
-    allowed_origins = os.getenv(
-        'ALLOWED_ORIGINS',
-        'http://localhost:3000,http://localhost:8080,http://localhost:4000'
-    ).split(',')
+    # Enable CORS with configurable allowed origins (strip whitespace)
+    allowed_origins = [
+        origin.strip()
+        for origin in os.getenv(
+            'ALLOWED_ORIGINS',
+            'http://localhost:3000,http://localhost:8080,http://localhost:4000'
+        ).split(',')
+        if origin.strip()
+    ]
     CORS(app, resources={r"/*": {"origins": allowed_origins}})
 
     # Register blueprints
