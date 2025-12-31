@@ -11,6 +11,7 @@
  */
 
 import { logError, Result, ok, err, getErrorMessage } from '../errorUtils';
+import { ErrorIds } from '../constants/errorIds';
 
 /**
  * Media types in Jellyfin library.
@@ -155,7 +156,12 @@ export async function jellyfinSearch(
         `Jellyfin search failed: ${message}`,
         new Error(`HTTP ${response.status}`),
         'warning',
-        { component: 'jellyfin', action: 'search', searchTerm }
+        {
+          errorId: ErrorIds.JELLYFIN_SEARCH_FAILED,
+          component: 'jellyfin',
+          action: 'search',
+          searchTerm
+        }
       );
       return err(message);
     }
@@ -166,6 +172,7 @@ export async function jellyfinSearch(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Jellyfin search error', error, 'error', {
+      errorId: ErrorIds.JELLYFIN_SEARCH_FAILED,
       component: 'jellyfin',
       action: 'search',
     });
@@ -197,6 +204,7 @@ export async function jellyfinSyncStatus(): Promise<
     return ok(data);
   } catch (error) {
     logError('Jellyfin sync status error', error, 'warning', {
+      errorId: ErrorIds.JELLYFIN_SYNC_STATUS_FAILED,
       component: 'jellyfin',
       action: 'sync-status',
     });
@@ -235,7 +243,13 @@ export async function linkJellyfinItem(
         `Jellyfin link failed: ${message}`,
         new Error(`HTTP ${response.status}`),
         'warning',
-        { component: 'jellyfin', action: 'link', videoId, jellyfinItemId }
+        {
+          errorId: ErrorIds.JELLYFIN_LINK_FAILED,
+          component: 'jellyfin',
+          action: 'link',
+          videoId,
+          jellyfinItemId
+        }
       );
       return err(message);
     }
@@ -245,6 +259,7 @@ export async function linkJellyfinItem(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Jellyfin link error', error, 'error', {
+      errorId: ErrorIds.JELLYFIN_LINK_FAILED,
       component: 'jellyfin',
       action: 'link',
     });
@@ -288,6 +303,7 @@ export async function getJellyfinPlaybackUrl(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Jellyfin playback URL error', error, 'error', {
+      errorId: ErrorIds.JELLYFIN_PLAYBACK_URL_FAILED,
       component: 'jellyfin',
       action: 'playback-url',
     });
@@ -322,6 +338,7 @@ export async function triggerJellyfinSync(): Promise<
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Jellyfin sync trigger error', error, 'error', {
+      errorId: ErrorIds.JELLYFIN_SYNC_TRIGGER_FAILED,
       component: 'jellyfin',
       action: 'sync',
     });
@@ -362,6 +379,7 @@ export async function triggerBackfill(options: {
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Jellyfin backfill error', error, 'error', {
+      errorId: ErrorIds.JELLYFIN_BACKFILL_FAILED,
       component: 'jellyfin',
       action: 'backfill',
     });

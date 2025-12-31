@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 // Notebook Sync service endpoint
 const NOTEBOOK_SYNC_URL = (
@@ -21,6 +22,7 @@ export async function POST(_req: NextRequest) {
     if (!syncRes.ok) {
       const errorText = await syncRes.text().catch(() => 'Unknown error');
       logError(`Notebook sync returned ${syncRes.status}`, new Error(errorText), 'warning', {
+        errorId: ErrorIds.NOTEBOOK_SYNC_FAILED,
         component: 'notebook-sync-api',
         endpoint: syncUrl,
       });
@@ -34,6 +36,7 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ ok: true, ...data });
   } catch (err) {
     logError('Failed to trigger notebook sync', err instanceof Error ? err : new Error(String(err)), 'error', {
+      errorId: ErrorIds.NOTEBOOK_SYNC_TRIGGER_FAILED,
       component: 'notebook-sync-api',
       endpoint: syncUrl,
     });

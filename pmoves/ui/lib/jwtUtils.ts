@@ -1,5 +1,6 @@
 import { getBootJwt } from './supabaseClient';
 import { logError } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
 
 export interface OwnerResult {
   ownerId: string | null;
@@ -23,6 +24,7 @@ export function ownerFromJwt(component?: string): OwnerResult {
     const parts = token.split('.');
     if (parts.length !== 3) {
       logError('Invalid JWT format', new Error('JWT must have 3 parts'), 'warning', {
+        errorId: ErrorIds.JWT_MISSING_HEADER,
         component: component || 'jwtUtils',
       });
       return { ownerId: null, error: 'Invalid JWT format' };
@@ -43,7 +45,10 @@ export function ownerFromJwt(component?: string): OwnerResult {
       ownerId: typeof json.sub === 'string' ? json.sub : null,
     };
   } catch (e) {
-    logError('JWT parsing failed', e, 'error', { component: component || 'jwtUtils' });
+    logError('JWT parsing failed', e, 'error', {
+      errorId: ErrorIds.JWT_PARSE_FAILED,
+      component: component || 'jwtUtils'
+    });
     return { ownerId: null, error: 'Failed to parse JWT' };
   }
 }

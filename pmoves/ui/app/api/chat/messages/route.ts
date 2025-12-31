@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
 import { ownerFromJwt } from '@/lib/jwtUtils';
 import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 export async function GET(req: NextRequest) {
   const supabase = getServiceSupabaseClient();
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
     .limit(50);
   if (error) {
     logError('Failed to fetch chat messages', error, 'error', {
+      errorId: ErrorIds.CHAT_FETCH_FAILED,
       component: 'chat/messages',
       ownerId,
     });

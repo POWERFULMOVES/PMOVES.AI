@@ -7,6 +7,7 @@
  */
 
 import { logError, Result, ok, err, getErrorMessage } from '../errorUtils';
+import { ErrorIds } from '../constants/errorIds';
 
 /**
  * Content source types for search results.
@@ -162,7 +163,12 @@ export async function hiragQuery(
         `Hi-RAG query failed: ${message}`,
         new Error(`HTTP ${response.status}`),
         'warning',
-        { component: 'hirag', action: 'query', query: query.substring(0, 50) }
+        {
+          errorId: ErrorIds.HIRAG_QUERY_FAILED,
+          component: 'hirag',
+          action: 'query',
+          query: query.substring(0, 50)
+        }
       );
       return err(message);
     }
@@ -173,6 +179,7 @@ export async function hiragQuery(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Hi-RAG query error', error, 'error', {
+      errorId: ErrorIds.HIRAG_QUERY_FAILED,
       component: 'hirag',
       action: 'query',
     });
@@ -201,6 +208,7 @@ export async function hiragHealth(): Promise<
     return ok({ healthy: data.healthy ?? true, version: data.version });
   } catch (error) {
     logError('Hi-RAG health check error', error, 'warning', {
+      errorId: ErrorIds.HIRAG_HEALTH_CHECK_FAILED,
       component: 'hirag',
       action: 'health',
     });
@@ -236,6 +244,7 @@ export async function exportToNotebook(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Notebook export error', error, 'error', {
+      errorId: ErrorIds.HIRAG_EXPORT_FAILED,
       component: 'hirag',
       action: 'export',
       notebookId,

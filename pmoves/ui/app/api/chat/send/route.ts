@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
 import { ownerFromJwt } from '@/lib/jwtUtils';
 import { logError, logForDebugging } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 export async function POST(req: NextRequest) {
   const supabase = getServiceSupabaseClient();
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
     .single();
   if (error) {
     logError('Failed to send chat message', error, 'error', {
+      errorId: ErrorIds.CHAT_SEND_FAILED,
       component: 'chat/send',
       owner,
     });
