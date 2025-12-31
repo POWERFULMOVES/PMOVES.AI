@@ -723,77 +723,12 @@ def list_scenarios():
     }), 200
 
 
-@simulation_bp.route('/api/v1/contracts', methods=['GET'])
-def list_contracts():
-    """List available token economy contract types."""
-    from models.simulation import ContractType
-
-    return jsonify({
-        'contracts': [
-            {
-                'id': c.value,
-                'name': c.value.replace('_', ' ').title(),
-                'description': _get_contract_description(c),
-            }
-            for c in ContractType
-        ]
-    }), 200
-
-
 def _get_scenario_description(scenario: SimulationScenario) -> str:
-    """Get human-readable description for a scenario.
-
-    Returns a detailed description of the economic conditions and market
-    dynamics represented by a simulation scenario. Used by the scenarios
-    list endpoint to provide context for each available scenario.
-
-    Args:
-        scenario: The scenario enum value to get a description for.
-            Must be a member of the SimulationScenario enum.
-
-    Returns:
-        str: Human-readable description of the scenario's economic
-            conditions and assumptions. Returns "Unknown scenario" if
-            the scenario is not recognized.
-
-    Examples:
-        >>> _get_scenario_description(SimulationScenario.BASELINE)
-        'Standard economic conditions with historical parameters'
-
-        >>> _get_scenario_description(SimulationScenario.STRESS_TEST)
-        'Extreme stress test with severe shocks'
-
-        >>> # Used in scenario list endpoint
-        >>> scenario = SimulationScenario.OPTIMISTIC
-        >>> {
-        ...     'id': scenario.value,
-        ...     'description': _get_scenario_description(scenario)
-        ... }
-        {'id': 'optimistic', 'description': 'Growth-oriented scenario with favorable conditions'}
-
-    Note:
-        This is a private helper function used internally by the
-        `/api/v1/scenarios` endpoint.
-    """
+    """Get human-readable description for a scenario."""
     descriptions = {
-        SimulationScenario.OPTIMISTIC: "High growth, low inequality scenario",
-        SimulationScenario.BASELINE: "Standard economic conditions",
-        SimulationScenario.PESSIMISTIC: "Low growth, high inequality scenario",
-        SimulationScenario.STRESS_TEST: "Extreme conditions for resilience testing",
-        SimulationScenario.CUSTOM: "User-defined parameters",
+        SimulationScenario.BASELINE: 'Standard economic conditions with historical parameters',
+        SimulationScenario.OPTIMISTIC: 'Growth-oriented scenario with favorable conditions',
+        SimulationScenario.PESSIMISTIC: 'Contraction scenario with stressed conditions',
+        SimulationScenario.STRESS_TEST: 'Extreme stress test with severe shocks',
     }
-    return descriptions.get(scenario, "Custom scenario")
-
-
-def _get_contract_description(contract) -> str:
-    """Get description for a contract type."""
-    from models.simulation import ContractType
-
-    descriptions = {
-        ContractType.GRO_TOKEN: "Daily token distribution to participants",
-        ContractType.FOOD_USD: "Stablecoin pegged to food prices",
-        ContractType.GROUP_PURCHASE: "Bulk buying with cooperative discounts",
-        ContractType.GRO_VAULT: "Staking with yield rewards",
-        ContractType.COOP_GOVERNOR: "Governance token with voting rewards",
-    }
-    return descriptions.get(contract, "Custom contract")
+    return descriptions.get(scenario, 'Unknown scenario')
