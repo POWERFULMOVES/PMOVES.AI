@@ -70,6 +70,7 @@ try:
     from services.common.events import envelope
 except Exception:  # pragma: no cover - optional dependency for unit tests
     import datetime
+    from datetime import timezone
     import uuid
 
     def envelope(
