@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 export default function RootError({
   error,
@@ -12,6 +13,7 @@ export default function RootError({
 }) {
   useEffect(() => {
     logError('Root error boundary caught error', error, 'critical', {
+      errorId: ErrorIds.ROOT_ERROR_BOUNDARY,
       component: 'RootErrorBoundary',
       digest: error.digest,
     });

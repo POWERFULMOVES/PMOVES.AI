@@ -10,8 +10,10 @@ Flask API endpoints for:
 
 import asyncio
 import logging
-from datetime import datetime
+import threading
+from datetime import datetime, timezone
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import Blueprint, request, jsonify
 from prometheus_client import Counter, Histogram, generate_latest
@@ -40,6 +42,74 @@ simulation_duration = Histogram(
     ['scenario']
 )
 
+# Background task storage
+_simulation_results: dict[str, dict[str, Any]] = {}
+_simulation_statuses: dict[str, str] = {}
+_executor: ThreadPoolExecutor | None = None
+
+
+def _get_executor() -> ThreadPoolExecutor:
+    """Get or create the background task executor."""
+    global _executor
+    if _executor is None:
+        _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sim_worker")
+    return _executor
+
+
+def _run_simulation_background(
+    simulation_id: str,
+    parameters: SimulationParameters,
+    scenario: SimulationScenario,
+    webhook_url: str | None = None,
+) -> None:
+    """Run simulation in background thread and store result.
+
+    Args:
+        simulation_id: Unique simulation identifier.
+        parameters: Simulation parameters.
+        scenario: Economic scenario.
+        webhook_url: Optional URL to POST result when complete.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        start_time = datetime.now(timezone.utc)
+        _simulation_statuses[simulation_id] = "running"
+
+        engine = loop.run_until_complete(get_simulation_engine())
+        result = loop.run_until_complete(engine.run_simulation(parameters, scenario))
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+
+        # Store result
+        _simulation_results[simulation_id] = result.model_dump(mode='json')
+        _simulation_statuses[simulation_id] = "complete"
+
+        simulation_requests.labels(
+            scenario=scenario.value,
+            status='success'
+        ).inc()
+        simulation_duration.labels(scenario=scenario.value).observe(duration)
+
+        logger.info(f"Background simulation {simulation_id} completed in {duration:.2f}s")
+
+        # TODO: Send webhook if provided
+        if webhook_url:
+            logger.info(f"Would send webhook to {webhook_url} (not implemented)")
+
+    except Exception as e:
+        _simulation_statuses[simulation_id] = "failed"
+        _simulation_results[simulation_id] = {"error": str(e)}
+        simulation_requests.labels(
+            scenario=scenario.value,
+            status='error'
+        ).inc()
+        logger.error(f"Background simulation {simulation_id} failed: {e}")
+
+    finally:
+        loop.close()
+
 
 @simulation_bp.route('/health', methods=['GET'])
 def health_check():
@@ -47,7 +117,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'tokenism-simulator',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
     }), 200
 
 
@@ -104,12 +174,12 @@ def run_simulation():
         asyncio.set_event_loop(loop)
 
         try:
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
 
             engine = loop.run_until_complete(get_simulation_engine())
             result = loop.run_until_complete(engine.run_simulation(parameters, scenario))
 
-            duration = (datetime.utcnow() - start_time).total_seconds()
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
             # Update metrics
             simulation_requests.labels(
@@ -159,9 +229,18 @@ def run_simulation_async():
         params_data = data.get('parameters', {})
         parameters = SimulationParameters(**params_data)
 
-        # In production, this would queue the job
-        # For now, return a placeholder response
-        simulation_id = f"sim_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        # Generate unique simulation ID
+        simulation_id = f"sim_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+
+        # Submit background task
+        executor = _get_executor()
+        executor.submit(
+            _run_simulation_background,
+            simulation_id,
+            parameters,
+            scenario,
+            webhook_url
+        )
 
         simulation_requests.labels(
             scenario=scenario.value,
@@ -172,11 +251,51 @@ def run_simulation_async():
             'simulation_id': simulation_id,
             'status': 'queued',
             'message': 'Simulation queued for processing',
+            'check_url': f'/api/v1/simulate/{simulation_id}',
         }), 202
 
     except Exception as e:
         logger.error(f"Error queuing simulation: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@simulation_bp.route('/api/v1/simulate/<simulation_id>', methods=['GET'])
+def get_simulation_status(simulation_id: str):
+    """
+    Get the status and result of an async simulation.
+
+    Args:
+        simulation_id: The simulation ID returned from the async endpoint.
+
+    Returns:
+        Status information and result if complete.
+    """
+    status = _simulation_statuses.get(simulation_id, 'unknown')
+
+    if status == 'complete':
+        result = _simulation_results.get(simulation_id, {})
+        return jsonify({
+            'simulation_id': simulation_id,
+            'status': status,
+            'result': result,
+        }), 200
+    elif status == 'failed':
+        result = _simulation_results.get(simulation_id, {})
+        return jsonify({
+            'simulation_id': simulation_id,
+            'status': status,
+            'error': result.get('error', 'Unknown error'),
+        }), 500
+    elif status == 'running':
+        return jsonify({
+            'simulation_id': simulation_id,
+            'status': status,
+            'message': 'Simulation still in progress',
+        }), 202
+    else:
+        return jsonify({
+            'error': f'Simulation {simulation_id} not found',
+        }), 404
 
 
 @simulation_bp.route('/api/v1/scenarios', methods=['GET'])

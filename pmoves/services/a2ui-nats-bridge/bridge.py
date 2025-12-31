@@ -19,8 +19,9 @@ import asyncio
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -47,7 +48,7 @@ logger = logging.getLogger("a2ui-nats-bridge")
 # Prometheus Metrics
 a2ui_events_published = Counter("a2ui_events_published_total", "A2UI events published to NATS", ["event_type"])
 a2ui_events_received = Counter("a2ui_events_received_total", "Events received from A2UI agents")
-geometry_events_subscribed = Counter("a2ui_geometry_events_total", "Geometry events from NATS")
+a2ui_events_forwarded = Counter("a2ui_events_forwarded_total", "A2UI events forwarded to WebSocket clients")
 active_websockets = Gauge("a2ui_active_websockets", "Active WebSocket connections")
 nats_connected = Gauge("a2ui_nats_connected", "NATS connection status")
 
@@ -74,7 +75,7 @@ class A2UIEvent:
 
     def __post_init__(self):
         if not self.timestamp:
-            self.timestamp = datetime.utcnow().isoformat() + "Z"
+            self.timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         if self.payload is None:
             self.payload = {}
 
@@ -118,13 +119,6 @@ class A2UIEvent:
         )
 
 
-# FastAPI App
-app = FastAPI(
-    title="A2UI NATS Bridge",
-    description="Bridges A2UI (Agent-to-User Interface) events to PMOVES NATS geometry bus",
-    version="1.0.0"
-)
-
 # Global state
 nc: Optional[nats.aio.client.Client] = None
 js: Optional["nats.js.client.JetStreamContext"] = None
@@ -132,8 +126,23 @@ active_ws_connections: set[WebSocket] = set()
 connected_a2ui_surfaces: dict[str, str] = {}  # surface_id -> client_id
 
 
-async def connect_nats():
-    """Connect to NATS with JetStream enabled."""
+async def connect_nats() -> None:
+    """Connect to NATS with JetStream enabled.
+
+    Establishes connection, creates the A2UI stream, and subscribes to
+    geometry events for bidirectional communication.
+
+    Retries up to 5 times with linear backoff (5s, 10s, 15s, 20s, 25s).
+
+    Side effects:
+        - Sets global `nc` and `js` variables
+        - Updates `nats_connected` Prometheus gauge
+        - Creates A2UI JetStream stream if not exists
+        - Subscribes to geometry.* wildcard subject
+
+    Note:
+        Logs error but continues if geometry subscription fails (non-critical).
+    """
     global nc, js
     retry_count = 0
     max_retries = 5
@@ -188,11 +197,53 @@ async def connect_nats():
     nats_connected.set(0)
 
 
-async def publish_a2ui_event(event: A2UIEvent):
-    """Publish A2UI event to NATS."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan.
+
+    Args:
+        app: FastAPI application instance.
+
+    Yields:
+        None: Control yields after startup completes, before shutdown begins.
+
+    Startup actions:
+        - Connect to NATS with JetStream
+        - Create A2UI stream
+        - Subscribe to geometry events
+
+    Shutdown actions:
+        - Close NATS connection
+        - Reset connection gauge
+    """
+    # Startup
+    await connect_nats()
+    yield
+    # Shutdown
+    global nc
+    if nc:
+        await nc.close()
+        nats_connected.set(0)
+
+
+# FastAPI App
+app = FastAPI(
+    title="A2UI NATS Bridge",
+    description="Bridges A2UI (Agent-to-User Interface) events to PMOVES NATS geometry bus",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+
+async def publish_a2ui_event(event: A2UIEvent) -> None:
+    """Publish A2UI event to NATS.
+
+    Raises:
+        ConnectionError: If NATS is not connected
+        RuntimeError: If publish fails
+    """
     if nc is None:
-        logger.warning("NATS not connected, cannot publish event")
-        return False
+        raise ConnectionError("NATS not connected, cannot publish event")
 
     try:
         # Publish to render subject
@@ -201,15 +252,19 @@ async def publish_a2ui_event(event: A2UIEvent):
 
         a2ui_events_published.labels(event_type=event.event_type).inc()
         logger.info(f"Published A2UI event: {event.event_type} (surface: {event.surface_id})")
-        return True
 
     except Exception as e:
         logger.error(f"Failed to publish A2UI event: {e}")
-        return False
+        raise RuntimeError(f"NATS publish failed: {e}") from e
 
 
-async def handle_user_action(action: dict[str, Any]):
-    """Handle user action from UI, forward to A2UI agent."""
+async def handle_user_action(action: dict[str, Any]) -> None:
+    """Handle user action from UI, forward to A2UI agent.
+
+    Raises:
+        ConnectionError: If NATS is not connected
+        RuntimeError: If publish fails
+    """
     action_name = action.get("name", "unknown")
     surface_id = action.get("surfaceId", "")
     context = action.get("context", {})
@@ -223,21 +278,6 @@ async def handle_user_action(action: dict[str, Any]):
         payload=action
     )
     await publish_a2ui_event(event)
-
-
-@app.on_event("startup")
-async def startup():
-    """Initialize NATS connection on startup."""
-    await connect_nats()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Close connections on shutdown."""
-    global nc
-    if nc:
-        await nc.close()
-        nats_connected.set(0)
 
 
 @app.get("/healthz")
@@ -255,7 +295,7 @@ async def health_check():
         "nats_connected": nats_status,
         "active_websockets": len(active_ws_connections),
         "active_surfaces": list(connected_a2ui_surfaces.keys()),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -277,10 +317,10 @@ async def a2ui_endpoint(data: dict[str, Any]):
     except (ValueError, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    success = await publish_a2ui_event(event)
-
-    if not success:
-        raise HTTPException(status_code=503, detail="NATS not connected")
+    try:
+        await publish_a2ui_event(event)
+    except (ConnectionError, RuntimeError) as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
     return {
         "status": "published",
@@ -291,8 +331,15 @@ async def a2ui_endpoint(data: dict[str, Any]):
 
 @app.post("/api/v1/action")
 async def user_action_endpoint(action: dict[str, Any]):
-    """Handle user action from UI."""
-    await handle_user_action(action)
+    """Handle user action from UI.
+
+    Returns 200 even if NATS unavailable (logs warning for debugging).
+    """
+    try:
+        await handle_user_action(action)
+    except (ConnectionError, RuntimeError) as e:
+        logger.warning(f"User action failed to publish: {e}")
+        # Return 200 to avoid disrupting UI, but log the error
     return {"status": "handled"}
 
 
@@ -329,9 +376,10 @@ async def simulate_a2ui_event():
             ]
         }
     )
-    success = await publish_a2ui_event(mock_event)
-    if not success:
-        raise HTTPException(status_code=503, detail="NATS not connected")
+    try:
+        await publish_a2ui_event(mock_event)
+    except (ConnectionError, RuntimeError) as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return {
         "status": "simulated",
         "surface_id": mock_event.surface_id,
@@ -386,6 +434,12 @@ async def a2ui_agent_websocket(websocket: WebSocket):
                 except json.JSONDecodeError as e:
                     logger.warning(f"Invalid JSON from agent: {e}")
                     await websocket.send_json({"error": "Invalid JSON format"})
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid A2UI event: {e}")
+                    await websocket.send_json({"error": f"Invalid event: {e}"})
+                except (ConnectionError, RuntimeError) as e:
+                    logger.error(f"NATS error: {e}")
+                    await websocket.send_json({"error": "NATS unavailable"})
                 except Exception as e:
                     logger.warning(f"Error processing A2UI event: {e}")
 
@@ -420,7 +474,7 @@ async def client_websocket(websocket: WebSocket):
             # Send as JSONL (one JSON per line) for A2UI format compatibility
             line = json.dumps(data)
             await websocket.send_text(line + "\n")
-            geometry_events_subscribed.inc()
+            a2ui_events_forwarded.inc()
         except Exception as e:
             logger.warning(f"Failed to forward A2UI message: {e}")
 
@@ -445,8 +499,15 @@ async def client_websocket(websocket: WebSocket):
             await sub.unsubscribe()
 
 
-def main():
-    """Run the A2UI NATS bridge server."""
+def main() -> None:
+    """Run the A2UI NATS bridge server.
+
+    Starts the uvicorn server on all interfaces (0.0.0.0) with the configured PORT.
+
+    Environment variables:
+        PORT: Server port (default: 9224)
+        NATS_URL: NATS server URL (default: nats://nats:4222)
+    """
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
 

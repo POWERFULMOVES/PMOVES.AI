@@ -11,6 +11,7 @@
  */
 
 import { logError, Result, ok, err, getErrorMessage } from '../errorUtils';
+import { ErrorIds } from '../constants/errorIds';
 
 /**
  * Research task status values.
@@ -163,7 +164,12 @@ export async function initiateResearch(
         `Research initiation failed: ${message}`,
         new Error(`HTTP ${response.status}`),
         'warning',
-        { component: 'research', action: 'initiate', query: query.substring(0, 50) }
+        {
+          errorId: ErrorIds.RESEARCH_INITIATE_FAILED,
+          component: 'research',
+          action: 'initiate',
+          query: query.substring(0, 50)
+        }
       );
       return err(message);
     }
@@ -174,6 +180,7 @@ export async function initiateResearch(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Research initiation error', error, 'error', {
+      errorId: ErrorIds.RESEARCH_INITIATE_FAILED,
       component: 'research',
       action: 'initiate',
     });
@@ -211,6 +218,7 @@ export async function getResearchTask(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Research task fetch error', error, 'error', {
+      errorId: ErrorIds.RESEARCH_TASK_FETCH_FAILED,
       component: 'research',
       action: 'get-task',
       taskId,
@@ -262,6 +270,7 @@ export async function listResearchTasks(options: {
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Research task list error', error, 'error', {
+      errorId: ErrorIds.RESEARCH_TASK_LIST_FAILED,
       component: 'research',
       action: 'list-tasks',
     });
@@ -302,6 +311,7 @@ export async function getResearchResults(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Research results fetch error', error, 'error', {
+      errorId: ErrorIds.RESEARCH_RESULTS_FETCH_FAILED,
       component: 'research',
       action: 'get-results',
       taskId,
@@ -343,6 +353,7 @@ export async function cancelResearch(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Research cancel error', error, 'error', {
+      errorId: ErrorIds.RESEARCH_CANCEL_FAILED,
       component: 'research',
       action: 'cancel',
       taskId,
@@ -372,6 +383,7 @@ export async function researchHealth(): Promise<
     return ok({ healthy: data.healthy ?? true, version: data.version });
   } catch (error) {
     logError('DeepResearch health check error', error, 'warning', {
+      errorId: ErrorIds.RESEARCH_HEALTH_CHECK_FAILED,
       component: 'research',
       action: 'health',
     });
@@ -411,6 +423,7 @@ export async function publishToNotebook(
     const message =
       error instanceof Error ? error.message : String(error);
     logError('Notebook publish error', error, 'error', {
+      errorId: ErrorIds.RESEARCH_PUBLISH_FAILED,
       component: 'research',
       action: 'publish',
       taskId,

@@ -149,7 +149,7 @@ class ConsciousnessHarvester:
                     links=data.get("links", []),
                     title=data.get("title", ""),
                     error=data.get("error"),
-                    crawled_at=data.get("crawled_at", datetime.utcnow().isoformat() + "Z"),
+                    crawled_at=data.get("crawled_at", datetime.now(timezone.utc).isoformat() + "Z"),
                 )
                 self.pending_results[request_id].set_result(result)
                 logger.debug(f"Received crawl result for {request_id}")
@@ -227,7 +227,7 @@ class ConsciousnessHarvester:
                 html=data.get("html", ""),
                 links=data.get("links", []),
                 title=data.get("title", ""),
-                crawled_at=datetime.utcnow().isoformat() + "Z",
+                crawled_at=datetime.now(timezone.utc).isoformat() + "Z",
             )
 
         except httpx.HTTPError as e:
@@ -301,7 +301,7 @@ class ConsciousnessHarvester:
                         description=description[:1000],  # Truncate long descriptions
                         proponents=proponents,
                         source_url=result.url,
-                        extracted_at=datetime.utcnow().isoformat() + "Z",
+                        extracted_at=datetime.now(timezone.utc).isoformat() + "Z",
                     )
                 )
 
@@ -441,7 +441,7 @@ class ConsciousnessHarvester:
 
         # Save summary
         summary_path = output_dir / "harvest-summary.json"
-        results_summary["harvested_at"] = datetime.utcnow().isoformat() + "Z"
+        results_summary["harvested_at"] = datetime.now(timezone.utc).isoformat() + "Z"
         summary_path.write_text(
             json.dumps(results_summary, indent=2),
             encoding="utf-8",

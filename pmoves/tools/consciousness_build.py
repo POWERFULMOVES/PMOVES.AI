@@ -248,7 +248,7 @@ def write_jsonl(chunks: Iterable[Chunk], dest: Path) -> None:
                         "category": chunk.category,
                         "content": chunk.content,
                         "namespace": "pmoves.consciousness",
-                        "created_at": datetime.utcnow().isoformat() + "Z",
+                        "created_at": datetime.now(timezone.utc).isoformat() + "Z",
                     },
                     ensure_ascii=False,
                 )

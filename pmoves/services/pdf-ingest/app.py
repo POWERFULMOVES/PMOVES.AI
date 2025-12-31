@@ -26,7 +26,7 @@ except Exception:  # pragma: no cover - fallback for local runs without shared m
         env = {
             "id": str(uuid.uuid4()),
             "topic": topic,
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.datetime.now(timezone.utc).isoformat() + "Z",
             "version": "v1",
             "source": source,
             "payload": payload,
