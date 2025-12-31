@@ -1,7 +1,5 @@
-# =============================================================================
 # PMOVES Tier-Based Environment File Anchors
 # Each tier receives ONLY the secrets it needs (principle of least privilege)
-# =============================================================================
 x-env-tier-data: &env-tier-data
   env_file:
     - path: env.tier-data
@@ -55,7 +53,6 @@ x-env-tier-ui: &env-tier-ui
 x-env-legacy: &env-legacy
   env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
 
-# =============================================================================
 services:
   postgres:
     image: ankane/pgvector
@@ -1530,10 +1527,8 @@ services:
       retries: 3
       start_period: 30s
 
-  # =============================================================================
   # PMOVES Tokenism Simulator
   # Token economy simulation service with CHIT/Geometry Bus integration
-  # =============================================================================
   tokenism-simulator:
     build:
       context: ./services/tokenism-simulator
@@ -1902,9 +1897,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # =============================================================================
   # E2B Agentic Computer Use Services
-  # =============================================================================
   # E2B MCP Server - Model Context Protocol bridge for E2B code execution
   # Provides tools to Agent Zero for secure code execution in E2B sandboxes
   e2b-mcp-server:
