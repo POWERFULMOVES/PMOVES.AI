@@ -69,17 +69,16 @@ _nats_loop_task: Optional[asyncio.Task] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
+    global _nats_loop_task, _nc
     # Startup
-"""Start NATS connection loop on app startup."""
-    global _nats_loop_task
+    """Start NATS connection loop on app startup."""
 
     if _nats_loop_task is None or _nats_loop_task.done():
         logger.info("Starting NATS resilience loop")
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
     yield
     # Shutdown
-"""Clean shutdown of NATS connection."""
-    global _nats_loop_task, _nc
+    """Clean shutdown of NATS connection."""
 
     if _nats_loop_task:
         _nats_loop_task.cancel()

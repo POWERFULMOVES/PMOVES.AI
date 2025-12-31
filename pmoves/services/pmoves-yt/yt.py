@@ -58,9 +58,9 @@ nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages pu
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
-    # Startup
-# Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
     global _nc, _nc_connect_task
+    # Startup
+    # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
     if not YT_NATS_ENABLE or not NATS_URL:
         _nc = None
     else:
@@ -97,7 +97,6 @@ async def lifespan(app: FastAPI):
         pass
     yield
     # Shutdown
-global _nc, _nc_connect_task
     if _nc_connect_task is not None:
         _nc_connect_task.cancel()
         try:

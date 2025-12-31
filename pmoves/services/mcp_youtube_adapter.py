@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 
 try:
     from fastapi import FastAPI, HTTPException, Query
-from contextlib import asynccontextmanager
+    from contextlib import asynccontextmanager
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel, Field
 except ImportError as exc:
@@ -79,7 +79,7 @@ EMBEDDING_DIM = int(os.environ.get("YOUTUBE_EMBEDDING_DIM", str(_DEFAULT_DIM)))
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
     # Startup
-"""Initialize services on startup."""
+    """Initialize services on startup."""
     print("🚀 MCP YouTube Adapter starting up...")
     print(f"   Supabase: {SUPABASE_URL}")
     print(f"   Embedding Model: {EMBEDDING_MODEL}")
@@ -100,7 +100,7 @@ async def lifespan(app: FastAPI):
             print(f"   ⚠️  Failed to load embedding model: {exc}")
     yield
     # Shutdown
-"""Cleanup on shutdown."""
+    """Cleanup on shutdown."""
     global _supabase_client, _embedding_api_client
     if _supabase_client:
         await _supabase_client.aclose()
