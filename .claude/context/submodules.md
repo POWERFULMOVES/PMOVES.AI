@@ -1,6 +1,6 @@
 # PMOVES.AI Submodules Reference
 
-Comprehensive documentation of all 20 git submodules in the PMOVES.AI repository.
+Comprehensive documentation of all 30+ git submodules in the PMOVES.AI repository.
 
 ## Overview
 
@@ -443,6 +443,107 @@ git submodule foreach 'echo $name: $(git rev-parse HEAD)'
 | PMOVES-n8n | varies | Workflow automation | varies |
 | Pmoves-Health-wger | varies | Fitness tracking | varies |
 | pmoves/vendor/agentgym-rl | N/A | RL training framework | N/A |
+| pmoves/vendor/e2b | N/A | E2B Danger Room - sandboxed code execution | workers |
+| pmoves/vendor/e2b-desktop | 6080 | E2B VNC desktop environment | workers |
+| pmoves/vendor/e2b-infra | varies | E2B infrastructure and deployment | N/A |
+| pmoves/vendor/e2b-mcp-server | varies | E2B MCP server for agent tools | workers |
+| pmoves/vendor/e2b-spells | varies | E2B pre-built agent patterns | N/A |
+| pmoves/vendor/e2b-surf | 3080 | E2B web browsing automation | ui |
+| research/A2UI | N/A | Google Agent-to-User Interface | N/A |
+
+---
+
+## E2B Danger Room Components (Added 2025-12-30)
+
+The E2B Danger Room provides self-hosted sandboxed code execution environments for agents, enabling safe computer use and browser automation with MCP tools.
+
+### pmoves/vendor/e2b
+- **Path:** `pmoves/vendor/e2b/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+- **Purpose:** Core E2B sandbox service
+- **Features:**
+  - Isolated code execution environments
+  - Template-based sandbox creation
+  - GPU and CPU variants
+- **Integration:** Used by e2b-mcp-server for agent execution
+
+### pmoves/vendor/e2b-desktop
+- **Path:** `pmoves/vendor/e2b-desktop/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
+- **Purpose:** VNC-based desktop environment for E2B
+- **Key Features:**
+  - Browser access via noVNC
+  - Full desktop GUI in sandbox
+  - Screenshot and video capture
+- **Port:** 6080 (VNC/Web UI)
+- **Use Cases:** Visual testing, GUI automation, screenshot capture
+
+### pmoves/vendor/e2b-infra
+- **Path:** `pmoves/vendor/e2b-infra/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+- **Purpose:** E2B infrastructure and deployment tooling
+- **Components:**
+  - Docker compose configurations
+  - Infrastructure as code
+  - Deployment scripts
+
+### pmoves/vendor/e2b-mcp-server
+- **Path:** `pmoves/vendor/e2b-mcp-server/`
+- **Repository:** https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+- **Purpose:** MCP server for E2B sandbox integration
+- **Features:**
+  - Exposes E2B via MCP protocol
+  - Sandbox creation and management
+  - Code execution API
+- **Integration:** Agents can spawn and control E2B sandboxes
+
+### pmoves/vendor/e2b-spells
+- **Path:** `pmoves/vendor/e2b-spells/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOEVES-E2b-Spells.git
+- **Purpose:** Pre-built agent patterns and workflows for E2B
+- **Features:**
+  - Example agent implementations
+  - Common automation patterns
+  - Best practice templates
+- **Languages:** Python, TypeScript
+
+### pmoves/vendor/e2b-surf
+- **Path:** `pmoves/vendor/e2b-surf/`
+- **Repository:** https://github.com/POWERFULMOVES/pmoves-surf.git
+- **Purpose:** Web browsing and navigation automation
+- **Features:**
+  - Headless browser automation
+  - Web scraping and interaction
+  - Screenshot capture
+- **Port:** 3080 (API)
+- **Use Cases:** Web research, form filling, content extraction
+
+---
+
+## Research & External Integrations (Added 2025-12-30)
+
+### research/A2UI
+- **Path:** `research/A2UI/`
+- **Repository:** https://github.com/google/A2UI.git
+- **Branch:** `PMOVES.AI-Edition-Hardened`
+- **Purpose:** Google Agent-to-User Interface - declarative UI generation for agents
+- **Version:** v0.8 (Public Preview)
+- **Key Concepts:**
+  - **Declarative UI format:** JSON-based UI description (no code execution)
+  - **Component catalog:** Pre-approved UI components (safe for LLMs)
+  - **Incremental updates:** UI can be updated in real-time via events
+  - **Framework-agnostic:** Works with Flutter, Angular, Lit, React
+- **A2UI Events (via a2ui-nats-bridge):**
+  - `createSurface` - Initialize UI surface
+  - `updateComponents` - Add/update components
+  - `updateDataModel` - Update data bindings
+  - `userAction` - Handle user interactions
+- **Integration:** Connected via A2UI NATS Bridge service (port 9224)
+- **NATS Subjects:**
+  - Publishes to: `a2ui.render.v1`
+  - Subscribes to: `a2ui.request.v1`
+- **README:** [research/A2UI/README.md](../../../research/A2UI/README.md)
+- **Documentation:** https://a2ui.dev/
 
 ---
 

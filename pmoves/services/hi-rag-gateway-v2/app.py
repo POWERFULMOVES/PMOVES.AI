@@ -993,49 +993,6 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
             # Exponential backoff with cap
             current_backoff = min(current_backoff * 2, GEOMETRY_REALTIME_MAX_BACKOFF)
 
-
-@app.on_event("startup")
-async def _on_startup() -> None:
-    if shape_store is None:
-        logger.info("ShapeStore unavailable; geometry cache warm skipped")
-        return
-    await _warm_shapes_from_supabase()
-    global _geometry_realtime_task
-    if _geometry_realtime_task is None:
-        ws_url = _derive_realtime_url()
-        api_key = SUPABASE_REALTIME_KEY
-        if ws_url and api_key:
-            _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
-            logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
-        else:
-            logger.info("Supabase realtime subscription skipped; missing URL or API key")
-    global _geometry_swarm_task
-    if _geometry_swarm_task is None and NATS_URL:
-        if hasattr(nats, "connect"):
-            _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
-            logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
-        else:
-            logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
-
-
-@app.on_event("shutdown")
-async def _on_shutdown() -> None:
-    global _geometry_realtime_task
-    if _geometry_realtime_task is not None:
-        _geometry_realtime_task.cancel()
-        with contextlib.suppress(Exception):
-            await _geometry_realtime_task
-        _geometry_realtime_task = None
-    global _geometry_swarm_task, _geometry_swarm_stop
-    if _geometry_swarm_stop is not None:
-        _geometry_swarm_stop.set()
-    if _geometry_swarm_task is not None:
-        _geometry_swarm_task.cancel()
-        with contextlib.suppress(Exception):
-            await _geometry_swarm_task
-        _geometry_swarm_task = None
-    _geometry_swarm_stop = None
-
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower()=="true"
 CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
 CHIT_DECRYPT_ANCHORS = os.environ.get("CHIT_DECRYPT_ANCHORS", "false").lower()=="true"

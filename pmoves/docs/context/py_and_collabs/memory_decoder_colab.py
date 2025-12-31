@@ -20,7 +20,7 @@ This notebook provides a **clean, end-to-end demo** of a *Memory Decoder* as out
 """
 
 # --- Versions pinned to avoid ABI/import issues in Colab ---
-!pip -q install --force-reinstall   "numpy==1.26.4"   "faiss-cpu==1.7.4"   "transformers==4.43.4"   "datasets==2.20.0"   "accelerate==0.33.0"   torch --upgrade
+# pip install --force-reinstall   "numpy==1.26.4"   "faiss-cpu==1.7.4"   "transformers==4.43.4"   "datasets==2.20.0"   "accelerate==0.33.0"   torch --upgrade
 
 import math, os, random
 from typing import List, Dict

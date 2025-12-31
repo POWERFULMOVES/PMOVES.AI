@@ -375,3 +375,40 @@ nats server report connections
 - `nats_server_subscriptions` - Active subscriptions
 - `nats_server_messages_in` - Messages received
 - `nats_server_messages_out` - Messages sent
+
+## A2UI (Agent-to-User Interface) Subjects
+
+### A2UI Render Events
+
+**`a2ui.render.v1`**
+- **Direction:** Published by A2UI agents → Consumed by UI clients
+- **Purpose:** Real-time UI component updates from A2UI agents
+- **Payload:** A2UI v0.9 format (JSONL)
+- **Stream:** A2UI (JetStream enabled)
+- **Events:**
+  - `createSurface` - Initialize new UI surface
+  - `beginRendering` - Start rendering with root component
+  - `surfaceUpdate` / `updateComponents` - Add/update UI components
+  - `dataModelUpdate` / `updateDataModel` - Update data bindings
+  - `userAction` - User interaction events
+  - `closeSurface` - Close UI surface
+
+**`a2ui.request.v1`**
+- **Direction:** Published by UI → Consumed by A2UI agents
+- **Purpose:** Request UI generation or updates
+- **Payload:**
+  ```json
+  {
+    "request_id": "unique-id",
+    "surface_id": "target-surface",
+    "request_type": "create|update|query",
+    "parameters": { ... }
+  }
+  ```
+
+### A2UI Wildcard Subjects
+
+- **`a2ui.>`** - All A2UI events (for wildcard subscriptions)
+- **`geometry.>`** - Cross-service geometry events (A2UI, Tokenism, DoX, Hyperdimensions)
+
+> **See Also:** [geometry-nats-subjects.md](./geometry-nats-subjects.md) for CGP/CHIT geometry protocol subjects

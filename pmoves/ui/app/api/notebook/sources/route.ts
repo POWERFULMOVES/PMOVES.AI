@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 // Open Notebook API endpoint - documented in docs/services/open-notebook/
 const NOTEBOOK_API_URL = (
@@ -37,6 +38,7 @@ export async function GET(_req: NextRequest) {
     if (!res.ok) {
       const errorText = await res.text().catch(() => 'Unknown error');
       logError(`Open Notebook API returned ${res.status}`, new Error(errorText), 'warning', {
+        errorId: ErrorIds.NOTEBOOK_SOURCES_FETCH_FAILED,
         component: 'notebook-sources-api',
         endpoint,
       });
@@ -57,6 +59,7 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ items, endpoint });
   } catch (err) {
     logError('Failed to fetch sources from Open Notebook', err instanceof Error ? err : new Error(String(err)), 'error', {
+      errorId: ErrorIds.NOTEBOOK_SOURCES_FETCH_FAILED,
       component: 'notebook-sources-api',
       endpoint,
     });

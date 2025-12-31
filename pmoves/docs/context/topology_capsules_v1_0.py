@@ -65,7 +65,7 @@ Topology Capsules bridge geometric learning and graph signal processing:
 # - Seed-only auto-tune of (lam_neg, ridge) for signed LP
 # ===============================================================
 
-!pip -q install torchvision scikit-learn
+# pip install torchvision scikit-learn
 
 import numpy as np, random, math, time
 from sklearn.decomposition import PCA
@@ -369,7 +369,7 @@ print(f"[Diag] components:{n_comp} | eigs[:6]={e6} | pos-kept≈{cons_pos:.1f}% 
 print(f"Done in {time.time()-t0:.1f}s.")
 
 # ================= CIFAR-10 Shape Capsule (CPU-fast, no deep nets) =================
-!pip -q install scikit-image scikit-learn torchvision --upgrade
+# pip install scikit-image scikit-learn torchvision --upgrade
 
 import numpy as np, time, math, random
 from skimage.feature import hog
@@ -564,7 +564,7 @@ log(f"Done in {time.time()-t0:.1f}s | deg_pos mean: {deg_pos:.2f} | N={N_POINTS}
 # - Label inference via tuned signed label propagation
 # ===============================================
 
-!pip -q install torchvision scikit-image scikit-learn
+# pip install torchvision scikit-image scikit-learn
 
 import time, math, random, numpy as np
 from collections import Counter
@@ -799,7 +799,7 @@ print(f"Done in {time.time()-t0:.1f}s | N={N} | m={PCA_DIM} | (lam={lam_opt}, ri
 # - Geometric-mean ensemble (no logits, no NaNs)
 # ===============================================
 
-!pip -q install torchvision scikit-image
+# pip install torchvision scikit-image
 
 import numpy as np, math, time, random
 from sklearn.neighbors import NearestNeighbors

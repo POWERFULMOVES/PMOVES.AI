@@ -78,7 +78,7 @@ class CGPMapper:
 
         cgp_packet = {
             "version": "cgp.v1",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "theory": {
                 "id": theory_id,
                 "name": name,

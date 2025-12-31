@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 export default function DashboardError({
   error,
@@ -13,6 +14,7 @@ export default function DashboardError({
 }) {
   useEffect(() => {
     logError('Dashboard error boundary caught error', error, 'error', {
+      errorId: ErrorIds.DASHBOARD_ERROR_BOUNDARY,
       component: 'DashboardErrorBoundary',
       digest: error.digest,
     });

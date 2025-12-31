@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 // Notebook Sync service endpoint
 const NOTEBOOK_SYNC_URL = (
@@ -42,6 +43,7 @@ export async function GET(_req: NextRequest) {
     });
   } catch (err) {
     logError('Failed to fetch notebook-sync runtime status', err instanceof Error ? err : new Error(String(err)), 'error', {
+      errorId: ErrorIds.NOTEBOOK_RUNTIME_FETCH_FAILED,
       component: 'notebook-runtime-api',
       endpoint: NOTEBOOK_SYNC_URL,
     });
