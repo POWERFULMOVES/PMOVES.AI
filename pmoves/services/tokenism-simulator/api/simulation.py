@@ -11,6 +11,7 @@ Flask API endpoints for:
 import asyncio
 import logging
 import threading
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor
@@ -47,12 +48,18 @@ _simulation_results: dict[str, dict[str, Any]] = {}
 _simulation_statuses: dict[str, str] = {}
 _executor: ThreadPoolExecutor | None = None
 
+# Thread safety for concurrent access
+_results_lock = threading.Lock()
+_status_lock = threading.Lock()
+_executor_lock = threading.Lock()
+
 
 def _get_executor() -> ThreadPoolExecutor:
-    """Get or create the background task executor."""
+    """Get or create the background task executor (thread-safe)."""
     global _executor
-    if _executor is None:
-        _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sim_worker")
+    with _executor_lock:
+        if _executor is None:
+            _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sim_worker")
     return _executor
 
 
@@ -75,7 +82,8 @@ def _run_simulation_background(
 
     try:
         start_time = datetime.now(timezone.utc)
-        _simulation_statuses[simulation_id] = "running"
+        with _status_lock:
+            _simulation_statuses[simulation_id] = "running"
 
         engine = loop.run_until_complete(get_simulation_engine())
         result = loop.run_until_complete(engine.run_simulation(parameters, scenario))
@@ -83,8 +91,10 @@ def _run_simulation_background(
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         # Store result
-        _simulation_results[simulation_id] = result.model_dump(mode='json')
-        _simulation_statuses[simulation_id] = "complete"
+        with _results_lock:
+            _simulation_results[simulation_id] = result.model_dump(mode='json')
+        with _status_lock:
+            _simulation_statuses[simulation_id] = "complete"
 
         simulation_requests.labels(
             scenario=scenario.value,
@@ -99,13 +109,15 @@ def _run_simulation_background(
             logger.info(f"Would send webhook to {webhook_url} (not implemented)")
 
     except Exception as e:
-        _simulation_statuses[simulation_id] = "failed"
-        _simulation_results[simulation_id] = {"error": str(e)}
+        with _status_lock:
+            _simulation_statuses[simulation_id] = "failed"
+        with _results_lock:
+            _simulation_results[simulation_id] = {"error": str(e)}
         simulation_requests.labels(
             scenario=scenario.value,
             status='error'
         ).inc()
-        logger.error(f"Background simulation {simulation_id} failed: {e}")
+        logger.exception(f"Background simulation {simulation_id} failed: {e}")
 
     finally:
         loop.close()
@@ -229,8 +241,8 @@ def run_simulation_async():
         params_data = data.get('parameters', {})
         parameters = SimulationParameters(**params_data)
 
-        # Generate unique simulation ID
-        simulation_id = f"sim_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        # Generate unique simulation ID with UUID fragment to prevent collisions
+        simulation_id = f"sim_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         # Submit background task
         executor = _get_executor()

@@ -7,7 +7,7 @@ import os
 import re
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 from clickhouse_driver import Client as ClickHouseClient

@@ -6,7 +6,7 @@ import logging
 import os
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -27,6 +27,9 @@ from prometheus_client import (
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Module-level task reference for proper cleanup
+_nats_task: Optional[asyncio.Task[None]] = None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifecycle Management
@@ -39,15 +42,22 @@ async def lifespan(app: FastAPI):
         - Initialize NATS connection and start connection task
 
     Shutdown:
-        - Drain and close NATS connection
+        - Cancel connection task, drain and close NATS connection
     """
+    global _nats_task
     # Startup
     app.state.nats = None
-    asyncio.create_task(_connect_nats())
+    _nats_task = asyncio.create_task(_connect_nats())
 
     yield
 
     # Shutdown
+    if _nats_task is not None:
+        _nats_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _nats_task
+        _nats_task = None
+
     nc: Optional[NATS] = getattr(app.state, "nats", None)
     if nc is not None and not nc.is_closed:
         try:
