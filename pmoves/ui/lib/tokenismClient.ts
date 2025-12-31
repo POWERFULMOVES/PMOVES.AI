@@ -23,6 +23,28 @@
  * ```
  */
 
+/**
+ * Convert snake_case keys to camelCase recursively.
+ * The Tokenism API returns snake_case, but TypeScript interfaces use camelCase.
+ */
+function toCamelCase<T>(obj: unknown): T {
+  if (obj === null || typeof obj !== 'object') {
+    return obj as T;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => toCamelCase(item)) as T;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    // Convert snake_case to camelCase
+    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    result[camelKey] = toCamelCase(value);
+  }
+  return result as T;
+}
+
 export type ContractType =
   | 'GroToken'
   | 'FoodUSD'
@@ -145,7 +167,8 @@ export class TokenismClient {
       throw new Error(`Tokenism simulation failed: ${response.status} - ${error}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<SimulationResult>(data);
   }
 
   /**
@@ -160,7 +183,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch scenarios: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<ScenarioInfo[]>(data);
   }
 
   /**
@@ -175,7 +199,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch contracts: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<ContractInfo[]>(data);
   }
 
   /**
@@ -195,7 +220,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch simulation: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<SimulationResult>(data);
   }
 
   /**
@@ -216,7 +242,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch geometry: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<CGPPacket>(data);
   }
 
   /**
@@ -234,7 +261,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch temporal geometry: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<CGPPacket>(data);
   }
 
   /**
@@ -250,7 +278,8 @@ export class TokenismClient {
       throw new Error(`Failed to list simulations: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<SimulationResult[]>(data);
   }
 
   /**
