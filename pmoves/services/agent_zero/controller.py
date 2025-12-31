@@ -51,7 +51,6 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
         filter_subject: Optional[str] = None
 
     @dataclass
-    @dataclass
     class StreamConfig:  # type: ignore[no-redef]
         name: str
         subjects: List[str]
