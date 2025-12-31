@@ -19,6 +19,7 @@ import nats
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from nats.aio.client import Client as NATS
+from nats.aio.msg import Msg
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
 # Prometheus metrics
@@ -272,7 +273,7 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     return kb_upsert
 
 
-async def _handle_session_context(msg: NATS.Msg) -> None:
+async def _handle_session_context(msg: Msg) -> None:
     """
     Handle incoming session context messages.
 

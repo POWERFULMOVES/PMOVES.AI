@@ -19,13 +19,25 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # Resolve env.shared path relative to this config file
-# Config file is at: .../tokenism-simulator/config/__init__.py
-# env.shared is at: pmoves/env.shared (3 levels up from config file)
-_env_path = Path(__file__).resolve().parents[3] / "env.shared"
+# In container: /app/config/__init__.py, env.shared at /app/env.shared
+# In dev: .../tokenism-simulator/config/__init__.py, env.shared at pmoves/env.shared
+_env_loaded = False
+_env_path = Path("/app/env.shared")  # Container path
 if _env_path.exists():
     load_dotenv(_env_path)
+    _env_loaded = True
 else:
-    logger.warning(f"Environment file not found: {_env_path}, using system environment")
+    # Try dev path (may fail in container)
+    try:
+        _env_path = Path(__file__).resolve().parents[3] / "env.shared"
+        if _env_path.exists():
+            load_dotenv(_env_path)
+            _env_loaded = True
+    except IndexError:
+        pass  # In container, parents[3] doesn't exist
+
+if not _env_loaded:
+    logger.warning("Environment file not found at any candidate path, using system environment")
 
 
 @dataclass(frozen=True)

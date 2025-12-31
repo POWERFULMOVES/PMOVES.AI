@@ -1,1 +1,7 @@
--r requirements.lock
+fastapi
+uvicorn
+nats-py
+pydantic
+python-dotenv
+pyyaml
+prometheus-client==0.20.0

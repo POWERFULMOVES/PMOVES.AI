@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+boto3
+requests
+nats-py>=2.7.0
+jsonschema
+httpx
+tenacity
+bgutil-ytdlp-pot-provider
+prometheus-client==0.20.0
