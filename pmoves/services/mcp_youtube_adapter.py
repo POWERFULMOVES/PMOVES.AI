@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 
 try:
     from fastapi import FastAPI, HTTPException, Query
+    from contextlib import asynccontextmanager
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel, Field
 except ImportError as exc:
@@ -74,11 +75,49 @@ EMBEDDING_COLUMN = os.environ.get("YOUTUBE_EMBEDDING_COLUMN", _DEFAULT_COLUMN)
 EMBEDDING_DIM = int(os.environ.get("YOUTUBE_EMBEDDING_DIM", str(_DEFAULT_DIM)))
 
 # FastAPI app
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    # Startup
+    """Initialize services on startup."""
+    print("🚀 MCP YouTube Adapter starting up...")
+    print(f"   Supabase: {SUPABASE_URL}")
+    print(f"   Embedding Model: {EMBEDDING_MODEL}")
+    print(f"   Embedding Column: {EMBEDDING_COLUMN} (dim={EMBEDDING_DIM})")
+    
+    # Pre-load embedding model
+    if EMBEDDING_API_URL:
+        print(f"   Using remote embedding API: {EMBEDDING_API_URL}")
+    else:
+        try:
+            model = get_embedding_model()
+            dim = getattr(model, "get_sentence_embedding_dimension", lambda: None)()
+            if dim:
+                print(f"   ✅ Loaded {EMBEDDING_MODEL} ({dim} dimensions)")
+            else:
+                print(f"   ✅ Loaded {EMBEDDING_MODEL}")
+        except Exception as exc:
+            print(f"   ⚠️  Failed to load embedding model: {exc}")
+    yield
+    # Shutdown
+    """Cleanup on shutdown."""
+    global _supabase_client, _embedding_api_client
+    if _supabase_client:
+        await _supabase_client.aclose()
+    if _embedding_api_client:
+        await _embedding_api_client.aclose()
+    print("👋 MCP YouTube Adapter shut down")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
+
 app = FastAPI(
     title="PMOVES.yt MCP Adapter",
     description="YouTube transcript search and metadata API for Jellyfin backfill",
     version="0.1.0"
-)
+, lifespan=lifespan)
 
 # Global state
 _embedding_model: Optional[SentenceTransformerType] = None
@@ -367,40 +406,4 @@ async def ingest_youtube_video(
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(exc)}")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup."""
-    print("🚀 MCP YouTube Adapter starting up...")
-    print(f"   Supabase: {SUPABASE_URL}")
-    print(f"   Embedding Model: {EMBEDDING_MODEL}")
-    print(f"   Embedding Column: {EMBEDDING_COLUMN} (dim={EMBEDDING_DIM})")
-    
-    # Pre-load embedding model
-    if EMBEDDING_API_URL:
-        print(f"   Using remote embedding API: {EMBEDDING_API_URL}")
-    else:
-        try:
-            model = get_embedding_model()
-            dim = getattr(model, "get_sentence_embedding_dimension", lambda: None)()
-            if dim:
-                print(f"   ✅ Loaded {EMBEDDING_MODEL} ({dim} dimensions)")
-            else:
-                print(f"   ✅ Loaded {EMBEDDING_MODEL}")
-        except Exception as exc:
-            print(f"   ⚠️  Failed to load embedding model: {exc}")
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    global _supabase_client, _embedding_api_client
-    if _supabase_client:
-        await _supabase_client.aclose()
-    if _embedding_api_client:
-        await _embedding_api_client.aclose()
-    print("👋 MCP YouTube Adapter shut down")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")

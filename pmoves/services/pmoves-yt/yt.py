@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, Body, HTTPException, BackgroundTasks, Response
+from contextlib import asynccontextmanager
 import yt_dlp
 try:
     from yt_dlp.utils import DownloadError, PostProcessingError
@@ -54,7 +55,64 @@ videos_downloaded_total = Counter('pmoves_yt_videos_downloaded_total', 'Videos d
 transcripts_processed_total = Counter('pmoves_yt_transcripts_processed_total', 'Transcripts processed')
 nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages published', ['subject'])
 
-app = FastAPI(title="PMOVES.YT", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    global _nc, _nc_connect_task
+    # Startup
+    # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
+    if not YT_NATS_ENABLE or not NATS_URL:
+        _nc = None
+    else:
+        if _nc_connect_task is None or _nc_connect_task.done():
+            _nc_connect_task = asyncio.create_task(_nats_connect_loop(), name="pmoves-yt-nats-connect")
+
+    # Docs sync at startup + optional periodic schedule
+    try:
+        if collect_yt_dlp_docs and sync_to_supabase:
+            if os.environ.get("YT_DOCS_SYNC_ON_START", "true").lower() in {"1","true","yes","y"}:
+                try:
+                    docs = collect_yt_dlp_docs()
+                    sync_to_supabase(docs)
+                    logger.info("yt-dlp docs synced on start")
+                except Exception as exc:
+                    logger.warning("docs sync on start failed: %s", exc)
+            interval_env = os.environ.get("YT_DOCS_SYNC_INTERVAL_SECONDS") or os.environ.get("YT_DOCS_SYNC_INTERVAL")
+            if interval_env:
+                try:
+                    interval = int(interval_env)
+                except Exception:
+                    interval = 86400
+                async def _periodic_docs_sync():
+                    while True:
+                        await asyncio.sleep(interval)
+                        try:
+                            docs = collect_yt_dlp_docs()
+                            sync_to_supabase(docs)
+                            logger.info("yt-dlp docs synced (periodic)")
+                        except Exception as exc:
+                            logger.warning("periodic docs sync failed: %s", exc)
+                asyncio.create_task(_periodic_docs_sync(), name="pmoves-yt-docs-sync")
+    except Exception:
+        pass
+    yield
+    # Shutdown
+    if _nc_connect_task is not None:
+        _nc_connect_task.cancel()
+        try:
+            await _nc_connect_task
+        except asyncio.CancelledError:
+            pass
+        _nc_connect_task = None
+
+    if _nc is not None and not getattr(_nc, "is_closed", True):
+        try:
+            await _nc.close()
+        except Exception as err:
+            logger.debug("Error closing NATS client during shutdown: %s", err)
+    _nc = None
+
+app = FastAPI(title="PMOVES.YT", version="1.0.0", lifespan=lifespan)
 logger = logging.getLogger("pmoves-yt")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
@@ -371,63 +429,7 @@ async def _nats_connect_loop() -> None:
             backoff = min(backoff * 2, 30.0)
 
 
-@app.on_event("startup")
-async def startup():
-    # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
-    global _nc, _nc_connect_task
-    if not YT_NATS_ENABLE or not NATS_URL:
-        _nc = None
-    else:
-        if _nc_connect_task is None or _nc_connect_task.done():
-            _nc_connect_task = asyncio.create_task(_nats_connect_loop(), name="pmoves-yt-nats-connect")
 
-    # Docs sync at startup + optional periodic schedule
-    try:
-        if collect_yt_dlp_docs and sync_to_supabase:
-            if os.environ.get("YT_DOCS_SYNC_ON_START", "true").lower() in {"1","true","yes","y"}:
-                try:
-                    docs = collect_yt_dlp_docs()
-                    sync_to_supabase(docs)
-                    logger.info("yt-dlp docs synced on start")
-                except Exception as exc:
-                    logger.warning("docs sync on start failed: %s", exc)
-            interval_env = os.environ.get("YT_DOCS_SYNC_INTERVAL_SECONDS") or os.environ.get("YT_DOCS_SYNC_INTERVAL")
-            if interval_env:
-                try:
-                    interval = int(interval_env)
-                except Exception:
-                    interval = 86400
-                async def _periodic_docs_sync():
-                    while True:
-                        await asyncio.sleep(interval)
-                        try:
-                            docs = collect_yt_dlp_docs()
-                            sync_to_supabase(docs)
-                            logger.info("yt-dlp docs synced (periodic)")
-                        except Exception as exc:
-                            logger.warning("periodic docs sync failed: %s", exc)
-                asyncio.create_task(_periodic_docs_sync(), name="pmoves-yt-docs-sync")
-    except Exception:
-        pass
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    global _nc, _nc_connect_task
-    if _nc_connect_task is not None:
-        _nc_connect_task.cancel()
-        try:
-            await _nc_connect_task
-        except asyncio.CancelledError:
-            pass
-        _nc_connect_task = None
-
-    if _nc is not None and not getattr(_nc, "is_closed", True):
-        try:
-            await _nc.close()
-        except Exception as err:
-            logger.debug("Error closing NATS client during shutdown: %s", err)
-    _nc = None
 
 @app.get("/healthz")
 def healthz():

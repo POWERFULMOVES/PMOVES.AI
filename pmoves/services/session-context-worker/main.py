@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import nats
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from nats.aio.client import Client as NATS
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
@@ -65,7 +66,41 @@ _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
 
 # FastAPI app for health endpoint
-app = FastAPI(title="Session Context Worker", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    global _nats_loop_task, _nc
+    # Startup
+    """Start NATS connection loop on app startup."""
+
+    if _nats_loop_task is None or _nats_loop_task.done():
+        logger.info("Starting NATS resilience loop")
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+    yield
+    # Shutdown
+    """Clean shutdown of NATS connection."""
+
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        try:
+            await _nats_loop_task
+        except Exception:
+            pass
+        _nats_loop_task = None
+
+    if _nc:
+        try:
+            await _nc.close()
+        except Exception:
+            pass
+        _nc = None
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=HEALTH_PORT)
+
+app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
 
 
 def _extract_searchable_content(context: Dict[str, Any]) -> str:
@@ -414,37 +449,4 @@ async def metrics():
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.on_event("startup")
-async def startup():
-    """Start NATS connection loop on app startup."""
-    global _nats_loop_task
 
-    if _nats_loop_task is None or _nats_loop_task.done():
-        logger.info("Starting NATS resilience loop")
-        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Clean shutdown of NATS connection."""
-    global _nats_loop_task, _nc
-
-    if _nats_loop_task:
-        _nats_loop_task.cancel()
-        try:
-            await _nats_loop_task
-        except Exception:
-            pass
-        _nats_loop_task = None
-
-    if _nc:
-        try:
-            await _nc.close()
-        except Exception:
-            pass
-        _nc = None
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=HEALTH_PORT)
