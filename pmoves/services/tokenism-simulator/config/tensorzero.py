@@ -10,7 +10,7 @@ Following PMOVES.AI patterns:
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
@@ -18,6 +18,57 @@ import httpx
 from config import TensorZeroConfig
 
 logger = logging.getLogger(__name__)
+
+
+class TensorZeroError(Exception):
+    """Base exception for TensorZero failures.
+
+    Attributes:
+        transient: If True, the error may be resolved by retrying (e.g., temporary network issues)
+    """
+
+    def __init__(self, message: str, transient: bool = False) -> None:
+        super().__init__(message)
+        self.transient = transient
+
+
+class TensorZeroHTTPError(TensorZeroError):
+    """HTTP error from TensorZero gateway.
+
+    Attributes:
+        status_code: HTTP status code
+        response_text: Response body from server
+    """
+
+    def __init__(self, status_code: int, response_text: str) -> None:
+        self.status_code = status_code
+        self.response_text = response_text
+        # 5xx errors may be transient, 4xx are not
+        transient = status_code >= 500
+        super().__init__(
+            f"HTTP {status_code}: {response_text}",
+            transient=transient
+        )
+
+
+class TensorZeroTimeoutError(TensorZeroError):
+    """Timeout waiting for TensorZero response.
+
+    Timeout errors are typically transient - the service may be under load.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, transient=True)
+
+
+class TensorZeroConnectionError(TensorZeroError):
+    """Network connection error to TensorZero.
+
+    Connection errors are typically transient - may indicate network issues.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, transient=True)
 
 
 @dataclass
@@ -58,7 +109,7 @@ class TensorZeroClient:
         messages: list[LLMMessage],
         temperature: float = 0.7,
         max_tokens: int = 1000,
-    ) -> Optional[LLMResponse]:
+    ) -> LLMResponse:
         """
         Send chat completion request to TensorZero.
 
@@ -68,9 +119,15 @@ class TensorZeroClient:
             max_tokens: Maximum tokens to generate
 
         Returns:
-            LLMResponse or None if request failed
+            LLMResponse with generated content
+
+        Raises:
+            TensorZeroHTTPError: On HTTP errors (4xx/5xx)
+            TensorZeroTimeoutError: On request timeout
+            TensorZeroConnectionError: On network connection failures
+            TensorZeroError: On other failures
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             payload = {
@@ -90,7 +147,7 @@ class TensorZeroClient:
                 )
                 response.raise_for_status()
 
-            latency = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             data = response.json()
             choice = data.get('choices', [{}])[0]
@@ -107,15 +164,25 @@ class TensorZeroClient:
 
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error from TensorZero: {e.response.status_code} {e.response.text}")
-            return None
+            raise TensorZeroHTTPError(e.response.status_code, e.response.text) from e
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout calling TensorZero after {self.timeout}s")
+            raise TensorZeroTimeoutError(
+                f"TensorZero timeout after {self.timeout}s"
+            ) from e
+        except httpx.ConnectError as e:
+            logger.error(f"Connection error to TensorZero at {self.base_url}")
+            raise TensorZeroConnectionError(
+                f"Cannot connect to TensorZero at {self.base_url}"
+            ) from e
         except Exception as e:
-            logger.error(f"Error calling TensorZero: {e}")
-            return None
+            logger.error(f"Unexpected error calling TensorZero: {e}")
+            raise TensorZeroError(f"TensorZero request failed: {e}") from e
 
     async def analyze_simulation(
         self,
         simulation_data: dict[str, Any],
-    ) -> Optional[str]:
+    ) -> str:
         """
         Generate natural language analysis of simulation results.
 
@@ -123,7 +190,13 @@ class TensorZeroClient:
             simulation_data: Simulation results to analyze
 
         Returns:
-            Analysis text or None if failed
+            Analysis text
+
+        Raises:
+            TensorZeroHTTPError: On HTTP errors
+            TensorZeroTimeoutError: On timeout
+            TensorZeroConnectionError: On connection failures
+            TensorZeroError: On other failures
         """
         system_prompt = """You are a token economy analyst for PMOVES.AI.
 Analyze the provided simulation results and provide:
@@ -148,12 +221,12 @@ Provide your analysis."""
         ]
 
         response = await self.chat_completion(messages)
-        return response.content if response else None
+        return response.content
 
     async def generate_risk_report(
         self,
         metrics: dict[str, Any],
-    ) -> Optional[str]:
+    ) -> str:
         """
         Generate risk assessment report.
 
@@ -161,7 +234,13 @@ Provide your analysis."""
             metrics: Key metrics including Gini coefficient, poverty rate, etc.
 
         Returns:
-            Risk report or None if failed
+            Risk report
+
+        Raises:
+            TensorZeroHTTPError: On HTTP errors
+            TensorZeroTimeoutError: On timeout
+            TensorZeroConnectionError: On connection failures
+            TensorZeroError: On other failures
         """
         system_prompt = """You are a risk assessment specialist for PMOVES.AI.
 Generate a risk report based on token economy metrics.
@@ -185,14 +264,14 @@ Include:
         ]
 
         response = await self.chat_completion(messages)
-        return response.content if response else None
+        return response.content
 
     async def suggest_calibration(
         self,
         current_params: dict[str, Any],
         observed_data: dict[str, Any],
         target_metrics: dict[str, Any],
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any]:
         """
         Suggest parameter calibration based on observed vs target data.
 
@@ -202,7 +281,13 @@ Include:
             target_metrics: Target metrics to achieve
 
         Returns:
-            Calibration suggestions or None if failed
+            Calibration suggestions
+
+        Raises:
+            TensorZeroHTTPError: On HTTP errors
+            TensorZeroTimeoutError: On timeout
+            TensorZeroConnectionError: On connection failures
+            TensorZeroError: On other failures
         """
         system_prompt = """You are a calibration specialist for PMOVES.AI.
 Suggest parameter adjustments to align simulation with observed data.
@@ -231,7 +316,7 @@ Suggest calibration adjustments."""
         ]
 
         response = await self.chat_completion(messages, temperature=0.3)
-        return response.raw_response if response else None
+        return response.raw_response
 
 
 # Global TensorZero client

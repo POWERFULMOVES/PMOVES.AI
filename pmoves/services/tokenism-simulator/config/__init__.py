@@ -9,11 +9,23 @@ Implements PMOVES.AI integration patterns:
 """
 
 import os
+import secrets
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
+import logging
 from dotenv import load_dotenv
 
-load_dotenv('/home/pmoves/PMOVES.AI/pmoves/env.shared')
+logger = logging.getLogger(__name__)
+
+# Resolve env.shared path relative to this config file
+# Config file is at: .../tokenism-simulator/config/__init__.py
+# Repo root is 3 levels up, then pmoves/env.shared
+_env_path = Path(__file__).resolve().parents[2] / "pmoves" / "env.shared"
+if _env_path.exists():
+    load_dotenv(_env_path)
+else:
+    logger.warning(f"Environment file not found: {_env_path}, using system environment")
 
 
 @dataclass(frozen=True)
@@ -73,7 +85,9 @@ class ServiceConfig:
     host: str = os.getenv('TOKENISM_HOST', '0.0.0.0')
     port: int = int(os.getenv('TOKENISM_PORT', '8100'))
     debug: bool = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
-    secret_key: str = os.getenv('SECRET_KEY', 'pmoves-tokenism-secret')
+    # Generate secure secret key if not provided
+    _secret_key_env: str = os.getenv('SECRET_KEY', '')
+    secret_key: str = _secret_key_env if _secret_key_env else secrets.token_hex(32)
 
     # Sub-components
     nats: NATSConfig = NATSConfig()
