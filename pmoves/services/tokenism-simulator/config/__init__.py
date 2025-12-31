@@ -18,6 +18,17 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_int_env(env_var: str, default: int) -> int:
+    """Parse integer environment variable with validation and fallback."""
+    value = os.getenv(env_var, str(default))
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning("Invalid %s value %r, using default %s", env_var, value, default)
+        return default
+
+
 # Resolve env.shared path relative to this config file
 # In container: /app/config/__init__.py, env.shared at /app/env.shared
 # In dev: .../tokenism-simulator/config/__init__.py, env.shared at pmoves/env.shared
@@ -26,6 +37,7 @@ _env_path = Path("/app/env.shared")  # Container path
 if _env_path.exists():
     load_dotenv(_env_path)
     _env_loaded = True
+    logger.debug(f"Loaded environment from: {_env_path}")
 else:
     # Try dev path (may fail in container)
     try:
@@ -33,11 +45,13 @@ else:
         if _env_path.exists():
             load_dotenv(_env_path)
             _env_loaded = True
+            logger.debug(f"Loaded environment from: {_env_path}")
     except IndexError:
         pass  # In container, parents[3] doesn't exist
 
 if not _env_loaded:
     logger.warning("Environment file not found at any candidate path, using system environment")
+    # Note: Silent fallback to system env is intentional - containers may pass all config via env vars
 
 
 @dataclass(frozen=True)
@@ -63,7 +77,7 @@ class TensorZeroConfig:
     """TensorZero LLM gateway configuration."""
     url: str = os.getenv('TENSORZERO_URL', 'http://tensorzero-gateway:3030')
     model: str = os.getenv('TENSORZERO_MODEL', 'claude-sonnet-4-5')
-    timeout: int = int(os.getenv('TENSORZERO_TIMEOUT', '30'))
+    timeout: int = _parse_int_env('TENSORZERO_TIMEOUT', 30)
 
 
 @dataclass(frozen=True)
@@ -72,7 +86,7 @@ class SupabaseConfig:
     url: str = os.getenv('SUPABASE_URL', 'http://supabase_kong_PMOVES.AI:8000')
     key: str = os.getenv('SUPABASE_ANON_KEY', '')
     jwt_secret: str = os.getenv('SUPABASE_JWT_SECRET', '')
-    pool_size: int = int(os.getenv('SUPABASE_POOL_SIZE', '10'))
+    pool_size: int = _parse_int_env('SUPABASE_POOL_SIZE', 10)
 
 
 @dataclass(frozen=True)
@@ -95,7 +109,7 @@ class CHITConfig:
 class ServiceConfig:
     """Main service configuration."""
     host: str = os.getenv('TOKENISM_HOST', '0.0.0.0')
-    port: int = int(os.getenv('TOKENISM_PORT', '8100'))
+    port: int = _parse_int_env('TOKENISM_PORT', 8100)
     debug: bool = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
     # Generate secure secret key if not provided
     _secret_key_env: str = os.getenv('SECRET_KEY', '')

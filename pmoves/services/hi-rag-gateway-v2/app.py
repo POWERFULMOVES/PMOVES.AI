@@ -907,8 +907,10 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         if "apikey=" not in full_url:
             sep = "&" if "?" in full_url else "?"
             full_url = f"{full_url}{sep}apikey={api_key}&vsn=1.0.0"
-        # Note: extra_headers not supported with uvloop; pass Authorization via URL if needed
-        # The apikey parameter above provides authentication for Supabase realtime
+        # Note: extra_headers not supported with uvloop for WebSocket handshake
+        # Authentication is handled via:
+        # 1. URL parameter: apikey=... (Supabase realtime channel auth)
+        # 2. Join payload: access_token (Phoenix protocol token in line 924)
         try:
             async with websockets.connect(
                 full_url,

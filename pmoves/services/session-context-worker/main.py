@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import nats
@@ -56,15 +56,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger("session_context_worker")
 
+
+def _parse_int_env(env_var: str, default: int) -> int:
+    """Parse integer environment variable with validation and fallback."""
+    value = os.environ.get(env_var, str(default))
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning("Invalid %s value %r, using default %s", env_var, value, default)
+        return default
+
+
 # Environment variables
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
-HEALTH_PORT = int(os.environ.get("HEALTH_PORT", "8100"))
+HEALTH_PORT = _parse_int_env("HEALTH_PORT", 8100)
 SESSION_CONTEXT_SUBJECT = "claude.code.session.context.v1"
 KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 
 # Global state
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
+
+
+def _nats_loop_done(task: asyncio.Task) -> None:
+    """Callback for NATS resilience loop task completion."""
+    if not task.cancelled():
+        exc = task.exception()
+        if exc:
+            logger.error("NATS resilience loop crashed unexpectedly: %s", exc, exc_info=True)
+
 
 # FastAPI app for health endpoint
 @asynccontextmanager
@@ -77,6 +97,7 @@ async def lifespan(app: FastAPI):
     if _nats_loop_task is None or _nats_loop_task.done():
         logger.info("Starting NATS resilience loop")
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+        _nats_loop_task.add_done_callback(_nats_loop_done)
     yield
     # Shutdown
     """Clean shutdown of NATS connection."""
@@ -85,15 +106,20 @@ async def lifespan(app: FastAPI):
         _nats_loop_task.cancel()
         try:
             await _nats_loop_task
-        except Exception:
-            pass
+        except asyncio.CancelledError:
+            logger.debug("NATS resilience loop cancelled successfully")
+        except Exception as e:
+            logger.warning("Unexpected error during NATS loop shutdown: %s", e)
         _nats_loop_task = None
 
     if _nc:
         try:
             await _nc.close()
-        except Exception:
-            pass
+            logger.info("NATS connection closed cleanly")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("NATS close error during shutdown: %s", e)
         _nc = None
 
 
@@ -421,8 +447,8 @@ async def _nats_resilience_loop() -> None:
         except asyncio.CancelledError:
             try:
                 await nc.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error closing NATS connection during cancellation: %s", e)
             if _nc is nc:
                 _nc = None
             raise
@@ -430,8 +456,8 @@ async def _nats_resilience_loop() -> None:
         # Clean up connection
         try:
             await nc.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Error closing NATS connection during cleanup: %s", e)
 
 
 @app.get("/healthz")

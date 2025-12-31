@@ -1,7 +1,17 @@
-fastapi
-uvicorn
-nats-py
-pydantic
-python-dotenv
-pyyaml
+# PMOVES Session Context Worker Dependencies
+# Core web framework
+fastapi>=0.112.0
+uvicorn[standard]>=0.30.0
+
+# NATS message bus
+nats-py>=2.7.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Configuration
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Metrics (exact pin for Prometheus compatibility)
 prometheus-client==0.20.0
