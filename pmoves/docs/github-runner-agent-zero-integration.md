@@ -97,7 +97,7 @@ curl -X POST http://github-runner-ctl:8100/runners/ai-lab/action \
 
 These events are published by `github-runner-ctl` for Agent Zero to consume:
 
-```
+```text
 github.runner.registered.v1       # New runner registered
 github.runner.removed.v1          # Runner decommissioned
 github.runner.enabled.v1          # Runner brought online
@@ -111,7 +111,7 @@ github.runner.queue_backlog.v1    # Queue depth above threshold
 
 ### Job Lifecycle Events
 
-```
+```text
 github.job.queued.v1              # Job queued for runner
 github.job.started.v1             # Job started on runner
 github.job.completed.v1           # Job completed successfully

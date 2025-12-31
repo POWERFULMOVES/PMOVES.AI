@@ -266,13 +266,13 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes",
+          "unit": "gbytes",
           "custom": { "fillOpacity": 30 },
           "thresholds": {
             "steps": [
               { "color": "green", "value": 0 },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 10 }
+              { "color": "yellow", "value": 80 },
+              { "color": "red", "value": 100 }
             ]
           }
         }

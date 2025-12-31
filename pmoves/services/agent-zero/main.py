@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+from contextlib import asynccontextmanager
 import logging
 import os
 import shlex
@@ -607,7 +608,46 @@ _sync_openai_compat_env()
 runtime_config = AgentZeroRuntimeConfig()
 client = AgentZeroClient(runtime_config)
 process_manager = AgentZeroProcessManager(runtime_config, client)
-app = FastAPI(title="Agent Zero Supervisor")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage Agent Zero application lifespan."""
+    # Declare globals for assignment
+    global _controller_task
+
+    # Startup
+    _warn_missing_notebook_config()
+    await process_manager.start()
+    _controller_shutdown.clear()
+    _controller_task = asyncio.create_task(
+        _controller_connect_loop(), name="agent-zero-controller-connect"
+    )
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(
+                sig, lambda s=sig: asyncio.create_task(process_manager.stop())
+            )
+        except (NotImplementedError, RuntimeError, ValueError):
+            # Tests run event loops in worker threads where signal handlers are unsupported.
+            logger.debug("Skipping signal handler registration for %s", sig)
+
+    yield
+
+    # Shutdown
+    await process_manager.stop()
+    _controller_shutdown.set()
+    if _controller_task:
+        with contextlib.suppress(asyncio.CancelledError):
+            await _controller_task
+        _controller_task = None
+    if event_controller.is_started:
+        with contextlib.suppress(Exception):
+            await event_controller.stop()
+
+
+app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -673,40 +713,6 @@ def _warn_missing_notebook_config() -> None:
         )
     elif nb_url and nb_token:
         logger.info("Open Notebook integration configured: %s", nb_url)
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    _warn_missing_notebook_config()
-    await process_manager.start()
-    global _controller_task
-    _controller_shutdown.clear()
-    _controller_task = asyncio.create_task(
-        _controller_connect_loop(), name="agent-zero-controller-connect"
-    )
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
-            loop.add_signal_handler(
-                sig, lambda s=sig: asyncio.create_task(process_manager.stop())
-            )
-        except (NotImplementedError, RuntimeError, ValueError):
-            # Tests run event loops in worker threads where signal handlers are unsupported.
-            logger.debug("Skipping signal handler registration for %s", sig)
-
-
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    await process_manager.stop()
-    _controller_shutdown.set()
-    global _controller_task
-    if _controller_task:
-        with contextlib.suppress(asyncio.CancelledError):
-            await _controller_task
-        _controller_task = None
-    if event_controller.is_started:
-        with contextlib.suppress(Exception):
-            await event_controller.stop()
 
 
 @app.get("/healthz")

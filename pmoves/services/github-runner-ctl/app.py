@@ -57,8 +57,6 @@ logger = logging.getLogger("github-runner-ctl")
 # Environment configuration (PMOVES pattern: env-based with defaults)
 PORT = int(os.environ.get("PORT", 8100))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
-NATS_USER = os.environ.get("NATS_USER")  # Optional: NATS username for authentication
-NATS_PASS = os.environ.get("NATS_PASS")  # Optional: NATS password for authentication
 GITHUB_PAT_FILE = os.environ.get("GITHUB_PAT_FILE", "/run/secrets/github_pat")
 RUNNERS_CONFIG = os.environ.get("RUNNERS_CONFIG", "/app/config/runners.yaml")
 REFRESH_INTERVAL = int(os.environ.get("REFRESH_INTERVAL_SECONDS", "60"))
@@ -164,9 +162,9 @@ async def refresh_runner_status():
                     # Publish NATS event for busy runners
                     if runner["status"] == "busy" and nats_publisher:
                         await nats_publisher.publish_job_event(
-                            "started",
-                            name,
-                            runner.get("source", "unknown"),
+                            event_type="started",
+                            runner=name,
+                            repository=runner.get("source", "unknown"),
                         )
 
                 logger.info(
@@ -181,9 +179,9 @@ async def refresh_runner_status():
                     is_healthy = await check_runner_health(name, config["health_url"])
                     if not is_healthy and nats_publisher:
                         await nats_publisher.publish_alert(
-                            "unreachable",
-                            name,
-                            f"Runner {name} health check failed",
+                            event_type="unreachable",
+                            runner=name,
+                            message=f"Runner {name} health check failed",
                             severity="warning",
                         )
 
@@ -208,7 +206,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize NATS publisher (non-blocking during startup)
     try:
-        nats_publisher = NATSPublisher(NATS_URL, nats_user=NATS_USER, nats_pass=NATS_PASS)
+        nats_publisher = NATSPublisher(NATS_URL)
         # Try to connect with a short timeout during startup
         connected = await asyncio.wait_for(
             nats_publisher.connect(retry=False),

@@ -49,9 +49,24 @@ monitor = ChannelMonitor(
     google_scopes=GOOGLE_SCOPES or None,
 )
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage Channel Monitor application lifespan."""
+    # Startup
+    await monitor.start()
+    app.state.monitor = monitor
+    # Ensure metrics counters exist
+    _ = CHANNEL_CHECKS_TOTAL.labels(kind="startup").inc(0)
+    _ = STATUS_UPDATES_TOTAL.labels(result="noop").inc(0)
+    yield
+    # Shutdown
+    await monitor.shutdown()
+
+
 app = FastAPI(
     title="PMOVES Channel Monitor",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 
@@ -115,20 +130,6 @@ class UserSourceRequest(BaseModel):
     yt_options: Dict[str, Any] | None = None
     token_id: str | None = Field(None, description="Linked OAuth token ID")
     status: str = Field("active", description="Source status")
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    await monitor.start()
-    app.state.monitor = monitor
-    # Ensure metrics counters exist
-    _ = CHANNEL_CHECKS_TOTAL.labels(kind="startup").inc(0)
-    _ = STATUS_UPDATES_TOTAL.labels(result="noop").inc(0)
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    await monitor.shutdown()
 
 
 async def require_secret(token: str | None = Header(default=None, alias="X-Channel-Monitor-Token")) -> None:

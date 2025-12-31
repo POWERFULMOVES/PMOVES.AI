@@ -6,6 +6,7 @@ import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -26,7 +27,46 @@ from prometheus_client import (
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="PMOVES-SUPASERCH", version="0.1.0")
+# Module-level task reference for proper cleanup
+_nats_task: Optional[asyncio.Task[None]] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan.
+
+    Startup:
+        - Initialize NATS connection and start connection task
+
+    Shutdown:
+        - Cancel connection task, drain and close NATS connection
+    """
+    global _nats_task
+    # Startup
+    app.state.nats = None
+    _nats_task = asyncio.create_task(_connect_nats())
+
+    yield
+
+    # Shutdown
+    if _nats_task is not None:
+        _nats_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _nats_task
+        _nats_task = None
+
+    nc: Optional[NATS] = getattr(app.state, "nats", None)
+    if nc is not None and not nc.is_closed:
+        try:
+            await nc.drain()
+        finally:
+            NATS_CONNECTION_GAUGE.set(0)
+
+
+app = FastAPI(title="PMOVES-SUPASERCH", version="0.1.0", lifespan=lifespan)
 
 # CGP NATS subject for GEOMETRY BUS integration
 CGP_SUBJECT = "tokenism.cgp.ready.v1"
@@ -391,24 +431,6 @@ async def _connect_nats() -> None:
     except Exception as exc:  # noqa: BLE001
         NATS_CONNECTION_GAUGE.set(0)
         logger.warning("Failed to connect to NATS at %s: %s", url, exc)
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    """Initialize NATS connection on application startup."""
-    app.state.nats = None
-    asyncio.create_task(_connect_nats())
-
-
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    """Clean up NATS connection on application shutdown."""
-    nc: Optional[NATS] = getattr(app.state, "nats", None)
-    if nc is not None and not nc.is_closed:
-        try:
-            await nc.drain()
-        finally:
-            NATS_CONNECTION_GAUGE.set(0)
 
 
 @app.get("/healthz")

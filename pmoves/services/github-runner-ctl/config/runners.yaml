@@ -10,10 +10,11 @@ runners:
       - gpu
       - Linux
       - X64
+    # Normalize all capabilities to strings for consistent Pydantic validation
     capabilities:
-      gpu: true
-      ram: 64GB
-      storage: 200GB
+      gpu: "true"
+      ram: "64GB"
+      storage: "200GB"
     workloads:
       - research
       - gpu-build
@@ -30,14 +31,15 @@ runners:
       - Linux
       - X64
     capabilities:
-      cpu: 8
-      ram: 16GB
-      storage: 50GB
-      docker: true
+      cpu: "8"
+      ram: "16GB"
+      storage: "50GB"
+      docker: "true"
     workloads:
       - docker-build
       - integration-test
       - security-scan
+    health_url: http://vps.local:8080/healthz  # TODO: Update with actual URL
     repositories:
       - POWERFULMOVES/PMOVES.AI
       - POWERFULMOVES/PMOVES-DoX
@@ -51,12 +53,13 @@ runners:
       - Linux
       - X64
     capabilities:
-      cpu: 4
-      ram: 8GB
-      ephemeral: true
+      cpu: "4"
+      ram: "8GB"
+      ephemeral: "true"
     workloads:
       - unit-test
       - overflow
       - staging
+    health_url: http://cloudstartup.local:8080/healthz  # TODO: Update with actual URL
     repositories:
       - POWERFULMOVES/PMOVES.AI
