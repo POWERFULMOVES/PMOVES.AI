@@ -206,8 +206,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
       });
 
     return () => abortController.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, week]);
+  }, [result, week, toPoincareDisk, logError, ErrorIds]);
 
   // Draw on canvas
   useEffect(() => {
@@ -275,6 +274,8 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
           width={800}
           height={400}
           className="w-full h-full"
+          role="img"
+          aria-label={`Poincaré disk visualization showing ${points.length} wealth distribution points${week !== undefined ? ` for week ${week}` : ''}`}
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setHoveredPoint(null)}
         />

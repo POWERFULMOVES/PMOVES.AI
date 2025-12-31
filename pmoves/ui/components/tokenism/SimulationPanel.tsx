@@ -126,15 +126,17 @@ export function TokenismSimulationPanel({ onSimulationComplete }: SimulationPane
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Contract Type Selection */}
         <div>
-          <label className="block text-xs font-mono uppercase text-gold-400 mb-2">
+          <label className="block text-xs font-mono uppercase text-gold-400 mb-2" id="contract-type-label">
             Contract Type
           </label>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div role="radiogroup" aria-labelledby="contract-type-label" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {CONTRACT_TYPES.map((ct) => (
               <button
                 key={ct.value}
                 type="button"
                 onClick={() => setContractType(ct.value)}
+                role="radio"
+                aria-checked={contractType === ct.value}
                 className={`
                   p-3 text-left border transition-all duration-200
                   ${contractType === ct.value
@@ -152,15 +154,17 @@ export function TokenismSimulationPanel({ onSimulationComplete }: SimulationPane
 
         {/* Scenario Selection */}
         <div>
-          <label className="block text-xs font-mono uppercase text-cyan-400 mb-2">
+          <label className="block text-xs font-mono uppercase text-cyan-400 mb-2" id="scenario-label">
             Economic Scenario
           </label>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+          <div role="radiogroup" aria-labelledby="scenario-label" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
             {SCENARIOS.map((sc) => (
               <button
                 key={sc.value}
                 type="button"
                 onClick={() => setScenario(sc.value)}
+                role="radio"
+                aria-checked={scenario === sc.value}
                 className={`
                   p-2 text-center border transition-all duration-200
                   ${scenario === sc.value

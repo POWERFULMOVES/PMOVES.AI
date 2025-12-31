@@ -2,14 +2,18 @@ import asyncio
 import datetime
 import hashlib
 import json
+import logging
 import os
 import pathlib
+import shutil
 import time
 
 from minio import Minio
 from nats.aio.client import Client as NATS
 
 from services.common.events import envelope
+
+logger = logging.getLogger("comfy-watcher")
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_USE_SSL = os.environ.get("MINIO_USE_SSL", "false").lower() == "true"
@@ -25,9 +29,28 @@ POLL_SECONDS = int(os.environ.get("COMFY_WATCHER_POLL_SECONDS", "5"))
 
 
 def load_state() -> dict:
+    """Load state from disk with proper error handling.
+
+    Returns the uploaded file registry. Handles missing state files,
+    corrupted JSON, and other I/O errors gracefully with logging.
+    """
     try:
         return json.loads(open(STATE_PATH).read())
-    except Exception:
+    except FileNotFoundError:
+        logger.info(f"State file not found, starting fresh: {STATE_PATH}")
+        return {"uploaded": {}}
+    except json.JSONDecodeError as exc:
+        logger.error(f"Corrupted state file at {STATE_PATH}, backing up and starting fresh: {exc}")
+        # Backup corrupted file for investigation
+        backup_path = f"{STATE_PATH}.corrupted.{int(time.time())}"
+        try:
+            shutil.copy(STATE_PATH, backup_path)
+            logger.info(f"Backed up corrupted state to: {backup_path}")
+        except Exception as backup_exc:
+            logger.warning(f"Could not backup corrupted state file: {backup_exc}")
+        return {"uploaded": {}}
+    except Exception as exc:
+        logger.error(f"Unexpected error loading state from {STATE_PATH}: {exc}")
         return {"uploaded": {}}
 
 
@@ -58,11 +81,14 @@ async def run() -> None:
     nc = NATS()
     await nc.connect(servers=[NATS_URL])
 
+    # Ensure MinIO bucket exists with proper error handling
     try:
         if not client.bucket_exists(BUCKET):
             client.make_bucket(BUCKET)
-    except Exception as e:
-        print("Bucket check/make:", e)
+            logger.info(f"Created MinIO bucket: {BUCKET}")
+    except Exception as exc:
+        logger.error(f"Failed to verify/create MinIO bucket '{BUCKET}': {exc}")
+        raise RuntimeError(f"MinIO bucket setup failed for '{BUCKET}': {exc}") from exc
 
     while True:
         for root, _, files in os.walk(OUTPUT_DIR):
@@ -87,18 +113,21 @@ async def run() -> None:
                     )
 
                     payload = {"artifact_uri": f"s3://{BUCKET}/{key}", "meta": {"public_url": public_url}}
+
+                    # Generate presigned URL with error handling
                     try:
                         from datetime import timedelta
-
                         payload["meta"]["presigned_url"] = client.presigned_get_object(BUCKET, key, expires=timedelta(hours=PRESIGN_HOURS))
-                    except Exception:
-                        pass
+                    except Exception as presign_exc:
+                        logger.warning(f"Failed to generate presigned URL for {key}: {presign_exc}")
+                        # Continue without presigned URL - not critical for all workflows
 
                     env = envelope("gen.image.result.v1", payload, source="comfy-watcher")
                     await nc.publish("gen.image.result.v1", json.dumps(env).encode())
-                    print("Uploaded and announced:", key)
-                except Exception as e:
-                    print("Error processing", path, e)
+                    logger.info(f"Uploaded and announced: {key}")
+                except Exception as exc:
+                    logger.error(f"Error processing file {path}: {exc}", exc_info=True)
+                    # Continue to next file instead of aborting entire loop
 
         await asyncio.sleep(POLL_SECONDS)
 
