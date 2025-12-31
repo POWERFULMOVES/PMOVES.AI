@@ -3,7 +3,7 @@ import logging
 import os
 import sqlite3
 import time
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -551,18 +551,25 @@ def _load_syncer() -> NotebookSyncer:
     )
 
 
-app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0")
-syncer = _load_syncer()
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan for Notebook Sync."""
+    global syncer
 
-
-@app.on_event("startup")
-async def on_startup() -> None:
+    # Startup
     await syncer.start()
 
+    yield
 
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
+    # Shutdown
     await syncer.stop()
+
+
+app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0", lifespan=lifespan)
+syncer = _load_syncer()
 
 
 @app.get("/healthz")

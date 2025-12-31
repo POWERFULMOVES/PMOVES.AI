@@ -162,9 +162,9 @@ async def refresh_runner_status():
                     # Publish NATS event for busy runners
                     if runner["status"] == "busy" and nats_publisher:
                         await nats_publisher.publish_job_event(
-                            "started",
-                            name,
-                            runner.get("source", "unknown"),
+                            event_type="started",
+                            runner=name,
+                            repository=runner.get("source", "unknown"),
                         )
 
                 logger.info(
@@ -179,9 +179,9 @@ async def refresh_runner_status():
                     is_healthy = await check_runner_health(name, config["health_url"])
                     if not is_healthy and nats_publisher:
                         await nats_publisher.publish_alert(
-                            "unreachable",
-                            name,
-                            f"Runner {name} health check failed",
+                            event_type="unreachable",
+                            runner=name,
+                            message=f"Runner {name} health check failed",
                             severity="warning",
                         )
 

@@ -12,7 +12,7 @@ ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 def utc_now() -> str:
     """Return a UTC timestamp in ISO-8601 format."""
-    return datetime.utcnow().strftime(ISO_FORMAT)
+    return datetime.now(timezone.utc).strftime(ISO_FORMAT)
 
 
 def compute_sha256(path: Path | str) -> str:

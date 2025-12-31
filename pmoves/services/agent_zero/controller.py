@@ -69,6 +69,7 @@ try:
     from services.common.events import envelope
 except Exception:  # pragma: no cover - optional dependency for unit tests
     import datetime
+    from datetime import timezone
     import uuid
 
     def envelope(
@@ -82,7 +83,7 @@ except Exception:  # pragma: no cover - optional dependency for unit tests
         event: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
             "topic": topic,
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.datetime.now(timezone.utc).isoformat() + "Z",
             "version": "v1",
             "source": source,
             "payload": payload,

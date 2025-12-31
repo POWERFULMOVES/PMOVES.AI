@@ -32,8 +32,9 @@ USER pmoves:pmoves
 
 # Health check (PMOVES standard pattern)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8100/healthz || exit 1
+    CMD ["sh", "-c", "curl -f http://localhost:${PORT:-8100}/healthz || exit 1"]
 
 EXPOSE 8100
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8100"]
+# Use shell to expand ${PORT} environment variable
+CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${PORT}"]

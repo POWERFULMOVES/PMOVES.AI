@@ -13,7 +13,7 @@ services:
     profiles: ["wger"]
 
   wger:
-    image: ${WGER_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-health-wger:pmoves-latest}
+    image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     depends_on: [wger-db]
     environment:
       - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-wgerpass}@wger-db:5432/wger

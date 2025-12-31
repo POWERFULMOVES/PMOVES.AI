@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import asyncio
 import base64
 import contextlib
@@ -30,13 +32,44 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev
 from services.common.telemetry import PublisherMetrics, PublishTelemetry, compute_publish_telemetry
 
 
-app = FastAPI(title="Publisher-Discord", version="0.1.0")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan for Publisher Discord."""
+    global _nats_loop_task, _nc
+    # Startup - Discord webhooks are configured at runtime
+    # Non-blocking, quiet NATS init
+    if YT_NATS_ENABLE and NATS_URL:
+        logger.info(
+            "nats_loop_start",
+            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+        )
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+    yield
+
+    # Shutdown
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        with contextlib.suppress(Exception):
+            await _nats_loop_task
+        _nats_loop_task = None
+    if _nc:
+        with contextlib.suppress(Exception):
+            await _nc.close()
+        _nc = None
+
+
+app = FastAPI(title="Publisher-Discord", version="0.1.0", lifespan=lifespan)
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 # Prefer the n8n-style username if provided, fallback to legacy var
 DISCORD_USERNAME = os.environ.get("DISCORD_USERNAME", os.environ.get("DISCORD_WEBHOOK_USERNAME", "PMOVES"))
 DISCORD_AVATAR_URL = os.environ.get("DISCORD_AVATAR_URL", "")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+YT_NATS_ENABLE = os.environ.get("YT_NATS_ENABLE", "true").lower() in {"1", "true", "yes", "on"}
 SUBJECTS = os.environ.get(
     "DISCORD_SUBJECTS",
     "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,"
@@ -62,6 +95,21 @@ logger = logging.getLogger("publisher_discord")
 
 # Track session_id -> thread_id mapping for Claude sessions
 _session_threads: Dict[str, str] = {}
+
+
+def _extract_webhook_domain(webhook_url: str) -> str:
+    """Extract domain from Discord webhook URL for logging (sanitizes credentials)."""
+    # Discord webhook URLs are: https://discord.com/api/webhooks/<id>/<token>
+    # Extract just the domain for logging
+    try:
+        if "discord.com" in webhook_url:
+            return "discord.com"
+        elif "discord.gg" in webhook_url:
+            return "discord.gg"
+        else:
+            return "unknown"
+    except Exception:
+        return "invalid"
 
 
 def _coerce_tags(raw: Any) -> Iterable[str]:
@@ -1085,10 +1133,18 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
     logger.info("claude_session_ended", extra={"session_id": session_id, "end_reason": end_reason})
 
 
-@app.on_event("startup")
-async def startup():
-    """Initialize NATS connection on application startup."""
     global _nats_loop_task
+    # Validate critical environment configuration
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning(
+            "discord_webhook_url_not_configured",
+            extra={"event": "discord_webhook_url_not_configured"},
+        )
+    else:
+        logger.info(
+            "discord_webhook_url_configured",
+            extra={"event": "discord_webhook_url_configured", "domain": _extract_webhook_domain(DISCORD_WEBHOOK_URL)},
+        )
     if _nats_loop_task and _nats_loop_task.done():
         try:
             _nats_loop_task.result()
@@ -1104,20 +1160,6 @@ async def startup():
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Clean up NATS connection on application shutdown."""
-    global _nats_loop_task, _nc
-    if _nats_loop_task:
-        _nats_loop_task.cancel()
-        with contextlib.suppress(Exception):
-            await _nats_loop_task
-        _nats_loop_task = None
-    if _nc:
-        with contextlib.suppress(Exception):
-            await _nc.close()
-        _nc = None
 
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):

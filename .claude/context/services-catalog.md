@@ -430,6 +430,59 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Integration:** `pmoves-jellyfin-bridge` (port 8093) syncs events to Supabase
 - **Related Submodules:** `PMOVES-Jellyfin`, `Pmoves-Jellyfin-AI-Media-Stack`
 
+## Token Economy & Agent UI (Added 2025-12-30)
+
+### Tokenism Simulator
+- **Ports:** 8103 (API)
+- **Purpose:** Token economy simulation with business model validation powered by EVO swarm intelligence
+- **Key APIs:**
+  - `GET /healthz` - Health check
+  - `GET /metrics` - Prometheus metrics
+  - `POST /api/v1/simulate` - Run simulation with scenario parameters
+  - `POST /api/v1/simulate/async` - Queue async simulation
+  - `GET /api/v1/scenarios` - List available scenarios (optimistic, baseline, pessimistic, stress_test)
+  - `GET /api/v1/contracts` - List contract types (GroToken, FoodUSD, GroupPurchase, GroVault, CoopGovernor)
+  - `GET /api/v1/simulations/{id}/geometry` - Get CHIT geometry data
+- **CHIT/Geometry:**
+  - Publishes to `tokenism.cgp.ready.v1` - Geometry packets for Poincaré disk visualization
+  - Hyperbolic wealth distribution visualization via A2UI
+- **Metrics:**
+  - `tokenism_simulation_requests_total{scenario, status}` - Counter for all simulations
+  - `tokenism_simulation_duration_seconds{scenario}` - Histogram for latency
+- **Grafana Dashboard:** tokenism-simulator
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-tokenism-simulator:pmoves-latest`
+- **Compose Profile:** `orchestration`
+- **Related Submodule:** `PMOVES-ToKenism-Multi`
+
+### A2UI NATS Bridge
+- **Ports:** 9224 (API), 9225 (WebSocket agents), 9226 (WebSocket clients)
+- **Purpose:** Bridges Google A2UI (Agent-to-User Interface) events to PMOVES NATS geometry bus
+- **Key APIs:**
+  - `GET /healthz` - Health check with active surfaces
+  - `GET /metrics` - Prometheus metrics
+  - `POST /api/v1/a2ui` - Accept A2UI JSON events
+  - `POST /api/v1/action` - Handle user actions from UI
+  - `POST /api/v1/simulate` - Simulate A2UI event for testing
+  - `WS /ws/a2ui` - WebSocket for A2UI agents (JSONL format)
+  - `WS /ws/client` - WebSocket for PMOVES UI subscribers
+- **NATS Subjects:**
+  - Publishes to: `a2ui.render.v1`, `a2ui.>`
+  - Subscribes to: `geometry.>` (bidirectional)
+- **A2UI Format (v0.9):**
+  - `createSurface` / `beginRendering` - Initialize UI surface
+  - `updateComponents` / `surfaceUpdate` - Add/update UI components
+  - `updateDataModel` / `dataModelUpdate` - Update data bindings
+  - `userAction` - Forward user interactions to agents
+- **Metrics:**
+  - `a2ui_events_published_total{event_type}` - Events published to NATS
+  - `a2ui_events_received_total` - Events from A2UI agents
+  - `a2ui_geometry_events_total` - Geometry events from NATS
+  - `a2ui_active_websockets` - Active WebSocket connections
+  - `a2ui_nats_connected` - NATS connection status (1=connected)
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest`
+- **Compose Profile:** `agents`, `orchestration`
+- **Related Submodule:** `research/A2UI` (Google A2UI repository)
+
 ## Quick Reference
 
 ### All Service Health Endpoints
@@ -438,6 +491,11 @@ Comprehensive reference of all production services, ports, APIs, and integration
 http://localhost:8080/healthz  # Agent Zero
 http://localhost:8091/healthz  # Archon
 http://localhost:8097/healthz  # Channel Monitor
+
+# Token Economy & Agent UI
+http://localhost:8103/healthz  # Tokenism Simulator
+http://localhost:8103/metrics  # Tokenism Simulator (Prometheus)
+http://localhost:9224/healthz  # A2UI NATS Bridge
 
 # Retrieval & Knowledge
 http://localhost:8086/healthz  # Hi-RAG v2 CPU

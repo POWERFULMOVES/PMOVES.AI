@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -30,7 +31,31 @@ from ..event_bus import EventBus  # noqa: E402
 
 logger = logging.getLogger("pmoves.gateway")
 
-app = FastAPI(title="PMOVES.AI Gateway")
+# Shared NATS event bus (publishes contracts + captures workflow events).
+event_bus = EventBus(
+    nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
+    subscribe_topics=[
+        "ingest.file.added.v1",
+        "ingest.transcript.ready.v1",
+        "kb.upsert.request.v1",
+        "kb.upsert.result.v1",
+    ],
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage PMOVES Gateway application lifespan."""
+    # Startup
+    if app.state.event_bus:
+        await app.state.event_bus.start()
+    yield
+    # Shutdown
+    if app.state.event_bus:
+        await app.state.event_bus.stop()
+
+
+app = FastAPI(title="PMOVES.AI Gateway", lifespan=lifespan)
 
 # Initialise ShapeStore so CHIT endpoints have in-memory state available.
 try:  # pragma: no cover - optional during documentation builds
@@ -44,16 +69,6 @@ except Exception as exc:  # pragma: no cover - optional dependency
     _shape_store = None
     chit.set_shape_store(None)
 
-# Shared NATS event bus (publishes contracts + captures workflow events).
-event_bus = EventBus(
-    nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
-    subscribe_topics=[
-        "ingest.file.added.v1",
-        "ingest.transcript.ready.v1",
-        "kb.upsert.request.v1",
-        "kb.upsert.result.v1",
-    ],
-)
 events_api.set_event_bus(event_bus)
 app.state.event_bus = event_bus
 
@@ -84,18 +99,6 @@ app.mount(
     StaticFiles(directory=str(_service_root / "artifacts"), check_dir=False),
     name="artifacts",
 )
-
-
-@app.on_event("startup")
-async def _startup() -> None:
-    if app.state.event_bus:
-        await app.state.event_bus.start()
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    if app.state.event_bus:
-        await app.state.event_bus.stop()
 
 
 @app.get("/demo/shapes-webrtc")
