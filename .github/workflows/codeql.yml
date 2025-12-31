@@ -28,9 +28,6 @@ jobs:
     #   - https://gh.io/using-larger-runners (GitHub.com only)
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
     runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
-    # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
-    # C/CPP files only exist in submodules (external dependencies)
-    continue-on-error: ${{ matrix.language == 'c-cpp' }}
     permissions:
       # required for all workflows
       security-events: write
@@ -48,8 +45,7 @@ jobs:
         include:
         - language: actions
           build-mode: none
-        - language: c-cpp
-          build-mode: autobuild
+        # Note: Removed c-cpp - this repo has no C/C++ code (only Python/TypeScript)
         - language: javascript-typescript
           build-mode: none
         - language: python
