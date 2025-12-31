@@ -112,6 +112,16 @@ scrape_configs:
     static_configs:
       - targets: ["messaging-gateway:8101"]
 
+  # === Tier 5 Services (Added 2025-12-30) ===
+
+  - job_name: tokenism-simulator
+    static_configs:
+      - targets: ["tokenism-simulator:8103"]
+
+  - job_name: a2ui-nats-bridge
+    static_configs:
+      - targets: ["a2ui-nats-bridge:9224"]
+
   # === Blackbox HTTP probes ===
   # Health check probes for services without /metrics
 
