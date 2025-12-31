@@ -9,12 +9,18 @@
 
 import { useState } from 'react';
 import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
-import { DashboardShell } from '@/components/DashboardNavigation';
-import { ServiceCard } from '@/components/services';
+import DashboardShell from '@/components/DashboardShell';
+import DashboardHeader from '@/components/DashboardHeader';
+import ServiceCard from '@/components/ServiceCard';
 import TokenismSimulationPanel from '@/components/tokenism/SimulationPanel';
 import TokenismResultsPanel from '@/components/tokenism/ResultsPanel';
 import TokenismGeometricView from '@/components/tokenism/GeometricView';
 import { SimulationResult } from '@/lib/tokenismClient';
+
+export const metadata = {
+  title: 'Tokenism | PMOVES',
+  description: 'Token economy simulation with business model validation powered by EVO swarm intelligence',
+};
 
 export default function TokenismPage() {
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
@@ -23,11 +29,12 @@ export default function TokenismPage() {
   const tokenismUIService = SERVICE_CATALOG.find(s => s.slug === 'tokenism-ui');
 
   return (
-    <DashboardShell
-      active="tokenism"
-      title="Tokenism"
-      subtitle="Token economy simulation with business model validation"
-    >
+    <DashboardShell active="tokenism">
+      <DashboardHeader
+        title="Tokenism"
+        subtitle="Token economy simulation with business model validation"
+        active="tokenism"
+      />
 
       <div className="space-y-6 p-6">
         {/* Service Overview */}
@@ -141,11 +148,11 @@ export default function TokenismPage() {
 interface CapabilityCardProps {
   title: string;
   description: string;
-  color: 'gold' | 'cyan' | 'green' | 'red' | 'violet' | 'blue';
+  color: string;
 }
 
 function CapabilityCard({ title, description, color }: CapabilityCardProps) {
-  const colorClasses: Record<CapabilityCardProps['color'], string> = {
+  const colorClasses = {
     gold: 'border-gold-500/50 text-gold-400',
     cyan: 'border-cyan-500/50 text-cyan-400',
     green: 'border-green-500/50 text-green-400',
@@ -154,7 +161,7 @@ function CapabilityCard({ title, description, color }: CapabilityCardProps) {
     blue: 'border-blue-500/50 text-blue-400',
   };
 
-  const classes = colorClasses[color];
+  const classes = colorClasses[color as keyof typeof colorClasses] || colorClasses.gold;
 
   return (
     <div className={`border ${classes} p-4 bg-black/30`}>
@@ -165,13 +172,13 @@ function CapabilityCard({ title, description, color }: CapabilityCardProps) {
 }
 
 interface ApiEndpointProps {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method: string;
   endpoint: string;
   description: string;
 }
 
 function ApiEndpoint({ method, endpoint, description }: ApiEndpointProps) {
-  const methodColors: Record<ApiEndpointProps['method'], string> = {
+  const methodColors = {
     GET: 'text-green-400',
     POST: 'text-blue-400',
     PUT: 'text-yellow-400',
@@ -180,7 +187,7 @@ function ApiEndpoint({ method, endpoint, description }: ApiEndpointProps) {
 
   return (
     <div className="flex items-center gap-4 p-2 bg-black/50 rounded">
-      <span className={`font-bold ${methodColors[method]}`}>
+      <span className={`font-bold ${methodColors[method as keyof typeof methodColors] || 'text-gray-400'}`}>
         {method}
       </span>
       <span className="text-gray-300">{endpoint}</span>

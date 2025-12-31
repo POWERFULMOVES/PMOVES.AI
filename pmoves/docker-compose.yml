@@ -1379,6 +1379,7 @@ services:
     restart: unless-stopped
     <<: *env-tier-agent
     environment:
+      - PORT=${GITHUB_RUNNER_CTL_PORT:-8100}
       - PORT=${GITHUB_RUNNER_CTL_PORT:-8104}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
@@ -1386,12 +1387,14 @@ services:
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
       - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
     depends_on: [ nats ]
+    ports: [ "8100:8100" ]
     ports: [ "8104:8104" ]
     volumes:
       - ./services/github-runner-ctl/config:/app/config:ro
     profiles: [ "orchestration", "workers" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
       test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
