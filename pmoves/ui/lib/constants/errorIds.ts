@@ -1,5 +1,5 @@
 /**
- * Error ID constants for Sentry aggregation.
+ * Error ID constants for log aggregation (Loki/Promtail).
  * Each unique error type gets a stable ID for tracking and alerting.
  *
  * Usage: logError(message, error, 'error', { errorId: ErrorIds.TOKENISM_SIMULATION_FAILED, ... })
