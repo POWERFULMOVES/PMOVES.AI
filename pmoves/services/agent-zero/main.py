@@ -627,7 +627,7 @@ async def lifespan(app: FastAPI):
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
             loop.add_signal_handler(
-                sig, lambda: asyncio.create_task(process_manager.stop())
+                sig, lambda s=sig: asyncio.create_task(process_manager.stop())
             )
         except (NotImplementedError, RuntimeError, ValueError):
             # Tests run event loops in worker threads where signal handlers are unsupported.
@@ -643,24 +643,11 @@ async def lifespan(app: FastAPI):
             await _controller_task
         _controller_task = None
     if event_controller.is_started:
-        try:
+        with contextlib.suppress(Exception):
             await event_controller.stop()
-        except Exception:
-            logger.debug("Exception during event controller shutdown", exc_info=True)
 
 
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
-
-# Prometheus metrics
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-
-http_requests_total = Counter('agent_zero_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-http_request_duration = Histogram('agent_zero_http_request_duration_seconds', 'HTTP request duration')
-mcp_commands_total = Counter('agent_zero_mcp_commands_total', 'MCP commands executed', ['command', 'status'])
-mcp_execute_duration = Histogram('agent_zero_mcp_execute_duration_seconds', 'MCP command execution duration')
-tasks_created_total = Counter('agent_zero_tasks_created_total', 'Agent tasks created')
-tasks_completed_total = Counter('agent_zero_tasks_completed_total', 'Agent tasks completed')
-memory_operations_total = Counter('agent_zero_memory_operations_total', 'Memory operations', ['operation'])
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST

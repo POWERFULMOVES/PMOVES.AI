@@ -95,27 +95,14 @@ EMBEDDING_DIM = int(os.environ.get("YOUTUBE_EMBEDDING_DIM", str(_DEFAULT_DIM)))
 # FastAPI app
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan, handling startup and shutdown events.
-
-    Initializes embedding models and HTTP clients on startup, and properly
-    closes connections on shutdown to prevent resource leaks.
-
-    Args:
-        app: The FastAPI application instance.
-
-    Yields:
-        None: Control is yielded back to the application during its lifetime.
-
-    Raises:
-        Exception: Propagates exceptions that occur during startup initialization.
-    """
+    """Manage application lifespan."""
     # Startup
-    # Initialize services on startup.
+    """Initialize services on startup."""
     print("🚀 MCP YouTube Adapter starting up...")
     print(f"   Supabase: {SUPABASE_URL}")
     print(f"   Embedding Model: {EMBEDDING_MODEL}")
     print(f"   Embedding Column: {EMBEDDING_COLUMN} (dim={EMBEDDING_DIM})")
-
+    
     # Pre-load embedding model
     if EMBEDDING_API_URL:
         print(f"   Using remote embedding API: {EMBEDDING_API_URL}")
@@ -131,7 +118,7 @@ async def lifespan(app: FastAPI):
             print(f"   ⚠️  Failed to load embedding model: {exc}")
     yield
     # Shutdown
-    # Cleanup on shutdown.
+    """Cleanup on shutdown."""
     global _supabase_client, _embedding_api_client
     if _supabase_client:
         await _supabase_client.aclose()
@@ -140,12 +127,15 @@ async def lifespan(app: FastAPI):
     print("👋 MCP YouTube Adapter shut down")
 
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
+
 app = FastAPI(
     title="PMOVES.yt MCP Adapter",
     description="YouTube transcript search and metadata API for Jellyfin backfill",
-    version="0.1.0",
-    lifespan=lifespan
-)
+    version="0.1.0"
+, lifespan=lifespan)
 
 
 if __name__ == "__main__":

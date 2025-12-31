@@ -127,62 +127,39 @@ def _nats_loop_done(task: asyncio.Task) -> None:
 # FastAPI app for health endpoint
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan with NATS connection lifecycle.
-
-    This async context manager handles the startup and shutdown of the NATS
-    connection resilience loop. On startup, it creates the NATS connection task.
-    On shutdown, it gracefully cancels the task and closes the connection.
-
-    Args:
-        app (FastAPI): The FastAPI application instance. This parameter is required
-            by FastAPI's lifespan interface but is not used directly.
-
-    Yields:
-        None: This context manager yields control back to FastAPI during the
-            application's lifetime.
-
-    Notes:
-        - The NATS resilience loop runs in a background task and handles automatic
-          reconnection with exponential backoff.
-        - On shutdown, the task is cancelled and the NATS connection is closed
-          gracefully.
-        - Exceptions during shutdown are silently caught to ensure clean exit.
-    """
+    """Manage application lifespan."""
     global _nats_loop_task, _nc
-    # Startup: Start NATS connection loop
+    # Startup
+    """Start NATS connection loop on app startup."""
+
     if _nats_loop_task is None or _nats_loop_task.done():
         logger.info("Starting NATS resilience loop")
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
-        _nats_loop_task.add_done_callback(_nats_loop_done)
     yield
-    # Shutdown: Clean shutdown of NATS connection
+    # Shutdown
+    """Clean shutdown of NATS connection."""
+
     if _nats_loop_task:
         _nats_loop_task.cancel()
         try:
             await _nats_loop_task
-        except asyncio.CancelledError:
-            logger.debug("NATS resilience loop cancelled successfully")
-        except Exception as e:
-            logger.warning("Unexpected error during NATS loop shutdown: %s", e)
+        except Exception:
+            pass
         _nats_loop_task = None
 
     if _nc:
         try:
             await _nc.close()
-            logger.info("NATS connection closed cleanly")
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning("NATS close error during shutdown: %s", e)
+        except Exception:
+            pass
         _nc = None
-
-
-app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=HEALTH_PORT)
+
+app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
 
 
 def _extract_searchable_content(context: Dict[str, Any]) -> str:
