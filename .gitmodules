@@ -99,6 +99,21 @@
 [submodule "pmoves/vendor/e2b"]
 	path = pmoves/vendor/e2b
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+[submodule "pmoves/vendor/e2b-desktop"]
+	path = pmoves/vendor/e2b-desktop
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
+[submodule "pmoves/vendor/e2b-infra"]
+	path = pmoves/vendor/e2b-infra
+	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+[submodule "pmoves/vendor/e2b-mcp-server"]
+	path = pmoves/vendor/e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+[submodule "pmoves/vendor/e2b-spells"]
+	path = pmoves/vendor/e2b-spells
+	url = https://github.com/POWERFULMOVES/PMOEVES-E2b-Spells.git
+[submodule "pmoves/vendor/e2b-surf"]
+	path = pmoves/vendor/e2b-surf
+	url = https://github.com/POWERFULMOVES/pmoves-surf.git
 [submodule "research/A2UI"]
 	path = research/A2UI
 	url = https://github.com/google/A2UI.git
