@@ -13,7 +13,7 @@ Following PMOVES.AI patterns:
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -46,30 +46,13 @@ class SimulationEngine:
     """
 
     def __init__(self, config: ServiceConfig):
-        """Initialize simulation engine with configuration.
-
-        Args:
-            config: Service configuration including NATS, TensorZero, and CHIT settings.
-
-        Note:
-            External connections are not established until :meth:`initialize` is called.
-        """
         self.config = config
         self.nats: NATSClient | None = None
         self.tensorzero: TensorZeroClient | None = None
         self.chit: CHITEncoder | None = None
 
-    async def initialize(self) -> None:
-        """Initialize external service connections.
-
-        Connects to:
-        - NATS message bus for publishing results
-        - TensorZero for AI-powered analysis
-        - CHIT encoder for geometry packet generation
-
-        Raises:
-            ConnectionError: If NATS connection fails.
-        """
+    async def initialize(self):
+        """Initialize external service connections."""
         # Connect to NATS
         self.nats = NATSClient(self.config.nats)
         await self.nats.connect()
@@ -97,7 +80,7 @@ class SimulationEngine:
         Returns:
             SimulationResult with weekly metrics and analysis
         """
-        simulation_id = f"sim_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        simulation_id = f"sim_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         logger.info(f"Starting simulation {simulation_id} with scenario {scenario}")
 
         # Apply scenario modifiers
@@ -162,19 +145,7 @@ class SimulationEngine:
         params: SimulationParameters,
         scenario: SimulationScenario,
     ) -> SimulationParameters:
-        """Apply scenario-based modifiers to simulation parameters.
-
-        Args:
-            params: Base simulation parameters.
-            scenario: Economic scenario to apply.
-
-        Returns:
-            Modified SimulationParameters with scenario-specific adjustments:
-            - OPTIMISTIC: +20% velocity, +30% staking APR, -20% Gini
-            - PESSIMISTIC: -20% velocity, -30% staking APR, +20% Gini
-            - STRESS_TEST: -50% velocity, +100% fees, Gini = 0.8
-            - BASELINE: No modification
-        """
+        """Apply scenario-based modifiers to parameters."""
         params_dict = params.model_dump()
 
         match scenario:
@@ -194,22 +165,7 @@ class SimulationEngine:
         return SimulationParameters(**params_dict)
 
     def _initialize_state(self, params: SimulationParameters) -> dict[str, Any]:
-        """Initialize simulation state with log-normal wealth distribution.
-
-        Args:
-            params: Simulation parameters defining participant count and initial Gini.
-
-        Returns:
-            Dictionary with initial state keys:
-            - wealth: List of participant wealth values (log-normal distribution)
-            - participants: Number of participants
-            - supply: Initial token supply
-            - staked: Total staked tokens (starts at 0)
-            - week: Current week number (starts at 0)
-
-        Note:
-            Uses fixed seed (42) for reproducible wealth distribution.
-        """
+        """Initialize simulation state."""
         # Generate initial wealth distribution
         np.random.seed(42)
         sigma = -np.log(1 - params.initial_gini) * 0.5
@@ -231,22 +187,7 @@ class SimulationEngine:
         state: dict[str, Any],
         week_num: int,
     ) -> WeeklyMetrics:
-        """Simulate one week of token economy activity.
-
-        Args:
-            params: Simulation parameters.
-            state: Current simulation state (wealth, participants, etc.).
-            week_num: Current week number (0-indexed).
-
-        Returns:
-            WeeklyMetrics containing economic indicators for the week:
-            - Average and median wealth
-            - Gini coefficient (inequality measure)
-            - Poverty rate (% below 20% of median wealth)
-            - Transaction count and volume
-            - Active and new participants
-            - Staked tokens and circulating supply
-        """
+        """Simulate one week of token economy activity."""
         wealth = np.array(state["wealth"])
         n_participants = len(wealth)
 
@@ -303,18 +244,7 @@ class SimulationEngine:
         wealth: np.ndarray,
         state: dict[str, Any],
     ) -> tuple[np.ndarray, float]:
-        """Apply contract-specific token economics to wealth distribution.
-
-        Args:
-            params: Simulation parameters including contract type.
-            wealth: Array of participant wealth values.
-            state: Current simulation state.
-
-        Returns:
-            Tuple of (modified_wealth, total_staked):
-            - wealth: Updated array after contract logic applied
-            - staked: Total tokens staked this week
-        """
+        """Apply contract-specific token economics."""
         staked = 0.0
 
         match params.contract_type:
@@ -360,29 +290,15 @@ class SimulationEngine:
         params: SimulationParameters,
         state: dict[str, Any],
         metrics: WeeklyMetrics,
-    ) -> None:
-        """Update simulation state after weekly simulation.
-
-        Args:
-            params: Simulation parameters.
-            state: Current simulation state (modified in-place).
-            metrics: Weekly metrics to incorporate into state.
-        """
+    ):
+        """Update state after weekly simulation."""
         state["week"] += 1
         state["participants"] += metrics.new_participants
         state["supply"] = metrics.circulating_supply
         state["staked"] = metrics.staked_tokens
 
     def _calculate_volatility(self, weekly_metrics: list[WeeklyMetrics]) -> float:
-        """Calculate wealth volatility across simulation weeks.
-
-        Args:
-            weekly_metrics: List of weekly metrics from simulation.
-
-        Returns:
-            Standard deviation of week-to-week average wealth changes.
-            Returns 0.0 if fewer than 2 weeks of data.
-        """
+        """Calculate wealth volatility across simulation."""
         if len(weekly_metrics) < 2:
             return 0.0
 
@@ -394,18 +310,13 @@ class SimulationEngine:
         return float(np.std(wealth_changes)) if wealth_changes else 0.0
 
     def _calculate_systemic_risk(self, result: SimulationResult) -> float:
-        """Calculate systemic risk score (0-1, higher = more risk).
+        """
+        Calculate systemic risk score (0-1).
 
-        Combines three risk factors:
-        - Gini coefficient (wealth inequality) - 40% weight
-        - Poverty rate - 30% weight
-        - Wealth volatility (normalized, capped at 500) - 30% weight
-
-        Args:
-            result: Simulation result with final metrics.
-
-        Returns:
-            Systemic risk score between 0 and 1.
+        Combines:
+        - Gini coefficient (wealth inequality)
+        - Poverty rate
+        - Wealth volatility
         """
         # Normalize components
         gini_risk = result.final_gini  # 0-1
@@ -421,11 +332,8 @@ class SimulationEngine:
 
         return float(np.clip(systemic_risk, 0, 1))
 
-    async def close(self) -> None:
-        """Close external connections and cleanup resources.
-
-        Closes the NATS connection if established. Safe to call multiple times.
-        """
+    async def close(self):
+        """Close external connections."""
         if self.nats:
             await self.nats.close()
         logger.info("Simulation engine closed")
@@ -436,17 +344,7 @@ _engine: SimulationEngine | None = None
 
 
 async def get_simulation_engine(config: ServiceConfig | None = None) -> SimulationEngine:
-    """Get or create the global simulation engine instance.
-
-    Args:
-        config: Optional service configuration. Uses default config if None.
-
-    Returns:
-        Initialized SimulationEngine ready to run simulations.
-
-    Raises:
-        ConnectionError: If NATS connection fails during initialization.
-    """
+    """Get or create the global simulation engine."""
     global _engine
 
     if _engine is None:

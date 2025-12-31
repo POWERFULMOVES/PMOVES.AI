@@ -317,6 +317,8 @@ async def a2ui_endpoint(data: dict[str, Any]):
     except (ValueError, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    success = await publish_a2ui_event(event)
+
     try:
         await publish_a2ui_event(event)
     except (ConnectionError, RuntimeError) as e:

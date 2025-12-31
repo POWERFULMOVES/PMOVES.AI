@@ -23,6 +23,28 @@
  * ```
  */
 
+/**
+ * Convert snake_case keys to camelCase recursively.
+ * The Tokenism API returns snake_case, but TypeScript interfaces use camelCase.
+ */
+function toCamelCase<T>(obj: unknown): T {
+  if (obj === null || typeof obj !== 'object') {
+    return obj as T;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => toCamelCase(item)) as T;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    // Convert snake_case to camelCase
+    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    result[camelKey] = toCamelCase(value);
+  }
+  return result as T;
+}
+
 export type ContractType =
   | 'GroToken'
   | 'FoodUSD'
@@ -117,11 +139,18 @@ export interface ContractInfo {
  * Provides interfaces for running simulations, retrieving results,
  * and accessing CHIT geometry packets for wealth visualization.
  */
+import { logError } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
+
 export class TokenismClient {
   private readonly httpUrl: string;
 
   constructor(options?: { httpUrl?: string }) {
+    // Server-side: use TOKENISM_URL (Docker internal hostname)
+    // Client-side: use NEXT_PUBLIC_TOKENISM_URL (user-accessible URL)
+    // Fallback: localhost for development
     this.httpUrl = options?.httpUrl
+      || (typeof window === 'undefined' ? process.env.TOKENISM_URL : undefined)
       || process.env.NEXT_PUBLIC_TOKENISM_URL
       || 'http://localhost:8103';
   }
@@ -141,11 +170,24 @@ export class TokenismClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Tokenism simulation failed: ${response.status} - ${error}`);
+      const errorText = await response.text();
+      const { contractType, scenario } = parameters;
+
+      // Provide actionable error messages based on status code
+      let userMessage = 'Simulation failed.';
+      if (response.status === 404) {
+        userMessage = 'Tokenism service not found. Ensure the backend is running.';
+      } else if (response.status === 500 || response.status === 502) {
+        userMessage = 'Tokenism service error. Check server logs.';
+      } else if (response.status === 400) {
+        userMessage = `Invalid parameters for ${contractType} / ${scenario}.`;
+      }
+
+      throw new Error(`${userMessage} (HTTP ${response.status}): ${errorText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<SimulationResult>(data);
   }
 
   /**
@@ -160,7 +202,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch scenarios: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<ScenarioInfo[]>(data);
   }
 
   /**
@@ -175,7 +218,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch contracts: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<ContractInfo[]>(data);
   }
 
   /**
@@ -195,7 +239,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch simulation: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<SimulationResult>(data);
   }
 
   /**
@@ -216,7 +261,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch geometry: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<CGPPacket>(data);
   }
 
   /**
@@ -234,7 +280,8 @@ export class TokenismClient {
       throw new Error(`Failed to fetch temporal geometry: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<CGPPacket>(data);
   }
 
   /**
@@ -250,7 +297,8 @@ export class TokenismClient {
       throw new Error(`Failed to list simulations: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return toCamelCase<SimulationResult[]>(data);
   }
 
   /**
@@ -266,7 +314,22 @@ export class TokenismClient {
       });
       return response.ok;
     } catch (error) {
-      console.warn('TokenismClient: Health check failed', error);
+      // Distinguish network errors for better debugging
+      const isNetworkError = error instanceof TypeError;
+      const isTimeout = error instanceof DOMException && error.name === 'TimeoutError';
+
+      logError(
+        'Tokenism health check failed',
+        error,
+        'warning',
+        {
+          errorId: ErrorIds.TOKENISM_HEALTH_CHECK_FAILED,
+          component: 'TokenismClient',
+          url: this.httpUrl,
+          isNetworkError,
+          isTimeout,
+        },
+      );
       return false;
     }
   }
