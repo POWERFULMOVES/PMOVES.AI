@@ -884,6 +884,11 @@ models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL e
 .PHONY: ui-dev-start ui-dev-stop ui-dev-logs
 
 ui-dev-start: ## Start the PMOVES console dev server on :3001 with env layering
+	@if [ "$${NODE_ENV:-}" = "production" ]; then \
+		echo "❌ ERROR: Development server cannot start in production (NODE_ENV=production)"; \
+		echo "   Use 'docker compose up pmoves-ui' for production"; \
+		exit 1; \
+	fi
 	@cd ui && \
 	  if [ ! -d node_modules ]; then echo "→ Installing UI dependencies (npm ci)"; npm ci; fi && \
 	  (logfile=.pmoves_ui_dev.log; nohup node scripts/with-env.mjs npm run dev:3001 > "$$logfile" 2>&1 & echo $$! > .pmoves_ui_dev.pid; \

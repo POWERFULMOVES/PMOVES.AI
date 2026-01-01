@@ -91,6 +91,12 @@ services:
     ports: [ "3010:3000" ]
     profiles: [ "orchestration", "workers", "supabase-local" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:3000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   postgrest-health:
     image: curlimages/curl:8.6.0
@@ -121,6 +127,13 @@ services:
     ports: [ "3011:3000" ]
     profiles: [ "supabase-cli-rest" ]
     networks: [ api_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:3000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   qdrant:
     image: qdrant/qdrant:v1.16.2
     restart: unless-stopped
@@ -219,7 +232,7 @@ services:
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -241,7 +254,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8090/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -263,7 +276,7 @@ services:
     profiles: [ "data", "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -285,7 +298,7 @@ services:
       - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8085/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -346,7 +359,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8083/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -376,7 +389,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -407,7 +420,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8084/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -437,7 +450,7 @@ services:
     ports: [ "8095:8095" ]
     profiles: [ "workers", "orchestration" ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8095/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -462,7 +475,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8100/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -490,7 +503,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, data_tier, monitoring_tier, supabase_net ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8102/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8102/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -564,7 +577,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8055/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -649,7 +662,7 @@ services:
     profiles: [ "workers", "orchestration", "agents" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8078/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8078/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -680,7 +693,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8079/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8079/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -709,7 +722,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8082/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -748,7 +761,7 @@ services:
     profiles: [ "orchestration", "workers", "agents" ]
     networks: [ api_tier, app_tier, bus_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8077/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8077/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -789,7 +802,7 @@ services:
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8097/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -844,7 +857,7 @@ services:
         condition: service_healthy
     networks: [ app_tier, data_tier, api_tier, monitoring_tier, supabase_net ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -899,7 +912,7 @@ services:
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -978,7 +991,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1017,7 +1030,7 @@ services:
               count: 1
               capabilities: [ gpu ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8200/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1078,7 +1091,7 @@ services:
     profiles: [ "agents" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1121,7 +1134,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)\"" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8091/healthz" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -1173,7 +1186,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8053/health').getcode()==200 else sys.exit(1)\"" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8053/healthz" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -1201,7 +1214,7 @@ services:
       data_tier:
       monitoring_tier:
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8054/healthz" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -1239,7 +1252,7 @@ services:
       data_tier:
       monitoring_tier:
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8100/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1261,7 +1274,7 @@ services:
     profiles: [ "workers", "botz" ]
     networks: [ api_tier, app_tier ]
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7071/health', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:7071/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1328,7 +1341,7 @@ services:
     profiles: [ "agents", "orchestration" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:9224/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1369,7 +1382,7 @@ services:
       - ./contracts:/app/contracts:ro
     networks: [ app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8098/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1393,7 +1406,7 @@ services:
     profiles: [ "orchestration", "workers" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8104/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1415,7 +1428,7 @@ services:
     profiles: [ "agents", "workers" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8099/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1438,7 +1451,7 @@ services:
     depends_on: [ nats ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8096/healthz').raise_for_status()\"" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8096/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1506,7 +1519,7 @@ services:
     profiles: [ "orchestration", "agents" ]
     networks: [ app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1524,7 +1537,7 @@ services:
     profiles: [ "workers" ]
     networks: [ api_tier, bus_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8101/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1563,7 +1576,7 @@ services:
     depends_on: [ nats, postgrest ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8100/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1605,7 +1618,7 @@ services:
     profiles: [ "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier, cataclysm ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8093/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1826,7 +1839,7 @@ services:
     profiles: [ "grayjay" ]
     networks: [ api_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
       interval: 30s
       timeout: 10s
       retries: 3
