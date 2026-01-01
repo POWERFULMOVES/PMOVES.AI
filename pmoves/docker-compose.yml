@@ -1025,7 +1025,18 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
-    command: [ "-js", "-m", "8222", "-ws", "-ws_port", "4223" ]
+    command: [
+      "-js",
+      "-m", "8222",
+      "-ws", "-ws_port", "4223",
+      # Authentication (use NATS_USER/NATS_PASS env vars for production)
+      "${NATS_AUTH:---auth}", "${NATS_USER:-nats}", "${NATS_PASS:-${NATS_DEFAULT_PASS:-pmoves}}",
+      # TLS (enable with NATS_TLS=true)
+      "${NATS_TLS_TLS:---tls}",
+      "${NATS_TLS_CERT:---tls_cert}",
+      "${NATS_TLS_KEY:---tls_key}",
+      "${NATS_TLS_CA:---tls_ca}",
+    ]
     restart: unless-stopped
     ports: [ "4222:4222", "9223:4223" ]
     profiles: [ "agents", "orchestration", "workers" ]
@@ -1490,8 +1501,6 @@ services:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    # env.tier-agent and .env.local are optional for local overrides.
-    # DISCORD_WEBHOOK_URL is validated at startup (logs warning if missing).
     env_file:
       - path: env.tier-agent
         required: false
