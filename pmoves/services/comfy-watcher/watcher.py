@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from datetime import timedelta
 import hashlib
 import json
 import logging
@@ -169,7 +170,6 @@ async def run() -> None:
 
                     # Generate presigned URL with error handling
                     try:
-                        from datetime import timedelta
                         payload["meta"]["presigned_url"] = client.presigned_get_object(BUCKET, key, expires=timedelta(hours=PRESIGN_HOURS))
                     except Exception as presign_exc:
                         logger.warning(f"Failed to generate presigned URL for {key}: {presign_exc}")

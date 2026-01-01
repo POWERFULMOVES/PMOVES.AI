@@ -113,8 +113,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="PMOVES Gateway Agent",
     description="Orchestrates 100+ MCP tools with Cipher memory integration",
-    version="1.0.0"
-, lifespan=lifespan)
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 # ============================================================================
