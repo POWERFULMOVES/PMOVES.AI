@@ -57,7 +57,7 @@ def load_state() -> dict:
     """
     try:
         with open(STATE_PATH) as f:
-            return json.loads(f.read())
+            return json.load(f)
     except FileNotFoundError:
         logger.info(f"State file not found, starting fresh: {STATE_PATH}")
         return {"uploaded": {}}

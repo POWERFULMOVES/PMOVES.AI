@@ -58,11 +58,13 @@ _executor_lock = threading.Lock()
 
 
 def _evict_old_results() -> None:
-    """Evict oldest results and statuses if we exceed the maximum cache size."""
-    with _results_lock, _status_lock:
-        while len(_simulation_results) > _MAX_RESULTS:
-            sim_id, _ = _simulation_results.popitem(last=False)
-            _simulation_statuses.pop(sim_id, None)
+    """Evict oldest results and statuses if we exceed the maximum cache size.
+
+    Note: Caller must hold both _results_lock and _status_lock.
+    """
+    while len(_simulation_results) > _MAX_RESULTS:
+        sim_id, _ = _simulation_results.popitem(last=False)
+        _simulation_statuses.pop(sim_id, None)
 
 
 def _shutdown_executor() -> None:
