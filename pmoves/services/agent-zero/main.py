@@ -627,7 +627,7 @@ async def lifespan(app: FastAPI):
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
             loop.add_signal_handler(
-                sig, lambda s=sig: asyncio.create_task(process_manager.stop())
+                sig, lambda: asyncio.create_task(process_manager.stop())
             )
         except (NotImplementedError, RuntimeError, ValueError):
             # Tests run event loops in worker threads where signal handlers are unsupported.
@@ -643,8 +643,10 @@ async def lifespan(app: FastAPI):
             await _controller_task
         _controller_task = None
     if event_controller.is_started:
-        with contextlib.suppress(Exception):
+        try:
             await event_controller.stop()
+        except Exception:
+            logger.debug("Exception during event controller shutdown", exc_info=True)
 
 
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)

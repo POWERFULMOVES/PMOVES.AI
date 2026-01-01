@@ -662,32 +662,34 @@ def get_simulation_status(simulation_id: str):
         For polling, implement exponential backoff (e.g., 1s, 2s, 4s, 8s...)
         to avoid overwhelming the service with frequent requests.
     """
-    status = _simulation_statuses.get(simulation_id, 'unknown')
+    # Acquire both locks to ensure atomic reads and avoid data races
+    with _status_lock, _results_lock:
+        status = _simulation_statuses.get(simulation_id, 'unknown')
 
-    if status == 'complete':
-        result = _simulation_results.get(simulation_id, {})
-        return jsonify({
-            'simulation_id': simulation_id,
-            'status': status,
-            'result': result,
-        }), 200
-    elif status == 'failed':
-        result = _simulation_results.get(simulation_id, {})
-        return jsonify({
-            'simulation_id': simulation_id,
-            'status': status,
-            'error': result.get('error', 'Unknown error'),
-        }), 500
-    elif status == 'running':
-        return jsonify({
-            'simulation_id': simulation_id,
-            'status': status,
-            'message': 'Simulation still in progress',
-        }), 202
-    else:
-        return jsonify({
-            'error': f'Simulation {simulation_id} not found',
-        }), 404
+        if status == 'complete':
+            result = _simulation_results.get(simulation_id, {})
+            return jsonify({
+                'simulation_id': simulation_id,
+                'status': status,
+                'result': result,
+            }), 200
+        elif status == 'failed':
+            result = _simulation_results.get(simulation_id, {})
+            return jsonify({
+                'simulation_id': simulation_id,
+                'status': status,
+                'error': result.get('error', 'Unknown error'),
+            }), 500
+        elif status == 'running':
+            return jsonify({
+                'simulation_id': simulation_id,
+                'status': status,
+                'message': 'Simulation still in progress',
+            }), 202
+        else:
+            return jsonify({
+                'error': f'Simulation {simulation_id} not found',
+            }), 404
 
 
 @simulation_bp.route('/api/v1/scenarios', methods=['GET'])

@@ -2418,69 +2418,6 @@ async def yt_playlist(body: Dict[str,Any] = Body(...)):
     if job_id:
         _job_update(job_id, 'failed' if any_failures else 'completed', None if not any_failures else 'one or more items failed')
     return {'ok': not any_failures, 'job_id': job_id, 'count': len(results), 'results': results}
-    try:
-        concurrency = int(os.environ.get('YT_CONCURRENCY', str(YT_CONCURRENCY)))
-    except Exception:
-        concurrency = YT_CONCURRENCY
-    concurrency = max(1, concurrency)
-
-    async def _ingest_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
-        vid = entry['id']
-        vid_url = f"https://www.youtube.com/watch?v={vid}" if len(vid) == 11 else vid
-        if job_id:
-            _item_upsert(job_id, vid, 'running', None, {'title': entry.get('title')})
-        result: Dict[str, Any]
-        status = 'failed'
-        error_msg: Optional[str] = None
-        try:
-            result = await asyncio.to_thread(_ingest_one, vid_url, ns, bucket)
-            status = 'completed' if result.get('ok') else 'failed'
-            error_msg = result.get('error')
-        except Exception as exc:
-            error_msg = str(exc)
-            result = {'ok': False, 'error': error_msg}
-        if job_id:
-            _item_upsert(job_id, vid, status, error_msg)
-        return {'id': vid, **result}
-
-    results: List[Dict[str, Any]] = []
-
-    if concurrency <= 1:
-        for entry in entries:
-            res = await _ingest_entry(entry)
-            results.append(res)
-            if rate_limit > 0:
-                await asyncio.sleep(rate_limit)
-    else:
-        semaphore = asyncio.Semaphore(concurrency)
-        rate_lock = asyncio.Lock()
-        next_available = 0.0
-        results_buffer: List[Optional[Dict[str, Any]]] = [None] * len(entries)
-
-        async def _wait_rate_limit() -> None:
-            nonlocal next_available
-            if rate_limit <= 0:
-                return
-            async with rate_lock:
-                now = time.monotonic()
-                if now < next_available:
-                    await asyncio.sleep(next_available - now)
-                    now = next_available
-                next_available = now + rate_limit
-
-        async def _worker(idx: int, entry: Dict[str, Any]) -> None:
-            async with semaphore:
-                await _wait_rate_limit()
-                res = await _ingest_entry(entry)
-                results_buffer[idx] = res
-
-        tasks = [asyncio.create_task(_worker(idx, entry)) for idx, entry in enumerate(entries)]
-        await asyncio.gather(*tasks)
-        results = [res for res in results_buffer if res is not None]
-
-    if job_id:
-        _job_update(job_id, 'completed')
-    return {'ok': True, 'job_id': job_id, 'count': len(results), 'results': results}
 
 @app.post('/yt/channel')
 async def yt_channel(body: Dict[str,Any] = Body(...)):

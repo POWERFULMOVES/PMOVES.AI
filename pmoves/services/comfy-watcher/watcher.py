@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from datetime import timedelta
 import hashlib
 import json
 import os
@@ -89,8 +90,6 @@ async def run() -> None:
 
                     payload = {"artifact_uri": f"s3://{BUCKET}/{key}", "meta": {"public_url": public_url}}
                     try:
-                        from datetime import timedelta
-
                         payload["meta"]["presigned_url"] = client.presigned_get_object(BUCKET, key, expires=timedelta(hours=PRESIGN_HOURS))
                     except Exception:
                         pass
