@@ -789,7 +789,7 @@ services:
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/api/monitor/healthz', timeout=5)" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1635,7 +1635,7 @@ services:
       api_tier:
         aliases: [ ollama ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/api/tags', timeout=5)" ]
+      test: [ "CMD", "ollama", "list" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1670,7 +1670,7 @@ services:
     # All other services call TensorZero internally, not providers directly.
     environment:
       - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
-      - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}
+      - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@${TENSORZERO_PG_HOST:-postgres}:${TENSORZERO_PG_PORT:-5432}/${TENSORZERO_PG_DB:-tensorzero}
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://host.docker.internal:4317
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TENSORZERO_PG_USER=${TENSORZERO_PG_USER:-tensorzero}
@@ -1701,7 +1701,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
-      - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}
+      - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@${TENSORZERO_PG_HOST:-postgres}:${TENSORZERO_PG_PORT:-5432}/${TENSORZERO_PG_DB:-tensorzero}
     volumes:
       - ./tensorzero/config:/app/config:ro
     depends_on:
@@ -1713,7 +1713,7 @@ services:
     profiles: [ "tensorzero" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/', timeout=5)" ]
+      test: [ "CMD", "curl", "-sf", "http://localhost:4000/" ]
       interval: 30s
       timeout: 10s
       retries: 3

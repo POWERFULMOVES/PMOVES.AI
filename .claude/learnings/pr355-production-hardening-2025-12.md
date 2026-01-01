@@ -60,6 +60,8 @@ Use `:?` syntax for mandatory secrets:
 
 ### Health Check Standard Pattern
 
+**See `.claude/context/healthcheck-patterns.md` for comprehensive multi-arch patterns.**
+
 ```yaml
 healthcheck:
   test: [ "CMD", "curl", "-sf", "http://localhost:PORT/healthz" ]
@@ -68,6 +70,9 @@ healthcheck:
   retries: 3
   start_period: 30s  # ALWAYS include - prevents false-negative restarts
 ```
+
+**CRITICAL:** Never use `python3 -c` in healthchecks - it fails in minimal images (ollama, alpine).
+Use `curl -sf` which works in ALL container images.
 
 ### GPU Services Pattern
 

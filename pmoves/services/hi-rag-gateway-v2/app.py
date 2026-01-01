@@ -134,6 +134,31 @@ _reranker = None
 
 
 def get_rerank_status() -> Dict[str, Any]:
+    """Get the current reranker configuration and status.
+
+    Returns a dictionary containing the reranker's configuration,
+    resolved model information, device settings, and any errors
+    or warnings encountered during initialization.
+
+    Returns:
+        A dictionary with keys:
+            - enabled: Whether reranking is enabled
+            - model: The model name from environment
+            - model_resolved: The actual model path used
+            - model_label: Human-readable model label
+            - model_path: Full path to model file
+            - provider: Reranker provider (local/tensorzero)
+            - topn: Number of results to rerank
+            - k: Final number of results to return
+            - fusion: Fusion method used
+            - device: "cuda" or "cpu"
+            - cuda_available: Whether CUDA is available
+            - use_fp16_requested: FP16 setting from env
+            - use_fp16_effective: Actual FP16 setting in use
+            - loaded: Whether the reranker is loaded
+            - errors: List of configuration errors
+            - warnings: List of configuration warnings
+    """
     return {
         "enabled": RERANK_ENABLE,
         "model": RERANK_MODEL,
@@ -323,6 +348,20 @@ async def _room_broadcast_roster(name: str):
     await _room_broadcast(name, {"type":"roster", "room": name, "peers": peers})
 
 def embed_query(text: str):
+    """Generate an embedding vector for the given text.
+
+    Tries the provider chain (TensorZero) first, then falls back to
+    the local SentenceTransformer model if providers are unavailable.
+
+    Args:
+        text: The text string to embed.
+
+    Returns:
+        A list of floats representing the embedding vector.
+
+    Raises:
+        ValueError: If embedding generation fails completely.
+    """
     # Try provider chain first; fall back to local SentenceTransformer when unavailable
     vec = None
     try:
@@ -413,12 +452,33 @@ def ensure_qdrant_collection(vector_dim: int):
         raise HTTPException(500, f"Qdrant collection error: {e}")
 
 def hybrid_score(vec_score: float, lex_score: float, alpha: float=ALPHA) -> float:
+    """Calculate a hybrid score combining vector and lexical scores.
+
+    Uses a weighted linear combination where alpha controls the balance
+    between vector similarity (semantic) and lexical matching (keyword).
+
+    Args:
+        vec_score: Vector similarity score, typically 0-1.
+        lex_score: Lexical/search score, typically 0-1.
+        alpha: Weight for vector score (default: ALPHA env var).
+
+    Returns:
+        A combined score between 0 and 1.
+    """
     return alpha*vec_score + (1.0-alpha)*lex_score
 
 _warm_entities: Dict[str, set] = {}
 _warm_last = 0.0
 
 def refresh_warm_dictionary():
+    """Refresh the in-memory entity cache from Neo4j.
+
+    Queries Neo4j for all Entity nodes and their values, organized by type.
+    This warm cache is used by the graph_terms function to quickly find
+    entity mentions in queries without hitting the database.
+
+    Updates the global _warm_entities dictionary and _warm_last timestamp.
+    """
     global _warm_entities, _warm_last
     if driver is None:
         _warm_entities = {}
@@ -454,6 +514,12 @@ def refresh_warm_dictionary():
         logger.exception("warm dictionary error")
 
 def warm_loop():
+    """Background loop to periodically refresh the entity cache.
+
+    Runs in a daemon thread and calls refresh_warm_dictionary at
+    NEO4J_DICT_REFRESH_SEC intervals to keep the in-memory entity
+    cache synchronized with Neo4j.
+    """
     while True:
         try:
             refresh_warm_dictionary()
@@ -466,6 +532,20 @@ if driver is not None:
     _t.Thread(target=warm_loop, daemon=True).start()
 
 def graph_terms(query: str, limit: int = 8, entity_types: Optional[List[str]] = None):
+    """Extract entity values from the knowledge graph that match the query.
+
+    Searches the warm entity cache for entities whose values contain
+    tokens from the query string. Useful for detecting known entities
+    (people, places, organizations) in user queries.
+
+    Args:
+        query: The query text to search for entity mentions.
+        limit: Maximum number of entities to return (default: 8).
+        entity_types: Optional list of entity type filters (e.g., ["PERSON", "ORG"]).
+
+    Returns:
+        A list of entity value strings that match the query tokens.
+    """
     toks = [t.lower() for t in re.split(r"\W+", query) if t and len(t) > 2]
     if not toks: return []
     types_norm = set([x.upper() for x in (entity_types or [])]) if entity_types else None
@@ -482,6 +562,21 @@ def graph_terms(query: str, limit: int = 8, entity_types: Optional[List[str]] = 
     return list(out)[:limit]
 
 def meili_lexical(query, namespace, limit):
+    """Perform a lexical search query against Meilisearch.
+
+    Searches the full-text index for documents matching the query within
+    a specific namespace. Returns a dictionary of chunk IDs to their
+    ranking scores.
+
+    Args:
+        query: The search query string.
+        namespace: The namespace to filter results by (e.g., "pmoves").
+        limit: Maximum number of results to return.
+
+    Returns:
+        A dictionary mapping chunk_id strings to their float scores (0-1).
+        Returns empty dict if Meilisearch is disabled or query fails.
+    """
     if not USE_MEILI: return {}
     try:
         headers={'Authorization': f'Bearer {MEILI_API_KEY}'} if MEILI_API_KEY else {}
@@ -517,6 +612,8 @@ def _extract_persona(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return persona or None
 
 class QueryReq(BaseModel):
+    """Request model for the hybrid RAG query endpoint."""
+
     query: str
     namespace: str = Field(default=NAMESPACE_DEFAULT)
     k: int = 10
@@ -527,6 +624,8 @@ class QueryReq(BaseModel):
     entity_types: Optional[List[str]] = None
 
 class QueryHit(BaseModel):
+    """A single search result hit from the hybrid RAG query."""
+
     chunk_id: str
     text: str
     score: float
@@ -536,6 +635,8 @@ class QueryHit(BaseModel):
     persona: Optional[Dict[str, Any]] = None
 
 class QueryResp(BaseModel):
+    """Response model for the hybrid RAG query endpoint."""
+
     query: str
     k: int
     used_rerank: bool

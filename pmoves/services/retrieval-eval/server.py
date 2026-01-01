@@ -20,6 +20,11 @@ app.mount('/static', StaticFiles(directory='static'), name='static')
 @app.get('/')
 def idx(): return {'ok':True, 'routes':['/samples','/query']}
 
+@app.get('/healthz')
+def healthz():
+    """Health check endpoint for Docker health checks."""
+    return {'status': 'ok'}
+
 @app.get('/samples')
 def samples(namespace: str = Query('pmoves'), limit: int = Query(20, ge=1, le=200)):
     qc = QdrantClient(url=QDRANT_URL, timeout=20.0)

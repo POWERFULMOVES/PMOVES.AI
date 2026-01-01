@@ -115,6 +115,8 @@ class TerminalSessionError(Exception):
 
 @dataclass
 class SubscriptionConfig:
+    """Configuration for NATS subscription settings."""
+
     subject: str
     durable: str
     queue: Optional[str]
@@ -124,6 +126,8 @@ class SubscriptionConfig:
 
 @dataclass
 class ControllerSettings:
+    """Settings for Agent Zero controller configuration."""
+
     nats_url: str = os.environ.get("NATS_URL", "nats://nats:4222")
     stream_name: str = os.environ.get("AGENTZERO_STREAM", "AGENTZERO")
     durable_prefix: str = os.environ.get("AGENTZERO_DURABLE_PREFIX", "agentzero")
@@ -151,12 +155,16 @@ class ControllerSettings:
 
 @dataclass
 class SessionJob:
+    """A job to be processed by a session worker."""
+
     envelope: Dict[str, Any]
     future: asyncio.Future
 
 
 @dataclass
 class SessionState:
+    """Runtime state for an active Agent Zero session."""
+
     queue: "asyncio.Queue[SessionJob]"
     task: asyncio.Task
 
@@ -170,6 +178,15 @@ class AgentZeroRuntime:
     async def handle(
         self, session_id: str, event: Dict[str, Any]
     ) -> List[Tuple[str, Dict[str, Any]]]:
+        """Handle an event within a session and generate response events.
+
+        Args:
+            session_id: The unique identifier for the session.
+            event: The event envelope containing topic and payload.
+
+        Returns:
+            A list of (topic, payload) tuples representing response events.
+        """
         topic = event.get("topic")
         payload = event.get("payload", {})
         correlation_id = event.get("correlation_id")
@@ -230,6 +247,8 @@ class AgentZeroRuntime:
 
 
 class AgentZeroSessionManager:
+    """Manages concurrent Agent Zero sessions with queue-based event processing."""
+
     def __init__(self, runtime: AgentZeroRuntime):
         self._runtime = runtime
         self._sessions: Dict[str, SessionState] = {}
@@ -237,6 +256,17 @@ class AgentZeroSessionManager:
         self._shutdown = asyncio.Event()
 
     async def enqueue(self, event: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+        """Enqueue an event for session processing and wait for completion.
+
+        Args:
+            event: The event envelope containing topic and payload with session_id.
+
+        Returns:
+            A list of (topic, payload) tuples representing response events.
+
+        Raises:
+            TerminalSessionError: If session_id is missing from the event payload.
+        """
         payload = event.get("payload") or {}
         session_id = payload.get("session_id")
         if not session_id:
@@ -289,6 +319,7 @@ class AgentZeroSessionManager:
                 queue.task_done()
 
     async def shutdown(self) -> None:
+        """Gracefully shutdown all active sessions and cleanup resources."""
         self._shutdown.set()
         async with self._lock:
             sessions = list(self._sessions.items())
@@ -310,6 +341,8 @@ class AgentZeroSessionManager:
 
 
 class AgentZeroController:
+    """Controller for Agent Zero NATS subscriptions and session management."""
+
     def __init__(self, settings: Optional[ControllerSettings] = None):
         self.settings = settings or ControllerSettings()
         self._nc: Optional[NATS] = None
@@ -329,6 +362,12 @@ class AgentZeroController:
 
     @property
     def metrics(self) -> Dict[str, Dict[str, int]]:
+        """Get current message processing metrics.
+
+        Returns:
+            A dictionary with counters for received, acked, nacked, and errors
+            per subject.
+        """
         return {name: dict(counter) for name, counter in self._metrics.items()}
 
     @property

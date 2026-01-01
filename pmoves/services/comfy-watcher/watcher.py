@@ -55,12 +55,44 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
+    """Save the watcher state to disk.
+
+    Persists the current state dictionary to JSON storage, ensuring the
+    target directory exists. Creates parent directories as needed.
+
+    Args:
+        state: A dictionary containing the watcher state, typically with
+            an "uploaded" key mapping file hashes to their metadata
+            (key, timestamp, size).
+
+    Raises:
+        OSError: If the state file cannot be written due to permission
+            or disk space issues.
+        TypeError: If the state dictionary contains non-serializable objects.
+    """
     pathlib.Path(os.path.dirname(STATE_PATH)).mkdir(parents=True, exist_ok=True)
     with open(STATE_PATH, "w") as f:
         json.dump(state, f)
 
 
 def file_hash(path: str) -> str:
+    """Calculate the SHA-256 hash of a file.
+
+    Computes a cryptographic hash by reading the file in 1 MB chunks,
+    allowing efficient hashing of large files without loading them
+    entirely into memory.
+
+    Args:
+        path: The absolute or relative path to the file to hash.
+
+    Returns:
+        A hexadecimal string representing the SHA-256 hash of the
+        file's contents.
+
+    Raises:
+        FileNotFoundError: If the specified file does not exist.
+        PermissionError: If the file cannot be read due to permissions.
+    """
     h = hashlib.sha256()
     with open(path, "rb") as f:
         while True:
@@ -72,6 +104,27 @@ def file_hash(path: str) -> str:
 
 
 async def run() -> None:
+    """Main watcher loop for ComfyUI output files.
+
+    Continuously monitors the configured output directory for new files,
+    uploads them to MinIO object storage, and publishes NATS events
+    with artifact metadata and presigned URLs.
+
+    The function:
+    - Validates MinIO credentials are configured
+    - Loads the upload state to avoid re-uploading files
+    - Ensures the target MinIO bucket exists
+    - Polls the output directory at configured intervals
+    - Uploads new files with timestamped S3-style keys
+    - Generates presigned URLs for temporary access
+    - Publishes completion events to NATS for downstream processing
+
+    Raises:
+        RuntimeError: If MinIO credentials are not set or bucket
+            creation fails.
+
+    The loop runs indefinitely until the process is terminated.
+    """
     if not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
         raise RuntimeError("MINIO_ACCESS_KEY and MINIO_SECRET_KEY must be set")
 
