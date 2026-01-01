@@ -320,7 +320,7 @@ async def a2ui_endpoint(data: dict[str, Any]):
     try:
         await publish_a2ui_event(event)
     except (ConnectionError, RuntimeError) as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
     return {
         "status": "published",
@@ -379,7 +379,7 @@ async def simulate_a2ui_event():
     try:
         await publish_a2ui_event(mock_event)
     except (ConnectionError, RuntimeError) as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     return {
         "status": "simulated",
         "surface_id": mock_event.surface_id,

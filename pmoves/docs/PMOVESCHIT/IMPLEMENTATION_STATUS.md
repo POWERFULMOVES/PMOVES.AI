@@ -231,7 +231,8 @@ curl -X POST http://localhost:8086/geometry/event \
 
 ## Related Documentation
 
-- `.claude/context/geometry-nats-subjects.md` - GEOMETRY BUS subjects
-- `.claude/context/services-catalog.md` - Service endpoints
+- `GEOMETRY_BUS_INTEGRATION.md` - GEOMETRY BUS subjects (NATS Subject Reference section)
+- `../services/README.md` - Service endpoints catalog
+- `../multi-stack-networking-guide-2025.md` - Networking and NATS overview
 - `Pmoves-hyperdimensions/` - Three.js visualization submodule
 - `PMOVES-ToKenism-Multi/` - CHIT contracts submodule

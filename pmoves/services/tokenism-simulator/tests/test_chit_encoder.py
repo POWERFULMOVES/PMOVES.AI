@@ -7,7 +7,6 @@ Tests cover:
 """
 import sys
 import pytest
-from decimal import Decimal
 
 # Add service to path
 sys.path.insert(0, "pmoves/services/tokenism-simulator")
@@ -104,23 +103,23 @@ class TestSimulationResultEncoding:
             scenario=SimulationScenario.BASELINE,
             parameters=params,
             final_avg_wealth=1000.0,
-            final_gini=Decimal('0.3'),
-            final_poverty_rate=Decimal('0.1'),
+            final_gini=0.3,
+            final_poverty_rate=0.1,
             total_transactions=1000,
-            total_volume=Decimal('50000.00'),
+            total_volume=50000.0,
             weekly_metrics=[
                 WeeklyMetrics(
                     week_number=0,
-                    avg_wealth=Decimal('1000'),
-                    median_wealth=Decimal('950'),
-                    gini_coefficient=Decimal('0.3'),
-                    poverty_rate=Decimal('0.1'),
+                    avg_wealth=1000.0,
+                    median_wealth=950.0,
+                    gini_coefficient=0.3,
+                    poverty_rate=0.1,
                     total_transactions=100,
-                    total_volume=Decimal('10000'),
+                    total_volume=10000.0,
                     active_participants=50,
                     new_participants=5,
-                    staked_tokens=Decimal('500'),
-                    circulating_supply=Decimal('1000')
+                    staked_tokens=500.0,
+                    circulating_supply=1000.0
                 )
             ]
         )
@@ -152,16 +151,16 @@ class TestSimulationResultEncoding:
         # Use minimal valid metrics instead of empty (avoid sigma=0 edge case)
         minimal_metrics = WeeklyMetrics(
             week_number=0,
-            avg_wealth=Decimal('100'),
-            median_wealth=Decimal('100'),
-            gini_coefficient=Decimal('0.1'),  # Small positive value for valid sigma
-            poverty_rate=Decimal('0'),
+            avg_wealth=100.0,
+            median_wealth=100.0,
+            gini_coefficient=0.1,  # Small positive value for valid sigma
+            poverty_rate=0.0,
             total_transactions=10,
-            total_volume=Decimal('1000'),
+            total_volume=1000.0,
             active_participants=10,  # Need participants > 0 for geometry
             new_participants=0,
-            staked_tokens=Decimal('0'),
-            circulating_supply=Decimal('1000'),
+            staked_tokens=0.0,
+            circulating_supply=1000.0,
         )
 
         result = SimulationResult(
@@ -169,10 +168,10 @@ class TestSimulationResultEncoding:
             scenario=SimulationScenario.OPTIMISTIC,
             parameters=params,
             final_avg_wealth=2000.0,
-            final_gini=Decimal('0.2'),
-            final_poverty_rate=Decimal('0.05'),
+            final_gini=0.2,
+            final_poverty_rate=0.05,
             total_transactions=500,
-            total_volume=Decimal('25000.00'),
+            total_volume=25000.0,
             weekly_metrics=[minimal_metrics]
         )
 
@@ -199,16 +198,16 @@ class TestSimulationResultEncoding:
         # Add minimal valid metrics for stress test scenario
         stress_metrics = WeeklyMetrics(
             week_number=0,
-            avg_wealth=Decimal('500'),
-            median_wealth=Decimal('400'),
-            gini_coefficient=Decimal('0.5'),  # Valid Gini
-            poverty_rate=Decimal('0.3'),
+            avg_wealth=500.0,
+            median_wealth=400.0,
+            gini_coefficient=0.5,  # Valid Gini
+            poverty_rate=0.3,
             total_transactions=20,
-            total_volume=Decimal('5000'),
+            total_volume=5000.0,
             active_participants=50,
             new_participants=0,
-            staked_tokens=Decimal('0'),
-            circulating_supply=Decimal('1000'),
+            staked_tokens=0.0,
+            circulating_supply=1000.0,
         )
 
         result = SimulationResult(
@@ -216,10 +215,10 @@ class TestSimulationResultEncoding:
             scenario=SimulationScenario.STRESS_TEST,
             parameters=params,
             final_avg_wealth=500.0,
-            final_gini=Decimal('0.5'),  # Valid Gini
-            final_poverty_rate=Decimal('0.3'),
+            final_gini=0.5,  # Valid Gini
+            final_poverty_rate=0.3,
             total_transactions=200,
-            total_volume=Decimal('5000.00'),
+            total_volume=5000.0,
             weekly_metrics=[stress_metrics]
         )
 
@@ -248,16 +247,16 @@ class TestWeeklyMetricsGeometry:
 
         metrics = WeeklyMetrics(
             week_number=5,
-            avg_wealth=Decimal('1500'),
-            median_wealth=Decimal('1400'),
-            gini_coefficient=Decimal('0.35'),
-            poverty_rate=Decimal('0.15'),
+            avg_wealth=1500.0,
+            median_wealth=1400.0,
+            gini_coefficient=0.35,
+            poverty_rate=0.15,
             total_transactions=250,
-            total_volume=Decimal('15000'),
+            total_volume=15000.0,
             active_participants=75,
             new_participants=10,
-            staked_tokens=Decimal('750'),
-            circulating_supply=Decimal('1500')
+            staked_tokens=750.0,
+            circulating_supply=1500.0
         )
 
         result = SimulationResult(
@@ -265,10 +264,10 @@ class TestWeeklyMetricsGeometry:
             scenario=SimulationScenario.BASELINE,
             parameters=params,
             final_avg_wealth=1500.0,
-            final_gini=Decimal('0.35'),
-            final_poverty_rate=Decimal('0.15'),
+            final_gini=0.35,
+            final_poverty_rate=0.15,
             total_transactions=250,
-            total_volume=Decimal('15000'),
+            total_volume=15000.0,
             weekly_metrics=[metrics]
         )
 
@@ -300,16 +299,16 @@ class TestWeeklyMetricsGeometry:
         metrics = [
             WeeklyMetrics(
                 week_number=i,
-                avg_wealth=Decimal(str(1000 + i * 100)),
-                median_wealth=Decimal(str(950 + i * 100)),
-                gini_coefficient=Decimal('0.3'),
-                poverty_rate=Decimal('0.1'),
+                avg_wealth=1000 + i * 100,
+                median_wealth=950 + i * 100,
+                gini_coefficient=0.3,
+                poverty_rate=0.1,
                 total_transactions=100 * (i + 1),
-                total_volume=Decimal(str(10000 * (i + 1))),
+                total_volume=10000 * (i + 1),
                 active_participants=50,
                 new_participants=5,
-                staked_tokens=Decimal('500'),
-                circulating_supply=Decimal('1000')
+                staked_tokens=500.0,
+                circulating_supply=1000.0
             )
             for i in range(5)
         ]
@@ -319,10 +318,10 @@ class TestWeeklyMetricsGeometry:
             scenario=SimulationScenario.BASELINE,
             parameters=params,
             final_avg_wealth=1400.0,
-            final_gini=Decimal('0.3'),
-            final_poverty_rate=Decimal('0.1'),
+            final_gini=0.3,
+            final_poverty_rate=0.1,
             total_transactions=1500,
-            total_volume=Decimal('150000'),
+            total_volume=150000.0,
             weekly_metrics=metrics
         )
 

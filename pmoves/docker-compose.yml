@@ -1,7 +1,5 @@
-# =============================================================================
 # PMOVES Tier-Based Environment File Anchors
 # Each tier receives ONLY the secrets it needs (principle of least privilege)
-# =============================================================================
 x-env-tier-data: &env-tier-data
   env_file:
     - path: env.tier-data
@@ -55,7 +53,6 @@ x-env-tier-ui: &env-tier-ui
 x-env-legacy: &env-legacy
   env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
 
-# =============================================================================
 services:
   postgres:
     image: ankane/pgvector
@@ -1033,6 +1030,8 @@ services:
     ports: [ "4222:4222", "9223:4223" ]
     profiles: [ "agents", "orchestration", "workers" ]
     networks: [ bus_tier, monitoring_tier ]
+    environment:
+      - NATS_DEFAULT_PASS=${NATS_DEFAULT_PASS:-pmoves}
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz" ]
       interval: 30s
@@ -1380,6 +1379,7 @@ services:
     restart: unless-stopped
     <<: *env-tier-agent
     environment:
+      - PORT=${GITHUB_RUNNER_CTL_PORT:-8100}
       - PORT=${GITHUB_RUNNER_CTL_PORT:-8104}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
@@ -1387,13 +1387,13 @@ services:
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
       - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
     depends_on: [ nats ]
-    ports: [ "8104:8104" ]
+    ports: [ "8100:8100", "8104:8104" ]
     volumes:
       - ./services/github-runner-ctl/config:/app/config:ro
     profiles: [ "orchestration", "workers" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1530,10 +1530,8 @@ services:
       retries: 3
       start_period: 30s
 
-  # =============================================================================
   # PMOVES Tokenism Simulator
   # Token economy simulation service with CHIT/Geometry Bus integration
-  # =============================================================================
   tokenism-simulator:
     build:
       context: ./services/tokenism-simulator
@@ -1902,9 +1900,7 @@ services:
       retries: 3
       start_period: 15s
 
-  # =============================================================================
   # E2B Agentic Computer Use Services
-  # =============================================================================
   # E2B MCP Server - Model Context Protocol bridge for E2B code execution
   # Provides tools to Agent Zero for secure code execution in E2B sandboxes
   e2b-mcp-server:

@@ -68,9 +68,7 @@ const CATEGORY_COLORS: Record<ServiceCategory, ServiceColor> = {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const SERVICE_CATALOG: ServiceDefinition[] = [
-  // ============================================================================
   // OBSERVABILITY TIER
-  // ============================================================================
   {
     slug: 'prometheus',
     title: 'Prometheus',
@@ -127,9 +125,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Container stats', 'Resource usage'],
   },
 
-  // ============================================================================
   // DATABASE TIER
-  // ============================================================================
   {
     slug: 'postgres',
     title: 'PostgreSQL',
@@ -165,9 +161,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Table editor', 'SQL editor', 'Auth UI'],
   },
 
-  // ============================================================================
   // DATA TIER
-  // ============================================================================
   {
     slug: 'qdrant',
     title: 'Qdrant',
@@ -225,9 +219,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Object storage', 'Buckets', 'Presigned URLs'],
   },
 
-  // ============================================================================
   // BUS TIER
-  // ============================================================================
   {
     slug: 'nats',
     title: 'NATS',
@@ -241,9 +233,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Pub/Sub', 'JetStream', 'Request/Reply'],
   },
 
-  // ============================================================================
   // AGENTS TIER
-  // ============================================================================
   {
     slug: 'agent-zero',
     title: 'Agent Zero',
@@ -349,9 +339,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     healthCheck: 'http://localhost:8054/healthz',
   },
 
-  // ============================================================================
   // WORKERS TIER
-  // ============================================================================
   {
     slug: 'extract-worker',
     title: 'Extract Worker',
@@ -518,9 +506,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Sandboxed code execution'],
   },
 
-  // ============================================================================
   // GPU TIER
-  // ============================================================================
   {
     slug: 'gpu-orchestrator',
     title: 'GPU Orchestrator',
@@ -614,9 +600,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Prosodic TTS', 'WebSocket streaming', 'Pipecat'],
   },
 
-  // ============================================================================
   // MEDIA TIER
-  // ============================================================================
   {
     slug: 'pmoves-yt',
     title: 'PMOVES.YT',
@@ -678,9 +662,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Emotion detection', 'Speaker diarization'],
   },
 
-  // ============================================================================
   // LLM TIER
-  // ============================================================================
   {
     slug: 'tensorzero-gateway',
     title: 'TensorZero Gateway',
@@ -731,9 +713,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Local inference', 'Model management'],
   },
 
-  // ============================================================================
   // UI TIER
-  // ============================================================================
   {
     slug: 'pmoves-ui',
     title: 'PMOVES UI',
@@ -749,9 +729,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Service catalog', 'Health monitoring', 'Branded portal'],
   },
 
-  // ============================================================================
   // INTEGRATION TIER
-  // ============================================================================
   {
     slug: 'n8n',
     title: 'n8n',
@@ -789,9 +767,11 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Multi-platform', 'Plugin system'],
   },
 
-  // ============================================================================
   // PMOVES-DOX TIER (Document Intelligence)
-  // ============================================================================
+
+  // MCP TIER (Model Context Protocol Servers)
+
+  // CATACLYSM STACK (Health, Wealth, Notes)
   {
     slug: 'dox-backend',
     title: 'DoX Backend',
@@ -869,10 +849,6 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     ],
     capabilities: ['CHIT protocol', 'Geometry packets', 'Manifold detection'],
   },
-
-  // ============================================================================
-  // MCP TIER (Model Context Protocol Servers)
-  // ============================================================================
   {
     slug: 'mcp-cipher',
     title: 'MCP Cipher',
@@ -910,10 +886,6 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     ],
     capabilities: ['API testing', 'Collection runner', 'Request validation'],
   },
-
-  // ============================================================================
-  // CATACLYSM STACK (Health, Wealth, Notes)
-  // ============================================================================
   {
     slug: 'cataclysm-firefly',
     title: 'Firefly III',
@@ -963,10 +935,8 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     external: true,
     capabilities: ['Workout tracking', 'Exercise library', 'Nutrition'],
   },
-  // ============================================================================
   // TOKENISM - Token Economy Simulation & Business Model Validation
   // Powered by EVO Swarm Intelligence
-  // ============================================================================
   {
     slug: 'tokenism',
     title: 'Tokenism',

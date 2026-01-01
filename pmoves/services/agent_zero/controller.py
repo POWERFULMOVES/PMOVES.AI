@@ -51,7 +51,6 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
         filter_subject: Optional[str] = None
 
     @dataclass
-    @dataclass
     class StreamConfig:  # type: ignore[no-redef]
         name: str
         subjects: List[str]
@@ -70,6 +69,7 @@ try:
     from services.common.events import envelope
 except Exception:  # pragma: no cover - optional dependency for unit tests
     import datetime
+    from datetime import timezone
     import uuid
 
     def envelope(

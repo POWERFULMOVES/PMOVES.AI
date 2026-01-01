@@ -26,7 +26,8 @@ POLL_SECONDS = int(os.environ.get("COMFY_WATCHER_POLL_SECONDS", "5"))
 
 def load_state() -> dict:
     try:
-        return json.loads(open(STATE_PATH).read())
+        with open(STATE_PATH) as f:
+            return json.load(f)
     except Exception:
         return {"uploaded": {}}
 
@@ -77,7 +78,7 @@ async def run() -> None:
                     if state["uploaded"].get(h):
                         continue
 
-                    key = datetime.datetime.now(timezone.utc).strftime("comfyui/%Y/%m/%d/") + fn
+                    key = datetime.datetime.now(datetime.timezone.utc).strftime("comfyui/%Y/%m/%d/") + fn
                     client.fput_object(BUCKET, key, path, content_type="image/png")
                     state["uploaded"][h] = {"key": key, "ts": time.time(), "size": size}
                     save_state(state)

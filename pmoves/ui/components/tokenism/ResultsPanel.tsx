@@ -8,14 +8,6 @@
 
 import { SimulationResult, WeeklyMetrics } from '@/lib/tokenismClient';
 
-/**
- * Validate that a value is a safe number for calculations.
- * Returns true for finite, non-negative numbers.
- */
-function isValidNumber(value: number | undefined | null): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(value) && value >= 0;
-}
-
 interface ResultsPanelProps {
   result?: SimulationResult | null;
 }
@@ -87,27 +79,6 @@ function Sparkline({ data, color, width = 200, height = 50 }: SparklineProps) {
   );
 }
 
-// Helper functions for analysis text generation
-function getWealthDistributionText(gini: number): string {
-  if (gini < 0.3) {
-    return 'Highly equitable distribution.';
-  }
-  if (gini < 0.5) {
-    return 'Moderate inequality level.';
-  }
-  return 'High inequality concentration.';
-}
-
-function getRiskAssessmentText(riskScore: number): string {
-  if (riskScore < 0.3) {
-    return 'Low systemic risk. Stable economic conditions.';
-  }
-  if (riskScore < 0.6) {
-    return 'Moderate risk. Monitor volatility.';
-  }
-  return 'High risk. Vulnerable to shocks.';
-}
-
 export function TokenismResultsPanel({ result }: ResultsPanelProps) {
   if (!result) {
     return (
@@ -122,50 +93,20 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
 
   const { finalAvgWealth, finalGini, systemicRiskScore, weeklyMetrics, scenario, contractType } = result;
 
-  // Validate data structure before processing
-  if (!Array.isArray(weeklyMetrics) || weeklyMetrics.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-48 border border-dashed border-red-700 bg-red-950/20">
-        <div className="text-center">
-          <p className="text-red-400 font-pixel text-sm">Invalid Simulation Data</p>
-          <p className="text-xs text-gray-600 mt-2">Weekly metrics not available</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Calculate trends (with safeguards against zero/NaN)
-  const firstWeek = weeklyMetrics[0];
-  const lastWeek = weeklyMetrics[weeklyMetrics.length - 1];
-
+  // Calculate trends
   const wealthTrend = weeklyMetrics.length >= 2
-    && isValidNumber(firstWeek?.avgWealth)
-    && firstWeek.avgWealth > 0
-    && isValidNumber(lastWeek?.avgWealth)
-    ? ((lastWeek.avgWealth - firstWeek.avgWealth) / firstWeek.avgWealth) * 100
+    ? ((weeklyMetrics[weeklyMetrics.length - 1].avgWealth - weeklyMetrics[0].avgWealth)
+      / weeklyMetrics[0].avgWealth) * 100
     : undefined;
 
   const giniTrend = weeklyMetrics.length >= 2
-    && isValidNumber(firstWeek?.giniCoefficient)
-    && firstWeek.giniCoefficient > 0
-    && isValidNumber(lastWeek?.giniCoefficient)
-    ? ((lastWeek.giniCoefficient - firstWeek.giniCoefficient) / firstWeek.giniCoefficient) * 100
+    ? ((weeklyMetrics[weeklyMetrics.length - 1].giniCoefficient - weeklyMetrics[0].giniCoefficient)
+      / weeklyMetrics[0].giniCoefficient) * 100
     : undefined;
 
   // Risk level
-  let riskLevel: string;
-  let riskColor: 'gold' | 'green' | 'red';
-
-  if (systemicRiskScore < 0.3) {
-    riskLevel = 'Low';
-    riskColor = 'green';
-  } else if (systemicRiskScore < 0.6) {
-    riskLevel = 'Medium';
-    riskColor = 'gold';
-  } else {
-    riskLevel = 'High';
-    riskColor = 'red';
-  }
+  const riskLevel = systemicRiskScore < 0.3 ? 'Low' : systemicRiskScore < 0.6 ? 'Medium' : 'High';
+  const riskColor = systemicRiskScore < 0.3 ? 'green' : systemicRiskScore < 0.6 ? 'gold' : 'red';
 
   return (
     <div className="space-y-6">
@@ -221,13 +162,13 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
           <div className="border border-gray-800 bg-black/30 p-4">
             <h3 className="text-xs font-mono uppercase text-gold-400 mb-3">Average Wealth</h3>
             <Sparkline
-              data={weeklyMetrics.map((m) => isValidNumber(m.avgWealth) ? m.avgWealth : 0)}
+              data={weeklyMetrics.map((m) => m.avgWealth)}
               color="#fbbf24"
             />
             <div className="flex justify-between text-xs text-gray-600 mt-2">
-              <span>Week 0: ${isValidNumber(weeklyMetrics[0]?.avgWealth) ? weeklyMetrics[0].avgWealth.toFixed(0) : 'N/A'}</span>
+              <span>Week 0: ${weeklyMetrics[0].avgWealth.toFixed(0)}</span>
               <span>
-                Week {weeklyMetrics.length - 1}: ${isValidNumber(lastWeek?.avgWealth) ? lastWeek.avgWealth.toFixed(0) : 'N/A'}
+                Week {weeklyMetrics.length - 1}: ${weeklyMetrics[weeklyMetrics.length - 1].avgWealth.toFixed(0)}
               </span>
             </div>
           </div>
@@ -236,13 +177,13 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
           <div className="border border-gray-800 bg-black/30 p-4">
             <h3 className="text-xs font-mono uppercase text-violet-400 mb-3">Gini Coefficient</h3>
             <Sparkline
-              data={weeklyMetrics.map((m) => isValidNumber(m.giniCoefficient) ? m.giniCoefficient : 0)}
+              data={weeklyMetrics.map((m) => m.giniCoefficient)}
               color="#a78bfa"
             />
             <div className="flex justify-between text-xs text-gray-600 mt-2">
-              <span>Week 0: {isValidNumber(weeklyMetrics[0]?.giniCoefficient) ? weeklyMetrics[0].giniCoefficient.toFixed(3) : 'N/A'}</span>
+              <span>Week 0: {weeklyMetrics[0].giniCoefficient.toFixed(3)}</span>
               <span>
-                Week {weeklyMetrics.length - 1}: {isValidNumber(lastWeek?.giniCoefficient) ? lastWeek.giniCoefficient.toFixed(3) : 'N/A'}
+                Week {weeklyMetrics.length - 1}: {weeklyMetrics[weeklyMetrics.length - 1].giniCoefficient.toFixed(3)}
               </span>
             </div>
           </div>
@@ -251,13 +192,13 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
           <div className="border border-gray-800 bg-black/30 p-4">
             <h3 className="text-xs font-mono uppercase text-red-400 mb-3">Poverty Rate</h3>
             <Sparkline
-              data={weeklyMetrics.map((m) => isValidNumber(m.povertyRate) ? m.povertyRate * 100 : 0)}
+              data={weeklyMetrics.map((m) => m.povertyRate * 100)}
               color="#f87171"
             />
             <div className="flex justify-between text-xs text-gray-600 mt-2">
-              <span>Week 0: {isValidNumber(weeklyMetrics[0]?.povertyRate) ? (weeklyMetrics[0].povertyRate * 100).toFixed(1) : 'N/A'}%</span>
+              <span>Week 0: {(weeklyMetrics[0].povertyRate * 100).toFixed(1)}%</span>
               <span>
-                Week {weeklyMetrics.length - 1}: {isValidNumber(lastWeek?.povertyRate) ? (lastWeek.povertyRate * 100).toFixed(1) : 'N/A'}%
+                Week {weeklyMetrics.length - 1}: {(weeklyMetrics[weeklyMetrics.length - 1].povertyRate * 100).toFixed(1)}%
               </span>
             </div>
           </div>
@@ -266,13 +207,13 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
           <div className="border border-gray-800 bg-black/30 p-4">
             <h3 className="text-xs font-mono uppercase text-cyan-400 mb-3">Transaction Volume</h3>
             <Sparkline
-              data={weeklyMetrics.map((m) => isValidNumber(m.totalVolume) ? m.totalVolume : 0)}
+              data={weeklyMetrics.map((m) => m.totalVolume)}
               color="#22d3ee"
             />
             <div className="flex justify-between text-xs text-gray-600 mt-2">
-              <span>Week 0: ${isValidNumber(weeklyMetrics[0]?.totalVolume) ? weeklyMetrics[0].totalVolume.toFixed(0) : 'N/A'}</span>
+              <span>Week 0: ${weeklyMetrics[0].totalVolume.toFixed(0)}</span>
               <span>
-                Week {weeklyMetrics.length - 1}: ${isValidNumber(lastWeek?.totalVolume) ? lastWeek.totalVolume.toFixed(0) : 'N/A'}
+                Week {weeklyMetrics.length - 1}: ${weeklyMetrics[weeklyMetrics.length - 1].totalVolume.toFixed(0)}
               </span>
             </div>
           </div>
@@ -285,18 +226,19 @@ export function TokenismResultsPanel({ result }: ResultsPanelProps) {
         <div className="text-sm text-gray-400 space-y-2">
           <p>
             <span className="text-gold-400">Wealth Distribution:</span>{' '}
-            {getWealthDistributionText(finalGini)}
+            {finalGini < 0.3 ? 'Highly equitable distribution.' :
+             finalGini < 0.5 ? 'Moderate inequality level.' :
+             'High inequality concentration.'}
           </p>
           <p>
             <span className="text-cyan-400">Risk Assessment:</span>{' '}
-            {getRiskAssessmentText(systemicRiskScore)}
+            {systemicRiskScore < 0.3 ? 'Low systemic risk. Stable economic conditions.' :
+             systemicRiskScore < 0.6 ? 'Moderate risk. Monitor volatility.' :
+             'High risk. Vulnerable to shocks.'}
           </p>
           <p>
             <span className="text-violet-400">Economic Health:</span>{' '}
-            {weeklyMetrics.length > 1
-              && isValidNumber(finalAvgWealth)
-              && isValidNumber(weeklyMetrics[0]?.avgWealth)
-              && finalAvgWealth > weeklyMetrics[0].avgWealth
+            {weeklyMetrics.length > 1 && finalAvgWealth > weeklyMetrics[0].avgWealth
               ? 'Growing economy with increasing wealth.'
               : 'Stagnant or declining economic conditions.'}
           </p>

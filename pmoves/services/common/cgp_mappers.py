@@ -5,7 +5,7 @@ from typing import Dict, List, Any
 
 
 def _now_iso() -> str:
-    return _dt.datetime.now(timezone.utc).isoformat() + "Z"
+    return _dt.datetime.now(_dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _norm(v: float | None, lo: float, hi: float) -> float | None:
