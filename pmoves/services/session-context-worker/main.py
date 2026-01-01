@@ -21,6 +21,8 @@ from contextlib import asynccontextmanager
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+from jsonschema import validate, ValidationError as JsonSchemaValidationError
+from services.common.events import load_schema
 
 # Prometheus metrics
 messages_received = Counter(
@@ -55,6 +57,18 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("session_context_worker")
+
+# Load schemas for payload validation (follows coding guidelines)
+# "Validate payloads against schemas before publishing events using services/common/events.py"
+try:
+    _SESSION_CONTEXT_SCHEMA = load_schema("claude.code.session.context.v1")
+    _KB_UPSERT_SCHEMA = load_schema("kb.upsert.request.v1")
+    logger.info("Loaded schemas: claude.code.session.context.v1, kb.upsert.request.v1")
+except Exception as exc:
+    logger.error("Failed to load schemas: %s", exc, exc_info=True)
+    # Fallback: allow startup but validation will fail
+    _SESSION_CONTEXT_SCHEMA = None
+    _KB_UPSERT_SCHEMA = None
 
 
 def _parse_int_env(env_var: str, default: int) -> int:
@@ -312,16 +326,31 @@ async def _handle_session_context(msg: Msg) -> None:
         data = json.loads(msg.data.decode("utf-8"))
 
         if not isinstance(data, dict):
-            logger.warning(f"Invalid message format: expected dict, got {type(data)}")
+            logger.warning("Invalid message format: expected dict, got %s", type(data))
             messages_failed.labels("invalid_format").inc()
             processing_duration.labels("unknown").observe(time.time() - start_time)
             return
+
+        # Validate incoming payload against schema (prevents schema drift)
+        if _SESSION_CONTEXT_SCHEMA:
+            try:
+                validate(instance=data, schema=_SESSION_CONTEXT_SCHEMA)
+            except JsonSchemaValidationError as exc:
+                logger.warning(
+                    "Session context payload validation failed: %s",
+                    exc.message,
+                    extra={"session_id": data.get("session_id", "unknown"), "validation_error": exc.message}
+                )
+                messages_failed.labels("schema_validation").inc()
+                processing_duration.labels("unknown").observe(time.time() - start_time)
+                return
 
         session_id = data.get("session_id", "unknown")
         context_type = data.get("context_type", "unknown")
 
         logger.info(
-            f"Processing session context: session_id={session_id}, type={context_type}",
+            "Processing session context: session_id=%s, type=%s",
+            session_id, context_type,
             extra={
                 "session_id": session_id,
                 "context_type": context_type,
@@ -331,6 +360,20 @@ async def _handle_session_context(msg: Msg) -> None:
         # Transform to kb.upsert format
         kb_upsert = _transform_to_kb_upsert(data)
 
+        # Validate outgoing payload against schema (prevents schema drift)
+        if _KB_UPSERT_SCHEMA:
+            try:
+                validate(instance=kb_upsert, schema=_KB_UPSERT_SCHEMA)
+            except JsonSchemaValidationError as exc:
+                logger.error(
+                    "KB upsert payload validation failed: %s",
+                    exc.message,
+                    extra={"session_id": session_id, "validation_error": exc.message}
+                )
+                messages_failed.labels("kb_schema_validation").inc()
+                processing_duration.labels(context_type).observe(time.time() - start_time)
+                return
+
         # Publish to kb.upsert.request.v1
         if _nc:
             await _nc.publish(
@@ -339,7 +382,8 @@ async def _handle_session_context(msg: Msg) -> None:
             )
             kb_upserts_published.labels("claude-code-sessions").inc()
             logger.info(
-                f"Published KB upsert for session {session_id}",
+                "Published KB upsert for session %s",
+                session_id,
                 extra={
                     "session_id": session_id,
                     "kb_id": kb_upsert["items"][0]["id"],
@@ -355,12 +399,12 @@ async def _handle_session_context(msg: Msg) -> None:
         messages_processed.labels(context_type).inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         logger.exception("Failed to decode JSON")
         messages_failed.labels("json_decode_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
-    except Exception as e:
-        logger.error(f"Error processing session context: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error("Error processing session context: %s", exc, exc_info=True)
         messages_failed.labels("processing_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
@@ -370,12 +414,14 @@ async def _register_nats_subscriptions(nc: NATS) -> None:
     try:
         await nc.subscribe(SESSION_CONTEXT_SUBJECT, cb=_handle_session_context)
         logger.info(
-            f"Subscribed to {SESSION_CONTEXT_SUBJECT}",
+            "Subscribed to %s",
+            SESSION_CONTEXT_SUBJECT,
             extra={"subject": SESSION_CONTEXT_SUBJECT}
         )
     except Exception as exc:
         logger.error(
-            f"Failed to subscribe to {SESSION_CONTEXT_SUBJECT}: {exc}",
+            "Failed to subscribe to %s: %s",
+            SESSION_CONTEXT_SUBJECT, exc,
             exc_info=True
         )
 
@@ -434,7 +480,7 @@ async def _nats_resilience_loop() -> None:
         # Connection successful
         _nc = nc
         backoff = 1.0
-        logger.info(f"NATS connected: {NATS_URL}", extra={"servers": [NATS_URL]})
+        logger.info("NATS connected: %s", NATS_URL, extra={"servers": [NATS_URL]})
 
         # Register subscriptions
         await _register_nats_subscriptions(nc)
