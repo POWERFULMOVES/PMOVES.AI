@@ -8,6 +8,7 @@ with correlation IDs, versioning, and source attribution.
 import asyncio
 import json
 import logging
+import re
 import uuid
 import datetime
 from datetime import timezone
@@ -53,17 +54,42 @@ def create_event_envelope(
 
 
 class NATSPublisher:
-    """NATS event publisher with connection management."""
+    """NATS event publisher with connection management and offline buffering."""
 
-    def __init__(self, nats_url: str):
+    # Maximum number of events to buffer while disconnected
+    MAX_BUFFER_SIZE = 1000
+
+    def __init__(
+        self,
+        nats_url: str,
+        max_buffer_size: int = MAX_BUFFER_SIZE,
+        nats_user: Optional[str] = None,
+        nats_pass: Optional[str] = None,
+    ):
         """Initialize NATS publisher.
 
         Args:
             nats_url: NATS connection URL (e.g., "nats://nats:4222")
+            max_buffer_size: Maximum events to buffer while disconnected
+            nats_user: Optional NATS username (overrides URL if provided)
+            nats_pass: Optional NATS password (overrides URL if provided)
         """
-        self.nats_url = nats_url
+        # Build authenticated URL if credentials provided separately
+        if nats_user and nats_pass:
+            # Extract host and port from existing URL
+            match = re.match(r'nats://([^:]+):(\d+)', nats_url)
+            if match:
+                host, port = match.groups()
+                self.nats_url = f"nats://{nats_user}:{nats_pass}@{host}:{port}"
+            else:
+                self.nats_url = nats_url
+        else:
+            self.nats_url = nats_url
+
         self._nc: Optional[NATS] = None
         self._connected = False
+        self._max_buffer_size = max_buffer_size
+        self._event_buffer: list[Dict[str, Any]] = []
 
     @property
     def is_connected(self) -> bool:
@@ -88,6 +114,12 @@ class NATSPublisher:
                 await self._nc.connect(self.nats_url)
                 self._connected = True
                 logger.info(f"Connected to NATS at {self.nats_url}")
+
+                # Flush buffered events after successful reconnection
+                if self._event_buffer:
+                    logger.info(f"Flushing {len(self._event_buffer)} buffered events...")
+                    await self._flush_buffer()
+
                 return True
             except Exception as e:
                 logger.warning(f"NATS connection failed: {e}")
@@ -127,17 +159,11 @@ class NATSPublisher:
             parent_id: Optional parent event ID for causality
 
         Returns:
-            True if published successfully, False otherwise
+            True if published or queued successfully, False otherwise
         """
         if not self.is_connected:
-            # Log event details when dropping due to no connection
-            payload_summary = str(payload)[:200] if payload else 'empty'
-            logger.warning(
-                f"NATS not connected, dropping event: {subject} | "
-                f"correlation_id={correlation_id} | payload_preview={payload_summary}"
-            )
-            NATS_EVENTS_FAILED.labels(subject=subject, reason="not_connected").inc()
-            return False
+            # Queue event for later delivery instead of dropping
+            return await self._queue_event(subject, payload, source, correlation_id, parent_id)
 
         try:
             envelope = create_event_envelope(
@@ -245,3 +271,87 @@ class NATSPublisher:
             **(data or {})
         }
         return await self.publish(subject, payload)
+
+    async def _queue_event(
+        self,
+        subject: str,
+        payload: Dict[str, Any],
+        source: str,
+        correlation_id: Optional[str],
+        parent_id: Optional[str],
+    ) -> bool:
+        """Queue an event for later delivery when NATS is disconnected.
+
+        Args:
+            subject: NATS subject
+            payload: Event data
+            source: Service name
+            correlation_id: Optional correlation ID
+            parent_id: Optional parent event ID
+
+        Returns:
+            True if queued successfully, False if buffer is full
+        """
+        if len(self._event_buffer) >= self._max_buffer_size:
+            logger.warning(
+                f"Event buffer full ({self._max_buffer_size}), dropping event: {subject}"
+            )
+            NATS_EVENTS_FAILED.labels(subject=subject, reason="buffer_full").inc()
+            return False
+
+        self._event_buffer.append({
+            "subject": subject,
+            "payload": payload,
+            "source": source,
+            "correlation_id": correlation_id,
+            "parent_id": parent_id,
+        })
+        NATS_EVENTS_PUBLISHED.labels(subject=subject, status="buffered").inc()
+        logger.debug(
+            f"Queued event {subject} (buffer size: {len(self._event_buffer)}/{self._max_buffer_size})"
+        )
+        return True
+
+    async def _flush_buffer(self) -> None:
+        """Flush all buffered events to NATS.
+
+        Called after successful reconnection. Events that fail to publish
+        are removed from the buffer and logged.
+        """
+        if not self._event_buffer:
+            return
+
+        logger.info(f"Flushing {len(self._event_buffer)} buffered events...")
+        flushed_count = 0
+        failed_count = 0
+
+        # Process events in order
+        while self._event_buffer:
+            event = self._event_buffer.pop(0)
+
+            try:
+                envelope = create_event_envelope(
+                    topic=event["subject"],
+                    payload=event["payload"],
+                    source=event["source"],
+                    correlation_id=event["correlation_id"],
+                    parent_id=event["parent_id"],
+                )
+                await self._nc.publish(event["subject"], json.dumps(envelope).encode())
+                NATS_EVENTS_PUBLISHED.labels(subject=event["subject"], status="flushed").inc()
+                flushed_count += 1
+            except Exception as e:
+                logger.error(
+                    f"Failed to flush buffered event {event['subject']}: {e}"
+                )
+                NATS_EVENTS_FAILED.labels(subject=event["subject"], reason="flush_error").inc()
+                failed_count += 1
+
+        logger.info(
+            f"Buffer flush complete: {flushed_count} sent, {failed_count} failed"
+        )
+
+    @property
+    def buffer_size(self) -> int:
+        """Return the current size of the event buffer."""
+        return len(self._event_buffer)
