@@ -1,3 +1,51 @@
+"""
+PMOVES.YT - YouTube and media ingestion service.
+
+This service provides a comprehensive API for ingesting, processing, and indexing
+media content from YouTube, SoundCloud, and other supported platforms. It integrates
+with PMOVES.AI services for transcription, summarization, knowledge indexing, and
+event-driven coordination via NATS.
+
+Key Features:
+- Video download and metadata extraction via yt-dlp
+- Multi-provider transcription (Faster-Whisper, remote endpoints)
+- AI-powered summarization using Gemma models (Ollama/HuggingFace)
+- Chapter-based segmentation with smart boundary detection
+- Integration with Hi-RAG v2 for knowledge indexing
+- Geometry Bus (CHIT) support for mathematical content indexing
+- Channel/playlist bulk ingestion with concurrency control
+- Event publishing via NATS message bus
+- Prometheus metrics and health monitoring
+
+Environment Variables:
+    MINIO_ENDPOINT: MinIO/S3 endpoint for media storage
+    SUPABASE_REST_URL: Supabase/PostgREST URL for metadata storage
+    NATS_URL: NATS message broker URL
+    FFW_URL: FFmpeg-Whisper service URL for transcription
+    HIRAG_URL: Hi-RAG Gateway v2 URL for knowledge indexing
+    YT_SUMMARY_PROVIDER: Summary provider (ollama|hf)
+    YT_CONCURRENCY: Max concurrent downloads (default: 2)
+    YT_PLAYLIST_MAX: Max items from playlist/channel (default: 50)
+    YT_SEG_AUTOTUNE: Enable auto-tuning for segmentation (default: true)
+    YT_ENABLE_PO_TOKEN: Enable PO token support for YouTube (default: false)
+    YT_ASYNC_UPSERT_ENABLED: Enable async chunk upserts (default: true)
+
+API Endpoints:
+    GET  /healthz: Health check with version info
+    GET  /metrics: Prometheus metrics
+    POST /yt_info: Fetch video metadata without downloading
+    POST /yt_download: Download video to S3/MinIO
+    POST /yt_transcript: Get or generate transcript
+    POST /yt_ingest: Full ingestion pipeline (download + transcript + index)
+    POST /yt_playlist: Ingest entire playlist
+    POST /yt_channel: Ingest entire channel
+    POST /yt_summarize: Generate AI summary
+    POST /yt_chapters: Generate chapter markers
+    POST /yt_emit: Emit Geometry Bus events
+    GET  /yt_emit_status: Query async emit job status
+    POST /yt_search: Search ingested content
+"""
+
 import os, json, tempfile, shutil, asyncio, time, re, math, uuid, copy, logging, threading
 from pathlib import Path
 from datetime import datetime, timezone
@@ -9,9 +57,19 @@ try:
     from yt_dlp.utils import DownloadError, PostProcessingError
 except Exception:  # pragma: no cover - fallback when utils module missing
     class DownloadError(Exception):
+        """Exception raised when yt-dlp fails to download media.
+
+        Wrapped to provide a consistent exception type when yt-dlp.utils
+        module is unavailable in the runtime environment.
+        """
         pass
 
     class PostProcessingError(Exception):
+        """Exception raised when yt-dlp post-processing fails.
+
+        Wrapped to provide a consistent exception type when yt-dlp.utils
+        module is unavailable in the runtime environment.
+        """
         pass
 import boto3
 import requests
@@ -57,7 +115,29 @@ nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages pu
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
+    """Manage application lifespan for FastAPI.
+
+    This context manager handles startup and shutdown events for the PMOVES.YT service.
+    On startup, it initializes NATS connections (if enabled) and schedules periodic
+    documentation sync tasks. On shutdown, it gracefully closes connections and cancels
+    background tasks.
+
+    Args:
+        app: The FastAPI application instance.
+
+    Yields:
+        None: This is a context manager for FastAPI lifespan management.
+
+    Startup:
+        - Initializes NATS connection if YT_NATS_ENABLE is true
+        - Triggers yt-dlp docs sync on startup if enabled
+        - Schedules periodic docs sync if YT_DOCS_SYNC_INTERVAL is set
+
+    Shutdown:
+        - Cancels and waits for periodic docs sync task
+        - Cancels and waits for NATS connection task
+        - Closes NATS connection if established
+    """
     global _nc, _nc_connect_task, _periodic_docs_task
     # Startup
     # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
@@ -143,6 +223,18 @@ except Exception:  # pragma: no cover
         return {"yt_dlp_version": "unknown"}
 
 def _parse_bool(value: Optional[str]) -> Optional[bool]:
+    """Parse a string value into a boolean.
+
+    Converts common string representations of boolean values into actual booleans.
+    Recognizes '1', 'true', 'yes', 'on' as True and '0', 'false', 'no', 'off' as False
+    (case-insensitive). Returns None for unrecognised values.
+
+    Args:
+        value: The string value to parse. Can be None.
+
+    Returns:
+        True if value is a truthy string, False if falsy, None otherwise.
+    """
     if value is None:
         return None
     lowered = value.strip().lower()
@@ -296,11 +388,28 @@ _emit_job_lock = threading.Lock()
 
 
 def _record_emit_job(job_id: str, state: Dict[str, Any]) -> None:
+    """Record or create an async emit job state.
+
+    Thread-safe function to store the state of a Geometry Bus emit job.
+    Used for tracking async emit operations initiated via the yt_emit endpoint.
+
+    Args:
+        job_id: Unique identifier for the emit job.
+        state: Dictionary containing job state information (status, progress, etc.).
+    """
     with _emit_job_lock:
         _emit_jobs[job_id] = state
 
 
 def _update_emit_job(job_id: str, **updates: Any) -> None:
+    """Update an existing emit job with new state information.
+
+    Thread-safe function that merges updates into an existing job's state.
+
+    Args:
+        job_id: Unique identifier for the emit job.
+        **updates: Keyword arguments representing state updates to merge.
+    """
     with _emit_job_lock:
         current = copy.deepcopy(_emit_jobs.get(job_id) or {})
         current.update(updates)
@@ -308,16 +417,36 @@ def _update_emit_job(job_id: str, **updates: Any) -> None:
 
 
 def _get_emit_job(job_id: str) -> Dict[str, Any]:
+    """Retrieve the current state of an emit job.
+
+    Thread-safe function that returns a deep copy of the job state to prevent
+    external modifications to the stored state.
+
+    Args:
+        job_id: Unique identifier for the emit job.
+
+    Returns:
+        Dictionary containing the job state, or empty dict if job not found.
+    """
     with _emit_job_lock:
         return copy.deepcopy(_emit_jobs.get(job_id) or {})
 
 
 def _clear_emit_jobs() -> None:  # pragma: no cover - primarily used in tests
+    """Clear all emit job states.
+
+    Thread-safe function primarily used in tests to reset state between tests.
+    """
     with _emit_job_lock:
         _emit_jobs.clear()
 
 
 def _utc_now() -> str:
+    """Get the current UTC timestamp as an ISO 8601 string.
+
+    Returns:
+        Current UTC time in ISO 8601 format (e.g., '2025-12-31T12:34:56+00:00').
+    """
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -328,6 +457,17 @@ def _channel_monitor_notify(
     error: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> None:
+    """Notify the Channel Monitor service about video processing status.
+
+    Sends a webhook notification to the Channel Monitor service with updates
+    about video ingestion progress, success, or failure.
+
+    Args:
+        video_id: The YouTube video ID being processed.
+        status: Status string (e.g., 'processing', 'completed', 'failed').
+        error: Optional error message if status is 'failed'.
+        metadata: Optional dictionary with additional video metadata.
+    """
     if not video_id or not CHANNEL_MONITOR_STATUS_URL:
         return
     payload: Dict[str, Any] = {"video_id": video_id, "status": status}
@@ -349,7 +489,25 @@ def _channel_monitor_notify(
         logger.warning("Channel monitor notify failed for %s: %s", video_id, exc)
 
 def _with_ytdlp_defaults(opts: Dict[str, Any], *, po_token: Optional[str] = None) -> Dict[str, Any]:
-    """Add hardened defaults so youtube-dl works without manual cookies."""
+    """Add hardened yt-dlp defaults for reliable YouTube downloads.
+
+    Merges user-provided options with production-tested defaults that enable
+    reliable YouTube downloads without manual cookie management. Configures
+    player client, PO tokens, user agents, and other extractor settings.
+
+    Args:
+        opts: User-provided yt-dlp options dictionary.
+        po_token: Optional PO token to override the default YT_PO_TOKEN_VALUE.
+
+    Returns:
+        Merged options dictionary with hardened defaults applied.
+
+    Notes:
+        - Sets Android client as default player client
+        - Configures PO token support if enabled
+        - Sets appropriate user agent
+        - Enables format selection and post-processing defaults
+    """
     merged = dict(opts)
     extractor_args = dict(merged.get('extractor_args') or {})
     youtube_args = dict(extractor_args.get('youtube') or {})
@@ -396,11 +554,33 @@ def _with_ytdlp_defaults(opts: Dict[str, Any], *, po_token: Optional[str] = None
     return merged
 
 def s3_client():
+    """Create and configure a boto3 S3 client for MinIO/S3 operations.
+
+    Constructs an S3 client using environment variables for endpoint configuration.
+    Supports both HTTP and HTTPS endpoints based on MINIO_SECURE setting.
+
+    Returns:
+        Configured boto3 S3 client instance.
+
+    Notes:
+        Uses MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, and MINIO_SECURE
+        environment variables for configuration.
+    """
     endpoint_url = MINIO_ENDPOINT if "://" in MINIO_ENDPOINT else f"{'https' if MINIO_SECURE else 'http'}://{MINIO_ENDPOINT}"
     return boto3.client("s3", aws_access_key_id=MINIO_ACCESS_KEY, aws_secret_access_key=MINIO_SECRET_KEY, endpoint_url=endpoint_url)
 
 async def _nats_connect_loop() -> None:
-    """Background task to keep the NATS connection alive."""
+    """Background task to maintain NATS connection with automatic reconnection.
+
+    Continuously attempts to establish and maintain a connection to NATS.
+    Implements exponential backoff for reconnection attempts. Handles
+    disconnection and closure events gracefully.
+
+    Notes:
+        - Sets global _nc when connection is established
+        - Exponential backoff from 1s to max 30s between retries
+        - Respects asyncio.CancelledError for clean shutdown
+    """
     global _nc
     backoff = 1.0
     while True:
@@ -439,6 +619,17 @@ async def _nats_connect_loop() -> None:
 
 @app.get("/healthz")
 def healthz():
+    """Health check endpoint with service version and provenance info.
+
+    Returns the operational status of the PMOVES.YT service along with
+    yt-dlp version information and provenance metadata.
+
+    Returns:
+        Dictionary with:
+            - ok: Always True if service is running
+            - yt_dlp: Version info from version_info()
+            - provenance: Channel, origin, and yt-dlp build info
+    """
     http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     meta = version_info()
     prov = {
@@ -453,10 +644,32 @@ def healthz():
 
 @app.get("/metrics")
 def metrics():
-    """Prometheus metrics endpoint."""
+    """Prometheus metrics endpoint.
+
+    Returns Prometheus metrics in the standard text format for scraping.
+    Includes HTTP request counts, request durations, video downloads,
+    transcript processing, and NATS message counts.
+
+    Returns:
+        Response with Prometheus metrics text/plain content.
+    """
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 def _publish_event(topic: str, payload: Dict[str, Any]):
+    """Publish an event to the NATS message bus.
+
+    Wraps the payload in an event envelope and publishes it to the specified
+    NATS subject. Increments the NATS message counter metric. Silently drops
+    events if NATS is unavailable or not connected.
+
+    Args:
+        topic: NATS subject to publish to (e.g., 'ingest.file.added.v1').
+        payload: Event payload data to publish.
+
+    Notes:
+        - Uses async task for non-blocking publish
+        - Logs warnings if NATS client is unavailable
+    """
     nc = _nc
     if nc is None:
         logger.warning("NATS client unavailable; dropping event for topic %s", topic)
@@ -475,12 +688,41 @@ def _publish_event(topic: str, payload: Dict[str, Any]):
         logger.exception("Failed to schedule publish for topic %s: %s", topic, exc)
 
 def upload_to_s3(local_path: str, bucket: str, key: str):
+    """Upload a file to MinIO/S3 storage.
+
+    Uploads a local file to the configured S3-compatible object storage
+    and returns the public URL for accessing the uploaded file.
+
+    Args:
+        local_path: Absolute path to the local file to upload.
+        bucket: S3 bucket name to upload to.
+        key: S3 object key (path within bucket).
+
+    Returns:
+        Public URL for accessing the uploaded file (http:// or https://).
+
+    Raises:
+        botocore.exceptions.ClientError: If upload fails.
+    """
     s3 = s3_client()
     s3.upload_file(local_path, bucket, key)
     scheme = 'https' if MINIO_SECURE else 'http'
     return f"{scheme}://{MINIO_ENDPOINT}/{bucket}/{key}"
 
 def base_prefix(video_id: str, platform: Optional[str] = None):
+    """Generate the S3 key prefix for a video based on its platform.
+
+    Creates a standardized storage prefix for organizing media files by
+    platform (YouTube, SoundCloud, etc.) and video ID.
+
+    Args:
+        video_id: Platform-specific video identifier.
+        platform: Optional platform name ('youtube', 'soundcloud', etc.).
+            If None, defaults to 'yt' prefix.
+
+    Returns:
+        S3 key prefix string (e.g., 'yt/dQw4w9WgXcQ' or 'sc/123456').
+    """
     prefix = "yt"
     if platform:
         normalized = str(platform).strip().lower()
@@ -495,6 +737,18 @@ def base_prefix(video_id: str, platform: Optional[str] = None):
     return f"{prefix}/{video_id}"
 
 def supa_insert(table: str, row: Dict[str,Any]):
+    """Insert a row into a Supabase/PostgREST table.
+
+    Performs a POST request to create a new row in the specified table.
+    Includes service role authentication if SUPA_SERVICE_KEY is configured.
+
+    Args:
+        table: Table name to insert into.
+        row: Dictionary of column names and values to insert.
+
+    Returns:
+        JSON response from Supabase if successful, None on error.
+    """
     try:
         headers = {'content-type': 'application/json'}
         if SUPA_SERVICE_KEY:
@@ -505,6 +759,20 @@ def supa_insert(table: str, row: Dict[str,Any]):
         return None
 
 def supa_upsert(table: str, row: Dict[str,Any], on_conflict: Optional[str]=None):
+    """Upsert a row into a Supabase/PostgREST table.
+
+    Performs a POST request with upsert semantics (insert or update on conflict).
+    Uses PostgRES's on_conflict parameter to specify the constraint column.
+
+    Args:
+        table: Table name to upsert into.
+        row: Dictionary of column names and values to upsert.
+        on_conflict: Optional constraint column name for conflict resolution
+            (e.g., 'video_id').
+
+    Returns:
+        JSON response from Supabase if successful, None on error.
+    """
     try:
         url = f"{SUPA}/{table}"
         if on_conflict:
@@ -518,6 +786,19 @@ def supa_upsert(table: str, row: Dict[str,Any], on_conflict: Optional[str]=None)
         return None
 
 def supa_update(table: str, match: Dict[str,Any], patch: Dict[str,Any]):
+    """Update rows in a Supabase/PostgREST table matching criteria.
+
+    Performs a PATCH request to update rows that match the specified criteria.
+    All match conditions are combined with AND logic using eq filters.
+
+    Args:
+        table: Table name to update in.
+        match: Dictionary of column names and values for filtering rows.
+        patch: Dictionary of column updates to apply.
+
+    Returns:
+        JSON response from Supabase if successful, None on error.
+    """
     try:
         # Build a simple eq filter query string
         qs = []
@@ -536,6 +817,18 @@ def supa_update(table: str, match: Dict[str,Any], patch: Dict[str,Any]):
         return None
 
 def supa_get(table: str, match: Dict[str,Any]) -> Optional[List[Dict[str,Any]]]:
+    """Query rows from a Supabase/PostgREST table matching criteria.
+
+    Performs a GET request with eq filters to fetch matching rows.
+    All match conditions are combined with AND logic.
+
+    Args:
+        table: Table name to query from.
+        match: Dictionary of column names and values for filtering.
+
+    Returns:
+        List of matching rows as dictionaries, or None on error.
+    """
     try:
         qs = []
         for k, v in match.items():
@@ -554,6 +847,18 @@ def supa_get(table: str, match: Dict[str,Any]) -> Optional[List[Dict[str,Any]]]:
 
 
 def _parse_upload_date(value: Optional[str]) -> Optional[str]:
+    """Parse and normalize a YouTube upload date to ISO 8601 format.
+
+    Handles both YouTube's numeric format (YYYYMMDD) and ISO 8601 strings.
+    Returns a UTC timestamp in compact ISO format (with 'Z' suffix).
+
+    Args:
+        value: Date string to parse (YYYYMMDD or ISO 8601 format).
+
+    Returns:
+        Normalized UTC timestamp string (e.g., '2025-12-31T00:00:00Z'),
+        or None if parsing fails.
+    """
     if not value:
         return None
     value = value.strip()
@@ -574,6 +879,20 @@ def _parse_upload_date(value: Optional[str]) -> Optional[str]:
 
 
 def _fetch_channel_monitor_context(video_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch channel monitoring context for a video from the database.
+
+    Queries the pmoves_channel_monitoring table to retrieve channel context
+    and metadata for a specific video. This provides enrichment data from
+    the Channel Monitor service.
+
+    Args:
+        video_id: YouTube video ID to look up.
+
+    Returns:
+        Dictionary with channel context (channel_id, channel_name, channel_url,
+        thumbnail, namespace, tags, priority, subscriber_count, etc.), or None
+        if no monitoring record exists.
+    """
     rows = supa_get("pmoves_channel_monitoring", {"video_id": video_id}) or []
     if not rows:
         return None
@@ -596,6 +915,28 @@ def _fetch_channel_monitor_context(video_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _collect_video_metadata(video_id: str) -> Dict[str, Any]:
+    """Collect comprehensive metadata for a video from database records.
+
+    Aggregates video metadata from multiple sources: the videos table,
+    provenance info, channel metadata, and channel monitoring context.
+    Provides a unified metadata structure for downstream processing.
+
+    Args:
+        video_id: YouTube video ID to collect metadata for.
+
+    Returns:
+        Dictionary with video metadata including:
+            - title: Video title
+            - description: Video description
+            - channel: Channel details (id, name, url, thumbnail, etc.)
+            - url: Source URL
+            - published_at: Upload timestamp
+            - duration: Video duration in seconds
+            - namespace: Content namespace
+            - tags: Monitoring tags
+            - meta: Full original metadata
+            - channel_monitor: Channel monitoring context if available
+    """
     metadata: Dict[str, Any] = {
         "title": f"YouTube {video_id}",
         "description": None,
@@ -655,6 +996,17 @@ def _collect_video_metadata(video_id: str) -> Dict[str, Any]:
     return metadata
 
 def _should_use_invidious(exc: Exception) -> bool:
+    """Determine if Invidious fallback should be used based on exception.
+
+    Evaluates whether a download failure should trigger fallback to Invidious
+    or Invidious Companion API based on the error type and configuration.
+
+    Args:
+        exc: The exception that occurred during yt-dlp download.
+
+    Returns:
+        True if Invidious fallback is available and appropriate, False otherwise.
+    """
     if not (INVIDIOUS_BASE_URL or (INVIDIOUS_COMPANION_URL and INVIDIOUS_COMPANION_KEY)):
         return False
     # Allow operator to force fallback unconditionally (e.g., during SABR waves)
@@ -689,6 +1041,16 @@ def _should_use_invidious(exc: Exception) -> bool:
 _YT_ID_RE = re.compile(r"(?:v=|/)([0-9A-Za-z_-]{11})(?:[&?/]|$)")
 
 def _extract_video_id(url: str) -> Optional[str]:
+    """Extract YouTube video ID from a URL or bare video ID.
+
+    Supports various YouTube URL formats and bare 11-character video IDs.
+
+    Args:
+        url: YouTube URL or bare video ID (11 characters).
+
+    Returns:
+        Extracted 11-character video ID, or None if not found.
+    """
     if not url:
         return None
     match = _YT_ID_RE.search(url)
@@ -699,6 +1061,18 @@ def _extract_video_id(url: str) -> Optional[str]:
     return None
 
 def _infer_platform(url: Optional[str], entry_meta: Optional[Dict[str, Any]] = None) -> str:
+    """Infer the content platform from URL or metadata.
+
+    Determines whether content is from YouTube, SoundCloud, or other platforms
+    by examining URL patterns or entry metadata fields.
+
+    Args:
+        url: Content URL to examine.
+        entry_meta: Optional metadata dictionary with platform/provider fields.
+
+    Returns:
+        Platform identifier ('youtube', 'soundcloud', etc.). Defaults to 'youtube'.
+    """
     if entry_meta:
         for key in ("platform", "provider", "source"):
             value = entry_meta.get(key)
@@ -714,6 +1088,15 @@ def _apply_provider_defaults(
     platform: str,
     ydl_opts: Dict[str, Any],
 ) -> None:
+    """Apply platform-specific authentication defaults to yt-dlp options.
+
+    Configures credentials for platforms like SoundCloud based on environment
+    variables. Modifies ydl_opts in-place.
+
+    Args:
+        platform: Platform identifier ('soundcloud', 'youtube', etc.).
+        ydl_opts: yt-dlp options dictionary to modify in-place.
+    """
     if platform == "soundcloud":
         if SOUNDCLOUD_COOKIEFILE and "cookiefile" not in ydl_opts:
             ydl_opts["cookiefile"] = SOUNDCLOUD_COOKIEFILE
@@ -726,6 +1109,18 @@ def _apply_provider_defaults(
 
 
 def _fetch_po_token_from_companion(video_id: str) -> Optional[str]:
+    """Fetch a PO token from the Invidious Companion service.
+
+    Queries the Invidious Companion API to obtain a PO token for bypassing
+    YouTube's signature restrictions. The token is extracted from redirect
+    response headers.
+
+    Args:
+        video_id: YouTube video ID to fetch token for.
+
+    Returns:
+        PO token string if available, None otherwise.
+    """
     if not YT_COMPANION_ENABLED:
         return None
     if not (INVIDIOUS_COMPANION_URL and INVIDIOUS_COMPANION_KEY):
@@ -1227,6 +1622,20 @@ def _download_with_invidious(
 
 @app.post("/yt/info")
 def yt_info(body: Dict[str,Any] = Body(...)):
+    """Fetch video metadata without downloading.
+
+    Retrieves metadata for a video including ID, title, uploader, duration,
+    and webpage URL using yt-dlp.
+
+    Args:
+        body: Request body with 'url' parameter containing the video URL.
+
+    Returns:
+        Dictionary with 'ok': True and 'info' containing video metadata.
+
+    Raises:
+        HTTPException: 400 if URL is not provided.
+    """
     url = body.get('url')
     if not url: raise HTTPException(400, 'url required')
     ydl_opts = _with_ytdlp_defaults({'quiet': True, 'noprogress': True, 'skip_download': True})
@@ -1237,6 +1646,33 @@ def yt_info(body: Dict[str,Any] = Body(...)):
 
 @app.post("/yt/download")
 def yt_download(body: Dict[str,Any] = Body(...)):
+    """Download a video from YouTube or other platforms to S3/MinIO.
+
+    Downloads video and thumbnail files using yt-dlp, uploads them to
+    object storage, and records metadata in the database. Supports
+    PO tokens, download archive, and custom yt-dlp options.
+
+    Args:
+        body: Request body with parameters:
+            - url (required): Video URL to download
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - bucket: S3 bucket name (default: DEFAULT_BUCKET)
+            - job_id: Optional job identifier for tracking
+            - entry_meta: Optional metadata dictionary
+            - format: Video format selection (default: 'bestvideo+bestaudio/best')
+            - yt_options: Additional yt-dlp options
+
+    Returns:
+        Dictionary with download result including:
+            - ok: Success status
+            - title: Video title
+            - video_id: Extracted video ID
+            - s3_url: S3 URL of downloaded video
+            - thumb: S3 URL of thumbnail
+
+    Raises:
+        HTTPException: 400 if URL is not provided.
+    """
     url = body.get('url'); ns = body.get('namespace') or DEFAULT_NAMESPACE
     bucket = body.get('bucket') or DEFAULT_BUCKET
     job_id = body.get('job_id')
@@ -1336,6 +1772,32 @@ def yt_download(body: Dict[str,Any] = Body(...)):
 
 @app.post("/yt/transcript")
 def yt_transcript(body: Dict[str,Any] = Body(...)):
+    """Generate or retrieve transcript for a video using FFmpeg-Whisper.
+
+    Attempts to download the video if needed, then sends it to the FFmpeg-Whisper
+    service for transcription. Stores results in the transcripts table and
+    updates the videos table with metadata.
+
+    Args:
+        body: Request body with parameters:
+            - video_id (required): YouTube video ID
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - bucket: S3 bucket name (default: DEFAULT_BUCKET)
+            - language: Optional language code for transcription
+            - whisper_model: Whisper model size (default: 'small')
+            - provider: Transcript provider override
+
+    Returns:
+        Dictionary with transcript result including:
+            - ok: Success status
+            - video_id: Video identifier
+            - text: Full transcript text
+            - language: Detected language
+            - segments: Time-stamped segments
+
+    Raises:
+        HTTPException: 400 if video_id not provided, 500 on transcription errors.
+    """
     vid = body.get('video_id'); bucket = body.get('bucket') or DEFAULT_BUCKET
     if not vid: raise HTTPException(400, 'video_id required')
     ns = body.get('namespace') or DEFAULT_NAMESPACE
@@ -1348,7 +1810,7 @@ def yt_transcript(body: Dict[str,Any] = Body(...)):
     except HTTPException as dl_exc:
         # If download still fails, continue to ffmpeg-whisper which may be
         # able to transcribe from an existing raw.mp4 if it was uploaded by
-        # another path; otherwise we’ll return its error below.
+        # another path; otherwise we'll return its error below.
         logger.warning(
             "yt_transcript_prefetch_failed",
             extra={"event": "yt_transcript_prefetch_failed", "video_id": vid, "error": str(dl_exc.detail) if hasattr(dl_exc, 'detail') else str(dl_exc)},
@@ -1432,6 +1894,29 @@ def yt_transcript(body: Dict[str,Any] = Body(...)):
 
 @app.post("/yt/ingest")
 def yt_ingest(body: Dict[str,Any] = Body(...)):
+    """Complete ingestion pipeline: download video and generate transcript.
+
+    Convenience endpoint that orchestrates the full ingestion process:
+    downloads video from URL, generates transcript using Whisper, and stores
+    all metadata. Returns combined results.
+
+    Args:
+        body: Request body with parameters:
+            - url (required): Video URL to ingest
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - bucket: S3 bucket name (default: DEFAULT_BUCKET)
+            - language: Optional language code for transcription
+            - whisper_model: Whisper model size (default: 'small')
+            - provider: Transcript provider override
+            - diarize: Enable speaker diarization
+
+    Returns:
+        Dictionary with 'ok': True and 'video'/'transcript' keys containing
+        download and transcription results.
+
+    Raises:
+        HTTPException: 400 if URL not provided, 502 if Whisper service unreachable.
+    """
     # Convenience orchestration: info + download + transcript
     url = body.get('url'); ns = body.get('namespace') or DEFAULT_NAMESPACE
     if not url:
@@ -1535,6 +2020,17 @@ def yt_ingest(body: Dict[str,Any] = Body(...)):
 # -------------------- Playlist / Channel ingestion --------------------
 
 def _extract_entries(url: str) -> List[Dict[str,Any]]:
+    """Extract playlist/channel entries without downloading.
+
+    Uses yt-dlp's extract_flat mode to quickly retrieve all video IDs
+    and titles from a playlist or channel URL.
+
+    Args:
+        url: Playlist or channel URL.
+
+    Returns:
+        List of dictionaries with 'id' and 'title' for each entry.
+    """
     ydl_opts = _with_ytdlp_defaults({'quiet': True, 'noprogress': True, 'skip_download': True, 'extract_flat': True})
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -1547,6 +2043,17 @@ def _extract_entries(url: str) -> List[Dict[str,Any]]:
         return out
 
 def _job_create(job_type: str, args: Dict[str,Any]) -> Optional[str]:
+    """Create a job record in the yt_jobs table.
+
+    Creates a new job tracking record for playlist/channel ingestion tasks.
+
+    Args:
+        job_type: Type of job ('playlist', 'channel', etc.).
+        args: Job arguments dictionary.
+
+    Returns:
+        Created job ID, or None if insertion failed.
+    """
     row = {'type': job_type, 'args': args, 'state': 'queued', 'started_at': None, 'finished_at': None, 'error': None}
     res = supa_insert('yt_jobs', row)
     if isinstance(res, list) and res:
@@ -1556,6 +2063,16 @@ def _job_create(job_type: str, args: Dict[str,Any]) -> Optional[str]:
     return None
 
 def _job_update(job_id: str, state: str, error: Optional[str]=None):
+    """Update job state and timestamps.
+
+    Updates a job's status, setting started_at or finished_at timestamps
+    based on state transition.
+
+    Args:
+        job_id: Job identifier to update.
+        state: New state ('queued', 'running', 'completed', 'failed').
+        error: Optional error message if state is 'failed'.
+    """
     patch = {'state': state, 'error': error}
     if state == 'running':
         patch['started_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -1571,6 +2088,19 @@ def _item_upsert(
     meta: Optional[Dict[str, Any]] = None,
     retries: Optional[int] = None,
 ):
+    """Upsert an item record for a job.
+
+    Creates or updates an item tracking record for individual videos
+    within a playlist/channel job.
+
+    Args:
+        job_id: Parent job identifier.
+        video_id: Video identifier.
+        status: Item status ('pending', 'running', 'completed', 'failed').
+        error: Optional error message if status is 'failed'.
+        meta: Optional metadata dictionary.
+        retries: Optional retry count.
+    """
     row: Dict[str, Any] = {'job_id': job_id, 'video_id': video_id, 'status': status}
     if error is not None:
         row['error'] = error
@@ -1582,16 +2112,47 @@ def _item_upsert(
 
 
 def _item_update(job_id: str, video_id: str, patch: Dict[str, Any]) -> None:
+    """Update an item record for a job.
+
+    Updates specific fields of an item tracking record.
+
+    Args:
+        job_id: Parent job identifier.
+        video_id: Video identifier.
+        patch: Dictionary of fields to update.
+    """
     supa_update('yt_items', {'job_id': job_id, 'video_id': video_id}, patch)
 
 
 class IngestException(Exception):
+    """Exception raised during video ingestion with retry hint.
+
+    Attributes:
+        message: Error message describing the failure.
+        transient: Whether the error is transient (retryable). Defaults to True.
+
+    Notes:
+        Transient errors (network issues, rate limiting) may be retried.
+        Non-transient errors (invalid URL, permanent blocks) should not be retried.
+    """
+
     def __init__(self, message: str, transient: bool = True) -> None:
         super().__init__(message)
         self.transient = transient
 
 
 def _is_retryable_error(message: Optional[str]) -> bool:
+    """Determine if an error message indicates a retryable condition.
+
+    Checks for error patterns that suggest temporary issues like rate limits,
+    network problems, or server-side throttling rather than permanent failures.
+
+    Args:
+        message: Error message to evaluate.
+
+    Returns:
+        True if error appears retryable, False otherwise.
+    """
     if not message:
         return True
     lowered = message.lower()
@@ -1602,6 +2163,17 @@ def _is_retryable_error(message: Optional[str]) -> bool:
 
 
 def _should_retry_exception(exc: BaseException) -> bool:
+    """Determine if an exception indicates a retryable condition.
+
+    Evaluates whether an exception should trigger a retry based on its type
+    and properties. IngestException with transient=False are not retryable.
+
+    Args:
+        exc: Exception to evaluate.
+
+    Returns:
+        True if exception is retryable, False otherwise.
+    """
     if isinstance(exc, IngestException):
         return exc.transient
     if isinstance(exc, HTTPException):
@@ -1610,6 +2182,18 @@ def _should_retry_exception(exc: BaseException) -> bool:
 
 
 def _deep_merge(target: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep merge two dictionaries.
+
+    Recursively merges patch into target, with nested dictionaries merged
+    rather than replaced. Target is not modified.
+
+    Args:
+        target: Base dictionary to merge into.
+        patch: Dictionary with updates to apply.
+
+    Returns:
+        New merged dictionary.
+    """
     merged = copy.deepcopy(target)
     for key, value in patch.items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):
@@ -1620,6 +2204,18 @@ def _deep_merge(target: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]
 
 
 def _merge_meta(video_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge metadata patch into existing video metadata.
+
+    Fetches existing metadata from the database, deeply merges the patch,
+    and updates the record with the merged result.
+
+    Args:
+        video_id: Video identifier.
+        patch: Metadata updates to apply.
+
+    Returns:
+        Merged metadata dictionary.
+    """
     rows = supa_get('videos', {'video_id': video_id}) or []
     current: Dict[str, Any] = {}
     if rows:
@@ -1632,6 +2228,17 @@ def _merge_meta(video_id: str, patch: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _compact(value: Any) -> Any:
+    """Recursively remove None and empty string values from data structures.
+
+    Cleans dictionaries and lists by removing null/empty values, preserving
+    structure while eliminating sparse entries.
+
+    Args:
+        value: Any value to compact (dict, list, or primitive).
+
+    Returns:
+        Compacted value, or None if entirely empty.
+    """
     if isinstance(value, dict):
         cleaned = {}
         for k, v in value.items():
@@ -1647,6 +2254,22 @@ def _compact(value: Any) -> Any:
     return value
 
 def _ingest_one(video_url: str, ns: str, bucket: str, job_id: Optional[str] = None, entry_meta: Optional[Dict[str, Any]] = None) -> Dict[str,Any]:
+    """Ingest a single video (download + transcript).
+
+    Performs complete ingestion pipeline for one video: download, transcription,
+    and metadata storage. Returns error result if any step fails.
+
+    Args:
+        video_url: Video URL to ingest.
+        ns: Content namespace.
+        bucket: S3 bucket for storage.
+        job_id: Optional job identifier for tracking.
+        entry_meta: Optional entry metadata.
+
+    Returns:
+        Dictionary with 'ok': True and video_id/transcript data on success,
+        or 'ok': False with error message on failure.
+    """
     try:
         payload = {'url': video_url, 'namespace': ns, 'bucket': bucket}
         if job_id:
@@ -1662,6 +2285,24 @@ def _ingest_one(video_url: str, ns: str, bucket: str, job_id: Optional[str] = No
 
 
 async def _ingest_one_async(video_url: str, ns: str, bucket: str, job_id: Optional[str] = None, entry_meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Async wrapper for _ingest_one that raises IngestException on failure.
+
+    Runs ingestion in a thread pool and converts errors to IngestException
+    with appropriate transient flag for retry logic.
+
+    Args:
+        video_url: Video URL to ingest.
+        ns: Content namespace.
+        bucket: S3 bucket for storage.
+        job_id: Optional job identifier for tracking.
+        entry_meta: Optional entry metadata.
+
+    Returns:
+        Dictionary with successful ingestion result.
+
+    Raises:
+        IngestException: If ingestion fails, with transient flag set based on error type.
+    """
     result = await asyncio.to_thread(_ingest_one, video_url, ns, bucket, job_id, entry_meta)
     if not result.get('ok'):
         msg = result.get('error') or 'ingest failed'
@@ -1670,6 +2311,24 @@ async def _ingest_one_async(video_url: str, ns: str, bucket: str, job_id: Option
 
 @app.post('/yt/playlist')
 async def yt_playlist(body: Dict[str,Any] = Body(...)):
+    """Ingest all videos from a playlist URL.
+
+    Extracts video entries from a playlist, downloads and transcribes each video
+    concurrently with rate limiting. Creates a job record for tracking progress.
+
+    Args:
+        body: Request body with parameters:
+            - url (required): Playlist URL
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - bucket: S3 bucket name (default: DEFAULT_BUCKET)
+            - max_videos: Maximum videos to process (default: YT_PLAYLIST_MAX)
+
+    Returns:
+        Dictionary with job_id and count of videos queued for ingestion.
+
+    Raises:
+        HTTPException: 400 if URL not provided or no entries found.
+    """
     url = body.get('url'); ns = body.get('namespace') or DEFAULT_NAMESPACE; bucket = body.get('bucket') or DEFAULT_BUCKET
     if not url:
         raise HTTPException(400, 'url required')
@@ -1825,6 +2484,24 @@ async def yt_playlist(body: Dict[str,Any] = Body(...)):
 
 @app.post('/yt/channel')
 async def yt_channel(body: Dict[str,Any] = Body(...)):
+    """Ingest all videos from a YouTube channel.
+
+    Accepts either a channel URL or channel ID, converts to appropriate URL format,
+    and delegates to yt_playlist for processing.
+
+    Args:
+        body: Request body with parameters:
+            - url or channel_id (required): Channel URL or ID
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - bucket: S3 bucket name (default: DEFAULT_BUCKET)
+            - max_videos: Maximum videos to process (default: YT_PLAYLIST_MAX)
+
+    Returns:
+        Dictionary with job_id and count of videos queued for ingestion.
+
+    Raises:
+        HTTPException: 400 if neither url nor channel_id provided.
+    """
     # Accept channel URL or channel_id
     base = body.get('url') or body.get('channel_id')
     if not base:
@@ -1837,6 +2514,21 @@ async def yt_channel(body: Dict[str,Any] = Body(...)):
 # -------------------- Gemma Summarization --------------------
 
 def _summarize_ollama(text: str, style: str) -> str:
+    """Summarize text using Ollama API with Gemma model.
+
+    Sends transcript text to Ollama local API for summarization using
+    the configured Gemma model.
+
+    Args:
+        text: Transcript text to summarize (truncated to 12000 chars).
+        style: Summary style ('brief', 'detailed', etc.).
+
+    Returns:
+        Generated summary text.
+
+    Raises:
+        HTTPException: 502 if Ollama request fails.
+    """
     prompt = f"You are a skilled video summarizer. Style={style}. Summarize the transcript below succinctly.\n\nTranscript:\n{text[:12000]}"
     try:
         r = requests.post(f"{OLLAMA_URL}/api/generate", json={"model": YT_GEMMA_MODEL, "prompt": prompt, "stream": False}, timeout=180)
@@ -1847,6 +2539,21 @@ def _summarize_ollama(text: str, style: str) -> str:
         raise HTTPException(502, f"Ollama summarization failed: {e}")
 
 def _summarize_hf(text: str, style: str) -> str:
+    """Summarize text using HuggingFace Transformers with Gemma model.
+
+    Uses local Gemma model via Transformers library for summarization.
+    Requires GPU for acceptable performance with 9B parameter model.
+
+    Args:
+        text: Transcript text to summarize (truncated to 8000 chars).
+        style: Summary style ('brief', 'detailed', etc.).
+
+    Returns:
+        Generated summary text.
+
+    Raises:
+        HTTPException: 500 if Transformers not installed or generation fails.
+    """
     # Optional local transformers path; requires GPU for Gemma-2 9B
     try:
         import torch  # noqa: F401
@@ -1866,6 +2573,17 @@ def _summarize_hf(text: str, style: str) -> str:
         raise HTTPException(500, f"HF Gemma generation failed: {e}")
 
 def _get_transcript(video_id: str) -> Dict[str,Any]:
+    """Retrieve transcript for a video from the database.
+
+    Fetches the transcript record including text and segments from
+    the transcripts table.
+
+    Args:
+        video_id: Video identifier.
+
+    Returns:
+        Dictionary with 'text' and 'segments' keys, or empty dict if not found.
+    """
     rows = supa_get('transcripts', {'video_id': video_id}) or []
     if not rows:
         return {'text': '', 'segments': []}
@@ -1876,10 +2594,37 @@ def _get_transcript(video_id: str) -> Dict[str,Any]:
     return {'text': row.get('text') or '', 'segments': meta.get('segments') or []}
 
 def _merge_video_meta(video_id: str, gemma_patch: Dict[str, Any]) -> None:
+    """Merge Gemma-generated content into video metadata.
+
+    Updates the video's meta field with summaries, chapters, or other
+    Gemma-generated content.
+
+    Args:
+        video_id: Video identifier.
+        gemma_patch: Dictionary with Gemma content to merge.
+    """
     _merge_meta(video_id, {'gemma': gemma_patch})
 
 @app.post('/yt/summarize')
 def yt_summarize(body: Dict[str,Any] = Body(...)):
+    """Generate an AI summary for a video transcript.
+
+    Uses Gemma model via Ollama or HuggingFace to summarize video transcript.
+    Stores result in video metadata and publishes NATS event.
+
+    Args:
+        body: Request body with parameters:
+            - video_id (required): Video identifier
+            - provider: Summary provider, 'ollama' or 'hf' (default: YT_SUMMARY_PROVIDER)
+            - style: Summary style ('short', 'detailed', etc., default: 'short')
+            - text: Optional transcript text (uses stored transcript if omitted)
+
+    Returns:
+        Dictionary with video_id, provider, style, and generated summary.
+
+    Raises:
+        HTTPException: 400 if video_id not provided, 404 if transcript not found.
+    """
     vid = body.get('video_id'); provider = (body.get('provider') or YT_SUMMARY_PROVIDER).lower()
     style = (body.get('style') or 'short')
     if not vid: raise HTTPException(400, 'video_id required')
@@ -1901,6 +2646,23 @@ def yt_summarize(body: Dict[str,Any] = Body(...)):
 
 @app.post('/yt/chapters')
 def yt_chapters(body: Dict[str,Any] = Body(...)):
+    """Generate chapter markers for a video transcript.
+
+    Uses Gemma model to analyze transcript and generate chapter titles
+    with brief descriptions. Stores result in video metadata.
+
+    Args:
+        body: Request body with parameters:
+            - video_id (required): Video identifier
+            - provider: Summary provider, 'ollama' or 'hf' (default: YT_SUMMARY_PROVIDER)
+            - text: Optional transcript text (uses stored transcript if omitted)
+
+    Returns:
+        Dictionary with video_id and list of chapters (each with title, blurb).
+
+    Raises:
+        HTTPException: 400 if video_id not provided, 404 if transcript not found.
+    """
     vid = body.get('video_id'); provider = (body.get('provider') or YT_SUMMARY_PROVIDER).lower()
     if not vid: raise HTTPException(400, 'video_id required')
     tr = _get_transcript(vid)
@@ -1929,7 +2691,17 @@ def yt_chapters(body: Dict[str,Any] = Body(...)):
 
 @app.post('/yt/docs/sync')
 def yt_docs_sync():
-    """Upsert yt-dlp CLI docs into Supabase (pmoves_core.tool_docs)."""
+    """Upsert yt-dlp CLI docs into Supabase (pmoves_core.tool_docs).
+
+    Triggers documentation collection from yt-dlp and syncs to Supabase
+    for use by AI agents and UI tools.
+
+    Returns:
+        Dictionary with 'ok': True and sync result details.
+
+    Raises:
+        HTTPException: 500 if docs sync helpers unavailable or sync fails.
+    """
     if not (collect_yt_dlp_docs and sync_to_supabase):
         raise HTTPException(500, 'docs sync helpers unavailable')
     try:
@@ -1941,7 +2713,18 @@ def yt_docs_sync():
 
 @app.get('/yt/docs/catalog')
 def yt_docs_catalog():
-    """Return a structured options catalog and extractor count for UIs/agents."""
+    """Return a structured options catalog and extractor count for UIs/agents.
+
+    Provides metadata about yt-dlp options, supported extractors, and version
+    information for building dynamic UIs and agent tool configurations.
+
+    Returns:
+        Dictionary with 'ok': True, 'meta' (version info, extractor count),
+        and 'options' catalog.
+
+    Raises:
+        HTTPException: 500 if catalog retrieval fails.
+    """
     try:
         cat = options_catalog()
         meta = version_info()
@@ -1953,6 +2736,20 @@ def yt_docs_catalog():
 # -------------------- Segmentation → JSONL + CGP emit --------------------
 
 def _segment_transcript(text: str, doc_id: str, namespace: str) -> List[Dict[str,Any]]:
+    """Segment transcript text into chunks for knowledge indexing.
+
+    Simple sentence/paragraph-based segmentation targeting ~1000 characters
+    per chunk. Splits on punctuation and newlines while respecting length
+    budgets.
+
+    Args:
+        text: Full transcript text to segment.
+        doc_id: Document identifier (usually video_id).
+        namespace: Content namespace.
+
+    Returns:
+        List of chunk dictionaries with doc_id, chunk_id, text, namespace, payload.
+    """
     # Naive sentence/paragraph segmentation by punctuation + length budget
     # Target ~900-1200 chars per chunk
     chunks: List[Dict[str,Any]] = []
@@ -1995,6 +2792,24 @@ def _segment_from_whisper_segments(
     max_chars: int = None,
     max_dur: float = None,
 ) -> List[Dict[str,Any]]:
+    """Segment transcript using Whisper time-aligned segments with smart boundaries.
+
+    Groups Whisper segments into chunks based on duration, gaps, and punctuation
+    to create semantically coherent segments with time boundaries.
+
+    Args:
+        segments: List of Whisper segment dicts with 'start', 'end', 'text'.
+        doc_id: Document identifier (usually video_id).
+        namespace: Content namespace.
+        target_dur: Target chunk duration in seconds (default: YT_SEG_TARGET_DUR).
+        gap_thresh: Gap threshold for splitting (default: YT_SEG_GAP_THRESH).
+        min_chars: Minimum characters per chunk (default: YT_SEG_MIN_CHARS).
+        max_chars: Maximum characters per chunk (default: YT_SEG_MAX_CHARS).
+        max_dur: Maximum duration per chunk (default: YT_SEG_MAX_DUR).
+
+    Returns:
+        List of chunk dictionaries with time boundaries in payload.
+    """
     # Smart boundary grouping with tunable thresholds
     tgt = float(target_dur) if target_dur is not None else YT_SEG_TARGET_DUR
     gap_thresh = gap_thresh if gap_thresh is not None else YT_SEG_GAP_THRESH
@@ -2048,9 +2863,20 @@ def _segment_from_whisper_segments(
 def _auto_tune_segment_params(segments: List[Dict[str,Any]], text: str) -> Dict[str,Any]:
     """Infer content profile (dialogue, talk, music/lyrics) and adjust thresholds.
 
-    Heuristics:
-    - words/sec (wps), avg seg duration, avg words/seg, avg gap
-    - lyrics/music cues: tags like [Music], repeated short lines, low punctuation
+    Analyzes transcript characteristics to optimize segmentation parameters for
+    different content types. Detects dialogue vs monologue vs music content.
+
+    Args:
+        segments: Whisper time-aligned segments.
+        text: Full transcript text.
+
+    Returns:
+        Dictionary of tuned segmentation parameters.
+
+    Notes:
+        Heuristics:
+        - words/sec (wps), avg seg duration, avg words/seg, avg gap
+        - lyrics/music cues: tags like [Music], repeated short lines, low punctuation
     """
     if not segments:
         return {}
@@ -2105,6 +2931,17 @@ def _auto_tune_segment_params(segments: List[Dict[str,Any]], text: str) -> Dict[
     return params
 
 def _normalise(values: List[float]) -> List[float]:
+    """Normalize a list of floats to sum to 1.0.
+
+    Creates a probability distribution from a list of values, handling
+    edge cases like zero or negative sums.
+
+    Args:
+        values: List of float values to normalize.
+
+    Returns:
+        Normalized list summing to 1.0, or uniform distribution if sum <= 0.
+    """
     total = sum(values)
     if total <= 0:
         length = len(values) or 1
@@ -2114,6 +2951,20 @@ def _normalise(values: List[float]) -> List[float]:
 
 
 def _build_cgp(video_id: str, chunks: List[Dict[str,Any]], title: Optional[str], namespace: str) -> Dict[str,Any]:
+    """Build a Compressed Geometry Proxy (CGP) for video chunks.
+
+    Creates a Geometry Bus CHIT structure with spectrum, points, and metadata
+    for mathematical representation of video content distribution.
+
+    Args:
+        video_id: Video identifier.
+        chunks: List of chunk dictionaries with text and time boundaries.
+        title: Optional video title for summary.
+        namespace: Content namespace for parameter pack lookup.
+
+    Returns:
+        CGP dictionary with id, summary, spectrum, points, and metadata.
+    """
     pack = get_builder_pack(namespace, 'video')
     if not pack:
         # Fallback to direct Supabase lookup when the shared helper is unavailable in-container.
@@ -2210,6 +3061,27 @@ def _build_cgp(video_id: str, chunks: List[Dict[str,Any]], title: Optional[str],
 
 @app.post('/yt/smoke/seed-pack')
 def yt_smoke_seed_pack(body: Dict[str, Any] = Body({})):
+    """Create or seed a geometry parameter pack for CGP building.
+
+    Creates a geometry parameter pack record in the database for testing
+    or configuration purposes. Clears the geometry params cache after creation.
+
+    Args:
+        body: Request body with parameters:
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - modality: Content modality (default: 'video')
+            - pack_id: Optional pack ID (auto-generated UUID if omitted)
+            - params: CGP parameters dict (bins, K, tau, beta, spectrum_mode)
+            - generation: Generation number (default: 1)
+            - population_id: Population identifier (default: 'smoke')
+            - fitness: Pack fitness score (default: 0.9)
+
+    Returns:
+        Dictionary with 'ok': True and 'pack' dict containing created record.
+
+    Raises:
+        HTTPException: 502 if database insert fails.
+    """
     namespace = body.get('namespace') or DEFAULT_NAMESPACE
     modality = body.get('modality') or 'video'
     pack_id = body.get('pack_id') or str(uuid.uuid4())
@@ -2255,6 +3127,24 @@ def yt_smoke_seed_pack(body: Dict[str, Any] = Body({})):
 
 @app.post('/yt/cgp-build')
 def yt_cgp_build(body: Dict[str, Any] = Body(...)):
+    """Build a Compressed Geometry Proxy (CGP) from provided chunks.
+
+    Creates a Geometry Bus CHIT structure from pre-segmented chunks without
+    performing segmentation. Useful for rebuilding CGPs with different parameters.
+
+    Args:
+        body: Request body with parameters:
+            - video_id (required): Video identifier
+            - chunks (required): List of chunk dictionaries with text and payloads
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - title: Optional video title for summary
+
+    Returns:
+        Dictionary with 'ok': True and 'cgp' dict containing the CGP structure.
+
+    Raises:
+        HTTPException: 400 if video_id or chunks not provided.
+    """
     video_id = body.get('video_id')
     if not video_id:
         raise HTTPException(400, 'video_id required')
@@ -2462,6 +3352,26 @@ def _emit_async_job(
 
 @app.post('/yt/emit')
 def yt_emit(background_tasks: BackgroundTasks, body: Dict[str, Any] = Body(...)):
+    """Emit video transcript to Geometry Bus and Hi-RAG for knowledge indexing.
+
+    Segments transcript, builds CGP (Compressed Geometry Proxy), and upserts
+    chunks to Hi-RAG v2. Can run synchronously or asynchronously based on chunk count.
+
+    Args:
+        background_tasks: FastAPI BackgroundTasks for async processing.
+        body: Request body with parameters:
+            - video_id (required): Video identifier
+            - namespace: Content namespace (default: DEFAULT_NAMESPACE)
+            - text: Optional transcript text (uses stored transcript if omitted)
+            - index_lexical: Enable/disable lexical indexing (bool/string)
+            - bucket: S3 bucket for storage (default: DEFAULT_BUCKET)
+
+    Returns:
+        Dictionary with 'ok': True, video_id, job_id (if async), and processing details.
+
+    Raises:
+        HTTPException: 400 if video_id not provided, 404 if transcript not found.
+    """
     vid = body.get('video_id')
     ns = body.get('namespace') or DEFAULT_NAMESPACE
     if not vid:
@@ -2618,6 +3528,26 @@ def yt_emit(background_tasks: BackgroundTasks, body: Dict[str, Any] = Body(...))
 
 @app.get('/yt/emit/status/{job_id}')
 def yt_emit_status(job_id: str):
+    """Query the status of an async emit job.
+
+    Returns the current state and progress of a previously initiated
+    async Geometry Bus emit job.
+
+    Args:
+        job_id: Job identifier from yt_emit response.
+
+    Returns:
+        Dictionary with 'ok': True and 'job' dict containing:
+            - status: Job status ('queued', 'running', 'completed', 'failed')
+            - created_at: Job creation timestamp
+            - started_at: Job start timestamp (when running)
+            - finished_at: Job completion timestamp (when done)
+            - error: Error message if failed
+            - Other job metadata
+
+    Raises:
+        HTTPException: 404 if job_id not found.
+    """
     job = _get_emit_job(job_id)
     if not job:
         raise HTTPException(404, 'job not found')

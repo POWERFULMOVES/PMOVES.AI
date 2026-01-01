@@ -57,7 +57,25 @@ EMBEDDING_API_URL = os.environ.get("YOUTUBE_EMBEDDING_API_URL")
 
 
 def _resolve_embedding_target(model_name: str) -> tuple[str, int]:
-    """Resolve Supabase column + dimension for supported embedding backends."""
+    """Resolve Supabase column and dimension for supported embedding backends.
+
+    Determines which Supabase column to use for storing embeddings and the
+    expected vector dimension based on the embedding model family.
+
+    Args:
+        model_name: Name of the embedding model (e.g., 'sentence-transformers/all-MiniLM-L6-v2').
+
+    Returns:
+        A tuple of (column_name, dimension) where:
+            - column_name: Supabase column name for embeddings (e.g., 'embedding_st', 'embedding_qwen')
+            - dimension: Expected vector dimension (e.g., 384, 2560, 768)
+
+    Examples:
+        >>> _resolve_embedding_target("sentence-transformers/all-MiniLM-L6-v2")
+        ('embedding_st', 384)
+        >>> _resolve_embedding_target("qwen2-embedding")
+        ('embedding_qwen', 2560)
+    """
     normalized = (model_name or "").lower()
 
     if "qwen3-embedding" in normalized or "qwen2-embedding" in normalized or "qwen-embedding" in normalized:
@@ -77,14 +95,27 @@ EMBEDDING_DIM = int(os.environ.get("YOUTUBE_EMBEDDING_DIM", str(_DEFAULT_DIM)))
 # FastAPI app
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
+    """Manage application lifespan, handling startup and shutdown events.
+
+    Initializes embedding models and HTTP clients on startup, and properly
+    closes connections on shutdown to prevent resource leaks.
+
+    Args:
+        app: The FastAPI application instance.
+
+    Yields:
+        None: Control is yielded back to the application during its lifetime.
+
+    Raises:
+        Exception: Propagates exceptions that occur during startup initialization.
+    """
     # Startup
-    """Initialize services on startup."""
+    # Initialize services on startup.
     print("🚀 MCP YouTube Adapter starting up...")
     print(f"   Supabase: {SUPABASE_URL}")
     print(f"   Embedding Model: {EMBEDDING_MODEL}")
     print(f"   Embedding Column: {EMBEDDING_COLUMN} (dim={EMBEDDING_DIM})")
-    
+
     # Pre-load embedding model
     if EMBEDDING_API_URL:
         print(f"   Using remote embedding API: {EMBEDDING_API_URL}")
@@ -100,7 +131,7 @@ async def lifespan(app: FastAPI):
             print(f"   ⚠️  Failed to load embedding model: {exc}")
     yield
     # Shutdown
-    """Cleanup on shutdown."""
+    # Cleanup on shutdown.
     global _supabase_client, _embedding_api_client
     if _supabase_client:
         await _supabase_client.aclose()
@@ -128,7 +159,18 @@ _embedding_api_client: Optional[httpx.AsyncClient] = None
 
 
 def get_embedding_model() -> SentenceTransformerType:
-    """Lazy-load embedding model."""
+    """Lazy-load the sentence transformer embedding model.
+
+    Loads the model on first call and caches it globally for subsequent calls.
+    Uses the model specified by the YOUTUBE_EMBEDDING_MODEL environment variable.
+
+    Returns:
+        The loaded SentenceTransformer model instance.
+
+    Raises:
+        RuntimeError: If sentence-transformers is not installed and no
+            remote embedding API URL is configured.
+    """
     if SentenceTransformer is None:
         raise RuntimeError(
             "sentence-transformers not installed. Install it or set YOUTUBE_EMBEDDING_API_URL "
@@ -141,7 +183,17 @@ def get_embedding_model() -> SentenceTransformerType:
 
 
 def get_supabase_client() -> httpx.AsyncClient:
-    """Get configured Supabase HTTP client."""
+    """Get or create a configured Supabase HTTP client.
+
+    Creates an httpx AsyncClient with proper authentication headers for
+    Supabase PostgREST API access. The client is cached globally for reuse.
+
+    Returns:
+        A configured httpx.AsyncClient instance with Supabase authentication headers.
+
+    Raises:
+        RuntimeError: If SUPABASE_SERVICE_ROLE_KEY environment variable is not set.
+    """
     global _supabase_client
     if _supabase_client is None:
         if not SUPABASE_KEY:
@@ -160,7 +212,14 @@ def get_supabase_client() -> httpx.AsyncClient:
 
 
 async def get_embedding_api_client() -> httpx.AsyncClient:
-    """HTTP client for remote embedding services."""
+    """Get or create an HTTP client for remote embedding services.
+
+    Creates an httpx AsyncClient for calling external embedding APIs
+    (when YOUTUBE_EMBEDDING_API_URL is configured). The client is cached globally.
+
+    Returns:
+        A configured httpx.AsyncClient instance with 30-second timeout.
+    """
     global _embedding_api_client
     if _embedding_api_client is None:
         _embedding_api_client = httpx.AsyncClient(timeout=30.0)
@@ -168,7 +227,23 @@ async def get_embedding_api_client() -> httpx.AsyncClient:
 
 
 async def encode_query_text(text: str) -> np.ndarray:
-    """Generate a query embedding using either local model or remote service."""
+    """Generate a query embedding using either local model or remote embedding service.
+
+    Supports two modes:
+    1. Remote API: Calls YOUTUBE_EMBEDDING_API_URL for embeddings
+    2. Local model: Uses sentence-transformers model loaded in-memory
+
+    Args:
+        text: The query text to encode into an embedding vector.
+
+    Returns:
+        A numpy array of shape (embedding_dim,) containing the normalized
+        embedding vector as float32.
+
+    Raises:
+        HTTPException: If the remote embedding API request fails or returns
+            an invalid response (status 502).
+    """
     if EMBEDDING_API_URL:
         client = await get_embedding_api_client()
         try:
@@ -192,7 +267,25 @@ async def encode_query_text(text: str) -> np.ndarray:
 
 
 def adjust_vector_dimension(vector: np.ndarray, target_dim: int) -> np.ndarray:
-    """Pad or truncate vectors to target dimension for cosine similarity."""
+    """Adjust vector dimension by padding or truncating.
+
+    Ensures embedding vectors have consistent dimensions for cosine similarity
+    computation. Pads with zeros if smaller, truncates if larger.
+
+    Args:
+        vector: Input embedding vector as numpy array.
+        target_dim: Target dimension for the output vector.
+
+    Returns:
+        A numpy array with shape (target_dim,) containing the adjusted vector.
+        If the input is larger, it is truncated. If smaller, it is zero-padded.
+
+    Examples:
+        >>> adjust_vector_dimension(np.array([1.0, 2.0]), 4)
+        array([1., 2., 0., 0.])
+        >>> adjust_vector_dimension(np.array([1.0, 2.0, 3.0, 4.0, 5.0]), 3)
+        array([1., 2., 3.])
+    """
     if vector.size > target_dim:
         return vector[:target_dim]
     if vector.size < target_dim:
@@ -202,12 +295,33 @@ def adjust_vector_dimension(vector: np.ndarray, target_dim: int) -> np.ndarray:
 
 # Request/Response models
 class YouTubeSearchRequest(BaseModel):
+    """Request model for YouTube transcript semantic search.
+
+    Attributes:
+        query: Search query text (must be at least 1 character).
+        limit: Maximum number of results to return (1-50, default 5).
+        threshold: Minimum cosine similarity score (0.0-1.0, default 0.70).
+    """
+
     query: str = Field(..., min_length=1, description="Search query text")
     limit: int = Field(5, ge=1, le=50, description="Maximum results to return")
     threshold: float = Field(0.70, ge=0.0, le=1.0, description="Cosine similarity threshold")
 
 
 class YouTubeResult(BaseModel):
+    """Single YouTube video search result with transcript match.
+
+    Attributes:
+        video_id: YouTube video identifier.
+        title: Video title.
+        url: Full YouTube video URL.
+        similarity: Cosine similarity score (0.0-1.0).
+        excerpt: Text excerpt from the transcript matching the query.
+        channel: YouTube channel name (optional).
+        published_at: ISO 8601 publication timestamp (optional).
+        duration: Video duration in seconds (optional).
+    """
+
     video_id: str
     title: str
     url: str
@@ -219,6 +333,15 @@ class YouTubeResult(BaseModel):
 
 
 class YouTubeSearchResponse(BaseModel):
+    """Response model for YouTube transcript search results.
+
+    Attributes:
+        query: The original search query.
+        results: List of matching YouTube videos ranked by similarity.
+        total: Number of results returned (may be less than requested).
+        threshold: The similarity threshold used for filtering.
+    """
+
     query: str
     results: List[YouTubeResult]
     total: int
@@ -226,6 +349,21 @@ class YouTubeSearchResponse(BaseModel):
 
 
 class YouTubeVideoMetadata(BaseModel):
+    """Complete metadata for a YouTube video including transcript and embedding.
+
+    Attributes:
+        video_id: YouTube video identifier.
+        title: Video title.
+        description: Video description text (optional).
+        channel: YouTube channel name (optional).
+        url: Full YouTube video URL.
+        published_at: ISO 8601 publication timestamp (optional).
+        duration: Video duration in seconds (optional).
+        transcript: Full transcript text (optional).
+        embedding: Embedding vector as list of floats (optional).
+        embedding_column: Supabase column name for the embedding (optional).
+    """
+
     video_id: str
     title: str
     description: Optional[str] = None
@@ -241,17 +379,37 @@ class YouTubeVideoMetadata(BaseModel):
 # API Endpoints
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint for monitoring service availability.
+
+    Returns:
+        A dictionary containing:
+            - status: Service health status ('ok').
+            - service: Service identifier ('mcp-youtube-adapter').
+            - timestamp: ISO 8601 timestamp of the health check in UTC.
+    """
     return {"status": "ok", "service": "mcp-youtube-adapter", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @app.post("/youtube/search", response_model=YouTubeSearchResponse)
 async def search_youtube_transcripts(request: YouTubeSearchRequest):
-    """
-    Semantic search across YouTube transcript corpus.
-    
-    Returns videos with transcripts semantically similar to the query,
-    ranked by cosine similarity score.
+    """Semantic search across YouTube transcript corpus.
+
+    Performs vector similarity search by encoding the query text and comparing
+    against pre-computed embeddings in Supabase. Results are ranked by cosine
+    similarity and filtered by the threshold parameter.
+
+    Args:
+        request: Search request containing query text, result limit, and similarity threshold.
+
+    Returns:
+        YouTubeSearchResponse containing:
+            - query: The original search query.
+            - results: Ranked list of YouTube videos with similarity scores and excerpts.
+            - total: Number of results returned.
+            - threshold: The similarity threshold applied.
+
+    Raises:
+        HTTPException: If Supabase query fails (502) or any other error occurs (500).
     """
     try:
         # Generate query embedding
@@ -324,8 +482,25 @@ async def search_youtube_transcripts(request: YouTubeSearchRequest):
 
 @app.get("/youtube/video/{video_id}", response_model=YouTubeVideoMetadata)
 async def get_youtube_video(video_id: str):
-    """
-    Fetch YouTube video metadata and transcript by video ID.
+    """Fetch YouTube video metadata and transcript by video ID.
+
+    Retrieves complete video information from Supabase including metadata,
+    full transcript, and embedding vector.
+
+    Args:
+        video_id: YouTube video identifier (11-character string).
+
+    Returns:
+        YouTubeVideoMetadata containing:
+            - video_id, title, description, channel, url
+            - published_at, duration
+            - transcript: Full transcript text
+            - embedding: Pre-computed embedding vector
+            - embedding_column: Supabase column name for the embedding
+
+    Raises:
+        HTTPException: If video not found (404), Supabase query fails (502),
+            or any other error occurs (500).
     """
     try:
         client = get_supabase_client()
@@ -370,10 +545,24 @@ async def ingest_youtube_video(
     url: str = Query(..., description="YouTube video URL"),
     extract_transcript: bool = Query(True, description="Extract transcript")
 ):
-    """
-    Ingest a YouTube video into the corpus.
-    
-    Fetches metadata, extracts transcript, generates embedding, and stores in Supabase.
+    """Ingest a YouTube video into the transcript corpus.
+
+    Extracts the video ID from a YouTube URL and initiates ingestion workflow.
+    Currently returns a placeholder response with deployment instructions.
+
+    Args:
+        url: Full YouTube video URL (youtube.com or youtu.be format).
+        extract_transcript: Whether to extract the transcript (currently unused).
+
+    Returns:
+        A dictionary containing:
+            - status: Ingestion status ('success').
+            - video_id: Extracted YouTube video identifier.
+            - message: Status message with next steps.
+            - next_steps: List of deployment and configuration instructions.
+
+    Raises:
+        HTTPException: If URL is invalid (400) or ingestion fails (500).
     """
     try:
         # Extract video ID from URL

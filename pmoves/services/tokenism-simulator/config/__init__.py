@@ -20,8 +20,27 @@ logger = logging.getLogger(__name__)
 
 # Resolve env.shared path relative to this config file
 # Config file is at: .../tokenism-simulator/config/__init__.py
-# env.shared is at: pmoves/env.shared (3 levels up from config file)
-_env_path = Path(__file__).resolve().parents[3] / "env.shared"
+# In dev: env.shared is at: pmoves/env.shared (3 levels up from config file)
+# In container: working dir is /app, so we need to look for env.shared differently
+try:
+    # Try development structure first (3 levels up)
+    _env_path = Path(__file__).resolve().parents[3] / "env.shared"
+except IndexError:
+    # In container, parents[3] would fail, so try alternative paths
+    # Container has /app as working dir, check common locations
+    _env_path_candidates = [
+        Path("/app/env.shared"),
+        Path("/pmoves/env.shared"),
+        Path("/app/services/tokenism-simulator/../../env.shared"),
+    ]
+    _env_path = None
+    for candidate in _env_path_candidates:
+        if candidate.exists():
+            _env_path = candidate
+            break
+    if _env_path is None:
+        _env_path = Path("/app/env.shared")  # Default fallback
+
 if _env_path.exists():
     load_dotenv(_env_path)
 else:

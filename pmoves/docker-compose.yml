@@ -1387,15 +1387,13 @@ services:
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
       - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
     depends_on: [ nats ]
-    ports: [ "8100:8100" ]
-    ports: [ "8104:8104" ]
+    ports: [ "8100:8100", "8104:8104" ]
     volumes:
       - ./services/github-runner-ctl/config:/app/config:ro
     profiles: [ "orchestration", "workers" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:
       test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1979,33 +1977,6 @@ services:
     # Next.js needs writable cache for build
     volumes:
       - e2b-surf-cache:/app/.next:rw
-    cap_drop: [ ALL ]
-    security_opt: [ no-new-privileges:true ]
-
-  # A2UI NATS Bridge - Bridges Google A2UI (Agent-to-User Interface) events to PMOVES geometry bus
-  # A2UI allows agents to generate declarative UIs safely (no code execution)
-  a2ui-nats-bridge:
-    build: ./services/a2ui-nats-bridge
-    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
-    container_name: pmoves-a2ui-nats-bridge
-    hostname: a2ui-nats-bridge
-    restart: unless-stopped
-    <<: *env-tier-agent
-    environment:
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
-      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
-      - PORT=9224
-    ports: [ "9224:9224" ]
-    depends_on: [ nats ]
-    profiles: [ "agents", "orchestration" ]
-    networks: [ api_tier, bus_tier, monitoring_tier ]
-    healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
     cap_drop: [ ALL ]
     security_opt: [ no-new-privileges:true ]
 

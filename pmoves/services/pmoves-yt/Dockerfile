@@ -4,12 +4,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg atomicparsley ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt requirements.lock ./
+COPY requirements.lock ./
 # Parameterize yt-dlp so we can bump or source from a fork
 ARG YTDLP_VERSION=
 ARG YTDLP_PIP_URL=
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --constraint requirements.lock -r requirements.txt \
+    && pip install --no-cache-dir -r requirements.lock \
     && if [ -n "$YTDLP_PIP_URL" ]; then pip install --no-cache-dir "$YTDLP_PIP_URL"; \
        elif [ -n "$YTDLP_VERSION" ]; then pip install --no-cache-dir "yt-dlp[default]==${YTDLP_VERSION}"; \
        else pip install --no-cache-dir "yt-dlp[default]"; fi
