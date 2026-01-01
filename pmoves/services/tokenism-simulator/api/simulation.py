@@ -114,19 +114,25 @@ def _evict_old_results() -> None:
     cache size exceeds `_MAX_RESULTS`, the oldest entries are removed from both
     the results and status tracking dictionaries.
 
-    The function uses separate locks for results and status dictionaries to
-    avoid deadlock while maintaining thread safety.
+    Thread safety is maintained by acquiring both locks during eviction to
+    prevent inconsistent state between results and statuses.
 
     Note:
         This function must be called while holding the `_results_lock` to
         ensure atomicity of the check-and-evict operation.
     """
+    # Collect IDs to evict first to minimize lock holding time
+    ids_to_evict = []
     with _results_lock:
         while len(_simulation_results) > _MAX_RESULTS:
             oldest_id, _ = _simulation_results.popitem(last=False)
-    # Evict corresponding status entry (use separate lock to avoid deadlock)
-    with _status_lock:
-        _simulation_statuses.pop(oldest_id, None)
+            ids_to_evict.append(oldest_id)
+
+    # Evict corresponding status entries
+    if ids_to_evict:
+        with _status_lock:
+            for old_id in ids_to_evict:
+                _simulation_statuses.pop(old_id, None)
 
 
 def _shutdown_executor() -> None:

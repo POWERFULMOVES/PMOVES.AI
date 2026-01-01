@@ -631,6 +631,10 @@ async def healthz():
         - The NATS connection status reflects the current state and may change
           as the resilience loop reconnects.
     """
+    return {
+        "ok": True,
+        "nats_connected": _nc is not None and not getattr(_nc, "_is_closed", True)
+    }
 
 
 @app.get("/metrics")

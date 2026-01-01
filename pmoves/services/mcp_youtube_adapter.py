@@ -257,7 +257,8 @@ async def encode_query_text(text: str) -> np.ndarray:
             raise HTTPException(status_code=502, detail=f"Embedding API request failed: {exc}") from exc
         embeddings = data.get("embeddings") or data.get("data")
         if not embeddings:
-            raise HTTPException(status_code=502, detail="Embedding API response missing 'embeddings'")
+            raise HTTPException(status_code=502, detail="Embedding API response missing 'embeddings' or 'data'")
+        # embeddings[0] works for both "embeddings" and "data" response formats
         vector = np.asarray(embeddings[0], dtype=np.float32)
     else:
         model = get_embedding_model()
