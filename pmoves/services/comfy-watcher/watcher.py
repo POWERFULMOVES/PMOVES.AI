@@ -16,17 +16,37 @@ from services.common.events import envelope
 
 logger = logging.getLogger("comfy-watcher")
 
+
+def _parse_int_env(key: str, default: int) -> int:
+    """Parse integer from environment with validation.
+
+    Args:
+        key: Environment variable name.
+        default: Default value if missing or invalid.
+
+    Returns:
+        Parsed integer value or default.
+    """
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(f"Invalid {key}={value!r}, using default={default}")
+        return default
+
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_USE_SSL = os.environ.get("MINIO_USE_SSL", "false").lower() == "true"
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY")
 BUCKET = os.environ.get("MINIO_BUCKET", "pmoves-comfyui")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://minio:9000")
-PRESIGN_HOURS = int(os.environ.get("PRESIGN_EXPIRES_HOURS", "24"))
+PRESIGN_HOURS = _parse_int_env("PRESIGN_EXPIRES_HOURS", 24)
 OUTPUT_DIR = os.environ.get("COMFY_OUTPUT_DIR", "/data/output")
 STATE_PATH = os.environ.get("COMFY_WATCHER_STATE_PATH", "/state/state.json")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
-POLL_SECONDS = int(os.environ.get("COMFY_WATCHER_POLL_SECONDS", "5"))
+POLL_SECONDS = _parse_int_env("COMFY_WATCHER_POLL_SECONDS", 5)
 
 
 def load_state() -> dict:
@@ -36,7 +56,8 @@ def load_state() -> dict:
     corrupted JSON, and other I/O errors gracefully with logging.
     """
     try:
-        return json.loads(open(STATE_PATH).read())
+        with open(STATE_PATH) as f:
+            return json.loads(f.read())
     except FileNotFoundError:
         logger.info(f"State file not found, starting fresh: {STATE_PATH}")
         return {"uploaded": {}}
