@@ -30,6 +30,11 @@ ALPHA = float(os.environ.get("ALPHA", "0.7"))
 _RERANK_CONFIG_ERRORS: List[str] = []
 _RERANK_CONFIG_WARNINGS: List[str] = []
 
+# Configure logging early for use in helper functions
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
+logger = logging.getLogger("hirag.gateway.v2")
+
 
 def _parse_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
@@ -59,6 +64,17 @@ def _parse_positive_int(name: str, default: int) -> int:
         _RERANK_CONFIG_ERRORS.append(f"{name} must be positive; received {value}")
         return default
     return value
+
+
+def _parse_int_env(name: str, default: int) -> int:
+    """Parse integer environment variable with validation and fallback."""
+    raw = os.environ.get(name, str(default))
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as exc:
+        # Use logger for general config warnings, not rerank-specific list
+        logger.warning("%s value %r invalid, using default %s: %s", name, raw, default, exc)
+        return default
 
 
 def _parse_optional_bool(name: str) -> Optional[bool]:
@@ -167,10 +183,10 @@ GRAPH_BOOST = float(os.environ.get("GRAPH_BOOST","0.15"))
 NEO4J_URL = (os.environ.get("NEO4J_URL","bolt://neo4j:7687") or "").strip()
 NEO4J_USER = os.environ.get("NEO4J_USER","neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD","neo4j")
-NEO4J_DICT_REFRESH_SEC = int(os.environ.get("NEO4J_DICT_REFRESH_SEC","60"))
-NEO4J_DICT_LIMIT = int(os.environ.get("NEO4J_DICT_LIMIT","50000"))
-ENTITY_CACHE_TTL = int(os.environ.get("ENTITY_CACHE_TTL","60"))
-ENTITY_CACHE_MAX = int(os.environ.get("ENTITY_CACHE_MAX","1000"))
+NEO4J_DICT_REFRESH_SEC = _parse_int_env("NEO4J_DICT_REFRESH_SEC", 60)
+NEO4J_DICT_LIMIT = _parse_int_env("NEO4J_DICT_LIMIT", 50000)
+ENTITY_CACHE_TTL = _parse_int_env("ENTITY_CACHE_TTL", 60)
+ENTITY_CACHE_MAX = _parse_int_env("ENTITY_CACHE_MAX", 1000)
 
 SUPABASE_REST_URL = os.environ.get("SUPA_REST_URL") or os.environ.get("SUPABASE_REST_URL")
 # Optional internal REST base explicitly pointing at host-gateway; prefer for derivations
@@ -203,7 +219,7 @@ SUPABASE_REALTIME_KEY = (
     SUPABASE_ANON_KEY if _is_jwt(SUPABASE_ANON_KEY) else
     _jwt_service_key or _explicit_realtime_key or SUPABASE_ANON_KEY
 )
-GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
+GEOMETRY_CACHE_WARM_LIMIT = _parse_int_env("GEOMETRY_CACHE_WARM_LIMIT", 64)
 # Realtime connection retry configuration
 GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))  # Initial retry delay (seconds)
 GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))  # Max retry delay cap (seconds)
@@ -214,12 +230,8 @@ TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="
 TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0.0/10").split(",") if c.strip()]
 TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIES", "").split(",") if c.strip()]
 
-HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
+HTTP_PORT = _parse_int_env("HIRAG_HTTP_PORT", 8086)
 NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","pmoves")
-
-logging.basicConfig(level=logging.INFO)
-logging.getLogger().setLevel(logging.INFO)
-logger = logging.getLogger("hirag.gateway.v2")
 
 if RERANK_ENABLE:
     logger.info(
@@ -1006,7 +1018,7 @@ CHIT_PERSIST_DB = os.environ.get("CHIT_PERSIST_DB","false").lower()=="true"
 GAN_SIDECAR_ENABLED = os.environ.get("GAN_SIDECAR_ENABLED", "false").lower()=="true"
 
 PGHOST = os.environ.get("PGHOST")
-PGPORT = int(os.environ.get("PGPORT","5432"))
+PGPORT = _parse_int_env("PGPORT", 5432)
 PGUSER = os.environ.get("PGUSER")
 PGPASSWORD = os.environ.get("PGPASSWORD")
 PGDATABASE = os.environ.get("PGDATABASE")

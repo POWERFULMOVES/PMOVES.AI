@@ -127,7 +127,6 @@ PDF_MAX_PAGES = int(os.environ.get("PDF_MAX_PAGES", "0"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 
 _nc: Optional[NATS] = None
-_nats_supervisor: Optional[asyncio.Task[None]] = None
 
 
 async def _nats_connect_loop() -> None:

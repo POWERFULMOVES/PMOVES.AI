@@ -671,8 +671,9 @@ class AgentZeroController:
         for sub in self._subscriptions:
             try:
                 await sub.unsubscribe()
-            except Exception:
-                pass
+            except Exception as exc:
+                sub_info = getattr(sub, "subject", sub)
+                logger.warning("Failed to unsubscribe from %s: %s", sub_info, exc)
         self._subscriptions.clear()
         # Disable JS for this controller and create core subscriptions
         self.settings.use_jetstream = False
