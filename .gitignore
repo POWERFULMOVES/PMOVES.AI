@@ -99,16 +99,6 @@ temp*.mp4
 pmoves/ui/.pmoves_ui_dev.pid
 pmoves/ui/.pmoves_ui_dev.log
 docs/notes.md
-<<<<<<< HEAD
-
-# Agent Zero runtime data
-pmoves/data/agent-zero/instruments/
-pmoves/data/agent-zero/runtime/agents/
-pmoves/data/agent-zero/memory/
-pmoves/data/agent-zero/tmp/
-
-=======
-notes.md
 
 # Claude Code user-specific settings
 .claude/settings.json
@@ -121,11 +111,14 @@ notes.md
 pmoves/PR_BODY_*.md
 
 # Research notes (local only)
-research/
->>>>>>> main
+/research/
 
-# Agent Zero runtime-generated files
+# Agent Zero runtime data
 pmoves/data/agent-zero/instruments/
 pmoves/data/agent-zero/runtime/agents/
-pmoves/data/agent-zero/tmp/
 pmoves/data/agent-zero/memory/
+pmoves/data/agent-zero/tmp/
+pmoves/data/agent-zero/logs/
+
+# Vendor unpacked packages (install via requirements.txt instead)
+pmoves/vendor/python/
