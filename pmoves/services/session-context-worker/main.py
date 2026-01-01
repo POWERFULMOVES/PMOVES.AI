@@ -506,10 +506,25 @@ async def _nats_resilience_loop() -> None:
 
 @app.get("/healthz")
 async def healthz():
-    """Health check endpoint."""
+    """Health check endpoint for monitoring service status.
+
+    Provides a simple health check that indicates whether the service is running
+    and if the NATS connection is currently active.
+
+    Returns:
+        Dict[str, Any]: A health status dictionary containing:
+            - ok (bool): Always True, indicating the service is running.
+            - nats_connected (bool): True if NATS client is connected, False otherwise.
+
+    Notes:
+        - This endpoint is typically used by orchestrators (Kubernetes, Docker Compose)
+          for health checks.
+        - The NATS connection status reflects the current state and may change
+          as the resilience loop reconnects.
+    """
     return {
         "ok": True,
-        "nats_connected": _nc is not None,
+        "nats_connected": _nc is not None and not getattr(_nc, "_is_closed", True)
     }
 
 

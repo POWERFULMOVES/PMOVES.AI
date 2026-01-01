@@ -40,6 +40,189 @@ simulation_duration = Histogram(
     ['scenario']
 )
 
+# Background task storage with LRU eviction to prevent memory leaks
+_MAX_RESULTS = 1000  # Maximum number of simulation results to keep in memory
+_simulation_results: OrderedDict[str, dict[str, Any]] = OrderedDict()
+_simulation_statuses: dict[str, str] = {}
+_executor: ThreadPoolExecutor | None = None
+
+# Thread safety for concurrent access
+_results_lock = threading.Lock()
+_status_lock = threading.Lock()
+_executor_lock = threading.Lock()
+
+
+def _evict_old_results() -> None:
+    """Evict oldest results if we exceed the maximum cache size.
+
+    This function implements LRU (Least Recently Used) eviction policy to
+    prevent unbounded memory growth from storing simulation results. When the
+    cache size exceeds `_MAX_RESULTS`, the oldest entries are removed from both
+    the results and status tracking dictionaries.
+
+    Thread safety is maintained by acquiring both locks during eviction to
+    prevent inconsistent state between results and statuses.
+
+    Note:
+        This function must be called while holding the `_results_lock` to
+        ensure atomicity of the check-and-evict operation.
+    """
+    # Collect IDs to evict first to minimize lock holding time
+    ids_to_evict = []
+    with _results_lock:
+        while len(_simulation_results) > _MAX_RESULTS:
+            oldest_id, _ = _simulation_results.popitem(last=False)
+            ids_to_evict.append(oldest_id)
+
+    # Evict corresponding status entries
+    if ids_to_evict:
+        with _status_lock:
+            for old_id in ids_to_evict:
+                _simulation_statuses.pop(old_id, None)
+
+
+def _shutdown_executor() -> None:
+    """Shutdown the background executor on application shutdown.
+
+    This function is registered with `atexit` to ensure clean shutdown of
+    the ThreadPoolExecutor when the application exits. It waits for all
+    running tasks to complete before shutdown.
+
+    The function is thread-safe and uses `_executor_lock` to prevent race
+    conditions with concurrent calls to `_get_executor`.
+
+    Note:
+        This function should not be called directly by application code.
+        It is invoked automatically by the `atexit` module during process
+        termination.
+    """
+    global _executor
+    with _executor_lock:
+        if _executor is not None:
+            logger.info("Shutting down simulation executor...")
+            _executor.shutdown(wait=True)
+            _executor = None
+
+
+# Register shutdown handler to run on process exit
+atexit.register(_shutdown_executor)
+
+
+def _get_executor() -> ThreadPoolExecutor:
+    """Get or create the background task executor (thread-safe).
+
+    This function implements lazy initialization of a ThreadPoolExecutor for
+    running asynchronous simulations. The executor is created on first access
+    and reused for subsequent calls.
+
+    The executor is configured with a maximum of 4 worker threads, each named
+    with the prefix "sim_worker" for easy identification in debug logs.
+
+    Returns:
+        ThreadPoolExecutor: The thread pool executor instance for running
+            background simulation tasks. The same instance is returned on
+            subsequent calls.
+
+    Note:
+        This function is thread-safe and uses `_executor_lock` to prevent
+        race conditions during initialization. The executor is automatically
+        shut down when the application exits via `_shutdown_executor`.
+    """
+    global _executor
+    with _executor_lock:
+        if _executor is None:
+            _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sim_worker")
+    return _executor
+
+
+def _run_simulation_background(
+    simulation_id: str,
+    parameters: SimulationParameters,
+    scenario: SimulationScenario,
+    webhook_url: str | None = None,
+) -> None:
+    """Run simulation in background thread and store result.
+
+    This function executes a token economy simulation asynchronously in a
+    background thread. It creates a new asyncio event loop for the thread,
+    runs the simulation using the simulation engine, stores the result in
+    the in-memory cache, and updates Prometheus metrics.
+
+    The function handles both successful and failed simulations, updating
+    the simulation status accordingly. If the cache exceeds `_MAX_RESULTS`,
+    old results are automatically evicted using the LRU policy.
+
+    Args:
+        simulation_id: Unique simulation identifier for tracking and
+            retrieving results. Should be formatted as "sim_{timestamp}_{uuid}".
+        parameters: Simulation parameters including economic variables,
+            token supply, and configuration settings.
+        scenario: Economic scenario defining market conditions and
+            external factors (e.g., BASELINE, OPTIMISTIC, PESSIMISTIC).
+        webhook_url: Optional URL to POST the simulation result when complete.
+            Currently not implemented (logged but not executed).
+
+    Raises:
+        Exception: Any exception from the simulation engine is caught, logged,
+            and stored as an error result. The function does not propagate
+            exceptions to avoid crashing the background thread.
+
+    Note:
+        This function creates its own asyncio event loop since it runs in a
+        separate thread. The loop is closed in the finally block to ensure
+        proper cleanup.
+
+    Note:
+        Thread safety is ensured by acquiring both `_results_lock` and
+        `_status_lock` together when updating shared state, preventing
+        inconsistent reads during concurrent access.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        start_time = datetime.now(timezone.utc)
+        with _status_lock:
+            _simulation_statuses[simulation_id] = "running"
+
+        engine = loop.run_until_complete(get_simulation_engine())
+        result = loop.run_until_complete(engine.run_simulation(parameters, scenario))
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+
+        # Store result and trigger eviction if needed (acquire locks together for consistency)
+        with _results_lock, _status_lock:
+            _simulation_results[simulation_id] = result.model_dump(mode='json')
+            _evict_old_results()
+            _simulation_statuses[simulation_id] = "complete"
+
+        simulation_requests.labels(
+            scenario=scenario.value,
+            status='success'
+        ).inc()
+        simulation_duration.labels(scenario=scenario.value).observe(duration)
+
+        logger.info(f"Background simulation {simulation_id} completed in {duration:.2f}s")
+
+        # TODO: Send webhook if provided
+        if webhook_url:
+            logger.info(f"Would send webhook to {webhook_url} (not implemented)")
+
+    except Exception as e:
+        # Acquire locks together for consistency with success path
+        with _status_lock, _results_lock:
+            _simulation_statuses[simulation_id] = "failed"
+            _simulation_results[simulation_id] = {"error": str(e)}
+            _evict_old_results()
+        simulation_requests.labels(
+            scenario=scenario.value,
+            status='error'
+        ).inc()
+        logger.exception(f"Background simulation {simulation_id} failed: {e}")
+
+    finally:
+        loop.close()
+
 
 @simulation_bp.route('/health', methods=['GET'])
 def health_check():
