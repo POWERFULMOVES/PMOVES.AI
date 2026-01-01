@@ -607,7 +607,59 @@ _sync_openai_compat_env()
 runtime_config = AgentZeroRuntimeConfig()
 client = AgentZeroClient(runtime_config)
 process_manager = AgentZeroProcessManager(runtime_config, client)
-app = FastAPI(title="Agent Zero Supervisor")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage Agent Zero application lifespan."""
+    # Declare globals for assignment
+    global _controller_task
+
+    # Startup
+    _warn_missing_notebook_config()
+    await process_manager.start()
+    _controller_shutdown.clear()
+    _controller_task = asyncio.create_task(
+        _controller_connect_loop(), name="agent-zero-controller-connect"
+    )
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(
+                sig, lambda: asyncio.create_task(process_manager.stop())
+            )
+        except (NotImplementedError, RuntimeError, ValueError):
+            # Tests run event loops in worker threads where signal handlers are unsupported.
+            logger.debug("Skipping signal handler registration for %s", sig)
+
+    yield
+
+    # Shutdown
+    await process_manager.stop()
+    _controller_shutdown.set()
+    if _controller_task:
+        with contextlib.suppress(asyncio.CancelledError):
+            await _controller_task
+        _controller_task = None
+    if event_controller.is_started:
+        try:
+            await event_controller.stop()
+        except Exception:
+            logger.debug("Exception during event controller shutdown", exc_info=True)
+
+
+app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
+
+# Prometheus metrics
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+http_requests_total = Counter('agent_zero_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+http_request_duration = Histogram('agent_zero_http_request_duration_seconds', 'HTTP request duration')
+mcp_commands_total = Counter('agent_zero_mcp_commands_total', 'MCP commands executed', ['command', 'status'])
+mcp_execute_duration = Histogram('agent_zero_mcp_execute_duration_seconds', 'MCP command execution duration')
+tasks_created_total = Counter('agent_zero_tasks_created_total', 'Agent tasks created')
+tasks_completed_total = Counter('agent_zero_tasks_completed_total', 'Agent tasks completed')
+memory_operations_total = Counter('agent_zero_memory_operations_total', 'Memory operations', ['operation'])
 
 controller_settings = ControllerSettings(nats_url=service_config.nats_url)
 event_controller = AgentZeroController(controller_settings)
@@ -645,28 +697,6 @@ async def _controller_connect_loop() -> None:
                 _controller_ready.clear()
             break
 
-
-@app.on_event("startup")
-async def on_startup() -> None:
-    await process_manager.start()
-    global _controller_task
-    _controller_shutdown.clear()
-    _controller_task = asyncio.create_task(
-        _controller_connect_loop(), name="agent-zero-controller-connect"
-    )
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        try:
-            loop.add_signal_handler(
-                sig, lambda s=sig: asyncio.create_task(process_manager.stop())
-            )
-        except (NotImplementedError, RuntimeError, ValueError):
-            # Tests run event loops in worker threads where signal handlers are unsupported.
-            logger.debug("Skipping signal handler registration for %s", sig)
-
-
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
     await process_manager.stop()
     _controller_shutdown.set()
     global _controller_task

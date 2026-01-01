@@ -586,37 +586,163 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         emb["thumbnail"] = {"url": thumb}
     return {"content": None, "embeds": [emb]}
 
-@app.on_event("startup")
-async def startup():
-    global _nats_loop_task
-    if _nats_loop_task and _nats_loop_task.done():
-        try:
-            _nats_loop_task.result()
-        except Exception as exc:  # pragma: no cover - startup diagnostics
-            logger.warning(
-                "nats_loop_previous_failure",
-                extra={"event": "nats_loop_previous_failure", "error": str(exc)},
-            )
-    if _nats_loop_task is None or _nats_loop_task.done():
-        logger.info(
-            "nats_loop_start",
-            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
-        )
-        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+
+async def _handle_claude_session_start(payload: Dict[str, Any]) -> None:
+    """Handle claude.code.session.start.v1 event by creating a Discord thread."""
+    session_id = payload.get("session_id")
+    if not session_id or not CLAUDE_SESSION_CHANNEL_ID:
+        logger.debug("claude_session_start_skipped", extra={"session_id": session_id, "has_channel": bool(CLAUDE_SESSION_CHANNEL_ID)})
+        return
+
+    # Build thread name
+    branch = payload.get("branch") or "unknown"
+    initial_prompt = payload.get("initial_prompt") or ""
+    summary_preview = initial_prompt[:50] if initial_prompt else "New session"
+    thread_name = f"Claude: {branch} - {summary_preview}"
+
+    # Build embed for the initial message
+    emb = {
+        "title": f"Claude Session Started",
+        "color": 0x5865f2,  # Discord blurple
+        "fields": []
+    }
+
+    if payload.get("branch"):
+        emb["fields"].append({"name": "Branch", "value": f"`{payload['branch']}`", "inline": True})
+    if payload.get("worktree"):
+        emb["fields"].append({"name": "Worktree", "value": f"`{payload['worktree']}`", "inline": True})
+    if payload.get("repository"):
+        emb["fields"].append({"name": "Repository", "value": payload["repository"], "inline": True})
+    if payload.get("model"):
+        emb["fields"].append({"name": "Model", "value": payload["model"], "inline": True})
+    if payload.get("parent_session_id"):
+        emb["fields"].append({"name": "Resumed from", "value": f"`{payload['parent_session_id']}`", "inline": False})
+
+    if initial_prompt:
+        emb["description"] = initial_prompt[:1000]
+
+    emb["footer"] = {"text": f"Session ID: {session_id}"}
+    emb["timestamp"] = payload.get("timestamp")
+
+    # Create thread
+    thread_id = await _create_discord_thread(CLAUDE_SESSION_CHANNEL_ID, thread_name, embeds=[emb])
+
+    if thread_id:
+        _session_threads[session_id] = thread_id
+        logger.info("claude_session_thread_created", extra={"session_id": session_id, "thread_id": thread_id})
 
 
-@app.on_event("shutdown")
-async def shutdown():
-    global _nats_loop_task, _nc
-    if _nats_loop_task:
-        _nats_loop_task.cancel()
-        with contextlib.suppress(Exception):
-            await _nats_loop_task
-        _nats_loop_task = None
-    if _nc:
-        with contextlib.suppress(Exception):
-            await _nc.close()
-        _nc = None
+async def _handle_claude_session_context(payload: Dict[str, Any]) -> None:
+    """Handle claude.code.session.context.v1 event by posting updates to the thread."""
+    session_id = payload.get("session_id")
+    if not session_id:
+        return
+
+    thread_id = _session_threads.get(session_id)
+    if not thread_id:
+        logger.debug("claude_context_no_thread", extra={"session_id": session_id})
+        return
+
+    context_type = payload.get("context_type", "update")
+
+    # Build embed
+    emb = {
+        "title": f"Context Update: {context_type}",
+        "color": 0xfee75c,  # Discord yellow
+        "fields": []
+    }
+
+    if payload.get("summary"):
+        emb["description"] = payload["summary"][:2000]
+
+    if payload.get("branch"):
+        emb["fields"].append({"name": "Branch", "value": f"`{payload['branch']}`", "inline": True})
+
+    # Show pending tasks
+    pending_tasks = payload.get("pending_tasks", [])
+    if pending_tasks:
+        pending_count = sum(1 for t in pending_tasks if t.get("status") in ("pending", "in_progress"))
+        completed_count = sum(1 for t in pending_tasks if t.get("status") == "completed")
+        emb["fields"].append({"name": "Tasks", "value": f"{completed_count} completed, {pending_count} pending", "inline": True})
+
+        # Show first few pending tasks
+        pending_list = [t for t in pending_tasks if t.get("status") in ("pending", "in_progress")][:3]
+        if pending_list:
+            task_text = "\n".join(f"• {t.get('content', 'Unknown task')[:80]}" for t in pending_list)
+            emb["fields"].append({"name": "Current Tasks", "value": task_text, "inline": False})
+
+    # Show active files
+    active_files = payload.get("active_files", [])
+    if active_files:
+        files_text = "\n".join(f"• `{f.get('path', 'unknown')}` ({f.get('action', 'modified')})" for f in active_files[:5])
+        emb["fields"].append({"name": "Active Files", "value": files_text, "inline": False})
+
+    # Show CGP geometry summary if present
+    cgp = payload.get("cgp_geometry")
+    if cgp and isinstance(cgp, dict):
+        emb["fields"].append({"name": "CGP Geometry", "value": f"Type: {cgp.get('type', 'unknown')}", "inline": True})
+
+    emb["timestamp"] = payload.get("timestamp")
+
+    await _post_to_discord_thread(thread_id, embeds=[emb])
+
+
+async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
+    """Handle claude.code.session.end.v1 event by posting final summary."""
+    session_id = payload.get("session_id")
+    if not session_id:
+        return
+
+    thread_id = _session_threads.get(session_id)
+    if not thread_id:
+        logger.debug("claude_end_no_thread", extra={"session_id": session_id})
+        return
+
+    end_reason = payload.get("end_reason", "unknown")
+
+    # Build embed
+    emb = {
+        "title": f"Session Ended: {end_reason}",
+        "color": 0xeb459e,  # Discord pink
+        "fields": []
+    }
+
+    if payload.get("summary"):
+        emb["description"] = payload["summary"][:2000]
+
+    if payload.get("duration_seconds"):
+        duration = payload["duration_seconds"]
+        hours, remainder = divmod(duration, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        duration_str = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s"
+        emb["fields"].append({"name": "Duration", "value": duration_str, "inline": True})
+
+    tasks_completed = payload.get("tasks_completed", 0)
+    tasks_pending = payload.get("tasks_pending", 0)
+    if tasks_completed or tasks_pending:
+        emb["fields"].append({"name": "Tasks", "value": f"{tasks_completed} completed, {tasks_pending} pending", "inline": True})
+
+    files_modified = payload.get("files_modified", [])
+    if files_modified:
+        files_text = "\n".join(f"• `{f}`" for f in files_modified[:10])
+        if len(files_modified) > 10:
+            files_text += f"\n... and {len(files_modified) - 10} more"
+        emb["fields"].append({"name": "Files Modified", "value": files_text, "inline": False})
+
+    commits = payload.get("commits_created", [])
+    if commits:
+        commit_text = "\n".join(f"• `{c.get('sha', 'unknown')[:7]}` {c.get('message', '')[:60]}" for c in commits[:5])
+        emb["fields"].append({"name": "Commits", "value": commit_text, "inline": False})
+
+    emb["timestamp"] = payload.get("timestamp")
+    emb["footer"] = {"text": f"Session ID: {session_id}"}
+
+    await _post_to_discord_thread(thread_id, embeds=[emb])
+
+    # Clean up thread tracking
+    _session_threads.pop(session_id, None)
+    logger.info("claude_session_ended", extra={"session_id": session_id, "end_reason": end_reason})
+
 
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):
