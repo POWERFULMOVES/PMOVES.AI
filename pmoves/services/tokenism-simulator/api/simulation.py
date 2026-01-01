@@ -264,9 +264,10 @@ def _run_simulation_background(
 
     except Exception as e:
         # Acquire locks together for consistency with success path
-        with _status_lock, _results_lock:
-            _simulation_statuses[simulation_id] = "failed"
+        # CRITICAL: Must use same lock order as success path: _results_lock, _status_lock
+        with _results_lock, _status_lock:
             _simulation_results[simulation_id] = {"error": str(e)}
+            _simulation_statuses[simulation_id] = "failed"
             _evict_old_results()
         simulation_requests.labels(
             scenario=scenario.value,
@@ -662,8 +663,8 @@ def get_simulation_status(simulation_id: str):
         For polling, implement exponential backoff (e.g., 1s, 2s, 4s, 8s...)
         to avoid overwhelming the service with frequent requests.
     """
-    # Acquire both locks to ensure atomic reads and avoid data races
-    with _status_lock, _results_lock:
+    # CRITICAL: Lock order must match _run_simulation_background: _results_lock, _status_lock
+    with _results_lock, _status_lock:
         status = _simulation_statuses.get(simulation_id, 'unknown')
 
         if status == 'complete':

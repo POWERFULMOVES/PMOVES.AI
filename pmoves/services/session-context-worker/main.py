@@ -123,11 +123,12 @@ async def lifespan(app: FastAPI):
         _nc = None
 
 
+app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=HEALTH_PORT)
-
-app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
 
 
 def _extract_searchable_content(context: Dict[str, Any]) -> str:

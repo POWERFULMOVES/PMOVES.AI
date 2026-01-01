@@ -30,6 +30,11 @@ ALPHA = float(os.environ.get("ALPHA", "0.7"))
 _RERANK_CONFIG_ERRORS: List[str] = []
 _RERANK_CONFIG_WARNINGS: List[str] = []
 
+# Configure logging early for use in helper functions
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
+logger = logging.getLogger("hirag.gateway.v2")
+
 
 def _parse_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
@@ -67,7 +72,8 @@ def _parse_int_env(name: str, default: int) -> int:
     try:
         return int(raw)
     except (TypeError, ValueError) as exc:
-        _RERANK_CONFIG_WARNINGS.append(f"{name} value {raw!r} invalid, using default {default}: {exc}")
+        # Use logger for general config warnings, not rerank-specific list
+        logger.warning("%s value %r invalid, using default %s: %s", name, raw, default, exc)
         return default
 
 
@@ -226,10 +232,6 @@ TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIE
 
 HTTP_PORT = _parse_int_env("HIRAG_HTTP_PORT", 8086)
 NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","pmoves")
-
-logging.basicConfig(level=logging.INFO)
-logging.getLogger().setLevel(logging.INFO)
-logger = logging.getLogger("hirag.gateway.v2")
 
 if RERANK_ENABLE:
     logger.info(
