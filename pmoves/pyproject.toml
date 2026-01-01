@@ -75,8 +75,8 @@ exclude = [
 line-length = 100
 indent-width = 4
 
-# Assume Python 3.10+
-target-version = "py310"
+# Assume Python 3.11+
+target-version = "py311"
 
 [tool.ruff.lint]
 # Enable recommended rules plus specific FastAPI/deprecation checks
@@ -117,7 +117,7 @@ ignore-variadic-names = true
 
 # Custom deprecation warnings for FastAPI patterns
 [tool.ruff.lint.flake8-tidy-imports]
-ban-relative-imports = "all"
+ban-relative-imports = "parents"  # Allow same-level relative imports, ban parent imports
 
 [tool.ruff.format]
 # Use double quotes by default

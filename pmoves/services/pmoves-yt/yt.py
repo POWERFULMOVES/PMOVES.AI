@@ -58,7 +58,7 @@ nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages pu
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
-    global _nc, _nc_connect_task
+    global _nc, _nc_connect_task, _periodic_docs_task
     # Startup
     # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.
     if not YT_NATS_ENABLE or not NATS_URL:
@@ -68,35 +68,40 @@ async def lifespan(app: FastAPI):
             _nc_connect_task = asyncio.create_task(_nats_connect_loop(), name="pmoves-yt-nats-connect")
 
     # Docs sync at startup + optional periodic schedule
-    try:
-        if collect_yt_dlp_docs and sync_to_supabase:
-            if os.environ.get("YT_DOCS_SYNC_ON_START", "true").lower() in {"1","true","yes","y"}:
-                try:
-                    docs = collect_yt_dlp_docs()
-                    sync_to_supabase(docs)
-                    logger.info("yt-dlp docs synced on start")
-                except Exception as exc:
-                    logger.warning("docs sync on start failed: %s", exc)
-            interval_env = os.environ.get("YT_DOCS_SYNC_INTERVAL_SECONDS") or os.environ.get("YT_DOCS_SYNC_INTERVAL")
-            if interval_env:
-                try:
-                    interval = int(interval_env)
-                except Exception:
-                    interval = 86400
-                async def _periodic_docs_sync():
-                    while True:
-                        await asyncio.sleep(interval)
-                        try:
-                            docs = collect_yt_dlp_docs()
-                            sync_to_supabase(docs)
-                            logger.info("yt-dlp docs synced (periodic)")
-                        except Exception as exc:
-                            logger.warning("periodic docs sync failed: %s", exc)
-                asyncio.create_task(_periodic_docs_sync(), name="pmoves-yt-docs-sync")
-    except Exception:
-        pass
+    if collect_yt_dlp_docs and sync_to_supabase:
+        if os.environ.get("YT_DOCS_SYNC_ON_START", "true").lower() in {"1","true","yes","y"}:
+            try:
+                docs = collect_yt_dlp_docs()
+                sync_to_supabase(docs)
+                logger.info("yt-dlp docs synced on start")
+            except Exception as exc:
+                logger.warning("docs sync on start failed: %s", exc)
+        interval_env = os.environ.get("YT_DOCS_SYNC_INTERVAL_SECONDS") or os.environ.get("YT_DOCS_SYNC_INTERVAL")
+        if interval_env:
+            try:
+                interval = int(interval_env)
+            except Exception:
+                interval = 86400
+            async def _periodic_docs_sync():
+                while True:
+                    await asyncio.sleep(interval)
+                    try:
+                        docs = collect_yt_dlp_docs()
+                        sync_to_supabase(docs)
+                        logger.info("yt-dlp docs synced (periodic)")
+                    except Exception as exc:
+                        logger.warning("periodic docs sync failed: %s", exc)
+            _periodic_docs_task = asyncio.create_task(_periodic_docs_sync(), name="pmoves-yt-docs-sync")
     yield
     # Shutdown
+    if _periodic_docs_task is not None:
+        _periodic_docs_task.cancel()
+        try:
+            await _periodic_docs_task
+        except asyncio.CancelledError:
+            pass
+        _periodic_docs_task = None
+
     if _nc_connect_task is not None:
         _nc_connect_task.cancel()
         try:
@@ -284,6 +289,7 @@ else:
 
 _nc: Optional[NATS] = None
 _nc_connect_task: Optional[asyncio.Task] = None
+_periodic_docs_task: Optional[asyncio.Task] = None
 
 _emit_jobs: Dict[str, Dict[str, Any]] = {}
 _emit_job_lock = threading.Lock()

@@ -1,10 +1,11 @@
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import re
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from difflib import SequenceMatcher
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -19,16 +20,24 @@ from starlette.responses import Response
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifecycle Management
 # ─────────────────────────────────────────────────────────────────────────────
+_autolink_task: Optional[asyncio.Task] = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan for Jellyfin Bridge."""
+    global _autolink_task
     # Startup
     if AUTOLINK and JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID:
-        asyncio.create_task(_autolink_loop())
+        _autolink_task = asyncio.create_task(_autolink_loop())
 
     yield
 
-    # Shutdown - no cleanup needed
+    # Shutdown
+    if _autolink_task:
+        _autolink_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _autolink_task
+        _autolink_task = None
 
 
 app = FastAPI(title="Jellyfin Bridge", version="0.1.0", lifespan=lifespan)

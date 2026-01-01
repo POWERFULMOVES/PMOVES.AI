@@ -109,15 +109,17 @@ async def lifespan(app: FastAPI):
     print("👋 MCP YouTube Adapter shut down")
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
-
 app = FastAPI(
     title="PMOVES.yt MCP Adapter",
     description="YouTube transcript search and metadata API for Jellyfin backfill",
-    version="0.1.0"
-, lifespan=lifespan)
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
 
 # Global state
 _embedding_model: Optional[SentenceTransformerType] = None

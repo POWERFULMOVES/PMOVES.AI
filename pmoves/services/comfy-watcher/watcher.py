@@ -26,7 +26,8 @@ POLL_SECONDS = int(os.environ.get("COMFY_WATCHER_POLL_SECONDS", "5"))
 
 def load_state() -> dict:
     try:
-        return json.loads(open(STATE_PATH).read())
+        with open(STATE_PATH) as f:
+            return json.load(f)
     except Exception:
         return {"uploaded": {}}
 
