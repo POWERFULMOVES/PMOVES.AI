@@ -119,13 +119,9 @@ def _evict_old_results() -> None:
     with _results_lock:
         while len(_simulation_results) > _MAX_RESULTS:
             oldest_id, _ = _simulation_results.popitem(last=False)
-            ids_to_evict.append(oldest_id)
-
-    # Evict corresponding status entries
-    if ids_to_evict:
-        with _status_lock:
-            for old_id in ids_to_evict:
-                _simulation_statuses.pop(old_id, None)
+    # Evict corresponding status entry (use separate lock to avoid deadlock)
+    with _status_lock:
+        _simulation_statuses.pop(oldest_id, None)
 
 
 def _shutdown_executor() -> None:

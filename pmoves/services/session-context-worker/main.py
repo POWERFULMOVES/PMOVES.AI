@@ -149,14 +149,13 @@ async def lifespan(app: FastAPI):
         - Exceptions during shutdown are silently caught to ensure clean exit.
     """
     global _nats_loop_task, _nc
-    # Startup
+    # Startup: Start NATS connection loop
     if _nats_loop_task is None or _nats_loop_task.done():
         logger.info("Starting NATS resilience loop")
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
         _nats_loop_task.add_done_callback(_nats_loop_done)
     yield
-    # Shutdown
-
+    # Shutdown: Clean shutdown of NATS connection
     if _nats_loop_task:
         _nats_loop_task.cancel()
         try:

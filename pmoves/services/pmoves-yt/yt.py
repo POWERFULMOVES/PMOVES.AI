@@ -115,29 +115,7 @@ nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages pu
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan for FastAPI.
-
-    This context manager handles startup and shutdown events for the PMOVES.YT service.
-    On startup, it initializes NATS connections (if enabled) and schedules periodic
-    documentation sync tasks. On shutdown, it gracefully closes connections and cancels
-    background tasks.
-
-    Args:
-        app: The FastAPI application instance.
-
-    Yields:
-        None: This is a context manager for FastAPI lifespan management.
-
-    Startup:
-        - Initializes NATS connection if YT_NATS_ENABLE is true
-        - Triggers yt-dlp docs sync on startup if enabled
-        - Schedules periodic docs sync if YT_DOCS_SYNC_INTERVAL is set
-
-    Shutdown:
-        - Cancels and waits for periodic docs sync task
-        - Cancels and waits for NATS connection task
-        - Closes NATS connection if established
-    """
+    """Manage application lifespan."""
     global _nc, _nc_connect_task, _periodic_docs_task
     # Startup
     # Non-blocking, quiet NATS init. Skip entirely unless explicitly enabled.

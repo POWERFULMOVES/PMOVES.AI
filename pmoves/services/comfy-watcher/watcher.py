@@ -58,21 +58,7 @@ def load_state() -> dict:
     try:
         with open(STATE_PATH) as f:
             return json.load(f)
-    except FileNotFoundError:
-        logger.info(f"State file not found, starting fresh: {STATE_PATH}")
-        return {"uploaded": {}}
-    except json.JSONDecodeError as exc:
-        logger.error(f"Corrupted state file at {STATE_PATH}, backing up and starting fresh: {exc}")
-        # Backup corrupted file for investigation
-        backup_path = f"{STATE_PATH}.corrupted.{int(time.time())}"
-        try:
-            shutil.copy(STATE_PATH, backup_path)
-            logger.info(f"Backed up corrupted state to: {backup_path}")
-        except Exception as backup_exc:
-            logger.warning(f"Could not backup corrupted state file: {backup_exc}")
-        return {"uploaded": {}}
-    except Exception as exc:
-        logger.error(f"Unexpected error loading state from {STATE_PATH}: {exc}")
+    except Exception:
         return {"uploaded": {}}
 
 
