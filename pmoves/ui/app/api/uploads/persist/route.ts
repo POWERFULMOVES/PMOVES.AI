@@ -69,15 +69,15 @@ export async function POST(request: NextRequest) {
     const language = (body.language as string | undefined) || 'en';
     const transcriptText = (body.transcriptText as string | undefined) || '';
     const author = body.author as string | undefined;
-    const ownerId = body.ownerId as string | undefined;
 
     if (!uploadId || !bucket || !key) {
       return NextResponse.json({ error: 'uploadId, bucket, and key are required' }, { status: 400 });
     }
 
-    const effectiveUserId = session?.user?.id || ownerId;
-    if (!session && bootJwt && !effectiveUserId) {
-      return NextResponse.json({ error: 'ownerId is required when using boot JWT' }, { status: 400 });
+    // Security: User identity must come from authenticated session only
+    const effectiveUserId = session?.user?.id;
+    if (!effectiveUserId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
     const readClient = (session ? supabaseAuth : getServiceSupabaseClient()) as ReturnType<typeof getServiceSupabaseClient>;
