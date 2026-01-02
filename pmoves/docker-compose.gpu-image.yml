@@ -24,7 +24,7 @@ services:
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
-      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_PMOVES.AI:8000/realtime/v1}
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}

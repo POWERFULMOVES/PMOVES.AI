@@ -71,11 +71,6 @@
 [submodule "pmoves/vendor/agentgym-rl"]
 	path = pmoves/vendor/agentgym-rl
 	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
-[submodule "PMOVES-crush"]
-	path = PMOVES-crush
-	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
-	ignore = all
-	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-Pipecat"]
 	path = PMOVES-Pipecat
 	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
@@ -83,7 +78,6 @@
 [submodule "PMOVES-Ultimate-TTS-Studio"]
 	path = PMOVES-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
-	ignore = all
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
@@ -95,11 +89,4 @@
 [submodule "Pmoves-hyperdimensions"]
 	path = Pmoves-hyperdimensions
 	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
-	ignore = all
-[submodule "pmoves/vendor/e2b"]
-	path = pmoves/vendor/e2b
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-[submodule "research/A2UI"]
-	path = research/A2UI
-	url = https://github.com/google/A2UI.git
 	ignore = all

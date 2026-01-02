@@ -2,9 +2,11 @@
 
 [gateway]
 
-
-
-
+# Observability enabled for production monitoring and cost tracking
+# ClickHouse connection is configured via the TENSORZERO_CLICKHOUSE_URL environment variable.
+# See pmoves/docs/services/open-notebook/TENSORZERO_OBSERVABILITY_NOTES.md for details.
+# Example: TENSORZERO_CLICKHOUSE_URL=http://user:pass@tensorzero-clickhouse:8123/default
+observability.enabled = true
 [gateway.observability]
 enabled = true
 async_writes = true
@@ -650,4 +652,14 @@ type = "chat_completion"
 model = "vl_sentinel_qwen3vl_local"
 weight = 1.0
 
+[functions.deepresearch.variants.qwen3_8b]
+type = "chat_completion"
+model = "qwen3_8b"
 
+[functions.deepresearch.variants.hosted_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+[functions.deepresearch.variants.hosted_together]
+type = "chat_completion"
+model = "chat_together"
