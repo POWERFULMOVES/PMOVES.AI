@@ -119,3 +119,74 @@ ollama run gemini-3-flash-preview:cloud  # Google cloud-backed
 2. **Add Tools** - Define hirag_query, file_read, cipher_memory tools in `tensorzero.toml`
 3. **Test Cloud-via-Ollama** - Verify cloud models accessible through Ollama proxy
 4. **Document Model List** - Create dynamic model catalog from TensorZero API
+
+---
+
+## 7. Audio Model Architecture Extension
+
+### 7.1 Overview
+
+**Status:** ⚠️ **IN PROGRESS** - Architecture defined, implementation pending
+
+All audio/speech models should route through TensorZero Gateway with GPU Orchestrator managing local providers:
+
+```
+Services → TensorZero Gateway → GPU Orchestrator → Local Providers (Ollama, Whisper, TTS)
+                                      ↓
+                              Legacy Fallback (Cloud APIs)
+```
+
+### 7.2 Current State
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| GPU Orchestrator | ✅ Running (port 8200) | Providers: ollama, vllm, tts |
+| TensorZero Gateway | ✅ Running (port 3030) | Chat + Embedding configured |
+| Whisper Support | ❌ Missing | Need whisper_client.py + TensorZero config |
+| TTS Support | ⚠️ Partial | GPU Orchestrator has tts_client.py, no TensorZero config |
+
+### 7.3 Implementation Tasks
+
+**Priority 1: Add Whisper to GPU Orchestrator**
+- Create `services/whisper_client.py` (pattern after `tts_client.py`)
+- Add to `model_lifecycle.py` provider list
+- Add Whisper models to `config/gpu-models.yaml`
+
+**Priority 2: Configure Audio Models in TensorZero**
+```toml
+# Whisper transcription
+[models.whisper_small]
+routing = ["ollama"]  # or gpu_orchestrator when implemented
+[models.whisper_small.providers.ollama]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "whisper-small"
+api_key_location = "none"
+
+# TTS synthesis
+[models.tts_kokoro]
+routing = ["gpu_orchestrator"]
+[models.tts_kokoro.providers.gpu_orchestrator]
+type = "openai"
+api_base = "http://pmoves-gpu-orchestrator:8200/tts"
+model_name = "kokoro"
+```
+
+**Priority 3: Service Migration**
+- `ffmpeg-whisper` → Call TensorZero instead of direct model execution
+- `pmoves-yt` → Use TensorZero transcription function
+- `flute-gateway` → Use TensorZero TTS routing
+
+### 7.4 Model Collections by Service
+
+| Service | Function | Models | Fallback |
+|---------|----------|--------|----------|
+| PMOVES.YT | `pmoves_yt_transcription` | whisper_small, whisper_medium | OpenAI Whisper |
+| Flute-Gateway | `flute_tts_synthesis` | kokoro, f5-tts, kitten-tts | ElevenLabs |
+| Hi-RAG V2 | `hirag_vl_analysis` | qwen2_vl_7b | GPT-4V, Gemini Vision |
+
+### 7.5 References
+
+- Main doc: `docs/tz.md` (Section 11: Audio Model Architecture)
+- GPU Orchestrator: `pmoves/services/gpu-orchestrator/`
+- TensorZero Config: `pmoves/tensorzero/config/tensorzero.toml`

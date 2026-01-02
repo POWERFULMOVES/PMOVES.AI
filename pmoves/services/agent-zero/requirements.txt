@@ -6,6 +6,9 @@ nats-py
 jsonschema
 PyYAML
 
+# Metrics
+prometheus-client==0.20.0
+
 # Testing
 pytest
 pytest-asyncio
