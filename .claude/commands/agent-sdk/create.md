@@ -6,6 +6,32 @@ Create a new PMOVES Agent instance with full ecosystem access.
 
 - `$ARGUMENTS` - Agent role/specialization (e.g., "researcher", "code-reviewer", "media-processor")
 
+## Prerequisites
+
+Before creating agents, ensure:
+
+1. **Submodules initialized:**
+   ```bash
+   git submodule update --init --recursive PMOVES-BoTZ
+   ```
+
+2. **Dependencies installed:**
+   ```bash
+   pip install -r pmoves/requirements.txt
+   ```
+
+3. **Services running:**
+   ```bash
+   # Check NATS
+   curl http://localhost:4222
+
+   # Check TensorZero
+   curl http://localhost:3030/v1/models
+
+   # Check Hi-RAG v2
+   curl http://localhost:8086/healthz
+   ```
+
 ## Instructions
 
 1. Parse the agent role from arguments
@@ -26,12 +52,22 @@ Create a new PMOVES Agent instance with full ecosystem access.
 
 ```python
 from pmoves_botz.features.agent_sdk import PMOVESAgent
+import asyncio
+from datetime import datetime
 
-agent = PMOVESAgent(
-    agent_id="pmoves-{role}-{timestamp}",
-    role="{role}",
-)
-await agent.connect()
+async def main():
+    timestamp = int(datetime.now().timestamp())
+    role = "researcher"  # Choose: researcher, code-reviewer, media-processor, knowledge-manager, general
+
+    agent = PMOVESAgent(
+        agent_id=f"pmoves-{role}-{timestamp}",
+        role=role,
+        model="openai::qwen3:8b",
+    )
+
+    await agent.connect()
+
+asyncio.run(main())
 ```
 
 4. Show created agent configuration:
@@ -41,17 +77,16 @@ await agent.connect()
    - MCP servers connected
    - Subagents available
 
-5. Announce agent on NATS:
-   ```
-   Subject: botz.agent.registered.v1
-   Payload: {"agent_id": "...", "role": "...", "capabilities": [...]}
-   ```
+5. NATS events published by agent:
+   - `botz.agent.heartbeat.v1` - Agent presence (every 30s)
+   - `agent.task.start.v1` - Task execution started
+   - `botz.work.completed.v1` - Task completed successfully
 
 ## Example
 
 ```bash
 /agent-sdk:create researcher
-# Creates: pmoves-researcher-1703123456
+# Creates: pmoves-researcher-1735123456
 # Tools: WebSearch, hirag_query, nats_publish, Task
 # Subagents: None (top-level agent)
 ```
