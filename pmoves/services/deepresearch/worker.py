@@ -263,6 +263,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -270,7 +271,7 @@ from nats.aio.client import Client as NATS
 from fastapi import FastAPI, Response
 import uvicorn
 from nats.aio.msg import Msg
-from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
 from services.common.events import envelope
 from .parser import parse_model_output, prepare_result
@@ -285,17 +286,43 @@ REQUEST_SUBJECT = "research.deepresearch.request.v1"
 RESULT_SUBJECT = "research.deepresearch.result.v1"
 CGP_SUBJECT = "tokenism.cgp.ready.v1"
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable.
+
+    Accepts: 1, true, t, yes, y, on (case-insensitive) as True.
+    Returns default if the variable is not set.
+    """
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
+def _get_or_create_counter(name: str, description: str, labelnames: tuple) -> Counter:
+    """Get existing counter or create new one (safe for module reimport via -m flag).
+
+    The python -m flag can cause module double-import, which would register
+    Prometheus metrics twice. This function checks the registry first to avoid
+    the duplicate registration ValueError.
+    """
+    # Check if metric already exists in registry (handles -m double-import)
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    return Counter(name, description, labelnames=labelnames)
+
+
 # Enable CGP publishing via environment variable (default: enabled)
-CGP_PUBLISH_ENABLED = os.getenv("DEEPRESEARCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
+CGP_PUBLISH_ENABLED = _env_bool("DEEPRESEARCH_CGP_PUBLISH", default=True)
 DEFAULT_MODE = "openrouter"
 
-# Prometheus metrics
-FALLBACK_COUNTER = Counter(
+# Prometheus metrics (safe for module reimport via -m flag)
+FALLBACK_COUNTER = _get_or_create_counter(
     "deepresearch_model_fallback_total",
     "Model fallback invocations grouped by reason",
     labelnames=("reason",),
 )
-REQUEST_COUNTER = Counter(
+REQUEST_COUNTER = _get_or_create_counter(
     "deepresearch_requests_total",
     "Total research requests processed",
     labelnames=("mode", "status"),
@@ -404,13 +431,6 @@ class NotebookPublishConfig:
     async_processing: bool
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
-
-
 def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, Any]:
     """Build a CGP (CHIT Geometry Packet) from research results.
 
@@ -424,8 +444,6 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
     Returns:
         Dict conforming to chit.cgp.v0.1 schema
     """
-    from datetime import datetime, timezone
-
     # Build points from iterations (research steps)
     points: List[Dict[str, Any]] = []
     if result.iterations:
