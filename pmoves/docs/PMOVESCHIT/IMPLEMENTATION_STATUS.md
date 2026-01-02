@@ -107,36 +107,19 @@ The CHIT system is built on five mathematical foundations:
 {
   "spec": "chit.cgp.v0.2",
   "meta": {
-    "source": "text",
-    "units_mode": "sentences",
+    "source": "docx|text|latent|voice",
+    "units_mode": "paragraphs|sentences|tokens",
     "K": 8,
-    "bins": 5,
+    "bins": 8,
     "mhep": 72.3,
     "backend": "sentence-transformers/all-MiniLM-L6-v2"
   },
   "super_nodes": [
     {
       "id": "super_0",
-      "x": -212.3,
-      "y": 148.1,
-      "r": 260.0,
+      "x": -212.3, "y": 148.1, "r": 260.0,
       "label": "Resonant Mode 0",
-      "constellations": [
-        {
-          "id": "const_0_0",
-          "anchor": [0.8, 0.2, 0.0, 0.0],
-          "summary": "Topic cluster alpha",
-          "radial_minmax": [0.0, 1.0],
-          "spectrum": [0.05, 0.15, 0.3, 0.3, 0.2],
-          "points": [
-            {
-              "id": "pt_0_0_0",
-              "magnitude": 0.85,
-              "text_b64": "SGVsbG8gd29ybGQ="
-            }
-          ]
-        }
-      ]
+      "constellations": [...]
     }
   ],
   "nats": {

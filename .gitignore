@@ -112,4 +112,7 @@ notes.md
 pmoves/PR_BODY_*.md
 
 # Research notes (local only)
-research/
+/research/
+
+# Vendor unpacked packages (install via requirements.txt instead)
+pmoves/vendor/python/
