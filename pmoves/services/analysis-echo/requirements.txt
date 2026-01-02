@@ -1,2 +1,0 @@
-nats-py==2.7.2
-jsonschema==4.22.0

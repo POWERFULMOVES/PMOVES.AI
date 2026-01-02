@@ -1,3 +1,36 @@
+# YAML anchors for tier-based env file loading
+# These anchors allow services to load environment variables from tier-specific env files
+# Tier architecture isolates secrets by service category (data, api, llm, worker, media, agent)
+x-env-tier-data: &env-tier-data
+  env_file:
+    - path: env.tier-data
+      required: false
+
+x-env-tier-api: &env-tier-api
+  env_file:
+    - path: env.tier-api
+      required: false
+
+x-env-tier-llm: &env-tier-llm
+  env_file:
+    - path: env.tier-llm
+      required: false
+
+x-env-tier-worker: &env-tier-worker
+  env_file:
+    - path: env.tier-worker
+      required: false
+
+x-env-tier-media: &env-tier-media
+  env_file:
+    - path: env.tier-media
+      required: false
+
+x-env-tier-agent: &env-tier-agent
+  env_file:
+    - path: env.tier-agent
+      required: false
+
 services:
   postgres:
     image: ankane/pgvector
@@ -708,9 +741,16 @@ services:
       dockerfile: deepresearch/Dockerfile
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]
+    env_file:
+      - path: env.shared
+        required: false
+      - path: env.tier-agent
+        required: false
+      - path: env.tier-llm
+        required: false
     environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # Secrets loaded from env.tier-agent: OPENROUTER_API_KEY, DEEPRESEARCH_NOTEBOOK_ID,
+      # DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX, OPEN_NOTEBOOK_API_URL, OPEN_NOTEBOOK_API_TOKEN
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
       - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
@@ -718,20 +758,15 @@ services:
       - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
       - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
       - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
-      - DEEPRESEARCH_NOTEBOOK_ID=${DEEPRESEARCH_NOTEBOOK_ID}
-      - DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX=${DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX}
       - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
       - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
-      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
-      - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
     depends_on: [nats]
     profiles: ["agents"]
     ports: ["8098:8098"]
     volumes:
       - ./contracts:/app/contracts:ro
-    networks: [pmoves]
+    networks: [pmoves_app, pmoves_bus]
 
   supaserch:
     build:
@@ -1033,9 +1068,56 @@ volumes:
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
 networks:
+  # Legacy single network (will be phased out)
   pmoves:
     external: true
     name: pmoves-net
   cataclysm:
     external: true
     name: cataclysm-net
+
+  # 5-tier network architecture for security segmentation
+  pmoves_data:
+    name: pmoves_data
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.4.0/24
+          gateway: 172.30.4.1
+
+  pmoves_api:
+    name: pmoves_api
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.1.0/24
+          gateway: 172.30.1.1
+
+  pmoves_app:
+    name: pmoves_app
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.2.0/24
+          gateway: 172.30.2.1
+
+  pmoves_bus:
+    name: pmoves_bus
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.3.0/24
+          gateway: 172.30.3.1
+
+  pmoves_monitoring:
+    name: pmoves_monitoring
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.5.0/24
+          gateway: 172.30.5.1

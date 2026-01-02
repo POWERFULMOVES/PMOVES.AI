@@ -1,5 +1,0 @@
-{% if system %}
-{{ system }}
-{% else %}
-You are a helpful AI assistant.
-{% endif %}

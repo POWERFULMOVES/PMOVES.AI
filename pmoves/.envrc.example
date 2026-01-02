@@ -1,7 +1,0 @@
-# Load local development env vars if present
-dotenv_if_exists .env
-dotenv_if_exists .env.local
-dotenv_if_exists .env.generated
-
-# Optional: export variables to shell
-layout python
