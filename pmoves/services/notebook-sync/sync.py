@@ -2,54 +2,19 @@ import asyncio
 import logging
 import os
 import sqlite3
-import time
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import httpx
 from dateutil import parser as date_parser
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
-from starlette.responses import Response
 
 LOGGER = logging.getLogger("pmoves.notebook_sync")
 logging.basicConfig(
     level=getattr(logging, os.getenv("NOTEBOOK_SYNC_LOG_LEVEL", "INFO").upper()),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Prometheus Metrics
-# ─────────────────────────────────────────────────────────────────────────────
-NOTEBOOK_SYNC_CYCLES = Counter(
-    "notebook_sync_cycles_total",
-    "Total sync cycles executed",
-    ["status"]
-)
-NOTEBOOK_SYNC_ITEMS = Counter(
-    "notebook_sync_items_total",
-    "Total items synced",
-    ["resource"]
-)
-NOTEBOOK_SYNC_CHUNKS = Counter(
-    "notebook_sync_chunks_indexed_total",
-    "Total chunks indexed from notebooks"
-)
-NOTEBOOK_SYNC_LATENCY = Histogram(
-    "notebook_sync_cycle_latency_seconds",
-    "Sync cycle latency in seconds",
-    buckets=[1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0]
-)
-NOTEBOOK_SYNC_ERRORS = Counter(
-    "notebook_sync_errors_total",
-    "Total sync errors",
-    ["stage"]
-)
-NOTEBOOK_SYNC_ACTIVE = Gauge(
-    "notebook_sync_active",
-    "Whether a sync is currently active"
 )
 
 VALID_MODES = {"live", "offline"}
@@ -192,36 +157,24 @@ class NotebookSyncer:
 
     async def _sync_cycle(self, manual: bool = False) -> None:
         async with self._lock:
-            NOTEBOOK_SYNC_ACTIVE.set(1)
             start = datetime.now(timezone.utc)
-            cycle_status = "success"
-            try:
-                if not self.enabled_resources:
-                    LOGGER.info("No notebook resources enabled; skipping sync")
-                    return
-                LOGGER.info(
-                    "Starting %s notebook sync (resources=%s)",
-                    "manual" if manual else "scheduled",
-                    ",".join(self.enabled_resources),
-                )
-                for resource in self.enabled_resources:
-                    try:
-                        await self._sync_resource(resource)
-                    except Exception:  # pylint: disable=broad-except
-                        LOGGER.exception("Failed to sync resource '%s'", resource)
-                        NOTEBOOK_SYNC_ERRORS.labels(stage="resource").inc()
-                        cycle_status = "partial"
-                self.last_sync_time = datetime.now(timezone.utc)
-                LOGGER.info(
-                    "Completed notebook sync in %.2fs", (self.last_sync_time - start).total_seconds()
-                )
-            except Exception:
-                cycle_status = "error"
-                raise
-            finally:
-                NOTEBOOK_SYNC_ACTIVE.set(0)
-                NOTEBOOK_SYNC_CYCLES.labels(status=cycle_status).inc()
-                NOTEBOOK_SYNC_LATENCY.observe((datetime.now(timezone.utc) - start).total_seconds())
+            if not self.enabled_resources:
+                LOGGER.info("No notebook resources enabled; skipping sync")
+                return
+            LOGGER.info(
+                "Starting %s notebook sync (resources=%s)",
+                "manual" if manual else "scheduled",
+                ",".join(self.enabled_resources),
+            )
+            for resource in self.enabled_resources:
+                try:
+                    await self._sync_resource(resource)
+                except Exception:  # pylint: disable=broad-except
+                    LOGGER.exception("Failed to sync resource '%s'", resource)
+            self.last_sync_time = datetime.now(timezone.utc)
+            LOGGER.info(
+                "Completed notebook sync in %.2fs", (self.last_sync_time - start).total_seconds()
+            )
 
     async def _sync_resource(self, resource: str) -> None:
         cursor = self.cursor_store.get_cursor(resource)
@@ -235,7 +188,7 @@ class NotebookSyncer:
             request_params = params.copy()
             if next_cursor:
                 request_params = {"cursor": next_cursor}
-            response = await self._request(self.api_client, "GET", f"/{resource}", params=request_params)
+            response = await self._request(self.api_client, "GET", f"/api/{resource}", params=request_params)
             payload = response.json()
             items = self._extract_items(payload)
             if not items:
@@ -282,7 +235,6 @@ class NotebookSyncer:
             extract_result = response.json()
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("LangExtract failed for %s %s", resource, normalized["id"])
-            NOTEBOOK_SYNC_ERRORS.labels(stage="langextract").inc()
             metadata = self._build_metadata(resource, normalized)
             error_payload = {
                 "message": str(exc),
@@ -297,15 +249,11 @@ class NotebookSyncer:
         chunks = [self._enrich_chunk(chunk, metadata, tags) for chunk in extract_result.get("chunks", [])]
         errors = [self._enrich_error(err, metadata) for err in extract_result.get("errors", [])]
 
-        NOTEBOOK_SYNC_ITEMS.labels(resource=resource).inc()
-        NOTEBOOK_SYNC_CHUNKS.inc(len(chunks))
-
         ingest_body = {"chunks": chunks, "errors": errors}
         try:
             await self._request(self.extract_client, "POST", "/ingest", json=ingest_body)
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("Failed to ingest chunks for %s %s", resource, normalized["id"])
-            NOTEBOOK_SYNC_ERRORS.labels(stage="ingest").inc()
             failure = {
                 "message": str(exc),
                 "stage": "ingest",
@@ -505,8 +453,22 @@ class NotebookSyncer:
 
 def _load_syncer() -> NotebookSyncer:
     base_url = os.getenv("OPEN_NOTEBOOK_API_URL")
+    mode = os.getenv("NOTEBOOK_SYNC_MODE", "live").lower()
+
+    # If OPEN_NOTEBOOK_API_URL is missing, check if graceful degradation is enabled
     if not base_url:
-        raise RuntimeError("OPEN_NOTEBOOK_API_URL must be set for notebook-sync")
+        if os.getenv("NOTEBOOK_SYNC_GRACEFUL_DEGRADATION", "").lower() == "true":
+            LOGGER.warning(
+                "OPEN_NOTEBOOK_API_URL not set; running in DEGRADED offline mode. "
+                "Syncing is disabled. Set OPEN_NOTEBOOK_API_URL to enable."
+            )
+            mode = "offline"
+            base_url = ""  # Empty - don't pretend we have a valid URL
+        else:
+            raise RuntimeError(
+                "OPEN_NOTEBOOK_API_URL must be set for notebook-sync. "
+                "Set NOTEBOOK_SYNC_GRACEFUL_DEGRADATION=true to start in offline mode."
+            )
 
     cursor_path = os.getenv("NOTEBOOK_SYNC_DB_PATH", "data/notebook_sync.db")
     interval = int(os.getenv("NOTEBOOK_SYNC_INTERVAL_SECONDS", "300"))
@@ -514,7 +476,7 @@ def _load_syncer() -> NotebookSyncer:
     langextract_url = os.getenv("LANGEXTRACT_URL", "http://langextract:8084")
     extract_worker_url = os.getenv("EXTRACT_WORKER_URL", "http://extract-worker:8083")
     token = os.getenv("OPEN_NOTEBOOK_API_TOKEN")
-    mode = os.getenv("NOTEBOOK_SYNC_MODE", "live").lower()
+    # Validate mode only if not already forced to offline (e.g., missing URL)
     if mode not in VALID_MODES:
         LOGGER.warning("Invalid NOTEBOOK_SYNC_MODE=%s; defaulting to 'live'", mode)
         mode = "live"
@@ -537,22 +499,22 @@ def _load_syncer() -> NotebookSyncer:
     )
 
 
-app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0")
-syncer = _load_syncer()
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    syncer = _load_syncer()
+    app.state.syncer = syncer
     await syncer.start()
-
-
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
+    yield
     await syncer.stop()
 
 
+app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0", lifespan=lifespan)
+
+
 @app.get("/healthz")
-async def healthz() -> Dict[str, Any]:
+async def healthz(request: Request) -> Dict[str, Any]:
+    syncer = request.app.state.syncer
     return {
         "ok": True,
         "last_sync": syncer.last_sync_time.isoformat().replace("+00:00", "Z")
@@ -561,13 +523,10 @@ async def healthz() -> Dict[str, Any]:
         "interval_seconds": syncer.interval_seconds,
     }
 
-@app.get("/metrics")
-def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
 
 @app.post("/sync")
-async def trigger_sync() -> Dict[str, Any]:
+async def trigger_sync(request: Request) -> Dict[str, Any]:
+    syncer = request.app.state.syncer
     if syncer._lock.locked():  # pylint: disable=protected-access
         raise HTTPException(status_code=409, detail="Sync already in progress")
     await syncer.trigger_once()

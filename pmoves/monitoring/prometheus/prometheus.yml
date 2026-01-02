@@ -31,9 +31,11 @@ scrape_configs:
     static_configs:
       - targets: ["flute-gateway:8055"]
 
-  - job_name: tensorzero-gateway
-    static_configs:
-      - targets: ["tensorzero-gateway:3000"]
+  # DISABLED: TensorZero gateway doesn't expose /metrics endpoint
+  # Use ClickHouse metrics instead via TensorZero UI
+  # - job_name: tensorzero-gateway
+  #   static_configs:
+  #     - targets: ["tensorzero-gateway:3000"]
 
   - job_name: deepresearch-metrics
     static_configs:
@@ -91,6 +93,8 @@ scrape_configs:
     static_configs:
       - targets: ["presign:8088"]
 
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened
   # === Blackbox HTTP probes ===
   # Health check probes for services without /metrics
 
