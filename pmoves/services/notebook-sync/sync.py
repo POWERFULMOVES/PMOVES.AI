@@ -189,7 +189,7 @@ class NotebookSyncer:
             request_params = params.copy()
             if next_cursor:
                 request_params = {"cursor": next_cursor}
-            response = await self._request(self.api_client, "GET", f"/{resource}", params=request_params)
+            response = await self._request(self.api_client, "GET", f"/api/{resource}", params=request_params)
             payload = response.json()
             items = self._extract_items(payload)
             if not items:
