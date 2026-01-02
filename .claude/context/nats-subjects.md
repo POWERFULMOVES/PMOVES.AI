@@ -2,6 +2,8 @@
 
 Comprehensive reference of all NATS message subjects used for event-driven communication across PMOVES services.
 
+> **See Also:** For GEOMETRY BUS subjects (`tokenism.*`, `geometry.*`), see [geometry-nats-subjects.md](./geometry-nats-subjects.md)
+
 ## NATS Configuration
 
 - **Server:** `nats://localhost:4222`
