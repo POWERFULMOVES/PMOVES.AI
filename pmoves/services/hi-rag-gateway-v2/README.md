@@ -73,5 +73,40 @@ curl -s http://localhost:8086/geometry/decode/text \
   -d '{"mode":"learned","constellation_id":"c.demo.1","k":5,"namespace":"pmoves"}'
 ```
 
+## Network Tier
+
+Hi-RAG Gateway v2 operates across multiple network tiers:
+
+- **API Tier** (172.30.1.0/24) - External API access (port 8086/8087)
+- **App Tier** (172.30.2.0/24) - Internal service mesh
+- **Data Tier** (172.30.4.0/24) - Qdrant, Neo4j, Meilisearch access
+- **Monitoring Tier** (172.30.5.0/24) - Prometheus metrics
+
+## Docker Compose Profile
+
+Hi-RAG v2 is included in the `workers` profile:
+
+```bash
+# Start workers profile (includes hi-rag-gateway-v2)
+docker compose --profile data --profile workers up -d
+
+# GPU variant
+docker compose --profile gpu up -d
+```
+
+## Dependencies
+
+Hi-RAG Gateway v2 requires these data tier services:
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| `qdrant` | 6333 | Vector embeddings storage |
+| `neo4j` | 7687 | Knowledge graph queries |
+| `meilisearch` | 7700 | Full-text keyword search |
+| `tensorzero-gateway` | 3030 | LLM embeddings (optional) |
+
 ## Related Docs
 - See `pmoves/docs/SMOKETESTS.md` (geometry steps) and `pmoves/Makefile` targets listed above.
+- See `pmoves/docs/PMOVES.AI-Edition-Hardened-Full.md` for full production deployment guide.
+- See `.claude/context/services-catalog.md` for service catalog.
+- See `.claude/context/geometry-nats-subjects.md` for GEOMETRY BUS subjects.
