@@ -5,7 +5,6 @@ import logging
 import os
 import re
 import time
-from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 import fitz  # type: ignore
@@ -27,7 +26,7 @@ except Exception:  # pragma: no cover - fallback for local runs without shared m
         env = {
             "id": str(uuid.uuid4()),
             "topic": topic,
-            "ts": datetime.datetime.now(timezone.utc).isoformat() + "Z",
+            "ts": datetime.datetime.utcnow().isoformat() + "Z",
             "version": "v1",
             "source": source,
             "payload": payload,
@@ -42,42 +41,7 @@ from libs.langextract import extract_text
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Lifecycle Management
-# ─────────────────────────────────────────────────────────────────────────────
-_nats_supervisor: Optional[asyncio.Task[None]] = None
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifespan.
-
-    Startup:
-        - Start NATS connection supervisor task
-
-    Shutdown:
-        - Cancel NATS supervisor and wait for cleanup
-    """
-    global _nats_supervisor
-
-    # Startup
-    if _nats_supervisor is None or _nats_supervisor.done():
-        loop = asyncio.get_running_loop()
-        _nats_supervisor = loop.create_task(_nats_connect_loop())
-
-    yield
-
-    # Shutdown
-    if _nats_supervisor is not None:
-        _nats_supervisor.cancel()
-        try:
-            await _nats_supervisor
-        except asyncio.CancelledError:
-            pass
-        _nats_supervisor = None
-
-
-app = FastAPI(title="PMOVES PDF Ingest", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="PMOVES PDF Ingest", version="0.1.0")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prometheus Metrics
@@ -127,6 +91,7 @@ PDF_MAX_PAGES = int(os.environ.get("PDF_MAX_PAGES", "0"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 
 _nc: Optional[NATS] = None
+_nats_supervisor: Optional[asyncio.Task[None]] = None
 
 
 async def _nats_connect_loop() -> None:
@@ -200,6 +165,34 @@ class PDFIngestRequest(BaseModel):
     title: Optional[str] = None
     file_id: Optional[str] = None
     publish_events: Optional[bool] = True
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    global _nats_supervisor
+
+    if _nats_supervisor is None or _nats_supervisor.done():
+        loop = asyncio.get_running_loop()
+        _nats_supervisor = loop.create_task(_nats_connect_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    global _nats_supervisor
+
+    if _nats_supervisor is not None:
+        _nats_supervisor.cancel()
+        try:
+            await _nats_supervisor
+        except asyncio.CancelledError:
+            pass
+        _nats_supervisor = None
+
+    if _nc is not None:
+        try:
+            await _nc.close()
+        except Exception:
+            pass
 
 
 def _minio_client() -> Minio:

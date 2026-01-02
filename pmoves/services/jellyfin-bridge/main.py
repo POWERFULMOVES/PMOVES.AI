@@ -1,6 +1,9 @@
+import asyncio
 import json
+import logging
 import os
 import re
+import time
 from difflib import SequenceMatcher
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -8,8 +11,58 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from fastapi import Body, FastAPI, HTTPException, Query
 import httpx
 from urllib.parse import urlencode
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
 
 app = FastAPI(title="Jellyfin Bridge", version="0.1.0")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Metrics
+# ─────────────────────────────────────────────────────────────────────────────
+JELLYFIN_REQUESTS = Counter(
+    "jellyfin_bridge_requests_total",
+    "Total Jellyfin Bridge requests",
+    ["endpoint", "status"]
+)
+JELLYFIN_SEARCH_LATENCY = Histogram(
+    "jellyfin_bridge_search_latency_seconds",
+    "Jellyfin search latency in seconds",
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+)
+JELLYFIN_LINKS = Counter(
+    "jellyfin_bridge_links_total",
+    "Total Jellyfin video link operations",
+    ["result"]
+)
+JELLYFIN_NOTEBOOK_PUBLISHES = Counter(
+    "jellyfin_bridge_notebook_publishes_total",
+    "Total Open Notebook publish attempts",
+    ["status"]
+)
+
+LOGGER = logging.getLogger("jellyfin_bridge")
+
+# ---------------------------------------------------------------------------
+# Open Notebook Publishing Configuration
+# ---------------------------------------------------------------------------
+OPEN_NOTEBOOK_API_URL = os.environ.get("OPEN_NOTEBOOK_API_URL", "")
+OPEN_NOTEBOOK_API_TOKEN = os.environ.get("OPEN_NOTEBOOK_API_TOKEN", "")
+OPEN_NOTEBOOK_NOTEBOOK_ID = os.environ.get("OPEN_NOTEBOOK_NOTEBOOK_ID", "") or os.environ.get("DEEPRESEARCH_NOTEBOOK_ID", "")
+JELLYFIN_NOTEBOOK_PUBLISH = os.environ.get("JELLYFIN_NOTEBOOK_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
+
+# Initialize notebook publisher if available
+_notebook_publisher = None
+try:
+    from libs.notebook_publisher import NotebookPublisher
+    if OPEN_NOTEBOOK_API_URL and OPEN_NOTEBOOK_API_TOKEN and JELLYFIN_NOTEBOOK_PUBLISH:
+        _notebook_publisher = NotebookPublisher(
+            base_url=OPEN_NOTEBOOK_API_URL,
+            api_token=OPEN_NOTEBOOK_API_TOKEN,
+            notebook_id=OPEN_NOTEBOOK_NOTEBOOK_ID,
+        )
+        LOGGER.info("Open Notebook publisher initialized for Jellyfin bridge")
+except ImportError:
+    LOGGER.info("notebook_publisher library not available")
 
 def _parse_env_list(value: Optional[str]) -> List[str]:
     if not value:
@@ -128,6 +181,10 @@ def _ensure_jellyfin_credentials() -> None:
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 def _supa_patch(table: str, match: Dict[str, Any], patch: Dict[str, Any]):
     qs = []
@@ -412,12 +469,70 @@ def _pick_best_match(title: str, items: List[Dict[str, Any]], target_year: Optio
         return None
     return best_item, best_score
 
+
+def _publish_to_notebook_sync(
+    title: str,
+    media_type: str,
+    overview: Optional[str] = None,
+    year: Optional[int] = None,
+    runtime_ticks: Optional[int] = None,
+    jellyfin_item_id: Optional[str] = None,
+) -> Optional[str]:
+    """Sync wrapper to publish Jellyfin media to Open Notebook."""
+    if not _notebook_publisher:
+        return None
+    try:
+        # Convert runtime ticks to minutes (1 tick = 100 nanoseconds)
+        duration_minutes = None
+        if runtime_ticks:
+            duration_minutes = int(runtime_ticks // 600_000_000)
+
+        # Build poster URL if available
+        poster_url = None
+        if jellyfin_item_id and JELLYFIN_URL:
+            poster_url = f"{JELLYFIN_URL}/Items/{jellyfin_item_id}/Images/Primary"
+
+        async def _async_publish():
+            return await _notebook_publisher.publish_media(
+                title=title,
+                media_type=media_type,
+                description=overview,
+                poster_url=poster_url,
+                year=year,
+                duration_minutes=duration_minutes,
+            )
+
+        # Run async publisher from sync context
+        try:
+            loop = asyncio.get_running_loop()
+            # If we're in an async context, schedule on the existing loop
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _async_publish())
+                entry_id, error = future.result(timeout=15)
+        except RuntimeError:
+            # No running loop, we can use asyncio.run directly
+            entry_id, error = asyncio.run(_async_publish())
+
+        if error:
+            LOGGER.warning("Notebook publish failed for '%s': %s", title, error)
+        elif entry_id:
+            LOGGER.info("Published to Open Notebook: %s (id=%s)", title, entry_id)
+        return entry_id
+    except Exception as e:
+        LOGGER.warning("Notebook publish error for '%s': %s", title, e)
+        return None
+
 @app.post("/jellyfin/link")
 def jellyfin_link(body: Dict[str,Any] = Body(...)):
     vid = body.get('video_id'); item = body.get('jellyfin_item_id')
-    if not vid or not item: raise HTTPException(400, 'video_id and jellyfin_item_id required')
+    if not vid or not item:
+        JELLYFIN_REQUESTS.labels(endpoint="link", status="error").inc()
+        raise HTTPException(400, 'video_id and jellyfin_item_id required')
     patch = {"meta": {"jellyfin_item_id": item}}
     _supa_patch('videos', {'video_id': vid}, patch)
+    JELLYFIN_LINKS.labels(result="success").inc()
+    JELLYFIN_REQUESTS.labels(endpoint="link", status="success").inc()
     return {"ok": True}
 
 @app.post("/jellyfin/refresh")
@@ -494,29 +609,39 @@ def jellyfin_search(
     recursive: bool = Query(True, description="Traverse child libraries recursively."),
     limit: int = Query(25, ge=1, le=200, description="Maximum number of results to return."),
 ):
-    _ensure_jellyfin_credentials()
-    filters: Dict[str, Any] = {
-        "library_ids": library_ids,
-        "library_scope": library_scope,
-        "media_types": media_types,
-        "include_item_types": include_item_types,
-        "exclude_item_types": exclude_item_types,
-        "fields": fields,
-        "sort_by": sort_by,
-        "sort_order": sort_order,
-        "parent_id": parent_id,
-        "year": year,
-        "recursive": recursive,
-        "limit": limit,
-    }
-    items, params = _search_jellyfin(query, filters)
-    serialized = [_serialize_jellyfin_item(item) for item in items]
-    return {"ok": True, "items": serialized, "applied_filters": params}
+    start = time.time()
+    try:
+        _ensure_jellyfin_credentials()
+        filters: Dict[str, Any] = {
+            "library_ids": library_ids,
+            "library_scope": library_scope,
+            "media_types": media_types,
+            "include_item_types": include_item_types,
+            "exclude_item_types": exclude_item_types,
+            "fields": fields,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "parent_id": parent_id,
+            "year": year,
+            "recursive": recursive,
+            "limit": limit,
+        }
+        items, params = _search_jellyfin(query, filters)
+        serialized = [_serialize_jellyfin_item(item) for item in items]
+        JELLYFIN_REQUESTS.labels(endpoint="search", status="success").inc()
+        return {"ok": True, "items": serialized, "applied_filters": params}
+    except HTTPException:
+        JELLYFIN_REQUESTS.labels(endpoint="search", status="error").inc()
+        raise
+    finally:
+        JELLYFIN_SEARCH_LATENCY.observe(time.time() - start)
 
 @app.post("/jellyfin/map-by-title")
 def jellyfin_map_by_title(body: Dict[str, Any] = Body(...)):
+    start = time.time()
     vid = body.get("video_id")
     if not vid:
+        JELLYFIN_REQUESTS.labels(endpoint="map-by-title", status="error").inc()
         raise HTTPException(400, "video_id required")
     rows = _supa_get("videos", {"video_id": vid})
     if not rows:
@@ -558,7 +683,24 @@ def jellyfin_map_by_title(body: Dict[str, Any] = Body(...)):
     if library_ids:
         updated_meta["jellyfin_library_ids"] = library_ids
     _supa_patch("videos", {"video_id": vid}, {"meta": updated_meta})
-    return {
+
+    # Publish to Open Notebook (best-effort, non-blocking)
+    notebook_entry_id = None
+    if _notebook_publisher:
+        notebook_entry_id = _publish_to_notebook_sync(
+            title=best_item.get("Name") or title,
+            media_type=best_item.get("Type") or "Video",
+            overview=best_item.get("Overview"),
+            year=_safe_int(best_item.get("ProductionYear")),
+            runtime_ticks=_safe_int(best_item.get("RunTimeTicks")),
+            jellyfin_item_id=best_item.get("Id"),
+        )
+
+    JELLYFIN_LINKS.labels(result="mapped").inc()
+    JELLYFIN_REQUESTS.labels(endpoint="map-by-title", status="success").inc()
+    JELLYFIN_SEARCH_LATENCY.observe(time.time() - start)
+
+    result: Dict[str, Any] = {
         "ok": True,
         "mapped": {
             "video_id": vid,
@@ -568,6 +710,10 @@ def jellyfin_map_by_title(body: Dict[str, Any] = Body(...)):
         },
         "applied_filters": params,
     }
+    if notebook_entry_id:
+        result["notebook_entry_id"] = notebook_entry_id
+        JELLYFIN_NOTEBOOK_PUBLISHES.labels(status="success").inc()
+    return result
 
 
 @app.get("/jellyfin/branding")
