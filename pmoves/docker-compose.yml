@@ -2,16 +2,17 @@ services:
   postgres:
     image: ankane/pgvector
     restart: unless-stopped
+    <<: *env-tier-data
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-pmoves}
-      - POSTGRES_USER=${POSTGRES_USER:-pmoves}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pmoves}
-    ports: [ "5432:5432" ]
+      - POSTGRES_DB=pmoves
+      - POSTGRES_USER=pmoves
+      # POSTGRES_PASSWORD from env.tier-data
+    ports: ["5432:5432"]
     volumes:
       - supabase-data:/var/lib/postgresql/data
       - ./supabase/initdb:/docker-entrypoint-initdb.d:ro
-    profiles: [ "data", "orchestration", "supabase-local" ]
-    networks: [ data_tier, monitoring_tier ]
+    profiles: ["data","orchestration","supabase-local"]
+    networks: [pmoves_data, pmoves]
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 10s
@@ -21,17 +22,18 @@ services:
   postgrest:
     image: postgrest/postgrest:latest
     restart: unless-stopped
-    depends_on: [ postgres ]
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    depends_on: [postgres]
+    <<: *env-tier-api
     environment:
+      # postgres credentials from env.tier-data via runtime linking
       - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
       - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
-      - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
-      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
-    ports: [ "3010:3000" ]
-    profiles: [ "orchestration", "workers", "supabase-local" ]
-    networks: [ api_tier, data_tier, monitoring_tier ]
+      - PGRST_SERVER_PORT=3000
+      # SUPABASE_JWT_SECRET from env.tier-api
+    ports: ["3010:3000"]
+    profiles: ["orchestration","workers","supabase-local"]
+    networks: [pmoves_api, pmoves]
 
   postgrest-health:
     image: curlimages/curl:8.6.0
@@ -52,51 +54,45 @@ services:
   postgrest-cli:
     image: postgrest/postgrest:latest
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - PGRST_DB_URI=postgres://${SUPABASE_DB_USER:-postgres}:${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:${SUPABASE_DB_PORT:-65432}/${SUPABASE_DB_NAME:-postgres}
       - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
       - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
       - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
-      - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET:-dev_jwt_secret}
-    ports: [ "3011:3000" ]
-    profiles: [ "supabase-cli-rest" ]
-    networks: [ api_tier, monitoring_tier ]
+      # SUPABASE_JWT_SECRET from env.tier-api
+    ports: ["3011:3000"]
+    profiles: ["supabase-cli-rest"]
+    networks: [pmoves_api, pmoves]
   qdrant:
     image: qdrant/qdrant:v1.10.0
     restart: unless-stopped
-    ports: [ "6333:6333" ]
-    profiles: [ "data", "qdrant-local" ]
-    networks: [ data_tier, monitoring_tier ]
+    ports: ["6333:6333"]
+    profiles: ["data","qdrant-local"]
+    networks: [pmoves_data, pmoves]
   meilisearch:
     image: getmeili/meilisearch:v1.8
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-data
     environment:
       - MEILI_ENV=production
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-    ports: [ "7700:7700" ]
-    profiles: [ "data", "meili-local" ]
-    networks: [ data_tier, monitoring_tier ]
-    healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:7700/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+      # MEILI_MASTER_KEY from env.tier-data
+    ports: ["7700:7700"]
+    profiles: ["data","meili-local"]
+    networks: [pmoves_data, pmoves]
   neo4j:
     image: neo4j:5.22
     restart: unless-stopped
-    env_file: [ .env.generated ]
+    <<: *env-tier-data
     environment:
-      - NEO4J_AUTH=${NEO4J_AUTH}
+      # NEO4J_AUTH from env.tier-data
       - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     ports: [ "7474:7474", "7687:7687" ]
     volumes:
       - neo4j-data:/data
       - ./neo4j/cypher:/cypher:ro
-    profiles: [ "data", "neo4j-local" ]
-    networks: [ data_tier, monitoring_tier ]
+    profiles: ["data","neo4j-local"]
+    networks: [pmoves_data, pmoves]
     healthcheck:
       test: [ "CMD-SHELL", "auth=\"$$NEO4J_AUTH\"; user=\"$${auth%%/*}\"; pass=\"$${auth#*/}\"; /var/lib/neo4j/bin/cypher-shell -a bolt://localhost:7687 -u \"$$user\" -p \"$$pass\" 'RETURN 1' || exit 1" ]
       interval: 10s
@@ -106,39 +102,40 @@ services:
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
+    <<: *env-tier-data
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}
-    ports: [ "9000:9000", "9001:9001" ]
+      - MINIO_ROOT_USER=minioadmin
+      # MINIO_ROOT_PASSWORD from env.tier-data
+    ports: ["9000:9000","9001:9001"]
     volumes:
       - minio-data:/data
-    profiles: [ "data", "orchestration", "workers", "agents" ]
-    networks: [ data_tier, monitoring_tier ]
+    profiles: ["data","orchestration","workers","agents"]
+    networks: [pmoves_data, pmoves]
+  # LEGACY: v1 Hi-RAG gateway (use hi-rag-gateway-v2 instead)
   hi-rag-gateway:
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
-      - QDRANT_URL=${QDRANT_URL}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION}
-      - SENTENCE_MODEL=all-MiniLM-L6-v2
-      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
-      # NEO4J_* injected via env_file to avoid compose-time expansion
-      - GRAPH_BOOST=${GRAPH_BOOST}
-      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
-      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
-      - USE_MEILI=${USE_MEILI}
-      - MEILI_URL=http://meilisearch:7700
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
-      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC}
-      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT}
-      - TAILSCALE_ONLY=${TAILSCALE_ONLY}
-      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
-      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
-    ports: [ "8089:8086" ]
-    profiles: [ "legacy" ]
+      # NEO4J_AUTH, MEILI_MASTER_KEY from env.tier-data
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
+      - GRAPH_BOOST=${GRAPH_BOOST:-true}
+      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-3600}
+      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
+      - USE_MEILI=${USE_MEILI:-true}
+      - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
+      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
+      - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
+      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY:-false}
+      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-}
+    ports: ["8089:8086"]
+    profiles: ["legacy"]
     depends_on:
       qdrant:
         condition: service_started
@@ -146,52 +143,54 @@ services:
       neo4j:
         condition: service_healthy
         required: false
-    networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
+    networks: [pmoves_app, pmoves]
+
+  # Tier: worker (retrieval evaluation service for testing RAG quality)
   retrieval-eval:
     build: ./services/retrieval-eval
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
-      - HIRAG_URL=http://hi-rag-gateway-v2:8086
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
       - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
     depends_on: [ hi-rag-gateway-v2 ]
     ports: [ "8090:8090" ]
     volumes:
       - ./services/retrieval-eval:/app:rw
       - ./datasets:/app/data:rw
-    profiles: [ "workers" ]
-    networks: [ app_tier, monitoring_tier ]
+    profiles: ["workers"]
+    networks: [pmoves_app, pmoves]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   presign:
     build: ./services/presign
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - MINIO_SECURE=${MINIO_SECURE:-false}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
+      - MINIO_SECURE=false
+      - AWS_DEFAULT_REGION=us-east-1
       - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
-      - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
-    ports: [ "8088:8080" ]
-    profiles: [ "data", "orchestration" ]
-    networks: [ api_tier, data_tier, monitoring_tier ]
+      # PRESIGN_SHARED_SECRET from env.tier-api
+    ports: ["8088:8080"]
+    profiles: ["data","orchestration"]
+    networks: [pmoves_api, pmoves]
 
+  # Tier: api (ComfyUI render callback handler - writes to Supabase, stores to MinIO)
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      # RENDER_WEBHOOK_SHARED_SECRET from env.tier-api
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3010}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
-      - RENDER_WEBHOOK_SHARED_SECRET=${RENDER_WEBHOOK_SHARED_SECRET}
       - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
-    ports: [ "8085:8085" ]
-    profiles: [ "orchestration", "workers" ]
-    networks: [ api_tier, data_tier, monitoring_tier ]
+    ports: ["8085:8085"]
+    profiles: ["orchestration","workers"]
+    networks: [pmoves_api, pmoves]
     extra_hosts:
       - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
@@ -225,7 +224,7 @@ services:
   extract-worker:
     build: ./services/extract-worker
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
@@ -234,13 +233,13 @@ services:
       # so ingestion and query stay on the same embedding space.
       - EMBEDDING_BACKEND=${EXTRACT_WORKER_EMBEDDING_BACKEND:-tensorzero}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      # MEILI_API_KEY from env.tier-data
       # Use unified Supabase REST by default (env_file values are not interpolated at compose time)
       - SUPA_REST_URL=http://host.docker.internal:65421/rest/v1
       - SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1
-    ports: [ "${EXTRACT_WORKER_HOST_PORT:-8083}:8083" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
+    ports: ["8083:8083"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves_app, pmoves]
     extra_hosts:
       - "host.docker.internal:host-gateway"
   pdf-ingest:
@@ -248,59 +247,40 @@ services:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - MINIO_SECURE=${MINIO_SECURE:-false}
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
+      - MINIO_SECURE=false
       - PDF_DEFAULT_BUCKET=${PDF_DEFAULT_BUCKET:-assets}
       - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
       - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
       - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_URL=nats://nats:4222
     depends_on:
       extract-worker:
         condition: service_started
       minio:
         condition: service_started
-    ports: [ "8092:8092" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ app_tier, data_tier, monitoring_tier ]
+    ports: ["8092:8092"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves_app, pmoves]
   langextract:
     build:
       context: .
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
-    environment:
-      # Orchestrator provider settings (set LANGEXTRACT_PROVIDER=orchestrator to enable)
-      - LANGEXTRACT_PROVIDER=${LANGEXTRACT_PROVIDER:-tensorzero}
-      - ORCHESTRATOR_AUTO_INGEST=${ORCHESTRATOR_AUTO_INGEST:-false}
-      - ORCHESTRATOR_USE_DOCLING=${ORCHESTRATOR_USE_DOCLING:-true}
-      - ORCHESTRATOR_USE_VL=${ORCHESTRATOR_USE_VL:-false}
-      # TensorZero for text chunking - use function name, let TensorZero route to model
-      # Internal port is 3000 (container), not 3030 (host)
-      - TENSORZERO_BASE_URL=http://tensorzero-gateway:3000
-      - TENSORZERO_MODEL=${TENSORZERO_MODEL:-langextract}
-      # MCP tool URLs (internal Docker network)
-      - MCP_GATEWAY_URL=${MCP_GATEWAY_URL:-http://pmz-mcp-gateway:2091}
-      - DOCLING_URL=${DOCLING_URL:-http://pmz-docling-mcp:3020}
-      - E2B_URL=${E2B_URL:-http://pmz-e2b-runner:7071}
-      - VL_SENTINEL_URL=${VL_SENTINEL_URL:-http://pmz-vl-sentinel:7072}
-      - EXTRACT_WORKER_URL=${EXTRACT_WORKER_URL:-http://extract-worker:8083}
-    ports: [ "8084:8084" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ app_tier, api_tier, monitoring_tier ]
+    <<: *env-tier-worker
+    ports: ["8084:8084"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves_app, pmoves]
 
   notebook-sync:
     build: ./services/notebook-sync
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-worker
     environment:
-      # Open Notebook runs outside this compose project's networks; reach it via host-gateway + published port.
-      # Keep env.shared's OPEN_NOTEBOOK_API_URL=http://localhost:5055 for host-side scripts.
-      - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
+      # OPEN_NOTEBOOK_API_URL, OPEN_NOTEBOOK_API_TOKEN from env.tier-worker
       - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
       - NOTEBOOK_SYNC_INTERVAL_SECONDS=${NOTEBOOK_SYNC_INTERVAL_SECONDS:-300}
       - NOTEBOOK_SYNC_NAMESPACE=${NOTEBOOK_SYNC_NAMESPACE:-open-notebook}
@@ -318,128 +298,24 @@ services:
     profiles: [ "workers", "orchestration" ]
     volumes:
       - notebook-sync-data:/data
-    networks: [ app_tier, monitoring_tier ]
+    networks: [pmoves_app, pmoves]
 
-  session-context-worker:
-    build:
-      context: .
-      dockerfile: services/session-context-worker/Dockerfile
-    restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
-    environment:
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - HEALTH_PORT=8100
-    depends_on:
-      nats:
-        condition: service_started
-    ports: [ "8100:8100" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ bus_tier, monitoring_tier ]
-
-  chat-relay:
-    build:
-      context: .
-      dockerfile: services/chat-relay/Dockerfile
-    restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
-    environment:
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - HEALTH_PORT=8102
-      - AGENT_RESPONSE_SUBJECT=agent.response.v1
-      - AGENT_REQUEST_SUBJECT=agent.request.v1
-      - DEFAULT_OWNER_ID=${DEFAULT_OWNER_ID:-00000000-0000-0000-0000-000000000000}
-    depends_on:
-      nats:
-        condition: service_started
-    ports: [ "8102:8102" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ bus_tier, data_tier, monitoring_tier, supabase_net ]
-
-  ultimate-tts-studio:
-    # Build from pmoves/docker/ultimate-tts-studio/Dockerfile
-    # TTS Engines: KittenTTS, F5-TTS, Kokoro (with GPU acceleration)
-    build:
-      context: docker/ultimate-tts-studio
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
-    environment:
-      - GRADIO_SERVER_NAME=0.0.0.0
-      - GRADIO_SERVER_PORT=7861
-      - GRADIO_MCP_SERVER=true
-      # WSL2/CUDA compatibility settings
-      - CUDA_FORCE_PTX_JIT=1
-      - CUDA_DEVICE_ORDER=PCI_BUS_ID
-      - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
-      - TORCH_CUDNN_V8_API_ENABLED=1
-    ports: [ "7861:7861" ]
-    profiles: [ "gpu", "tts" ]
-    networks: [ api_tier, monitoring_tier ]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
-        limits:
-          memory: 8G
-    healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:7861/gradio_api/info || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      start_period: 120s
-      retries: 3
-    volumes:
-      - ultimate-tts-checkpoints:/app/checkpoints
-      - ultimate-tts-outputs:/app/outputs
-
-  flute-gateway:
-    build:
-      context: .
-      dockerfile: services/flute-gateway/Dockerfile
-    restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
-    environment:
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      # Use internal Docker network hostname for Supabase Kong (on supabase_net/pmoves-net)
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_pmoves.ai:8000}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      # VibeVoice is typically run outside Docker (Pinokio/host); reach it via host-gateway.
-      - VIBEVOICE_URL=${VIBEVOICE_URL:-http://host.docker.internal:3000}
-      - WHISPER_URL=${WHISPER_URL:-http://ffmpeg-whisper:8078}
-      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}
-      - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
-      - FLUTE_API_KEY=${FLUTE_API_KEY:-}
-      - FLUTE_HTTP_PORT=8055
-      - FLUTE_WS_PORT=8056
-    depends_on:
-      nats:
-        condition: service_started
-    ports: [ "8055:8055", "8056:8056" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ api_tier, bus_tier, data_tier, monitoring_tier, supabase_net ]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
+  # Tier: media (MinIO credentials from tier-data, media config from tier-media)
   ffmpeg-whisper:
     build:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - USE_CUDA=${USE_CUDA:-true}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     deploy:
       resources:
         reservations:
@@ -447,45 +323,45 @@ services:
             - driver: nvidia
               capabilities: [ compute, utility ]
               count: ${GPU_COUNT:-all}
-    ports: [ "8078:8078" ]
-    profiles: [ "workers", "orchestration", "agents" ]
-    networks: [ app_tier, data_tier, monitoring_tier ]
+    ports: ["8078:8078"]
+    profiles: ["workers","orchestration","agents"]
+    networks: [pmoves_app, pmoves]
 
+  # Tier: media (MinIO credentials from tier-data, video analysis config from tier-media)
   media-video:
     build:
       context: .
       dockerfile: services/media-video/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
-      - FRAME_EVERY=${FRAME_EVERY:-5}
-      - SCORE_THRES=${SCORE_THRES:-0.25}
+      - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
+      - FRAME_SAMPLE_RATE=${FRAME_SAMPLE_RATE:-5}
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [ gpu ]
               count: ${GPU_COUNT:-all}
-    ports: [ "8079:8079" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ app_tier, data_tier, monitoring_tier ]
+    ports: ["8079:8079"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves_app, pmoves]
 
+  # Tier: media (MinIO credentials from tier-data, audio analysis config from tier-media)
   media-audio:
     build:
       context: .
       dockerfile: services/media-audio/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
@@ -495,9 +371,10 @@ services:
           devices:
             - capabilities: [ gpu ]
               count: ${GPU_COUNT:-all}
-    ports: [ "8082:8082" ]
-    profiles: [ "workers", "orchestration" ]
-    networks: [ app_tier, data_tier, monitoring_tier ]
+    ports: ["8082:8082"]
+    profiles: ["workers","orchestration"]
+    networks: [pmoves_app, pmoves]
+  # Tier: media (MinIO credentials from tier-data, YouTube config from tier-media)
   pmoves-yt:
     image: ${PMOVES_YT_IMAGE:-ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest}
     build:
@@ -505,13 +382,13 @@ services:
       args:
         - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - YT_BUCKET=${YT_BUCKET:-assets}
+      - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -525,29 +402,41 @@ services:
       - YT_TRANSCRIPT_PROVIDER=${YT_TRANSCRIPT_PROVIDER:-faster-whisper}
       - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
       - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
+      - YT_CHANNEL_CHECK_INTERVAL=${YT_CHANNEL_CHECK_INTERVAL:-3600}
     volumes:
       - ./config:/app/config
-      - ./data/yt-dlp:/data/yt-dlp
-    ports: [ "8077:8077" ]
-    profiles: [ "orchestration", "workers", "agents" ]
-    networks: [ api_tier, app_tier, bus_tier, data_tier, monitoring_tier ]
+    depends_on:
+      minio:
+        condition: service_started
+      # bgutil-pot-provider is optional and may be excluded when compose is
+      # invoked with profiles that don't include the 'yt' provider. Remove
+      # the hard dependency so `make up` with different profiles doesn't
+      # fail with an "undefined service" error. The image/service is still
+      # defined below and can be enabled via profiles when needed.
+    ports: ["8077:8077"]
+    profiles: ["orchestration","workers","agents"]
+    networks: [pmoves_app, pmoves]
 
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
     environment:
       - PORT=4416
-    profiles: [ "orchestration", "yt" ]
-    networks: [ api_tier, app_tier ] # api_tier added for external DNS/googleapis access
+    depends_on: [minio]
+    profiles: ["orchestration","yt"]
+    networks: [pmoves_app, pmoves]
 
+  # Tier: agent (orchestrates media ingestion monitoring)
   channel-monitor:
     build: ./services/channel-monitor
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
+      # CHANNEL_MONITOR_DATABASE_URL from env.tier-agent
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
       - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
     volumes:
       - ./config:/app/config
     depends_on:
@@ -557,9 +446,9 @@ services:
         condition: service_started
       bgutil-pot-provider:
         condition: service_started
-    ports: [ "8097:8097" ]
-    profiles: [ "orchestration", "yt" ]
-    networks: [ api_tier, data_tier, monitoring_tier ]
+    ports: ["8097:8097"]
+    profiles: ["orchestration","yt"]
+    networks: [pmoves_app, pmoves]
 
   # Optional: experimental v2 gateway with rerank providers
   hi-rag-gateway-v2:
@@ -567,7 +456,7 @@ services:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
@@ -581,24 +470,21 @@ services:
       - RERANK_FUSION=${RERANK_FUSION:-mul}
       - USE_MEILI=true
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      # MEILI_API_KEY from env.tier-data
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-      - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
-      # NEO4J_* injected via env_file to avoid compose-time expansion
       - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
       - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
-      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_PMOVES.AI:8000/realtime/v1}
-      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
+      - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:65421/realtime/v1}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports: [ "${HIRAG_V2_HOST_PORT:-8086}:8086" ]
@@ -608,7 +494,7 @@ services:
         condition: service_started
       neo4j:
         condition: service_healthy
-    networks: [ app_tier, data_tier, api_tier, monitoring_tier, supabase_net ]
+    networks: [pmoves_api, pmoves]
 
   # GPU-enabled variant of legacy v1 gateway (optional)
   hi-rag-gateway-gpu:
@@ -619,24 +505,23 @@ services:
         - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu128}
         - TORCH_SKIP_CUDA=0
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-api
     environment:
-      - QDRANT_URL=${QDRANT_URL}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION}
-      - SENTENCE_MODEL=all-MiniLM-L6-v2
-      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
-      # NEO4J_* injected via env_file to avoid compose-time expansion
-      - GRAPH_BOOST=${GRAPH_BOOST}
-      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
-      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
-      - USE_MEILI=${USE_MEILI}
-      - MEILI_URL=http://meilisearch:7700
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
-      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC}
-      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT}
-      - TAILSCALE_ONLY=${TAILSCALE_ONLY}
-      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
-      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
+      # NEO4J_AUTH, MEILI_MASTER_KEY from env.tier-data
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
+      - GRAPH_BOOST=${GRAPH_BOOST:-true}
+      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-3600}
+      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
+      - USE_MEILI=${USE_MEILI:-true}
+      - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
+      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
+      - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
+      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY:-false}
+      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-}
       - RERANK_ENABLE=${RERANK_ENABLE:-true}
       - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
       - RERANK_TOPN=${RERANK_TOPN:-50}
@@ -656,7 +541,7 @@ services:
       neo4j:
         condition: service_healthy
         required: false
-    networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
+    networks: [pmoves_app, pmoves]
 
   # GPU-enabled variant of v2 gateway with CLAP/torch installed
   hi-rag-gateway-v2-gpu:
@@ -669,9 +554,10 @@ services:
         TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
     runtime: nvidia
     restart: unless-stopped
-    command: [ "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086" ]
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]
+    <<: *env-tier-api
     environment:
+      # NEO4J_AUTH, MEILI_MASTER_KEY from env.tier-data
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
@@ -685,7 +571,6 @@ services:
       - RERANK_FUSION=${RERANK_FUSION:-mul}
       - USE_MEILI=${USE_MEILI:-true}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
@@ -733,19 +618,29 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
-    command: [ "-js" ]
+    <<: *env-tier-data
+    command: [
+      "-js",
+      "-m", "8222",
+      "-ws", "-ws_port", "4223",
+      # Authentication (NATS_USER/NATS_PASS from env.tier-data)
+      "-auth", "-u", "nats", "-p", "pmoves",
+    ]
     restart: unless-stopped
-    ports: [ "4222:4222" ]
-    profiles: [ "agents", "orchestration", "workers" ]
-    networks: [ bus_tier, monitoring_tier ]
+    ports: ["4222:4222", "9223:4223"]
+    profiles: ["agents"]
+    networks: [pmoves_bus, pmoves]
 
+  # Tier: agent (Agent Zero orchestration - NATS, Supabase, TensorZero access)
   agent-zero:
     build:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
+      # NATS_URL from env.tier-data (internal network)
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
@@ -753,8 +648,7 @@ services:
       - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
       - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
-      # Open Notebook API for notebook.search MCP command (host.docker.internal for container-to-host)
-      - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     depends_on: [nats]
     # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
     # and keep 8080 mapped for the API when enabled by the runtime.
@@ -767,11 +661,10 @@ services:
       - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
       - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
       - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
-      # Settings persistence (settings.json lives in /a0/tmp)
-      - ${AGENT_ZERO_TMP_DIR:-./data/agent-zero/tmp}:/a0/tmp
-    profiles: [ "agents" ]
-    networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_bus]
 
+  # Tier: agent (Supabase-driven agent service with prompt/form management)
   archon:
     build:
       context: .
@@ -780,30 +673,27 @@ services:
         - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
         - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
       - PORT=8091
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      # Use container DNS for Supabase (same as Hi-RAG fix)
       - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_PMOVES.AI:8000/rest/v1}
-      # In single-env mode, credentials come from env_file; avoid overriding with empty host vars.
     depends_on:
       nats:
         condition: service_started
     ports: [ "8091:8091", "8051:8051", "8052:8052" ]
     profiles: [ "agents" ]
     networks:
-      api_tier:
-      bus_tier:
-      data_tier:
-      monitoring_tier:
-      supabase_net:
+      pmoves_app:
+        aliases:
+          - archon-server
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -892,29 +782,60 @@ services:
       retries: 12
       start_period: 15s
 
+  # Tier: agent (distributed node announcer for multi-host orchestration)
   mesh-agent:
     build: ./services/mesh-agent
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
       - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
-    depends_on: [ nats ]
-    profiles: [ "agents" ]
-    networks: [ app_tier, bus_tier, monitoring_tier ]
+    depends_on: [nats]
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_bus]
 
+  # Tier: agent (A2UI NATS bridge - geometry bus integration)
+  a2ui-nats-bridge:
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+      - PORT=9224
+    ports: ["9224:9224"]
+    depends_on: [nats]
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  # Tier: agent (LLM-based research planner - uses TensorZero for LLM access)
   deepresearch:
     build:
       context: .
       dockerfile: services/deepresearch/Dockerfile
     image: ${DEEPRESEARCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-deepresearch:pmoves-latest}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local, ../.env ]
+    <<: *env-tier-agent
     environment:
+      # OPENROUTER_API_KEY, OPEN_NOTEBOOK_API_URL, OPEN_NOTEBOOK_API_TOKEN from env.tier-agent
+      # LLM provider access via TensorZero (env.tier-agent provides TENSORZERO_URL)
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
       - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
+      - DEEPRESEARCH_TENSORZERO_BASE_URL=${DEEPRESEARCH_TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - DEEPRESEARCH_API_BASE=${DEEPRESEARCH_API_BASE:-http://deepresearch-local:8080}
       - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
       - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
@@ -937,43 +858,24 @@ services:
       - ./contracts:/app/contracts:ro
     networks: [ app_tier, bus_tier, monitoring_tier ]
 
+  # Tier: agent (multimodal holographic deep research orchestrator)
   supaserch:
     build:
       context: ./services
       dockerfile: supaserch/Dockerfile
     image: ${SUPASERCH_IMAGE:-ghcr.io/powerfulmoves/pmoves-supaserch:pmoves-latest}
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
       - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
-    ports: [ "${SUPASERCH_HOST_PORT:-8099}:8099" ]
-    profiles: [ "agents", "workers" ]
-    networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
-
-  consciousness-service:
-    build:
-      context: ./services
-      dockerfile: consciousness-service/Dockerfile
-    image: ${CONSCIOUSNESS_SERVICE_IMAGE:-}
-    restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
-    environment:
-      - SERVICE_NAME=consciousness-service
-      - SERVICE_PORT=8096
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - HIRAG_V2_URL=${HIRAG_V2_URL:-http://hi-rag-gateway-v2:8086}
-    ports: [ "${CONSCIOUSNESS_SERVICE_PORT:-8096}:8096" ]
-    profiles: [ "agents", "orchestration" ]
-    depends_on: [ nats ]
-    networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
-    healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8096/healthz').raise_for_status()\"" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_PMOVES.AI:8000/rest/v1}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    ports: ["${SUPASERCH_HOST_PORT:-8099}:8099"]
+    profiles: ["agents","workers"]
+    networks: [pmoves_app, pmoves_bus]
 
   # NATS echo subscribers for diagnostics
   nats-echo-req:
@@ -981,94 +883,78 @@ services:
       context: ./services
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
-    depends_on: [ nats ]
-    profiles: [ "agents", "diag" ]
-    networks: [ bus_tier ]
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves_bus, pmoves]
 
   nats-echo-res:
     build:
       context: ./services
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
-    depends_on: [ nats ]
-    profiles: [ "agents", "diag" ]
-    networks: [ bus_tier ]
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves_bus, pmoves]
 
+  # Tier: agent (Discord notification bot - listens on NATS subjects)
   publisher-discord:
     build:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
+      # DISCORD_WEBHOOK_URL from env.tier-agent (optional)
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,claude.code.session.start.v1,claude.code.session.context.v1,claude.code.session.end.v1}
-    depends_on: [ nats ]
-    ports: [ "8094:8092" ]
-    profiles: [ "orchestration", "agents" ]
-    networks: [ app_tier, bus_tier, monitoring_tier ]
+      - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
+    depends_on: [nats]
+    ports: ["8094:8092"]
+    profiles: ["orchestration","agents"]
+    networks: [pmoves_app, pmoves_bus]
 
-  messaging-gateway:
-    build: ./services/messaging-gateway
-    restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
-    environment:
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - MESSAGING_SUBJECTS=${MESSAGING_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1}
-    depends_on: [ nats ]
-    ports: [ "8101:8101" ]
-    profiles: [ "workers" ]
-    networks: [ api_tier, bus_tier ]
-
+  # Tier: agent (Jellyfin metadata webhook & helper)
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-agent
     environment:
-      JELLYFIN_URL: ${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
-      SUPA_REST_URL: ${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
-    ports: [ "8093:8093" ]
-    profiles: [ "orchestration" ]
-    networks: [ api_tier, data_tier, monitoring_tier, cataclysm ]
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
+      - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
+    ports: ["8093:8093"]
+    profiles: ["orchestration"]
+    networks: [pmoves_app, pmoves, cataclysm]
 
+  # Tier: llm (local model backend for TensorZero)
   pmoves-ollama:
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:latest}
     restart: unless-stopped
+    <<: *env-tier-llm
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_MODELS=/root/.ollama/models
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: [ "11434:11434" ]
     volumes:
-      - /usr/share/ollama/.ollama/models:/root/.ollama/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
-    profiles: [ "tensorzero" ]
-    networks:
-      app_tier:
-        aliases: [ ollama ]
-      api_tier:
-        aliases: [ ollama ]
+      - pmoves-ollama-models:/root/.ollama/models
+    profiles: ["tensorzero"]
+    networks: [pmoves_api, pmoves]
 
   tensorzero-clickhouse:
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped
+    <<: *env-tier-llm
     environment:
-      - CLICKHOUSE_USER=${TENSORZERO_CLICKHOUSE_USER:-tensorzero}
-      - CLICKHOUSE_PASSWORD=${TENSORZERO_CLICKHOUSE_PASSWORD:-tensorzero}
+      - CLICKHOUSE_USER=tensorzero
+      - CLICKHOUSE_PASSWORD=tensorzero
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
     ports: [ "8123:8123" ]
     volumes:
@@ -1080,39 +966,33 @@ services:
       interval: 5s
       timeout: 2s
       retries: 5
-    profiles: [ "tensorzero" ]
-    networks: [ data_tier, monitoring_tier ]
+    profiles: ["tensorzero"]
+    networks: [pmoves_api, pmoves]
 
   tensorzero-gateway:
     image: tensorzero/gateway:latest
     restart: unless-stopped
-    command: [ "--config-file", "/app/config/tensorzero.toml" ]
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    command: ["--config-file", "/app/config/tensorzero.toml"]
+    <<: *env-tier-llm
     environment:
       - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
-      - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}
-      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://host.docker.internal:4317
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - TENSORZERO_PG_USER=${TENSORZERO_PG_USER:-tensorzero}
-      - TENSORZERO_PG_PASSWORD=${TENSORZERO_PG_PASSWORD}
-      - TENSORZERO_PG_DB=${TENSORZERO_PG_DB:-tensorzero}
+      # LLM API keys from env.tier-llm (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
     volumes:
       - ./tensorzero/config:/app/config:ro
     depends_on:
       tensorzero-clickhouse:
         condition: service_healthy
-    ports: [ "3030:3000" ]
-    profiles: [ "tensorzero" ]
-    networks: [ api_tier, data_tier, monitoring_tier ]
+    ports: ["3030:3000"]
+    profiles: ["tensorzero"]
+    networks: [pmoves_api, pmoves]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   tensorzero-ui:
     image: tensorzero/ui:latest
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    <<: *env-tier-llm
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
       - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}
@@ -1123,9 +1003,9 @@ services:
         condition: service_healthy
       tensorzero-gateway:
         condition: service_started
-    ports: [ "4000:4000" ]
-    profiles: [ "tensorzero" ]
-    networks: [ api_tier, data_tier, monitoring_tier ]
+    ports: ["4000:4000"]
+    profiles: ["tensorzero"]
+    networks: [pmoves_api, pmoves]
 
   invidious-db:
     image: postgres:14
