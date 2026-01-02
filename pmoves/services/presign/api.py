@@ -1,10 +1,11 @@
-
 import os, time, hmac, hashlib
 from typing import Optional, List, Dict
 from fastapi import FastAPI, HTTPException, Header, Query
 from pydantic import BaseModel, Field
 import boto3
 from botocore.config import Config
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
 
 def get_s3():
     endpoint = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT")
@@ -28,6 +29,29 @@ def get_s3():
 
 ALLOWED_BUCKETS = set([b.strip() for b in os.environ.get("ALLOWED_BUCKETS","").split(",") if b.strip()])
 SHARED_SECRET = os.environ.get("PRESIGN_SHARED_SECRET","")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Metrics
+# ─────────────────────────────────────────────────────────────────────────────
+PRESIGN_REQUESTS = Counter(
+    "presign_requests_total",
+    "Total presign requests",
+    ["operation", "status"]
+)
+PRESIGN_LATENCY = Histogram(
+    "presign_latency_seconds",
+    "Presign operation latency in seconds",
+    buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+)
+PRESIGN_AUTH_FAILURES = Counter(
+    "presign_auth_failures_total",
+    "Total authentication failures"
+)
+PRESIGN_BUCKET_DENIALS = Counter(
+    "presign_bucket_denials_total",
+    "Total bucket access denials",
+    ["bucket"]
+)
 
 def check_auth(authorization: Optional[str] = Header(None)):
     if not SHARED_SECRET:
@@ -62,36 +86,76 @@ app = FastAPI(title="PMOVES Presign", version="1.0.0")
 def healthz():
     return {"ok": True, "time": int(time.time())}
 
+@app.get("/metrics")
+def metrics_endpoint():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 @app.post("/presign/put")
 def presign_put(req: PresignReq, authorization: Optional[str] = Header(None)):
-    check_auth(authorization); check_bucket(req.bucket)
-    s3 = get_s3()
-    params = {"Bucket": req.bucket, "Key": req.key}
-    if req.content_type:
-        params["ContentType"] = req.content_type
-    url = s3.generate_presigned_url("put_object", Params=params, ExpiresIn=req.expires)
-    return {"url": url, "method": "PUT", "headers": {"Content-Type": req.content_type} if req.content_type else {}}
+    start = time.time()
+    try:
+        check_auth(authorization); check_bucket(req.bucket)
+        s3 = get_s3()
+        params = {"Bucket": req.bucket, "Key": req.key}
+        if req.content_type:
+            params["ContentType"] = req.content_type
+        url = s3.generate_presigned_url("put_object", Params=params, ExpiresIn=req.expires)
+        PRESIGN_REQUESTS.labels(operation="put", status="success").inc()
+        return {"url": url, "method": "PUT", "headers": {"Content-Type": req.content_type} if req.content_type else {}}
+    except HTTPException as e:
+        if e.status_code == 401:
+            PRESIGN_AUTH_FAILURES.inc()
+        elif e.status_code == 403:
+            PRESIGN_BUCKET_DENIALS.labels(bucket=req.bucket).inc()
+        PRESIGN_REQUESTS.labels(operation="put", status="error").inc()
+        raise
+    finally:
+        PRESIGN_LATENCY.observe(time.time() - start)
 
 @app.post("/presign/get")
 def presign_get(req: PresignReq, authorization: Optional[str] = Header(None)):
-    check_auth(authorization); check_bucket(req.bucket)
-    s3 = get_s3()
-    params = {"Bucket": req.bucket, "Key": req.key}
-    url = s3.generate_presigned_url("get_object", Params=params, ExpiresIn=req.expires)
-    return {"url": url, "method": "GET"}
+    start = time.time()
+    try:
+        check_auth(authorization); check_bucket(req.bucket)
+        s3 = get_s3()
+        params = {"Bucket": req.bucket, "Key": req.key}
+        url = s3.generate_presigned_url("get_object", Params=params, ExpiresIn=req.expires)
+        PRESIGN_REQUESTS.labels(operation="get", status="success").inc()
+        return {"url": url, "method": "GET"}
+    except HTTPException as e:
+        if e.status_code == 401:
+            PRESIGN_AUTH_FAILURES.inc()
+        elif e.status_code == 403:
+            PRESIGN_BUCKET_DENIALS.labels(bucket=req.bucket).inc()
+        PRESIGN_REQUESTS.labels(operation="get", status="error").inc()
+        raise
+    finally:
+        PRESIGN_LATENCY.observe(time.time() - start)
 
 @app.post("/presign/post")
 def presign_post(req: PresignPostReq, authorization: Optional[str] = Header(None)):
-    check_auth(authorization); check_bucket(req.bucket)
-    s3 = get_s3()
-    fields = {}
-    conditions = []
-    if req.content_type:
-        fields["Content-Type"] = req.content_type
-        conditions.append({"Content-Type": req.content_type})
-    if req.acl:
-        fields["acl"] = req.acl
-        conditions.append({"acl": req.acl})
-    post = s3.generate_presigned_post(req.bucket, req.key, Fields=fields, Conditions=conditions, ExpiresIn=req.expires)
-    return {"url": post["url"], "fields": post["fields"]}
+    start = time.time()
+    try:
+        check_auth(authorization); check_bucket(req.bucket)
+        s3 = get_s3()
+        fields = {}
+        conditions = []
+        if req.content_type:
+            fields["Content-Type"] = req.content_type
+            conditions.append({"Content-Type": req.content_type})
+        if req.acl:
+            fields["acl"] = req.acl
+            conditions.append({"acl": req.acl})
+        post = s3.generate_presigned_post(req.bucket, req.key, Fields=fields, Conditions=conditions, ExpiresIn=req.expires)
+        PRESIGN_REQUESTS.labels(operation="post", status="success").inc()
+        return {"url": post["url"], "fields": post["fields"]}
+    except HTTPException as e:
+        if e.status_code == 401:
+            PRESIGN_AUTH_FAILURES.inc()
+        elif e.status_code == 403:
+            PRESIGN_BUCKET_DENIALS.labels(bucket=req.bucket).inc()
+        PRESIGN_REQUESTS.labels(operation="post", status="error").inc()
+        raise
+    finally:
+        PRESIGN_LATENCY.observe(time.time() - start)
 

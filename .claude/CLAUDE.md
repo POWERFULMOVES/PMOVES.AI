@@ -68,7 +68,7 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Request: `{"query": "...", "top_k": 10, "rerank": true}`
 - **Use for:** Knowledge retrieval, semantic search, RAG queries
 
-**Hi-RAG Gateway v1** [Port 8089 CPU, 8090 GPU] **[LEGACY]**
+**Hi-RAG Gateway v1** [Port 8089 CPU, 8110 GPU] **[LEGACY]**
 - Original hybrid RAG implementation
 - Use v2 instead for new features
 
@@ -89,6 +89,24 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Knowledge base / note-taking integration
 - Access via `OPEN_NOTEBOOK_API_URL` + API token
 - Used by DeepResearch for persistent storage
+
+### Voice & Speech Services
+
+**Flute-Gateway** [Port 8055 HTTP, 8056 WebSocket]
+- Multimodal voice communication layer with Pipecat integration
+- Prosodic synthesis with natural pauses and emphasis
+- WebSocket streaming for real-time audio
+- API: `POST http://localhost:8055/v1/voice/synthesize/prosodic`
+- Health: `GET http://localhost:8055/healthz`
+- **Use for:** TTS synthesis, real-time voice sessions, audio streaming
+- **See:** `.claude/context/flute-gateway.md` for API reference
+
+**Ultimate-TTS-Studio** [Port 7861]
+- Multi-engine TTS with 7 engines (Kokoro, F5-TTS, KittenTTS, VoxCPM, etc.)
+- Gradio web interface for interactive synthesis
+- GPU-accelerated (CUDA 12.4)
+- Health: `GET http://localhost:7861/gradio_api/info`
+- **Use for:** High-quality TTS, voice cloning, multi-language synthesis
 
 ### Media Ingestion & Processing
 
@@ -321,21 +339,30 @@ docker compose --profile agents --profile workers up -d
 
 ## Git & CI Patterns
 
-**Submodules:**
-- `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES.YT`
-- `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Deep-Serch`
-- `PMOVES-BoTZ`, `PMOVES-DoX`, `PMOVES-HiRAG`
-- Plus health/wealth integrations and more (20 total)
+**Submodules (25 total):**
+- Core: `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES-BoTZ`, `PMOVES.YT`
+- RAG/Research: `PMOVES-HiRAG`, `PMOVES-Deep-Serch`, `PMOVES-Open-Notebook`
+- Media: `PMOVES-Jellyfin`, `PMOVES-Ultimate-TTS-Studio`, `PMOVES-Pipecat`
+- Integration: `PMOVES-tensorzero`, `PMOVES-n8n`, `PMOVES-ToKenism-Multi`
+- Plus health/wealth integrations and more
 - **See:** `.claude/context/submodules.md` for complete catalog
+
+**Security Posture (as of 2025-12-23):**
+- CODEOWNERS: 24/24 (100%) - All submodules have code owners
+- Dependabot: 24/24 (100%) - All submodules have automated security updates
+- **See:** `.claude/learnings/submodule-security-audit-2025-12.md`
 
 **CI/CD:**
 - GitHub Actions for multi-arch builds (amd64, arm64)
+- Self-hosted runners: ai-lab (GPU), vps (CPU), cloudstartup (staging), kvm4 (production)
 - Published to GHCR + Docker Hub
 - Smoke tests via `make verify-all`
+- **See:** `.claude/context/ci-runners.md` for runner deployment
 
 **Branch Strategy:**
 - Main branch: `main`
 - Feature branches: `feature/*`
+- Hardened branches: `PMOVES.AI-Edition-Hardened` (in submodules)
 - PR target: `main`
 
 ## Testing Workflow
@@ -392,11 +419,18 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 
 See `.claude/context/` for detailed documentation:
 - `services-catalog.md` - Complete service listing with all details
-- `submodules.md` - Complete submodules catalog (20 submodules)
+- `submodules.md` - Complete submodules catalog (25 submodules)
+- `ci-runners.md` - Self-hosted runner deployment and configuration
 - `nats-subjects.md` - Comprehensive NATS subject catalog
 - `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference
 - `testing-strategy.md` - Testing workflow and PR requirements
+
+**GEOMETRY BUS & CHIT Integration:**
+- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
+- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
+- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
+- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
 **GEOMETRY BUS & CHIT Integration:**
 - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide

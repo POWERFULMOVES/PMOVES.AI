@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { DashboardShell } from "../../../components/DashboardNavigation";
 
+// Monitoring service URLs (configured via NEXT_PUBLIC_* env vars for client-side access)
+const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL || 'http://localhost:3002';
+const PROMETHEUS_URL = process.env.NEXT_PUBLIC_PROMETHEUS_URL || 'http://localhost:9090';
+const LOKI_URL = process.env.NEXT_PUBLIC_LOKI_URL || 'http://localhost:3100';
+
 export default function MonitorDashboardPage() {
   const statsUrl = "/api/monitor/stats";
   const [stats, setStats] = useState<Record<string, unknown> | null>(null);
@@ -126,7 +131,7 @@ export default function MonitorDashboardPage() {
         {/* Quick links */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <a
-            href="http://localhost:3000"
+            href={GRAFANA_URL}
             target="_blank"
             rel="noreferrer"
             className="card-glass p-4 group"
@@ -135,13 +140,13 @@ export default function MonitorDashboardPage() {
               <span className="font-display font-semibold text-sm group-hover:text-cata-cyan transition-colors">
                 Grafana
               </span>
-              <span className="font-mono text-2xs text-ink-muted">:3000</span>
+              <span className="font-mono text-2xs text-ink-muted">{new URL(GRAFANA_URL).port || '80'}</span>
             </div>
             <p className="text-xs text-ink-muted mt-1">Dashboard visualization</p>
           </a>
 
           <a
-            href="http://localhost:9090"
+            href={PROMETHEUS_URL}
             target="_blank"
             rel="noreferrer"
             className="card-glass p-4 group"
@@ -150,13 +155,13 @@ export default function MonitorDashboardPage() {
               <span className="font-display font-semibold text-sm group-hover:text-cata-cyan transition-colors">
                 Prometheus
               </span>
-              <span className="font-mono text-2xs text-ink-muted">:9090</span>
+              <span className="font-mono text-2xs text-ink-muted">{new URL(PROMETHEUS_URL).port || '80'}</span>
             </div>
             <p className="text-xs text-ink-muted mt-1">Metrics queries</p>
           </a>
 
           <a
-            href="http://localhost:3100"
+            href={LOKI_URL}
             target="_blank"
             rel="noreferrer"
             className="card-glass p-4 group"
@@ -165,7 +170,7 @@ export default function MonitorDashboardPage() {
               <span className="font-display font-semibold text-sm group-hover:text-cata-cyan transition-colors">
                 Loki
               </span>
-              <span className="font-mono text-2xs text-ink-muted">:3100</span>
+              <span className="font-mono text-2xs text-ink-muted">{new URL(LOKI_URL).port || '80'}</span>
             </div>
             <p className="text-xs text-ink-muted mt-1">Log aggregation</p>
           </a>
