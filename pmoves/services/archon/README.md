@@ -90,3 +90,39 @@ The dashboard page at `pmoves/ui/app/dashboard/archon-prompts/page.tsx` surfaces
 - **UI rollback:** redeploy the previous UI build or revert the `pmoves/ui/app/dashboard/archon-prompts` route in Git.
 - **Data rollback:** if a prompt edit needs to be undone, copy the `archon_prompts` row from the `supabase` point-in-time recovery snapshot or re-run the seed data in `pmoves/supabase/initdb/10_archon_prompts_seed.sql` after confirming with stakeholders.
 - **Credential rollback:** rotate the `SUPABASE_SERVICE_ROLE_KEY` if it was exposed during troubleshooting, then restart services depending on the Archon prompt helpers so new tokens propagate.
+
+## Network Tier
+
+Archon operates across multiple network tiers:
+
+- **API Tier** (172.30.1.0/24) - External API/UI access (port 8091, UI 3737)
+- **Bus Tier** (172.30.3.0/24) - NATS connectivity for event-driven workflows
+- **Data Tier** (172.30.4.0/24) - Supabase/PostgREST access
+- **Monitoring Tier** (172.30.5.0/24) - Prometheus metrics
+
+## Docker Compose Profile
+
+Archon is included in the `agents` profile:
+
+```bash
+# Start agents (NATS + Agent Zero + Archon)
+docker compose --profile agents up -d
+
+# Or via make target
+make up-agents
+```
+
+## Related Services
+
+| Service | Purpose |
+|---------|---------|
+| `agent-zero` | Control-plane orchestrator (MCP client) |
+| `nats` | Event bus for crawl/ingest workflows |
+| `postgres` | Supabase database (prompt catalog) |
+| `postgrest` | Supabase REST API |
+
+## See Also
+
+- `pmoves/docs/PMOVES.AI-Edition-Hardened-Full.md` - Full production deployment guide
+- `.claude/context/services-catalog.md` - Service catalog
+- `.claude/context/nats-subjects.md` - NATS subject catalog

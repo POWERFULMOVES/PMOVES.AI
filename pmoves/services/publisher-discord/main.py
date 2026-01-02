@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import contextlib
 import datetime
 import json
@@ -29,7 +30,42 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev
 from services.common.telemetry import PublisherMetrics, PublishTelemetry, compute_publish_telemetry
 
 
-app = FastAPI(title="Publisher-Discord", version="0.1.0")
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan with NATS connection."""
+    # Startup
+    global _nats_loop_task
+    if _nats_loop_task and _nats_loop_task.done():
+        try:
+            _nats_loop_task.result()
+        except Exception as exc:  # pragma: no cover - startup diagnostics
+            logger.warning(
+                "nats_loop_previous_failure",
+                extra={"event": "nats_loop_previous_failure", "error": str(exc)},
+            )
+    if _nats_loop_task is None or _nats_loop_task.done():
+        logger.info(
+            "nats_loop_start",
+            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+        )
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+
+    yield
+
+    # Shutdown
+    global _nc
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        with contextlib.suppress(Exception):
+            await _nats_loop_task
+        _nats_loop_task = None
+    if _nc:
+        with contextlib.suppress(Exception):
+            await _nc.close()
+        _nc = None
+
+
+app = FastAPI(title="Publisher-Discord", version="0.1.0", lifespan=lifespan)
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 # Prefer the n8n-style username if provided, fallback to legacy var
@@ -38,7 +74,8 @@ DISCORD_AVATAR_URL = os.environ.get("DISCORD_AVATAR_URL", "")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 SUBJECTS = os.environ.get(
     "DISCORD_SUBJECTS",
-    "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1",
+    "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,"
+    "tokenism.attribution.recorded.v1,tokenism.cgp.weekly.v1,tokenism.cgp.ready.v1,tokenism.swarm.population.v1",
 ).split(",")
 
 JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "")
@@ -48,12 +85,18 @@ DISCORD_PUBLISH_PREFIX = os.environ.get("DISCORD_PUBLISH_PREFIX", "Published: ")
 DISCORD_METRICS_TABLE = os.environ.get("DISCORD_METRICS_TABLE", "publisher_discord_metrics")
 DISCORD_METRICS_CONFLICT = os.environ.get("DISCORD_METRICS_CONFLICT", "published_event_id")
 
+# Claude session thread configuration
+CLAUDE_SESSION_CHANNEL_ID = os.environ.get("CLAUDE_SESSION_CHANNEL_ID", "")
+DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
 
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
 _webhook_counters = Counter()
 _telemetry_metrics = PublisherMetrics()
 logger = logging.getLogger("publisher_discord")
+
+# Track session_id -> thread_id mapping for Claude sessions
+_session_threads: Dict[str, str] = {}
 
 
 def _coerce_tags(raw: Any) -> Iterable[str]:
@@ -202,6 +245,24 @@ async def _handle_nats_message(msg):
     if not isinstance(payload, dict):
         payload = {"raw": msg.data.decode("utf-8", errors="ignore")}
 
+    # Handle Claude session events differently (use Discord Bot API with threads)
+    if name.startswith("claude.code.session."):
+        if name == "claude.code.session.start.v1":
+            await _handle_claude_session_start(payload)
+        elif name == "claude.code.session.context.v1":
+            await _handle_claude_session_context(payload)
+        elif name == "claude.code.session.end.v1":
+            await _handle_claude_session_end(payload)
+        logger.info(
+            "claude_session_event_processed",
+            extra={
+                "subject": name,
+                "session_id": payload.get("session_id"),
+            },
+        )
+        return
+
+    # Handle regular events (use webhook)
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
     published_at = datetime.datetime.now(datetime.timezone.utc)
     telemetry = compute_publish_telemetry(
@@ -342,6 +403,7 @@ async def _nats_resilience_loop() -> None:
 
 @app.get("/healthz")
 async def healthz():
+    """Health check endpoint for Kubernetes probes."""
     return {
         "ok": True,
         "webhook": bool(DISCORD_WEBHOOK_URL),
@@ -352,10 +414,118 @@ async def healthz():
 
 @app.get("/metrics")
 async def metrics():
+    """Metrics endpoint for webhook and telemetry statistics."""
     return {
         "webhook": _webhook_snapshot(),
         "telemetry": _telemetry_metrics.summary(),
     }
+
+async def _create_discord_thread(channel_id: str, thread_name: str, message_content: Optional[str] = None, embeds: Optional[list] = None) -> Optional[str]:
+    """Create a new Discord thread in the specified channel. Returns thread_id or None on failure."""
+    if not DISCORD_BOT_TOKEN or not channel_id:
+        logger.warning("discord_thread_create_skipped", extra={"event": "discord_thread_create_skipped", "reason": "missing_bot_token_or_channel"})
+        return None
+
+    # First, post a message to the channel
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {}
+    if message_content:
+        payload["content"] = message_content
+    if embeds:
+        payload["embeds"] = embeds
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            # Create a message in the channel
+            r = await client.post(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                headers=headers,
+                json=payload
+            )
+            if r.status_code not in (200, 201):
+                logger.warning(
+                    "discord_message_create_failed",
+                    extra={"event": "discord_message_create_failed", "status": r.status_code, "body": r.text[:256]}
+                )
+                return None
+
+            message_data = r.json()
+            message_id = message_data.get("id")
+
+            if not message_id:
+                logger.warning("discord_message_no_id", extra={"event": "discord_message_no_id"})
+                return None
+
+            # Create a thread from the message
+            thread_payload = {"name": thread_name[:100], "auto_archive_duration": 1440}  # 24 hours
+            r = await client.post(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/threads",
+                headers=headers,
+                json=thread_payload
+            )
+
+            if r.status_code not in (200, 201):
+                logger.warning(
+                    "discord_thread_create_failed",
+                    extra={"event": "discord_thread_create_failed", "status": r.status_code, "body": r.text[:256]}
+                )
+                return None
+
+            thread_data = r.json()
+            thread_id = thread_data.get("id")
+
+            if thread_id:
+                logger.info("discord_thread_created", extra={"event": "discord_thread_created", "thread_id": thread_id, "name": thread_name})
+
+            return thread_id
+
+        except Exception as exc:
+            logger.warning("discord_thread_create_exception", extra={"event": "discord_thread_create_exception", "error": str(exc)})
+            return None
+
+
+async def _post_to_discord_thread(thread_id: str, content: Optional[str] = None, embeds: Optional[list] = None) -> bool:
+    """Post a message to an existing Discord thread."""
+    if not DISCORD_BOT_TOKEN or not thread_id:
+        logger.warning("discord_thread_post_skipped", extra={"event": "discord_thread_post_skipped", "reason": "missing_bot_token_or_thread_id"})
+        return False
+
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {}
+    if content:
+        payload["content"] = content
+    if embeds:
+        payload["embeds"] = embeds
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            r = await client.post(
+                f"https://discord.com/api/v10/channels/{thread_id}/messages",
+                headers=headers,
+                json=payload
+            )
+
+            if r.status_code in (200, 201):
+                return True
+
+            logger.warning(
+                "discord_thread_post_failed",
+                extra={"event": "discord_thread_post_failed", "status": r.status_code, "body": r.text[:256]}
+            )
+            return False
+
+        except Exception as exc:
+            logger.warning("discord_thread_post_exception", extra={"event": "discord_thread_post_exception", "error": str(exc)})
+            return False
+
 
 async def _post_discord(content: Optional[str], embeds: Optional[list] = None, retries: int = 3):
     if not DISCORD_WEBHOOK_URL:
@@ -419,6 +589,119 @@ async def _post_discord(content: Optional[str], embeds: Optional[list] = None, r
     _webhook_counters["discord_webhook_failures"] += 1
     return False
 
+
+def _decode_publish_file(obj: Any) -> Optional[dict]:
+    """
+    Accept a small file payload for webhook attachment.
+
+    Shape:
+      {
+        "name": "voice.wav",
+        "content_type": "audio/wav",
+        "content_b64": "..."
+      }
+    """
+    if not isinstance(obj, dict):
+        return None
+    name = obj.get("name") or obj.get("filename")
+    content_b64 = obj.get("content_b64") or obj.get("b64")
+    content_type = obj.get("content_type") or obj.get("type") or "application/octet-stream"
+    if not isinstance(name, str) or not name.strip():
+        return None
+    if not isinstance(content_b64, str) or not content_b64.strip():
+        return None
+    try:
+        # Be strict: reject malformed base64 rather than silently producing tiny/garbled files.
+        cleaned = re.sub(r"\s+", "", content_b64.strip())
+        raw = base64.b64decode(cleaned.encode("ascii"), validate=True)
+    except Exception:
+        return None
+    # Discord webhooks: 8MB typical limit; keep tighter to avoid noisy failures.
+    if len(raw) == 0 or len(raw) > 7_500_000:
+        return None
+    # Guard against "success" uploads that are effectively empty (e.g. bad base64 decoded as a few bytes).
+    if str(content_type).lower().startswith("audio/") and len(raw) < 1024:
+        return None
+    return {"name": name.strip(), "content_type": str(content_type), "bytes": raw}
+
+
+async def _post_discord_with_file(
+    content: Optional[str],
+    embeds: Optional[list],
+    file_name: str,
+    file_bytes: bytes,
+    file_content_type: str,
+    retries: int = 3,
+) -> bool:
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning("discord_webhook_missing", extra={"event": "discord_webhook_missing"})
+        _webhook_counters["discord_webhook_missing"] += 1
+        return False
+
+    payload = {"username": DISCORD_USERNAME}
+    if DISCORD_AVATAR_URL:
+        payload["avatar_url"] = DISCORD_AVATAR_URL
+    if content:
+        payload["content"] = content
+    if embeds:
+        payload["embeds"] = embeds
+
+    # Discord expects multipart with payload_json + files[0]
+    data = {"payload_json": json.dumps(payload)}
+    files = {"files[0]": (file_name, file_bytes, file_content_type)}
+
+    backoff = 1.0
+    async with httpx.AsyncClient(timeout=30) as client:
+        for attempt in range(max(1, retries)):
+            try:
+                r = await client.post(DISCORD_WEBHOOK_URL, data=data, files=files)
+            except Exception as exc:
+                logger.warning(
+                    "discord_webhook_exception",
+                    extra={
+                        "event": "discord_webhook_exception",
+                        "error": str(exc),
+                        "attempt": attempt + 1,
+                    },
+                )
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2.0, 8.0)
+                continue
+            if r.status_code in (200, 204):
+                _webhook_counters["discord_webhook_success"] += 1
+                return True
+            if r.status_code == 429:
+                try:
+                    ra = float(r.headers.get("Retry-After", backoff))
+                except Exception:
+                    ra = backoff
+                await asyncio.sleep(ra)
+                backoff = min(backoff * 2.0, 8.0)
+                continue
+            if 500 <= r.status_code < 600:
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2.0, 8.0)
+                continue
+            logger.warning(
+                "discord_webhook_failed",
+                extra={
+                    "event": "discord_webhook_failed",
+                    "status_code": r.status_code,
+                    "attempt": attempt + 1,
+                    "body": r.text[:256],
+                },
+            )
+            _webhook_counters["discord_webhook_failures"] += 1
+            return False
+
+    logger.warning(
+        "discord_webhook_failed",
+        extra={"event": "discord_webhook_failed", "status_code": None, "attempt": retries},
+    )
+    _webhook_counters["discord_webhook_failures"] += 1
+    return False
+
+
 def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     name = name.strip()
     emb = {"title": name, "fields": []}
@@ -428,6 +711,11 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         "ingest.summary.ready.v1": 0xf59e0b,
         "ingest.chapters.ready.v1": 0x8b5cf6,
         "content.published.v1": 0x22c55e,
+        # CHIT / ToKenism colors (teal/cyan spectrum)
+        "tokenism.attribution.recorded.v1": 0x00d4aa,
+        "tokenism.cgp.weekly.v1": 0x06b6d4,
+        "tokenism.cgp.ready.v1": 0x0891b2,
+        "tokenism.swarm.population.v1": 0x14b8a6,
     }
     emb["color"] = color_map.get(name, 0x94a3b8)  # default slate-400
     thumb = _pick_thumbnail(payload)
@@ -570,6 +858,57 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
                     )
             else:
                 emb["fields"].append({"name": "Summary", "value": summary_text[:1024], "inline": False})
+    # CHIT / ToKenism event handlers
+    elif name == "tokenism.attribution.recorded.v1":
+        chit_id = payload.get("chit_id") or payload.get("chitId")
+        emb["title"] = f"Attribution Recorded: {chit_id}"
+        if payload.get("address"):
+            emb["fields"].append({"name": "Address", "value": f"`{payload['address']}`", "inline": True})
+        if payload.get("action"):
+            emb["fields"].append({"name": "Action", "value": str(payload["action"]), "inline": True})
+        if payload.get("amount") is not None:
+            emb["fields"].append({"name": "Amount", "value": f"${payload['amount']:,.2f}", "inline": True})
+        if payload.get("week") is not None:
+            emb["fields"].append({"name": "Week", "value": str(payload["week"]), "inline": True})
+        if payload.get("merkle_root"):
+            emb["fields"].append({"name": "Merkle Root", "value": f"`{payload['merkle_root'][:16]}...`", "inline": False})
+    elif name == "tokenism.cgp.weekly.v1":
+        week = payload.get("week")
+        emb["title"] = f"ToKenism Week {week} CGP Ready"
+        emb["description"] = f"New CGP packet with {payload.get('super_node_count', 0)} super nodes generated."
+        if payload.get("gini") is not None:
+            emb["fields"].append({"name": "Gini", "value": f"{payload['gini']:.4f}", "inline": True})
+        if payload.get("poverty_rate") is not None:
+            emb["fields"].append({"name": "Poverty Rate", "value": f"{payload['poverty_rate']*100:.1f}%", "inline": True})
+        if payload.get("total_wealth") is not None:
+            emb["fields"].append({"name": "Total Wealth", "value": f"${payload['total_wealth']:,.0f}", "inline": True})
+        if payload.get("total_attributions") is not None:
+            emb["fields"].append({"name": "Attributions", "value": str(payload["total_attributions"]), "inline": True})
+        if payload.get("cgp_spec"):
+            emb["fields"].append({"name": "Spec", "value": f"`{payload['cgp_spec']}`", "inline": True})
+    elif name == "tokenism.cgp.ready.v1":
+        emb["title"] = "CGP Packet Ready"
+        emb["description"] = "CHIT Geometry Packet available for consumption."
+        if payload.get("week"):
+            emb["fields"].append({"name": "Week", "value": str(payload["week"]), "inline": True})
+        if payload.get("super_node_count"):
+            emb["fields"].append({"name": "Super Nodes", "value": str(payload["super_node_count"]), "inline": True})
+    elif name == "tokenism.swarm.population.v1":
+        pop_name = payload.get("name") or payload.get("population_id")
+        emb["title"] = f"Swarm Population: {pop_name}"
+        emb["description"] = "ToKenism swarm optimization update."
+        if payload.get("generations"):
+            emb["fields"].append({"name": "Generations", "value": str(payload["generations"]), "inline": True})
+        if payload.get("best_fitness") is not None:
+            emb["fields"].append({"name": "Best Fitness", "value": f"{payload['best_fitness']:.4f}", "inline": True})
+        if payload.get("avg_fitness") is not None:
+            emb["fields"].append({"name": "Avg Fitness", "value": f"{payload['avg_fitness']:.4f}", "inline": True})
+        if payload.get("fitness_improvement") is not None:
+            imp = payload["fitness_improvement"]
+            sign = "+" if imp > 0 else ""
+            emb["fields"].append({"name": "Improvement", "value": f"{sign}{imp:.4f}", "inline": True})
+        if payload.get("optimization_target"):
+            emb["fields"].append({"name": "Target", "value": str(payload["optimization_target"]), "inline": True})
     else:
         desc = json.dumps(payload)[:1800]
         emb["description"] = f"```json\n{desc}\n```"
@@ -746,14 +1085,28 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
 
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):
+    """Test endpoint for publishing messages to Discord webhook."""
     content = body.get("content") or "PMOVES test message"
     embeds = body.get("embeds")
+    raw_file = body.get("file")
+    file_obj = _decode_publish_file(raw_file)
+    if raw_file is not None and file_obj is None:
+        raise HTTPException(400, "invalid file payload (expected base64 content)")
     if _nc is None:
         logger.warning(
             "nats_publish_skipped",
             extra={"event": "nats_publish_skipped", "reason": "nats_client_none"},
         )
-    ok = await _post_discord(content, embeds)
+    if file_obj:
+        ok = await _post_discord_with_file(
+            content,
+            embeds,
+            file_name=file_obj["name"],
+            file_bytes=file_obj["bytes"],
+            file_content_type=file_obj["content_type"],
+        )
+    else:
+        ok = await _post_discord(content, embeds)
     if not ok:
         raise HTTPException(502, "discord webhook failed")
     return {"ok": True}

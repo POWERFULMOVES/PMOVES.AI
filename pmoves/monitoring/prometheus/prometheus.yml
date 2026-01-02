@@ -31,9 +31,11 @@ scrape_configs:
     static_configs:
       - targets: ["flute-gateway:8055"]
 
-  - job_name: tensorzero-gateway
-    static_configs:
-      - targets: ["tensorzero-gateway:3000"]
+  # DISABLED: TensorZero gateway doesn't expose /metrics endpoint
+  # Use ClickHouse metrics instead via TensorZero UI
+  # - job_name: tensorzero-gateway
+  #   static_configs:
+  #     - targets: ["tensorzero-gateway:3000"]
 
   - job_name: deepresearch-metrics
     static_configs:
@@ -67,7 +69,7 @@ scrape_configs:
 
   - job_name: archon
     static_configs:
-      - targets: ["archon:8181"]
+      - targets: ["archon:8091"]
 
   # === Tier 3 Services (Added 2025-12-24) ===
 
@@ -91,20 +93,8 @@ scrape_configs:
     static_configs:
       - targets: ["presign:8088"]
 
-  # === Tier 4 Services (Added 2025-12-25) ===
-
-  - job_name: render-webhook
-    static_configs:
-      - targets: ["render-webhook:8085"]
-
-  - job_name: session-context-worker
-    static_configs:
-      - targets: ["session-context-worker:8100"]
-
-  - job_name: messaging-gateway
-    static_configs:
-      - targets: ["messaging-gateway:8101"]
-
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened
   # === Blackbox HTTP probes ===
   # Health check probes for services without /metrics
 
@@ -114,11 +104,11 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://host.docker.internal:8080/healthz       # agent-zero
+          - http://host.docker.internal:8080/healthz        # agent-zero
           - http://host.docker.internal:8086/              # hi-rag v2 CPU
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://host.docker.internal:8088/healthz        # presign
-          - http://host.docker.internal:8181/health         # archon
+          - http://host.docker.internal:8091/healthz        # archon
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:8055/healthz        # flute-gateway

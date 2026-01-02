@@ -15,8 +15,9 @@ test.describe('Services dashboard', () => {
     await page.goto('/dashboard/services');
     await expect(page.getByRole('heading', { name: /integration services/i })).toBeVisible();
 
+    // Use .first() since new design has multiple links per service (card + quick links)
     for (const service of SERVICES) {
-      await expect(page.getByRole('link', { name: new RegExp(service.title, 'i') })).toBeVisible();
+      await expect(page.getByRole('link', { name: new RegExp(service.title, 'i') }).first()).toBeVisible();
     }
   });
 
