@@ -86,6 +86,10 @@
     "geometry.cgp.v1": {
       "schema": "schemas/geometry/cgp.v1.schema.json"
     },
+    "geometry.cgp.v2": {
+      "schema": "schemas/geometry/cgp.v2.schema.json",
+      "description": "CHIT Geometry Packet v2 with attribution, Merkle proofs, and hyperbolic encoding"
+    },
     "geometry.swarm.meta.v1": {
       "schema": "schemas/geometry/swarm.meta.v1.schema.json"
     },
