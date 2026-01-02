@@ -68,7 +68,7 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Request: `{"query": "...", "top_k": 10, "rerank": true}`
 - **Use for:** Knowledge retrieval, semantic search, RAG queries
 
-**Hi-RAG Gateway v1** [Port 8089 CPU, 8090 GPU] **[LEGACY]**
+**Hi-RAG Gateway v1** [Port 8089 CPU, 8110 GPU] **[LEGACY]**
 - Original hybrid RAG implementation
 - Use v2 instead for new features
 
@@ -89,6 +89,24 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Knowledge base / note-taking integration
 - Access via `OPEN_NOTEBOOK_API_URL` + API token
 - Used by DeepResearch for persistent storage
+
+### Voice & Speech Services
+
+**Flute-Gateway** [Port 8055 HTTP, 8056 WebSocket]
+- Multimodal voice communication layer with Pipecat integration
+- Prosodic synthesis with natural pauses and emphasis
+- WebSocket streaming for real-time audio
+- API: `POST http://localhost:8055/v1/voice/synthesize/prosodic`
+- Health: `GET http://localhost:8055/healthz`
+- **Use for:** TTS synthesis, real-time voice sessions, audio streaming
+- **See:** `.claude/context/flute-gateway.md` for API reference
+
+**Ultimate-TTS-Studio** [Port 7861]
+- Multi-engine TTS with 7 engines (Kokoro, F5-TTS, KittenTTS, VoxCPM, etc.)
+- Gradio web interface for interactive synthesis
+- GPU-accelerated (CUDA 12.4)
+- Health: `GET http://localhost:7861/gradio_api/info`
+- **Use for:** High-quality TTS, voice cloning, multi-language synthesis
 
 ### Media Ingestion & Processing
 
@@ -321,27 +339,104 @@ docker compose --profile agents --profile workers up -d
 
 ## Git & CI Patterns
 
-**Submodules:**
-- `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES.YT`
-- `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Supaserch`
-- Plus health/wealth integrations
+**Submodules (25 total):**
+- Core: `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES-BoTZ`, `PMOVES.YT`
+- RAG/Research: `PMOVES-HiRAG`, `PMOVES-Deep-Serch`, `PMOVES-Open-Notebook`
+- Media: `PMOVES-Jellyfin`, `PMOVES-Ultimate-TTS-Studio`, `PMOVES-Pipecat`
+- Integration: `PMOVES-tensorzero`, `PMOVES-n8n`, `PMOVES-ToKenism-Multi`
+- Plus health/wealth integrations and more
+- **See:** `.claude/context/submodules.md` for complete catalog
+
+**Security Posture (as of 2025-12-23):**
+- CODEOWNERS: 24/24 (100%) - All submodules have code owners
+- Dependabot: 24/24 (100%) - All submodules have automated security updates
+- **See:** `.claude/learnings/submodule-security-audit-2025-12.md`
 
 **CI/CD:**
 - GitHub Actions for multi-arch builds (amd64, arm64)
+- Self-hosted runners: ai-lab (GPU), vps (CPU), cloudstartup (staging), kvm4 (production)
 - Published to GHCR + Docker Hub
 - Smoke tests via `make verify-all`
+- **See:** `.claude/context/ci-runners.md` for runner deployment
 
 **Branch Strategy:**
 - Main branch: `main`
 - Feature branches: `feature/*`
+- Hardened branches: `PMOVES.AI-Edition-Hardened` (in submodules)
 - PR target: `main`
+
+## Testing Workflow
+
+### Before PR Submission
+1. Run `/test:pr` to execute standard test suite
+2. Copy generated Testing section to PR description
+3. Ensure docstring coverage ≥80% on new/modified Python code
+
+### Test Commands
+| Command | Description |
+|---------|-------------|
+| `cd pmoves && make verify-all` | Full verification (smoke tests, health checks) |
+| `/health:check-all` | Check all service health endpoints |
+| `/test:pr` | PR testing workflow with documentation |
+| `/deploy:smoke-test` | Deployment smoke tests |
+| `pytest pmoves/tests/` | Integration tests |
+
+### CI Requirements
+- **CodeQL Analysis** - Security scanning (must pass)
+- **CHIT Contract Check** - Schema validation (must pass)
+- **SQL Policy Lint** - Migration validation (must pass)
+- **CodeRabbit Review** - Docstring coverage ≥80%
+
+See `.claude/context/testing-strategy.md` for detailed testing guidelines.
+
+## UI Development Checklist
+
+Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2025.md`):
+
+### Security
+- [ ] User identity from JWT only, never from request body/query params
+- [ ] Proper base64url decoding for JWT payloads (`-` → `+`, `_` → `/`)
+- [ ] No query parameter fallbacks that bypass authentication
+
+### Privacy
+- [ ] No PII (userId, email) in error logging interfaces
+- [ ] Use `logError()` not raw `console.error` for production
+- [ ] Generic user-facing error messages with digest IDs for support
+
+### Accessibility (WCAG 2.1)
+- [ ] Skip links as first focusable element (`sr-only focus:not-sr-only` pattern)
+- [ ] Skip link target has `tabIndex={-1}` for programmatic focus
+- [ ] ARIA live regions: `assertive` (critical errors) / `polite` (normal errors)
+- [ ] Tailwind classes statically analyzable (use lookup objects, not interpolation)
+
+### Code Quality
+- [ ] Consistent error response shapes: `{ok, error}` or `{items, error}`
+- [ ] HTTP status codes: 401 (auth failure), 400 (bad request), 500 (server error)
+- [ ] Shared utilities extracted (no duplicate functions like `ownerFromJwt`)
+- [ ] Unused imports removed
 
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
 - `services-catalog.md` - Complete service listing with all details
+- `submodules.md` - Complete submodules catalog (25 submodules)
+- `ci-runners.md` - Self-hosted runner deployment and configuration
 - `nats-subjects.md` - Comprehensive NATS subject catalog
+- `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference
+- `testing-strategy.md` - Testing workflow and PR requirements
+
+**GEOMETRY BUS & CHIT Integration:**
+- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
+- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
+- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
+- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
+
+**GEOMETRY BUS & CHIT Integration:**
+- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
+- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
+- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
+- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
 ## Meta-Instruction for Claude Code CLI
 
@@ -351,5 +446,6 @@ When developing features for PMOVES.AI:
 3. **Expose health/metrics** - Follow observability patterns
 4. **Check health first** - Always verify service status before use
 5. **Consult context docs** - Reference `.claude/context/` for details
+6. **Test before PR** - Run `/test:pr` and document results
 
 PMOVES.AI is a sophisticated production system. Your role is to build features that integrate with this ecosystem, not replace it.

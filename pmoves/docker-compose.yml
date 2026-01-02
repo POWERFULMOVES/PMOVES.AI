@@ -1,7 +1,5 @@
-# =============================================================================
 # PMOVES Tier-Based Environment File Anchors
 # Each tier receives ONLY the secrets it needs (principle of least privilege)
-# =============================================================================
 x-env-tier-data: &env-tier-data
   env_file:
     - path: env.tier-data
@@ -44,11 +42,17 @@ x-env-tier-llm: &env-tier-llm
     - path: .env.local
       required: false
 
+x-env-tier-ui: &env-tier-ui
+  env_file:
+    - path: env.tier-ui
+      required: false
+    - path: .env.local
+      required: false
+
 # Legacy: Full env for services not yet migrated to tier-based
 x-env-legacy: &env-legacy
   env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
 
-# =============================================================================
 services:
   postgres:
     image: ankane/pgvector
@@ -121,7 +125,7 @@ services:
     profiles: [ "data", "qdrant-local" ]
     networks: [ data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:6333/readyz" ]
+      test: [ "CMD-SHELL", "timeout 5 bash -c ':> /dev/tcp/127.0.0.1/6333' && echo OK || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -132,11 +136,12 @@ services:
     <<: *env-tier-data
     environment:
       - MEILI_ENV=production
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     ports: [ "7700:7700" ]
     profiles: [ "data", "meili-local" ]
     networks: [ data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:7700/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:7700/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -164,8 +169,8 @@ services:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     ports: [ "9000:9000", "9001:9001" ]
     volumes:
       - minio-data:/data
@@ -211,7 +216,7 @@ services:
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -233,7 +238,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8090/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -255,7 +260,7 @@ services:
     profiles: [ "data", "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -277,7 +282,7 @@ services:
       - "postgrest:host-gateway"
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8085/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -338,7 +343,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8083/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -368,7 +373,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -399,7 +404,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8084/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -429,7 +434,7 @@ services:
     ports: [ "8095:8095" ]
     profiles: [ "workers", "orchestration" ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8095/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -454,7 +459,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8100/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -482,7 +487,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ bus_tier, data_tier, monitoring_tier, supabase_net ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8102/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8102/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -556,7 +561,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8055/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -591,6 +596,8 @@ services:
       - NEXT_PUBLIC_PRESIGN_URL=${NEXT_PUBLIC_PRESIGN_URL:-http://localhost:8088}
       - NEXT_PUBLIC_PMOVES_YT_BASE_URL=${NEXT_PUBLIC_PMOVES_YT_BASE_URL:-http://localhost:8077}
       - NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL=${NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL:-http://localhost:8097/api/monitor/stats}
+      # Token Economy Simulation
+      - NEXT_PUBLIC_TOKENISM_URL=${NEXT_PUBLIC_TOKENISM_URL:-http://localhost:8103}
       # Monitoring Stack
       - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3002}
       - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
@@ -600,6 +607,7 @@ services:
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:8503}
+      - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
@@ -638,7 +646,7 @@ services:
     profiles: [ "workers", "orchestration", "agents" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8078/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8078/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -669,7 +677,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8079/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8079/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -698,7 +706,7 @@ services:
     profiles: [ "workers", "orchestration" ]
     networks: [ app_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8082/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -737,7 +745,7 @@ services:
     profiles: [ "orchestration", "workers", "agents" ]
     networks: [ api_tier, app_tier, bus_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8077/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8077/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -751,7 +759,7 @@ services:
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, app_tier ] # api_tier added for external DNS/googleapis access
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:4416/healthz" ]
+      test: [ "CMD-SHELL", "timeout 5 bash -c ':> /dev/tcp/127.0.0.1/4416' && echo OK || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -764,7 +772,6 @@ services:
     environment:
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
-      # CHANNEL_MONITOR_DATABASE_URL is provided via env_file (env.shared)
       - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     volumes:
       - ./config:/app/config
@@ -779,7 +786,7 @@ services:
     profiles: [ "orchestration", "yt" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8097/api/monitor/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/api/monitor/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -834,7 +841,7 @@ services:
         condition: service_healthy
     networks: [ app_tier, data_tier, api_tier, monitoring_tier, supabase_net ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -889,7 +896,7 @@ services:
         required: false
     networks: [ app_tier, data_tier, api_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -906,7 +913,7 @@ services:
         TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
     runtime: nvidia
     restart: unless-stopped
-    command: [ "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086" ]
+    command: [ "python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086" ]
     <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
@@ -968,7 +975,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8086/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1007,7 +1014,7 @@ services:
               count: 1
               capabilities: [ gpu ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8200/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1018,9 +1025,9 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
-    command: [ "-js", "-m", "8222" ]
+    command: [ "-js", "-m", "8222", "-ws", "-ws_port", "4223" ]
     restart: unless-stopped
-    ports: [ "4222:4222" ]
+    ports: [ "4222:4222", "9223:4223" ]
     profiles: [ "agents", "orchestration", "workers" ]
     networks: [ bus_tier, monitoring_tier ]
     healthcheck:
@@ -1046,7 +1053,12 @@ services:
       - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
       # Open Notebook API for notebook.search MCP command (host.docker.internal for container-to-host)
       - OPEN_NOTEBOOK_API_URL=http://host.docker.internal:5055
-    depends_on: [nats]
+      # E2B Configuration for E2B MCP tools (e2b.sandbox.create, e2b.desktop.create, etc.)
+      - E2B_MCP_SERVER_URL=${E2B_MCP_SERVER_URL:-http://e2b-mcp-server:7073}
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+    depends_on: [nats, e2b-mcp-server]
     # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
     # and keep 8080 mapped for the API when enabled by the runtime.
     ports: [ "8080:8080", "8081:80" ]
@@ -1063,7 +1075,7 @@ services:
     profiles: [ "agents" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1192,6 +1204,44 @@ services:
       retries: 12
       start_period: 15s
 
+  # Gateway Agent: Orchestrates 100+ MCP tools via Agent Zero MCP API
+  gateway-agent:
+    build: ./services/gateway-agent
+    restart: unless-stopped
+    env_file:
+      - path: env.tier-agent
+        required: false
+      - path: .env.local
+        required: false
+      - env.shared
+      - .env.generated
+    environment:
+      - PORT=8100
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+      - CIPHER_URL=${CIPHER_URL:-http://pmoves-botz-cipher:8000}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+      # API Keys loaded from env.shared via env_file
+    ports:
+      - "8100:8100"
+    depends_on:
+      agent-zero:
+        condition: service_healthy
+    profiles: [ "agents", "gateway" ]
+    networks:
+      api_tier:
+      bus_tier:
+      data_tier:
+      monitoring_tier:
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # E2B Sandbox Runner: Isolated code execution environment
   pmz-e2b-runner:
     build:
@@ -1231,7 +1281,7 @@ services:
   #   profiles: [ "botz", "mcp" ]
   #   networks: [ api_tier, app_tier ]
   #   healthcheck:
-  #     test: [ "CMD", "curl", "-sf", "http://localhost:8811/health" ]
+  #     test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8811/health', timeout=5)" ]
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3
@@ -1255,6 +1305,33 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  a2ui-nats-bridge:
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+      - PORT=9224
+    ports: [ "9224:9224" ]
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: [ "agents", "orchestration" ]
+    networks: [ api_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
 
   deepresearch:
     build:
@@ -1289,7 +1366,31 @@ services:
       - ./contracts:/app/contracts:ro
     networks: [ app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8098/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  github-runner-ctl:
+    build: ./services/github-runner-ctl
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - PORT=${GITHUB_RUNNER_CTL_PORT:-8104}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
+      - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
+      - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
+      - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
+    depends_on: [ nats ]
+    ports: [ "8104:8104" ]
+    volumes:
+      - ./services/github-runner-ctl/config:/app/config:ro
+    profiles: [ "orchestration", "workers" ]
+    networks: [ api_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1311,7 +1412,7 @@ services:
     profiles: [ "agents", "workers" ]
     networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8099/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1353,6 +1454,13 @@ services:
     depends_on: [ nats ]
     profiles: [ "agents", "diag" ]
     networks: [ bus_tier ]
+    healthcheck:
+      # Verify module imports and NATS client is available (no HTTP endpoint)
+      test: [ "CMD", "python", "-c", "import nats_echo; import nats" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   nats-echo-res:
     build:
@@ -1366,13 +1474,27 @@ services:
     depends_on: [ nats ]
     profiles: [ "agents", "diag" ]
     networks: [ bus_tier ]
+    healthcheck:
+      # Verify module imports and NATS client is available (no HTTP endpoint)
+      test: [ "CMD", "python", "-c", "import nats_echo; import nats" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   publisher-discord:
     build:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    <<: *env-tier-agent
+    # env.tier-agent and .env.local are optional for local overrides.
+    # DISCORD_WEBHOOK_URL is validated at startup (logs warning if missing).
+    env_file:
+      - path: env.tier-agent
+        required: false
+      - path: .env.local
+        required: false
+      - env.shared
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,claude.code.session.start.v1,claude.code.session.context.v1,claude.code.session.end.v1}
@@ -1381,7 +1503,7 @@ services:
     profiles: [ "orchestration", "agents" ]
     networks: [ app_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8092/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1399,11 +1521,73 @@ services:
     profiles: [ "workers" ]
     networks: [ api_tier, bus_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8101/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # PMOVES Tokenism Simulator
+  # Token economy simulation service with CHIT/Geometry Bus integration
+  tokenism-simulator:
+    build:
+      context: ./services/tokenism-simulator
+      dockerfile: Dockerfile
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
+      - TOKENISM_PORT=${TOKENISM_PORT:-8100}
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_CLIENT_NAME=tokenism-simulator
+      - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - TENSORZERO_MODEL=${TENSORZERO_MODEL:-claude-sonnet-4-5}
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
+      - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
+      - CHIT_ENABLED=${CHIT_ENABLED:-true}
+      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:4222}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports: [ "${TOKENISM_HOST_PORT:-8103}:8100" ]
+    profiles: [ "agents", "orchestration" ]
+    depends_on: [ nats, postgrest ]
+    networks: [ api_tier, app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # PMOVES Tokenism UI (from ToKenism-Multi submodule)
+  # Interactive dashboard for token economy simulation
+  # Built with Next.js, Recharts for visualization
+  tokenism-ui:
+    build:
+      context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
+      dockerfile: Dockerfile
+    image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
+    restart: unless-stopped
+    <<: *env-tier-ui
+    environment:
+      - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
+      - NODE_ENV=production
+      - PORT=8504
+    ports: [ "${TOKENISM_UI_HOST_PORT:-8504}:8504" ]
+    profiles: [ "ui", "orchestration" ]
+    depends_on: [ tokenism-simulator ]
+    networks: [ app_tier, api_tier ]
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8504" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
@@ -1416,7 +1600,7 @@ services:
     profiles: [ "orchestration" ]
     networks: [ api_tier, data_tier, monitoring_tier, cataclysm ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8093/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1446,7 +1630,7 @@ services:
       api_tier:
         aliases: [ ollama ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:11434/api/tags" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11434/api/tags', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1473,7 +1657,7 @@ services:
     networks: [ data_tier, monitoring_tier ]
 
   tensorzero-gateway:
-    image: tensorzero/gateway:2024.12.18
+    image: tensorzero/gateway:2025.12.6
     restart: unless-stopped
     command: [ "--config-file", "/app/config/tensorzero.toml" ]
     <<: *env-tier-llm
@@ -1484,6 +1668,9 @@ services:
       - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://host.docker.internal:4317
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TENSORZERO_PG_USER=${TENSORZERO_PG_USER:-tensorzero}
+      - TENSORZERO_PG_PASSWORD=${TENSORZERO_PG_PASSWORD}
+      - TENSORZERO_PG_DB=${TENSORZERO_PG_DB:-tensorzero}
     volumes:
       - ./tensorzero/config:/app/config:ro
     depends_on:
@@ -1495,14 +1682,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:3000/health" ]
+      test: [ "CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
   tensorzero-ui:
-    image: tensorzero/ui:2024.12.18
+    image: tensorzero/ui:2025.12.6
     restart: unless-stopped
     <<: *env-tier-llm
     environment:
@@ -1521,7 +1708,7 @@ services:
     profiles: [ "tensorzero" ]
     networks: [ api_tier, data_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:4000/" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1566,10 +1753,13 @@ services:
       - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
       - "${INVIDIOUS_COMPANION_LISTEN:-127.0.0.1:8282}:8282"
-    # The upstream image does not ship common shell utilities (wget/curl),
-    # so docker-level health checks misreport the service as unhealthy even
-    # when the /healthz endpoint is serving 200s. Rely on the invidious smoke
-    # target for runtime verification instead.
+    # Health check using Node.js http module (no curl/wget in upstream image)
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:8282/healthz', r => r.statusCode === 200 ? process.exit(0) : process.exit(1))" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     profiles: [ "invidious" ]
     networks: [ app_tier, monitoring_tier ]
 
@@ -1631,7 +1821,7 @@ services:
     profiles: [ "grayjay" ]
     networks: [ api_tier ]
     healthcheck:
-      test: [ "CMD", "curl", "-sf", "http://localhost:8080/healthz" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1682,6 +1872,13 @@ services:
       - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
     profiles: [ "cloudflare" ]
     networks: [ api_tier ]
+    healthcheck:
+      # Check if cloudflared tunnel process is running (minimal image, no curl/wget)
+      test: [ "CMD-SHELL", "pgrep -x cloudflared" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   invidious-companion-proxy:
     build: ./services/invidious-companion-proxy
@@ -1692,6 +1889,94 @@ services:
     ports: [ "8281:80" ]
     profiles: [ "invidious" ]
     networks: [ api_tier, app_tier ]
+    healthcheck:
+      # Check nginx is serving the status endpoint
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:80/api/v1/status | grep -q ok" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # E2B Agentic Computer Use Services
+  # E2B MCP Server - Model Context Protocol bridge for E2B code execution
+  # Provides tools to Agent Zero for secure code execution in E2B sandboxes
+  e2b-mcp-server:
+    build:
+      context: ./docker/e2b-mcp-server
+      dockerfile: Dockerfile
+      args:
+        E2B_MCP_BRANCH: PMOVES.AI-Edition-Hardened
+    image: pmoves-e2b-mcp-server:hardened
+    container_name: pmoves-e2b-mcp-server
+    hostname: e2b-mcp-server
+    restart: unless-stopped
+    <<: *env-tier-llm
+    environment:
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_DESKTOP_AUTH_TOKEN=${E2B_DESKTOP_AUTH_TOKEN:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NODE_ENV=production
+      - MCP_SERVER_PORT=7073
+    # stdin_open and tty for Node.js MCP stdio transport
+    stdin_open: true
+    tty: true
+    # No exposed ports - MCP communicates via stdio to Agent Zero
+    # Health check via process presence
+    healthcheck:
+      test: [ "CMD-SHELL", "node --version && test -f /app/build/index.js" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    profiles: [ "e2b", "agents" ]
+    networks: [ bus_tier, api_tier, monitoring_tier ]
+    # Security hardening (read-only fs for distroless base)
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
+  # E2B Surf - Web interface for agentic computer use with OpenAI Computer Use
+  # Next.js application providing virtual desktop control via natural language
+  e2b-surf:
+    build:
+      context: ./docker/e2b-surf
+      dockerfile: Dockerfile
+      args:
+        E2B_SURF_BRANCH: PMOVES.AI-Edition-Hardened
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    image: pmoves-e2b-surf:hardened
+    container_name: pmoves-e2b-surf
+    hostname: e2b-surf
+    restart: unless-stopped
+    <<: *env-tier-api
+    environment:
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - E2B_SANDBOX_URL=${E2B_SANDBOX_URL:-http://e2b-sandbox:7070}
+      - E2B_DESKTOP_URL=${E2B_DESKTOP_URL:-http://e2b-desktop:6080}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3080}
+      - NODE_ENV=production
+      - PORT=3000
+    ports: [ "3080:3000" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles: [ "e2b", "ui" ]
+    networks: [ api_tier, app_tier, monitoring_tier ]
+    # Next.js needs writable cache for build
+    volumes:
+      - e2b-surf-cache:/app/.next:rw
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
 volumes:
   neo4j-data: {}
   minio-data: {}
@@ -1707,6 +1992,7 @@ volumes:
   archon-worktrees: {}
   ultimate-tts-checkpoints: {}
   ultimate-tts-outputs: {}
+  e2b-surf-cache: {}
 networks:
   # 5-Tier Network Architecture for Defense in Depth
   api_tier:
@@ -1756,4 +2042,4 @@ networks:
   # Enables services to connect directly to supabase_realtime without host.docker.internal
   supabase_net:
     external: true
-    name: pmoves-net
+    name: supabase_network_PMOVES.AI
