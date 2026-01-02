@@ -67,7 +67,7 @@ export function DashboardNavigation({ active }: DashboardNavigationProps) {
     String(process.env.NEXT_PUBLIC_SINGLE_USER_MODE || process.env.SINGLE_USER_MODE || '1') === '1';
 
   return (
-    <nav className="flex flex-wrap items-center gap-2">
+    <nav aria-label="Dashboard navigation" className="flex flex-wrap items-center gap-2">
       {NAV_ITEMS.map((item) => {
         const isActive = item.key === active || pathname === item.href;
         const accent = item.accent ? accentColors[item.accent] : '';
