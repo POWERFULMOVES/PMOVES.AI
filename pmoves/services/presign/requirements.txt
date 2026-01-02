@@ -1,5 +1,5 @@
-fastapi==0.112.1
-uvicorn[standard]==0.30.6
-boto3==1.34.159
-python-multipart==0.0.18
-pydantic==2.8.2
+# Prometheus metrics
+prometheus-client==0.21.0 \
+    --hash=sha256:4fa6b4dd0ac16d58bb587c04b1caae65b8c5043e85f778f42f5f632f6af2e166
+
+-r requirements.lock
