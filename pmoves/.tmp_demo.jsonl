@@ -1,2 +1,0 @@
-{"chunk_id":"demo-1","namespace":"pmoves","text":"PMOVES is a hybrid RAG stack combining Qdrant, Meilisearch, and reranker fusion."}
-{"chunk_id":"demo-2","namespace":"pmoves","text":"The gateway supports cosine embeddings and optional graph boosts from Neo4j entities."}

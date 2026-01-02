@@ -1,9 +1,0 @@
-{
-  "payload": {
-    "prompt": "Outline the PMOVES deep research service roadmap",
-    "context": ["Focus on milestones from ROADMAP.md"],
-    "metadata": {
-      "request_id": "R-0001"
-    }
-  }
-}
