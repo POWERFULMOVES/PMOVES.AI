@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2025-12-14_
+_Last updated: 2026-01-02_
 
 ## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
@@ -74,6 +74,7 @@ Next 48 hours
 - [ ] SupaSerch orchestration: persist aggregated results (DeepResearch, Archon, geometry) into Supabase and publish telemetry panels.
 
 ### 1. Finish the M2 Automation Loop
+**Status note:** Infrastructure is complete, but end-to-end validation remains blocked until the n8n approval poller is activated and runs successfully.
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
 - [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
 - [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
