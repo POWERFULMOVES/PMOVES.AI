@@ -1,6 +1,5 @@
-
 import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading
-import os, time, math, json, logging, re, sys, contextlib, ipaddress, importlib.util
+import importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
@@ -190,14 +189,25 @@ SUPABASE_REALTIME_URL = (
 SUPABASE_REALTIME_DISABLED = SUPABASE_REALTIME_URL.lower() in {"", "disabled", "none"}
 if SUPABASE_REALTIME_DISABLED:
     SUPABASE_REALTIME_URL = ""
-# For backend realtime subscriptions, prefer service_role key over anon key
-# Service role key has full access to all channels without RLS restrictions
-# Only use explicit SUPABASE_REALTIME_KEY if it looks like a service_role JWT
+# For backend realtime subscriptions, we need a JWT (not sb_secret_ format)
+# Supabase CLI uses sb_secret_ format in SUPABASE_SERVICE_ROLE_KEY, but realtime needs JWT
+# SUPABASE_SERVICE_KEY (without _ROLE) typically contains the JWT format
+_jwt_service_key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
 _explicit_realtime_key = os.environ.get("SUPABASE_REALTIME_KEY") or os.environ.get("REALTIME_ANON_KEY")
-# Backend services should use service_role for full realtime access
-SUPABASE_REALTIME_KEY = SUPABASE_SERVICE_KEY or _explicit_realtime_key or SUPABASE_ANON_KEY
+# For realtime: prefer JWT keys, avoid sb_secret_ format which doesn't work with websockets
+def _is_jwt(key: str) -> bool:
+    return key and key.startswith("eyJ") and key.count(".") == 2
+SUPABASE_REALTIME_KEY = (
+    _jwt_service_key if _is_jwt(_jwt_service_key) else
+    _explicit_realtime_key if _is_jwt(_explicit_realtime_key) else
+    SUPABASE_ANON_KEY if _is_jwt(SUPABASE_ANON_KEY) else
+    _jwt_service_key or _explicit_realtime_key or SUPABASE_ANON_KEY
+)
 GEOMETRY_CACHE_WARM_LIMIT = int(os.environ.get("GEOMETRY_CACHE_WARM_LIMIT", "64"))
-GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))
+# Realtime connection retry configuration
+GEOMETRY_REALTIME_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_BACKOFF", "5.0"))  # Initial retry delay (seconds)
+GEOMETRY_REALTIME_MAX_BACKOFF = float(os.environ.get("GEOMETRY_REALTIME_MAX_BACKOFF", "60.0"))  # Max retry delay cap (seconds)
+GEOMETRY_REALTIME_STARTUP_GRACE = float(os.environ.get("GEOMETRY_REALTIME_STARTUP_GRACE", "120.0"))  # Use WARNING (not ERROR) for this duration
 
 TAILSCALE_ONLY = os.environ.get("TAILSCALE_ONLY","false").lower()=="true"
 TAILSCALE_ADMIN_ONLY = os.environ.get("TAILSCALE_ADMIN_ONLY","false").lower()=="true"
@@ -407,14 +417,17 @@ def refresh_warm_dictionary():
     try:
         tmp: Dict[str, set] = {}
         with driver.session() as s:
-            count_result = s.run("MATCH (e:Entity) RETURN count(e) AS cnt").single()
+            # Avoid Neo4j "UnknownLabelWarning" when the graph hasn't been seeded yet.
+            count_result = s.run(
+                "MATCH (e) WHERE 'Entity' IN labels(e) RETURN count(e) AS cnt"
+            ).single()
             if not count_result or not count_result["cnt"]:
                 _warm_entities = {}
                 _warm_last = time.time()
                 return
             recs = s.run(
                 (
-                    "MATCH (e:Entity) "
+                    "MATCH (e) WHERE 'Entity' IN labels(e) "
                     "WITH e, CASE WHEN 'type' IN keys(e) THEN e.type ELSE 'UNK' END AS typ "
                     "RETURN e.value AS v, typ AS t "
                     "LIMIT $lim"
@@ -519,7 +532,53 @@ class QueryResp(BaseModel):
     rerank_provider: Optional[str] = None
     hits: List[QueryHit]
 
-app = FastAPI(title="PMOVES Hi-RAG Gateway v2 (hybrid + rerank)", version="2.1.0")
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage Hi-RAG Gateway lifespan with geometry realtime and swarm workers."""
+    # Startup
+    if shape_store is None:
+        logger.info("ShapeStore unavailable; geometry cache warm skipped")
+    else:
+        await _warm_shapes_from_supabase()
+        global _geometry_realtime_task
+        if _geometry_realtime_task is None:
+            ws_url = _derive_realtime_url()
+            api_key = SUPABASE_REALTIME_KEY
+            if ws_url and api_key:
+                _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
+                logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
+            else:
+                logger.info("Supabase realtime subscription skipped; missing URL or API key")
+        global _geometry_swarm_task
+        if _geometry_swarm_task is None and NATS_URL:
+            if hasattr(nats, "connect"):
+                _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
+                logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+            else:
+                logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
+
+    yield
+
+    # Shutdown
+    global _geometry_realtime_task
+    if _geometry_realtime_task is not None:
+        _geometry_realtime_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_realtime_task
+        _geometry_realtime_task = None
+    global _geometry_swarm_task, _geometry_swarm_stop
+    if _geometry_swarm_stop is not None:
+        _geometry_swarm_stop.set()
+    if _geometry_swarm_task is not None:
+        _geometry_swarm_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_swarm_task
+        _geometry_swarm_task = None
+    _geometry_swarm_stop = None
+
+
+app = FastAPI(title="PMOVES Hi-RAG Gateway v2 (hybrid + rerank)", version="2.1.0", lifespan=lifespan)
 
 # ensure repo root on sys.path for importing shared tools
 try:
@@ -873,6 +932,9 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         logger.warning("websockets not installed; skipping Supabase realtime subscription")
         return
 
+    startup_time = time.monotonic()
+    current_backoff = GEOMETRY_REALTIME_BACKOFF
+
     while True:
         full_url = ws_url
         if full_url.rstrip('/').endswith('/realtime/v1'):
@@ -880,16 +942,14 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         if "apikey=" not in full_url:
             sep = "&" if "?" in full_url else "?"
             full_url = f"{full_url}{sep}apikey={api_key}&vsn=1.0.0"
-        headers = {}
-        if SUPABASE_REALTIME_KEY:
-            headers["Authorization"] = f"Bearer {SUPABASE_REALTIME_KEY}"
+        # Note: extra_headers not supported with uvloop; pass Authorization via URL if needed
+        # The apikey parameter above provides authentication for Supabase realtime
         try:
             async with websockets.connect(
                 full_url,
                 ping_interval=20,
                 ping_timeout=20,
                 max_queue=None,
-                extra_headers=headers or None,
             ) as ws:
                 join_payload = {
                     "topic": "realtime:geometry.cgp.v1",
@@ -902,12 +962,15 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                 }
                 await ws.send(json.dumps(join_payload))
                 logger.info("Subscribed to Supabase realtime geometry.cgp.v1 channel")
+                # Reset backoff on successful connection
+                current_backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
                 heartbeat = asyncio.create_task(_phoenix_heartbeat(ws))
                 try:
                     async for raw in ws:
                         try:
                             msg = json.loads(raw)
-                        except Exception:
+                        except json.JSONDecodeError as e:
+                            logger.debug("Supabase realtime: failed to parse message: %s", e)
                             continue
                         if msg.get("topic") != "realtime:geometry.cgp.v1":
                             continue
@@ -939,54 +1002,30 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
                         await heartbeat
         except asyncio.CancelledError:
             break
-        except Exception:
-            logger.exception(
-                "Supabase realtime listener error; retrying in %.1fs", max(1.0, GEOMETRY_REALTIME_BACKOFF)
-            )
-            await asyncio.sleep(max(1.0, GEOMETRY_REALTIME_BACKOFF))
+        except Exception as exc:
+            elapsed = time.monotonic() - startup_time
+            if elapsed < GEOMETRY_REALTIME_STARTUP_GRACE:
+                # During startup grace period, use WARNING (not ERROR with stack trace)
+                # because Supabase realtime may still be initializing - this is expected behavior
+                logger.warning(
+                    "Supabase realtime not ready (%s: %s); retrying in %.1fs (grace period: %.0fs remaining)",
+                    type(exc).__name__,
+                    str(exc)[:100],
+                    current_backoff,
+                    GEOMETRY_REALTIME_STARTUP_GRACE - elapsed,
+                )
+                # Still log stack trace at DEBUG for troubleshooting unexpected errors
+                logger.debug("Stack trace for startup grace period warning:", exc_info=True)
+            else:
+                logger.exception(
+                    "Supabase realtime listener error (%s); retrying in %.1fs",
+                    type(exc).__name__,
+                    current_backoff,
+                )
+            await asyncio.sleep(current_backoff)
+            # Exponential backoff with cap
+            current_backoff = min(current_backoff * 2, GEOMETRY_REALTIME_MAX_BACKOFF)
 
-
-@app.on_event("startup")
-async def _on_startup() -> None:
-    if shape_store is None:
-        logger.info("ShapeStore unavailable; geometry cache warm skipped")
-        return
-    await _warm_shapes_from_supabase()
-    global _geometry_realtime_task
-    if _geometry_realtime_task is None:
-        ws_url = _derive_realtime_url()
-        api_key = SUPABASE_REALTIME_KEY
-        if ws_url and api_key:
-            _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
-            logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
-        else:
-            logger.info("Supabase realtime subscription skipped; missing URL or API key")
-    global _geometry_swarm_task
-    if _geometry_swarm_task is None and NATS_URL:
-        if hasattr(nats, "connect"):
-            _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
-            logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
-        else:
-            logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
-
-
-@app.on_event("shutdown")
-async def _on_shutdown() -> None:
-    global _geometry_realtime_task
-    if _geometry_realtime_task is not None:
-        _geometry_realtime_task.cancel()
-        with contextlib.suppress(Exception):
-            await _geometry_realtime_task
-        _geometry_realtime_task = None
-    global _geometry_swarm_task, _geometry_swarm_stop
-    if _geometry_swarm_stop is not None:
-        _geometry_swarm_stop.set()
-    if _geometry_swarm_task is not None:
-        _geometry_swarm_task.cancel()
-        with contextlib.suppress(Exception):
-            await _geometry_swarm_task
-        _geometry_swarm_task = None
-    _geometry_swarm_stop = None
 
 CHIT_REQUIRE_SIGNATURE = os.environ.get("CHIT_REQUIRE_SIGNATURE", "false").lower()=="true"
 CHIT_PASSPHRASE = os.environ.get("CHIT_PASSPHRASE", "")
@@ -1612,58 +1651,41 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
     pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
     top_pts = pts[:k]
 
+    # Mode handling: "learned" (T5 summarization), "swarm" (EvoSwarm GAN), or default (geometry points)
     if mode == "learned":
         try:
             from transformers import pipeline  # type: ignore
-        except Exception:
-            raise HTTPException(500, "transformers not installed")
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise HTTPException(500, f"transformers not available: {type(exc).__name__}")
         texts = []
         cb = _load_codebook(CHIT_CODEBOOK_PATH)
         for rec in cb[: min(64, len(cb))]:
             t = rec.get("text") or rec.get("summary")
-            if t: texts.append(t)
+            if t:
+                texts.append(t)
         if const:
-            s = const.get("summary");
-            if s: texts.insert(0, s)
+            s = const.get("summary")
+            if s:
+                texts.insert(0, s)
         if not texts:
             raise HTTPException(400, "no codebook or constellation text available")
         nlp = pipeline("summarization", model=CHIT_T5_MODEL)
         out = nlp("\n".join(texts)[:4000], max_length=128, min_length=32, do_sample=False)
-        return {
-            "mode": mode,
-            "summary": out[0].get("summary_text", ""),
-            "used": len(texts),
-            "namespace": namespace,
-            "modality": modality,
-            "builder_pack": builder_pack,
-        }
         summary = out[0].get("summary_text", "")
+        # Apply HRM refinement to learned mode summary
         summary, hrm_info = _hrm_controller.maybe_refine(summary, namespace=namespace)
-        return {"mode": mode, "summary": summary, "used": len(texts), "hrm": hrm_info, "namespace": namespace}
-    else:
-        pts = []
-        if const:
-            for p in const.get("points", []) or []:
-                cid = p.get("id");
-                if not cid: continue
-                pts.append({
-                    "id": cid,
-                    "text": p.get("text"),
-                    "proj": p.get("proj"),
-                    "conf": p.get("conf")
-                })
-        pts.sort(key=lambda x: (x.get("conf") or 0.0, x.get("proj") or 0.0), reverse=True)
         return {
             "mode": mode,
-            "points": pts[:k],
+            "summary": summary,
+            "used": len(texts),
+            "hrm": hrm_info,
             "namespace": namespace,
             "modality": modality,
             "builder_pack": builder_pack,
         }
-        hrm_info = _hrm_controller.status(namespace)
-        return {"mode": mode, "points": pts[:k], "hrm": hrm_info, "namespace": namespace}
-        return {"mode": mode, "summary": out[0].get("summary_text",""), "used": len(texts)}
-    if mode == "swarm":
+
+    elif mode == "swarm":
+        # EvoSwarm mode: GAN sidecar reviews and re-ranks candidates
         sidecar = _get_gan_sidecar()
         accept_threshold = float(body.get("accept_threshold", 0.55))
         max_edits = int(body.get("max_edits", 1))
@@ -1678,6 +1700,9 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
                     "decision": "unavailable",
                     "threshold": accept_threshold,
                 },
+                "namespace": namespace,
+                "modality": modality,
+                "builder_pack": builder_pack,
             }
         review = sidecar.review_text_candidates(
             top_pts,
@@ -1687,8 +1712,23 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
         )
         review["mode"] = mode
         review["raw_points"] = top_pts
+        review["namespace"] = namespace
+        review["modality"] = modality
+        review["builder_pack"] = builder_pack
         return review
-    return {"mode": mode, "points": top_pts}
+
+    else:
+        # Default geometry mode: return top-k points with HRM status
+        # Use pre-computed top_pts (already sorted and sliced at line 1650)
+        hrm_info = _hrm_controller.status(namespace)
+        return {
+            "mode": mode,
+            "points": top_pts,
+            "hrm": hrm_info,
+            "namespace": namespace,
+            "modality": modality,
+            "builder_pack": builder_pack,
+        }
 
 @app.post("/geometry/calibration/report")
 def geometry_calibration_report(body: Dict[str, Any], _=Depends(require_tailscale)):

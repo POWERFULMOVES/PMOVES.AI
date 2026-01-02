@@ -1,15 +1,14 @@
 import asyncio
-import asyncio
 import logging
 import os
 import sqlite3
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import httpx
 from dateutil import parser as date_parser
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 LOGGER = logging.getLogger("pmoves.notebook_sync")
@@ -189,7 +188,7 @@ class NotebookSyncer:
             request_params = params.copy()
             if next_cursor:
                 request_params = {"cursor": next_cursor}
-            response = await self._request(self.api_client, "GET", f"/{resource}", params=request_params)
+            response = await self._request(self.api_client, "GET", f"/api/{resource}", params=request_params)
             payload = response.json()
             items = self._extract_items(payload)
             if not items:
@@ -454,8 +453,22 @@ class NotebookSyncer:
 
 def _load_syncer() -> NotebookSyncer:
     base_url = os.getenv("OPEN_NOTEBOOK_API_URL")
+    mode = os.getenv("NOTEBOOK_SYNC_MODE", "live").lower()
+
+    # If OPEN_NOTEBOOK_API_URL is missing, check if graceful degradation is enabled
     if not base_url:
-        raise RuntimeError("OPEN_NOTEBOOK_API_URL must be set for notebook-sync")
+        if os.getenv("NOTEBOOK_SYNC_GRACEFUL_DEGRADATION", "").lower() == "true":
+            LOGGER.warning(
+                "OPEN_NOTEBOOK_API_URL not set; running in DEGRADED offline mode. "
+                "Syncing is disabled. Set OPEN_NOTEBOOK_API_URL to enable."
+            )
+            mode = "offline"
+            base_url = ""  # Empty - don't pretend we have a valid URL
+        else:
+            raise RuntimeError(
+                "OPEN_NOTEBOOK_API_URL must be set for notebook-sync. "
+                "Set NOTEBOOK_SYNC_GRACEFUL_DEGRADATION=true to start in offline mode."
+            )
 
     cursor_path = os.getenv("NOTEBOOK_SYNC_DB_PATH", "data/notebook_sync.db")
     interval = int(os.getenv("NOTEBOOK_SYNC_INTERVAL_SECONDS", "300"))
@@ -463,7 +476,7 @@ def _load_syncer() -> NotebookSyncer:
     langextract_url = os.getenv("LANGEXTRACT_URL", "http://langextract:8084")
     extract_worker_url = os.getenv("EXTRACT_WORKER_URL", "http://extract-worker:8083")
     token = os.getenv("OPEN_NOTEBOOK_API_TOKEN")
-    mode = os.getenv("NOTEBOOK_SYNC_MODE", "live").lower()
+    # Validate mode only if not already forced to offline (e.g., missing URL)
     if mode not in VALID_MODES:
         LOGGER.warning("Invalid NOTEBOOK_SYNC_MODE=%s; defaulting to 'live'", mode)
         mode = "live"
@@ -486,22 +499,22 @@ def _load_syncer() -> NotebookSyncer:
     )
 
 
-app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0")
-syncer = _load_syncer()
-
-
-@app.on_event("startup")
-async def on_startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    syncer = _load_syncer()
+    app.state.syncer = syncer
     await syncer.start()
-
-
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
+    yield
     await syncer.stop()
 
 
+app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0", lifespan=lifespan)
+
+
 @app.get("/healthz")
-async def healthz() -> Dict[str, Any]:
+async def healthz(request: Request) -> Dict[str, Any]:
+    syncer = request.app.state.syncer
     return {
         "ok": True,
         "last_sync": syncer.last_sync_time.isoformat().replace("+00:00", "Z")
@@ -512,7 +525,8 @@ async def healthz() -> Dict[str, Any]:
 
 
 @app.post("/sync")
-async def trigger_sync() -> Dict[str, Any]:
+async def trigger_sync(request: Request) -> Dict[str, Any]:
+    syncer = request.app.state.syncer
     if syncer._lock.locked():  # pylint: disable=protected-access
         raise HTTPException(status_code=409, detail="Sync already in progress")
     await syncer.trigger_once()

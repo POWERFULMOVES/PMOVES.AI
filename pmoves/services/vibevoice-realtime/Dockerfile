@@ -37,8 +37,7 @@ RUN chmod +x /entrypoint.sh
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
-    mkdir -p /models && \
-    chown -R pmoves:pmoves /app /app/vibevoice /models
+    chown -R pmoves:pmoves /app /app/vibevoice
 
 USER pmoves
 

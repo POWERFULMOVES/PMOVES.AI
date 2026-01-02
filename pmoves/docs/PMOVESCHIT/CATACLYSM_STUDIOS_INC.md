@@ -1,5 +1,26 @@
 # Cataclysm Studios Platform Vision & Brand Identity
 
+> [!TIP]
+> **Implementation Cross-Reference**
+>
+> This document describes the CATACLYSM STUDIOS platform vision. For technical implementation details, see:
+>
+> | Topic | Documentation |
+> |-------|---------------|
+> | **PMOVES.AI Services** | `.claude/context/services-catalog.md` |
+> | **CHIT/Geometry System** | `PMOVESCHIT.md`, `IMPLEMENTATION_STATUS.md` |
+> | **Voice Layer (Flute)** | `.claude/context/flute-gateway.md` |
+> | **Persona Framework** | `pmoves/docs/PERSONAS.md` |
+> | **NATS Event Bus** | `.claude/context/nats-subjects.md` |
+> | **Agent Orchestration** | Agent Zero at Port 8080 |
+>
+> **Three-Entity Model:**
+> - **Cataclysm Studios Inc.** → Platform & Company
+> - **PMOVES.AI** → Technology Engine (60+ microservices)
+> - **DARKXSIDE** → Creative Persona
+
+---
+
 ## Company & Brand Storytelling
 
 **Cataclysm Studios Inc.** is a technology and creative venture with a mission to empower communities through the fusion of artificial intelligence (AI), blockchain, and collaborative creativity. Founded by a visionary entrepreneur who also embodies the **artist persona “DARKXSIDE,”** Cataclysm Studios blends technical innovation with artistic culture. The company’s origin story is rooted in a desire to **catalyze a “cataclysm” of positive change** – harnessing cutting-edge AI and decentralized platforms to uplift local communities and independent creators. The core vision is to create a **resilient, sustainable, and equitable circular economy** that puts tools of innovation into the hands of everyday people[\[1\]](https://drive.google.com/file/d/1ssinODY8X0uCzdO_zY09nOb5UeFbVJfm). In practical terms, this means enabling communities to organize, produce, and govern their own projects using advanced technology, all while nurturing a creative identity and narrative that inspires participation.

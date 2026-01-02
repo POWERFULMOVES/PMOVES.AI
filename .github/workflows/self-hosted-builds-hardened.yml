@@ -63,7 +63,7 @@ jobs:
             cuda.repo.nvidia.com:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -83,7 +83,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Ollama CUDA
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./services/ollama
           file: ./services/ollama/Dockerfile.cuda
@@ -109,13 +109,13 @@ jobs:
 
       - name: Upload Trivy results for Ollama CUDA
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-ollama-cuda.sarif
           category: trivy-ollama-cuda
 
       - name: Build Hi-RAG GPU
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./services/hirag-gateway
           file: ./services/hirag-gateway/Dockerfile.gpu
@@ -141,7 +141,7 @@ jobs:
 
       - name: Upload Trivy results for Hi-RAG GPU
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-hirag-gpu.sarif
           category: trivy-hirag-gpu
@@ -217,7 +217,7 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -232,7 +232,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build ${{ matrix.service.name }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.service.context }}
           push: ${{ github.event_name != 'pull_request' }}
@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload Trivy results for ${{ matrix.service.name }}
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-${{ matrix.service.name }}.sarif
           category: trivy-${{ matrix.service.name }}
@@ -285,10 +285,10 @@ jobs:
             registry.npmjs.org:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -339,7 +339,7 @@ jobs:
             ghcr.io:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Deploy to staging
         run: |
@@ -377,7 +377,7 @@ jobs:
             discord.com:443
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Pull latest images
         run: |
@@ -426,7 +426,7 @@ jobs:
             staging:4222
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run TensorZero tests
         run: |

@@ -38,10 +38,11 @@ export async function POST(request: NextRequest) {
 
     // When running with a boot JWT (no browser cookie session), switch to service-role client
     const readClient = (session ? supabase : getServiceSupabaseClient()) as ReturnType<typeof getServiceSupabaseClient>;
-    const userId = session?.user?.id || (body.ownerId as string | undefined);
+    const userId = session?.user?.id;
 
-    if (!session && bootJwt && !userId) {
-      return NextResponse.json({ error: 'ownerId is required when using boot JWT' }, { status: 400 });
+    // Security: User identity must come from authenticated session only
+    if (!userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
     const { data: eventRow, error: eventError } = await readClient
