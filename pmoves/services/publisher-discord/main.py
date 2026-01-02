@@ -1,3 +1,14 @@
+"""Discord notification publisher for PMOVES media events.
+
+Listens to NATS subjects for media ingestion events and publishes
+notifications to Discord channels.
+
+Environment Variables:
+    DISCORD_BOT_TOKEN: Discord bot token
+    DISCORD_WEBHOOK_URL: Discord webhook URL (alternative to bot token)
+    NATS_URL: NATS connection string
+"""
+
 from contextlib import asynccontextmanager
 
 import asyncio
