@@ -10,22 +10,23 @@ import Link from 'next/link';
 import { SystemStatsBar } from './SystemStatsBar';
 import { TierOverviewGrid } from '../services/TierOverview';
 import { useServiceHealth } from '@/lib/useServiceHealth';
-import type { ServiceHealthMap } from '@/lib/serviceHealth';
 import type { ServiceCategory } from '@/lib/serviceCatalog';
 import type { TierStats } from '../services/TierOverview';
 
 export interface SystemHubData {
+  services?: unknown[];
+  health?: unknown;
+  tiers: Record<ServiceCategory, TierStats>;
   stats: {
-    total: number;
-    healthy: number;
-    unhealthy: number;
-    unknown: number;
-    percentage: number;
+    totalServices?: number;
+    healthyPercentage?: number;
+    total?: number;
+    healthy?: number;
+    unhealthy?: number;
+    unknown?: number;
+    percentage?: number;
+    criticalDown?: string[];
   };
-  tiers: {
-    tier: ServiceCategory;
-    stats: TierStats;
-  }[];
 }
 
 /**
@@ -96,6 +97,21 @@ export function SystemHubSection() {
 
   const { stats, tiers } = hubData;
 
+  // Transform stats from API format to component format
+  const componentStats = {
+    total: stats.total ?? stats.totalServices ?? 0,
+    healthy: stats.healthy ?? 0,
+    unhealthy: stats.unhealthy ?? 0,
+    unknown: stats.unknown ?? 0,
+    percentage: stats.percentage ?? stats.healthyPercentage ?? 0,
+  };
+
+  // Transform tiers Record to array format for TierOverviewGrid
+  const tierArray = Object.entries(tiers).map(([tier, stats]) => ({
+    tier: tier as ServiceCategory,
+    stats,
+  }));
+
   return (
     <section className="relative py-20 px-6 lg:px-12 bg-void-elevated">
       {/* Background accent */}
@@ -118,7 +134,7 @@ export function SystemHubSection() {
               </h2>
             </div>
             <p className="max-w-md text-ink-secondary font-body">
-              Real-time health monitoring across {stats.total} PMOVES services.
+              Real-time health monitoring across {componentStats.total} PMOVES services.
               Grouped by category with one-click access.
             </p>
           </div>
@@ -127,11 +143,11 @@ export function SystemHubSection() {
 
         {/* System Stats Bar */}
         <SystemStatsBar
-          totalServices={stats.total}
-          healthyCount={stats.healthy}
-          unhealthyCount={stats.unhealthy}
-          unknownCount={stats.unknown}
-          percentage={stats.percentage}
+          totalServices={componentStats.total}
+          healthyCount={componentStats.healthy}
+          unhealthyCount={componentStats.unhealthy}
+          unknownCount={componentStats.unknown}
+          percentage={componentStats.percentage}
           isChecking={isPolling}
           lastUpdate={lastUpdate}
           onRefresh={handleRefresh}
@@ -139,7 +155,7 @@ export function SystemHubSection() {
 
         {/* Tier Overview Grid */}
         <TierOverviewGrid
-          tierStats={tiers}
+          tierStats={tierArray}
           healthMap={health}
           expandedTier={expandedTier}
           onTierExpand={(tier) => setExpandedTier(expandedTier === tier ? null : tier)}

@@ -339,3 +339,125 @@ Hi-RAG: Tool definitions for retrieval functions
 Publisher Services: Consistent LLM interface for content generation
 Evaluation Pipeline: Automated quality checks for all agent outputs
 This comprehensive integration will provide PMOVES.AI with unprecedented visibility into LLM usage, enable data-driven optimization across all agents, and create a foundation for continuous improvement of AI capabilities.
+
+---
+
+## 11. Audio Model Architecture (Whisper, TTS, VLM)
+
+### 11.1 Architecture Overview
+
+**Design Principle:** All audio/speech models route through TensorZero Gateway with GPU Orchestrator managing local model providers.
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  PMOVES.YT      │────▶│  TensorZero      │────▶│ GPU Orchestrator│
+│  ffmpeg-whisper│     │  Gateway         │     │ + Local Providers│
+│  flute-gateway  │     │  (port 3030)     │     │   (port 8200)    │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                              │
+                              ▼
+                       ┌──────────────────┐
+                       │  Legacy Fallback:│
+                       │  - Ollama        │
+                       │  - LM Studio     │
+                       │  - NVIDIA NIMS   │
+                       │  - VLM           │
+                       └──────────────────┘
+```
+
+### 11.2 Supported Model Types
+
+| Model Type | Provider | GPU Orchestrator Support | TensorZero Config |
+|------------|----------|--------------------------|-------------------|
+| **Whisper** (transcription) | Ollama, Faster-Whisper | ❌ TODO | ❌ TODO |
+| **TTS** (synthesis) | Ultimate TTS Studio | ✅ Implemented (tts_client.py) | ❌ TODO |
+| **VLM** (vision) | Ollama (qwen2-vl) | ⚠️ Partial | ✅ Configured |
+
+### 11.3 Current Gaps
+
+1. **Whisper Transcription:**
+   - Currently runs independently in `ffmpeg-whisper` service
+   - Should route through TensorZero → GPU Orchestrator
+   - Models: `whisper-small`, `whisper-medium`, `whisper-large`
+
+2. **TTS Synthesis:**
+   - Ultimate TTS Studio managed by GPU Orchestrator
+   - Engines: Kokoro, F5-TTS, VoxCPM, KittenTTS, MeloTTS, Piper
+   - Missing TensorZero configuration for routing
+
+3. **GPU Orchestrator Providers:**
+   - Current: `ollama`, `vllm`, `tts`
+   - Missing: `whisper`, `vlm`
+
+### 11.4 Implementation Plan
+
+**Phase 1: GPU Orchestrator Whisper Support**
+```python
+# pmoves/services/gpu-orchestrator/services/whisper_client.py
+class WhisperClient:
+    """Client for Whisper transcription via GPU Orchestrator."""
+
+    async def transcribe(self, audio_path: str, model: str = "whisper-small") -> dict:
+        """Transcribe audio file using Whisper."""
+        # Route to Faster-Whisper service or Ollama
+```
+
+**Phase 2: TensorZero Whisper Configuration**
+```toml
+# pmoves/tensorzero/config/tensorzero.toml
+[models.whisper_small_local]
+routing = ["gpu_orchestrator"]
+
+[models.whisper_small_local.providers.gpu_orchestrator]
+type = "openai"
+api_base = "http://pmoves-gpu-orchestrator:8200/api/whisper"
+model_name = "whisper-small"
+api_key_location = "none"
+
+[functions.pmoves_yt_transcription]
+type = "chat"  # or audio when supported
+
+[functions.pmoves_yt_transcription.variants.whisper_small]
+type = "chat_completion"
+model = "whisper_small_local"
+```
+
+**Phase 3: Service Migration**
+- `ffmpeg-whisper`: Call TensorZero `/inference` endpoint
+- `pmoves-yt`: Use TensorZero for transcription requests
+- `flute-gateway`: Use TensorZero for TTS routing
+
+### 11.5 Model Collections by Service
+
+**PMOVES.YT (YouTube Ingestion):**
+- Transcription: `whisper_small_local`, `whisper_medium_local`
+- Fallback: OpenAI Whisper API
+
+**Flute-Gateway (Voice Synthesis):**
+- TTS: `kokoro`, `f5-tts`, `kitten-tts` (via GPU Orchestrator)
+- Fallback: ElevenLabs API
+
+**Hi-RAG V2 (Multimodal):**
+- Vision: `qwen2_vl_7b` (Ollama)
+- Fallback: GPT-4V, Gemini Pro Vision
+
+### 11.6 Environment Variables
+
+```bash
+# GPU Orchestrator
+GPU_ORCHESTRATOR_URL=http://pmoves-gpu-orchestrator:8200
+
+# Whisper (Faster-Whisper service)
+WHISPER_MODEL=small
+WHISPER_DEVICE=cuda
+WHISPER_COMPUTE_TYPE=float16
+
+# TTS (Ultimate TTS Studio)
+ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+```
+
+### 11.7 References
+
+- GPU Orchestrator: `pmoves/services/gpu-orchestrator/`
+- TensorZero Config: `pmoves/tensorzero/config/tensorzero.toml`
+- GPU Models Registry: `pmoves/config/gpu-models.yaml`
