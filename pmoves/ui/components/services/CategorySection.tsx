@@ -29,6 +29,8 @@ const CATEGORY_INFO: Record<ServiceCategory, { name: string; icon: string; descr
   llm: { name: 'LLM Gateway', icon: '🧠', description: 'Language model services' },
   ui: { name: 'User Interface', icon: '🖥️', description: 'Web interfaces and dashboards' },
   integration: { name: 'Integrations', icon: '🔌', description: 'External service integrations' },
+  dox: { name: 'Document Intelligence', icon: '📄', description: 'PMOVES-DoX document processing' },
+  mcp: { name: 'MCP Servers', icon: '🔗', description: 'Model Context Protocol servers' },
 };
 
 export function CategorySection({ category, services, healthMap }: CategorySectionProps) {

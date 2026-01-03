@@ -45,9 +45,9 @@ List all GEOMETRY BUS subjects (see geometry-nats-subjects.md)
 | `geometry.packet.encoded.v1` | Pub | Encoded CGP v2 packets |
 | `geometry.packet.decoded.v1` | Pub | Decoded packet results |
 | `geometry.visualization.request.v1` | Pub | Visualization requests |
-| `geometry.visualization.ready.v1` | Sub | Visualization complete |
+| `geometry.visualization.ready.v1` | Pub | Visualization complete |
 | `tokenism.transform.v1` | Pub/Sub | Token transformations |
-| `evoswarm.population.v1` | Pub/Sub | EvoSwarm population events |
+| `evoswarm.population.v1` | Pub | EvoSwarm population events |
 
 ## Example
 

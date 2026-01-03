@@ -1025,11 +1025,24 @@ services:
   # Agents profile (opt-in): NATS broker + Agent Zero + Archon
   nats:
     image: nats:2.10-alpine
-    command: [ "-js", "-m", "8222", "-ws", "-ws_port", "4223" ]
+    command: [
+      "-js",
+      "-m", "8222",
+      "-ws", "-ws_port", "4223",
+      # Authentication (use NATS_USER/NATS_PASS env vars for production)
+      "${NATS_AUTH:---auth}", "${NATS_USER:-nats}", "${NATS_PASS:-${NATS_DEFAULT_PASS:-pmoves}}",
+      # TLS (enable with NATS_TLS=true)
+      "${NATS_TLS_TLS:---tls}",
+      "${NATS_TLS_CERT:---tls_cert}",
+      "${NATS_TLS_KEY:---tls_key}",
+      "${NATS_TLS_CA:---tls_ca}",
+    ]
     restart: unless-stopped
     ports: [ "4222:4222", "9223:4223" ]
     profiles: [ "agents", "orchestration", "workers" ]
     networks: [ bus_tier, monitoring_tier ]
+    environment:
+      - NATS_DEFAULT_PASS=${NATS_DEFAULT_PASS:-pmoves}
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz" ]
       interval: 30s
@@ -1377,6 +1390,7 @@ services:
     restart: unless-stopped
     <<: *env-tier-agent
     environment:
+      - PORT=${GITHUB_RUNNER_CTL_PORT:-8100}
       - PORT=${GITHUB_RUNNER_CTL_PORT:-8104}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
@@ -1384,13 +1398,13 @@ services:
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
       - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
     depends_on: [ nats ]
-    ports: [ "8104:8104" ]
+    ports: [ "8100:8100", "8104:8104" ]
     volumes:
       - ./services/github-runner-ctl/config:/app/config:ro
     profiles: [ "orchestration", "workers" ]
     networks: [ api_tier, bus_tier, monitoring_tier ]
     healthcheck:
-      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)" ]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1487,8 +1501,6 @@ services:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
-    # env.tier-agent and .env.local are optional for local overrides.
-    # DISCORD_WEBHOOK_URL is validated at startup (logs warning if missing).
     env_file:
       - path: env.tier-agent
         required: false

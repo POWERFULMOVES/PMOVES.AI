@@ -7,7 +7,7 @@
 > |----------|----------|
 > | **Implementation Status** | `IMPLEMENTATION_STATUS.md` |
 > | **TypeScript Modules** | `PMOVES-ToKenism-Multi/integrations/contracts/chit/` |
-> | **NATS Subjects** | `.claude/context/geometry-nats-subjects.md` |
+> | **NATS Subjects** | `GEOMETRY_BUS_INTEGRATION.md` (NATS Subject Reference section) |
 > | **Hi-RAG Integration** | `GEOMETRY_BUS_INTEGRATION.md` |
 > | **TAC Commands** | `/chit:encode`, `/chit:decode`, `/chit:visualize`, `/chit:bus` |
 >

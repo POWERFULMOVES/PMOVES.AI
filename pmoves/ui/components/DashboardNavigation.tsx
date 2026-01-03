@@ -18,6 +18,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/ingest', label: 'Ingestion', key: 'ingest', accent: 'cyan' },
   { href: '/dashboard/ingestion-queue', label: 'Queue', key: 'ingestion-queue' },
   { href: '/dashboard/videos', label: 'Videos', key: 'videos', accent: 'ember' },
+  { href: '/dashboard/search', label: 'Search', key: 'search', accent: 'forest' },
+  { href: '/dashboard/jellyfin', label: 'Jellyfin', key: 'jellyfin', accent: 'violet' },
+  { href: '/dashboard/research', label: 'Research', key: 'research', accent: 'gold' },
   { href: '/dashboard/monitor', label: 'Monitor', key: 'monitor', accent: 'forest' },
   { href: '/dashboard/notebook', label: 'Notebook', key: 'notebook', accent: 'violet' },
   { href: '/dashboard/notebook/runtime', label: 'Runtime', key: 'notebook-runtime' },
@@ -26,12 +29,16 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/chat', label: 'Chat', key: 'chat' },
   { href: '/dashboard/services', label: 'Services', key: 'services' },
   { href: '/dashboard/chit', label: 'Chit', key: 'chit', accent: 'cyan' },
+  { href: '/dashboard/tokenism', label: 'Tokenism', key: 'tokenism', accent: 'gold' },
 ];
 
 export type NavKey =
   | 'ingest'
   | 'ingestion-queue'
   | 'videos'
+  | 'search'
+  | 'jellyfin'
+  | 'research'
   | 'monitor'
   | 'notebook'
   | 'notebook-runtime'
@@ -39,7 +46,8 @@ export type NavKey =
   | 'personas'
   | 'chat'
   | 'services'
-  | 'chit';
+  | 'chit'
+  | 'tokenism';
 
 interface DashboardNavigationProps {
   active?: NavKey;
@@ -59,7 +67,7 @@ export function DashboardNavigation({ active }: DashboardNavigationProps) {
     String(process.env.NEXT_PUBLIC_SINGLE_USER_MODE || process.env.SINGLE_USER_MODE || '1') === '1';
 
   return (
-    <nav className="flex flex-wrap items-center gap-2">
+    <nav aria-label="Dashboard navigation" className="flex flex-wrap items-center gap-2">
       {NAV_ITEMS.map((item) => {
         const isActive = item.key === active || pathname === item.href;
         const accent = item.accent ? accentColors[item.accent] : '';

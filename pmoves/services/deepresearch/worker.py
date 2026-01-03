@@ -299,17 +299,42 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 
 
+# Module-level cache for metrics (avoids private registry API access)
+_METRIC_CACHE: dict[str, Counter] = {}
+
+
 def _get_or_create_counter(name: str, description: str, labelnames: tuple) -> Counter:
     """Get existing counter or create new one (safe for module reimport via -m flag).
 
     The python -m flag can cause module double-import, which would register
-    Prometheus metrics twice. This function checks the registry first to avoid
-    the duplicate registration ValueError.
+    Prometheus metrics twice. This function uses a module-level cache to track
+    metrics we've created, avoiding reliance on private prometheus_client APIs.
+
+    Args:
+        name: Metric name (must be unique in Prometheus registry).
+        description: Human-readable description of the metric.
+        labelnames: Tuple of label names for the counter.
+
+    Returns:
+        Counter instance (either newly created or cached from previous import).
     """
-    # Check if metric already exists in registry (handles -m double-import)
-    if name in REGISTRY._names_to_collectors:
-        return REGISTRY._names_to_collectors[name]
-    return Counter(name, description, labelnames=labelnames)
+    if name in _METRIC_CACHE:
+        return _METRIC_CACHE[name]
+
+    try:
+        counter = Counter(name, description, labelnames=labelnames)
+        _METRIC_CACHE[name] = counter
+        return counter
+    except ValueError as e:
+        # Already registered by a previous import - this shouldn't happen
+        # with our cache, but handle it gracefully for robustness
+        LOGGER.warning("Metric %s already registered (unexpected): %s", name, e)
+        # Try to get from registry as fallback (uses private API only as last resort)
+        if hasattr(REGISTRY, "_names_to_collectors") and name in REGISTRY._names_to_collectors:
+            cached = REGISTRY._names_to_collectors[name]
+            _METRIC_CACHE[name] = cached
+            return cached
+        raise
 
 
 # Enable CGP publishing via environment variable (default: enabled)

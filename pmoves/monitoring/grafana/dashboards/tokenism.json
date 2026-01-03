@@ -1,0 +1,148 @@
+{
+  "title": "Tokenism Simulator",
+  "description": "Token economy simulation metrics - simulation requests, duration, success rates, and scenario analysis",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "tokenism-simulator",
+  "tags": ["tokenism", "simulation", "economy", "chit"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Simulator Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Service Status",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "up{job=\"tokenism-simulator\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Simulations",
+      "gridPos": { "x": 4, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(tokenism_simulation_requests_total)", "legendFormat": "Simulations" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "gold", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Success Rate",
+      "gridPos": { "x": 9, "y": 1, "w": 5, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(tokenism_simulation_requests_total{status=\"success\"}) / sum(tokenism_simulation_requests_total) * 100",
+          "legendFormat": "Success %"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 80 }, { "color": "green", "value": 95 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Simulations/sec",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(rate(tokenism_simulation_requests_total[5m]))", "legendFormat": "Rate" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "sims/s", "decimals": 2 } }
+    },
+    {
+      "type": "stat",
+      "title": "Avg Duration",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "avg(rate(tokenism_simulation_duration_seconds_sum[5m]) / rate(tokenism_simulation_duration_seconds_count[5m]))", "legendFormat": "Duration" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 2 } }
+    },
+    {
+      "type": "row",
+      "title": "Simulation Metrics by Scenario",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Simulations by Scenario",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(rate(tokenism_simulation_requests_total[5m])) by (scenario)", "legendFormat": "{{scenario}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate by Scenario",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(rate(tokenism_simulation_requests_total{status=\"error\"}[5m])) by (scenario)", "legendFormat": "{{scenario}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2, "color": "red" } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Simulation Duration (p50, p95, p99)",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(tokenism_simulation_duration_seconds_bucket[5m])) by (le, scenario))", "legendFormat": "p50 - {{scenario}}" },
+        { "expr": "histogram_quantile(0.95, sum(rate(tokenism_simulation_duration_seconds_bucket[5m])) by (le, scenario))", "legendFormat": "p95 - {{scenario}}" },
+        { "expr": "histogram_quantile(0.99, sum(rate(tokenism_simulation_duration_seconds_bucket[5m])) by (le, scenario))", "legendFormat": "p99 - {{scenario}}" }
+      ],
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } } }
+    },
+    {
+      "type": "piechart",
+      "title": "Scenario Distribution",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(tokenism_simulation_requests_total) by (scenario)", "legendFormat": "{{scenario}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right" }, "pieType": "donut" }
+    },
+    {
+      "type": "row",
+      "title": "CHIT Geometry Events",
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "A2UI Events Published",
+      "gridPos": { "x": 0, "y": 23, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(a2ui_events_published_total)", "legendFormat": "Events" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "purple", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "A2UI Active Surfaces",
+      "gridPos": { "x": 6, "y": 23, "w": 6, "h": 4 },
+      "targets": [{ "expr": "a2ui_active_websockets", "legendFormat": "Surfaces" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Geometry Events Subscribed",
+      "gridPos": { "x": 12, "y": 23, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(a2ui_geometry_events_total)", "legendFormat": "Events" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": 0 }] } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "A2UI Events by Type",
+      "gridPos": { "x": 18, "y": 23, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(rate(a2ui_events_published_total[5m])) by (event_type)", "legendFormat": "{{event_type}}" }],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 20 } } }
+    }
+  ]
+}

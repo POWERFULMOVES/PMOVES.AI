@@ -2,6 +2,100 @@
 
 > Consolidated learnings from CodeRabbit PR reviews. These patterns help avoid common issues caught during code review.
 
+## HTTP Method Semantics
+
+**Priority: Critical** | Source: PR #385 github-runner-ctl client.py
+
+Different HTTP methods return different status codes and body formats. Always handle these correctly:
+
+| Method | Success Status | Body | Return Value |
+|--------|----------------|------|--------------|
+| GET | 200 OK | JSON | `Dict[str, Any]` |
+| POST | 201 Created | JSON | `Dict[str, Any]` |
+| PUT | 200 OK | JSON | `Dict[str, Any]` |
+| DELETE | 204 No Content | **Empty** | `None` |
+
+```python
+# ✅ Correct - handle 204 No Content
+async def _request(self, method: str, path: str, **kwargs) -> Optional[Dict[str, Any]]:
+    response = await client.request(method, path, **kwargs)
+
+    # Track metrics BEFORE status checks
+    status = str(response.status_code)
+    REQUESTS_TOTAL.labels(endpoint=endpoint, status=status).inc()
+
+    # Handle 204 No Content (DELETE responses)
+    if response.status_code == 204:
+        return None
+
+    response.raise_for_status()
+    return response.json()
+
+# ❌ Wrong - JSONDecodeError on DELETE
+async def _request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
+    response = await client.request(method, path, **kwargs)
+    response.raise_for_status()
+    return response.json()  # Crashes on 204 No Content!
+```
+
+## Metrics Hygiene
+
+**Priority: High** | Source: PR #385 github-runner-ctl client.py
+
+Follow these rules for Prometheus metrics:
+
+1. **Increment exactly once** per request
+2. **Increment AFTER determining final status**
+3. **Never increment in both try AND except blocks**
+4. **Use `logger.exception`** instead of `logger.error` for stack traces
+
+```python
+# ✅ Correct - single increment, final status
+try:
+    response = await client.request(method, path, **kwargs)
+    status = str(response.status_code)
+    REQUESTS_TOTAL.labels(endpoint=endpoint, status=status).inc()
+    response.raise_for_status()
+    if response.status_code == 204:
+        return None
+    return response.json()
+except httpx.HTTPStatusError as e:
+    REQUESTS_TOTAL.labels(endpoint=endpoint, status=str(e.response.status_code)).inc()
+    logger.exception(f"API error: {e.response.status_code} {path}")
+    raise
+except httpx.RequestError as e:
+    REQUESTS_TOTAL.labels(endpoint=endpoint, status="network_error").inc()
+    logger.exception(f"Request failed: {path}")
+    raise
+
+# ❌ Wrong - double increment on errors
+REQUESTS_TOTAL.labels(endpoint=endpoint, status="200").inc()  # ✗ Premature!
+try:
+    response = await client.request(method, path, **kwargs)
+    return response.json()
+except Exception:
+    REQUESTS_TOTAL.labels(endpoint=endpoint, status="error").inc()  # ✗ Double count!
+    raise
+```
+
+## Query Parameter Consistency
+
+**Priority: Medium** | Source: PR #385 github-runner-ctl client.py
+
+Always use the `params` dict for query parameters, never embed them in the URL path:
+
+```python
+# ✅ Correct - all params in dict
+path = "/user/repos"
+params = {"type": "owner", "per_page": 30}
+return await self._request("GET", path, params=params)
+
+# ❌ Wrong - split query params
+path = "/user/repos?type=owner"  # ✗ Harder to maintain
+params = {"per_page": 30}
+return await self._request("GET", path, params=params)
+```
+
 ## Edge Case Guards
 
 **Priority: High** | Source: PR #328 main.py:651
@@ -20,32 +114,6 @@ first_chunk = chunks[0]
 # ❌ Wrong - IndexError on empty input
 chunks = parse_prosodic(text)
 first_chunk = chunks[0]  # Crashes if text was whitespace
-```
-
-## Metrics & Observability
-
-**Priority: High** | Source: PR #328 main.py:651, 873
-
-- Increment success metrics AFTER the operation succeeds
-- Track metrics for ALL code paths including re-raised exceptions
-- Pattern: try → operation → success metrics
-- Anti-pattern: metrics → try → operation
-
-```python
-# ✅ Correct - metrics after success
-try:
-    result = await process(data)
-    REQUESTS_TOTAL.labels(endpoint="/api", status="200").inc()
-    return result
-except HTTPException as exc:
-    REQUESTS_TOTAL.labels(endpoint="/api", status=str(exc.status_code)).inc()
-    raise
-
-# ❌ Wrong - metrics before we know outcome
-REQUESTS_TOTAL.labels(endpoint="/api", status="200").inc()
-try:
-    result = await process(data)  # May fail!
-    return result
 ```
 
 ## Loop Indexing
@@ -148,4 +216,4 @@ These rules should fail CI if violated:
 
 ---
 
-*Last updated: 2025-12-18 from PR #328 CodeRabbit review (19 issues, 4 rounds)*
+*Last updated: 2025-12-30 from PR #385 (HTTP semantics, metrics hygiene)*

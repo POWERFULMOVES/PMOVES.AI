@@ -4,4 +4,4 @@ nats-py==2.6.0
 httpx==0.26.0
 pydantic==2.6.0
 huggingface_hub==0.20.0
-python-multipart==0.0.6
+python-multipart==0.0.18

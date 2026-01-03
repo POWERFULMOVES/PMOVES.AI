@@ -16,11 +16,29 @@ from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger("evo-controller")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
-app = FastAPI(title="PMOVES Evo Controller", version="0.1.0")
+_controller: Optional[EvoSwarmController] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage EvoSwarm controller application lifespan."""
+    global _controller
+    # Startup
+    _controller = EvoSwarmController(config=EvoConfig())
+    await _controller.start()
+    yield
+    # Shutdown
+    if _controller:
+        await _controller.shutdown()
+        _controller = None
+
+
+app = FastAPI(title="PMOVES Evo Controller", version="0.1.0", lifespan=lifespan)
 
 
 @dataclass
@@ -197,19 +215,6 @@ class EvoSwarmController:
                 r.raise_for_status()
         except Exception:  # pragma: no cover
             logger.warning("failed to publish geometry.swarm.meta.v1 (agent-zero not reachable?)")
-
-
-_controller = EvoSwarmController(EvoConfig())
-
-
-@app.on_event("startup")
-async def _startup() -> None:
-    await _controller.start()
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    await _controller.shutdown()
 
 
 @app.get("/health")

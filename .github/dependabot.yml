@@ -1,28 +1,12 @@
 version: 2
 updates:
-  # Python dependencies in pmoves directory
-  - package-ecosystem: "pip"
-    directory: "/pmoves"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "python"
-    commit-message:
-      prefix: "chore(deps)"
-      include: "scope"
-
-  # Docker images in services directory
+  # Docker base images in service Dockerfiles
   - package-ecosystem: "docker"
     directory: "/pmoves/services"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "docker"
@@ -37,10 +21,51 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 10
     labels:
       - "dependencies"
-      - "github-actions"
+      - "ci"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Python dependencies for Agent Zero
+  - package-ecosystem: "pip"
+    directory: "/pmoves/services/agent-zero"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Python dependencies for Archon
+  - package-ecosystem: "pip"
+    directory: "/pmoves/services/archon"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Python dependencies for DeepResearch
+  - package-ecosystem: "pip"
+    directory: "/pmoves/services/deepresearch"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "python"
     commit-message:
       prefix: "chore(deps)"
       include: "scope"

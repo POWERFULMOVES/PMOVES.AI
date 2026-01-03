@@ -61,9 +61,10 @@ At the top of the code cell you can adjust:
 ⚡ **One cell, one upload, structured data ready for training.**
 """
 
-!pip -q install python-docx sentence-transformers faiss-cpu
+# Note: Install dependencies with:
+# pip install python-docx sentence-transformers faiss-cpu
 
-# @title Pivot‑Banded Structuring: .docx → Trainable Dataset (Single Cell, Colab‑Ready)
+# Pivot‑Banded Structuring: .docx → Trainable Dataset (Single Cell, Colab‑Ready)
 # Copyright (c) 2025
 # MIT License
 # ---
@@ -384,7 +385,9 @@ def main():
     # --- Preview
     print("\n==== Pivots (first 5) ====")
     for i, (pid, ptxt) in enumerate(zip(pivots[:5], pivot_texts[:5])):
-        print(f"[pivot {i}] chunk#{pid}: {ptxt[:120].replace('\n',' ')}{'...' if len(ptxt)>120 else ''}")
+        preview = ptxt[:120].replace('\n', ' ')
+        ellipsis = '...' if len(ptxt) > 120 else ''
+        print(f"[pivot {i}] chunk#{pid}: {preview}{ellipsis}")
     print("\n==== Sample rows (top 10 by energy) ====")
     disp = df.sort_values("energy", ascending=False).head(10)
     print(disp[["id","pivot_local_index","band","energy"]].to_string(index=False))

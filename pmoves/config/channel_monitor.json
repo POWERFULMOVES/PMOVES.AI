@@ -1,170 +1,353 @@
 {
   "channels": [
     {
-      "channel_id": "UC_x5XG1OV2P6uZZ5FSM9Ttw",
-      "channel_name": "Google Developers",
-      "platform": "youtube",
-      "source_type": "channel",
-      "source_url": "https://www.youtube.com/@GoogleDevelopers",
-      "enabled": false,
-      "check_interval_minutes": 60,
-      "auto_process": true,
-      "filters": {
-        "min_duration_seconds": 60,
-        "max_age_days": 30,
-        "exclude_keywords": [
-          "#shorts"
-        ],
-        "title_keywords": []
-      },
-      "priority": 1,
-      "namespace": "pmoves",
-      "tags": [
-        "tech"
-      ],
-      "format": null,
-      "media_type": "video",
-      "cookies_path": null,
-      "yt_options": {
-        "download_archive": "/data/yt-dlp/google-developers.archive",
-        "subtitle_langs": [
-          "en"
-        ],
-        "write_info_json": true
-      }
-    },
-    {
-      "channel_id": "yt:channel:@DARKSXIDE",
-      "channel_name": "DARKSXIDE (Channel)",
-      "platform": "youtube",
-      "source_type": "channel",
-      "source_url": "https://www.youtube.com/@DARKSXIDE",
-      "enabled": true,
-      "check_interval_minutes": 60,
-      "auto_process": true,
-      "filters": {
-        "min_duration_seconds": 60,
-        "max_age_days": 30,
-        "exclude_keywords": [
-          "#shorts"
-        ],
-        "title_keywords": []
-      },
-      "priority": 1,
-      "namespace": "pmoves.darkxside",
-      "tags": [
-        "darkxside",
-        "music",
-        "ai",
-        "art",
-        "science",
-        "consciousness"
-      ],
-      "format": null,
-      "media_type": "video",
-      "cookies_path": "/app/config/cookies/darkxside.youtube.cookies.txt",
-      "yt_options": {
-        "download_archive": "/data/yt-dlp/darkxside/channel.archive",
-        "subtitle_langs": [
-          "en"
-        ],
-        "write_info_json": true
-      }
-    },
-    {
-      "channel_id": "yt:playlists:@DARKSXIDE",
-      "channel_name": "DARKSXIDE (Playlists)",
-      "platform": "youtube",
-      "source_type": "playlist",
-      "source_url": "https://www.youtube.com/@DARKSXIDE/playlists",
-      "enabled": true,
-      "check_interval_minutes": 60,
-      "auto_process": true,
-      "filters": {
-        "min_duration_seconds": 60,
-        "max_age_days": 30,
-        "exclude_keywords": [
-          "#shorts"
-        ],
-        "title_keywords": []
-      },
-      "priority": 1,
-      "namespace": "pmoves.darkxside",
-      "tags": [
-        "darkxside",
-        "tutorials"
-      ],
-      "format": null,
-      "media_type": "video",
-      "cookies_path": "/app/config/cookies/darkxside.youtube.cookies.txt",
-      "yt_options": {
-        "download_archive": "/data/yt-dlp/darkxside/playlists.archive",
-        "subtitle_langs": [
-          "en"
-        ],
-        "write_info_json": true
-      }
-    },
-    {
       "channel_id": "yt:playlist:PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8",
-      "channel_name": "DARKSXIDE Mix Series",
+      "channel_name": "DARKSXIDE AI Playlist",
       "platform": "youtube",
       "source_type": "playlist",
       "source_url": "https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8",
       "enabled": true,
-      "check_interval_minutes": 60,
-      "auto_process": true,
+      "check_interval_minutes": 120,
+      "auto_process": false,
       "filters": {
         "min_duration_seconds": 60,
-        "max_age_days": 30,
-        "exclude_keywords": [
-          "#shorts"
-        ],
+        "max_age_days": 365,
+        "exclude_keywords": ["#shorts"],
         "title_keywords": []
       },
       "priority": 1,
-      "namespace": "pmoves.darkxside",
-      "tags": [
-        "darkxside",
-        "mix"
-      ],
+      "namespace": "pmoves.darkxside.ai",
+      "tags": ["darkxside", "ai", "playlist"],
       "format": "best",
       "media_type": "video",
       "cookies_path": "/app/config/cookies/darkxside.youtube.cookies.txt",
       "yt_options": {
-        "download_archive": "/data/yt-dlp/darkxside/mixseries.archive",
-        "subtitle_langs": [
-          "en"
-        ],
+        "download_archive": "/data/yt-dlp/darkxside/ai-playlist.archive",
+        "subtitle_langs": ["en"],
         "write_info_json": true
       }
     },
     {
-      "channel_id": "soundcloud:darkxside",
-      "channel_name": "DARKSXIDE SoundCloud",
-      "platform": "soundcloud",
-      "source_type": "user",
-      "source_url": "https://soundcloud.com/darkxside",
-      "enabled": false,
-      "auto_process": true,
-      "namespace": "pmoves.darkxside.audio",
-      "tags": [
-        "darkxside",
-        "soundcloud",
-        "audio"
-      ],
-      "media_type": "audio",
-      "format": "bestaudio/best",
+      "channel_id": "yt:channel:@code4AI",
+      "channel_name": "Code4AI",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@code4AI",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.ai",
+      "tags": ["ai", "coding", "tutorials"],
+      "format": null,
+      "media_type": "video",
       "cookies_path": null,
       "yt_options": {
-        "download_archive": "/data/yt-dlp/darkxside/soundcloud.archive",
-        "postprocessors": [
-          {
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192"
-          }
-        ],
+        "download_archive": "/data/yt-dlp/channels/code4ai.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@Aitrepreneur",
+      "channel_name": "AI Trepreneur",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@Aitrepreneur",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.ai",
+      "tags": ["ai", "business", "tutorials"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/aitrepreneur.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@TheoriesofEverything",
+      "channel_name": "Theories of Everything",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@TheoriesofEverything",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 300,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.consciousness",
+      "tags": ["consciousness", "physics", "philosophy", "science"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/toe.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@SabineHossenfelder",
+      "channel_name": "Sabine Hossenfelder",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@SabineHossenfelder",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.science",
+      "tags": ["physics", "science", "consciousness"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/sabine.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@MeetKevin",
+      "channel_name": "Meet Kevin",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@MeetKevin",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 30,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 3,
+      "namespace": "pmoves.youtube.finance",
+      "tags": ["finance", "business", "news"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/meetkevin.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@indydevdan",
+      "channel_name": "IndyDevDan",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@indydevdan",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.ai",
+      "tags": ["ai", "coding", "agents"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/indydevdan.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@CloserToTruthTV",
+      "channel_name": "Closer To Truth",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@CloserToTruthTV",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 1,
+      "namespace": "pmoves.youtube.consciousness",
+      "tags": ["consciousness", "philosophy", "science", "kuhn"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/closertotruth.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@drmichaellevin",
+      "channel_name": "Dr. Michael Levin",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@drmichaellevin",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 300,
+        "max_age_days": 180,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 1,
+      "namespace": "pmoves.youtube.consciousness",
+      "tags": ["consciousness", "biology", "morphogenesis", "bioelectricity"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/levin.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@WesRoth",
+      "channel_name": "Wes Roth",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@WesRoth",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 60,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.ai",
+      "tags": ["ai", "news", "analysis"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/wesroth.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@AICodeKing",
+      "channel_name": "AI Code King",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@AICodeKing",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.ai",
+      "tags": ["ai", "coding", "tutorials"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/aicodeking.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@ColeMedin",
+      "channel_name": "Cole Medin",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@ColeMedin",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.ai",
+      "tags": ["ai", "agents", "archon", "tutorials"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/colemedin.archive",
+        "subtitle_langs": ["en"],
+        "write_info_json": true
+      }
+    },
+    {
+      "channel_id": "yt:channel:@Bijanbowen",
+      "channel_name": "Bijan Bowen",
+      "platform": "youtube",
+      "source_type": "channel",
+      "source_url": "https://www.youtube.com/@Bijanbowen",
+      "enabled": true,
+      "check_interval_minutes": 240,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 120,
+        "max_age_days": 90,
+        "exclude_keywords": ["#shorts"],
+        "title_keywords": []
+      },
+      "priority": 2,
+      "namespace": "pmoves.youtube.ai",
+      "tags": ["ai", "business", "tutorials"],
+      "format": null,
+      "media_type": "video",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/channels/bijanbowen.archive",
+        "subtitle_langs": ["en"],
         "write_info_json": true
       }
     }
@@ -172,9 +355,9 @@
   "global_settings": {
     "max_videos_per_check": 10,
     "use_rss_feed": true,
-    "use_youtube_api": false,
+    "use_youtube_api": true,
     "youtube_api_key": "",
-    "check_on_startup": true,
+    "check_on_startup": false,
     "notification_webhook": "",
     "batch_processing": true,
     "batch_size": 5,
@@ -182,20 +365,19 @@
       "write_info_json": true,
       "extractor_args": {
         "youtube": {
-          "player_client": [
-            "web_safari"
-          ]
+          "player_client": ["web_safari"]
         },
         "youtubepot-bgutilhttp": {
-          "base_url": [
-            "http://bgutil-pot-provider:4416"
-          ]
+          "base_url": ["http://bgutil-pot-provider:4416"]
         }
       }
-    }
+    },
+    "channel_metadata_fields": ["id", "name", "url", "namespace", "tags", "priority", "subscriber_count", "thumbnail", "description"],
+    "video_metadata_fields": ["duration", "view_count", "like_count", "thumbnail", "published_at", "categories", "tags"],
+    "channel_breakdown_limit": 50
   },
   "monitoring_schedule": {
     "enabled": true,
-    "interval_minutes": 30
+    "interval_minutes": 60
   }
 }

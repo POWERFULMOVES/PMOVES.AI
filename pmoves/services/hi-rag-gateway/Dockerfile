@@ -18,5 +18,12 @@ RUN if [ "$TORCH_SKIP_CUDA" != "1" ]; then pip install --no-cache-dir --index-ur
 COPY hi-rag-gateway/ .
 COPY common/ ./services/common/
 RUN mkdir -p /app/services && touch /app/services/__init__.py
+
+# Security: Run as non-root user
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
 EXPOSE 8086
 CMD ["uvicorn","gateway:app","--host","0.0.0.0","--port","8086"]

@@ -19,7 +19,11 @@ __all__ = [
     "publisher",
     "publisher_discord",
     "pmoves_yt",
+    "common",
 ]
+
+# Import common package directly since it's a real package with __init__.py
+from . import common  # noqa: E402, F401
 
 _BASE = Path(__file__).resolve().parent
 _ROOT = _BASE.parent

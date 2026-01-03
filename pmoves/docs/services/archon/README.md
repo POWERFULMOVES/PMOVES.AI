@@ -55,6 +55,13 @@ Archon is validated as part of the broader agents and GPU smokes:
 - GPU / Hi-RAG path:
   - `make -C pmoves smoke-gpu`
 
+### MCP / Agents health endpoints
+
+Archon exposes additional health endpoints beyond the main `/healthz`:
+
+- MCP server (port 8051): `curl -sS http://localhost:8051/health | jq .`
+- PydanticAI agents service (port 8052): `curl -sS http://localhost:8052/health | jq .`
+
 For deeper integration checks:
 
 - Follow the “All Services Up, Then Tests” checklist in `pmoves/docs/SMOKETESTS.md`.
@@ -70,4 +77,3 @@ When Archon health flaps (e.g. `/healthz` returns non-200 during bring-up):
    - `make -C pmoves agents-headless-smoke`
 
 Capture command output and health payloads in `pmoves/docs/SESSION_IMPLEMENTATION_PLAN.md` when you change Archon wiring or update the vendor submodule, so roadmap and stabilization notes stay aligned.
-

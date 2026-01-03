@@ -29,6 +29,19 @@ from typing import Iterable, List, Optional
 
 
 HARVEST_SUFFIX = "pmoves/data/consciousness/Constellation-Harvest-Regularization"
+TAXONOMY_SUFFIX = "pmoves/data/consciousness/kuhn_full_taxonomy.json"
+
+
+def load_full_taxonomy(repo_root: Path) -> dict:
+    """Load the full Kuhn consciousness taxonomy from JSON file."""
+    taxonomy_path = repo_root / TAXONOMY_SUFFIX
+    if taxonomy_path.exists():
+        try:
+            with taxonomy_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"[warn] Failed to load taxonomy from {taxonomy_path}: {e}", file=sys.stderr)
+    return {}
 
 
 @dataclass
@@ -52,8 +65,114 @@ def strip_html(html: str) -> str:
     return cleaned.strip()
 
 
-def collect_chunks(base: Path) -> List[Chunk]:
+def collect_taxonomy_chunks(taxonomy: dict) -> List[Chunk]:
+    """Generate chunks from the Kuhn consciousness taxonomy JSON.
+
+    Supports the full JSON taxonomy format with:
+    - categories: dict of category objects
+    - Each category has: id, description, theories (optional), subcategories (optional)
+    - Each subcategory has: description, theories
+    - Each theory has: name, proponents (list), description
+    """
     chunks: List[Chunk] = []
+    categories = taxonomy.get("categories", {})
+
+    if not categories:
+        print("[warn] No categories found in taxonomy", file=sys.stderr)
+        return chunks
+
+    for cat_key, cat_data in categories.items():
+        # Normalize category name for display
+        category_id = cat_data.get("id", cat_key.replace("_", "-").lower())
+        category_name = cat_key.replace("_", " ").lstrip("0123456789").strip()
+        cat_description = cat_data.get("description", "")
+
+        # Category description chunk
+        chunk_id = f"consciousness-cat-{category_id}"
+        chunks.append(
+            Chunk(
+                chunk_id=chunk_id,
+                title=f"{category_name} - Category Overview",
+                url=None,
+                category=category_id,
+                content=f"{category_name}: {cat_description}",
+            )
+        )
+
+        # Process subcategories
+        for subcat_key, subcat_data in cat_data.get("subcategories", {}).items():
+            subcat_name = subcat_key.replace("_", " ").lstrip("0123456789.").strip()
+            subcat_description = subcat_data.get("description", "")
+
+            # Subcategory chunk
+            subcat_id = f"consciousness-subcat-{subcat_key.lower().replace(' ', '-').replace('.', '-')[:40]}"
+            chunks.append(
+                Chunk(
+                    chunk_id=subcat_id,
+                    title=f"{subcat_name} - Subcategory",
+                    url=None,
+                    category=category_id,
+                    content=f"{subcat_name} is a subcategory of {category_name}. {subcat_description}",
+                )
+            )
+
+            # Theories in subcategory
+            for theory in subcat_data.get("theories", []):
+                theory_name = theory.get("name", "Unknown Theory")
+                proponents = theory.get("proponents", [])
+                proponents_str = ", ".join(proponents) if isinstance(proponents, list) else str(proponents)
+                desc = theory.get("description", "")
+
+                # Create stable ID from theory name
+                theory_slug = theory_name.lower().replace(" ", "-").replace("'", "").replace("/", "-")[:35]
+                chunk_id = f"consciousness-theory-{theory_slug}-{uuid.uuid4().hex[:6]}"
+
+                content = (
+                    f"{theory_name} is a consciousness theory in the {subcat_name} subcategory of {category_name}. "
+                    f"Key proponents: {proponents_str}. {desc}"
+                )
+                chunks.append(
+                    Chunk(
+                        chunk_id=chunk_id,
+                        title=theory_name,
+                        url=None,
+                        category=category_id,
+                        content=content,
+                    )
+                )
+
+        # Direct theories (no subcategory)
+        for theory in cat_data.get("theories", []):
+            theory_name = theory.get("name", "Unknown Theory")
+            proponents = theory.get("proponents", [])
+            proponents_str = ", ".join(proponents) if isinstance(proponents, list) else str(proponents)
+            desc = theory.get("description", "")
+
+            theory_slug = theory_name.lower().replace(" ", "-").replace("'", "").replace("/", "-")[:35]
+            chunk_id = f"consciousness-theory-{theory_slug}-{uuid.uuid4().hex[:6]}"
+
+            content = (
+                f"{theory_name} is a consciousness theory in the {category_name} category. "
+                f"Key proponents: {proponents_str}. {desc}"
+            )
+            chunks.append(
+                Chunk(
+                    chunk_id=chunk_id,
+                    title=theory_name,
+                    url=None,
+                    category=category_id,
+                    content=content,
+                )
+            )
+
+    return chunks
+
+
+def collect_chunks(base: Path, taxonomy: dict) -> List[Chunk]:
+    chunks: List[Chunk] = []
+
+    # First, add taxonomy chunks from JSON
+    chunks.extend(collect_taxonomy_chunks(taxonomy))
 
     # Research papers
     research_dir = base / "research-papers"
@@ -129,7 +248,7 @@ def write_jsonl(chunks: Iterable[Chunk], dest: Path) -> None:
                         "category": chunk.category,
                         "content": chunk.content,
                         "namespace": "pmoves.consciousness",
-                        "created_at": datetime.utcnow().isoformat() + "Z",
+                        "created_at": datetime.now(timezone.utc).isoformat() + "Z",
                     },
                     ensure_ascii=False,
                 )
@@ -213,6 +332,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=HARVEST_SUFFIX,
         help="Harvest directory (default: %(default)s relative to repo root)",
     )
+    parser.add_argument(
+        "--taxonomy",
+        default=TAXONOMY_SUFFIX,
+        help="Taxonomy JSON file (default: %(default)s relative to repo root)",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -221,7 +345,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"[error] Harvest directory not found: {base}", file=sys.stderr)
         return 1
 
-    chunks = collect_chunks(base)
+    # Load full taxonomy from JSON
+    taxonomy = load_full_taxonomy(repo_root)
+    if not taxonomy:
+        # Fallback: try from base directory
+        taxonomy_in_base = base.parent / "kuhn_full_taxonomy.json"
+        if taxonomy_in_base.exists():
+            try:
+                taxonomy = json.loads(taxonomy_in_base.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, IOError):
+                pass
+
+    if not taxonomy:
+        print("[warn] No taxonomy loaded, will only process research papers", file=sys.stderr)
+
+    chunks = collect_chunks(base, taxonomy)
     chunks_sorted = sorted(chunks, key=lambda c: c.chunk_id)
 
     write_jsonl(

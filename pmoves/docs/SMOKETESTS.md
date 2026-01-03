@@ -51,7 +51,7 @@ Optional secret bundle:
 - Start data + workers profile (v2 gateway) after the Supabase CLI stack is online:
   - `make up`
 - Wait ~15–30s for services to become ready. If you see `service missing` errors (Neo4j, Realtime, etc.), confirm the CLI stack is running and that `make up-external` completed successfully for Wger/Firefly/Open Notebook/Jellyfin.
-- TensorZero/Ollama embeddings: for hi‑rag v2 smokes run `make -C pmoves up-tensorzero` (starts ClickHouse, gateway/UI, and `pmoves-ollama`). The sidecar automatically serves `embeddinggemma:latest`/`300m`; if you host embeddings elsewhere, point `TENSORZERO_BASE_URL` at that gateway before running smoketests. The gateway exposes an OpenAI-compatible `/v1/embeddings` endpoint that smokes hit before falling back to CPU sentence-transformers. citeturn0search0turn0search2
+- TensorZero/Ollama embeddings: for hi‑rag v2 smokes run `make -C pmoves up-tensorzero` (starts ClickHouse, gateway/UI, and `pmoves-ollama`). The default production embedding model is `qwen3-embedding:4b` via `tensorzero::embedding_model_name::qwen3_embedding_4b_local`; if you host embeddings elsewhere, point `TENSORZERO_BASE_URL` at that gateway before running smoketests. The gateway exposes an OpenAI-compatible `/v1/embeddings` endpoint that smokes hit before falling back to CPU sentence-transformers.
 
 Useful health checks:
 - Presign: `curl http://localhost:8088/healthz`
@@ -118,6 +118,23 @@ Expected: the Discord channel receives a rich embed with the Smoke Story title, 
 - When a summary is present alongside other description content, the remainder appears in a `Summary` field (truncated to Discord's limits) so operators can confirm spillover handling.
 
 Remove `public_url` from the payload if you want to confirm the local-path fallback formatting.
+
+### Local realtime voice loop (operator audio)
+
+To hear `voice.agent.response.v1` replies locally (your host machine speakers), start the host-run speaker + follower:
+
+```bash
+make -C pmoves voice-speaker-start
+make -C pmoves voice-follow-start
+```
+
+Quick manual test (forces WAV/batch mode):
+
+```bash
+VOICE_SPEAKER_MODE=batch make -C pmoves voice-say MSG="Voice loop check"
+```
+
+If audio is choppy in `stream` mode, keep `VOICE_SPEAKER_MODE=batch` (slightly higher latency, much more reliable).
 
 ## 4) Seed Demo Data (Optional but helpful)
 - `make seed-data` (loads small sample docs into Qdrant/Meilisearch; already invoked by `make bootstrap-data`)
@@ -236,7 +253,7 @@ Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), 
 ### 5d) Wger Static Proxy Smoke
 - Ensure `make up-external-wger` (or `make up-external`) is running so both `cataclysm-wger` and `cataclysm-wger-nginx`
   containers are online. The nginx sidecar mirrors the upstream production guidance where Django writes the static
-  bundle and nginx serves `/static` and `/media` from shared volumes.citeturn0search0
+  bundle and nginx serves `/static` and `/media` from shared volumes.
 - Run `make smoke-wger` (defaults `WGER_ROOT_URL=http://localhost:8000`). The target:
   1. Performs an HTTP GET to confirm the proxy forwards requests to Gunicorn.
   2. Fetches `/static/images/logos/logo-font.svg` to ensure collectstatic artifacts are mounted correctly.
@@ -244,7 +261,7 @@ Prereqs: Supabase CLI stack running (`supabase start --network-id pmoves-net`), 
 - If the static check fails, recreate the containers with
   `docker compose -p pmoves -f docker-compose.external.yml up -d --force-recreate wger` to rerun `collectstatic`. Volume
   permission errors are the next suspect—verify `/home/wger/static` is owned by UID 1000 inside the Django container,
-  matching the upstream deployment reference.citeturn0search0
+  matching the upstream deployment reference.
 
 ### 5e) Creative Automations
 Prereqs: tutorials installed (`pmoves/creator/tutorials/`), Supabase CLI stack running, `make bootstrap` secrets populated, `make up`, external services (`make -C pmoves up-external`), and `make up-n8n`.
