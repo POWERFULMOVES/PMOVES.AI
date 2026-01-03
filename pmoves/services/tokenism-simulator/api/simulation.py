@@ -65,7 +65,6 @@ import atexit
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
-from concurrent.futures import ThreadPoolExecutor
 
 from flask import Blueprint, request, jsonify
 from prometheus_client import Counter, Histogram, generate_latest
@@ -107,54 +106,19 @@ _executor_lock = threading.Lock()
 
 
 def _evict_old_results() -> None:
-    """Evict oldest results if we exceed the maximum cache size.
-
-    This function implements LRU (Least Recently Used) eviction policy to
-    prevent unbounded memory growth from storing simulation results. When the
-    cache size exceeds `_MAX_RESULTS`, the oldest entries are removed from both
-    the results and status tracking dictionaries.
-
-    Thread safety is maintained by acquiring both locks during eviction to
-    prevent inconsistent state between results and statuses.
-
-    Note:
-        This function must be called while holding the `_results_lock` to
-        ensure atomicity of the check-and-evict operation.
-    """
-    # Collect IDs to evict first to minimize lock holding time
-    ids_to_evict = []
+    """Evict oldest results if we exceed the maximum cache size."""
     with _results_lock:
         while len(_simulation_results) > _MAX_RESULTS:
-            oldest_id, _ = _simulation_results.popitem(last=False)
-            ids_to_evict.append(oldest_id)
-
-    # Evict corresponding status entries
-    if ids_to_evict:
-        with _status_lock:
-            for old_id in ids_to_evict:
-                _simulation_statuses.pop(old_id, None)
+            _simulation_results.popitem(last=False)
 
 
 def _shutdown_executor() -> None:
-    """Shutdown the background executor on application shutdown.
-
-    This function is registered with `atexit` to ensure clean shutdown of
-    the ThreadPoolExecutor when the application exits. It waits for all
-    running tasks to complete before shutdown.
-
-    The function is thread-safe and uses `_executor_lock` to prevent race
-    conditions with concurrent calls to `_get_executor`.
-
-    Note:
-        This function should not be called directly by application code.
-        It is invoked automatically by the `atexit` module during process
-        termination.
-    """
+    """Shutdown the background executor on application shutdown."""
     global _executor
     with _executor_lock:
         if _executor is not None:
             logger.info("Shutting down simulation executor...")
-            _executor.shutdown(wait=True)
+            _executor.shutdown(wait=True, timeout=5.0)
             _executor = None
 
 
@@ -163,25 +127,7 @@ atexit.register(_shutdown_executor)
 
 
 def _get_executor() -> ThreadPoolExecutor:
-    """Get or create the background task executor (thread-safe).
-
-    This function implements lazy initialization of a ThreadPoolExecutor for
-    running asynchronous simulations. The executor is created on first access
-    and reused for subsequent calls.
-
-    The executor is configured with a maximum of 4 worker threads, each named
-    with the prefix "sim_worker" for easy identification in debug logs.
-
-    Returns:
-        ThreadPoolExecutor: The thread pool executor instance for running
-            background simulation tasks. The same instance is returned on
-            subsequent calls.
-
-    Note:
-        This function is thread-safe and uses `_executor_lock` to prevent
-        race conditions during initialization. The executor is automatically
-        shut down when the application exits via `_shutdown_executor`.
-    """
+    """Get or create the background task executor (thread-safe)."""
     global _executor
     with _executor_lock:
         if _executor is None:
@@ -244,10 +190,11 @@ def _run_simulation_background(
 
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-        # Store result and trigger eviction if needed (acquire locks together for consistency)
-        with _results_lock, _status_lock:
+        # Store result and trigger eviction if needed
+        with _results_lock:
             _simulation_results[simulation_id] = result.model_dump(mode='json')
             _evict_old_results()
+        with _status_lock:
             _simulation_statuses[simulation_id] = "complete"
 
         simulation_requests.labels(
@@ -263,11 +210,10 @@ def _run_simulation_background(
             logger.info(f"Would send webhook to {webhook_url} (not implemented)")
 
     except Exception as e:
-        # Acquire locks together for consistency with success path
-        # CRITICAL: Must use same lock order as success path: _results_lock, _status_lock
-        with _results_lock, _status_lock:
-            _simulation_results[simulation_id] = {"error": str(e)}
+        with _status_lock:
             _simulation_statuses[simulation_id] = "failed"
+        with _results_lock:
+            _simulation_results[simulation_id] = {"error": str(e)}
             _evict_old_results()
         simulation_requests.labels(
             scenario=scenario.value,
@@ -303,7 +249,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'tokenism-simulator',
-        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'timestamp': datetime.utcnow().isoformat(),
     }), 200
 
 
@@ -457,12 +403,12 @@ def run_simulation():
         asyncio.set_event_loop(loop)
 
         try:
-            start_time = datetime.now(timezone.utc)
+            start_time = datetime.utcnow()
 
             engine = loop.run_until_complete(get_simulation_engine())
             result = loop.run_until_complete(engine.run_simulation(parameters, scenario))
 
-            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            duration = (datetime.utcnow() - start_time).total_seconds()
 
             # Update metrics
             simulation_requests.labels(
@@ -592,7 +538,6 @@ def run_simulation_async():
             'simulation_id': simulation_id,
             'status': 'queued',
             'message': 'Simulation queued for processing',
-            'check_url': f'/api/v1/simulate/{simulation_id}',
         }), 202
 
     except Exception as e:
@@ -663,34 +608,32 @@ def get_simulation_status(simulation_id: str):
         For polling, implement exponential backoff (e.g., 1s, 2s, 4s, 8s...)
         to avoid overwhelming the service with frequent requests.
     """
-    # CRITICAL: Lock order must match _run_simulation_background: _results_lock, _status_lock
-    with _results_lock, _status_lock:
-        status = _simulation_statuses.get(simulation_id, 'unknown')
+    status = _simulation_statuses.get(simulation_id, 'unknown')
 
-        if status == 'complete':
-            result = _simulation_results.get(simulation_id, {})
-            return jsonify({
-                'simulation_id': simulation_id,
-                'status': status,
-                'result': result,
-            }), 200
-        elif status == 'failed':
-            result = _simulation_results.get(simulation_id, {})
-            return jsonify({
-                'simulation_id': simulation_id,
-                'status': status,
-                'error': result.get('error', 'Unknown error'),
-            }), 500
-        elif status == 'running':
-            return jsonify({
-                'simulation_id': simulation_id,
-                'status': status,
-                'message': 'Simulation still in progress',
-            }), 202
-        else:
-            return jsonify({
-                'error': f'Simulation {simulation_id} not found',
-            }), 404
+    if status == 'complete':
+        result = _simulation_results.get(simulation_id, {})
+        return jsonify({
+            'simulation_id': simulation_id,
+            'status': status,
+            'result': result,
+        }), 200
+    elif status == 'failed':
+        result = _simulation_results.get(simulation_id, {})
+        return jsonify({
+            'simulation_id': simulation_id,
+            'status': status,
+            'error': result.get('error', 'Unknown error'),
+        }), 500
+    elif status == 'running':
+        return jsonify({
+            'simulation_id': simulation_id,
+            'status': status,
+            'message': 'Simulation still in progress',
+        }), 202
+    else:
+        return jsonify({
+            'error': f'Simulation {simulation_id} not found',
+        }), 404
 
 
 @simulation_bp.route('/api/v1/scenarios', methods=['GET'])
@@ -748,40 +691,7 @@ def list_scenarios():
 
 
 def _get_scenario_description(scenario: SimulationScenario) -> str:
-    """Get human-readable description for a scenario.
-
-    Returns a detailed description of the economic conditions and market
-    dynamics represented by a simulation scenario. Used by the scenarios
-    list endpoint to provide context for each available scenario.
-
-    Args:
-        scenario: The scenario enum value to get a description for.
-            Must be a member of the SimulationScenario enum.
-
-    Returns:
-        str: Human-readable description of the scenario's economic
-            conditions and assumptions. Returns "Unknown scenario" if
-            the scenario is not recognized.
-
-    Examples:
-        >>> _get_scenario_description(SimulationScenario.BASELINE)
-        'Standard economic conditions with historical parameters'
-
-        >>> _get_scenario_description(SimulationScenario.STRESS_TEST)
-        'Extreme stress test with severe shocks'
-
-        >>> # Used in scenario list endpoint
-        >>> scenario = SimulationScenario.OPTIMISTIC
-        >>> {
-        ...     'id': scenario.value,
-        ...     'description': _get_scenario_description(scenario)
-        ... }
-        {'id': 'optimistic', 'description': 'Growth-oriented scenario with favorable conditions'}
-
-    Note:
-        This is a private helper function used internally by the
-        `/api/v1/scenarios` endpoint.
-    """
+    """Get human-readable description for a scenario."""
     descriptions = {
         SimulationScenario.BASELINE: 'Standard economic conditions with historical parameters',
         SimulationScenario.OPTIMISTIC: 'Growth-oriented scenario with favorable conditions',

@@ -96,24 +96,7 @@ monitor = ChannelMonitor(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage Channel Monitor application lifespan.
-
-    Handles startup and shutdown events for the FastAPI application.
-    On startup, initializes the channel monitor and ensures metrics
-    counters are properly initialized. On shutdown, gracefully closes
-    database connections and stops background tasks.
-
-    Args:
-        app: FastAPI application instance.
-
-    Yields:
-        None. Control is yielded back to FastAPI for the application lifetime.
-
-    Notes:
-        - Stores monitor instance in app.state.monitor for dependency injection
-        - Initializes Prometheus metric counters with zero values to ensure
-          all label combinations exist before first use
-    """
+    """Manage Channel Monitor application lifespan."""
     # Startup
     await monitor.start()
     app.state.monitor = monitor

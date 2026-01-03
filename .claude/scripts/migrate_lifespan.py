@@ -107,23 +107,13 @@ async def lifespan(app: FastAPI):
     insert_pos = app_match.start()
     content = content[:insert_pos] + '\n' + lifespan_func + '\n' + content[insert_pos:]
 
-    # Update FastAPI app to include lifespan (handle both empty and non-empty cases)
-    if 'app = FastAPI()' in content:
-        # Empty FastAPI() case - no comma needed
-        content = re.sub(
-            r'app = FastAPI\(\)',
-            'app = FastAPI(lifespan=lifespan)',
-            content,
-            count=1
-        )
-    else:
-        # FastAPI with existing arguments - add comma
-        content = re.sub(
-            r'(app = FastAPI\([^)]*)(\))',
-            r'\1, lifespan=lifespan\2',
-            content,
-            count=1
-        )
+    # Update FastAPI app to include lifespan
+    content = re.sub(
+        r'(app = FastAPI\([^)]*)(\))',
+        r'\1, lifespan=lifespan\2',
+        content,
+        count=1
+    )
 
     # Remove old @app.on_event decorators and handlers
     content = re.sub(
@@ -148,13 +138,7 @@ async def lifespan(app: FastAPI):
         return False
 
 def main():
-    # Derive root from script location for portability
-    script_path = Path(__file__).resolve()
-    # Script is at .claude/scripts/migrate_lifespan.py, so root is 2 levels up
-    root = script_path.parents[1]
-    if not (root / "pmoves").exists():
-        # Fallback to current directory if structure doesn't match
-        root = Path.cwd()
+    root = Path("/home/pmoves/PMOVES.AI")
     print("🔄 Migrating FastAPI @app.on_event to lifespan pattern...")
 
     migrated = 0
