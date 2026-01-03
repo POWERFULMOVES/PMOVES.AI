@@ -1,7 +1,7 @@
 <clickhouse>
   <users>
     <tensorzero>
-      <password></password>
+      <password>tensorzero</password>
       <profile>default</profile>
       <networks>
         <ip>::/0</ip>
