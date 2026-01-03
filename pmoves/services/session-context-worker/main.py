@@ -36,17 +36,14 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import nats
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from nats.aio.client import Client as NATS
-from nats.aio.msg import Msg
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
-from jsonschema import validate, ValidationError as JsonSchemaValidationError
-from services.common.events import load_schema
 
 # Prometheus metrics
 messages_received = Counter(
@@ -114,15 +111,6 @@ KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 # Global state
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
-
-
-def _nats_loop_done(task: asyncio.Task) -> None:
-    """Callback for NATS resilience loop task completion."""
-    if not task.cancelled():
-        exc = task.exception()
-        if exc:
-            logger.error("NATS resilience loop crashed unexpectedly: %s", exc, exc_info=True)
-
 
 # FastAPI app for health endpoint
 @asynccontextmanager
@@ -412,8 +400,9 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     return kb_upsert
 
 
-async def _handle_session_context(msg: nats.aio.msg.Msg) -> None:
-    """Handle incoming session context messages from NATS.
+async def _handle_session_context(msg: NATS.Msg) -> None:
+    """
+    Handle incoming session context messages.
 
     This is the message handler for the claude.code.session.context.v1 subject.
     It parses the incoming session context, transforms it into a knowledge base
@@ -449,7 +438,7 @@ async def _handle_session_context(msg: nats.aio.msg.Msg) -> None:
         data = json.loads(msg.data.decode("utf-8"))
 
         if not isinstance(data, dict):
-            logger.warning("Invalid message format: expected dict, got %s", type(data))
+            logger.warning(f"Invalid message format: expected dict, got {type(data)}")
             messages_failed.labels("invalid_format").inc()
             processing_duration.labels("unknown").observe(time.time() - start_time)
             return
@@ -522,12 +511,12 @@ async def _handle_session_context(msg: nats.aio.msg.Msg) -> None:
         messages_processed.labels(context_type).inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         logger.exception("Failed to decode JSON")
         messages_failed.labels("json_decode_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
-    except Exception as exc:
-        logger.error("Error processing session context: %s", exc, exc_info=True)
+    except Exception as e:
+        logger.error(f"Error processing session context: {e}", exc_info=True)
         messages_failed.labels("processing_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
