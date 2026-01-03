@@ -413,15 +413,8 @@ async def list_tools(category: str = None, force_refresh: bool = False):
 
 
 @app.post("/tools/execute", response_model=ToolExecuteResponse)
-async def execute_tool(
-    request: ToolExecuteRequest,
-    _auth: Optional[str] = Depends(get_api_key)
-):
-    """
-    Execute an MCP tool via the Gateway.
-
-    Requires authentication when GATEWAY_API_KEY is set.
-    """
+async def execute_tool(request: ToolExecuteRequest):
+    """Execute an MCP tool via the Gateway"""
     start_time = datetime.now()
 
     try:
@@ -480,16 +473,8 @@ async def _route_to_upstream(tool: ToolDefinition, parameters: Dict[str, Any]) -
 
 
 @app.post("/skills/store", response_model=dict)
-async def store_skill(
-    request: SkillStoreRequest,
-    background_tasks: BackgroundTasks,
-    _auth: Optional[str] = Depends(get_api_key)
-):
-    """
-    Store a learned skill pattern in Cipher memory.
-
-    Requires authentication when GATEWAY_API_KEY is set.
-    """
+async def store_skill(request: SkillStoreRequest, background_tasks: BackgroundTasks):
+    """Store a learned skill pattern in Cipher memory"""
     try:
         # Store in Cipher memory
         skill_data = {
@@ -517,15 +502,8 @@ async def store_skill(
 
 
 @app.post("/skills/search", response_model=dict)
-async def search_skills(
-    request: SkillSearchRequest,
-    _auth: Optional[str] = Depends(get_api_key)
-):
-    """
-    Search for skills in Cipher memory.
-
-    Requires authentication when GATEWAY_API_KEY is set.
-    """
+async def search_skills(request: SkillSearchRequest):
+    """Search for skills in Cipher memory"""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             params = {"query": request.query, "limit": request.limit}
