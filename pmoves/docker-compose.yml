@@ -74,9 +74,16 @@ services:
     env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
     environment:
       - MEILI_ENV=production
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     ports: [ "7700:7700" ]
     profiles: [ "data", "meili-local" ]
     networks: [ data_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:7700/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   neo4j:
     image: neo4j:5.22
     restart: unless-stopped
@@ -1334,4 +1341,4 @@ networks:
   # Enables services to connect directly to supabase_realtime without host.docker.internal
   supabase_net:
     external: true
-    name: pmoves-net
+    name: supabase_network_PMOVES.AI
