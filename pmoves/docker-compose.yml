@@ -1007,6 +1007,33 @@ services:
     profiles: ["tensorzero"]
     networks: [pmoves_api, pmoves]
 
+  # GPU Orchestrator - Dynamic model loading and GPU resource management
+  gpu-orchestrator:
+    build:
+      context: ./services/gpu-orchestrator
+      dockerfile: Dockerfile
+    image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:latest}
+    restart: unless-stopped
+    <<: *env-tier-llm
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - GPU_MODELS_CONFIG=/config/gpu-models.yaml
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles: ["gpu"]
+    networks: [pmoves_api, pmoves_bus]
+    ports: ["8100:8100"]
+
   invidious-db:
     image: postgres:14
     restart: unless-stopped
