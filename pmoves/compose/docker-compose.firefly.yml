@@ -14,7 +14,7 @@ services:
     profiles: ["firefly"]
 
   firefly:
-    image: ${FIREFLY_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-firefly-iii:pmoves-latest}
+    image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     depends_on: [firefly-db]
     environment:
       APP_KEY: ${FIREFLY_APP_KEY:-base64:CHANGE_ME}

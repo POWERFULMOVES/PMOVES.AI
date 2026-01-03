@@ -25,11 +25,11 @@ payloads resolve correctly.
 1. After `make up-external-jellyfin`, open `http://localhost:8096` and run through the onboarding wizard, pointing Movies,
    TV, Music, etc. at the folders above.
 2. Install the **Kodi Sync Queue** plugin from Dashboard → Plugins → Catalog → search for “Kodi” (stable repository). This
-   enables real-time sync events for Jellyfin for Kodi clients.citeturn1search1
+   enables real-time sync events for Jellyfin for Kodi clients.
 3. Optional: if the plugin catalog is empty, add the stable manifest URL
-   (`https://repo.jellyfin.org/releases/plugin/manifest-stable.json`) under Dashboard → Plugins → Repositories.citeturn1search1
+   (`https://repo.jellyfin.org/releases/plugin/manifest-stable.json`) under Dashboard → Plugins → Repositories.
 4. On each Kodi device, install **Jellyfin for Kodi** from the official add-on repository (Download → Video add-ons →
-   Jellyfin), sign in with the same base URL/API key, and enable automatic sync.citeturn1search1
+   Jellyfin), sign in with the same base URL/API key, and enable automatic sync.
 
 ## Maintenance Tips
 

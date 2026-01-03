@@ -350,6 +350,7 @@ docker compose --profile agents --profile workers up -d
 **Security Posture (as of 2025-12-23):**
 - CODEOWNERS: 24/24 (100%) - All submodules have code owners
 - Dependabot: 24/24 (100%) - All submodules have automated security updates
+- Branch Protection: 24/24 (100%) - All submodules have branch protection rules
 - **See:** `.claude/learnings/submodule-security-audit-2025-12.md`
 
 **CI/CD:**
@@ -364,6 +365,9 @@ docker compose --profile agents --profile workers up -d
 - Feature branches: `feature/*`
 - Hardened branches: `PMOVES.AI-Edition-Hardened` (in submodules)
 - PR target: `main`
+- **NEVER delete branches after merging** - User needs them for review
+  - Use `gh pr merge --squash` without `--delete-branch`
+  - Branches are cleaned up manually by user
 
 ## Testing Workflow
 
@@ -418,6 +422,7 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
+- `tier-architecture.md` - **6-tier environment + 5-tier network architecture (SECURITY)**
 - `services-catalog.md` - Complete service listing with all details
 - `submodules.md` - Complete submodules catalog (25 submodules)
 - `ci-runners.md` - Self-hosted runner deployment and configuration
@@ -425,12 +430,6 @@ See `.claude/context/` for detailed documentation:
 - `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference
 - `testing-strategy.md` - Testing workflow and PR requirements
-
-**GEOMETRY BUS & CHIT Integration:**
-- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
-- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
-- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
-- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
 **GEOMETRY BUS & CHIT Integration:**
 - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide

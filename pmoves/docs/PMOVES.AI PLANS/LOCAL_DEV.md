@@ -91,7 +91,7 @@ Defaults baked into compose:
  - Local PostgREST at `http://postgrest:3000` with a local Postgres database.
 
 Embedding providers (local-first):
-- Ollama: set `OLLAMA_URL` and `OLLAMA_EMBED_MODEL` (default nomic-embed-text).
+- Ollama: set `OLLAMA_URL` and `OLLAMA_EMBED_MODEL` (default `qwen3-embedding:4b`; edge: `qwen3-embedding:0.6b` or `embeddinggemma:300m`).
 - OpenAI-compatible endpoints (LM Studio, vLLM, NVIDIA NIM): set `OPENAI_COMPAT_BASE_URL` and `OPENAI_COMPAT_API_KEY`.
 - Hugging Face Inference: set `HF_API_KEY` and optionally `HF_EMBED_MODEL`.
 If none are configured/reachable, the gateway falls back to `SENTENCE_MODEL` locally.

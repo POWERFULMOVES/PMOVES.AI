@@ -480,11 +480,12 @@ curl -X POST http://localhost:8099/v1/search?q=test
 
 ## Related Documentation
 
-- **NATS Subject Catalog**: `.claude/context/geometry-nats-subjects.md`
-- **Main NATS Reference**: `.claude/context/nats-subjects.md`
-- **Mathematical Vision**: `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md`
-- **Human-Readable Guide**: `pmoves/docs/PMOVESCHIT/Human_side.md`
-- **Services Catalog**: `.claude/context/services-catalog.md`
+- **NATS Subject Reference**: See "NATS Subject Reference" section above
+- **Networking Guide**: `../multi-stack-networking-guide-2025.md`
+- **Services Index**: `../services/README.md`
+- **Mathematical Vision**: `Integrating Math into PMOVES.AI.md`
+- **Human-Readable Guide**: `Human_side.md`
+- **Integration Status**: `IMPLEMENTATION_STATUS.md`
 
 ## References
 

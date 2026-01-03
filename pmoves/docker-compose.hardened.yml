@@ -1,9 +1,301 @@
 services:
-  archon:
-    user: "1000:1000"
+  # Python API Services - 500M /tmp, 200M cache
+  hi-rag-gateway-v2:
+    user: "65532:65532"
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  extract-worker:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  langextract:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  presign:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  render-webhook:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  retrieval-eval:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  pdf-ingest:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  jellyfin-bridge:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  invidious-companion-proxy:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  # GPU Services - 2G /tmp, 10G cache, 4G shm
+  ffmpeg-whisper:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=4G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+
+  media-video:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=4G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+
+  media-audio:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=4G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+
+  hi-rag-gateway-v2-gpu:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=4G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+
+  hi-rag-gateway-gpu:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=4G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+
+  # Python Workers - 500M /tmp, 100M cache
+  deepresearch:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+      - /opt/DeepResearch:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  supaserch:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  publisher-discord:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  mesh-agent:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  nats-echo-req:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  nats-echo-res:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  publisher:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  analysis-echo:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  graph-linker:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  comfy-watcher:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  grayjay-plugin-host:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  # Agent Services
+  agent-zero:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    # Note: Persistent volumes /a0/* are mounted from host, need proper ownership
+
+  archon:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G,mode=1777
+      - /home/pmoves/.cache:size=2G,uid=65532,gid=65532
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
@@ -13,23 +305,39 @@ services:
     environment:
       SUPABASE_SERVICE_ROLE_KEY_FILE: /run/secrets/supabase_service_role_key
       SUPABASE_JWT_SECRET_FILE: /run/secrets/supabase_jwt_secret
-  pmoves-yt:
-    user: "1000:1000"
-    # yt-dlp writes temp files; keep FS read-only with a tmpfs for /tmp
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
+
   channel-monitor:
-    user: "1000:1000"
+    user: "65532:65532"
     read_only: true
     tmpfs:
-      - /tmp
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
+
+  # Media Ingestion - 10G /tmp, 500M cache
+  pmoves-yt:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=10G,mode=1777
+      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
+  # Sync Services - 100M /tmp, 50M cache
+  notebook-sync:
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /home/pmoves/.cache:size=50M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    # Note: Persistent volume /data is mounted from host, need proper ownership
 
 secrets:
   supabase_service_role_key:

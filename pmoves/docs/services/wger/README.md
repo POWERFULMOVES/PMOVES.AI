@@ -2,7 +2,7 @@
 
 The PMOVES external stack now mirrors the upstream production deployment model by pairing the
 `cataclysm-wger` Django container with an Nginx reverse proxy that serves collected static and media
-assets, matching the official guidance from the Wger Docker project.citeturn0search0
+assets, matching the official guidance from the Wger Docker project.
 
 ## Runtime layout
 

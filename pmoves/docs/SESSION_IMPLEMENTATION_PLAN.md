@@ -50,7 +50,7 @@ Owner: @POWERFULMOVES  • Agents: @AGENTS
 - GPU smoke (`make -C pmoves smoke-gpu`) passes — rerank_enabled=true, rerank_model=Qwen/Qwen3-Reranker-4B, rerank_loaded=false (expected), rerank query returned `used_rerank`.
 - Archon REST policy probe (`SMOKE_REST_TABLE=pmoves_core make -C pmoves archon-rest-policy-smoke`) returns HTTP 404, treated as OK per target (table missing/anon policy).
 - Archon smoke now passes after probing a table endpoint (`/rest/v1/it_errors?select=id&limit=1`) instead of the root.
-- DeepResearch in-net smoke (`make -C pmoves deepresearch-smoke-in-net`) not run: no `deepresearch` container; GHCR pull denied and local build from `./services` lacks `/contracts`. Pin `DEEPRESEARCH_IMAGE` to a pullable tag with credentials or rebuild from repo root with contracts in context.
+- DeepResearch in-net smoke (`make -C pmoves deepresearch-smoke-in-net`) was previously blocked by missing images/contracts; this is now superseded by the 2025-12-13 validation below.
 - Monitoring smoke (`make -C pmoves monitoring-smoke`) initially timed out waiting for blackbox samples; after warm-up, blackbox reports targets and the smoke passes. Monitoring stack now running (Grafana :3002, Prometheus :9090, Loki :3100, cAdvisor :9180); targets show channel-monitor down and node-exporter disabled on this host.
 
    Triggered by moving `/tmp/nats/jetstream` out of the NATS container and posting a valid `/events/publish` payload to exercise the fallback path.
@@ -81,3 +81,11 @@ Owner: @POWERFULMOVES  • Agents: @AGENTS
 - Single-env policy remains active; Supabase REST is canonical for `public,pmoves_core,pmoves_kb`.
 - Node Exporter is Linux-only; on macOS/Windows, keep using cAdvisor only.
 - JetStream fallback ensures Agent Zero remains responsive even when JetStream is warming up.
+
+## 2025-12-13 Validation
+- Core smoke (`make -C pmoves smoke`) PASS.
+- Agents headless smoke (`make -C pmoves agents-headless-smoke`) PASS (Agent Zero + Archon health).
+- Archon UI smoke (`make -C pmoves archon-ui-smoke`) PASS.
+- Creator pipeline smoke (`make -C pmoves smoke-creator-pipeline`) PASS.
+- DeepResearch smoke PASS and wrote a Notebook entry: `entry:source:xqdy7r271nz04nla736a`.
+- n8n: repo-tracked flows normalized and importable (`pmoves/n8n/flows/*.json`); import is file-by-file via `make -C pmoves n8n-import-flows` (avoids `--separate` importer crash on this n8n version). Activate with `make -C pmoves n8n-activate-flows`.

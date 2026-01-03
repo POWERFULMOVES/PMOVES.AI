@@ -5,6 +5,7 @@ import contextlib
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -32,10 +33,21 @@ from ..event_bus import EventBus  # noqa: E402
 
 logger = logging.getLogger("pmoves.gateway")
 
+# Shared NATS event bus (publishes contracts + captures workflow events).
+event_bus = EventBus(
+    nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
+    subscribe_topics=[
+        "ingest.file.added.v1",
+        "ingest.transcript.ready.v1",
+        "kb.upsert.request.v1",
+        "kb.upsert.result.v1",
+    ],
+)
 
-@contextlib.asynccontextmanager
+
+@asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
+    """Manage PMOVES Gateway application lifespan."""
     # Startup
     if app.state.event_bus:
         await app.state.event_bus.start()
@@ -59,16 +71,6 @@ except Exception as exc:  # pragma: no cover - optional dependency
     _shape_store = None
     chit.set_shape_store(None)
 
-# Shared NATS event bus (publishes contracts + captures workflow events).
-event_bus = EventBus(
-    nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
-    subscribe_topics=[
-        "ingest.file.added.v1",
-        "ingest.transcript.ready.v1",
-        "kb.upsert.request.v1",
-        "kb.upsert.result.v1",
-    ],
-)
 events_api.set_event_bus(event_bus)
 app.state.event_bus = event_bus
 

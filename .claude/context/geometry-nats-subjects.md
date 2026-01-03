@@ -13,7 +13,7 @@ The GEOMETRY BUS is a universal data fabric for multimodal AI communication usin
 ## Subject Naming Convention
 
 GEOMETRY subjects follow versioned patterns:
-```
+```text
 tokenism.<domain>.<event>.v1    # ToKenism economic simulations
 geometry.<type>.<event>.v1      # Core geometry events
 ```

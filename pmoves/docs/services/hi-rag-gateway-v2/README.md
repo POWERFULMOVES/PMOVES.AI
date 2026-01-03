@@ -43,7 +43,7 @@ Stable GHCR image (no local build)
   docker compose -p pmoves -f docker-compose.yml -f docker-compose.gpu-image.yml --profile gpu up -d hi-rag-gateway-v2-gpu
   ```
 - Or set `HIRAG_V2_GPU_IMAGE=ghcr.io/cataclysm-studios-inc/hi-rag-gateway-v2-gpu:cu128-py310-stable` in `pmoves/env.shared` and run `make -C pmoves up-gpu-gateways`.
-- Embedding pipeline: services now try TensorZero first (`TENSORZERO_BASE_URL`, defaulting to `http://tensorzero-gateway:3000`) using the bundled Ollama-backed `embeddinggemma:latest` / `embeddinggemma:300m` models. Ensure `make up-tensorzero` and `ollama pull embeddinggemma:latest` (requires Ollama ≥ 0.11.10) so the gateway can answer GPU queries without falling back to `sentence-transformers/all-MiniLM-L6-v2`. citeturn0search0turn0search2
+- Embedding pipeline: services try TensorZero first (`TENSORZERO_BASE_URL`, default `http://tensorzero-gateway:3000`) using the bundled Ollama sidecar. Production default is `qwen3-embedding:4b` via `tensorzero::embedding_model_name::qwen3_embedding_4b_local`; keep it consistent with `QDRANT_COLLECTION` (do not mix embedding dims). If TensorZero/Ollama are unavailable, the gateway falls back to `sentence-transformers/all-MiniLM-L6-v2`.
 
 Neo4j warm dictionary
 - Startup no longer emits `UnknownPropertyKey` warnings when `type` is absent on individual `Entity` nodes—the warm cache now checks `keys(e)` before reading the property and falls back to `UNK`.

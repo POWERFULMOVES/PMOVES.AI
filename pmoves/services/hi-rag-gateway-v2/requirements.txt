@@ -1,2 +1,36 @@
+# Hi-RAG v2 Gateway Requirements
+# Core web framework
+fastapi>=0.112.0
+uvicorn[standard]>=0.30.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Vector database
+qdrant-client>=1.9.0
+
+# Embeddings and reranking
+sentence-transformers>=3.0.0
+FlagEmbedding>=1.2.0
+
+# Graph database
+neo4j>=5.0.0
+
+# HTTP client
+requests>=2.32.0
+
+# Message bus
+nats-py>=2.7.0
+
+# PostgreSQL
+psycopg[binary]>=3.1.0
+
+# ML/AI
+torch>=2.9.0
+accelerate>=1.0.0
+
+# Utilities
+rapidfuzz>=3.0.0
+
 # Metrics
-prometheus-client==0.20.0
+prometheus-client>=0.20.0

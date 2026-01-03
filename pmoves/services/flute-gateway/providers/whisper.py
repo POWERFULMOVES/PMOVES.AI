@@ -25,7 +25,7 @@ class WhisperProvider(VoiceProvider):
             base_url: ffmpeg-whisper service URL (default: http://ffmpeg-whisper:8078)
         """
         super().__init__(base_url)
-        self.transcribe_endpoint = f"{base_url}/transcribe"
+        self.transcribe_endpoint = f"{base_url}/transcribe_file"
         self.health_endpoint = f"{base_url}/healthz"
 
     async def synthesize(

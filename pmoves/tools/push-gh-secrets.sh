@@ -71,6 +71,9 @@ if [[ -n "$ONLY_KEYS" ]]; then
   IFS=',' read -r -a ONLY_ARR <<< "$ONLY_KEYS"
 fi
 
+# Initialize empty array to avoid unbound variable errors under set -u
+MANIFEST_KEYS=()
+
 if [[ $PUSH_ALL -eq 0 && -z "$ONLY_KEYS" && -f "$MANIFEST" ]]; then
   mapfile -t MANIFEST_KEYS < <(grep -E '^[[:space:]]+key:' "$MANIFEST" | awk '{print $2}' | sort -u)
 fi
@@ -83,7 +86,7 @@ should_include() {
     done
     return 1
   fi
-  if [[ $PUSH_ALL -eq 1 || ${#MANIFEST_KEYS[@]:-0} -eq 0 ]]; then
+  if [[ $PUSH_ALL -eq 1 || ${#MANIFEST_KEYS[@]} -eq 0 ]]; then
     return 0
   fi
   for k in "${MANIFEST_KEYS[@]}"; do

@@ -1,1 +1,4 @@
 jellyfin-ai/neo4j/import
+jellyfin-ai/redis
+jellyfin-ai/redis/*
+jellyfin-ai/redis/**

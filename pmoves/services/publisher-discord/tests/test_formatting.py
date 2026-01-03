@@ -75,7 +75,7 @@ for p in (str(ROOT), str(PM)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from pmoves.services import publisher_discord as discord
+from services import publisher_discord as discord
 
 
 def test_format_content_published_embed_minimal():
