@@ -56,7 +56,7 @@ Create animated visualizations of parametric surfaces and CHIT geometric transfo
 |--------|----------|
 | `preview` | Interactive browser preview |
 | `gif` | Documentation, README |
-| `mp4` | High quality video |
+| `mp4` | High-quality video |
 | `webm` | Web embedding |
 | `frames` | Individual PNG frames |
 

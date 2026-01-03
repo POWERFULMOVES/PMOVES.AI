@@ -1,5 +1,23 @@
 from __future__ import annotations
 
+"""SupaSerch multimodal holographic deep research orchestrator.
+
+SupaSerch coordinates complex research queries across multiple PMOVES services:
+- DeepResearch for LLM-based research planning
+- Hi-RAG v2 for hybrid retrieval (vectors + graph + full-text)
+- Archon/Agent Zero MCP tools for advanced capabilities
+
+Key endpoints:
+    POST /search          - Execute multimodal search query
+    GET  /metrics        - Prometheus metrics endpoint
+    GET  /healthz        - Health check endpoint
+
+Environment Variables:
+    SUPASERCH_MODE: Research mode (tensorzero, openrouter, or deepresearch)
+    NATS_URL: NATS connection string (default: nats://nats:4222)
+    HIRAG_URL: Hi-RAG gateway URL (default: http://hi-rag-gateway-v2:8086)
+"""
+
 import asyncio
 import contextlib
 import json
@@ -7,6 +25,7 @@ import logging
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -27,15 +46,37 @@ from prometheus_client import (
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Module-level task reference for proper cleanup
+_nats_task: Optional[asyncio.Task[None]] = None
 
-@contextlib.asynccontextmanager
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan with NATS connection."""
+    """Manage application lifespan.
+
+    Startup:
+        - Initialize NATS connection and start connection task
+
+    Shutdown:
+        - Cancel connection task, drain and close NATS connection
+    """
+    global _nats_task
     # Startup
     app.state.nats = None
-    asyncio.create_task(_connect_nats())
+    _nats_task = asyncio.create_task(_connect_nats())
+
     yield
+
     # Shutdown
+    if _nats_task is not None:
+        _nats_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _nats_task
+        _nats_task = None
+
     nc: Optional[NATS] = getattr(app.state, "nats", None)
     if nc is not None and not nc.is_closed:
         try:
@@ -121,13 +162,15 @@ def _build_cgp_packet(
         Dict conforming to chit.cgp.v0.1 schema
     """
     # Build points from pipeline stages
+    # Status-to-projection mapping for readability
+    status_proj_map = {"complete": 1.0, "pending": 0.5}
     points = []
     for i, stage in enumerate(plan):
         status = stage.get("status", "pending")
         points.append({
             "id": f"stage:{stage.get('stage', f'step-{i}')}",
             "modality": "latent",
-            "proj": 1.0 if status == "complete" else (0.5 if status == "pending" else 0.0),
+            "proj": status_proj_map.get(status, 0.0),
             "conf": 0.9 if status == "complete" else 0.5,
             "summary": stage.get("summary", "")[:200],
             "meta": {

@@ -16,19 +16,19 @@ This plan tracks the work required to expose PMOVES/Jellyfin media libraries thr
 
 | Option | Summary | Pros | Cons |
 | --- | --- | --- | --- |
-| Grayjay desktop `--server` mode | Run the Grayjay desktop build in “server” mode to expose the aggregated plugin catalog and media browser via a web UI/API. | Officially supported as of the 2025.10 release; minimal customization. citeturn9search6 | Requires bundling the desktop build in our stack; still experimental (nightly feature). |
-| Phoenix-based Jellyfin plugin host | Deploy the open-source `grayjay-jellyfin-plugin` Phoenix app inside our infra to mint plugin QR codes. | Battle-tested UI for generating Jellyfin plugin manifests & QR codes. citeturn10search9 | Full Elixir/Phoenix runtime; needs Redis/Postgres and TLS to mirror production UX. |
+| Grayjay desktop `--server` mode | Run the Grayjay desktop build in “server” mode to expose the aggregated plugin catalog and media browser via a web UI/API. | Officially supported as of the 2025.10 release; minimal customization. | Requires bundling the desktop build in our stack; still experimental (nightly feature). |
+| Phoenix-based Jellyfin plugin host | Deploy the open-source `grayjay-jellyfin-plugin` Phoenix app inside our infra to mint plugin QR codes. | Battle-tested UI for generating Jellyfin plugin manifests & QR codes. | Full Elixir/Phoenix runtime; needs Redis/Postgres and TLS to mirror production UX. |
 | Static plugin manifest service | Serve curated plugin JSON from a lightweight FastAPI/Flask app inside PMOVES. | Easy to containerize; aligns with our Python stack. | Must replicate plugin schema manually; loses auto-update benefits from official feeds. |
 
 ### Container Artefacts
 
-- **Grayjay server/runtime** – FUTO publishes multi-arch images under the GitLab registry `registry.gitlab.futo.org/videostreaming/grayjay/*`. Pull tags directly or mirror into our internal registry before composing. citeturn1search4
-- **Fcast (streaming helpers)** – Complementary streaming containers live at `registry.gitlab.futo.org/videostreaming/fcast/*` alongside release bundles and CI artifacts; useful for testing Grayjay plugin playback. citeturn1search4
+- **Grayjay server/runtime** – FUTO publishes multi-arch images under the GitLab registry `registry.gitlab.futo.org/videostreaming/grayjay/*`. Pull tags directly or mirror into our internal registry before composing.
+- **Fcast (streaming helpers)** – Complementary streaming containers live at `registry.gitlab.futo.org/videostreaming/fcast/*` alongside release bundles and CI artifacts; useful for testing Grayjay plugin playback.
 
 ---
 
 ## 3. Proposed Architecture
-1. **Invidious companion** stays resident (profile `invidious`) to guarantee high-reliability YouTube playback/metadata for Grayjay-sourced requests. citeturn7open0
+1. **Invidious companion** stays resident (profile `invidious`) to guarantee high-reliability YouTube playback/metadata for Grayjay-sourced requests.
    - Bring up with `COMPOSE_PROFILES=invidious make up` (or merge with existing profiles); configure secrets in `env.shared`.
 2. **Grayjay service**: package the desktop build (AppImage) in a thin VNC-less container that launches `Grayjay --server --bind 0.0.0.0:9095 --data /grayjay`. Add compose profile `grayjay` so operators can opt in.
    - The repo now includes `grayjay-plugin-host` (FastAPI) and `grayjay-server` compose services; start with `COMPOSE_PROFILES=grayjay docker compose up -d` and browse plugins at `http://localhost:9096/plugins`.
@@ -52,7 +52,7 @@ This plan tracks the work required to expose PMOVES/Jellyfin media libraries thr
 ---
 
 ## 5. Risks & Open Questions
-- Server mode stability is new; monitor upstream releases for breaking changes. citeturn9search6
+- Server mode stability is new; monitor upstream releases for breaking changes.
 - Jellyfin authentication: decide between password-based login vs. creating limited-scope API keys per Grayjay user.
 - Plugin auto-update: determine whether to mirror upstream plugin feed or curate PMOVES-specific entries only.
 

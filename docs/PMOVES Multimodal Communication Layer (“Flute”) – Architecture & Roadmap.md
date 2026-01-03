@@ -1,3 +1,15 @@
+> [!CAUTION]
+> **DEPRECATED DOCUMENT LOCATION**
+>
+> This document has been superseded. Please refer to the canonical locations:
+>
+> - **Operational API Reference:** `.claude/context/flute-gateway.md`
+> - **Full Architecture:** `pmoves/docs/context/PMOVES Multimodal Communication Layer (Flute) – Architecture & Roadmap.md`
+>
+> This file is retained for historical reference only and will be removed in a future cleanup.
+
+---
+
 # PMOVES Multimodal Communication Layer (“Flute”) – Architecture & Roadmap
 
 ## Overview and Goals

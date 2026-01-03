@@ -127,11 +127,8 @@ Optional TensorZero integration for embedding generation.
 [gateway]
 observability.enabled = true
 
-[gateway.observability.clickhouse]
-url = "env::TENSORZERO_OBS_CLICKHOUSE_URL"
-database = "env::TENSORZERO_OBS_CLICKHOUSE_DB"
-username = "env::TENSORZERO_OBS_CLICKHOUSE_USER"
-password = "env::TENSORZERO_OBS_CLICKHOUSE_PASSWORD"
+# Note: ClickHouse is configured via TENSORZERO_CLICKHOUSE_URL environment variable
+# The [gateway.observability.clickhouse] section is no longer valid in TensorZero 2025.11.6+
 
 # Model definitions
 [models.gemma_embed_local]
@@ -151,10 +148,8 @@ type = "chat"
 
 **ClickHouse Connection:**
 ```bash
-TENSORZERO_OBS_CLICKHOUSE_URL=http://tensorzero-clickhouse:8123
-TENSORZERO_OBS_CLICKHOUSE_DB=tensorzero
-TENSORZERO_OBS_CLICKHOUSE_USER=tensorzero
-TENSORZERO_OBS_CLICKHOUSE_PASSWORD=tensorzero
+# TensorZero 2025.11.6+ uses a single URL format (username/password/database in URL)
+TENSORZERO_CLICKHOUSE_URL=http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default
 ```
 
 **Gateway Configuration:**

@@ -72,13 +72,21 @@ COPY --from=ffmpeg-builder /usr/local /usr/local
 
 WORKDIR /app
 
-COPY ffmpeg-whisper/requirements.txt ./requirements.txt
+COPY pmoves/services/ffmpeg-whisper/requirements.txt ./requirements.txt
+COPY pmoves/services/ffmpeg-whisper/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir uv && \
     uv pip install --system --no-cache-dir -r requirements.txt
 
-COPY . /app/services
+COPY pmoves/services /app/services
 
 ENV PYTHONPATH=/app
+
+# Security: Run as non-root user (GPU services need video group)
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves -G video --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
 
 EXPOSE 8078
 

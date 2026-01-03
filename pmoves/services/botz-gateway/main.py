@@ -154,7 +154,7 @@ async def cleanup_stale_instances():
     while True:
         try:
             await asyncio.sleep(60)  # Check every minute
-            threshold = datetime.utcnow() - timedelta(minutes=STALE_THRESHOLD_MINUTES)
+            threshold = datetime.now(timezone.utc) - timedelta(minutes=STALE_THRESHOLD_MINUTES)
 
             async with httpx.AsyncClient() as client:
                 # Mark instances with old heartbeats as unavailable
@@ -186,7 +186,7 @@ async def update_heartbeat(instance_id: str, is_available: bool = True):
             headers=supabase_headers,
             params={"instance_id": f"eq.{instance_id}"},
             json={
-                "last_heartbeat": datetime.utcnow().isoformat(),
+                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
                 "is_available": is_available
             }
         )
@@ -214,7 +214,7 @@ async def register_botz_instance(registration: BotzRegistration) -> Dict[str, An
             "runner_host": registration.runner_host,
             "config_path": registration.config_path,
             "metadata": registration.metadata,
-            "last_heartbeat": datetime.utcnow().isoformat(),
+            "last_heartbeat": datetime.now(timezone.utc).isoformat(),
             "is_available": True
         }
 
@@ -246,7 +246,7 @@ async def register_botz_instance(registration: BotzRegistration) -> Dict[str, An
 @app.get("/healthz")
 async def healthz():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "botz-gateway", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "service": "botz-gateway", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/metrics")
@@ -328,7 +328,7 @@ async def heartbeat(hb: BotzHeartbeat):
     """Update BoTZ heartbeat."""
     success = await update_heartbeat(hb.instance_id, hb.is_available)
     if success:
-        return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
     else:
         raise HTTPException(status_code=404, detail="BoTZ instance not found")
 
@@ -422,7 +422,7 @@ async def claim_work_item(claim: WorkItemClaim):
                         "work_item_id": claim.work_item_id,
                         "botz_id": claim.botz_id,
                         "session_id": claim.session_id,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }).encode()
                 )
 
@@ -460,7 +460,7 @@ async def complete_work_item(completion: WorkItemComplete):
                         "botz_id": completion.botz_id,
                         "commit_sha": completion.commit_sha,
                         "pr_url": completion.pr_url,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }).encode()
                 )
 

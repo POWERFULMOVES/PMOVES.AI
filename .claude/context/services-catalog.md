@@ -111,6 +111,53 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Used By:** DeepResearch, notebook-sync
 - **Status:** External submodule integration
 
+## Voice & Speech Services
+
+### Flute-Gateway
+- **Ports:** 8055 (HTTP), 8056 (WebSocket)
+- **Purpose:** Multimodal voice communication layer with Pipecat integration
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `POST /v1/voice/synthesize/prosodic` - Prosodic TTS synthesis
+  - `POST /v1/voice/analyze/prosodic` - Text analysis for TTS
+  - `POST /v1/sessions` - Create voice session
+- **Features:**
+  - Pipecat pipeline for real-time audio
+  - Prosodic synthesis with natural pauses/emphasis
+  - WebSocket streaming for duplex communication
+  - Multiple TTS backend support (VibeVoice, Ultimate-TTS)
+- **Metrics:** `GET http://localhost:8055/metrics` (Prometheus)
+- **Dependencies:** NATS, Ultimate-TTS-Studio (optional), FFmpeg-Whisper
+- **Environment:**
+  - `FLUTE_API_KEY` - API authentication
+  - `ULTIMATE_TTS_URL` - Backend TTS service
+  - `VIBEVOICE_URL` - Alternative TTS backend
+- **Docker Image:** Custom build from `services/flute-gateway`
+- **Compose Profile:** `workers`, `orchestration`
+
+### Ultimate-TTS-Studio
+- **Ports:** 7861
+- **Purpose:** Multi-engine TTS with 7 engines pre-installed
+- **Key APIs:**
+  - `GET /gradio_api/info` - Service info and health
+  - Gradio Python client for synthesis
+- **Engines:**
+  - KittenTTS - Fast neural TTS
+  - Kokoro - High-quality Japanese/English
+  - F5-TTS - Natural prosody
+  - VoxCPM - Voice cloning
+  - Whisper - Speech-to-text input
+  - espeak-ng - Phoneme generation
+  - pynini - G2P and phonetic rules
+- **Features:**
+  - CUDA GPU acceleration
+  - Gradio web interface
+  - Multiple voice styles
+- **Security:** Non-root user (UID 65532)
+- **Metrics:** Gradio-based (no native Prometheus /metrics endpoint)
+- **Docker Image:** Custom build from `docker/ultimate-tts-studio`
+- **Compose Profile:** `gpu`, `tts`
+
 ## Media Ingestion & Processing
 
 ### PMOVES.YT
@@ -383,6 +430,59 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Integration:** `pmoves-jellyfin-bridge` (port 8093) syncs events to Supabase
 - **Related Submodules:** `PMOVES-Jellyfin`, `Pmoves-Jellyfin-AI-Media-Stack`
 
+## Token Economy & Agent UI (Added 2025-12-30)
+
+### Tokenism Simulator
+- **Ports:** 8103 (API)
+- **Purpose:** Token economy simulation with business model validation powered by EVO swarm intelligence
+- **Key APIs:**
+  - `GET /healthz` - Health check
+  - `GET /metrics` - Prometheus metrics
+  - `POST /api/v1/simulate` - Run simulation with scenario parameters
+  - `POST /api/v1/simulate/async` - Queue async simulation
+  - `GET /api/v1/scenarios` - List available scenarios (optimistic, baseline, pessimistic, stress_test)
+  - `GET /api/v1/contracts` - List contract types (GroToken, FoodUSD, GroupPurchase, GroVault, CoopGovernor)
+  - `GET /api/v1/simulations/{id}/geometry` - Get CHIT geometry data
+- **CHIT/Geometry:**
+  - Publishes to `tokenism.cgp.ready.v1` - Geometry packets for Poincaré disk visualization
+  - Hyperbolic wealth distribution visualization via A2UI
+- **Metrics:**
+  - `tokenism_simulation_requests_total{scenario, status}` - Counter for all simulations
+  - `tokenism_simulation_duration_seconds{scenario}` - Histogram for latency
+- **Grafana Dashboard:** tokenism-simulator
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-tokenism-simulator:pmoves-latest`
+- **Compose Profile:** `orchestration`
+- **Related Submodule:** `PMOVES-ToKenism-Multi`
+
+### A2UI NATS Bridge
+- **Ports:** 9224 (API), 9225 (WebSocket agents), 9226 (WebSocket clients)
+- **Purpose:** Bridges Google A2UI (Agent-to-User Interface) events to PMOVES NATS geometry bus
+- **Key APIs:**
+  - `GET /healthz` - Health check with active surfaces
+  - `GET /metrics` - Prometheus metrics
+  - `POST /api/v1/a2ui` - Accept A2UI JSON events
+  - `POST /api/v1/action` - Handle user actions from UI
+  - `POST /api/v1/simulate` - Simulate A2UI event for testing
+  - `WS /ws/a2ui` - WebSocket for A2UI agents (JSONL format)
+  - `WS /ws/client` - WebSocket for PMOVES UI subscribers
+- **NATS Subjects:**
+  - Publishes to: `a2ui.render.v1`, `a2ui.>`
+  - Subscribes to: `geometry.>` (bidirectional)
+- **A2UI Format (v0.9):**
+  - `createSurface` / `beginRendering` - Initialize UI surface
+  - `updateComponents` / `surfaceUpdate` - Add/update UI components
+  - `updateDataModel` / `dataModelUpdate` - Update data bindings
+  - `userAction` - Forward user interactions to agents
+- **Metrics:**
+  - `a2ui_events_published_total{event_type}` - Events published to NATS
+  - `a2ui_events_received_total` - Events from A2UI agents
+  - `a2ui_geometry_events_total` - Geometry events from NATS
+  - `a2ui_active_websockets` - Active WebSocket connections
+  - `a2ui_nats_connected` - NATS connection status (1=connected)
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest`
+- **Compose Profile:** `agents`, `orchestration`
+- **Related Submodule:** `research/A2UI` (Google A2UI repository)
+
 ## Quick Reference
 
 ### All Service Health Endpoints
@@ -392,11 +492,21 @@ http://localhost:8080/healthz  # Agent Zero
 http://localhost:8091/healthz  # Archon
 http://localhost:8097/healthz  # Channel Monitor
 
+# Token Economy & Agent UI
+http://localhost:8103/healthz  # Tokenism Simulator
+http://localhost:8103/metrics  # Tokenism Simulator (Prometheus)
+http://localhost:9224/healthz  # A2UI NATS Bridge
+
 # Retrieval & Knowledge
 http://localhost:8086/healthz  # Hi-RAG v2 CPU
 http://localhost:8087/healthz  # Hi-RAG v2 GPU
 http://localhost:8099/healthz  # SupaSerch
 http://localhost:8098/healthz  # DeepResearch
+
+# Voice & Speech
+http://localhost:8055/healthz  # Flute-Gateway
+http://localhost:8055/metrics  # Flute-Gateway (Prometheus)
+http://localhost:7861/gradio_api/info  # Ultimate-TTS-Studio
 
 # Media Processing
 http://localhost:8077/healthz  # PMOVES.YT

@@ -16,8 +16,8 @@ for candidate in (ROOT, PMOVES_ROOT):
     if candidate_str not in sys.path:
         sys.path.insert(0, candidate_str)
 
-from pmoves.services.common.telemetry import PublisherMetrics
-from pmoves.services.publisher import publisher
+from services.common.telemetry import PublisherMetrics
+from services.publisher import publisher
 
 
 def test_slugify_and_output_path(tmp_path):

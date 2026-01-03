@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
-from pmoves.services.pmoves_yt import docs_sync as _  # noqa: F401 ensure module importable
-from pmoves.services.pmoves-yt import yt as app_module
+from services.pmoves_yt import docs_sync as _  # noqa: F401 ensure module importable
+from services.pmoves_yt import yt as app_module
 
 
 def test_docs_catalog_endpoint_smoke():

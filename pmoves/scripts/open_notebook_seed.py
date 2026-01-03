@@ -54,19 +54,51 @@ def _tensorzero_embedding_name(model: str) -> str:
     return f"{prefix}{model}"
 
 
-def _tensorzero_models() -> Tuple[Tuple[str, str], Tuple[str, str]]:
-    chat_name = os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini"
-    embed_base = os.environ.get("TENSORZERO_EMBED_MODEL") or "gemma_embed_local"
-    embed_name = _tensorzero_embedding_name(embed_base)
-    return (chat_name, "language"), (embed_name, "embedding")
+def _tensorzero_models() -> List[Tuple[str, str]]:
+    """
+    Return all TensorZero models configured in tensorzero.toml.
+
+    Chat models use "openai::<model_name>" format (TensorZero acts as OpenAI-compatible).
+    Embedding models use "tensorzero::embedding_model_name::<model_name>" format.
+    """
+    chat_models = [
+        # Agent Zero models
+        ("openai::agent_zero_qwen14b_local", "language"),
+        ("openai::agent_zero_mistral7b_local", "language"),
+        ("openai::agent_zero_phi3_mini_local", "language"),
+        # General purpose chat (local via Ollama)
+        ("openai::qwen2_5_14b", "language"),
+        ("openai::qwen2_5_32b", "language"),
+        ("openai::chat_ollama_llama3", "language"),
+        ("openai::qwen3_8b", "language"),
+        ("openai::langextract_qwen7b_local", "language"),
+        ("openai::nemotron_mini", "language"),
+        # Cloud fallbacks (if API keys configured)
+        ("openai::chat_openai_platform", "language"),
+        ("openai::chat_groq", "language"),
+        ("openai::chat_openrouter", "language"),
+    ]
+
+    embedding_models = [
+        ("tensorzero::embedding_model_name::qwen3_embedding_8b_local", "embedding"),  # 4096 dim
+        ("tensorzero::embedding_model_name::qwen3_embedding_4b_local", "embedding"),  # CPU fallback
+        ("tensorzero::embedding_model_name::gemma_embed_local", "embedding"),        # Small CPU
+        ("tensorzero::embedding_model_name::archon_nomic_embed_local", "embedding"),
+        ("tensorzero::embedding_model_name::openai_text_embedding_small", "embedding"),
+    ]
+
+    return chat_models + embedding_models
 
 
 def _tensorzero_defaults() -> Dict[str, str]:
-    chat_name = os.environ.get("TENSORZERO_MODEL") or "openai::gpt-4o-mini"
-    embed_base = os.environ.get("TENSORZERO_EMBED_MODEL") or "gemma_embed_local"
+    """Default models for PMOVES (local-first via TensorZero)."""
     return {
-        "default_chat_model": chat_name,
-        "default_embedding_model": _tensorzero_embedding_name(embed_base),
+        # Default chat: qwen2.5:14b (balanced local model)
+        "default_chat_model": "openai::qwen2_5_14b",
+        # Tools: agent_zero_qwen14b_local (orchestration)
+        "default_tools_model": "openai::agent_zero_qwen14b_local",
+        # Embedding: qwen3-embedding:8b (4096 dimensions, high quality)
+        "default_embedding_model": "tensorzero::embedding_model_name::qwen3_embedding_8b_local",
     }
 
 
@@ -74,18 +106,21 @@ PROVIDERS: Dict[str, ProviderSpec] = {
     "openai": {
         "env": ["OPENAI_API_KEY"],
         "models": [
-            ("gpt-5-mini", "language"),
-            ("gpt-5", "language"),
+            ("gpt-4o-mini", "language"),
+            ("gpt-4o", "language"),
+            ("o3-mini", "language"),
             ("text-embedding-3-small", "embedding"),
             ("whisper-1", "speech_to_text"),
-            ("gpt-4o-mini-tts", "text_to_speech"),
+            ("tts-1", "text_to_speech"),
+            ("tts-1-hd", "text_to_speech"),
         ],
         "defaults": {
-            "default_chat_model": "gpt-5-mini",
-            "default_tools_model": "gpt-5",
+            "default_chat_model": "gpt-4o-mini",
+            "default_tools_model": "gpt-4o",
+            "default_reasoning_model": "o3-mini",
             "default_embedding_model": "text-embedding-3-small",
             "default_speech_to_text_model": "whisper-1",
-            "default_text_to_speech_model": "gpt-4o-mini-tts",
+            "default_text_to_speech_model": "tts-1",
         },
     },
     "groq": {

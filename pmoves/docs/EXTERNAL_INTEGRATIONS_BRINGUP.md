@@ -17,7 +17,7 @@ docker network create cataclysm-net || true
 ## Wger (Health)
 The PMOVES compose bundle now wraps the upstream Django container with the official nginx static
 proxy recommended by the Wger project, so you no longer need to maintain a separate clone just to
-host the UI.citeturn0search0
+host the UI.
 
 1) Bring the stack up from the PMOVES workspace:
 ```bash
@@ -128,10 +128,10 @@ JELLYFIN_NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
    - Enable Intel/AMD VAAPI by running `COMPOSE_PROFILES=jellyfin-ai,jellyfin-ai-vaapi docker compose -f pmoves/docker-compose.jellyfin-ai.yml up -d` and overriding `JELLYFIN_STACK_SERVICE=jellyfin-vaapi` plus any custom `/dev/dri` nodes. This mounts the render device into the Jellyfin container and forwards the same hardware mode to the audio processor/API gateway.
    - Enable NVIDIA NVENC by running `COMPOSE_PROFILES=jellyfin-ai,jellyfin-ai-nvenc docker compose -f pmoves/docker-compose.jellyfin-ai.yml up -d` with `JELLYFIN_STACK_SERVICE=jellyfin-nvenc` and the appropriate `JELLYFIN_NVIDIA_VISIBLE_DEVICES` or `JELLYFIN_NVIDIA_GPUS` values. The FFmpeg 7.1 toolchain inside the audio processor already exposes HDR tone mapping, SVT-AV1, and NVENC so metadata-rich transcodes stay GPU accelerated.
 4) Plugins and clients:
-   - Server dashboard → Plugins → Catalog → install **Kodi Sync Queue** (stable repo) so Jellyfin pushes updates to Kodi.citeturn1search1
-   - If the catalog is empty, add `https://repo.jellyfin.org/releases/plugin/manifest-stable.json` under Repositories.citeturn1search1
+   - Server dashboard → Plugins → Catalog → install **Kodi Sync Queue** (stable repo) so Jellyfin pushes updates to Kodi.
+   - If the catalog is empty, add `https://repo.jellyfin.org/releases/plugin/manifest-stable.json` under Repositories.
    - On Kodi devices install **Jellyfin for Kodi** from the official add-on store, sign in with the same base URL/API key,
-     and enable auto-sync.citeturn1search1
+     and enable auto-sync.
 
 ## n8n Public API (import + run)
 - API base: `http://localhost:5678/api/v1` with header `X-N8N-API-KEY: $N8N_API_KEY`.

@@ -23,7 +23,7 @@ Make targets
 - `make -C pmoves up-external` — starts the packaged image alongside Wger/Firefly/Jellyfin (ensure `docker network create cataclysm-net` first)
 - `make notebook-seed-models` — auto-register provider models/default selections via `scripts/open_notebook_seed.py` after `env.shared` contains your API keys
 - `make yt-notebook-sync ARGS="--limit 10"` — mirror unsynced PMOVES.YT transcripts from Supabase into an Open Notebook notebook (set `YOUTUBE_NOTEBOOK_ID`, `SUPABASE_SERVICE_ROLE_KEY`, and `OPEN_NOTEBOOK_API_TOKEN` first)
-  - The sync helper now submits sources with `async_processing=true` so Open Notebook queues ingestion instead of running blocking calls inside the request loop. This matches the platform's recommendation to use background processing for heavier workloads; only pass `--sync-processing` for debugging if you can tolerate the `asyncio.run()` error the upstream docs warn about.citeturn1open0
+  - The sync helper now submits sources with `async_processing=true` so Open Notebook queues ingestion instead of running blocking calls inside the request loop. Only pass `--sync-processing` for debugging if you can tolerate the `asyncio.run()` error when the request loop is already running.
 
 ### Sync control
 

@@ -9,7 +9,7 @@ from types import ModuleType
 from typer.testing import CliRunner
 
 
-def test_bootstrap_stages_bundle_and_updates_env(tmp_path) -> None:
+def test_bootstrap_stages_bundle_and_updates_env(tmp_path, monkeypatch) -> None:
     if "yaml" not in sys.modules:
         yaml_module = ModuleType("yaml")
 
@@ -25,6 +25,16 @@ def test_bootstrap_stages_bundle_and_updates_env(tmp_path) -> None:
     runner = CliRunner()
     registry = tmp_path / "registry.json"
     env_rel = Path("tmp/pytest-mini-cli/env.shared")
+
+    # Mock _run_module to create the env file that bootstrap_env would create
+    def mock_run_module(module: str, args: list) -> int:
+        if module == "pmoves.scripts.bootstrap_env":
+            env_file = Path.cwd() / env_rel
+            env_file.parent.mkdir(parents=True, exist_ok=True)
+            env_file.write_text("DEMO_TOKEN=demo-value\n", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(mini_cli, "_run_module", mock_run_module)
     registry.write_text(
         json.dumps(
             {

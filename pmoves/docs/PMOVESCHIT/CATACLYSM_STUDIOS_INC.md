@@ -7,12 +7,12 @@
 >
 > | Topic | Documentation |
 > |-------|---------------|
-> | **PMOVES.AI Services** | `.claude/context/services-catalog.md` |
-> | **CHIT/Geometry System** | `PMOVESCHIT.md`, `IMPLEMENTATION_STATUS.md` |
-> | **Voice Layer (Flute)** | `.claude/context/flute-gateway.md` |
-> | **Persona Framework** | `pmoves/docs/PERSONAS.md` |
-> | **NATS Event Bus** | `.claude/context/nats-subjects.md` |
-> | **Agent Orchestration** | Agent Zero at Port 8080 |
+> | **PMOVES.AI Services** | `pmoves/docs/services/README.md`, `pmoves/docs/INTEGRATIONS.md` |
+> | **CHIT/Geometry System** | `PMOVESCHIT.md`, `IMPLEMENTATION_STATUS.md`, `GEOMETRY_BUS_INTEGRATION.md` |
+> | **Voice Layer (Flute)** | `../FLUTE_PROSODIC_ARCHITECTURE.md`, `../context/PMOVES Multimodal Communication Layer (Flute) – Architecture & Roadmap.md` |
+> | **Persona Framework** | `../PERSONAS.md` |
+> | **NATS Event Bus** | `../multi-stack-networking-guide-2025.md`, service READMEs |
+> | **Agent Orchestration** | `../services/agent-zero/README.md` (Port 8080 API, 8081 UI) |
 >
 > **Three-Entity Model:**
 > - **Cataclysm Studios Inc.** → Platform & Company

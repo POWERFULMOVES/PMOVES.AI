@@ -4,6 +4,9 @@ This document provides a comprehensive guide to PMOVES.AI's GitHub organization,
 
 ## Table of Contents
 - [Contributor Guidance](#contributor-guidance)
+- [Security Roadmap](#security-roadmap)
+- [Branch Protection Rules](#branch-protection-rules)
+- [Recent Changes](#recent-changes)
 - [GitHub Actions Self-Hosted Runner Setup](#github-actions-self-hosted-runner-setup)
 - [GitHub Documentation Resources](#github-documentation-resources)
 - [PMOVES Project Repositories](#pmoves-project-repositories)
@@ -11,11 +14,169 @@ This document provides a comprehensive guide to PMOVES.AI's GitHub organization,
 - [Video Resources & Tutorials](#video-resources--tutorials)
 - [Team & Collaboration](#team--collaboration)
 
---- 
+---
 
 ## Contributor Guidance
 - Operational/stabilization rules live in the root `AGENTS.md`; service-level coding norms for the `pmoves/` subtree live in `pmoves/AGENTS.md`. Read both before opening PRs and keep edits in sync.
 - Submodules are the source of truth for hardened integrations (Archon, Agent Zero, PMOVES.YT, etc.). Pin the intended branch/ref in `.gitmodules`, align with `docs/PMOVES.AI-Edition-Hardened-Full.md`, and note any temporary divergence in PR notes.
+
+---
+
+## Security Roadmap
+
+### Phase 1: Foundation - COMPLETE ✅
+**Completion Date:** 2025-11-15
+**Security Score:** 80/100
+
+**Achievements:**
+- GitHub Actions hardening with secure workflow patterns
+- Non-root baseline established (3/29 services migrated)
+- SecurityContext templates for pod security standards
+- Initial container security posture
+
+### Phase 2: Hardening - COMPLETE ✅
+**Completion Date:** 2025-12-07 (PR #276, commit 8bf936a)
+**Security Score:** 95/100 (+18.75% improvement)
+
+**Achievements:**
+- **BuildKit Secrets Migration:** Removed 4 HIGH-RISK secrets from Archon Dockerfile, migrated to BuildKit `--secret` pattern
+- **Network Tier Segmentation:** 5-tier isolation architecture across 45 services
+  - Tier 1: Public (Jellyfin, TensorZero UI)
+  - Tier 2: Gateway (TensorZero, Agent Zero)
+  - Tier 3: Application (Hi-RAG, Archon, PMOVES.YT)
+  - Tier 4: Data (Supabase, Qdrant, Neo4j, Meilisearch)
+  - Tier 5: Infrastructure (NATS, MinIO, Prometheus)
+- **Branch Protection:** Main branch protected with required PR reviews, status checks, signed commits, and linear history
+- **CODEOWNERS:** Automated review assignments for critical paths
+
+**Documentation:** 67KB of Phase 2 security guides and audit logs
+
+### Phase 3: Advanced Security - PLANNED
+**Target Completion:** Q1 2026
+**Target Security Score:** 98/100
+
+**Planned Initiatives:**
+- TLS termination with cert-manager
+- HashiCorp Vault integration for dynamic secrets
+- Automated secret rotation policies
+- mTLS between service tiers
+- Runtime security monitoring with Falco
+- SAST/DAST integration in CI/CD pipeline
+
+---
+
+## Branch Protection Rules
+
+### Default branch merge rules (Rulesets)
+PMOVES.AI uses **GitHub Rulesets** on the default branch (not classic branch protection). This matters because the REST endpoint for branch protection can return 404 even when merges are still gated.
+
+**Inspect the active ruleset (recommended):**
+- List rulesets: `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets`
+- View a ruleset: `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/<id>`
+- Quick summary (human-readable): `gh api repos/POWERFULMOVES/PMOVES.AI/rulesets/<id> | jq '{enforcement,conditions,rules: [.rules[].type]}'`
+
+**Current expected gates (as of 2025-12-15):**
+- Pull requests required
+- Code owner review required (see `.github/CODEOWNERS`)
+- Last-push approval required (someone other than the last pusher must approve)
+- Review threads must be resolved before merge
+- Prevent deletion + non-fast-forward updates on the default branch
+- Allowed merge methods: merge, squash, rebase
+
+### CODEOWNERS
+Automated review assignments are configured in `.github/CODEOWNERS` and are authoritative (inspect it directly: `.github/CODEOWNERS`). This repo intentionally keeps owners narrow for security-critical paths (workflows, compose, env, and core services).
+
+**Status:** Active and enforced since PR #276 (2025-12-07)
+
+---
+
+## Recent Fixes
+
+### Docker Auth + Build Stability (2025-12-13)
+**Status:** Complete ✅
+
+- **Docker credential helper mismatch:** Docker Desktop/WSL commonly writes `credsStore=desktop.exe` into `~/.docker/config.json`. On Linux/headless hosts this can break pulls/builds with `docker-credential-desktop.exe: permission denied`.
+  - **Preferred fix:** use the repo-scoped Docker config under `.docker-nocreds/` and set `DOCKER_CONFIG` accordingly.
+  - The `pmoves/Makefile` now auto-prefers `../.docker-nocreds` when present so `make -C pmoves up-*` and `make -C pmoves update` work in headless environments.
+  - **GHCR login tip (local):** use the same repo-scoped config when logging into GHCR, otherwise Docker will try to save credentials via the broken helper:
+    - `DOCKER_CONFIG=./.docker-nocreds gh auth token | DOCKER_CONFIG=./.docker-nocreds docker login ghcr.io -u <USER> --password-stdin`
+    - Note: run this from the repository root (or adjust the relative `.docker-nocreds` path accordingly).
+    - Safety note: avoid `docker login` without `DOCKER_CONFIG` on headless hosts unless you intentionally want credentials written to `~/.docker/config.json`.
+- **Compose file subsets:** invoking `docker compose` with different `-f` subsets under the same project name can cause noisy “Found orphan containers” warnings (and confusing status output). Prefer the `pmoves/Makefile` targets, which operate on a consistent compose file set for the `pmoves` stack.
+- **Buildx drift:** stale Docker Desktop/WSL buildx builders can reference dead `/run/desktop/mnt/host/wsl/...` bind mounts. Switch to the default builder (`docker buildx use default`) or recreate the builder if builds fail.
+- **GHCR publish scope:** pushing images to GHCR requires a token with `write:packages` (and `read:packages` for pulls of private packages). For GitHub CLI tokens: `gh auth refresh -h github.com -s write:packages`.
+  - If `gh auth refresh` rate-limits with `slow_down`, wait ~30–60 seconds and retry (GitHub device flow throttles repeated attempts).
+- **GHCR namespace casing:** GHCR image references must use a lowercase namespace. If your org/user owner is uppercase (e.g., `POWERFULMOVES`), normalize tags to lowercase in CI/CD (the integrations GHCR workflow now does this).
+- **dotenv safety + compose overrides:** avoid `source`-ing `pmoves/env.shared` directly in shell scripts/Make recipes (it may contain non-shell-safe values). Prefer `pmoves/scripts/with-env.sh`, which sanitizes dotenv files before exporting vars.
+- **Secrets precedence:** avoid Compose-time `environment: VAR=${VAR}` for secrets that are already in `env_file`, because an unset shell var becomes an empty string and overrides the `env_file` value inside containers. This surfaced as Open Notebook tokens drifting from DeepResearch until the compose interpolation was removed.
+- **n8n flow versioning:** canonical, shareable exports live under `pmoves/n8n/flows/` and are mirrored into the `PMOVES-n8n` submodule (`PMOVES-n8n/workflows/`). Import/activate with `make -C pmoves n8n-bootstrap` (handles import + DB sanitize + restart). Refresh exports from a live n8n instance via `make -C pmoves n8n-export-repo-flows`.
+- **n8n HTTP timeouts:** `options.timeout` for HTTP Request nodes is **milliseconds** in n8n. Treat values like `10/20/30` as 10ms/20ms/30ms unless explicitly multiplied (this has bitten Voice Agent flows and Supabase/NATS calls).
+- **Voice Agents (Flute):** Voice Agent router (`pmoves/n8n/flows/voice_platform_router.json`) defaults to TensorZero local models when available (`VOICE_AGENT_MODEL=tensorzero::model_name::qwen2_5_14b`) and publishes `voice.agent.response.v1` to NATS.
+
+### Docker Build Reliability Improvements (2025-12-06 to 2025-12-07)
+**Status:** Complete ✅
+
+Following Phase 2 Security Hardening, we identified and resolved critical Docker build failures across the stack:
+
+**Critical Issues Fixed:**
+1. **DeepResearch** — container restart loop and build wiring
+   - Commit `4a2a36a6` restored the runtime `contracts/` copy in `pmoves/services/deepresearch/Dockerfile` and updated `pmoves/docker-compose.yml` so the container stopped crash-looping.
+2. **Dockerfiles (root context)** — COPY-path fixes for services building from the repo root
+   - Commit `d6c5381e` corrected COPY paths in `pmoves/services/chat-relay/Dockerfile` and `pmoves/services/flute-gateway/Dockerfile`.
+3. **FFmpeg-Whisper** — scoped build context and safer ignore rules
+   - Commit `714681db` updated `pmoves/services/ffmpeg-whisper/Dockerfile`, `pmoves/docker-compose.yml`, and the repo root `.dockerignore`.
+
+**Build Success Rate**: Improved from intermittent failures to 100% successful builds for affected services
+
+**See Also**: `docs/build-fixes-2025-12-07.md` for the detailed timeline and root-cause analysis.
+
+---
+
+## Recent Changes
+
+### PR #276: Phase 2 Security Hardening (2025-12-07)
+**Status:** Merged to main (commit 8bf936a)
+
+**Changes:**
+- Fixed network isolation tier assignments for all 45 services
+- Container security fixes:
+  - TensorZero: Non-root user, read-only root filesystem
+  - DeepResearch: Fixed build context and environment variable syntax
+  - NATS: Proper health check configuration
+- Removed BuildKit secrets from tracked files
+- Implemented branch protection rules
+- Added CODEOWNERS for automated reviews
+
+**Key Commits:**
+- a15c045: Network tier segmentation fixes
+- 0811f96: TensorZero container hardening
+- cb47f06: DeepResearch build fixes
+- 4a2a36a: Branch protection setup
+
+**Documentation:** See `docs/security/phase-2/` for complete audit trail
+
+### Production Readiness Enhancements (2025-12-07, commit 7bacba2)
+**Status:** Complete ✅
+
+**TensorZero Model Expansion:**
+- Added 5 new Qwen models for local inference via Ollama:
+  - Qwen2.5 32B (flagship, ~19GB)
+  - Qwen2.5 14B (efficient, ~8GB)
+  - Qwen2-VL 7B (vision-language, ~5GB)
+  - Qwen3-Reranker 4B (cross-encoder for Hi-RAG v2)
+- Enabled ClickHouse observability in TensorZero config
+
+**GitHub Automation:**
+- Created .github/CODEOWNERS for security-critical path approvals
+- Configured Dependabot for Docker, GitHub Actions, and Python dependencies
+- Weekly automated dependency update schedule
+
+**Documentation Updates (via TAC parallel agents):**
+- Updated PMOVES.AI-Edition-Hardened-Full.md (service count, network architecture, security posture)
+- Created docs/architecture/network-tier-segmentation.md (421 lines, 5-tier architecture)
+- Updated .gitignore patterns for backup files and WSL2 artifacts
+
+---
 
 ## GitHub Actions Self-Hosted Runner Setup
 

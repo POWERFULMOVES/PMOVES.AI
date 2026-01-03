@@ -46,50 +46,109 @@ ARG ARCHON_GIT_REMOTE=https://github.com/POWERFULMOVES/PMOVES-Archon.git
 ARG ARCHON_GIT_REF=main
 ARG USE_LOCAL_VENDOR=0
 
-# Default configuration values (override at runtime)
-ARG SUPABASE_URL_DEFAULT=https://your-project.supabase.co
-ARG SUPABASE_SERVICE_ROLE_KEY_DEFAULT=replace-with-service-role-key
-ARG SUPABASE_ANON_KEY_DEFAULT=replace-with-anon-key
-ARG POSTGRES_HOST_DEFAULT=archon-postgres
-ARG POSTGRES_DB_DEFAULT=postgres
-ARG POSTGRES_USER_DEFAULT=postgres
-ARG POSTGRES_PASSWORD_DEFAULT=postgres
-ARG POSTGRES_PORT_DEFAULT=5432
-ARG MCP_SERVICE_URL_DEFAULT=http://archon-mcp:8051
-ARG MCP_CLIENT_ID_DEFAULT=archon
-ARG MCP_CLIENT_SECRET_DEFAULT=replace-with-mcp-secret
-ARG MCP_CREDENTIALS_PATH_DEFAULT=/app/config/mcp/credentials.json
+# ============================================================================
+# SECURITY: No default secrets in Dockerfile
+# ============================================================================
+# All sensitive configuration MUST be provided at runtime via:
+# - docker-compose env_file directive (env.shared, .env.local)
+# - docker run -e flags
+# - Kubernetes ConfigMap/Secret
+# - Host environment variables
+#
+# DO NOT add ARG defaults for:
+# - API keys, tokens, passwords
+# - Database credentials (POSTGRES_PASSWORD, SUPABASE_SERVICE_KEY, etc.)
+# - Service secrets (MCP_CLIENT_SECRET, etc.)
+# - Authentication tokens
+#
+# These values are intentionally NOT defined here to prevent accidental
+# exposure in image layers, build cache, or docker history output.
+# ============================================================================
 
-ENV SUPABASE_URL=${SUPABASE_URL_DEFAULT} \
-    SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY_DEFAULT} \
-    SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY_DEFAULT} \
-    SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY_DEFAULT} \
-    POSTGRES_HOST=${POSTGRES_HOST_DEFAULT} \
-    POSTGRES_PORT=${POSTGRES_PORT_DEFAULT} \
-    POSTGRES_DB=${POSTGRES_DB_DEFAULT} \
-    POSTGRES_USER=${POSTGRES_USER_DEFAULT} \
-    POSTGRES_PASSWORD=${POSTGRES_PASSWORD_DEFAULT} \
-    MCP_SERVICE_URL=${MCP_SERVICE_URL_DEFAULT} \
-    MCP_CLIENT_ID=${MCP_CLIENT_ID_DEFAULT} \
-    MCP_CLIENT_SECRET=${MCP_CLIENT_SECRET_DEFAULT} \
-    MCP_CREDENTIALS_PATH=${MCP_CREDENTIALS_PATH_DEFAULT} \
-    ARCHON_FORM=POWERFULMOVES \
+# Non-sensitive default paths and configuration only
+ENV ARCHON_FORM=POWERFULMOVES \
     AGENT_FORMS_DIR=/app/configs/agents/forms \
     ARCHON_UI_STATIC_DIR=/app/static/archon-ui \
-    ARCHON_VENDOR_ROOT=/app/vendor/archon
+    ARCHON_VENDOR_ROOT=/app/vendor/archon \
+    MCP_CREDENTIALS_PATH=/app/config/mcp/credentials.json
+
+# Local vendor seed (submodule) for USE_LOCAL_VENDOR=1 builds.
+# NOTE: This requires the submodule to be present in the build context.
+COPY integrations/archon /app/_local_vendor/archon
 
 # Bring in upstream Archon sources to vendor path
 # Prefer local submodule when USE_LOCAL_VENDOR=1; otherwise clone from remote.
 RUN if [ "${USE_LOCAL_VENDOR}" = "1" ]; then \
       echo "→ Using local submodule vendor at /app/vendor/archon"; \
       mkdir -p /app/vendor; \
-      cp -R ./integrations/archon /app/vendor/archon; \
+      cp -R /app/_local_vendor/archon /app/vendor/archon; \
     else \
       echo "→ Cloning vendor ${ARCHON_GIT_REMOTE}@${ARCHON_GIT_REF}"; \
       git clone --depth 1 --single-branch --branch "${ARCHON_GIT_REF}" "${ARCHON_GIT_REMOTE}" /app/vendor/archon; \
+    fi; \
+    rm -rf /app/_local_vendor
+
+# Patch upstream Archon MCP bootstrap for FastMCP compatibility.
+# fastmcp>=2.x expects `instructions=` (and does not accept `description=`).
+RUN set -eux; \
+    target="/app/vendor/archon/python/src/mcp_server/mcp_server.py"; \
+    if [ -f "$target" ] && grep -q "FastMCP(" "$target" && grep -q "description=" "$target"; then \
+      sed -i '/^[[:space:]]*description=/d' "$target"; \
+      echo "→ Patched MCP server description kwarg"; \
+    else \
+      echo "→ MCP server patch not needed"; \
     fi
 
-COPY services/archon/requirements.txt ./requirements.txt
+# Patch upstream Archon migration checker to avoid `/rpc/sql` calls.
+# Supabase REST does not ship a default `sql` RPC, so calling it produces noisy 404 logs.
+RUN python - <<'PY'
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+path = Path("/app/vendor/archon/python/src/server/services/migration_service.py")
+if not path.exists():
+    print(f"→ Archon migration_service.py not found at {path}; skipping patch")
+    raise SystemExit(0)
+
+text = path.read_text(encoding="utf-8")
+marker = "async def check_migrations_table_exists"
+start = text.find(marker)
+if start == -1:
+    print("→ check_migrations_table_exists not found; skipping patch")
+    raise SystemExit(0)
+
+# Find the next method at the same indentation level (4 spaces).
+match = re.search(r"\n    async def [a-zA-Z_][a-zA-Z0-9_]*\(", text[start + 1 :])
+end = (start + 1 + match.start()) if match else len(text)
+
+replacement = """async def check_migrations_table_exists(self) -> bool:
+        \"""
+        Check if the archon_migrations table exists in the database.
+
+        Supabase REST does not include a built-in `sql` RPC endpoint, so avoid calling
+        `supabase.rpc("sql", ...)` just to probe table existence.
+
+        Returns:
+            True if table exists, False otherwise
+        \"""
+        supabase = self._get_supabase_client()
+        try:
+            supabase.table("archon_migrations").select("id").limit(0).execute()
+            return True
+        except Exception as e:  # noqa: BLE001
+            logfire.info(f"Migrations table does not exist (or is not exposed): {e}")
+            return False
+
+"""
+
+patched = text[:start] + replacement + text[end:]
+path.write_text(patched, encoding="utf-8")
+print("→ Patched Archon check_migrations_table_exists (removed /rpc/sql probe)")
+PY
+
+COPY services/archon/requirements.txt services/archon/requirements.lock ./
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
@@ -115,6 +174,13 @@ RUN if [ -d "$ARCHON_UI_DIR" ]; then \
     else \
         echo "Archon UI directory '$ARCHON_UI_DIR' not found. Skipping UI build."; \
     fi
+
+# Security: Run as non-root user
+RUN groupadd -r pmoves --gid=65532 && \
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    chown -R pmoves:pmoves /app
+
+USER pmoves:pmoves
 
 EXPOSE 8090
 CMD ["python", "-m", "services.archon.main"]

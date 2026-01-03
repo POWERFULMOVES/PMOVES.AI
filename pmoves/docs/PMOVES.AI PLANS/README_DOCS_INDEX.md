@@ -1,6 +1,7 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2025-11-03_
+_Last updated: 2026-01-02_
 
+- **Stabilization Checklist** — `STABILIZATION_CHECKLIST.md`
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
 - **ComfyUI End‑to‑End** — `COMFYUI_END_TO_END.md`
 - **Hi‑RAG Reranker Providers** — `HI_RAG_RERANK_PROVIDERS.md`
@@ -36,6 +37,33 @@ _Last updated: 2025-11-03_
 These pair with UI frameworks in:
 - `docs/Unified and Modular PMOVES UI Design.md`
 - `docs/PMOVES Multimodal Communication Layer (“Flute”) – Architecture & Roadmap.md`
+
+## Submodule Plans Index
+
+| Submodule | Plan / Status Doc |
+| --- | --- |
+| PMOVES-Agent-Zero | `PMOVES_AGENT_ZERO_STATUS.md` |
+| PMOVES-Archon | `archonupdateforpmoves.md` |
+| PMOVES-BoTZ | `PMOVES_BOTZ_STATUS.md` |
+| PMOVES-Creator | `CREATOR_PIPELINE.md` |
+| PMOVES-Deep-Serch | `PMOVES_DEEP_SERCH_STATUS.md` |
+| PMOVES-DoX | `PMOVES_DOX_STATUS.md` |
+| PMOVES-HiRAG | `HI-RAG_UPGRADE.md` |
+| PMOVES-Jellyfin | `JELLYFIN_BRIDGE_INTEGRATION.md` |
+| PMOVES-Open-Notebook | `PMOVES_OPEN_NOTEBOOK_STATUS.md` |
+| PMOVES-Pipecat | `PMOVES_PIPECAT_STATUS.md` |
+| PMOVES-Pinokio-Ultimate-TTS-Studio | `PMOVES_PINOKIO_ULTIMATE_TTS_STUDIO_STATUS.md` |
+| PMOVES-Remote-View | `PMOVES_REMOTE_VIEW_STATUS.md` |
+| PMOVES-Tailscale | `PMOVES_TAILSCALE_STATUS.md` |
+| PMOVES-ToKenism-Multi | `PMOVES_TOKENISM_MULTI_STATUS.md` |
+| PMOVES-Ultimate-TTS-Studio | `PMOVES_ULTIMATE_TTS_STUDIO_STATUS.md` |
+| PMOVES-Wealth | `PMOVES_WEALTH_STATUS.md` |
+| PMOVES-crush | `PMOVES_CRUSH_STATUS.md` |
+| PMOVES-n8n | `N8N_SETUP.md` |
+| PMOVES-tensorzero | `PMOVES_TENSORZERO_STATUS.md` |
+
+Other tracked submodules:
+- Pmoves-hyperdimensions — `PMOVES_HYPERDIMENSIONS_STATUS.md`
 
 ## Codex + MCP
 - Full bundle and profiles: `codex_full_config_bundle/README-Codex-MCP-Full.md`

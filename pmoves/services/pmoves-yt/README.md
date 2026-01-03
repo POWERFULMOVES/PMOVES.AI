@@ -47,11 +47,16 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 - Use the metadata to filter notebook syncs or n8n workflows by brand/namespace
   without additional joins — e.g. `channel_tags @> '{"darkxside"}'`.
 
-### yt-dlp configuration & images (2025-11)
-- `yt-dlp[default]` + `curl-cffi` ship within the image; `ffmpeg` and `atomicparsley`
+### yt-dlp configuration & images (2025-12)
+- `yt-dlp[default]` + `curl-cffi` ship from PyPI at build time; `ffmpeg` and `atomicparsley`
   are installed via apt so metadata/thumbnail embedding works out of the box.
-- Dockerfile accepts `ARG YTDLP_VERSION`; if set during build we pin yt‑dlp to
-  that version, otherwise the latest is installed. Example:
+- Build args:
+  - `YTDLP_VERSION=YYYY.MM.DD` to pin an exact release.
+  - `YTDLP_PIP_URL=<pip URL>` to consume a fork (e.g., git+https). `YTDLP_PIP_URL` wins over `YTDLP_VERSION`.
+- Weekly bump workflow `.github/workflows/yt-dlp-bump.yml` opens a PR with the latest yt-dlp and validates a multi-arch build.
+  Override or skip by supplying your own `YTDLP_VERSION`/`YTDLP_PIP_URL` in image builds.
+
+Example:
 
 ```
 # Pin by version

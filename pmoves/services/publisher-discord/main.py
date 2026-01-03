@@ -1,3 +1,16 @@
+"""Discord notification publisher for PMOVES media events.
+
+Listens to NATS subjects for media ingestion events and publishes
+notifications to Discord channels.
+
+Environment Variables:
+    DISCORD_BOT_TOKEN: Discord bot token
+    DISCORD_WEBHOOK_URL: Discord webhook URL (alternative to bot token)
+    NATS_URL: NATS connection string
+"""
+
+from contextlib import asynccontextmanager
+
 import asyncio
 import base64
 import contextlib
@@ -30,30 +43,25 @@ except Exception:  # pragma: no cover - supabase is optional for local/dev
 from services.common.telemetry import PublisherMetrics, PublishTelemetry, compute_publish_telemetry
 
 
-@contextlib.asynccontextmanager
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan with NATS connection."""
-    # Startup
-    global _nats_loop_task
-    if _nats_loop_task and _nats_loop_task.done():
-        try:
-            _nats_loop_task.result()
-        except Exception as exc:  # pragma: no cover - startup diagnostics
-            logger.warning(
-                "nats_loop_previous_failure",
-                extra={"event": "nats_loop_previous_failure", "error": str(exc)},
-            )
-    if _nats_loop_task is None or _nats_loop_task.done():
+    """Manage application lifespan for Publisher Discord."""
+    global _nats_loop_task, _nc
+    # Startup - Discord webhooks are configured at runtime
+    # Non-blocking, quiet NATS init
+    if YT_NATS_ENABLE and NATS_URL:
         logger.info(
             "nats_loop_start",
             extra={"event": "nats_loop_start", "servers": [NATS_URL]},
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
-
     yield
 
     # Shutdown
-    global _nc
     if _nats_loop_task:
         _nats_loop_task.cancel()
         with contextlib.suppress(Exception):
@@ -72,6 +80,7 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DISCORD_USERNAME = os.environ.get("DISCORD_USERNAME", os.environ.get("DISCORD_WEBHOOK_USERNAME", "PMOVES"))
 DISCORD_AVATAR_URL = os.environ.get("DISCORD_AVATAR_URL", "")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+YT_NATS_ENABLE = os.environ.get("YT_NATS_ENABLE", "true").lower() in {"1", "true", "yes", "on"}
 SUBJECTS = os.environ.get(
     "DISCORD_SUBJECTS",
     "ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1,"
@@ -97,6 +106,21 @@ logger = logging.getLogger("publisher_discord")
 
 # Track session_id -> thread_id mapping for Claude sessions
 _session_threads: Dict[str, str] = {}
+
+
+def _extract_webhook_domain(webhook_url: str) -> str:
+    """Extract domain from Discord webhook URL for logging (sanitizes credentials)."""
+    # Discord webhook URLs are: https://discord.com/api/webhooks/<id>/<token>
+    # Extract just the domain for logging
+    try:
+        if "discord.com" in webhook_url:
+            return "discord.com"
+        elif "discord.gg" in webhook_url:
+            return "discord.gg"
+        else:
+            return "unknown"
+    except Exception:
+        return "invalid"
 
 
 def _coerce_tags(raw: Any) -> Iterable[str]:
@@ -702,6 +726,34 @@ async def _post_discord_with_file(
     return False
 
 
+def _safe_format_number(
+    value: Any,
+    fmt: str = ".2f",
+    prefix: str = "",
+    suffix: str = "",
+    fallback: str = "N/A",
+) -> str:
+    """Safely format a numeric value with defensive error handling.
+
+    Args:
+        value: The value to format (should be numeric).
+        fmt: Format specifier (e.g., ".2f", ",.0f", ".4f").
+        prefix: String to prepend (e.g., "$").
+        suffix: String to append (e.g., "%").
+        fallback: Value to return if formatting fails.
+
+    Returns:
+        Formatted string or fallback if value is not numeric.
+    """
+    if value is None:
+        return fallback
+    try:
+        formatted = f"{float(value):{fmt}}"
+        return f"{prefix}{formatted}{suffix}"
+    except (TypeError, ValueError):
+        return fallback
+
+
 def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     name = name.strip()
     emb = {"title": name, "fields": []}
@@ -867,7 +919,7 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if payload.get("action"):
             emb["fields"].append({"name": "Action", "value": str(payload["action"]), "inline": True})
         if payload.get("amount") is not None:
-            emb["fields"].append({"name": "Amount", "value": f"${payload['amount']:,.2f}", "inline": True})
+            emb["fields"].append({"name": "Amount", "value": _safe_format_number(payload["amount"], ",.2f", "$"), "inline": True})
         if payload.get("week") is not None:
             emb["fields"].append({"name": "Week", "value": str(payload["week"]), "inline": True})
         if payload.get("merkle_root"):
@@ -877,11 +929,16 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         emb["title"] = f"ToKenism Week {week} CGP Ready"
         emb["description"] = f"New CGP packet with {payload.get('super_node_count', 0)} super nodes generated."
         if payload.get("gini") is not None:
-            emb["fields"].append({"name": "Gini", "value": f"{payload['gini']:.4f}", "inline": True})
+            emb["fields"].append({"name": "Gini", "value": _safe_format_number(payload["gini"], ".4f"), "inline": True})
         if payload.get("poverty_rate") is not None:
-            emb["fields"].append({"name": "Poverty Rate", "value": f"{payload['poverty_rate']*100:.1f}%", "inline": True})
+            # Multiply by 100 for percentage display, with defensive handling
+            try:
+                pct_value = float(payload["poverty_rate"]) * 100
+                emb["fields"].append({"name": "Poverty Rate", "value": f"{pct_value:.1f}%", "inline": True})
+            except (TypeError, ValueError):
+                emb["fields"].append({"name": "Poverty Rate", "value": "N/A", "inline": True})
         if payload.get("total_wealth") is not None:
-            emb["fields"].append({"name": "Total Wealth", "value": f"${payload['total_wealth']:,.0f}", "inline": True})
+            emb["fields"].append({"name": "Total Wealth", "value": _safe_format_number(payload["total_wealth"], ",.0f", "$"), "inline": True})
         if payload.get("total_attributions") is not None:
             emb["fields"].append({"name": "Attributions", "value": str(payload["total_attributions"]), "inline": True})
         if payload.get("cgp_spec"):
@@ -900,13 +957,17 @@ def _format_event(name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if payload.get("generations"):
             emb["fields"].append({"name": "Generations", "value": str(payload["generations"]), "inline": True})
         if payload.get("best_fitness") is not None:
-            emb["fields"].append({"name": "Best Fitness", "value": f"{payload['best_fitness']:.4f}", "inline": True})
+            emb["fields"].append({"name": "Best Fitness", "value": _safe_format_number(payload["best_fitness"], ".4f"), "inline": True})
         if payload.get("avg_fitness") is not None:
-            emb["fields"].append({"name": "Avg Fitness", "value": f"{payload['avg_fitness']:.4f}", "inline": True})
+            emb["fields"].append({"name": "Avg Fitness", "value": _safe_format_number(payload["avg_fitness"], ".4f"), "inline": True})
         if payload.get("fitness_improvement") is not None:
-            imp = payload["fitness_improvement"]
-            sign = "+" if imp > 0 else ""
-            emb["fields"].append({"name": "Improvement", "value": f"{sign}{imp:.4f}", "inline": True})
+            # Format improvement with sign prefix, defensive handling
+            try:
+                imp = float(payload["fitness_improvement"])
+                sign = "+" if imp > 0 else ""
+                emb["fields"].append({"name": "Improvement", "value": f"{sign}{imp:.4f}", "inline": True})
+            except (TypeError, ValueError):
+                emb["fields"].append({"name": "Improvement", "value": "N/A", "inline": True})
         if payload.get("optimization_target"):
             emb["fields"].append({"name": "Target", "value": str(payload["optimization_target"]), "inline": True})
     else:

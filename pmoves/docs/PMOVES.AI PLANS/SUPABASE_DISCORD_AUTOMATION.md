@@ -1,5 +1,5 @@
 # Supabase → Agent Zero → Discord Automation Playbook
-_Last updated: 2025-10-01_
+_Last updated: 2026-01-02_
 
 This guide captures the concrete steps and validation checks for wiring the M2 "Creator & Publishing" automation path end to end. It augments the high-level context in `pmoves/docs/CREATOR_PIPELINE.md` and the operational checklist in `pmoves/docs/NEXT_STEPS.md` with implementation-ready instructions.
 
@@ -86,6 +86,8 @@ Perform the following steps in order to validate the pipeline:
    - If running in staging, deactivate after validation. For continuous operation, confirm schedule intervals and leave active.
 
 ### 2025-10-23 Session Status (Codex Sandbox)
+
+**Status summary:** Infrastructure is ready, but end-to-end validation remains blocked until the n8n approval poller activates and runs successfully.
 
 | Step | Status | Notes |
 | --- | --- | --- |

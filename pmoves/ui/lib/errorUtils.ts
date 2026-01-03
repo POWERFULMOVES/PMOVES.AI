@@ -3,9 +3,13 @@
  * Provides consistent error logging and user feedback
  */
 
+import type { ErrorId } from './constants/errorIds';
+
 type ErrorSeverity = 'debug' | 'info' | 'warning' | 'error' | 'critical';
 
 interface ErrorContext {
+  /** Stable error ID for log aggregation */
+  errorId?: ErrorId;
   component?: string;
   action?: string;
   userId?: string;

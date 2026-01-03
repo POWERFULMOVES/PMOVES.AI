@@ -245,7 +245,8 @@ def refresh_warm_dictionary():
         with driver.session() as s:
             recs = s.run(
                 (
-                    "MATCH (e:Entity) "
+                    # Avoid Neo4j "UnknownLabelWarning" when the graph hasn't been seeded yet.
+                    "MATCH (e) WHERE 'Entity' IN labels(e) "
                     "WITH e, CASE WHEN 'type' IN keys(e) THEN e.type ELSE 'UNK' END AS typ "
                     "RETURN e.value AS v, typ AS t "
                     "LIMIT $lim"

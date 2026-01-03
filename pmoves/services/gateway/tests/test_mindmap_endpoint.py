@@ -5,7 +5,7 @@ pytest.importorskip("fastapi")
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from pmoves.services.gateway.gateway.api import mindmap as mindmap_module
+from services.gateway.gateway.api import mindmap as mindmap_module
 
 
 class _FakeMindmapSession:

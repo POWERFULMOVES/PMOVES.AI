@@ -6,8 +6,8 @@ LABEL org.opencontainers.image.description="Chat Relay - NATS to Supabase Realti
 WORKDIR /app
 
 # Install dependencies
-COPY services/chat-relay/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY services/chat-relay/requirements.txt services/chat-relay/requirements.lock ./
+RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
 # Copy source
 COPY services/chat-relay/main.py .
