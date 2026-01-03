@@ -1034,6 +1034,61 @@ services:
     networks: [pmoves_api, pmoves_bus]
     ports: ["8100:8100"]
 
+  # Evo Controller - CHIT geometry parameter optimization via EvoSwarm
+  evo-controller:
+    build:
+      context: ./services/evo-controller
+      dockerfile: Dockerfile
+    image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - PORT=8113
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000}
+      - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
+      - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
+      - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+    ports: ["8113:8113"]
+    profiles: ["orchestration"]
+    networks: [pmoves_app, pmoves_bus]
+
+  # Flute Gateway - Multimodal voice communication layer (TTS/STT)
+  flute-gateway:
+    build:
+      context: ./services/flute-gateway
+      dockerfile: Dockerfile
+    image: ${FLUTE_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-flute-gateway:latest}
+    restart: unless-stopped
+    <<: *env-tier-media
+    environment:
+      - PORT=8055
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
+      - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+      - FLUTE_API_KEY=${FLUTE_API_KEY:-}
+    ports: ["8055:8055", "8056:8056"]
+    profiles: ["orchestration", "media"]
+    networks: [pmoves_app, pmoves_bus]
+
+  # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
+  session-context-worker:
+    build:
+      context: ./services/session-context-worker
+      dockerfile: Dockerfile
+    image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:latest}
+    restart: unless-stopped
+    <<: *env-tier-worker
+    environment:
+      - PORT=8100
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
+    ports: ["8102:8100"]
+    profiles: ["workers"]
+    networks: [pmoves_app, pmoves_bus]
+    depends_on:
+      - hi-rag-gateway-v2
+
   invidious-db:
     image: postgres:14
     restart: unless-stopped
