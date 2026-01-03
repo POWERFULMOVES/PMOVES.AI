@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Callable, Optional
-from datetime import datetime, timezone
+from datetime import datetime
 
 import nats
 
@@ -31,67 +31,40 @@ class NATSClient:
     """
 
     def __init__(self, config: NATSConfig):
-        """Initialize NATS client with configuration.
-
-        Args:
-            config: NATS connection configuration including URL, client name,
-                    and JetStream settings.
-
-        Note:
-            The client is not connected until :meth:`connect` is called.
-        """
         self.config = config
         self.nc: Optional[nats.aio.client.Client] = None
         self.js: Optional[nats.aio.client.JetStreamContext] = None
         self._connected = False
         self._subscribers = []
 
-    async def connect(self) -> None:
-        """Connect to NATS with retry logic.
+    async def connect(self) -> bool:
+        """Connect to NATS server."""
+        try:
+            options = {
+                'servers': self.config.url,
+                'name': self.config.client_name,
+                'connect_timeout': 10,
+                'reconnect_time_wait': 2,
+                'max_reconnect_attempts': -1,  # Infinite reconnect
+            }
 
-        Raises:
-            ConnectionError: If connection fails after max retry attempts
-        """
-        backoff = 1.0
-        max_backoff = 30.0
-        max_attempts = 5
+            self.nc = await nats.connect(**options)
+            self._connected = True
 
-        for attempt in range(max_attempts):
-            try:
-                options = {
-                    'servers': self.config.url,
-                    'name': self.config.client_name,
-                    'connect_timeout': 10,
-                    'reconnect_time_wait': 2,
-                    'max_reconnect_attempts': -1,  # Infinite reconnect after initial
-                }
+            # Try to enable JetStream if configured
+            if self.config.jetstream_enabled:
+                try:
+                    self.js = self.nc.jetstream()
+                    logger.info("JetStream enabled")
+                except Exception as e:
+                    logger.warning(f"JetStream not available: {e}")
 
-                self.nc = await nats.connect(**options)
-                self._connected = True
+            logger.info(f"Connected to NATS at {self.config.url}")
+            return True
 
-                # Try to enable JetStream if configured
-                if self.config.jetstream_enabled:
-                    try:
-                        self.js = self.nc.jetstream()
-                        logger.info("JetStream enabled")
-                    except Exception as e:
-                        logger.warning(f"JetStream not available: {e}")
-
-                logger.info(f"Connected to NATS at {self.config.url}")
-                return
-
-            except Exception as e:
-                logger.warning(
-                    f"NATS connection attempt {attempt+1}/{max_attempts} failed: {e}"
-                )
-                if attempt < max_attempts - 1:
-                    logger.info(f"Retrying in {backoff:.1f}s...")
-                    await asyncio.sleep(backoff)
-                    backoff = min(backoff * 2, max_backoff)
-
-        raise ConnectionError(
-            f"Failed to connect to NATS at {self.config.url} after {max_attempts} attempts"
-        )
+        except Exception as e:
+            logger.error(f"Failed to connect to NATS: {e}")
+            return False
 
     async def publish(self, subject: str, data: dict[str, Any]) -> bool:
         """
@@ -111,7 +84,7 @@ class NATSClient:
         try:
             # Add metadata to message
             envelope = {
-                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'timestamp': datetime.utcnow().isoformat(),
                 'source': self.config.client_name,
                 'data': data,
             }
@@ -129,36 +102,15 @@ class NATSClient:
             return False
 
     async def publish_simulation_result(self, result: dict[str, Any]) -> bool:
-        """Publish simulation result to tokenism.simulation.result.v1.
-
-        Args:
-            result: Simulation result data including metrics and parameters.
-
-        Returns:
-            True if published successfully, False if NATS not connected.
-        """
+        """Publish simulation result to tokenism.simulation.result.v1."""
         return await self.publish(self.config.simulation_result_subject, result)
 
     async def publish_calibration_result(self, result: dict[str, Any]) -> bool:
-        """Publish calibration result to tokenism.calibration.result.v1.
-
-        Args:
-            result: Calibration result including parameter adjustments.
-
-        Returns:
-            True if published successfully, False if NATS not connected.
-        """
+        """Publish calibration result to tokenism.calibration.result.v1."""
         return await self.publish(self.config.calibration_result_subject, result)
 
     async def publish_cgp_packet(self, cgp_data: dict[str, Any]) -> bool:
-        """Publish CHIT geometry packet to tokenism.cgp.ready.v1.
-
-        Args:
-            cgp_data: CHIT Geometry Packet with wealth distribution geometry.
-
-        Returns:
-            True if published successfully, False if NATS not connected.
-        """
+        """Publish CHIT geometry packet to tokenism.cgp.ready.v1."""
         return await self.publish(self.config.cgp_ready_subject, cgp_data)
 
     async def subscribe(
@@ -204,23 +156,15 @@ class NATSClient:
             logger.error(f"Error subscribing to {subject}: {e}")
             return False
 
-    async def close(self) -> None:
-        """Close NATS connection and cleanup resources.
-
-        Unsubscribes all active subscriptions and closes the NATS connection.
-        Safe to call multiple times (idempotent).
-        """
+    async def close(self):
+        """Close NATS connection."""
         if self.nc:
             await self.nc.close()
             self._connected = False
             logger.info("NATS connection closed")
 
     def is_connected(self) -> bool:
-        """Check if connected to NATS.
-
-        Returns:
-            True if connected to NATS server, False otherwise.
-        """
+        """Check if connected to NATS."""
         return self._connected and self.nc is not None
 
 
@@ -229,21 +173,12 @@ _nats_client: Optional[NATSClient] = None
 
 
 async def get_nats_client(config: Optional[NATSConfig] = None) -> NATSClient:
-    """Get or create the global NATS client.
-
-    Raises:
-        ConnectionError: If NATS connection fails
-    """
+    """Get or create the global NATS client."""
     global _nats_client
 
     if _nats_client is None:
         cfg = config or NATSConfig()
         _nats_client = NATSClient(cfg)
-        try:
-            await _nats_client.connect()
-        except Exception as e:
-            # Reset client on connection failure so it can be retried
-            _nats_client = None
-            raise
+        await _nats_client.connect()
 
     return _nats_client

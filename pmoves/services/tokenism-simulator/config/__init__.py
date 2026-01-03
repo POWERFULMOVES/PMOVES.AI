@@ -9,38 +9,16 @@ Implements PMOVES.AI integration patterns:
 """
 
 import os
-import secrets
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
-import logging
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
 # Resolve env.shared path relative to this config file
 # Config file is at: .../tokenism-simulator/config/__init__.py
-# In dev: env.shared is at: pmoves/env.shared (3 levels up from config file)
-# In container: working dir is /app, so we need to look for env.shared differently
-try:
-    # Try development structure first (3 levels up)
-    _env_path = Path(__file__).resolve().parents[3] / "env.shared"
-except IndexError:
-    # In container, parents[3] would fail, so try alternative paths
-    # Container has /app as working dir, check common locations
-    _env_path_candidates = [
-        Path("/app/env.shared"),
-        Path("/pmoves/env.shared"),
-        Path("/app/services/tokenism-simulator/../../env.shared"),
-    ]
-    _env_path = None
-    for candidate in _env_path_candidates:
-        if candidate.exists():
-            _env_path = candidate
-            break
-    if _env_path is None:
-        _env_path = Path("/app/env.shared")  # Default fallback
-
+# env.shared is at: pmoves/env.shared (3 levels up from config file)
+_env_path = Path(__file__).resolve().parents[3] / "env.shared"
 if _env_path.exists():
     load_dotenv(_env_path)
 else:
@@ -104,9 +82,7 @@ class ServiceConfig:
     host: str = os.getenv('TOKENISM_HOST', '0.0.0.0')
     port: int = int(os.getenv('TOKENISM_PORT', '8100'))
     debug: bool = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
-    # Generate secure secret key if not provided
-    _secret_key_env: str = os.getenv('SECRET_KEY', '')
-    secret_key: str = _secret_key_env if _secret_key_env else secrets.token_hex(32)
+    secret_key: str = os.getenv('SECRET_KEY', 'pmoves-tokenism-secret')
 
     # Sub-components
     nats: NATSConfig = NATSConfig()

@@ -1137,7 +1137,176 @@ services:
       retries: 12
       start_period: 15s
 
-  archon-agent-work-orders:
+  mesh-agent:
+    build: ./services/mesh-agent
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
+      - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
+    depends_on: [nats]
+    profiles: ["agents"]
+    networks: [pmoves]
+
+  a2ui-nats-bridge:
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+      - PORT=9224
+    ports: ["9224:9224"]
+    depends_on: [nats]
+    profiles: ["agents"]
+    networks: [pmoves]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  a2ui-nats-bridge:
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+      - PORT=9224
+    ports: [ "9224:9224" ]
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: [ "agents", "orchestration" ]
+    networks: [ api_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    cap_drop: [ ALL ]
+    security_opt: [ no-new-privileges:true ]
+
+  deepresearch:
+    build:
+      context: ./services
+      dockerfile: deepresearch/Dockerfile
+    image: ${DEEPRESEARCH_IMAGE:-}
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local, ../.env]
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-openrouter}
+      - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
+      - DEEPRESEARCH_API_BASE=${DEEPRESEARCH_API_BASE:-http://deepresearch-local:8080}
+      - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
+      - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
+      - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
+      - DEEPRESEARCH_NOTEBOOK_ID=${DEEPRESEARCH_NOTEBOOK_ID}
+      - DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX=${DEEPRESEARCH_NOTEBOOK_TITLE_PREFIX}
+      - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
+      - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
+      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL}
+      - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
+    depends_on: [nats]
+    profiles: ["agents"]
+    ports: ["8098:8098"]
+    volumes:
+      - ./contracts:/app/contracts:ro
+    networks: [ app_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  github-runner-ctl:
+    build: ./services/github-runner-ctl
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - PORT=${GITHUB_RUNNER_CTL_PORT:-8100}
+      - PORT=${GITHUB_RUNNER_CTL_PORT:-8104}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
+      - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
+      - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
+      - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
+    depends_on: [ nats ]
+    ports: [ "8100:8100", "8104:8104" ]
+    volumes:
+      - ./services/github-runner-ctl/config:/app/config:ro
+    profiles: [ "orchestration", "workers" ]
+    networks: [ api_tier, bus_tier, monitoring_tier ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  supaserch:
+    build:
+      context: ./services
+      dockerfile: supaserch/Dockerfile
+    image: ${SUPASERCH_IMAGE:-}
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+    ports: ["${SUPASERCH_HOST_PORT:-8099}:8099"]
+    profiles: ["agents","workers"]
+    networks: [pmoves]
+
+  # NATS echo subscribers for diagnostics
+  nats-echo-req:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves]
+
+  nats-echo-res:
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    depends_on: [nats]
+    profiles: ["agents","diag"]
+    networks: [pmoves]
+
+  publisher-discord:
     build:
       context: .
       dockerfile: ./services/archon/Dockerfile
