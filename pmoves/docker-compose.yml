@@ -847,7 +847,7 @@ services:
 
   # Tier: llm (local model backend for TensorZero)
   pmoves-ollama:
-    image: ${PMOVES_OLLAMA_IMAGE:-pmoves/ollama:0.12.6}
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:latest}
     restart: unless-stopped
     <<: *env-tier-llm
     environment:
@@ -869,7 +869,7 @@ services:
     ports: ["8123:8123"]
     volumes:
       - tensorzero-clickhouse-data:/var/lib/clickhouse
-      - ./tensorzero/clickhouse/users.xml:/etc/clickhouse-server/users.d/notebook.xml:ro
+      - ./tensorzero/clickhouse/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
     healthcheck:
       test: ["CMD-SHELL", "wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping"]
       start_period: 30s
