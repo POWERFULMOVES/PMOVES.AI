@@ -57,6 +57,7 @@ services:
   postgres:
     image: ankane/pgvector
     restart: unless-stopped
+    <<: *env-tier-data
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-pmoves}
       - POSTGRES_USER=${POSTGRES_USER:-pmoves}
@@ -151,7 +152,7 @@ services:
     restart: unless-stopped
     <<: *env-tier-data
     environment:
-      - NEO4J_AUTH=${NEO4J_AUTH}
+      # NEO4J_AUTH from env.tier-data
       - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     ports: [ "7474:7474", "7687:7687" ]
     volumes:
@@ -168,6 +169,7 @@ services:
   minio:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     command: server /data --console-address ":9001"
+    <<: *env-tier-data
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
@@ -226,7 +228,7 @@ services:
     restart: unless-stopped
     <<: *env-tier-api
     environment:
-      - HIRAG_URL=http://hi-rag-gateway-v2:8086
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
       - EVAL_HTTP_PORT=${EVAL_HTTP_PORT:-8090}
     depends_on: [ hi-rag-gateway-v2 ]
     ports: [ "8090:8090" ]
@@ -250,10 +252,9 @@ services:
     <<: *env-tier-api
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - MINIO_SECURE=${MINIO_SECURE:-false}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
+      - MINIO_SECURE=false
+      - AWS_DEFAULT_REGION=us-east-1
       - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
     ports: [ "8088:8080" ]
@@ -266,14 +267,15 @@ services:
       retries: 3
       start_period: 15s
 
+  # Tier: api (ComfyUI render callback handler - writes to Supabase, stores to MinIO)
   render-webhook:
     build: ./services/render-webhook
     restart: unless-stopped
     <<: *env-tier-worker
     environment:
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      # RENDER_WEBHOOK_SHARED_SECRET from env.tier-api
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3010}
       - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
-      - RENDER_WEBHOOK_SHARED_SECRET=${RENDER_WEBHOOK_SHARED_SECRET}
       - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
     ports: [ "8085:8085" ]
     profiles: [ "orchestration", "workers" ]
@@ -333,7 +335,7 @@ services:
       # so ingestion and query stay on the same embedding space.
       - EMBEDDING_BACKEND=${EXTRACT_WORKER_EMBEDDING_BACKEND:-tensorzero}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      # MEILI_API_KEY from env.tier-data
       # Use unified Supabase REST by default (env_file values are not interpolated at compose time)
       - SUPA_REST_URL=http://host.docker.internal:65421/rest/v1
       - SUPA_REST_INTERNAL_URL=http://host.docker.internal:65421/rest/v1
@@ -356,14 +358,13 @@ services:
     <<: *env-tier-worker
     environment:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - MINIO_SECURE=${MINIO_SECURE:-false}
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
+      - MINIO_SECURE=false
       - PDF_DEFAULT_BUCKET=${PDF_DEFAULT_BUCKET:-assets}
       - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
       - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
       - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_URL=nats://nats:4222
     depends_on:
       extract-worker:
         condition: service_started
@@ -620,6 +621,7 @@ services:
       retries: 3
       start_period: 60s
 
+  # Tier: media (MinIO credentials from tier-data, media config from tier-media)
   ffmpeg-whisper:
     build:
       context: ..
@@ -627,14 +629,14 @@ services:
     restart: unless-stopped
     <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - USE_CUDA=${USE_CUDA:-true}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     deploy:
       resources:
         reservations:
@@ -652,6 +654,7 @@ services:
       retries: 3
       start_period: 60s
 
+  # Tier: media (MinIO credentials from tier-data, video analysis config from tier-media)
   media-video:
     build:
       context: .
@@ -659,14 +662,13 @@ services:
     restart: unless-stopped
     <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
-      - FRAME_EVERY=${FRAME_EVERY:-5}
-      - SCORE_THRES=${SCORE_THRES:-0.25}
+      - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
+      - FRAME_SAMPLE_RATE=${FRAME_SAMPLE_RATE:-5}
     deploy:
       resources:
         reservations:
@@ -683,6 +685,7 @@ services:
       retries: 3
       start_period: 60s
 
+  # Tier: media (MinIO credentials from tier-data, audio analysis config from tier-media)
   media-audio:
     build:
       context: .
@@ -690,9 +693,8 @@ services:
     restart: unless-stopped
     <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
       - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
@@ -720,11 +722,11 @@ services:
     restart: unless-stopped
     <<: *env-tier-media
     environment:
+      # MINIO_ACCESS_KEY, MINIO_SECRET_KEY from env.tier-data
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - YT_BUCKET=${YT_BUCKET:-assets}
+      - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
       - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://postgrest:3000}}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -738,6 +740,7 @@ services:
       - YT_TRANSCRIPT_PROVIDER=${YT_TRANSCRIPT_PROVIDER:-faster-whisper}
       - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
       - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
+      - YT_CHANNEL_CHECK_INTERVAL=${YT_CHANNEL_CHECK_INTERVAL:-3600}
     volumes:
       - ./config:/app/config
       - ./data/yt-dlp:/data/yt-dlp
@@ -765,14 +768,17 @@ services:
       retries: 3
       start_period: 15s
 
+  # Tier: agent (orchestrates media ingestion monitoring)
   channel-monitor:
     build: ./services/channel-monitor
     restart: unless-stopped
     <<: *env-tier-media
     environment:
+      # CHANNEL_MONITOR_DATABASE_URL from env.tier-agent
       - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
       - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
       - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
     volumes:
       - ./config:/app/config
     depends_on:
@@ -812,7 +818,7 @@ services:
       - RERANK_FUSION=${RERANK_FUSION:-mul}
       - USE_MEILI=true
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
+      # MEILI_API_KEY from env.tier-data
       - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
       - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
@@ -822,7 +828,6 @@ services:
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
-      # NEO4J_* injected via env_file to avoid compose-time expansion
       - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
       - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
       - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -858,22 +863,21 @@ services:
     restart: unless-stopped
     <<: *env-tier-api
     environment:
-      - QDRANT_URL=${QDRANT_URL}
-      - QDRANT_COLLECTION=${QDRANT_COLLECTION}
-      - SENTENCE_MODEL=all-MiniLM-L6-v2
-      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT}
-      # NEO4J_* injected via env_file to avoid compose-time expansion
-      - GRAPH_BOOST=${GRAPH_BOOST}
-      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL}
-      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX}
-      - USE_MEILI=${USE_MEILI}
-      - MEILI_URL=http://meilisearch:7700
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
-      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC}
-      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT}
-      - TAILSCALE_ONLY=${TAILSCALE_ONLY}
-      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY}
-      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS}
+      # NEO4J_AUTH, MEILI_MASTER_KEY from env.tier-data
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+      - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+      - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
+      - GRAPH_BOOST=${GRAPH_BOOST:-true}
+      - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-3600}
+      - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
+      - USE_MEILI=${USE_MEILI:-true}
+      - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+      - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
+      - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
+      - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
+      - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY:-false}
+      - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-}
       - RERANK_ENABLE=${RERANK_ENABLE:-true}
       - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
       - RERANK_TOPN=${RERANK_TOPN:-50}
@@ -916,6 +920,7 @@ services:
     command: [ "python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086" ]
     <<: *env-tier-api
     environment:
+      # NEO4J_AUTH, MEILI_MASTER_KEY from env.tier-data
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
       - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
@@ -929,7 +934,6 @@ services:
       - RERANK_FUSION=${RERANK_FUSION:-mul}
       - USE_MEILI=${USE_MEILI:-true}
       - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
-      - MEILI_API_KEY=${MEILI_MASTER_KEY}
       - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
       - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
       - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
@@ -1050,6 +1054,7 @@ services:
       retries: 3
       start_period: 10s
 
+  # Tier: agent (Agent Zero orchestration - NATS, Supabase, TensorZero access)
   agent-zero:
     build:
       context: .
@@ -1057,6 +1062,8 @@ services:
     restart: unless-stopped
     <<: *env-tier-agent
     environment:
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
+      # NATS_URL from env.tier-data (internal network)
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
@@ -1096,6 +1103,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # Tier: agent (Supabase-driven agent service with prompt/form management)
   archon:
     build:
       context: .
@@ -1106,6 +1114,7 @@ services:
     restart: unless-stopped
     <<: *env-tier-agent
     environment:
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
       - PORT=8091
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
@@ -1346,6 +1355,33 @@ services:
     cap_drop: [ ALL ]
     security_opt: [ no-new-privileges:true ]
 
+  # Tier: agent (A2UI NATS bridge - geometry bus integration)
+  a2ui-nats-bridge:
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+      - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+      - PORT=9224
+    ports: ["9224:9224"]
+    depends_on: [nats]
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  # Tier: agent (LLM-based research planner - uses TensorZero for LLM access)
   deepresearch:
     build:
       context: .
@@ -1357,6 +1393,7 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
       - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
+      - DEEPRESEARCH_TENSORZERO_BASE_URL=${DEEPRESEARCH_TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - DEEPRESEARCH_API_BASE=${DEEPRESEARCH_API_BASE:-http://deepresearch-local:8080}
       - DEEPRESEARCH_PLANNING_ENDPOINT=${DEEPRESEARCH_PLANNING_ENDPOINT:-/api/research}
       - DEEPRESEARCH_OPENROUTER_MODEL=${DEEPRESEARCH_OPENROUTER_MODEL:-tongyi-deepresearch}
@@ -1410,6 +1447,7 @@ services:
       retries: 3
       start_period: 30s
 
+  # Tier: agent (multimodal holographic deep research orchestrator)
   supaserch:
     build:
       context: ./services
@@ -1418,6 +1456,7 @@ services:
     restart: unless-stopped
     <<: *env-tier-agent
     environment:
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
       - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
@@ -1496,6 +1535,7 @@ services:
       retries: 3
       start_period: 15s
 
+  # Tier: agent (Discord notification bot - listens on NATS subjects)
   publisher-discord:
     build:
       context: .
@@ -1601,6 +1641,7 @@ services:
       retries: 3
       start_period: 40s
 
+  # Tier: agent (Jellyfin metadata webhook & helper)
   jellyfin-bridge:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
@@ -1618,9 +1659,11 @@ services:
       retries: 3
       start_period: 30s
 
+  # Tier: llm (local model backend for TensorZero)
   pmoves-ollama:
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.5.4}
     restart: unless-stopped
+    <<: *env-tier-llm
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
       - OLLAMA_MODELS=/root/.ollama/models
@@ -1651,9 +1694,10 @@ services:
   tensorzero-clickhouse:
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped
+    <<: *env-tier-llm
     environment:
-      - CLICKHOUSE_USER=${TENSORZERO_CLICKHOUSE_USER:-tensorzero}
-      - CLICKHOUSE_PASSWORD=${TENSORZERO_CLICKHOUSE_PASSWORD:-tensorzero}
+      - CLICKHOUSE_USER=tensorzero
+      - CLICKHOUSE_PASSWORD=tensorzero
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
     ports: [ "8123:8123" ]
     volumes:
@@ -1705,7 +1749,6 @@ services:
     restart: unless-stopped
     <<: *env-tier-llm
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}
       - TENSORZERO_POSTGRES_URL=postgresql://${TENSORZERO_PG_USER:-tensorzero}:${TENSORZERO_PG_PASSWORD}@host.docker.internal:65432/${TENSORZERO_PG_DB:-tensorzero}

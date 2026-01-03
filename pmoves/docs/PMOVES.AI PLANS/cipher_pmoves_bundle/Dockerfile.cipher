@@ -1,9 +1,0 @@
-# syntax=docker/dockerfile:1
-FROM node:20-alpine
-RUN npm i -g @byterover/cipher
-WORKDIR /app
-EXPOSE 8765
-ENV CIPHER_CONFIG=/app/cipher.yml
-ENV MCP_SERVER_MODE=aggregator
-ENV OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
-CMD ["sh", "-lc", "cipher --mode mcp --transport http --port 8765"]
