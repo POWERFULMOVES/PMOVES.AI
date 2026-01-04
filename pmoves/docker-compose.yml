@@ -500,7 +500,10 @@ services:
     - pmoves_app
     - pmoves_bus
   channel-monitor:
-    env_file: *id005
+    env_file:
+    - env.tier-agent
+    - path: env.tier-data
+      required: false
     build: ./services/channel-monitor
     restart: unless-stopped
     environment:
@@ -523,6 +526,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_data
   hi-rag-gateway-v2:
     env_file: *id002
     build:
@@ -750,7 +754,10 @@ services:
     - pmoves_app
     - pmoves_bus
   archon:
-    env_file: *id005
+    env_file:
+    - env.tier-agent
+    - path: env.tier-data
+      required: false
     build:
       context: .
       dockerfile: ./services/archon/Dockerfile
@@ -787,6 +794,8 @@ services:
       pmoves_app:
         aliases:
         - archon-server
+      pmoves_data:
+      supabase_net:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
