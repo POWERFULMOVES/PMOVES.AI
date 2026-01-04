@@ -31,6 +31,11 @@ x-env-tier-agent: &env-tier-agent
     - path: env.tier-agent
       required: false
 
+x-env-tier-ui: &env-tier-ui
+  env_file:
+    - path: env.tier-ui
+      required: false
+
 services:
   postgres:
     image: ankane/pgvector
@@ -715,6 +720,31 @@ services:
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
 
+  # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
+  botz-gateway:
+    build: ./services/botz-gateway
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
+      - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
+    depends_on:
+      nats:
+        condition: service_started
+    ports: ["8054:8054"]
+    profiles: ["agents", "botz"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
   a2ui-nats-bridge:
     build: ./services/a2ui-nats-bridge
@@ -979,6 +1009,58 @@ services:
     ports: ["8055:8055", "8056:8056"]
     profiles: ["orchestration", "media"]
     networks: [pmoves_app, pmoves_bus]
+
+  # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
+  tokenism-simulator:
+    build:
+      context: ./services/tokenism-simulator
+      dockerfile: Dockerfile
+    image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
+      - TOKENISM_PORT=${TOKENISM_PORT:-8100}
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_CLIENT_NAME=tokenism-simulator
+      - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - TENSORZERO_MODEL=${TENSORZERO_MODEL:-claude-sonnet-4-5}
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
+      - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
+      - CHIT_ENABLED=${CHIT_ENABLED:-true}
+      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:4222}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports: ["${TOKENISM_HOST_PORT:-8103}:8100"]
+    profiles: ["agents", "orchestration", "botz"]
+    depends_on: [nats, postgrest]
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # PMOVES Tokenism UI - Interactive dashboard for token economy simulation
+  tokenism-ui:
+    build:
+      context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
+      dockerfile: Dockerfile
+    image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
+    restart: unless-stopped
+    <<: *env-tier-ui
+    environment:
+      - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
+      - NODE_ENV=production
+      - PORT=8504
+    ports: ["${TOKENISM_UI_HOST_PORT:-8504}:8504"]
+    profiles: ["agents", "botz"]
+    networks: [pmoves_app]
 
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
