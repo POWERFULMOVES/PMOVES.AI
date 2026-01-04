@@ -992,6 +992,43 @@ services:
     profiles: ["orchestration"]
     networks: [pmoves_app, pmoves_bus]
 
+  # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
+  ultimate-tts-studio:
+    build:
+      context: ./docker/ultimate-tts-studio
+      dockerfile: Dockerfile
+    image: ${ULTIMATE_TTS_IMAGE:-ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:pmoves-latest}
+    restart: unless-stopped
+    <<: *env-tier-media
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7861
+      - GRADIO_MCP_SERVER=true
+      # WSL2/CUDA compatibility settings
+      - CUDA_FORCE_PTX_JIT=1
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
+      - TORCH_CUDNN_V8_API_ENABLED=1
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    ports: ["7861:7861"]
+    profiles: ["gpu", "tts"]
+    networks: [pmoves_app, pmoves_monitoring]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7861/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # Flute Gateway - Multimodal voice communication layer (TTS/STT)
   flute-gateway:
     build:
