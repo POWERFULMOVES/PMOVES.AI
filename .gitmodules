@@ -2,6 +2,7 @@
 	path = PMOVES-ToKenism-Multi
 	url = https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git
 	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-Creator"]
 	path = PMOVES-Creator
 	url = https://github.com/POWERFULMOVES/PMOVES-Creator.git
@@ -10,6 +11,7 @@
 	path = PMOVES-Agent-Zero
 	url = https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-Archon"]
 	path = PMOVES-Archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
@@ -50,6 +52,7 @@
 	path = PMOVES-BoTZ
 	url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
 	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-DoX"]
 	path = PMOVES-DoX
 	url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
