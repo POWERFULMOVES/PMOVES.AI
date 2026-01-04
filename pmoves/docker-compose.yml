@@ -697,27 +697,20 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_data
     extra_hosts:
     - host.docker.internal:host-gateway
   nats:
     env_file: *id001
     image: nats:2.10-alpine
     command:
-    - -js
-    - -m
-    - '8222'
-    - -ws
-    - -ws_port
-    - '4223'
-    - -auth
-    - -u
-    - nats
-    - -p
-    - pmoves
+    - "-js"
+    - "-m"
+    - "8222"
     restart: unless-stopped
     ports:
     - ${NATS_PORT:-4222}:4222
-    - ${NATS_PORT:-9223}:4223
+    - ${NATS_WS_PORT:-9223}:4223
     networks:
     - pmoves_bus
     environment:
@@ -1008,7 +1001,7 @@ services:
     - pmoves_bus
   pmoves-ollama:
     env_file: *id006
-    image: ${PMOVES_OLLAMA_IMAGE:-pmoves/ollama:0.12.6}
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6}
     restart: unless-stopped
     environment:
     - OLLAMA_HOST=0.0.0.0:11434
@@ -1016,6 +1009,8 @@ services:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${OLLAMA_PORT:-11434}:11434
     volumes:
     - pmoves-ollama-models:/root/.ollama/models
     networks:
@@ -1068,6 +1063,7 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_data
     extra_hosts:
     - host.docker.internal:host-gateway
   tensorzero-ui:
@@ -1258,24 +1254,24 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-  tokenism-ui:
-    env_file: *id007
-    build:
-      context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
-      dockerfile: Dockerfile
-    image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
-    restart: unless-stopped
-    environment:
-    - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
-    - NODE_ENV=production
-    - PORT=8504
-    - DOCKED_MODE=${DOCKED_MODE:-true}
-    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
-    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    ports:
-    - ${TOKENISM_UI_PORT:-8504}:8504
-    networks:
-    - pmoves_app
+  # tokenism-ui: # TEMPORARY: Commented out due to missing Dockerfile
+  #   env_file: *id007
+  #   build:
+  #     context: ../PMOVES-ToKenism-Multi/pmoves-nextjs
+  #     dockerfile: Dockerfile
+  #   image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
+  #   restart: unless-stopped
+  #   environment:
+  #   - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
+  #   - NODE_ENV=production
+  #   - PORT=8504
+  #   - DOCKED_MODE=${DOCKED_MODE:-true}
+  #   - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+  #   - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+  #   ports:
+  #   - ${TOKENISM_UI_PORT:-8504}:8504
+  #   networks:
+  #   - pmoves_app
   pmoves-ui:
     build:
       context: ./ui
@@ -1566,8 +1562,7 @@ services:
     image: quay.io/invidious/invidious-companion:latest
     restart: unless-stopped
     env_file:
-    - env.shared.generated
-    - env.shared
+    - env.tier-media
     - .env.generated
     - .env.local
     environment:
@@ -1592,8 +1587,7 @@ services:
     image: quay.io/invidious/invidious:latest
     restart: unless-stopped
     env_file:
-    - env.shared.generated
-    - env.shared
+    - env.tier-media
     - .env.generated
     - .env.local
     environment:
