@@ -1152,6 +1152,71 @@ services:
       retries: 3
       start_period: 60s
 
+  # Messaging Gateway - NATS messaging bridge for ingestion events
+  messaging-gateway:
+    build: ./services/messaging-gateway
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - MESSAGING_SUBJECTS=${MESSAGING_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1}
+    depends_on: [ nats ]
+    ports: [ "8101:8101" ]
+    profiles: [ "workers" ]
+    networks: [ pmoves_api, pmoves_bus ]
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Chat Relay - Agent chat relay with Supabase integration
+  chat-relay:
+    build:
+      context: .
+      dockerfile: services/chat-relay/Dockerfile
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - HEALTH_PORT=8102
+      - AGENT_RESPONSE_SUBJECT=agent.response.v1
+      - AGENT_REQUEST_SUBJECT=agent.request.v1
+      - DEFAULT_OWNER_ID=${DEFAULT_OWNER_ID:-00000000-0000-0000-0000-000000000000}
+    depends_on:
+      nats:
+        condition: service_started
+    ports: [ "8103:8102" ]
+    profiles: [ "workers", "orchestration" ]
+    networks: [ pmoves_bus, pmoves_data, pmoves_monitoring, supabase_net ]
+
+  # Consciousness Service - Self-awareness and consciousness simulation
+  consciousness-service:
+    build:
+      context: ./services/consciousness-service
+      dockerfile: Dockerfile
+    image: ${CONSCIOUSNESS_SERVICE_IMAGE:-}
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - SERVICE_NAME=consciousness-service
+      - SERVICE_PORT=8096
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - HIRAG_V2_URL=${HIRAG_V2_URL:-http://hi-rag-gateway-v2:8086}
+    ports: [ "${CONSCIOUSNESS_SERVICE_PORT:-8096}:8096" ]
+    profiles: [ "agents", "orchestration" ]
+    depends_on: [ nats ]
+    networks: [ pmoves_api, pmoves_app, pmoves_bus, pmoves_monitoring ]
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8096/healthz').raise_for_status()\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
     build:
@@ -1169,6 +1234,89 @@ services:
     networks: [pmoves_app, pmoves_bus]
     depends_on:
       - hi-rag-gateway-v2
+
+  # Comfy Watcher - ComfyUI output watcher for NATS integration
+  comfy-watcher:
+    build:
+      context: .
+      dockerfile: services/comfy-watcher/Dockerfile
+    restart: unless-stopped
+    <<: *env-tier-worker
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
+      - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
+    depends_on:
+      nats:
+        condition: service_started
+      minio:
+        condition: service_started
+    volumes:
+      - comfy-watcher-output:/data
+      - comfy-watcher-state:/state
+    profiles: ["orchestration", "workers"]
+    networks: [pmoves_bus, pmoves_data]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "from watcher import load_state; load_state()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Gateway Agent - Orchestrates 100+ MCP tools via Agent Zero MCP API
+  gateway-agent:
+    build: ./services/gateway-agent
+    restart: unless-stopped
+    env_file:
+      - env.shared
+      - .env.generated
+    environment:
+      - PORT=8110
+      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+      - CIPHER_URL=${CIPHER_URL:-http://pmoves-botz-cipher:8000}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+    ports:
+      - "8110:8110"
+    profiles: ["agents"]
+    networks: [pmoves_api, pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8110/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # GitHub Runner Control - Manages self-hosted GitHub runners
+  github-runner-ctl:
+    build: ./services/github-runner-ctl
+    restart: unless-stopped
+    <<: *env-tier-agent
+    environment:
+      - PORT=8104
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
+      - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
+      - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
+      - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
+    depends_on: [ nats ]
+    ports: ["8104:8104"]
+    volumes:
+      - ./services/github-runner-ctl/config:/app/config:ro
+    profiles: ["orchestration", "workers"]
+    networks: [pmoves_api, pmoves_bus, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   invidious-db:
     image: postgres:14
