@@ -518,8 +518,6 @@ services:
         condition: service_healthy
       pmoves-yt:
         condition: service_started
-      bgutil-pot-provider:
-        condition: service_started
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
     networks:
