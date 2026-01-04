@@ -9,8 +9,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SimulationResult, getTokenismClient, CGPPacket } from '@/lib/tokenismClient';
-import { logError } from '@/lib/errorUtils';
-import { ErrorIds } from '@/lib/constants/errorIds';
 
 interface GeometricViewProps {
   result?: SimulationResult | null;
@@ -158,13 +156,11 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
       return;
     }
 
-    const abortController = new AbortController();
     setLoading(true);
     setError(null);
 
     tokenism.getGeometry(result.simulationId, week)
       .then((data) => {
-        if (abortController.signal.aborted) return;
         setCgp(data);
 
         // Convert CGP points to Poincaré disk representation
@@ -182,32 +178,15 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
         setPoints(newPoints);
       })
       .catch((err) => {
-        if (abortController.signal.aborted) return;
-
-        const errorMsg = err instanceof Error ? err.message : 'Failed to load geometry';
-        setError(errorMsg);
-
-        logError(
-          'Tokenism geometry load failed',
-          err,
-          'error',
-          {
-            errorId: ErrorIds.TOKENISM_GEOMETRY_LOAD_FAILED,
-            component: 'GeometricView',
-            simulationId: result.simulationId,
-            week,
-          },
-        );
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load geometry';
+        console.error('Failed to load geometry:', err);
+        setError(errorMessage);
+        setPoints([]);  // Clear points on error - don't show synthetic/fake data
       })
       .finally(() => {
-        if (!abortController.signal.aborted) {
-          setLoading(false);
-        }
+        setLoading(false);
       });
-
-    return () => abortController.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, week]);
+  }, [result, week, tokenism]);
 
   // Draw on canvas
   useEffect(() => {
@@ -228,7 +207,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
     };
     const radius = Math.min(canvas.width, canvas.height) / 2 - 20;
 
-    const edges = (cgp?.geometry.edges || []) as [number, number][];
+    const edges = cgp?.geometry.edges || [];
 
     drawPoincareDisk(ctx, points, edges, canvas.width, canvas.height, center, radius);
   }, [points, cgp]);
@@ -253,9 +232,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
     for (const point of points) {
       const px = center.x + point.x * radius;
       const py = center.y + point.y * radius;
-      const dx = mouseX - px;
-      const dy = mouseY - py;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = Math.sqrt((mouseX - px) ** 2 + (mouseY - py) ** 2);
 
       if (dist < 15) {
         found = point;
@@ -267,7 +244,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
   };
 
   return (
-    <div className="space-y-4 relative">
+    <div className="space-y-4">
       {/* Canvas */}
       <div className="relative flex justify-center items-center bg-black/50 border border-violet-500/30 rounded-lg" style={{ minHeight: '400px' }}>
         <canvas
@@ -291,16 +268,6 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
         {!loading && !result && (
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-gray-500 font-pixel text-sm">Run a simulation to see geometric visualization</p>
-          </div>
-        )}
-
-        {error && !loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-            <div className="text-center p-6 border border-red-500/50 rounded-lg max-w-md">
-              <p className="text-red-400 font-pixel text-sm mb-2">Visualization Error</p>
-              <p className="text-gray-400 text-xs">{error}</p>
-              <p className="text-gray-600 text-xs mt-3 font-mono">ID: {ErrorIds.TOKENISM_GEOMETRY_LOAD_FAILED}</p>
-            </div>
           </div>
         )}
       </div>
