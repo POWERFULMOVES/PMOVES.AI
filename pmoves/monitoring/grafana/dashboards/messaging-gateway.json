@@ -1,0 +1,220 @@
+{
+  "title": "Messaging Gateway",
+  "description": "Multi-platform messaging gateway - API requests, NATS message handling, and platform message delivery",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "messaging-gateway",
+  "tags": ["messaging", "gateway", "nats", "api"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Service Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Service Status",
+      "gridPos": { "x": 0, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "up{job=\"messaging-gateway\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total API Requests",
+      "gridPos": { "x": 5, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(messaging_gateway_api_requests_total)", "legendFormat": "Requests" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Total Messages Sent",
+      "gridPos": { "x": 10, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(messaging_gateway_messages_sent_total)", "legendFormat": "Messages" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "P95 Latency",
+      "gridPos": { "x": 15, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(messaging_gateway_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3, "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 2 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Error Rate",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(rate(messaging_gateway_api_requests_total{status=~\"4..|5..\"}[5m]))", "legendFormat": "Errors" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2, "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 0.1 }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "type": "row",
+      "title": "API Request Metrics",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "API Request Rate by Endpoint",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_api_requests_total[5m])) by (endpoint)", "legendFormat": "{{endpoint}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "API Request Rate by Status",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_api_requests_total{status=~\"2..\"}[5m]))", "legendFormat": "Success (2xx)" },
+        { "expr": "sum(rate(messaging_gateway_api_requests_total{status=~\"4..\"}[5m]))", "legendFormat": "Client Error (4xx)" },
+        { "expr": "sum(rate(messaging_gateway_api_requests_total{status=~\"5..\"}[5m]))", "legendFormat": "Server Error (5xx)" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 30 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Success (2xx)" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Client Error (4xx)" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Server Error (5xx)" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "API Requests Total by Endpoint",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_api_requests_total[5m])) by (endpoint)", "legendFormat": "{{endpoint}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "API Success Rate",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_api_requests_total{status=~\"2..\"}[5m])) / sum(rate(messaging_gateway_api_requests_total[5m])) * 100", "legendFormat": "Success %" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "decimals": 2, "custom": { "drawStyle": "line", "fillOpacity": 30 }, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 95 }, { "color": "green", "value": 99 }] } }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Messaging Metrics",
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Messages Sent by Platform and Status",
+      "gridPos": { "x": 0, "y": 23, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_messages_sent_total[5m])) by (platform, status)", "legendFormat": "{{platform}} - {{status}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 30 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "/.* - success.*/" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "/.* - failed.*/" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Messages Sent Rate",
+      "gridPos": { "x": 12, "y": 23, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_messages_sent_total{status=\"success\"}[5m]))", "legendFormat": "Success" },
+        { "expr": "sum(rate(messaging_gateway_messages_sent_total{status=\"failed\"}[5m]))", "legendFormat": "Failed" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 30 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Success" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Failed" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "NATS Messages Received by Subject",
+      "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_nats_messages_received_total[5m])) by (subject)", "legendFormat": "{{subject}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Message Delivery Success Rate",
+      "gridPos": { "x": 12, "y": 31, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_messages_sent_total{status=\"success\"}[5m])) / sum(rate(messaging_gateway_messages_sent_total[5m])) * 100", "legendFormat": "Delivery Success %" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "decimals": 2, "custom": { "drawStyle": "line", "fillOpacity": 30 }, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 95 }, { "color": "green", "value": 99 }] } }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Latency Analysis",
+      "gridPos": { "x": 0, "y": 39, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Duration Percentiles",
+      "gridPos": { "x": 0, "y": 40, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(messaging_gateway_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(messaging_gateway_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(messaging_gateway_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Duration by Endpoint",
+      "gridPos": { "x": 12, "y": 40, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(messaging_gateway_request_duration_seconds_bucket[5m])) by (le, endpoint))", "legendFormat": "P95 {{endpoint}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 30 } } }
+    },
+    {
+      "type": "heatmap",
+      "title": "Request Duration Distribution",
+      "gridPos": { "x": 0, "y": 48, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_request_duration_seconds_bucket[5m])) by (le)", "legendFormat": "{{le}}" }
+      ],
+      "options": { "calculate": false, "cellGap": 2, "cellRadius": 0, "cellValues": {} },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Average Request Duration",
+      "gridPos": { "x": 12, "y": 48, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(messaging_gateway_request_duration_seconds_sum[5m])) / sum(rate(messaging_gateway_request_duration_seconds_count[5m]))", "legendFormat": "Average" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 30 } } }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" }
+}
