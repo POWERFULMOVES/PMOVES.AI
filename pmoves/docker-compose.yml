@@ -1112,6 +1112,7 @@ services:
     - tensorzero
     networks:
     - pmoves_app
+    - pmoves_data
   gpu-orchestrator:
     env_file: *id006
     build:
@@ -1334,9 +1335,10 @@ services:
     ports:
     - ${PMOVES_UI_PORT:-4482}:3000
     networks:
-    - app_tier
-    - api_tier
-    - supabase_net
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
     profiles:
     - ui
     healthcheck:
@@ -1392,7 +1394,7 @@ services:
       nats:
         condition: service_started
     ports:
-    - 8103:8102
+    - ${CHAT_RELAY_PORT:-8105}:8102
     profiles:
     - workers
     - orchestration
@@ -1747,6 +1749,8 @@ volumes:
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
+  comfy-watcher-output: {}
+  comfy-watcher-state: {}
 networks:
   pmoves_data:
     name: pmoves_data
