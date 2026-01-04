@@ -184,7 +184,11 @@ services:
     - pmoves_data
     - pmoves_bus
   hi-rag-gateway:
-    env_file: *id002
+    env_file:
+    - path: env.tier-api
+      required: false
+    - path: env.tier-data
+      required: false
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
@@ -194,7 +198,7 @@ services:
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
-    - GRAPH_BOOST=${GRAPH_BOOST:-true}
+    - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
     - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-3600}
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
@@ -219,6 +223,7 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_data
   retrieval-eval:
     env_file: *id003
     build: ./services/retrieval-eval
@@ -576,7 +581,11 @@ services:
     - pmoves_api
     - pmoves_bus
   hi-rag-gateway-gpu:
-    env_file: *id002
+    env_file:
+    - path: env.tier-api
+      required: false
+    - path: env.tier-data
+      required: false
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
@@ -589,7 +598,7 @@ services:
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
-    - GRAPH_BOOST=${GRAPH_BOOST:-true}
+    - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
     - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-3600}
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
@@ -625,8 +634,13 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_data
   hi-rag-gateway-v2-gpu:
-    env_file: *id002
+    env_file:
+    - path: env.tier-api
+      required: false
+    - path: env.tier-data
+      required: false
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
@@ -772,9 +786,9 @@ services:
     - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
     - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
     - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://postgrest:3000}
     - NATS_URL=${NATS_URL:-nats://nats:4222}
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_PMOVES.AI:8000/rest/v1}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000/rest/v1}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
@@ -936,7 +950,7 @@ services:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - NATS_URL=${NATS_URL:-nats://nats:4222}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_PMOVES.AI:8000/rest/v1}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000/rest/v1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     ports:
     - ${SUPASERCH_PORT:-8099}:8099
@@ -1368,7 +1382,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL:-nats://nats:4222}
-    - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+    - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     - HEALTH_PORT=8102
     - AGENT_RESPONSE_SUBJECT=agent.response.v1
@@ -1488,7 +1502,7 @@ services:
     - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
     - CIPHER_URL=${CIPHER_URL:-http://pmoves-botz-cipher:8000}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
-    - SUPABASE_URL=${SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+    - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
     - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
     ports:
