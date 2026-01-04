@@ -36,6 +36,14 @@ x-env-tier-ui: &env-tier-ui
     - path: env.tier-ui
       required: false
 
+# Docked mode anchor - indicates service is running within PMOVES.AI parent system
+# Submodules can detect this to adapt behavior (use parent services vs standalone)
+x-docked-mode: &docked-mode
+  environment:
+    - DOCKED_MODE=true
+    - PARENT_SYSTEM=PMOVES.AI
+    - PARENT_VERSION=${PMOVES_VERSION:-1.0.0-hardened}
+
 services:
   postgres:
     image: ankane/pgvector
@@ -644,6 +652,7 @@ services:
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
       # NATS_URL from env.tier-data (internal network)
+      # CORE SUBMODULE SERVICE - Always started in hardened mode (profile can be removed)
       - PORT=8080
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
@@ -652,6 +661,10 @@ services:
       - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
       - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+      # Docked mode: Set when running inside PMOVES.AI parent system
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     depends_on: [nats]
     # The upstream Agent Zero UI binds to port 80; map host 8081→80 for the UI,
     # and keep 8080 mapped for the API when enabled by the runtime.
@@ -1476,56 +1489,92 @@ volumes:
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
 networks:
-  # Legacy single network (will be phased out)
-  pmoves:
-    external: true
-    name: pmoves-net
-  cataclysm:
-    external: true
-    name: cataclysm-net
+  # ============================================================================
+  # 5-Tier Network Architecture (Hardened Security Model)
+  # ============================================================================
+  # Tier 1 - DATA: Most isolated, no external access
+  # Tier 2 - API: Internal services, no external access
+  # Tier 3 - APP: Application services, selective external access
+  # Tier 4 - BUS: Message/event bus, allows inter-service communication
+  # Tier 5 - MONITORING: Observability, external dashboard access
+  #
+  # Subnet allocation:
+  #   172.30.1.0/24 - pmoves_api (Tier 2)
+  #   172.30.2.0/24 - pmoves_app (Tier 3)
+  #   172.30.3.0/24 - pmoves_bus (Tier 4)
+  #   172.30.4.0/24 - pmoves_data (Tier 1)
+  #   172.30.5.0/24 - pmoves_monitoring (Tier 5)
+  # ============================================================================
 
-  # 5-tier network architecture for security segmentation
+  # Tier 1: Data Storage (most isolated - no external access)
   pmoves_data:
     name: pmoves_data
     driver: bridge
+    internal: true  # No external access - data tier isolation
     ipam:
       driver: default
       config:
         - subnet: 172.30.4.0/24
           gateway: 172.30.4.1
 
+  # Tier 2: API/Internal Services (no external access)
   pmoves_api:
     name: pmoves_api
     driver: bridge
+    internal: true  # No external access - API tier isolation
     ipam:
       driver: default
       config:
         - subnet: 172.30.1.0/24
           gateway: 172.30.1.1
 
+  # Tier 3: Application Services (selective external access via published ports)
   pmoves_app:
     name: pmoves_app
     driver: bridge
+    # internal: false - Allows external access through port mappings
     ipam:
       driver: default
       config:
         - subnet: 172.30.2.0/24
           gateway: 172.30.2.1
 
+  # Tier 4: Message/Event Bus (allows inter-service communication)
   pmoves_bus:
     name: pmoves_bus
     driver: bridge
+    # internal: false - NATS and other bus services need cross-tier access
     ipam:
       driver: default
       config:
         - subnet: 172.30.3.0/24
           gateway: 172.30.3.1
 
+  # Tier 5: Monitoring/Observability (external dashboard access)
   pmoves_monitoring:
     name: pmoves_monitoring
     driver: bridge
+    # internal: false - Dashboards (Grafana, Prometheus UI) need external access
     ipam:
       driver: default
       config:
         - subnet: 172.30.5.0/24
           gateway: 172.30.5.1
+
+  # External networks (managed outside this compose file)
+  supabase_net:
+    external: true
+    name: supabase_net
+
+  # ============================================================================
+  # Legacy Networks (to be phased out - migrate services to tiered networks)
+  # ============================================================================
+  pmoves:
+    external: true
+    name: pmoves-net
+    # DEPRECATED: Services on this network should migrate to appropriate tier
+
+  cataclysm:
+    external: true
+    name: cataclysm-net
+    # DEPRECATED: Legacy network for cataclysm services
