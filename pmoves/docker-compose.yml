@@ -1585,8 +1585,6 @@ services:
     restart: unless-stopped
     env_file:
     - env.tier-media
-    - .env.generated
-    - .env.local
     environment:
     - PORT=8282
     - HOST=0.0.0.0
@@ -1610,7 +1608,6 @@ services:
     restart: unless-stopped
     env_file:
     - env.tier-media
-    - .env.generated
     - .env.local
     environment:
     - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n\

@@ -1,3 +1,8 @@
+"""CHIT Codebook Generation Utility.
+
+Generates codebook files for CHIT secret encoding operations.
+"""
+
 from __future__ import annotations
 
 import argparse

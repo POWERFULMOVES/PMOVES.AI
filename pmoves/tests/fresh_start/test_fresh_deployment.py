@@ -315,13 +315,12 @@ class TestInfrastructureVolumes:
         volumes = compose.get("volumes", {})
         assert len(volumes) > 0, "No volumes defined in docker-compose.yml"
 
-        # Check for critical volumes
+        # Check for critical volumes (must match docker-compose.yml names)
         critical_volumes = [
-            "postgres_data",
-            "neo4j_data",
-            "qdrant_storage",
-            "meilisearch_data",
-            "minio-data",
+            "supabase-data",  # PostgreSQL/Supabase data
+            "neo4j-data",     # Neo4j graph database
+            "minio-data",     # MinIO object storage
+            # Note: qdrant and meilisearch use default storage (no named volumes)
         ]
         for volume in critical_volumes:
             assert volume in volumes, f"Critical volume not defined: {volume}"
