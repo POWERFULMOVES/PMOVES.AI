@@ -1567,11 +1567,7 @@ services:
   invidious-companion:
     image: quay.io/invidious/invidious-companion:latest
     restart: unless-stopped
-    env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    env_file: *id004
     environment:
     - PORT=8282
     - HOST=0.0.0.0
@@ -1593,11 +1589,7 @@ services:
   invidious:
     image: quay.io/invidious/invidious:2024.12.09
     restart: unless-stopped
-    env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    env_file: *id004
     environment:
     - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n\
       \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
