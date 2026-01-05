@@ -1,0 +1,5 @@
+persona_slug,persona_name,alias,alias_type,source,source_reference,confidence,notes
+powerfulmoves,powerfulmoves,DARKXSIDE,handle,community_submission,discord://channel/aliases,0.95,Primary handle observed in archived Discord threads.
+powerfulmoves,powerfulmoves,PMoves,short_form,jellyfin_export,jellyfin://collections/powerfulmoves,0.9,Common truncation found in metadata titles.
+darkxsideshows,Dark X Side Shows,DXS,acronym,community_submission,discord://channel/aliases,0.85,Abbreviation used in promotional assets.
+darkxsideshows,Dark X Side Shows,DarkXSIDE Studios,label,internal_registry,gsheet://pmoves/persona_registry,0.8,Legacy studio label kept for search compatibility.
