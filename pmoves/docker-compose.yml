@@ -1565,11 +1565,7 @@ services:
   invidious-companion:
     image: quay.io/invidious/invidious-companion:latest
     restart: unless-stopped
-    env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    env_file: *id004
     environment:
     - PORT=8282
     - HOST=0.0.0.0
@@ -1589,44 +1585,48 @@ services:
     - pmoves_app
     - pmoves_bus
   invidious:
-    image: quay.io/invidious/invidious:latest
+    image: quay.io/invidious/invidious:2024.12.09
     restart: unless-stopped
-    env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    env_file: *id004
     environment:
-    - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n\
-      \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
-      \ 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port:\
-      \ ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\n\
-      hmac_key: \"${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}\"\ninvidious_companion:\n\
-      \  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\
-      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY\
-      \ not set}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
-      \ ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector:\
-      \ ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\
-      \n"
+      INVIDIOUS_CONFIG: |
+        db:
+          dbname: ${INVIDIOUS_PG_DB:-invidious}
+          user: ${INVIDIOUS_PG_USER:-kemal}
+          password: ${INVIDIOUS_PG_PASSWORD:-kemal}
+          host: invidious-db
+          port: 5432
+          check_tables: true
+        domain: ${INVIDIOUS_DOMAIN:-}
+        external_port: ${INVIDIOUS_EXTERNAL_PORT:-3005}
+        https_only: ${INVIDIOUS_HTTPS_ONLY:-false}
+        hmac_key: "${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}"
+        invidious_companion:
+          - private_url: "http://invidious-companion:8282"
+            public_url: "${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}"
+        invidious_companion_key: "${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}"
+        statistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}
+        use_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}
+        redirector:
+          use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}
+          redirector_url: "${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}"
     ports:
-    - ${INVIDIOUS_PORT:-3000}:3000
+      - "${INVIDIOUS_BIND:-127.0.0.1:3005}:3000"
     depends_on:
       invidious-db:
         condition: service_healthy
       invidious-companion:
         condition: service_started
     healthcheck:
-      test:
-      - CMD-SHELL
-      - wget -qO- http://127.0.0.1:3000/api/v1/trending >/dev/null
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1"]
       interval: 30s
       timeout: 5s
       retries: 3
     profiles:
-    - invidious
+      - invidious
     networks:
-    - pmoves_app
-    - pmoves_bus
+      - pmoves_app
+      - pmoves_bus
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
