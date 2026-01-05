@@ -87,6 +87,7 @@ automations_app = typer.Typer(help="n8n automations")
 crush_app = typer.Typer(help="Crush CLI integration")
 deps_app = typer.Typer(help="Host tooling dependency helpers")
 tailscale_app = typer.Typer(help="Tailscale helpers")
+env_app = typer.Typer(help="Environment management (tier layout)")
 app.add_typer(secrets_app, name="secrets")
 app.add_typer(profile_app, name="profile")
 app.add_typer(mcp_app, name="mcp")
@@ -94,6 +95,7 @@ app.add_typer(automations_app, name="automations")
 app.add_typer(crush_app, name="crush")
 app.add_typer(deps_app, name="deps")
 app.add_typer(tailscale_app, name="tailscale")
+app.add_typer(env_app, name="env")
 
 
 DEPENDENCY_DEFINITIONS = {
@@ -1086,6 +1088,304 @@ def crush_preview() -> None:
     config, providers = crush_configurator.build_config()
     typer.echo(json.dumps(config, indent=2))
     typer.echo("\nProviders: " + ", ".join(sorted(providers.keys())))
+
+
+# ===== ENV APP: Environment Management (Tier Layout) =====
+
+
+@env_app.command("init", help="Initialize environment with CHIT secrets.")
+def env_init(
+    profile: str = typer.Option(
+        "dev",
+        "--profile",
+        "-p",
+        help="Deployment profile (dev, prod, hybrid).",
+    ),
+    cgp_file: Path = typer.Option(
+        Path("pmoves/pmoves/data/chit/env.cgp.json"),
+        "--cgp",
+        "-c",
+        help="CHIT CGP file to decode.",
+    ),
+    manifest: Path = typer.Option(
+        Path("pmoves/chit/secrets_manifest_v2.yaml"),
+        "--manifest",
+        "-m",
+        help="CHIT v2 manifest file.",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite existing tier files.",
+    ),
+) -> None:
+    """Initialize environment by decoding CHIT secrets and applying to tier files."""
+    import sys
+    from pmoves.chit import decode_secret_map, load_cgp, apply_manifest_v2
+
+    pmoves_dir = REPO_ROOT / "pmoves"
+    cgp_path = REPO_ROOT / cgp_file
+    manifest_path = REPO_ROOT / manifest
+
+    # Check CGP file exists
+    if not cgp_path.exists():
+        typer.echo(f"❌ CHIT CGP file not found: {cgp_path}")
+        typer.echo("   Run 'pmoves secrets encode' first to create from env.shared")
+        raise typer.Exit(1)
+
+    # Check manifest exists
+    if not manifest_path.exists():
+        typer.echo(f"❌ CHIT manifest not found: {manifest_path}")
+        typer.echo("   Run 'python3 pmoves/tools/generate_chit_v2.py' to generate")
+        raise typer.Exit(1)
+
+    # Load and decode CGP
+    typer.echo(f"📦 Loading CHIT CGP from {cgp_path}...")
+    try:
+        cgp_data = load_cgp(cgp_path)
+        secrets = decode_secret_map(cgp_data)
+        typer.echo(f"   ✅ Decoded {len(secrets)} secrets from CGP")
+    except Exception as e:
+        typer.echo(f"❌ Failed to decode CGP: {e}")
+        raise typer.Exit(1)
+
+    # Apply manifest to tier files
+    typer.echo(f"📋 Applying manifest from {manifest_path}...")
+    try:
+        result = apply_manifest_v2(secrets, manifest_path, base_dir=pmoves_dir)
+        typer.echo(f"   ✅ Wrote {len(result.get('tier_files', []))} tier files")
+        typer.echo(f"   ✅ Generated {result.get('github_secrets', 0)} GitHub secrets")
+        typer.echo(f"   ✅ Generated {result.get('docker_secrets', 0)} Docker secrets")
+    except Exception as e:
+        typer.echo(f"❌ Failed to apply manifest: {e}")
+        raise typer.Exit(1)
+
+    typer.echo("\n✅ Environment initialized successfully!")
+    typer.echo(f"   Tier files: {', '.join(result.get('tier_files', []))}")
+    typer.echo(f"   GitHub secrets: {pmoves_dir / 'data' / 'chit' / 'github_secrets.json'}")
+    typer.echo(f"   Docker secrets: {pmoves_dir / 'data' / 'chit' / 'docker_secrets.json'}")
+
+
+@env_app.command("validate", help="Validate tier environment files.")
+def env_validate(
+    tier: str = typer.Option(
+        "all",
+        "--tier",
+        "-t",
+        help="Tier to validate (all, data, api, llm, media, agent, worker).",
+    ),
+    connectivity: bool = typer.Option(
+        False,
+        "--connectivity",
+        "-c",
+        help="Run service connectivity checks.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output results as JSON.",
+    ),
+) -> None:
+    """Validate tier environment files for completeness and correctness."""
+    import subprocess
+
+    # Run env_validator as a subprocess
+    cmd = [sys.executable, "-m", "pmoves.tools.env_validator", "--tier", tier]
+    if connectivity:
+        cmd.append("--connectivity")
+    if json_output:
+        cmd.append("--json")
+
+    result = subprocess.run(cmd, cwd=REPO_ROOT)
+    raise typer.Exit(result.returncode)
+
+
+@env_app.command("doctor", help="Run environment diagnostics.")
+def env_doctor(
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show detailed diagnostic output.",
+    ),
+) -> None:
+    """Run comprehensive environment diagnostics."""
+    import subprocess
+    from pmoves.tools.env_validator import (
+        validate_all_tiers,
+        run_connectivity_checks,
+        TIER_DEFINITIONS,
+    )
+
+    typer.echo("🏥 PMOVES Environment Diagnostics")
+    typer.echo("=" * 50)
+    typer.echo("")
+
+    # 1. Check tier files exist
+    typer.echo("📁 Checking tier files...")
+    pmoves_dir = REPO_ROOT / "pmoves"
+    missing = []
+    for tier, tier_def in TIER_DEFINITIONS.items():
+        tier_file = pmoves_dir / tier_def["file"]
+        if tier_file.exists():
+            typer.echo(f"   ✅ env.tier-{tier}")
+        else:
+            typer.echo(f"   ❌ env.tier-{tier} (missing)")
+            missing.append(tier)
+
+    if missing:
+        typer.echo(f"\n⚠️  Missing tier files: {', '.join(missing)}")
+        typer.echo("   Run 'pmoves env init' to create them.")
+    else:
+        typer.echo("\n✅ All tier files present.")
+
+    # 2. Validate tier contents
+    typer.echo("\n🔍 Validating tier contents...")
+    report = validate_all_tiers(REPO_ROOT)
+    if report.is_valid():
+        typer.echo("   ✅ All validations passed")
+    else:
+        typer.echo(f"   ❌ {len(report.errors)} error(s) found")
+        if verbose:
+            for error in report.errors[:10]:  # Show first 10
+                typer.echo(f"      {error}")
+            if len(report.errors) > 10:
+                typer.echo(f"      ... and {len(report.errors) - 10} more")
+
+    if report.has_warnings():
+        typer.echo(f"   ⚠️  {len(report.warnings)} warning(s)")
+
+    # 3. Check Docker
+    typer.echo("\n🐳 Checking Docker...")
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            typer.echo("   ✅ Docker is running")
+
+            # Count running containers
+            result = subprocess.run(
+                ["docker", "compose", "ps", "--format", "{{.Name}}"],
+                cwd=pmoves_dir,
+                capture_output=True,
+                text=True,
+            )
+            running = len([line for line in result.stdout.strip().split("\n") if line])
+            typer.echo(f"   📊 {running} services running")
+        else:
+            typer.echo("   ⚠️  Docker is not running")
+    except Exception as e:
+        typer.echo(f"   ⚠️  Could not check Docker: {e}")
+
+    # 4. Check CHIT CGP file
+    typer.echo("\n🔐 Checking CHIT secrets...")
+    cgp_path = pmoves_dir / "data" / "chit" / "env.cgp.json"
+    if cgp_path.exists():
+        typer.echo(f"   ✅ CHIT CGP file exists: {cgp_path.relative_to(REPO_ROOT)}")
+        if verbose:
+            from pmoves.chit import load_cgp, decode_secret_map
+
+            try:
+                cgp_data = load_cgp(cgp_path)
+                secrets = decode_secret_map(cgp_data)
+                typer.echo(f"   📊 {len(secrets)} secrets in CGP")
+            except Exception as e:
+                typer.echo(f"   ⚠️  Could not read CGP: {e}")
+    else:
+        typer.echo("   ⚠️  CHIT CGP file not found")
+        typer.echo("      Run 'pmoves secrets encode' to create")
+
+    # 5. Summary
+    typer.echo("\n" + "=" * 50)
+    if report.is_valid() and not missing:
+        typer.echo("✅ Environment is healthy!")
+    else:
+        typer.echo("⚠️  Issues found - see above")
+        typer.echo("   Recommended actions:")
+        if missing:
+            typer.echo("     - Run 'pmoves env init' to create missing tier files")
+        if not report.is_valid():
+            typer.echo("     - Run 'pmoves env validate' for detailed errors")
+        typer.echo("     - Run 'pmoves secrets encode' to update CHIT secrets")
+
+
+@env_app.command("migrate-to-tiers", help="Migrate from legacy .env.generated to tier layout.")
+def env_migrate(
+    backup: bool = typer.Option(
+        True,
+        "--backup/--no-backup",
+        "-b/-B",
+        help="Create backup before migration.",
+    ),
+) -> None:
+    """Migrate secrets from legacy .env.generated to new tier layout."""
+    import shutil
+    from datetime import datetime
+
+    pmoves_dir = REPO_ROOT / "pmoves"
+    legacy_env = pmoves_dir / ".env.generated"
+    backup_dir = pmoves_dir / "data" / "backups"
+
+    if not legacy_env.exists():
+        typer.echo(f"❌ Legacy env file not found: {legacy_env}")
+        typer.echo("   Migration not needed.")
+        raise typer.Exit(1)
+
+    # Create backup if requested
+    if backup:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = backup_dir / f".env.generated.backup.{timestamp}"
+        shutil.copy2(legacy_env, backup_path)
+        typer.echo(f"📦 Backed up to: {backup_path.relative_to(REPO_ROOT)}")
+
+    # Parse legacy env file
+    typer.echo("📖 Parsing legacy .env.generated...")
+    env_vars = {}
+    with open(legacy_env) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, value = line.split("=", 1)
+                env_vars[key.strip()] = value.strip()
+
+    typer.echo(f"   ✅ Found {len(env_vars)} variables")
+
+    # Write to tier files based on categorization
+    from pmoves.tools.env_validator import TIER_DEFINITIONS
+
+    written = {}
+    for tier, tier_def in TIER_DEFINITIONS.items():
+        tier_file = pmoves_dir / tier_def["file"]
+
+        # Collect variables for this tier
+        tier_vars = {}
+        for var in tier_def.get("required", []) + tier_def.get("optional", []):
+            if var in env_vars:
+                tier_vars[var] = env_vars[var]
+
+        # Write tier file
+        if tier_vars:
+            with open(tier_file, "w") as f:
+                f.write(f"# PMOVES.AI Tier {tier.upper()} Environment\n")
+                f.write(f"# Migrated from .env.generated on {datetime.now().isoformat()}\n\n")
+                for key, value in tier_vars.items():
+                    f.write(f"{key}={value}\n")
+            written[tier] = len(tier_vars)
+            typer.echo(f"   ✅ env.tier-{tier}: {len(tier_vars)} variables")
+
+    typer.echo(f"\n✅ Migration complete!")
+    typer.echo(f"   Migrated {sum(written.values())} variables to {len(written)} tier files")
+    typer.echo(f"\n💡 Next steps:")
+    typer.echo(f"   1. Run 'pmoves env validate' to check tier files")
+    typer.echo(f"   2. Run 'pmoves secrets encode' to update CHIT")
+    typer.echo(f"   3. Consider removing legacy .env.generated after verification")
 
 
 def main() -> None:
