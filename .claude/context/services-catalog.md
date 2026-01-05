@@ -1,6 +1,132 @@
 # PMOVES.AI Services Catalog
 
+**Last Updated:** 2026-01-04
+**Status:** Hardened Edition Architecture
+
 Comprehensive reference of all production services, ports, APIs, and integration points.
+
+## Architecture Overview
+
+### 5-Tier Network Model
+
+| Tier | Docker Network | Purpose | Security |
+|------|---------------|---------|----------|
+| Tier 1 | `pmoves_data` | Data storage | `internal: true` (isolated) |
+| Tier 2 | `pmoves_api` | API/internal services | `internal: true` (isolated) |
+| Tier 3 | `pmoves_app` | Application services | External access allowed |
+| Tier 4 | `pmoves_bus` | Message/event bus | External access allowed |
+| Tier 5 | `pmoves_monitoring` | Observability | External access allowed |
+
+### Dynamic Port Allocation
+
+All services use dynamic port variables with defaults:
+```yaml
+ports:
+  - "${SERVICE_PORT:-default}:internal_port"
+```
+
+Generate ports via: `make generate-ports`
+
+### Service Status Legend
+
+- **Core** ✅ - Essential for PMOVES.AI hardened operation
+- **DOCKED_MODE** ✅ - Supports docked mode detection
+- **Profiles** - Organizational grouping for selective startup
+
+---
+
+## Service Classification Table
+
+| Service | Network Tier | Port Variable | Core | DOCKED_MODE | Profiles |
+|---------|--------------|---------------|------|-------------|----------|
+| **Agent Coordination** | | | | | |
+| agent-zero | Tier 3 (App), Tier 4 (Bus) | AGENT_ZERO_PORT | ✅ | ✅ | None |
+| archon | Tier 3 (App) | ARCHON_PORT | ✅ | ✅ | None |
+| mesh-agent | Tier 3 (App), Tier 4 (Bus) | MESH_AGENT_PORT | ✅ | ✅ | None |
+| a2ui-nats-bridge | Tier 3 (App), Tier 4 (Bus) | | ➖ | ❌ | agents |
+| **Retrieval & Knowledge** | | | | | |
+| hi-rag-gateway | Tier 2 (API), Tier 4 (Bus) | HI_RAG_GATEWAY_PORT | ✅ | ✅ | None |
+| hi-rag-gateway-gpu | Tier 2 (API), Tier 4 (Bus) | HI_RAG_GATEWAY_GPU_PORT | ✅ | ✅ | None |
+| hi-rag-gateway-v2 | Tier 2 (API), Tier 4 (Bus) | | ✅ | ✅ | None |
+| hi-rag-gateway-v2-gpu | Tier 2 (API), Tier 4 (Bus) | | ✅ | ✅ | None |
+| deepresearch | Tier 3 (App), Tier 4 (Bus) | DEEPRESEARCH_PORT | ✅ | ✅ | None |
+| supaserch | Tier 3 (App), Tier 4 (Bus) | SUPASERCH_PORT | ✅ | ❌ | None |
+| **Data Storage** | | | | | |
+| postgres | Tier 1 (Data), Supabase | POSTGRES_PORT | ✅ | ✅ | None |
+| postgrest | Tier 2 (API), Supabase | POSTGREST_PORT | ✅ | ✅ | None |
+| postgrest-cli | Tier 2 (API), Supabase | POSTGREST_CLI_PORT | ✅ | ❌ | supabase-cli-rest |
+| qdrant | Tier 1 (Data) | QDRANT_PORT | ✅ | ✅ | None |
+| neo4j | Tier 1 (Data) | NEO4J_PORT | ✅ | ✅ | None |
+| meilisearch | Tier 1 (Data) | MEILISEARCH_PORT | ✅ | ✅ | None |
+| minio | Tier 1 (Data), Tier 4 (Bus) | MINIO_PORT | ✅ | ✅ | None |
+| tensorzero-clickhouse | Tier 1 (Data) | TENSORZERO_CLICKHOUSE_PORT | ✅ | ✅ | None |
+| invidious-db | Tier 1 (Data) | INVIDIOUS_DB_PORT | ✅ | ❌ | invidious |
+| **LLM & Inference** | | | | | |
+| tensorzero-gateway | Tier 2 (API), Tier 4 (Bus) | TENSORZERO_GATEWAY_PORT | ✅ | ✅ | None |
+| tensorzero-ui | Tier 3 (App) | TENSORZERO_UI_PORT | ✅ | ✅ | tensorzero |
+| pmoves-ollama | Tier 2 (API) | PMOVES_OLLAMA_PORT | ✅ | ✅ | None |
+| gpu-orchestrator | Tier 2 (API), Tier 4 (Bus) | GPU_ORCHESTRATOR_PORT | ✅ | ❌ | gpu |
+| **Voice & Speech** | | | | | |
+| flute-gateway | Tier 3 (App), Tier 4 (Bus) | FLUTE_GATEWAY_PORT | ➖ | ❌ | orchestration, media |
+| ultimate-tts-studio | Tier 3 (App), Tier 5 (Monitoring) | ULTIMATE_TTS_STUDIO_PORT | ➖ | ❌ | gpu, tts |
+| **Media Processing** | | | | | |
+| pmoves-yt | Tier 3 (App), Tier 4 (Bus) | PMOVES_YT_PORT | ✅ | ✅ | None |
+| channel-monitor | Tier 3 (App), Tier 4 (Bus) | CHANNEL_MONITOR_PORT | ✅ | ✅ | None |
+| ffmpeg-whisper | Tier 3 (App), Tier 4 (Bus) | FFMPEG_WHISPER_PORT | ✅ | ❌ | workers, orchestration |
+| media-video | Tier 3 (App), Tier 4 (Bus) | MEDIA_VIDEO_PORT | ✅ | ❌ | workers |
+| media-audio | Tier 3 (App), Tier 4 (Bus) | MEDIA_AUDIO_PORT | ✅ | ❌ | workers |
+| extract-worker | Tier 3 (App), Tier 4 (Bus) | EXTRACT_WORKER_PORT | ✅ | ❌ | workers |
+| langextract | Tier 3 (App) | LANGEXTRACT_PORT | ✅ | ❌ | workers |
+| pdf-ingest | Tier 3 (App), Tier 4 (Bus) | | ✅ | ❌ | workers |
+| notebook-sync | Tier 3 (App), Tier 4 (Bus) | NOTEBOOK_SYNC_PORT | ✅ | ❌ | workers |
+| **Agent Services** | | | | | |
+| botz-gateway | Tier 3 (App), Tier 4 (Bus), Tier 2 (API), Tier 5 (Monitoring) | BOTZ_GATEWAY_PORT | ✅ | ✅ | None |
+| tokenism-simulator | Tier 3 (App), Tier 2 (API), Tier 4 (Bus), Tier 5 (Monitoring) | TOKENISM_SIMULATOR_PORT | ✅ | ✅ | None |
+| tokenism-ui | Tier 3 (App) | TOKENISM_UI_PORT | ✅ | ✅ | None |
+| gateway-agent | Tier 2 (API), Tier 3 (App), Tier 4 (Bus) | GATEWAY_AGENT_PORT | ✅ | ❌ | agents |
+| consciousness-service | Tier 2 (API), Tier 3 (App), Tier 4 (Bus), Tier 5 (Monitoring) | CONSCIOUSNESS_SERVICE_PORT | ✅ | ❌ | agents |
+| chat-relay | Tier 4 (Bus), Tier 1 (Data), Tier 5 (Monitoring), Supabase | CHAT_RELAY_PORT | ✅ | ❌ | workers |
+| **PMOVES.YT Stack** | | | | | |
+| invidious | Tier 3 (App), Tier 4 (Bus) | INVIDIOUS_PORT | ✅ | ❌ | invidious |
+| invidious-companion | Tier 3 (App), Tier 4 (Bus) | INVIDIOUS_COMPANION_PORT | ✅ | ❌ | invidious |
+| invidious-companion-proxy | Tier 3 (App), Tier 4 (Bus) | INVIDIOUS_COMPANION_PROXY_PORT | ✅ | ✅ | invidious |
+| grayjay-server | Tier 3 (App), Tier 4 (Bus) | GRAYJAY_SERVER_PORT | ✅ | ✅ | grayjay |
+| grayjay-plugin-host | Tier 3 (App), Tier 4 (Bus) | GRAYJAY_PLUGIN_HOST_PORT | ✅ | ✅ | grayjay |
+| **Utilities** | | | | | |
+| presign | Tier 2 (API), Tier 4 (Bus) | PRESIGN_PORT | ✅ | ❌ | data |
+| render-webhook | Tier 2 (API), Tier 4 (Bus) | RENDER_WEBHOOK_PORT | ✅ | ❌ | workers |
+| publisher-discord | Tier 3 (App), Tier 4 (Bus) | PUBLISHER_DISCORD_PORT | ✅ | ❌ | agents |
+| jellyfin-bridge | Tier 3 (App), Tier 4 (Bus) | JELLYFIN_BRIDGE_PORT | ✅ | ❌ | orchestration |
+| **Monitoring** | | | | | |
+| prometheus | Tier 5 (Monitoring) | PROMETHEUS_PORT | ➖ | ❌ | monitoring |
+| grafana | Tier 5 (Monitoring) | GRAFANA_PORT | ➖ | ❌ | monitoring |
+| loki | Tier 5 (Monitoring) | LOKI_PORT | ➖ | ❌ | monitoring |
+| promtail | Tier 5 (Monitoring) | PROMTAIL_PORT | ➖ | ❌ | monitoring |
+| blackbox-exporter | Tier 5 (Monitoring) | BLACKBOX_EXPORTER_PORT | ➖ | ❌ | monitoring |
+| cadvisor | Tier 5 (Monitoring) | CADVISOR_PORT | ➖ | ❌ | monitoring |
+| **Message Bus** | | | | | |
+| nats | Tier 4 (Bus) | NATS_PORT | ✅ | ✅ | None |
+| nats-ws | Tier 4 (Bus) | NATS_WS_PORT | ✅ | ❌ | agents |
+| nats-echo-req | Tier 4 (Bus) | NATS_ECHO_REQ_PORT | ✅ | ❌ | diag |
+| nats-echo-res | Tier 4 (Bus) | NATS_ECHO_RES_PORT | ✅ | ❌ | diag |
+| nats-monitor | Tier 4 (Bus) | NATS_MONITOR_PORT | ✅ | ❌ | diag |
+| messaging-gateway | Tier 2 (API), Tier 4 (Bus) | MESSAGING_GATEWAY_PORT | ✅ | ❌ | workers |
+| **Worker Services** | | | | | |
+| comfy-watcher | Tier 4 (Bus), Tier 1 (Data) | COMFY_WATCHER_PORT | ✅ | ❌ | workers |
+| session-context-worker | Tier 3 (App), Tier 4 (Bus) | SESSION_CONTEXT_WORKER_PORT | ✅ | ❌ | workers |
+| retrieval-eval | Tier 3 (App), Tier 4 (Bus) | RETRIEVAL_EVAL_PORT | ✅ | ❌ | workers |
+| github-runner-ctl | Tier 2 (API), Tier 4 (Bus), Tier 5 (Monitoring) | GITHUB_RUNNER_CTL_PORT | ✅ | ❌ | workers |
+| evo-controller | Tier 3 (App), Tier 4 (Bus) | EVO_CONTROLLER_PORT | ✅ | ❌ | orchestration |
+| **UI Services** | | | | | |
+| pmoves-ui | app_tier, api_tier, Supabase | PMOVES_UI_PORT | ✅ | ❌ | ui |
+| **Infrastructure** | | | | | |
+| cloudflared | Tier 3 (App) | CLOUDFLARED_PORT | ➖ | ❌ | cloudflare |
+| bgutil-pot-provider | Tier 3 (App), Tier 4 (Bus) | | ➖ | ❌ | yt |
+| postgrest-health | Tier 2 (API), Tier 4 (Bus) | | ➖ | ❌ | supabase-local |
+
+**Summary:** 62 total services | 56 core | 27 with DOCKED_MODE
+
+---
 
 ## Agent Coordination & Orchestration
 
