@@ -1302,10 +1302,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    - *id007
     environment:
     - NODE_ENV=production
     - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
@@ -1497,8 +1494,8 @@ services:
     build: ./services/gateway-agent
     restart: unless-stopped
     env_file:
-    - env.shared
-    - .env.generated
+    - *id005
+    - *id002
     environment:
     - PORT=8110
     - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
@@ -1650,10 +1647,7 @@ services:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
     env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    - *id004
     environment:
     - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
     - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
@@ -1677,10 +1671,7 @@ services:
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
     restart: unless-stopped
     env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    - *id004
     environment:
     - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
     - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
@@ -1709,10 +1700,7 @@ services:
       \ --no-autoupdate run \"$$CLOUDFLARE_TUNNEL_NAME\";\nelse\n  echo \"Set CLOUDFLARE_TUNNEL_TOKEN\
       \ or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.\";\n  exit 1;\nfi\n"
     env_file:
-    - env.shared.generated
-    - env.shared
-    - .env.generated
-    - .env.local
+    - *id005
     environment:
     - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
