@@ -1,3 +1,8 @@
+"""Smoke Test for SupaSerch Service.
+
+Validates SupaSerch search functionality and API endpoints.
+"""
+
 import asyncio
 import json
 import os
