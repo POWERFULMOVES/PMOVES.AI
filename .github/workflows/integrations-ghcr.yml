@@ -330,7 +330,7 @@ jobs:
           docker pull "${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest"
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -345,7 +345,7 @@ jobs:
           scanners: 'vuln'
 
       - name: Trivy vulnerability scan report (includes unfixed)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
           format: table

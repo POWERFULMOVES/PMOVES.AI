@@ -98,7 +98,7 @@ jobs:
 
       - name: Scan Ollama CUDA with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda-${{ github.sha }}
           format: sarif
@@ -130,7 +130,7 @@ jobs:
 
       - name: Scan Hi-RAG GPU with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu-${{ github.sha }}
           format: sarif
@@ -249,7 +249,7 @@ jobs:
 
       - name: Scan ${{ matrix.service.name }} with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
           format: sarif
