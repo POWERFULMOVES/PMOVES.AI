@@ -38,7 +38,7 @@ services:
       - NET_ADMIN
       - IPC_LOCK
     healthcheck:
-      test: [ "CMD-SHELL", "wget --spider http://tensorzero:tensorzero@localhost:8123/ping" ]
+      test: [ "CMD-SHELL", "wget --spider http://$${CLICKHOUSE_USER:-tensorzero}:$${CLICKHOUSE_PASSWORD:-tensorzero}@localhost:8123/ping" ]
       interval: 5s
       timeout: 2s
       retries: 5
@@ -49,7 +49,7 @@ services:
     command: [ "--config-file", "/app/config/tensorzero.toml" ]
     environment:
       # ClickHouse Connection
-      - TENSORZERO_CLICKHOUSE_URL=http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default
+      - TENSORZERO_CLICKHOUSE_URL=http://$${CLICKHOUSE_USER:-tensorzero}:$${CLICKHOUSE_PASSWORD:-tensorzero}@tensorzero-clickhouse:8123/default
       # Dynamic API Keys
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
