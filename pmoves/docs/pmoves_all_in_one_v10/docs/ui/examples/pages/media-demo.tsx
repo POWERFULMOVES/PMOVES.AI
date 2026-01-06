@@ -1,2 +1,0 @@
-import React from "react"; import { SkinProvider } from "@/runtime/skin/SkinProvider"; import { MediaBubble } from "@/runtime/notebook/MediaBubble";
-export default function MediaDemo(){ return (<SkinProvider url="/skins/comic-pop/1.1.0/skin.json"><div style={{ padding:20 }}><h1>Media Embed Demo</h1><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}><div><MediaBubble meta={{ provider:"youtube", videoId:"dQw4w9WgXcQ" }} /></div><div><MediaBubble meta={{ provider:"http", url:"/sample.mp4" }} /></div></div></div></SkinProvider>); }

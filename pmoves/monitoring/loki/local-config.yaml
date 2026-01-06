@@ -1,10 +1,13 @@
+# Loki local configuration for PMOVES.AI monitoring
+# Single-process mode for development/WSL2 deployment
+
 auth_enabled: false
 
 server:
   http_listen_port: 3100
+  grpc_listen_port: 9096
 
 common:
-  instance_addr: 127.0.0.1
   path_prefix: /loki
   storage:
     filesystem:
@@ -12,33 +15,27 @@ common:
       rules_directory: /loki/rules
   replication_factor: 1
   ring:
+    instance_addr: 127.0.0.1
     kvstore:
       store: inmemory
 
 schema_config:
   configs:
     - from: 2024-01-01
-      store: tsdb
+      store: boltdb-shipper
       object_store: filesystem
       schema: v13
       index:
-        prefix: index_
+        prefix: loki_index_
         period: 24h
 
+ruler:
+  alertmanager_url: http://localhost:9093
+
+# Limits for resource management
 limits_config:
-  retention_period: 168h
-
-chunk_store_config: {}
-
-storage_config:
-  tsdb_shipper:
-    active_index_directory: /loki/index
-    cache_location: /loki/tsdb-cache
-  filesystem:
-    directory: /loki/chunks
-
-compactor:
-  working_directory: /loki/compactor
-  compactor_ring:
-    kvstore:
-      store: inmemory
+  split_queries_by_interval: 30m
+  max_entries_limit_per_query: 10000
+  max_streams_per_user: 0
+  max_global_streams_per_user: 0
+  allow_structured_metadata: false  # Required for boltdb-shipper storage in Loki 3.x

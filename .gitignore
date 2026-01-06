@@ -46,6 +46,10 @@ tmp/*.mp3
 /pmoves/.env
 /pmoves/.env.local
 /pmoves/.env.testkeys
+# Tier environment files (containing actual keys - gitignored)
+/pmoves/env.tier-*
+# But keep example files tracked
+!/pmoves/env.tier-*.example
 /pmoves/.env.precleanup-*
 /pmoves/.env.*.bak
 /pmoves/.env copy

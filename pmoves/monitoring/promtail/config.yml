@@ -1,18 +1,45 @@
+# Promtail configuration for PMOVES.AI
+# Scrapes Docker container logs and sends to Loki
+
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
 
-clients:
-  - url: http://loki:3100/loki/api/v1/push
-
 positions:
   filename: /tmp/positions.yaml
 
-scrape_configs:
-  - job_name: docker-logs
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: docker
-          __path__: /var/lib/docker/containers/*/*-json.log
+clients:
+  - url: http://loki:3100/loki/api/v1/push
 
+scrape_configs:
+  # Docker container logs via Docker socket
+  - job_name: docker-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container_name
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: stream
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: project
+      - replacement: /var/lib/docker/containers/${[1]}/${[1]}-json.log
+        source_labels: ['__meta_docker_container_name']
+        target_label: __path__
+
+  # System logs via journald (if available)
+  - job_name: system-journal
+    journal:
+      max_age: 12h
+      labels:
+        job: systemd-journal
+        host: ${HOSTNAME}
+    relabel_configs:
+      - source_labels: ['__journal__systemd_unit']
+        target_label: unit
+      - source_labels: ['__journal__hostname']
+        target_label: hostname
