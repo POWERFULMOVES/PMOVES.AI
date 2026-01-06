@@ -1,0 +1,27 @@
+# PMOVES.AI Code Owners
+#
+# These owners will be requested for review when someone opens a pull request
+# affecting these paths.
+
+# Security-critical paths require approval from @powerfulmoves
+/pmoves/services/*/Dockerfile @powerfulmoves
+/pmoves/docker-compose*.yml @powerfulmoves
+/pmoves/env.shared @powerfulmoves
+/deploy/k8s/ @powerfulmoves
+/.github/workflows/ @powerfulmoves
+
+# TensorZero configuration (LLM gateway and observability)
+/pmoves/tensorzero/config/ @powerfulmoves
+
+# Monitoring and observability configuration
+/pmoves/monitoring/ @powerfulmoves
+
+# Documentation
+/docs/ @powerfulmoves @claudedev
+
+# Git configuration files
+.gitignore @powerfulmoves
+.gitmodules @powerfulmoves
+
+# GitHub configuration
+/.github/ @powerfulmoves

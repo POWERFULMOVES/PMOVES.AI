@@ -9,10 +9,8 @@ Implements PMOVES.AI integration patterns:
 """
 
 import os
-import logging
 from dataclasses import dataclass
 from typing import Optional
-from pathlib import Path
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -20,23 +18,11 @@ logger = logging.getLogger(__name__)
 # Resolve env.shared path relative to this config file
 # Config file is at: .../tokenism-simulator/config/__init__.py
 # env.shared is at: pmoves/env.shared (3 levels up from config file)
-# In container, the path may be different, so try multiple locations
-_env_path = None
-config_file_path = Path(__file__).resolve()
-# Try different parent levels for env.shared
-for i in range(1, 5):
-    try:
-        candidate = config_file_path.parents[i] / "env.shared"
-        if candidate.exists():
-            _env_path = candidate
-            break
-    except IndexError:
-        continue
-
-if _env_path:
+_env_path = Path(__file__).resolve().parents[3] / "env.shared"
+if _env_path.exists():
     load_dotenv(_env_path)
 else:
-    logger.warning("Environment file not found, using system environment")
+    logger.warning(f"Environment file not found: {_env_path}, using system environment")
 
 
 @dataclass(frozen=True)

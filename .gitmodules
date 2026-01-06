@@ -99,8 +99,8 @@
 	path = Pmoves-hyperdimensions
 	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
 	ignore = all
-[submodule "pmoves/vendor/e2b"]
-	path = pmoves/vendor/e2b
+[submodule "pmoves/pmoves/vendor/e2b"]
+	path = pmoves/pmoves/vendor/e2b
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
 [submodule "pmoves/vendor/e2b-desktop"]
 	path = pmoves/vendor/e2b-desktop
@@ -120,3 +120,8 @@
 [submodule "research/A2UI"]
 	path = research/A2UI
 	url = https://github.com/google/A2UI.git
+	ignore = all
+[submodule "PMOVES-A2UI"]
+	path = PMOVES-A2UI
+	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
+	branch = PMOVES.AI-Edition-Hardened

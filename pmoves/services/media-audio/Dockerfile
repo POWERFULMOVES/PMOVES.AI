@@ -33,4 +33,4 @@ RUN groupadd -r pmoves --gid=65532 && \
 USER pmoves:pmoves
 
 EXPOSE 8082
-CMD ["uvicorn","server:app","--host","0.0.0.0","--port","8082"]
+CMD ["uvicorn","server:app","--host","127.0.0.1","--port","8082"]

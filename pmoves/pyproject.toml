@@ -1,0 +1,59 @@
+[tool.pytest.ini_options]
+# Pytest configuration for PMOVES.AI unified test framework
+# This file complements pytest.ini in the repository root
+
+# Test discovery patterns
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+# Test paths (should match pytest.ini)
+testpaths = [
+    "pmoves/tests",
+    "pmoves/tests/smoke",
+    "pmoves/tests/integration",
+    "pmoves/tests/performance",
+    "pmoves/tests/services",
+]
+
+# Pytest markers (should match pytest.ini)
+markers = [
+    "smoke: Quick health checks (5-30s) - validates service endpoints",
+    "integration: Service-to-service communication tests (1-5m)",
+    "functional: End-to-end user workflow tests (2-10m)",
+    "performance: Load benchmarks and latency tests (5-30m)",
+    "slow: Tests that take >10s to run",
+    "gpu: Tests requiring GPU acceleration",
+]
+
+# Async test mode
+asyncio_mode = "auto"
+
+# Output options
+addopts = [
+    "--import-mode=importlib",
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+
+# Coverage options (can be enabled with --cov)
+[tool.coverage.run]
+source = ["pmoves"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
