@@ -1,37 +1,37 @@
 # YAML anchors for tier-based env file loading
 # These anchors allow services to load environment variables from tier-specific env files
 # Tier architecture isolates secrets by service category (data, api, llm, worker, media, agent)
-x-env-tier-data: &env-tier-data
+x-env-tier-data: &id001
   env_file:
     - path: env.tier-data
       required: false
 
-x-env-tier-api: &env-tier-api
+x-env-tier-api: &id002
   env_file:
     - path: env.tier-api
       required: false
 
-x-env-tier-llm: &env-tier-llm
+x-env-tier-llm: &id006
   env_file:
     - path: env.tier-llm
       required: false
 
-x-env-tier-worker: &env-tier-worker
+x-env-tier-worker: &id003
   env_file:
     - path: env.tier-worker
       required: false
 
-x-env-tier-media: &env-tier-media
+x-env-tier-media: &id004
   env_file:
     - path: env.tier-media
       required: false
 
-x-env-tier-agent: &env-tier-agent
+x-env-tier-agent: &id005
   env_file:
     - path: env.tier-agent
       required: false
 
-x-env-tier-ui: &env-tier-ui
+x-env-tier-ui: &id007
   env_file:
     - path: env.tier-ui
       required: false
@@ -826,7 +826,7 @@ services:
   botz-gateway:
     build: ./services/botz-gateway
     restart: unless-stopped
-    <<: *env-tier-agent
+    <<: *id005
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
@@ -1139,7 +1139,7 @@ services:
       dockerfile: Dockerfile
     image: ${ULTIMATE_TTS_IMAGE:-ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:pmoves-latest}
     restart: unless-stopped
-    <<: *env-tier-media
+    <<: *id004
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
       - GRADIO_SERVER_PORT=7861
@@ -1194,7 +1194,7 @@ services:
       dockerfile: Dockerfile
     image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
     restart: unless-stopped
-    <<: *env-tier-agent
+    <<: *id005
     environment:
       - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
       - TOKENISM_PORT=${TOKENISM_PORT:-8100}
@@ -1230,7 +1230,7 @@ services:
       dockerfile: Dockerfile
     image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
     restart: unless-stopped
-    <<: *env-tier-ui
+    <<: *id007
     environment:
       - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
       - NODE_ENV=production
@@ -1320,7 +1320,7 @@ services:
       context: .
       dockerfile: services/comfy-watcher/Dockerfile
     restart: unless-stopped
-    <<: *env-tier-worker
+    <<: *id003
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - MINIO_ENDPOINT=minio:9000
@@ -1376,7 +1376,7 @@ services:
   github-runner-ctl:
     build: ./services/github-runner-ctl
     restart: unless-stopped
-    <<: *env-tier-agent
+    <<: *id005
     environment:
       - PORT=8104
       - NATS_URL=${NATS_URL:-nats://nats:4222}
