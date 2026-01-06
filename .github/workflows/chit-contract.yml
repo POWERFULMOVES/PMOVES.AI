@@ -1,0 +1,116 @@
+---
+name: CHIT Contract Check
+
+# yamllint disable rule:truthy
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pmoves/supabase/**/*.sql'
+      - 'pmoves/supabase/initdb/**'
+      - 'pmoves/services/**'
+      - 'pmoves/docs/SUPABASE_*.md'
+      - '.github/workflows/chit-contract.yml'
+  pull_request:
+    paths:
+      - 'pmoves/supabase/**/*.sql'
+      - 'pmoves/supabase/initdb/**'
+      - 'pmoves/services/**'
+      - 'pmoves/docs/SUPABASE_*.md'
+      - '.github/workflows/chit-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: [self-hosted, vps]
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          sparse-checkout: |
+            pmoves
+            docs
+            .github/workflows
+          sparse-checkout-cone-mode: false
+
+      # Install ripgrep
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: CHIT schema/endpoints checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Checking CHIT Database Tables ==="
+          # Check for CHIT tables in SQL files
+          if ! rg -ni --iglob '*.sql' 'create table.*\b(anchors|constellations|shape_points|shape_index)\b' pmoves/supabase/; then
+            echo "❌ Missing CHIT tables (anchors, constellations, shape_points, shape_index)"
+            exit 1
+          fi
+          echo "✅ Found CHIT table definitions"
+
+          echo "=== Checking CHIT API Endpoints ==="
+          # Check for POST /geometry/event endpoint (FastAPI decorator syntax)
+          if ! rg -n '@(router|app)\.post\(.*/geometry/event' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: POST /geometry/event"
+            exit 1
+          fi
+          echo "✅ Found POST /geometry/event"
+
+          # Check for GET /shape/point/{id}/jump endpoint
+          if ! rg -n '@(router|app)\.get\(.*/shape/point.*jump' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: GET /shape/point/{id}/jump"
+            exit 1
+          fi
+          echo "✅ Found GET /shape/point/{id}/jump"
+
+          # Check for /geometry/decode/* endpoints (text, image, audio)
+          if ! rg -n '@(router|app)\.post\(.*/geometry/decode/(text|image|audio)' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: POST /geometry/decode/*"
+            exit 1
+          fi
+          echo "✅ Found POST /geometry/decode/* endpoints"
+
+          # Check for /geometry/calibration/report endpoint
+          if ! rg -n '@(router|app)\.post\(.*/geometry/calibration/report' pmoves/services/; then
+            echo "❌ Missing CHIT endpoint: POST /geometry/calibration/report"
+            exit 1
+          fi
+          echo "✅ Found POST /geometry/calibration/report"
+
+          echo "=== Checking CHIT Event Publishing ==="
+          # Check for geometry.cgp.v1 event usage
+          if ! rg -n 'geometry\.cgp\.v1' pmoves/services/; then
+            echo "❌ Missing event publish: geometry.cgp.v1"
+            exit 1
+          fi
+          echo "✅ Found geometry.cgp.v1 event"
+
+          echo "=== Checking CHIT Environment Variables ==="
+          # Check for CHIT environment variable usage
+          for var in CHIT_REQUIRE_SIGNATURE CHIT_PASSPHRASE CHIT_DECRYPT_ANCHORS CHIT_CODEBOOK_PATH CHIT_T5_MODEL; do
+            if ! rg -n "$var" pmoves/services/; then
+              echo "❌ Missing CHIT environment variable: $var"
+              exit 1
+            fi
+          done
+          echo "✅ Found all CHIT environment variables"
+
+          echo ""
+          echo "======================================"
+          echo "✅ All CHIT contract checks passed!"
+          echo "======================================"

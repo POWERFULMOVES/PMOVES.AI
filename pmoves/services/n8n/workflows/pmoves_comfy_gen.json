@@ -1,0 +1,85 @@
+{
+  "meta": {
+    "instanceId": "pmoves-demo",
+    "securityNote": "WARNING: Webhook endpoint has no authentication. Add headerAuth or basicAuth before exposing to untrusted networks."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pmoves/gen-image",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "Webhook",
+      "name": "Webhook: Gen Image",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.0,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "requestMethod": "POST",
+        "url": "http://comfyui:8188/prompt",
+        "jsonParameters": true,
+        "options": {},
+        "sendBody": true,
+        "bodyParametersJson": "={{ $json.prompt || $json }}"
+      },
+      "id": "HTTP",
+      "name": "HTTP \u2192 ComfyUI /prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "responseBody": "Generation started"
+      },
+      "id": "Resp",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.0,
+      "position": [
+        860,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Gen Image": {
+      "main": [
+        [
+          {
+            "node": "HTTP \u2192 ComfyUI /prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP \u2192 ComfyUI /prompt": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "staticData": null,
+  "id": "PMOVES ComfyUI Gen v1"
+}

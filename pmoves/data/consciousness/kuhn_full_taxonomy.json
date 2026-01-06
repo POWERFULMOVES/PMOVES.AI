@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Kuhn Landscape of Consciousness - Full Taxonomy",
+  "description": "325 consciousness theories from Robert Lawrence Kuhn's 'A Landscape of Consciousness' (2024)",
+  "version": "1.0.0",
+  "source": {
+    "paper": "A landscape of consciousness: Toward a taxonomy of explanations and implications",
+    "author": "Robert Lawrence Kuhn",
+    "journal": "Progress in Biophysics and Molecular Biology",
+    "year": 2024,
+    "doi": "10.1016/j.pbiomolbio.2023.12.003"
+  },
+  "categories": {
+    "1_Materialism_Theories": {
+      "id": "materialism",
+      "description": "Theories holding that consciousness arises from or is identical to physical brain processes",
+      "subcategories": {
+        "1.1_Philosophical_Materialism": {
+          "description": "Philosophical arguments for consciousness as purely physical",
+          "theories": [
+            {"name": "Eliminative Materialism", "proponents": ["Paul Churchland", "Patricia Churchland"], "description": "Folk psychology concepts will be eliminated by neuroscience"},
+            {"name": "Reductive Materialism", "proponents": ["J.J.C. Smart", "U.T. Place"], "description": "Mental states are identical to brain states"},
+            {"name": "Type Identity Theory", "proponents": ["Herbert Feigl", "J.J.C. Smart"], "description": "Each mental type is identical to a brain state type"},
+            {"name": "Token Identity Theory", "proponents": ["Donald Davidson"], "description": "Each mental token is identical to a physical token"},
+            {"name": "Functionalism", "proponents": ["Hilary Putnam", "Jerry Fodor"], "description": "Mental states defined by functional roles"},
+            {"name": "Analytical Functionalism", "proponents": ["David Lewis", "Frank Jackson"], "description": "Mental concepts analyzed as functional concepts"},
+            {"name": "Psychofunctionalism", "proponents": ["Jerry Fodor"], "description": "Mental states identified via psychological theory"},
+            {"name": "Machine Functionalism", "proponents": ["Hilary Putnam"], "description": "Mind as computational state machine"},
+            {"name": "Homuncular Functionalism", "proponents": ["William Lycan"], "description": "Hierarchical functional decomposition"},
+            {"name": "Teleofunctionalism", "proponents": ["Ruth Millikan", "Fred Dretske"], "description": "Functions defined by evolutionary history"}
+          ]
+        },
+        "1.2_Neurobiological": {
+          "description": "Consciousness explained through neural mechanisms",
+          "theories": [
+            {"name": "Global Workspace Theory", "proponents": ["Bernard Baars", "Stanislas Dehaene"], "description": "Consciousness as global information broadcast"},
+            {"name": "Global Neuronal Workspace", "proponents": ["Stanislas Dehaene", "Jean-Pierre Changeux"], "description": "Cortical workspace for conscious access"},
+            {"name": "Neural Correlates of Consciousness", "proponents": ["Christof Koch", "Francis Crick"], "description": "Neural patterns correlating with consciousness"},
+            {"name": "Recurrent Processing Theory", "proponents": ["Victor Lamme"], "description": "Recurrent cortical loops generate consciousness"},
+            {"name": "Predictive Processing", "proponents": ["Karl Friston", "Andy Clark"], "description": "Consciousness from prediction error minimization"},
+            {"name": "Active Inference", "proponents": ["Karl Friston"], "description": "Free energy minimization framework"},
+            {"name": "Higher-Order Thought Theory", "proponents": ["David Rosenthal"], "description": "Consciousness requires higher-order representations"},
+            {"name": "Higher-Order Perception Theory", "proponents": ["William Lycan"], "description": "Inner perception of mental states"},
+            {"name": "Self-Representationalism", "proponents": ["Uriah Kriegel"], "description": "Conscious states represent themselves"},
+            {"name": "Attended Intermediate Representations", "proponents": ["Jesse Prinz"], "description": "Attention to mid-level representations"},
+            {"name": "Thalamo-Cortical Theory", "proponents": ["Rodolfo Llinas"], "description": "Thalamic-cortical oscillations generate consciousness"},
+            {"name": "Dynamic Core Hypothesis", "proponents": ["Gerald Edelman", "Giulio Tononi"], "description": "Integrated neural activity cluster"},
+            {"name": "Claustrum Theory", "proponents": ["Francis Crick", "Christof Koch"], "description": "Claustrum as consciousness conductor"},
+            {"name": "Reticular Activating System", "proponents": ["Giuseppe Moruzzi", "Horace Magoun"], "description": "Brainstem arousal system"},
+            {"name": "Neuronal Synchrony", "proponents": ["Wolf Singer"], "description": "Gamma oscillation binding"},
+            {"name": "Neural Darwinism", "proponents": ["Gerald Edelman"], "description": "Selectionist neural development"},
+            {"name": "Reentry Theory", "proponents": ["Gerald Edelman"], "description": "Recursive signaling loops"},
+            {"name": "Microconsciousness", "proponents": ["Semir Zeki"], "description": "Distributed micro-conscious processes"}
+          ]
+        },
+        "1.3_Electromagnetic_Field": {
+          "description": "Consciousness as electromagnetic field phenomenon",
+          "theories": [
+            {"name": "CEMI Field Theory", "proponents": ["Johnjoe McFadden"], "description": "Consciousness is the brain's EM field"},
+            {"name": "EM Field Theory", "proponents": ["Susan Pockett"], "description": "Experience identical to EM patterns"},
+            {"name": "Resonance Theory", "proponents": ["Tam Hunt", "Jonathan Schooler"], "description": "Shared resonance creates consciousness"},
+            {"name": "Phi-Field Theory", "proponents": ["William Uttal"], "description": "Field integration in brain"}
+          ]
+        },
+        "1.4_Computational_Informational": {
+          "description": "Consciousness as information processing",
+          "theories": [
+            {"name": "Computational Theory of Mind", "proponents": ["Jerry Fodor", "Zenon Pylyshyn"], "description": "Mind as computational system"},
+            {"name": "Attention Schema Theory", "proponents": ["Michael Graziano"], "description": "Brain models attention as consciousness"},
+            {"name": "Information Integration", "proponents": ["Giulio Tononi"], "description": "Phi as measure of integrated information"},
+            {"name": "Global Availability", "proponents": ["Ned Block"], "description": "Information globally available to cognition"},
+            {"name": "Workspace Dynamics", "proponents": ["Bernard Baars"], "description": "Theater metaphor for consciousness"},
+            {"name": "Broadcast Theory", "proponents": ["Daniel Dennett"], "description": "Fame in the brain"},
+            {"name": "Multiple Drafts Model", "proponents": ["Daniel Dennett"], "description": "Parallel content fixation"},
+            {"name": "Virtual Machine Consciousness", "proponents": ["Daniel Dennett"], "description": "Consciousness as software"},
+            {"name": "Pandemonium Architecture", "proponents": ["Oliver Selfridge"], "description": "Competing demons/modules"},
+            {"name": "Society of Mind", "proponents": ["Marvin Minsky"], "description": "Mind as agent society"},
+            {"name": "Strange Loop Theory", "proponents": ["Douglas Hofstadter"], "description": "Self-referential loops create self"},
+            {"name": "Symbolic AI Consciousness", "proponents": ["John McCarthy"], "description": "Symbol manipulation suffices"},
+            {"name": "Connectionist Consciousness", "proponents": ["Paul Smolensky"], "description": "Neural network emergence"},
+            {"name": "Predictive Coding", "proponents": ["Rajesh Rao", "Dana Ballard"], "description": "Hierarchical prediction"},
+            {"name": "Bayesian Brain", "proponents": ["Karl Friston"], "description": "Probabilistic inference"}
+          ]
+        },
+        "1.5_Homeostatic_Affective": {
+          "description": "Consciousness rooted in bodily regulation and affect",
+          "theories": [
+            {"name": "Somatic Marker Hypothesis", "proponents": ["Antonio Damasio"], "description": "Emotions guide conscious decisions"},
+            {"name": "Affective Neuroscience", "proponents": ["Jaak Panksepp"], "description": "Subcortical affective systems"},
+            {"name": "Core Consciousness", "proponents": ["Antonio Damasio"], "description": "Proto-self and core self"},
+            {"name": "Feeling of What Happens", "proponents": ["Antonio Damasio"], "description": "Consciousness as feeling of being"},
+            {"name": "Interoceptive Inference", "proponents": ["Anil Seth"], "description": "Body-based predictive processing"},
+            {"name": "Primordial Emotions", "proponents": ["Derek Denton"], "description": "Ancient emotional substrates"},
+            {"name": "Homeostatic Consciousness", "proponents": ["Bud Craig"], "description": "Interoception and insula"},
+            {"name": "BrainMind", "proponents": ["Jaak Panksepp"], "description": "Primary process emotions"}
+          ]
+        },
+        "1.6_Embodied_Enactive": {
+          "description": "Consciousness from embodied interaction",
+          "theories": [
+            {"name": "Enactivism", "proponents": ["Francisco Varela", "Evan Thompson", "Eleanor Rosch"], "description": "Sensorimotor coupling with world"},
+            {"name": "Autopoiesis", "proponents": ["Humberto Maturana", "Francisco Varela"], "description": "Self-creating living systems"},
+            {"name": "Extended Mind", "proponents": ["Andy Clark", "David Chalmers"], "description": "Cognition extends beyond brain"},
+            {"name": "Radical Embodiment", "proponents": ["Lawrence Shapiro"], "description": "Body shapes cognition fundamentally"},
+            {"name": "Sensorimotor Contingency", "proponents": ["Kevin O'Regan", "Alva Noë"], "description": "Knowledge of sensorimotor laws"},
+            {"name": "4E Cognition", "proponents": ["Various"], "description": "Embodied, Embedded, Enacted, Extended"},
+            {"name": "Ecological Psychology", "proponents": ["James Gibson"], "description": "Direct perception of affordances"},
+            {"name": "Situated Cognition", "proponents": ["Lucy Suchman"], "description": "Cognition in context"},
+            {"name": "Distributed Cognition", "proponents": ["Edwin Hutchins"], "description": "Cognition across agents and artifacts"},
+            {"name": "Grounded Cognition", "proponents": ["Lawrence Barsalou"], "description": "Modal simulations ground concepts"}
+          ]
+        },
+        "1.7_Relational": {
+          "description": "Consciousness as relational phenomenon",
+          "theories": [
+            {"name": "Relational Interpretation", "proponents": ["Carlo Rovelli"], "description": "Properties are relational, not intrinsic"},
+            {"name": "Relational Quantum Mechanics", "proponents": ["Carlo Rovelli"], "description": "QM applies to consciousness"},
+            {"name": "Intersubjectivity", "proponents": ["Dan Zahavi"], "description": "Self through others"},
+            {"name": "Social Construction", "proponents": ["Rom Harré"], "description": "Consciousness socially constructed"}
+          ]
+        },
+        "1.8_Representational": {
+          "description": "Consciousness as mental representation",
+          "theories": [
+            {"name": "Representationalism", "proponents": ["Fred Dretske", "Michael Tye"], "description": "Experience is representational content"},
+            {"name": "PANIC Theory", "proponents": ["Michael Tye"], "description": "Poised Abstract Nonconceptual Intentional Content"},
+            {"name": "Phenomenal Intentionality", "proponents": ["Uriah Kriegel"], "description": "Intentionality grounded in phenomenology"},
+            {"name": "First-Person Representation", "proponents": ["David Chalmers"], "description": "Centered worlds semantics"},
+            {"name": "Quotational Theory", "proponents": ["David Rosenthal"], "description": "HOTs quote first-order states"},
+            {"name": "Same-Order Representationalism", "proponents": ["Rocco Gennaro"], "description": "Intrinsic higher-order content"}
+          ]
+        },
+        "1.9_Language": {
+          "description": "Role of language in consciousness",
+          "theories": [
+            {"name": "Linguistic Consciousness", "proponents": ["Daniel Dennett"], "description": "Language enables certain consciousness"},
+            {"name": "Narrative Self", "proponents": ["Daniel Dennett"], "description": "Self as center of narrative gravity"},
+            {"name": "Inner Speech", "proponents": ["Peter Carruthers"], "description": "Self-talk enables metacognition"},
+            {"name": "Linguistic Determinism", "proponents": ["Benjamin Whorf"], "description": "Language shapes thought"},
+            {"name": "Social Brain Hypothesis", "proponents": ["Robin Dunbar"], "description": "Social complexity drove brain evolution"},
+            {"name": "Bicameral Mind", "proponents": ["Julian Jaynes"], "description": "Pre-conscious linguistic brain"}
+          ]
+        },
+        "1.10_Phylogenetic_Evolution": {
+          "description": "Evolutionary origins of consciousness",
+          "theories": [
+            {"name": "Evolutionary Consciousness", "proponents": ["Nicholas Humphrey"], "description": "Consciousness evolved as inner eye"},
+            {"name": "Biological Naturalism", "proponents": ["John Searle"], "description": "Consciousness is biological"},
+            {"name": "Sentience Evolution", "proponents": ["Nicholas Humphrey"], "description": "Sentience as evolutionary adaptation"},
+            {"name": "Cambrian Explosion Hypothesis", "proponents": ["Todd Feinberg", "Jon Mallatt"], "description": "Consciousness emerged in Cambrian"},
+            {"name": "Unlimited Associative Learning", "proponents": ["Eva Jablonka", "Simona Ginsburg"], "description": "UAL as consciousness marker"},
+            {"name": "Attention Schema Evolution", "proponents": ["Michael Graziano"], "description": "Social attention drove consciousness"},
+            {"name": "Mirror Self-Recognition", "proponents": ["Gordon Gallup"], "description": "Self-awareness marker"},
+            {"name": "Theory of Mind Evolution", "proponents": ["David Premack"], "description": "Mentalizing capacity evolved"}
+          ]
+        }
+      }
+    },
+    "2_Non_Reductive_Physicalism": {
+      "id": "non-reductive-physicalism",
+      "description": "Mental properties are physical but not reducible to lower-level descriptions",
+      "theories": [
+        {"name": "Nonreductive Physicalism", "proponents": ["Donald Davidson"], "description": "Mental properties not reducible to physical"},
+        {"name": "Emergentism", "proponents": ["C.D. Broad", "Samuel Alexander"], "description": "Consciousness as emergent property"},
+        {"name": "Anomalous Monism", "proponents": ["Donald Davidson"], "description": "Mental events physical but anomalous"},
+        {"name": "Supervenience Physicalism", "proponents": ["Jaegwon Kim"], "description": "Mental supervenes on physical"},
+        {"name": "Nonreductive Functionalism", "proponents": ["Ned Block"], "description": "Functions not reducible"},
+        {"name": "Weak Emergence", "proponents": ["Mark Bedau"], "description": "Unpredictable but explainable emergence"},
+        {"name": "Strong Emergence", "proponents": ["Timothy O'Connor"], "description": "Irreducible causal powers"},
+        {"name": "Biological Emergence", "proponents": ["John Searle"], "description": "Life-like emergence"},
+        {"name": "Downward Causation", "proponents": ["Roger Sperry"], "description": "Higher levels cause lower"}
+      ]
+    },
+    "3_Quantum_Theories": {
+      "id": "quantum",
+      "description": "Consciousness involves quantum mechanical processes",
+      "theories": [
+        {"name": "Orchestrated Objective Reduction", "proponents": ["Roger Penrose", "Stuart Hameroff"], "description": "Quantum computations in microtubules"},
+        {"name": "Quantum Mind", "proponents": ["Henry Stapp"], "description": "QM essential for consciousness"},
+        {"name": "Quantum Brain Dynamics", "proponents": ["Giuseppe Vitiello", "Mari Jibu"], "description": "Quantum field dynamics in brain"},
+        {"name": "Bohm Implicate Order", "proponents": ["David Bohm"], "description": "Consciousness in implicate order"},
+        {"name": "Quantum Holonomic Brain", "proponents": ["Karl Pribram"], "description": "Holographic brain theory"},
+        {"name": "Many Minds Interpretation", "proponents": ["David Albert", "Barry Loewer"], "description": "Minds in quantum superposition"},
+        {"name": "Quantum Cognition", "proponents": ["Jerome Busemeyer"], "description": "Quantum probability in decisions"},
+        {"name": "Penrose-Lucas Argument", "proponents": ["Roger Penrose"], "description": "Gödel implies non-algorithmic mind"},
+        {"name": "Quantum Zeno Effect", "proponents": ["Henry Stapp"], "description": "Attention as quantum measurement"},
+        {"name": "Coherent States", "proponents": ["Gustav Bernroider"], "description": "Ion channel coherence"},
+        {"name": "Biophoton Hypothesis", "proponents": ["Fritz-Albert Popp"], "description": "Photon signaling in brain"},
+        {"name": "Quantum Entanglement Mind", "proponents": ["Matthew Fisher"], "description": "Nuclear spin entanglement"}
+      ]
+    },
+    "4_Integrated_Information_Theory": {
+      "id": "iit",
+      "description": "Consciousness is integrated information (Phi)",
+      "theories": [
+        {"name": "IIT 1.0", "proponents": ["Giulio Tononi"], "description": "Initial formulation of Phi"},
+        {"name": "IIT 2.0", "proponents": ["Giulio Tononi"], "description": "Refined information integration"},
+        {"name": "IIT 3.0", "proponents": ["Giulio Tononi", "Masafumi Oizumi"], "description": "Causal structure analysis"},
+        {"name": "IIT 4.0", "proponents": ["Giulio Tononi"], "description": "Latest formulation with intrinsicality"},
+        {"name": "Phi as Consciousness", "proponents": ["Giulio Tononi"], "description": "Phi identical to consciousness"},
+        {"name": "Exclusion Postulate", "proponents": ["Giulio Tononi"], "description": "One maximum of Phi"},
+        {"name": "Intrinsic Cause-Effect Power", "proponents": ["Giulio Tononi"], "description": "Irreducible causal structure"},
+        {"name": "Qualia Space", "proponents": ["Giulio Tononi"], "description": "Geometric structure of experience"}
+      ]
+    },
+    "5_Panpsychisms": {
+      "id": "panpsychism",
+      "description": "Consciousness is fundamental feature of reality",
+      "theories": [
+        {"name": "Constitutive Panpsychism", "proponents": ["Philip Goff"], "description": "Macro-consciousness from micro"},
+        {"name": "Cosmopsychism", "proponents": ["Itay Shani", "Philip Goff"], "description": "Universe itself is conscious"},
+        {"name": "Panprotopsychism", "proponents": ["David Chalmers"], "description": "Proto-conscious fundamental properties"},
+        {"name": "Russellian Monism", "proponents": ["Bertrand Russell", "Galen Strawson"], "description": "Intrinsic nature is experiential"},
+        {"name": "Panexperientialism", "proponents": ["Alfred North Whitehead"], "description": "Experience in all occasions"},
+        {"name": "Process Philosophy", "proponents": ["Alfred North Whitehead"], "description": "Reality as experiential processes"},
+        {"name": "Micropsychism", "proponents": ["William Seager"], "description": "Fundamental particles conscious"},
+        {"name": "Combination Problem", "proponents": ["William James", "Philip Goff"], "description": "How micro-experience combines"},
+        {"name": "Subject Summing", "proponents": ["Luke Roelofs"], "description": "Combining subjects of experience"},
+        {"name": "Quality Combination", "proponents": ["Sam Coleman"], "description": "Combining experiential qualities"},
+        {"name": "Structure Combination", "proponents": ["Philip Goff"], "description": "Structural coherence approach"},
+        {"name": "Panpsychist IIT", "proponents": ["Hedda Hassel Mørch"], "description": "IIT with panpsychist interpretation"},
+        {"name": "Neutral Panpsychism", "proponents": ["Leopold Stubenberg"], "description": "Neutral base for experience"},
+        {"name": "Priority Cosmopsychism", "proponents": ["Philip Goff"], "description": "Cosmic consciousness primary"}
+      ]
+    },
+    "6_Monisms": {
+      "id": "monism",
+      "description": "Reality is fundamentally one kind of substance",
+      "theories": [
+        {"name": "Neutral Monism", "proponents": ["William James", "Bertrand Russell"], "description": "Reality neither mental nor physical"},
+        {"name": "Double-Aspect Monism", "proponents": ["Baruch Spinoza"], "description": "Mind and matter two aspects"},
+        {"name": "Dual-Aspect Monism", "proponents": ["Harald Atmanspacher"], "description": "Complementary aspects"},
+        {"name": "Reflexive Monism", "proponents": ["Max Velmans"], "description": "Subject and object aspects"},
+        {"name": "Anomalous Monism", "proponents": ["Donald Davidson"], "description": "Token identity without type laws"},
+        {"name": "Priority Monism", "proponents": ["Jonathan Schaffer"], "description": "Whole prior to parts"},
+        {"name": "Existence Monism", "proponents": ["Parmenides"], "description": "Only one thing exists"},
+        {"name": "Substance Monism", "proponents": ["Spinoza"], "description": "One substance, many modes"},
+        {"name": "Experiential Monism", "proponents": ["William James"], "description": "Pure experience base"}
+      ]
+    },
+    "7_Dualisms": {
+      "id": "dualism",
+      "description": "Mind and matter are fundamentally distinct",
+      "theories": [
+        {"name": "Substance Dualism", "proponents": ["René Descartes", "Richard Swinburne"], "description": "Mind and body distinct substances"},
+        {"name": "Property Dualism", "proponents": ["David Chalmers"], "description": "Mental properties non-physical"},
+        {"name": "Interactionist Dualism", "proponents": ["Karl Popper", "John Eccles"], "description": "Mind and brain causally interact"},
+        {"name": "Epiphenomenalism", "proponents": ["Thomas Huxley", "Frank Jackson"], "description": "Mental states causally inert"},
+        {"name": "Parallelism", "proponents": ["Gottfried Leibniz"], "description": "Pre-established harmony"},
+        {"name": "Occasionalism", "proponents": ["Nicolas Malebranche"], "description": "God causes correlations"},
+        {"name": "Emergent Dualism", "proponents": ["William Hasker"], "description": "Soul emerges from brain"},
+        {"name": "Naturalistic Dualism", "proponents": ["David Chalmers"], "description": "Non-reductive but natural"},
+        {"name": "Type-F Monism/Dualism", "proponents": ["David Chalmers"], "description": "Protophenomenal properties"},
+        {"name": "Modal Dualism", "proponents": ["David Chalmers"], "description": "Conceivability arguments"},
+        {"name": "Explanatory Gap", "proponents": ["Joseph Levine"], "description": "Gap between physical and phenomenal"}
+      ]
+    },
+    "8_Idealisms": {
+      "id": "idealism",
+      "description": "Reality is fundamentally mental",
+      "theories": [
+        {"name": "Analytic Idealism", "proponents": ["Bernardo Kastrup"], "description": "Reality is mental, matter appearance"},
+        {"name": "Conscious Realism", "proponents": ["Donald Hoffman"], "description": "Consciousness fundamental, spacetime interface"},
+        {"name": "Objective Idealism", "proponents": ["G.W.F. Hegel"], "description": "Reality as absolute mind"},
+        {"name": "Subjective Idealism", "proponents": ["George Berkeley"], "description": "Esse est percipi"},
+        {"name": "Transcendental Idealism", "proponents": ["Immanuel Kant"], "description": "Mind structures experience"},
+        {"name": "Absolute Idealism", "proponents": ["F.H. Bradley"], "description": "Reality as unified experience"},
+        {"name": "Personal Idealism", "proponents": ["Borden Parker Bowne"], "description": "Persons as ultimate reality"},
+        {"name": "Interface Theory of Perception", "proponents": ["Donald Hoffman"], "description": "Perception hides reality"},
+        {"name": "Conscious Agent Theory", "proponents": ["Donald Hoffman"], "description": "Network of conscious agents"},
+        {"name": "Mind-at-Large", "proponents": ["Aldous Huxley", "Bernardo Kastrup"], "description": "Individual minds as dissociations"}
+      ]
+    },
+    "9_Anomalous_Altered_States": {
+      "id": "anomalous",
+      "description": "Studies informed by altered states and anomalous experiences",
+      "theories": [
+        {"name": "NDE Research", "proponents": ["Pim van Lommel", "Sam Parnia"], "description": "Near-death experiences suggest non-local consciousness"},
+        {"name": "AWARE Study", "proponents": ["Sam Parnia"], "description": "Awareness during resuscitation"},
+        {"name": "Psychedelic Consciousness", "proponents": ["Robin Carhart-Harris"], "description": "Entropic brain states"},
+        {"name": "Default Mode Network", "proponents": ["Marcus Raichle"], "description": "Resting state consciousness"},
+        {"name": "Meditation Studies", "proponents": ["Richard Davidson"], "description": "Contemplative transformation"},
+        {"name": "Mindfulness Research", "proponents": ["Jon Kabat-Zinn"], "description": "Present-moment awareness"},
+        {"name": "Neurophenomenology", "proponents": ["Francisco Varela"], "description": "First-person methods"},
+        {"name": "Lucid Dreaming", "proponents": ["Stephen LaBerge"], "description": "Conscious awareness in dreams"},
+        {"name": "Flow States", "proponents": ["Mihaly Csikszentmihalyi"], "description": "Optimal experience"},
+        {"name": "Anesthesia Studies", "proponents": ["George Mashour"], "description": "Consciousness during anesthesia"},
+        {"name": "Split-Brain Research", "proponents": ["Roger Sperry", "Michael Gazzaniga"], "description": "Divided consciousness"},
+        {"name": "Blindsight", "proponents": ["Lawrence Weiskrantz"], "description": "Vision without awareness"},
+        {"name": "Hemineglect", "proponents": ["Edoardo Bisiach"], "description": "Unilateral unawareness"},
+        {"name": "Synesthesia", "proponents": ["V.S. Ramachandran"], "description": "Cross-modal experience"},
+        {"name": "Phantom Limb", "proponents": ["V.S. Ramachandran"], "description": "Body schema plasticity"},
+        {"name": "Dissociative Disorders", "proponents": ["Various"], "description": "Fragmented consciousness"},
+        {"name": "Psychosis Research", "proponents": ["Various"], "description": "Altered reality testing"}
+      ]
+    },
+    "10_Challenge_Theories": {
+      "id": "challenge",
+      "description": "Theories challenging standard assumptions",
+      "theories": [
+        {"name": "Illusionism", "proponents": ["Keith Frankish", "Daniel Dennett"], "description": "Consciousness as illusion"},
+        {"name": "Mysterianism", "proponents": ["Colin McGinn"], "description": "Mind constitutionally limited"},
+        {"name": "The Hard Problem", "proponents": ["David Chalmers"], "description": "Why subjective experience exists"},
+        {"name": "Explanatory Gap", "proponents": ["Joseph Levine"], "description": "Gap between physical and phenomenal"},
+        {"name": "Knowledge Argument", "proponents": ["Frank Jackson"], "description": "Mary's Room thought experiment"},
+        {"name": "Zombie Argument", "proponents": ["David Chalmers"], "description": "Conceivability of philosophical zombies"},
+        {"name": "Chinese Room", "proponents": ["John Searle"], "description": "Syntax insufficient for semantics"},
+        {"name": "What is it Like", "proponents": ["Thomas Nagel"], "description": "Subjective character of experience"},
+        {"name": "Qualia Problems", "proponents": ["Various"], "description": "Inverted and absent qualia"},
+        {"name": "Other Minds Problem", "proponents": ["Various"], "description": "How to know others are conscious"},
+        {"name": "Binding Problem", "proponents": ["Various"], "description": "Unity of conscious experience"},
+        {"name": "Meta-Problem", "proponents": ["David Chalmers"], "description": "Why we think there's a hard problem"},
+        {"name": "Reality+ Thesis", "proponents": ["David Chalmers"], "description": "Virtual realities are genuine"},
+        {"name": "Simulation Hypothesis", "proponents": ["Nick Bostrom"], "description": "We may be simulated"},
+        {"name": "Strong AI", "proponents": ["Various"], "description": "Machines can be conscious"},
+        {"name": "Weak AI", "proponents": ["John Searle"], "description": "Machines simulate but aren't conscious"},
+        {"name": "Consciousness Denialism", "proponents": ["Various"], "description": "Consciousness doesn't exist"}
+      ]
+    }
+  },
+  "implications": {
+    "meaning_purpose_value": {
+      "description": "What consciousness theories imply for meaning, purpose, and value"
+    },
+    "ai_consciousness": {
+      "description": "Whether artificial systems can be conscious"
+    },
+    "virtual_immortality": {
+      "description": "Mind uploading and digital continuation"
+    },
+    "survival_beyond_death": {
+      "description": "Whether consciousness survives bodily death"
+    }
+  }
+}
