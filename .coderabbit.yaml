@@ -23,8 +23,8 @@ documentation:
     minimum: 80
     patch: 80
 
-# Language-specific settings
-language: "python"
+# Language setting (locale for reviews)
+language: "en"
 
 # Review depth settings
 review:
