@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Unified env loader for PMOVES scripts.
-# Loads, in order: env.shared.generated → env.shared → .env.generated → .env.local
+# Loads, in order: tier env files → env.shared.generated → env.shared → .env.generated → .env.local
 # Existing exported vars are preserved unless files set them explicitly.
 set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -34,6 +34,15 @@ load_env_file() {
   set -H 2>/dev/null || true
 }
 
+# Hardened 6-tier architecture: load tier env files first
+load_env_file "$ROOT_DIR/pmoves/env.tier-data"
+load_env_file "$ROOT_DIR/pmoves/env.tier-api"
+load_env_file "$ROOT_DIR/pmoves/env.tier-llm"
+load_env_file "$ROOT_DIR/pmoves/env.tier-media"
+load_env_file "$ROOT_DIR/pmoves/env.tier-agent"
+load_env_file "$ROOT_DIR/pmoves/env.tier-worker"
+
+# Legacy env files (loaded after tiers for backward compatibility)
 load_env_file "$ROOT_DIR/env.shared.generated"
 load_env_file "$ROOT_DIR/env.shared"
 load_env_file "$ROOT_DIR/.env.generated"

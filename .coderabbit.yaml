@@ -16,23 +16,5 @@ reviews:
     - "main"
     - "origin/main"
 
-# Documentation comment requirements
-documentation:
-  # Require docstrings for Python functions/classes
-  coverage:
-    minimum: 80
-    patch: 80
-
-# Language-specific settings
-language: "python"
-
-# Review depth settings
-review:
-  # Number of commits to review in a PR
-  num_commits: 10
-
-  # Include summary of PR
-  summary: true
-
-  # Enable line-by-line reviews
-  line_comments: true
+# Language setting (locale for reviews)
+language: "en"

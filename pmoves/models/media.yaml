@@ -1,7 +1,0 @@
-asr:
-  laptop_4090: faster-whisper-small
-  workstation_5090: faster-whisper-medium
-  jetson_orin_8gb: faster-whisper-base
-vision:
-  jetson_orin_8gb:
-    detector: yolov8n.pt

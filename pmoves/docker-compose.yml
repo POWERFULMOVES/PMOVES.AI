@@ -999,7 +999,8 @@ services:
     - pmoves_app
     - pmoves_bus
   pmoves-ollama:
-    image: ${PMOVES_OLLAMA_IMAGE:-pmoves/ollama:0.12.6}
+    env_file: *id006
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6}
     restart: unless-stopped
     environment:
     - OLLAMA_HOST=0.0.0.0:11434
@@ -1025,8 +1026,8 @@ services:
     ports:
     - ${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
     volumes:
-      - tensorzero-clickhouse-data:/var/lib/clickhouse
-      - ./tensorzero/clickhouse/users.xml:/etc/clickhouse-server/users.d/notebook.xml:ro
+    - tensorzero-clickhouse-data:/var/lib/clickhouse
+    - ./tensorzero/clickhouse/users.xml:/etc/clickhouse-server/users.d/notebook.xml:ro
     healthcheck:
       test:
       - CMD-SHELL
@@ -1579,6 +1580,8 @@ volumes:
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
+  comfy-watcher-output: {}
+  comfy-watcher-state: {}
 networks:
   pmoves_data:
     name: pmoves_data
