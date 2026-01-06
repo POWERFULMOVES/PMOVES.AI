@@ -1,0 +1,196 @@
+# PMOVES Gateway Agent Deployment Workflow
+# Deploys the Gateway Agent service with GitHub Secrets for MCP tool credentials
+
+name: Deploy Gateway Agent
+
+on:
+  push:
+    branches:
+      - main
+      - feat/gateway-agent
+    paths:
+      - 'pmoves/services/gateway-agent/**'
+      - 'pmoves/docker-compose.yml'
+      - '.github/workflows/deploy-gateway-agent.yml'
+  workflow_dispatch:
+
+env:
+  # GitHub Secrets - Service Credentials
+  HOSTINGER_API_KEY: ${{ secrets.HOSTINGER_API_KEY }}
+  TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
+  N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+  POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+  E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+  VENICE_API_KEY: ${{ secrets.VENICE_API_KEY }}
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Python syntax
+        run: |
+          python3 -m py_compile pmoves/services/gateway-agent/app.py
+          echo "✓ Python syntax valid"
+
+      - name: Validate requirements.txt
+        run: |
+          pip3 install --dry-run -r pmoves/services/gateway-agent/requirements.txt
+          echo "✓ Requirements are installable"
+
+  # ============================================================================
+  # AI-Lab Deployment (Local GPU Node)
+  # ============================================================================
+
+  build-ai-lab:
+    name: Build Gateway Agent (AI-Lab)
+    runs-on: [self-hosted, ai-lab]
+    needs: validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Gateway Agent
+        run: |
+          cd pmoves
+          docker compose build gateway-agent
+          echo "✓ Gateway Agent image built"
+
+      - name: Tag image
+        run: |
+          docker tag pmoves/gateway-agent:latest pmoves/gateway-agent:${{ github.sha }}
+          echo "✓ Image tagged"
+
+  deploy-ai-lab:
+    name: Deploy to AI-Lab
+    runs-on: [self-hosted, ai-lab]
+    needs: build-ai-lab
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy Gateway Agent
+        run: |
+          cd pmoves
+          docker compose --profile gateway up -d gateway-agent
+          echo "✓ Gateway Agent deployed"
+
+      - name: Wait for health check
+        run: |
+          echo "Waiting for Gateway Agent to be healthy..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8100/healthz > /dev/null; then
+              echo "✓ Gateway Agent is healthy"
+              exit 0
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+          echo "✗ Gateway Agent failed health check"
+          exit 1
+
+      - name: Verify tool discovery
+        run: |
+          sleep 5  # Give it time to discover tools
+          response=$(curl -s http://localhost:8100/tools)
+          tool_count=$(echo "$response" | jq -r '.total // 0')
+          echo "✓ Discovered $tool_count MCP tools"
+
+          if [ "$tool_count" -gt 0 ]; then
+            echo "Sample tools:"
+            curl -s http://localhost:8100/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
+          fi
+
+  # ============================================================================
+  # VPS Deployment (KVM4-1 API Gateway Node)
+  # ============================================================================
+
+  deploy-vps:
+    name: Deploy to VPS (KVM4-1)
+    runs-on: [self-hosted, kvm4]
+    needs: validate
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Gateway Agent (VPS)
+        run: |
+          cd pmoves
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml build gateway-agent
+          echo "✓ Gateway Agent image built (VPS)"
+
+      - name: Deploy Gateway Agent to VPS
+        run: |
+          cd pmoves
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d gateway-agent
+          echo "✓ Gateway Agent deployed to VPS"
+
+      - name: Wait for health check
+        run: |
+          echo "Waiting for Gateway Agent to be healthy..."
+          for i in {1..60}; do
+            if curl -sf http://localhost:8100/healthz > /dev/null; then
+              echo "✓ Gateway Agent is healthy"
+              exit 0
+            fi
+            echo "Waiting... ($i/60)"
+            sleep 2
+          done
+          echo "✗ Gateway Agent failed health check"
+          exit 1
+
+      - name: Verify tool discovery
+        run: |
+          sleep 5  # Give it time to discover tools
+          response=$(curl -s http://localhost:8100/tools)
+          tool_count=$(echo "$response" | jq -r '.total // 0')
+          echo "✓ Discovered $tool_count MCP tools"
+
+          if [ "$tool_count" -gt 0 ]; then
+            echo "Sample tools:"
+            curl -s http://localhost:8100/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
+          fi
+
+      - name: Verify secrets loaded
+        run: |
+          secrets=$(curl -s http://localhost:8100/secrets)
+          echo "✓ Secrets endpoint response:"
+          echo "$secrets" | jq '.'
+
+  # ============================================================================
+  # Rollback
+  # ============================================================================
+
+  rollback-ai-lab:
+    name: Rollback AI-Lab
+    runs-on: [self-hosted, ai-lab]
+    needs: deploy-ai-lab
+    if: failure()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Rollback to previous version
+        run: |
+          cd pmoves
+          docker compose --profile gateway down gateway-agent
+          echo "✓ Gateway Agent stopped (rolled back)"
+
+  rollback-vps:
+    name: Rollback VPS
+    runs-on: [self-hosted, kvm4]
+    needs: deploy-vps
+    if: failure()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Rollback to previous version
+        run: |
+          cd pmoves
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml down gateway-agent
+          echo "✓ Gateway Agent stopped (rolled back)"

@@ -14,6 +14,14 @@ supa.md
 *.log
 .last_logs.txt
 
+# Backup files (may contain credentials)
+*.backup*
+*-backup-*
+*.bak
+
+# WSL artifacts
+.wsl/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -44,3 +52,16 @@ data/jellyfin/
 data/open-notebook/
 data/chit/
 cloudflared/
+# Agent Zero runtime data (keep structure, ignore runtime)
+pmoves/data/agent-zero/memory/
+pmoves/data/agent-zero/runtime/
+pmoves/data/agent-zero/tmp/
+pmoves/data/agent-zero/logs/
+
+# Tier environment files (actual secrets - use .example for tracked templates)
+env.tier-api
+env.tier-agent
+env.tier-data
+env.tier-llm
+env.tier-media
+env.tier-worker
