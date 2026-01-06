@@ -2056,6 +2056,10 @@ chit-encode-secrets:
 chit-decode-secrets:
 	@$(PYTHON) tools/chit_decode_secrets.py $(ARGS)
 
+.PHONY: chit-apply-manifest
+chit-apply-manifest:
+	@$(PYTHON) -c "from pathlib import Path; from pmoves.chit import load_cgp, decode_secret_map, apply_manifest_v2; cgp = load_cgp(Path('data/chit/env.cgp.json')); secrets = decode_secret_map(cgp); result = apply_manifest_v2(secrets, Path('chit/secrets_manifest_v2.yaml')); print(f'Applied to {len(result[\"tier_files\"])} tier files'); [print(f'  - env.tier-{f}') for f in result['tier_files']]"
+
 .PHONY: ingest-consciousness-yt
 ingest-consciousness-yt:
 	@$(PYTHON) tools/consciousness_ingest.py $(ARGS)
