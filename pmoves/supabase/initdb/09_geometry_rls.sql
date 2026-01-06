@@ -41,7 +41,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='shape_index' AND policyname='read_shape_index_tenant'
   ) THEN
-    EXECUTE 'CREATE POLICY read_shape_points_tenant ON public.shape_index FOR SELECT USING (namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves'')';
+    EXECUTE 'CREATE POLICY read_shape_index_tenant ON public.shape_index FOR SELECT USING (namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves'')';
   END IF;
 END$$;
 
