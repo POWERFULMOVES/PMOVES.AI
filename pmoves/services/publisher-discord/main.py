@@ -102,12 +102,16 @@ def _extract_webhook_domain(webhook_url: str) -> str:
     # Discord webhook URLs are: https://discord.com/api/webhooks/<id>/<token>
     # Extract just the domain for logging
     try:
-        if "discord.com" in webhook_url:
-            return "discord.com"
-        elif "discord.gg" in webhook_url:
-            return "discord.gg"
-        else:
-            return "unknown"
+        from urllib.parse import urlparse
+        parsed = urlparse(webhook_url)
+        hostname = parsed.hostname
+        if hostname:
+            # Check for exact match or subdomain of discord.com
+            if hostname == "discord.com" or hostname.endswith(".discord.com"):
+                return "discord.com"
+            elif hostname == "discord.gg" or hostname.endswith(".discord.gg"):
+                return "discord.gg"
+        return "unknown"
     except Exception:
         return "invalid"
 
