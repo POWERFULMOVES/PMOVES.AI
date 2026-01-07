@@ -18,28 +18,30 @@ ALTER TABLE public.constellations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shape_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shape_index ENABLE ROW LEVEL SECURITY;
 
--- Permissive read policies (dev). Tighten for prod (e.g., tenant/namespace scoping).
+-- Tenant-scoped read policies for Geometry Bus tables
+-- SECURITY: Uses namespace-based tenant isolation via app.current_tenant setting
+-- NOTE: Set 'app.current_tenant' with SET LOCAL app.current_tenant = 'tenant_name';
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='anchors' AND policyname='read_anchors_all'
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='anchors' AND policyname='read_anchors_tenant'
   ) THEN
-    EXECUTE 'CREATE POLICY read_anchors_all ON public.anchors FOR SELECT USING (true)';
+    EXECUTE 'CREATE POLICY read_anchors_tenant ON public.anchors FOR SELECT USING (namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves'')';
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='constellations' AND policyname='read_constellations_all'
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='constellations' AND policyname='read_constellations_tenant'
   ) THEN
-    EXECUTE 'CREATE POLICY read_constellations_all ON public.constellations FOR SELECT USING (true)';
+    EXECUTE 'CREATE POLICY read_constellations_tenant ON public.constellations FOR SELECT USING (namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves'')';
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='shape_points' AND policyname='read_shape_points_all'
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='shape_points' AND policyname='read_shape_points_tenant'
   ) THEN
-    EXECUTE 'CREATE POLICY read_shape_points_all ON public.shape_points FOR SELECT USING (true)';
+    EXECUTE 'CREATE POLICY read_shape_points_tenant ON public.shape_points FOR SELECT USING (namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves'')';
   END IF;
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='shape_index' AND policyname='read_shape_index_all'
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='shape_index' AND policyname='read_shape_index_tenant'
   ) THEN
-    EXECUTE 'CREATE POLICY read_shape_index_all ON public.shape_index FOR SELECT USING (true)';
+    EXECUTE 'CREATE POLICY read_shape_index_tenant ON public.shape_index FOR SELECT USING (namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves'')';
   END IF;
 END$$;
 

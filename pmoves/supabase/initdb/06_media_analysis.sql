@@ -59,12 +59,39 @@ ALTER TABLE public.detections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.segments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.emotions ENABLE ROW LEVEL SECURITY;
 
+-- SECURITY: Tenant-scoped RLS policies with namespace isolation
+-- Uses app.current_tenant setting to isolate data by namespace column
+-- Set tenant with: SET LOCAL app.current_tenant = 'tenant_name';
 DO $$ BEGIN
-  CREATE POLICY detections_anon_all ON public.detections FOR ALL TO anon USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  CREATE POLICY detections_tenant_isolation ON public.detections FOR ALL TO anon
+  USING (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves')
+  WITH CHECK (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves');
+EXCEPTION WHEN duplicate_object THEN
+  -- Drop old insecure policy if exists
+  DROP POLICY IF EXISTS detections_anon_all ON public.detections;
+  CREATE POLICY detections_tenant_isolation ON public.detections FOR ALL TO anon
+  USING (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves')
+  WITH CHECK (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves');
+END $$;
+
 DO $$ BEGIN
-  CREATE POLICY segments_anon_all ON public.segments FOR ALL TO anon USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  CREATE POLICY segments_tenant_isolation ON public.segments FOR ALL TO anon
+  USING (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves')
+  WITH CHECK (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves');
+EXCEPTION WHEN duplicate_object THEN
+  DROP POLICY IF EXISTS segments_anon_all ON public.segments;
+  CREATE POLICY segments_tenant_isolation ON public.segments FOR ALL TO anon
+  USING (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves')
+  WITH CHECK (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves');
+END $$;
+
 DO $$ BEGIN
-  CREATE POLICY emotions_anon_all ON public.emotions FOR ALL TO anon USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  CREATE POLICY emotions_tenant_isolation ON public.emotions FOR ALL TO anon
+  USING (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves')
+  WITH CHECK (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves');
+EXCEPTION WHEN duplicate_object THEN
+  DROP POLICY IF EXISTS emotions_anon_all ON public.emotions;
+  CREATE POLICY emotions_tenant_isolation ON public.emotions FOR ALL TO anon
+  USING (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves')
+  WITH CHECK (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves');
+END $$;
