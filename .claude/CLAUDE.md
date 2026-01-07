@@ -237,36 +237,6 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 
 ## Common Development Tasks
 
-### Bring-Up Services (Tier by Tier)
-
-After a fresh clone or container stop:
-
-```bash
-# 1. Observability FIRST (so we can see what's happening)
-make up-obs
-
-# 2. Data tier (databases, message bus, object storage)
-make up-data-tier
-make up-nats
-
-# Verify data tier is healthy
-make health-summary
-
-# 3. Workers and agents
-make up-workers
-make up-agents
-
-# Full health check
-make health-summary
-
-# Verify specific services
-curl http://localhost:8080/healthz  # Agent Zero
-curl http://localhost:8091/healthz  # Archon
-curl http://localhost:3030/healthz  # TensorZero
-curl http://localhost:9090          # Prometheus
-curl http://localhost:3000          # Grafana
-```
-
 ### Call LLMs via TensorZero
 ```bash
 curl -X POST http://localhost:3030/v1/chat/completions \
@@ -460,6 +430,12 @@ See `.claude/context/` for detailed documentation:
 - `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference
 - `testing-strategy.md` - Testing workflow and PR requirements
+
+**GEOMETRY BUS & CHIT Integration:**
+- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
+- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
+- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
+- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
 **GEOMETRY BUS & CHIT Integration:**
 - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide

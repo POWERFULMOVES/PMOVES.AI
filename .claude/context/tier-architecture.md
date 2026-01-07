@@ -233,22 +233,21 @@ grep -A 5 "<service>:" docker-compose.yml | grep "env-tier"
 ## Makefile Commands
 
 ```bash
-# Start specific tier (in dependency order)
-make up-obs          # Observability FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
-make up-data-tier    # Data tier (postgres, qdrant, neo4j, meilisearch, minio)
-make up-nats         # NATS message bus
-make up-workers      # Background workers (extract, langextract, pdf-ingest)
-make up-agents       # Agent orchestration (agent-zero, archon)
-make up-tensorzero   # TensorZero gateway
-make up-ui           # UI services (pmoves-ui)
+# Start all tiers
+make up
 
-# Health checks
-make health-summary  # Quick health check on all services
-make wait-data       # Wait for data tier to be ready
-make verify-all      # Full verification: bring-up + smoke tests
+# Start specific tier
+make up-data      # Data tier
+make up-api       # API tier
+make up-workers   # Worker tier
+make up-agents    # Agent tier
+make up-media     # Media tier
 
-# Stop all services
-make down            # Stop and remove all containers
+# Stop all tiers
+make down
+
+# Verify health (all tiers)
+make verify-all
 ```
 
 ---
