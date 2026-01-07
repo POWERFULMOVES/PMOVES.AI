@@ -10,9 +10,12 @@ from __future__ import annotations
 import hashlib
 import json
 import base64
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 # CHIT CGP Spec Version
 CHIT_CGP_VERSION = "chit.cgp.v0.1"
@@ -154,8 +157,9 @@ def decode_secret_map(cgp_dict: Dict[str, Any]) -> Dict[str, str]:
                     value = value[2:]
                 decoded = _hex_decode(value)
                 secrets[label] = decoded
-            except Exception:
-                # Fallback to raw value
+            except (ValueError, TypeError) as e:
+                # Fallback to raw value on decode failure
+                logger.warning(f"Failed to hex-decode value for '{label}': {e}, using raw value")
                 secrets[label] = value
         else:
             secrets[label] = value
@@ -286,17 +290,28 @@ def write_docker_secrets(
 def sync_common_credentials(
     base_dir: Path,
     common_creds: Optional[Dict[str, str]] = None,
-) -> None:
+    force: bool = False,
+) -> Dict[str, List[str]]:
     """
     Ensure common credentials are consistent across all tier env files.
 
-    This function enforces credential consistency for services that span
-    multiple tiers (e.g., MinIO credentials used by api, media, worker tiers).
+    This function ADDS missing credentials to tier env files but does NOT
+    overwrite existing values unless force=True. This prevents accidentally
+    replacing strong production passwords with weak development defaults.
+
+    WARNING: Default credentials are for development only.
+    Do not use 'changeme' or 'minioadmin' in production.
 
     Args:
         base_dir: Base directory containing env.tier-* files
         common_creds: Optional dict of credential key -> value. If not provided,
                       uses sensible defaults for PMOVES.AI development.
+        force: If True, overwrite existing credentials. If False (default),
+               only add missing credentials, never replace existing ones.
+
+    Returns:
+        Dictionary mapping file paths to lists of changes made:
+        {"/path/to/env.tier-data": ["Added POSTGRES_PASSWORD=changeme"], ...}
 
     Default credentials (when common_creds not provided):
         - POSTGRES_PASSWORD: changeme
@@ -304,7 +319,11 @@ def sync_common_credentials(
         - MINIO_SECRET_KEY: minioadmin
         - MINIO_ROOT_USER: minioadmin
         - MINIO_ROOT_PASSWORD: minioadmin
+        - MINIO_USER: minioadmin
+        - MINIO_PASSWORD: minioadmin
+        - NEO4J_AUTH: neo4j/changeme
         - NEO4J_PASSWORD: changeme
+        - PGRST_DB_URI: postgres://pmoves:changeme@postgres:5432/pmoves
     """
     if common_creds is None:
         common_creds = {
@@ -330,36 +349,64 @@ def sync_common_credentials(
         base_dir / "env.tier-llm",
     ]
 
+    results: Dict[str, List[str]] = {}
+
     for tier_path in tier_files:
-        if not tier_path.exists():
-            continue
+        changes: List[str] = []
 
-        content = tier_path.read_text()
-        lines = content.split("\n")
-        modified = False
+        try:
+            if not tier_path.exists():
+                logger.debug(f"Tier file does not exist: {tier_path}")
+                continue
 
-        for cred, value in common_creds.items():
-            # Check if credential exists in file
-            for i, line in enumerate(lines):
-                if line.startswith(f"{cred}="):
-                    # Extract current value
-                    current = line.split("=", 1)[1].strip()
-                    # Update if different
-                    if current != value:
-                        lines[i] = f"{cred}={value}"
-                        modified = True
-                    break
-            else:
-                # Credential not found - append at end of file
-                # before any trailing empty lines
-                for j in range(len(lines) - 1, -1, -1):
-                    if lines[j].strip() and not lines[j].startswith("#"):
-                        lines.insert(j + 1, f"{cred}={value}")
-                        modified = True
+            content = tier_path.read_text(encoding="utf-8")
+            lines = content.split("\n")
+            modified = False
+
+            for cred, value in common_creds.items():
+                # Check if credential exists in file
+                found = False
+                for i, line in enumerate(lines):
+                    if line.startswith(f"{cred}="):
+                        found = True
+                        # Only update if force=True and value differs
+                        if force:
+                            current = line.split("=", 1)[1].strip()
+                            if current != value:
+                                lines[i] = f"{cred}={value}"
+                                changes.append(f"Updated {cred}={value[:8]}..." if len(value) > 8 else f"Updated {cred}={value}")
+                                modified = True
+                                logger.info(f"Updated credential '{cred}' in {tier_path.name}")
                         break
 
-        if modified:
-            tier_path.write_text("\n".join(lines) + "\n")
+                # Credential not found - append at end of file
+                # before any trailing empty lines
+                if not found:
+                    for j in range(len(lines) - 1, -1, -1):
+                        if lines[j].strip() and not lines[j].startswith("#"):
+                            lines.insert(j + 1, f"{cred}={value}")
+                            changes.append(f"Added {cred}={value[:8]}..." if len(value) > 8 else f"Added {cred}={value}")
+                            modified = True
+                            logger.info(f"Added credential '{cred}' to {tier_path.name}")
+                            break
+
+            if modified:
+                tier_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            if changes:
+                results[str(tier_path)] = changes
+
+        except (PermissionError, OSError) as e:
+            logger.error(f"Cannot access {tier_path}: {e}")
+            results[str(tier_path)] = [f"ERROR: {e}"]
+        except UnicodeDecodeError as e:
+            logger.error(f"Cannot decode {tier_path}: {e}")
+            results[str(tier_path)] = [f"ERROR: Unicode decode failed"]
+        except Exception as e:
+            logger.error(f"Unexpected error processing {tier_path}: {e}")
+            results[str(tier_path)] = [f"ERROR: {e}"]
+
+    return results
 
 
 def apply_manifest_v2(
@@ -377,14 +424,37 @@ def apply_manifest_v2(
 
     Returns:
         Summary of what was written
+
+    Raises:
+        FileNotFoundError: If manifest file does not exist
+        ValueError: If manifest YAML is invalid or malformed
     """
     import yaml
 
     if base_dir is None:
         base_dir = manifest_path.parent.parent
 
-    with open(manifest_path) as f:
-        manifest = yaml.safe_load(f)
+    # Load manifest with proper error handling
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        logger.error(f"Manifest file not found: {manifest_path}")
+        raise FileNotFoundError(f"Manifest not found: {manifest_path}") from e
+    except yaml.YAMLError as e:
+        logger.error(f"Invalid YAML in manifest {manifest_path}: {e}")
+        raise ValueError(f"Invalid YAML in manifest: {e}") from e
+    except (PermissionError, OSError) as e:
+        logger.error(f"Cannot read manifest {manifest_path}: {e}")
+        raise
+
+    # Validate manifest structure
+    if not isinstance(manifest, dict):
+        raise ValueError(f"Manifest must be a dictionary, got {type(manifest).__name__}")
+
+    if "entries" not in manifest:
+        logger.warning(f"Manifest {manifest_path} has no 'entries' key")
+        return {"tier_files": [], "github_secrets": 0, "docker_secrets": 0}
 
     # Group secrets by tier file
     tier_files: Dict[str, List[str]] = {}
