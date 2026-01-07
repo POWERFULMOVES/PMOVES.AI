@@ -1388,6 +1388,301 @@ def env_migrate(
     typer.echo(f"   3. Consider removing legacy .env.generated after verification")
 
 
+# Agent SDK Commands
+# =============================================================================
+
+@agent_sdk_app.command("create", help="Create new PMOVES Agent instance via interactive wizard")
+def agent_sdk_create(
+    role: str = typer.Option(
+        None,
+        "--role",
+        "-r",
+        help="Agent role (researcher, code-reviewer, media-processor, knowledge-manager, general)"
+    ),
+    model: str = typer.Option(
+        "openai::qwen3:8b",
+        "--model",
+        "-m",
+        help="Model to use (provider::model_name syntax)"
+    ),
+    agent_id: Optional[str] = typer.Option(
+        None,
+        "--agent-id",
+        help="Custom agent ID (default: auto-generated)"
+    ),
+    connect: bool = typer.Option(
+        True,
+        "--connect/--no-connect",
+        help="Connect to PMOVES services after creation"
+    ),
+    config_only: bool = typer.Option(
+        False,
+        "--config-only",
+        help="Generate configuration without creating agent"
+    ),
+) -> None:
+    """Create a PMOVES Agent SDK instance with full ecosystem access.
+
+    This will launch an interactive wizard to guide you through:
+    1. Role selection (or use --role to skip)
+    2. Tool customization
+    3. MCP server configuration
+    4. Service connection (NATS, TensorZero, Hi-RAG)
+
+    Example:
+        pmoves agent-sdk create --role researcher
+        pmoves agent-sdk create --model openai::gpt-4o --no-connect
+    """
+    import asyncio
+    import sys
+    from datetime import datetime
+
+    # Add PMOVES-BoTZ to path
+    botz_path = Path(__file__).parent.parent.parent / "PMOVES-BoTZ"
+    sys.path.insert(0, str(botz_path))
+
+    try:
+        from pmoves_botz.features.agent_sdk import PMOVESAgent
+    except ImportError:
+        typer.echo("❌ PMOVES Agent SDK not found in PMOVES-BoTZ")
+        typer.echo(f"   Expected: {botz_path / 'features/agent_sdk'}")
+        typer.echo("\nInitialize submodule:")
+        typer.echo("   git submodule update --init PMOVES-BoTZ")
+        raise typer.Exit(1)
+
+    async def create_and_connect():
+        # Interactive role selection if not provided
+        if not role:
+            typer.echo("\n🎭 Select Agent Role:")
+            typer.echo("   1. researcher      - Deep research via SupaSerch + Hi-RAG")
+            typer.echo("   2. code-reviewer   - Security-focused code analysis")
+            typer.echo("   3. media-processor - Video/audio processing workflows")
+            typer.echo("   4. knowledge-manager - Hi-RAG knowledge base operations")
+            typer.echo("   5. general         - Full ecosystem access (all tools)")
+            typer.echo()
+
+            while True:
+                try:
+                    choice = input("Select role [1-5] (default: 5): ").strip()
+                    if not choice:
+                        selected_role = "general"
+                        break
+                    role_map = {1: "researcher", 2: "code-reviewer", 3: "media-processor", 4: "knowledge-manager", 5: "general"}
+                    idx = int(choice)
+                    if 1 <= idx <= 5:
+                        selected_role = role_map[idx]
+                        break
+                    typer.echo(f"❌ Invalid choice. Please enter 1-5")
+                except ValueError:
+                    typer.echo("❌ Please enter a number.")
+                except KeyboardInterrupt:
+                    typer.echo("\n\n✋ Wizard cancelled.")
+                    raise typer.Exit(0)
+        else:
+            selected_role = role
+
+        # Generate agent ID
+        timestamp = int(datetime.now().timestamp())
+        final_agent_id = agent_id or f"pmoves-{selected_role}-{timestamp}"
+
+        typer.echo(f"\n🔧 Creating agent: {final_agent_id}")
+
+        # Create agent instance
+        agent = PMOVESAgent(
+            agent_id=final_agent_id,
+            role=selected_role,
+            model=model,
+            enable_nats=True,
+            enable_hooks=True,
+        )
+
+        if config_only:
+            # Show config without connecting
+            typer.echo("\n📋 Agent Configuration:")
+            typer.echo(f"   Agent ID: {agent.agent_id}")
+            typer.echo(f"   Role: {agent.role}")
+            typer.echo(f"   Model: {agent.model}")
+            typer.echo(f"   Tools: {', '.join(agent.allowed_tools)}")
+            return
+
+        if connect:
+            # Connect to services
+            typer.echo("🔗 Connecting to PMOVES services...")
+            try:
+                await agent.connect(require_services=True)
+                typer.echo("✅ Connected to NATS")
+                typer.echo("✅ HTTP client initialized")
+            except ConnectionError as e:
+                typer.echo(f"❌ Connection failed: {e}")
+                typer.echo("   Agent NOT created due to service unavailability.")
+                typer.echo("\n🔧 Troubleshooting:")
+                typer.echo("   1. Start NATS: docker compose up -d nats")
+                typer.echo("   2. Check health: curl http://localhost:4222")
+                typer.echo("   3. Create agent without --connect flag to skip connection")
+                raise typer.Exit(1)
+            except RuntimeError as e:
+                typer.echo(f"❌ Configuration error: {e}")
+                typer.echo("   Agent NOT created due to missing dependencies.")
+                raise typer.Exit(1)
+
+        # Display configuration
+        typer.echo("\n" + "╔" + "═" * 68 + "╗")
+        typer.echo("║" + " " * 68 + "║")
+        typer.echo("║" + "   ✅ PMOVES Agent Created Successfully!".center(68) + "║")
+        typer.echo("║" + " " * 68 + "║")
+        typer.echo("╚" + "═" * 68 + "╝")
+        typer.echo()
+        typer.echo(f"📌 Agent ID:    {agent.agent_id}")
+        typer.echo(f"🎭 Role:        {agent.role}")
+        typer.echo(f"🧠 Model:       {agent.model}")
+        typer.echo(f"🔗 NATS URL:    {agent.NATS_URL}")
+        typer.echo(f"🌐 TensorZero:  {agent.TENSORZERO_URL}")
+        typer.echo(f"🔍 Hi-RAG:      {agent.HIRAG_URL}")
+        typer.echo()
+        typer.echo("📦 Available Tools:")
+        for tool in agent.allowed_tools:
+            typer.echo(f"   • {tool}")
+        typer.echo()
+        typer.echo("🔌 MCP Servers:")
+        mcp_servers = agent._configure_mcp_servers()
+        for server in mcp_servers:
+            typer.echo(f"   • {server}")
+        typer.echo()
+        typer.echo("👥 Subagents:")
+        subagents = agent._configure_subagents()
+        for subagent in subagents:
+            typer.echo(f"   • {subagent}")
+        typer.echo()
+        typer.echo("📡 NATS Events:")
+        typer.echo(f"   • botz.agent.registered.v1 - Registration announcement")
+        typer.echo(f"   • botz.agent.heartbeat.v1 - Presence (every 30s)")
+        typer.echo(f"   • agent.task.start.v1 - Task execution start")
+        typer.echo(f"   • botz.work.completed.v1 - Task completion")
+        typer.echo()
+
+        # Usage example
+        typer.echo("💡 Usage Example:")
+        typer.echo()
+        typer.echo("   from pmoves_botz.features.agent_sdk import PMOVESAgent")
+        typer.echo()
+        typer.echo(f"   agent = PMOVESAgent(agent_id='{agent.agent_id}', role='{agent.role}')")
+        typer.echo("   async for message in agent.execute('Your task here'):")
+        typer.echo("       print(message.content)")
+        typer.echo()
+
+        typer.echo("📚 Next Steps:")
+        typer.echo("   1. Use: pmoves agent-sdk run --agent-id <ID> 'Your task'")
+        typer.echo("   2. Use: pmoves agent-sdk resume --session-id <ID>")
+        typer.echo("   3. Monitor: nats sub 'botz.agent.>'")
+        typer.echo()
+
+        if connect:
+            typer.echo("⏳ Agent is now running and sending heartbeats...")
+            typer.echo("   Press Ctrl+C to disconnect and exit.")
+            typer.echo()
+
+            try:
+                # Keep running to maintain heartbeat
+                while True:
+                    await asyncio.sleep(1)
+            except KeyboardInterrupt:
+                typer.echo("\n\n👋 Disconnecting agent...")
+                await agent.disconnect()
+                typer.echo("✅ Agent disconnected.")
+                raise typer.Exit(0)
+
+    # Run async function
+    asyncio.run(create_and_connect())
+
+
+@agent_sdk_app.command("run", help="Execute a task with an existing agent")
+def agent_sdk_run(
+    agent_id: str = typer.Argument(..., help="Agent identifier"),
+    task: str = typer.Argument(..., help="Task to execute"),
+    session: Optional[str] = typer.Option(None, "--session", help="Session ID for resume"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Override model"),
+) -> None:
+    """Execute a task using a PMOVES Agent.
+
+    Example:
+        pmoves agent-sdk run research-agent "Analyze PMOVES architecture"
+        pmoves agent-sdk run code-agent --model openai::gpt-4o "Review security"
+    """
+    import asyncio
+    import sys
+
+    botz_path = Path(__file__).parent.parent.parent / "PMOVES-BoTZ"
+    sys.path.insert(0, str(botz_path))
+
+    try:
+        from pmoves_botz.features.agent_sdk import PMOVESAgent
+    except ImportError:
+        typer.echo("❌ PMOVES Agent SDK not found")
+        raise typer.Exit(1)
+
+    async def execute_task():
+        """Execute task with comprehensive error handling."""
+        # Outer layer: Agent initialization errors
+        try:
+            typer.echo(f"🎯 Executing task with '{agent_id}'...")
+            typer.echo(f"📝 Task: {task}")
+            typer.echo()
+
+            # Pass model to constructor for cleaner initialization
+            agent_kwargs = {"agent_id": agent_id, "role": "general"}
+            if model:
+                agent_kwargs["model"] = model
+
+            async with PMOVESAgent(**agent_kwargs) as agent:
+                # Inner layer: Task execution errors
+                try:
+                    async for message in agent.execute(task, session_id=session):
+                        if hasattr(message, 'type'):
+                            if message.type == "assistant":
+                                typer.echo(f"🤖 {message.content}")
+                            elif message.type == "result":
+                                typer.echo(f"✅ Result: {message.result}")
+                            elif message.type == "tool_use":
+                                typer.echo(f"🔧 Using: {message.name}")
+
+                except ConnectionError as e:
+                    typer.echo(f"\n❌ Connection failed during execution: {e}")
+                    typer.echo("\n🔧 Troubleshooting:")
+                    typer.echo("   1. Check service health: curl http://localhost:8086/healthz  # Hi-RAG")
+                    typer.echo("   2. Check TensorZero: curl http://localhost:3030/v1/models")
+                    typer.echo("   3. Check NATS: docker compose ps nats")
+                    raise typer.Exit(1)
+
+                except TimeoutError as e:
+                    typer.echo(f"\n⏱️  Task timed out: {e}")
+                    typer.echo("   Try breaking the task into smaller steps or increase timeout.")
+                    raise typer.Exit(1)
+
+                except ValueError as e:
+                    typer.echo(f"\n❌ Invalid input: {e}")
+                    typer.echo("   Check your agent ID, model format, and task description.")
+                    raise typer.Exit(1)
+
+        except ImportError as e:
+            typer.echo(f"❌ Failed to import PMOVESAgent: {e}")
+            typer.echo("   Ensure PMOVES-BoTZ submodule is initialized:")
+            typer.echo("   git submodule update --init --recursive PMOVES-BoTZ")
+            raise typer.Exit(1)
+
+        except ValueError as e:
+            typer.echo(f"❌ Agent configuration error: {e}")
+            typer.echo("   Check agent_id format and model configuration.")
+            raise typer.Exit(1)
+
+    asyncio.run(execute_task())
+
+
+@agent_sdk_app.command("list", help="List all PMOVES agents")
+def agent_sdk_list(
+    status: str = typer.Option("active", "--status", help="Filter by status"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Maximum number to show"),
+) -> None:
+    """List existing PMOVES Agent instances.
 def main() -> None:
     app()
 
