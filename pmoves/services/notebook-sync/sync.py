@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import sqlite3
-import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -551,6 +550,7 @@ def _load_syncer() -> NotebookSyncer:
     )
 
 
+<<<<<<< HEAD
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifecycle Management
 # ─────────────────────────────────────────────────────────────────────────────
@@ -565,11 +565,23 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+=======
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    syncer = _load_syncer()
+    app.state.syncer = syncer
+    await syncer.start()
+    yield
+>>>>>>> origin/feat/hardened-chit-geometry
     await syncer.stop()
 
 
 app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0", lifespan=lifespan)
+<<<<<<< HEAD
 syncer = _load_syncer()
+=======
+>>>>>>> origin/feat/hardened-chit-geometry
 
 
 @app.get("/healthz")

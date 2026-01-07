@@ -437,6 +437,12 @@ See `.claude/context/` for detailed documentation:
 - `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
 - `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
+**GEOMETRY BUS & CHIT Integration:**
+- `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
+- `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
+- `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
+- `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
+
 ## Meta-Instruction for Claude Code CLI
 
 When developing features for PMOVES.AI:
