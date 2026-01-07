@@ -9,7 +9,7 @@ services:
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     networks: [monitoring_tier]
     extra_hosts:
@@ -25,9 +25,9 @@ services:
       - "${GRAFANA_HOST_PORT:-3002}:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning/dashboards:ro
     networks: [monitoring_tier]
 
   loki:
@@ -36,7 +36,7 @@ services:
     command: ["-config.file=/etc/loki/local-config.yaml"]
     ports: ["${LOKI_HOST_PORT:-3100}:3100"]
     volumes:
-      - ./monitoring/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+      - ./loki/local-config.yaml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
     networks: [monitoring_tier]
 
@@ -48,7 +48,7 @@ services:
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
+      - ./promtail/config.yml:/etc/promtail/config.yml:ro
     networks: [monitoring_tier]
 
   blackbox:
@@ -56,7 +56,7 @@ services:
     restart: unless-stopped
     ports: ["${BLACKBOX_HOST_PORT:-9115}:9115"]
     volumes:
-      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
     networks: [monitoring_tier]
     extra_hosts:
       - "host.docker.internal:host-gateway"

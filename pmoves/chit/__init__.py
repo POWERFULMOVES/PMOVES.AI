@@ -283,6 +283,85 @@ def write_docker_secrets(
     return docker_secrets
 
 
+def sync_common_credentials(
+    base_dir: Path,
+    common_creds: Optional[Dict[str, str]] = None,
+) -> None:
+    """
+    Ensure common credentials are consistent across all tier env files.
+
+    This function enforces credential consistency for services that span
+    multiple tiers (e.g., MinIO credentials used by api, media, worker tiers).
+
+    Args:
+        base_dir: Base directory containing env.tier-* files
+        common_creds: Optional dict of credential key -> value. If not provided,
+                      uses sensible defaults for PMOVES.AI development.
+
+    Default credentials (when common_creds not provided):
+        - POSTGRES_PASSWORD: changeme
+        - MINIO_ACCESS_KEY: minioadmin
+        - MINIO_SECRET_KEY: minioadmin
+        - MINIO_ROOT_USER: minioadmin
+        - MINIO_ROOT_PASSWORD: minioadmin
+        - NEO4J_PASSWORD: changeme
+    """
+    if common_creds is None:
+        common_creds = {
+            "POSTGRES_PASSWORD": "changeme",
+            "MINIO_ACCESS_KEY": "minioadmin",
+            "MINIO_SECRET_KEY": "minioadmin",
+            "MINIO_ROOT_USER": "minioadmin",
+            "MINIO_ROOT_PASSWORD": "minioadmin",
+            "MINIO_USER": "minioadmin",
+            "MINIO_PASSWORD": "minioadmin",
+            "NEO4J_AUTH": "neo4j/changeme",
+            "NEO4J_PASSWORD": "changeme",
+            "PGRST_DB_URI": "postgres://pmoves:changeme@postgres:5432/pmoves",
+        }
+
+    # Tier files that may contain common credentials
+    tier_files = [
+        base_dir / "env.tier-data",
+        base_dir / "env.tier-api",
+        base_dir / "env.tier-media",
+        base_dir / "env.tier-worker",
+        base_dir / "env.tier-agent",
+        base_dir / "env.tier-llm",
+    ]
+
+    for tier_path in tier_files:
+        if not tier_path.exists():
+            continue
+
+        content = tier_path.read_text()
+        lines = content.split("\n")
+        modified = False
+
+        for cred, value in common_creds.items():
+            # Check if credential exists in file
+            for i, line in enumerate(lines):
+                if line.startswith(f"{cred}="):
+                    # Extract current value
+                    current = line.split("=", 1)[1].strip()
+                    # Update if different
+                    if current != value:
+                        lines[i] = f"{cred}={value}"
+                        modified = True
+                    break
+            else:
+                # Credential not found - append at end of file
+                # before any trailing empty lines
+                for j in range(len(lines) - 1, -1, -1):
+                    if lines[j].strip() and not lines[j].startswith("#"):
+                        lines.insert(j + 1, f"{cred}={value}")
+                        modified = True
+                        break
+
+        if modified:
+            tier_path.write_text("\n".join(lines) + "\n")
+
+
 def apply_manifest_v2(
     secrets: Dict[str, str],
     manifest_path: Path,
@@ -313,11 +392,18 @@ def apply_manifest_v2(
     docker_secrets: Dict[str, str] = {}
 
     for entry in manifest.get("entries", []):
-        label = entry["source"]["label"]
-        if label not in secrets:
-            continue
+        source = entry["source"]
 
-        value = secrets[label]
+        # Handle static values (configuration, not secrets)
+        if source.get("type") == "static":
+            value = source["value"]
+            label = value  # For tracking/debugging
+        # Handle CGP secrets
+        else:
+            label = source["label"]
+            if label not in secrets:
+                continue
+            value = secrets[label]
 
         for target in entry.get("targets", []):
             if "file" in target:
@@ -339,6 +425,9 @@ def apply_manifest_v2(
     # Write tier env files
     if tier_files:
         write_to_tier_envs(secrets, tier_files, base_dir)
+
+    # Sync common credentials across all tier files
+    sync_common_credentials(base_dir)
 
     # Write GitHub secrets
     github_path = base_dir / "data" / "chit" / "github_secrets.json"
