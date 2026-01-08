@@ -519,12 +519,11 @@ up-gpu: ## Start with optional GPU accelerations where supported
 	@echo "✔ Stack started with GPU profile."
 
 .PHONY: up-gpu-gateways
-up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
+up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT))
 	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
 	@$(DC) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
 	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
-	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT), v1-gpu :8090)."
+	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT))."
 
 .PHONY: recreate-v2-gpu
 recreate-v2-gpu: ## Force-recreate v2-gpu container (no deps)
@@ -559,12 +558,6 @@ up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
 	@$(DC) --profile workers up -d hi-rag-gateway-v2 >/dev/null 2>&1 || true
 	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu >/dev/null 2>&1 || true
 	@echo "✔ hi-rag-gateway-v2(:$(HIRAG_CPU_PORT)) and hi-rag-gateway-v2-gpu(:$(HIRAG_GPU_PORT)) ready."
-
-.PHONY: up-legacy-both
-up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
-	@$(DC) --profile legacy up -d hi-rag-gateway >/dev/null 2>&1 || true
-	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu >/dev/null 2>&1 || true
-	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: up down clean up-cloudflare down-cloudflare logs-cloudflare cloudflare-url restart-cloudflare up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
@@ -1860,11 +1853,6 @@ smoke-all-strict: ## Run all smoke tests in STRICT mode
 test-discord-format:
 	@echo "Running publisher-discord embed formatting tests" && \
 	 pytest -q pmoves/services/publisher-discord/tests -k formatting
-
-.PHONY: up-legacy
-up-legacy:
-	@$(DC) --profile data up -d qdrant neo4j minio meilisearch presign >/dev/null 2>&1 || true
-	@$(DC) --profile workers up -d hi-rag-gateway retrieval-eval render-webhook >/dev/null 2>&1 || true
 
 .PHONY: discord-ping
 discord-ping:

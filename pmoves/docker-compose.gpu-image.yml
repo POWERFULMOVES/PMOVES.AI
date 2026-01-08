@@ -1,9 +1,15 @@
+# YAML anchors for tier-based env file loading
+x-env-tier-api: &env-tier-api
+  env_file:
+    - path: env.tier-api
+      required: false
+
 services:
   hi-rag-gateway-v2-gpu:
     image: ${HIRAG_V2_GPU_IMAGE:-ghcr.io/cataclysm-studios-inc/hi-rag-gateway-v2-gpu:cu128-py310-stable}
     runtime: nvidia
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-api
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
@@ -23,13 +29,10 @@ services:
       - NEO4J_URL=${NEO4J_URL}
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://postgrest:3000/rest/v1}
       - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase_kong_PMOVES.AI:8000/realtime/v1}
-      - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
-      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-      - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
       - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     gpus: all
     ports: ["${HIRAG_V2_GPU_HOST_PORT:-8087}:8086"]
