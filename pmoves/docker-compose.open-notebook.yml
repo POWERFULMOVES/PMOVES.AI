@@ -1,14 +1,16 @@
+# YAML anchors for tier-based env file loading
+x-env-tier-worker: &env-tier-worker
+  env_file:
+    - path: env.tier-worker
+      required: false
+
 services:
   open-notebook:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
     container_name: cataclysm-open-notebook
     restart: unless-stopped
-    env_file:
-      - env.shared.generated
-      - env.shared
-      - .env.generated
-      - .env.local
+    <<: *env-tier-worker
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
