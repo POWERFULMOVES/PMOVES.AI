@@ -143,7 +143,7 @@ up-bus: ## Start message bus (NATS)
 	@timeout 30 bash -c 'until docker exec pmoves-nats-1 nc -z localhost 4222 2>/dev/null; do sleep 1; done' || echo "⚠️ NATS may still be starting"
 	@echo "✅ NATS ready"
 
-.PHONY: up-workers
+.PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
 	@$(DC) --profile workers up -d
@@ -727,7 +727,7 @@ notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundl
 	@bash -c '$(LOAD_ENV_SHARED) node scripts/notebook_workbench_smoke.mjs $(ARGS)'
 
 # Bring only worker services (ensures data deps are active)
-up-workers:
+up-workers-core:
 	@$(DC) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
 
 # YouTube ingest + whisper stack
@@ -758,11 +758,11 @@ up-invidious:
 	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --profile invidious up -d invidious invidious-db invidious-companion'
 
 # TensorZero model gateway stack
-.PHONY: up-tensorzero down-tensorzero
-up-tensorzero:
+.PHONY: up-tensorzero up-tensorzero-full down-tensorzero-full
+up-tensorzero-full:
 	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
 
-down-tensorzero:
+down-tensorzero-full:
 	@$(DC) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || true
 	@echo "✔ TensorZero stack stopped."
 
@@ -1098,8 +1098,8 @@ up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
-.PHONY: up-agents
-up-agents: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
+.PHONY: up-agents up-agents-stack
+up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
 	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 
 .PHONY: agents-headless-smoke
