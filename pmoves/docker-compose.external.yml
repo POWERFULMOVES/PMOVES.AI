@@ -1,9 +1,26 @@
+# YAML anchors for tier-based env file loading
+# These reference the tier env files from parent docker-compose.yml
+x-env-tier-data: &env-tier-data
+  env_file:
+    - path: env.tier-data
+      required: false
+
+x-env-tier-worker: &env-tier-worker
+  env_file:
+    - path: env.tier-worker
+      required: false
+
+x-env-tier-media: &env-tier-media
+  env_file:
+    - path: env.tier-media
+      required: false
+
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     container_name: cataclysm-wger
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-worker
     networks:
       cataclysm:
         aliases:
@@ -42,7 +59,7 @@ services:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     container_name: cataclysm-firefly
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-worker
     networks:
       cataclysm:
         aliases:
@@ -65,7 +82,7 @@ services:
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: cataclysm-open-notebook-surrealdb
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-data
     command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} rocksdb:/mydata/mydatabase.db
     restart: unless-stopped
     user: "0:0"
@@ -82,7 +99,7 @@ services:
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
     container_name: cataclysm-open-notebook
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-worker
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
@@ -105,7 +122,7 @@ services:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: cataclysm-jellyfin
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-media
     networks:
       cataclysm:
         aliases:
