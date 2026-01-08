@@ -1,6 +1,6 @@
 # PMOVES.AI Migration Guide
 
-This guide helps you migrate from legacy PMOVES.AI environments to the new 6-tier architecture.
+This guide helps you migrate from legacy PMOVES.AI environments to the new 7-tier architecture.
 
 ## What Changed?
 
@@ -13,7 +13,7 @@ pmoves/.env.generated
 - Difficult to manage permissions
 - Hard to identify which services need which variables
 
-### New 6-Tier Architecture
+### New 7-Tier Architecture
 ```
 pmoves/env.tier-data     # Database credentials
 pmoves/env.tier-api      # Internal service URLs
@@ -21,6 +21,7 @@ pmoves/env.tier-llm      # LLM provider keys
 pmoves/env.tier-media    # Media processing configs
 pmoves/env.tier-agent    # Agent orchestration
 pmoves/env.tier-worker   # Data processing workers
+pmoves/env.tier-ui       # Frontend UI service URLs and client-side configs
 ```
 
 **Benefits:**
@@ -206,6 +207,17 @@ TENSORZERO_URL             → env.tier-worker
 SENTENCE_MODEL             → env.tier-worker
 ```
 
+### From `.env.generated` to `env.tier-ui`
+
+```
+SUPABASE_URL               → env.tier-ui
+SUPA_REST_URL              → env.tier-ui
+SUPABASE_ANON_KEY          → env.tier-ui
+AGENT_ZERO_URL             → env.tier-ui
+ARCHON_URL                 → env.tier-ui
+TENSORZERO_URL             → env.tier-ui
+```
+
 ## Post-Migration Validation
 
 ### 1. Check Tier Files
@@ -215,7 +227,7 @@ SENTENCE_MODEL             → env.tier-worker
 ls -la pmoves/env.tier-*
 
 # Check each file has content
-for tier in data api llm media agent worker; do
+for tier in data api llm media agent worker ui; do
   echo "=== env.tier-$tier ==="
   cat pmoves/env.tier-$tier | head -5
   echo ""
@@ -392,6 +404,72 @@ After successful migration:
    # Rotate API keys monthly
    # Use CHIT for secure distribution
    ```
+
+## Security Hardening (v1.5 → v2.0)
+
+### Breaking Change: RLS Policy Authentication
+
+**Affected Tables:**
+- `public.detections`, `public.segments`, `public.emotions` (media analysis)
+- `public.anchors`, `public.constellations`, `public.shape_points`, `public.shape_index` (geometry bus)
+
+**What Changed:**
+- **Before:** Policies allowed anonymous access (`TO anon`) with a fallback to `namespace = 'pmoves'`
+- **After:** Policies require authentication (`TO authenticated`) with NO fallback
+
+**Impact:**
+- Services without JWT authentication will receive permission denied errors
+- The `'pmoves'` namespace fallback has been removed for strict tenant isolation
+- All database access must now provide:
+  1. Valid JWT token via `Authorization: Bearer <token>` header
+  2. Tenant context via `SET LOCAL app.current_tenant = 'tenant_name'`
+
+**Migration Steps:**
+
+1. **Update your application to include JWT tokens:**
+   ```bash
+   # Get JWT from Supabase
+   SUPABASE_ANON_KEY="your-anon-key"
+   JWT_TOKEN=$(curl -s -X POST \
+     "https://your-project.supabase.co/auth/v1/token?grant_type=password" \
+     -H "apikey: $SUPABASE_ANON_KEY" \
+     -d '{"email":"user@example.com","password":"password"}' | jq -r '.access_token')
+
+   # Include in API requests
+   curl -H "Authorization: Bearer $JWT_TOKEN" \
+     http://localhost:3000/rest/v1/detections
+   ```
+
+2. **Set tenant context for multi-tenant deployments:**
+   ```sql
+   -- In your application or migration script
+   SET LOCAL app.current_tenant = 'your_tenant_name';
+
+   -- Now queries will only return data for this tenant
+   SELECT * FROM detections;
+   ```
+
+3. **Verify RLS policies are active:**
+   ```sql
+   -- Check current policies
+   SELECT schemaname, tablename, policyname, roles
+   FROM pg_policies
+   WHERE schemaname = 'public'
+     AND tablename IN ('detections', 'segments', 'emotions', 'anchors', 'constellations');
+   ```
+
+**Rollback (if needed):**
+```sql
+-- To temporarily allow anon access (NOT RECOMMENDED for production)
+ALTER POLICY detections_tenant_isolation ON public.detections
+  TO anon
+  USING (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves')
+  WITH CHECK (namespace = current_setting('app.current_tenant', true) OR namespace = 'pmoves');
+```
+
+**See Also:**
+- Row Level Security documentation: https://www.postgresql.org/docs/current/ddl-rowsecurity.html
+- Supabase RLS guide: https://supabase.com/docs/guides/auth/row-level-security
 
 ## Additional Resources
 
