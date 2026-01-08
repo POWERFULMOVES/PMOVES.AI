@@ -1,132 +1,6 @@
 # PMOVES.AI Services Catalog
 
-**Last Updated:** 2026-01-04
-**Status:** Hardened Edition Architecture
-
 Comprehensive reference of all production services, ports, APIs, and integration points.
-
-## Architecture Overview
-
-### 5-Tier Network Model
-
-| Tier | Docker Network | Purpose | Security |
-|------|---------------|---------|----------|
-| Tier 1 | `pmoves_data` | Data storage | `internal: true` (isolated) |
-| Tier 2 | `pmoves_api` | API/internal services | `internal: true` (isolated) |
-| Tier 3 | `pmoves_app` | Application services | External access allowed |
-| Tier 4 | `pmoves_bus` | Message/event bus | External access allowed |
-| Tier 5 | `pmoves_monitoring` | Observability | External access allowed |
-
-### Dynamic Port Allocation
-
-All services use dynamic port variables with defaults:
-```yaml
-ports:
-  - "${SERVICE_PORT:-default}:internal_port"
-```
-
-Generate ports via: `make generate-ports`
-
-### Service Status Legend
-
-- **Core** ✅ - Essential for PMOVES.AI hardened operation
-- **DOCKED_MODE** ✅ - Supports docked mode detection
-- **Profiles** - Organizational grouping for selective startup
-
----
-
-## Service Classification Table
-
-| Service | Network Tier | Port Variable | Core | DOCKED_MODE | Profiles |
-|---------|--------------|---------------|------|-------------|----------|
-| **Agent Coordination** | | | | | |
-| agent-zero | Tier 3 (App), Tier 4 (Bus) | AGENT_ZERO_PORT | ✅ | ✅ | None |
-| archon | Tier 3 (App) | ARCHON_PORT | ✅ | ✅ | None |
-| mesh-agent | Tier 3 (App), Tier 4 (Bus) | MESH_AGENT_PORT | ✅ | ✅ | None |
-| a2ui-nats-bridge | Tier 3 (App), Tier 4 (Bus) | | ➖ | ❌ | agents |
-| **Retrieval & Knowledge** | | | | | |
-| hi-rag-gateway | Tier 2 (API), Tier 4 (Bus) | HI_RAG_GATEWAY_PORT | ✅ | ✅ | None |
-| hi-rag-gateway-gpu | Tier 2 (API), Tier 4 (Bus) | HI_RAG_GATEWAY_GPU_PORT | ✅ | ✅ | None |
-| hi-rag-gateway-v2 | Tier 2 (API), Tier 4 (Bus) | | ✅ | ✅ | None |
-| hi-rag-gateway-v2-gpu | Tier 2 (API), Tier 4 (Bus) | | ✅ | ✅ | None |
-| deepresearch | Tier 3 (App), Tier 4 (Bus) | DEEPRESEARCH_PORT | ✅ | ✅ | None |
-| supaserch | Tier 3 (App), Tier 4 (Bus) | SUPASERCH_PORT | ✅ | ❌ | None |
-| **Data Storage** | | | | | |
-| postgres | Tier 1 (Data), Supabase | POSTGRES_PORT | ✅ | ✅ | None |
-| postgrest | Tier 2 (API), Supabase | POSTGREST_PORT | ✅ | ✅ | None |
-| postgrest-cli | Tier 2 (API), Supabase | POSTGREST_CLI_PORT | ✅ | ❌ | supabase-cli-rest |
-| qdrant | Tier 1 (Data) | QDRANT_PORT | ✅ | ✅ | None |
-| neo4j | Tier 1 (Data) | NEO4J_PORT | ✅ | ✅ | None |
-| meilisearch | Tier 1 (Data) | MEILISEARCH_PORT | ✅ | ✅ | None |
-| minio | Tier 1 (Data), Tier 4 (Bus) | MINIO_PORT | ✅ | ✅ | None |
-| tensorzero-clickhouse | Tier 1 (Data) | TENSORZERO_CLICKHOUSE_PORT | ✅ | ✅ | None |
-| invidious-db | Tier 1 (Data) | INVIDIOUS_DB_PORT | ✅ | ❌ | invidious |
-| **LLM & Inference** | | | | | |
-| tensorzero-gateway | Tier 2 (API), Tier 4 (Bus) | TENSORZERO_GATEWAY_PORT | ✅ | ✅ | None |
-| tensorzero-ui | Tier 3 (App) | TENSORZERO_UI_PORT | ✅ | ✅ | tensorzero |
-| pmoves-ollama | Tier 2 (API) | PMOVES_OLLAMA_PORT | ✅ | ✅ | None |
-| gpu-orchestrator | Tier 2 (API), Tier 4 (Bus) | GPU_ORCHESTRATOR_PORT | ✅ | ❌ | gpu |
-| **Voice & Speech** | | | | | |
-| flute-gateway | Tier 3 (App), Tier 4 (Bus) | FLUTE_GATEWAY_PORT | ➖ | ❌ | orchestration, media |
-| ultimate-tts-studio | Tier 3 (App), Tier 5 (Monitoring) | ULTIMATE_TTS_STUDIO_PORT | ➖ | ❌ | gpu, tts |
-| **Media Processing** | | | | | |
-| pmoves-yt | Tier 3 (App), Tier 4 (Bus) | PMOVES_YT_PORT | ✅ | ✅ | None |
-| channel-monitor | Tier 3 (App), Tier 4 (Bus) | CHANNEL_MONITOR_PORT | ✅ | ✅ | None |
-| ffmpeg-whisper | Tier 3 (App), Tier 4 (Bus) | FFMPEG_WHISPER_PORT | ✅ | ❌ | workers, orchestration |
-| media-video | Tier 3 (App), Tier 4 (Bus) | MEDIA_VIDEO_PORT | ✅ | ❌ | workers |
-| media-audio | Tier 3 (App), Tier 4 (Bus) | MEDIA_AUDIO_PORT | ✅ | ❌ | workers |
-| extract-worker | Tier 3 (App), Tier 4 (Bus) | EXTRACT_WORKER_PORT | ✅ | ❌ | workers |
-| langextract | Tier 3 (App) | LANGEXTRACT_PORT | ✅ | ❌ | workers |
-| pdf-ingest | Tier 3 (App), Tier 4 (Bus) | | ✅ | ❌ | workers |
-| notebook-sync | Tier 3 (App), Tier 4 (Bus) | NOTEBOOK_SYNC_PORT | ✅ | ❌ | workers |
-| **Agent Services** | | | | | |
-| botz-gateway | Tier 3 (App), Tier 4 (Bus), Tier 2 (API), Tier 5 (Monitoring) | BOTZ_GATEWAY_PORT | ✅ | ✅ | None |
-| tokenism-simulator | Tier 3 (App), Tier 2 (API), Tier 4 (Bus), Tier 5 (Monitoring) | TOKENISM_SIMULATOR_PORT | ✅ | ✅ | None |
-| tokenism-ui | Tier 3 (App) | TOKENISM_UI_PORT | ✅ | ✅ | None |
-| gateway-agent | Tier 2 (API), Tier 3 (App), Tier 4 (Bus) | GATEWAY_AGENT_PORT | ✅ | ❌ | agents |
-| consciousness-service | Tier 2 (API), Tier 3 (App), Tier 4 (Bus), Tier 5 (Monitoring) | CONSCIOUSNESS_SERVICE_PORT | ✅ | ❌ | agents |
-| chat-relay | Tier 4 (Bus), Tier 1 (Data), Tier 5 (Monitoring), Supabase | CHAT_RELAY_PORT | ✅ | ❌ | workers |
-| **PMOVES.YT Stack** | | | | | |
-| invidious | Tier 3 (App), Tier 4 (Bus) | INVIDIOUS_PORT | ✅ | ❌ | invidious |
-| invidious-companion | Tier 3 (App), Tier 4 (Bus) | INVIDIOUS_COMPANION_PORT | ✅ | ❌ | invidious |
-| invidious-companion-proxy | Tier 3 (App), Tier 4 (Bus) | INVIDIOUS_COMPANION_PROXY_PORT | ✅ | ✅ | invidious |
-| grayjay-server | Tier 3 (App), Tier 4 (Bus) | GRAYJAY_SERVER_PORT | ✅ | ✅ | grayjay |
-| grayjay-plugin-host | Tier 3 (App), Tier 4 (Bus) | GRAYJAY_PLUGIN_HOST_PORT | ✅ | ✅ | grayjay |
-| **Utilities** | | | | | |
-| presign | Tier 2 (API), Tier 4 (Bus) | PRESIGN_PORT | ✅ | ❌ | data |
-| render-webhook | Tier 2 (API), Tier 4 (Bus) | RENDER_WEBHOOK_PORT | ✅ | ❌ | workers |
-| publisher-discord | Tier 3 (App), Tier 4 (Bus) | PUBLISHER_DISCORD_PORT | ✅ | ❌ | agents |
-| jellyfin-bridge | Tier 3 (App), Tier 4 (Bus) | JELLYFIN_BRIDGE_PORT | ✅ | ❌ | orchestration |
-| **Monitoring** | | | | | |
-| prometheus | Tier 5 (Monitoring) | PROMETHEUS_PORT | ➖ | ❌ | monitoring |
-| grafana | Tier 5 (Monitoring) | GRAFANA_PORT | ➖ | ❌ | monitoring |
-| loki | Tier 5 (Monitoring) | LOKI_PORT | ➖ | ❌ | monitoring |
-| promtail | Tier 5 (Monitoring) | PROMTAIL_PORT | ➖ | ❌ | monitoring |
-| blackbox-exporter | Tier 5 (Monitoring) | BLACKBOX_EXPORTER_PORT | ➖ | ❌ | monitoring |
-| cadvisor | Tier 5 (Monitoring) | CADVISOR_PORT | ➖ | ❌ | monitoring |
-| **Message Bus** | | | | | |
-| nats | Tier 4 (Bus) | NATS_PORT | ✅ | ✅ | None |
-| nats-ws | Tier 4 (Bus) | NATS_WS_PORT | ✅ | ❌ | agents |
-| nats-echo-req | Tier 4 (Bus) | NATS_ECHO_REQ_PORT | ✅ | ❌ | diag |
-| nats-echo-res | Tier 4 (Bus) | NATS_ECHO_RES_PORT | ✅ | ❌ | diag |
-| nats-monitor | Tier 4 (Bus) | NATS_MONITOR_PORT | ✅ | ❌ | diag |
-| messaging-gateway | Tier 2 (API), Tier 4 (Bus) | MESSAGING_GATEWAY_PORT | ✅ | ❌ | workers |
-| **Worker Services** | | | | | |
-| comfy-watcher | Tier 4 (Bus), Tier 1 (Data) | COMFY_WATCHER_PORT | ✅ | ❌ | workers |
-| session-context-worker | Tier 3 (App), Tier 4 (Bus) | SESSION_CONTEXT_WORKER_PORT | ✅ | ❌ | workers |
-| retrieval-eval | Tier 3 (App), Tier 4 (Bus) | RETRIEVAL_EVAL_PORT | ✅ | ❌ | workers |
-| github-runner-ctl | Tier 2 (API), Tier 4 (Bus), Tier 5 (Monitoring) | GITHUB_RUNNER_CTL_PORT | ✅ | ❌ | workers |
-| evo-controller | Tier 3 (App), Tier 4 (Bus) | EVO_CONTROLLER_PORT | ✅ | ❌ | orchestration |
-| **UI Services** | | | | | |
-| pmoves-ui | app_tier, api_tier, Supabase | PMOVES_UI_PORT | ✅ | ❌ | ui |
-| **Infrastructure** | | | | | |
-| cloudflared | Tier 3 (App) | CLOUDFLARED_PORT | ➖ | ❌ | cloudflare |
-| bgutil-pot-provider | Tier 3 (App), Tier 4 (Bus) | | ➖ | ❌ | yt |
-| postgrest-health | Tier 2 (API), Tier 4 (Bus) | | ➖ | ❌ | supabase-local |
-
-**Summary:** 62 total services | 56 core | 27 with DOCKED_MODE
-
----
 
 ## Agent Coordination & Orchestration
 
@@ -556,6 +430,59 @@ Generate ports via: `make generate-ports`
 - **Integration:** `pmoves-jellyfin-bridge` (port 8093) syncs events to Supabase
 - **Related Submodules:** `PMOVES-Jellyfin`, `Pmoves-Jellyfin-AI-Media-Stack`
 
+## Token Economy & Agent UI (Added 2025-12-30)
+
+### Tokenism Simulator
+- **Ports:** 8103 (API)
+- **Purpose:** Token economy simulation with business model validation powered by EVO swarm intelligence
+- **Key APIs:**
+  - `GET /healthz` - Health check
+  - `GET /metrics` - Prometheus metrics
+  - `POST /api/v1/simulate` - Run simulation with scenario parameters
+  - `POST /api/v1/simulate/async` - Queue async simulation
+  - `GET /api/v1/scenarios` - List available scenarios (optimistic, baseline, pessimistic, stress_test)
+  - `GET /api/v1/contracts` - List contract types (GroToken, FoodUSD, GroupPurchase, GroVault, CoopGovernor)
+  - `GET /api/v1/simulations/{id}/geometry` - Get CHIT geometry data
+- **CHIT/Geometry:**
+  - Publishes to `tokenism.cgp.ready.v1` - Geometry packets for Poincaré disk visualization
+  - Hyperbolic wealth distribution visualization via A2UI
+- **Metrics:**
+  - `tokenism_simulation_requests_total{scenario, status}` - Counter for all simulations
+  - `tokenism_simulation_duration_seconds{scenario}` - Histogram for latency
+- **Grafana Dashboard:** tokenism-simulator
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-tokenism-simulator:pmoves-latest`
+- **Compose Profile:** `orchestration`
+- **Related Submodule:** `PMOVES-ToKenism-Multi`
+
+### A2UI NATS Bridge
+- **Ports:** 9224 (API), 9225 (WebSocket agents), 9226 (WebSocket clients)
+- **Purpose:** Bridges Google A2UI (Agent-to-User Interface) events to PMOVES NATS geometry bus
+- **Key APIs:**
+  - `GET /healthz` - Health check with active surfaces
+  - `GET /metrics` - Prometheus metrics
+  - `POST /api/v1/a2ui` - Accept A2UI JSON events
+  - `POST /api/v1/action` - Handle user actions from UI
+  - `POST /api/v1/simulate` - Simulate A2UI event for testing
+  - `WS /ws/a2ui` - WebSocket for A2UI agents (JSONL format)
+  - `WS /ws/client` - WebSocket for PMOVES UI subscribers
+- **NATS Subjects:**
+  - Publishes to: `a2ui.render.v1`, `a2ui.>`
+  - Subscribes to: `geometry.>` (bidirectional)
+- **A2UI Format (v0.9):**
+  - `createSurface` / `beginRendering` - Initialize UI surface
+  - `updateComponents` / `surfaceUpdate` - Add/update UI components
+  - `updateDataModel` / `dataModelUpdate` - Update data bindings
+  - `userAction` - Forward user interactions to agents
+- **Metrics:**
+  - `a2ui_events_published_total{event_type}` - Events published to NATS
+  - `a2ui_events_received_total` - Events from A2UI agents
+  - `a2ui_geometry_events_total` - Geometry events from NATS
+  - `a2ui_active_websockets` - Active WebSocket connections
+  - `a2ui_nats_connected` - NATS connection status (1=connected)
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest`
+- **Compose Profile:** `agents`, `orchestration`
+- **Related Submodule:** `research/A2UI` (Google A2UI repository)
+
 ## Quick Reference
 
 ### All Service Health Endpoints
@@ -564,6 +491,11 @@ Generate ports via: `make generate-ports`
 http://localhost:8080/healthz  # Agent Zero
 http://localhost:8091/healthz  # Archon
 http://localhost:8097/healthz  # Channel Monitor
+
+# Token Economy & Agent UI
+http://localhost:8103/healthz  # Tokenism Simulator
+http://localhost:8103/metrics  # Tokenism Simulator (Prometheus)
+http://localhost:9224/healthz  # A2UI NATS Bridge
 
 # Retrieval & Knowledge
 http://localhost:8086/healthz  # Hi-RAG v2 CPU
