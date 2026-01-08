@@ -514,12 +514,12 @@ check-tier-envs: ## Validate all tier environment files exist
 	@echo "Checking tier environment files..."
 	@missing=""; \
 	for tier in data api llm worker media agent ui; do \
-		if [ ! -f "pmoves/env.tier-$$tier" ]; then \
-			if [ -f "pmoves/env.tier-$$tier.example" ]; then \
-				echo "⚠️  WARNING: pmoves/env.tier-$$tier missing (example exists)"; \
-				echo "   Copy from example: cp pmoves/env.tier-$$tier.example pmoves/env.tier-$$tier"; \
+		if [ ! -f "env.tier-$$tier" ]; then \
+			if [ -f "env.tier-$$tier.example" ]; then \
+				echo "⚠️  WARNING: env.tier-$$tier missing (example exists)"; \
+				echo "   Copy from example: cp env.tier-$$tier.example env.tier-$$tier"; \
 			else \
-				echo "❌ ERROR: pmoves/env.tier-$$tier missing (no example found)"; \
+				echo "❌ ERROR: env.tier-$$tier missing (no example found)"; \
 				missing="$$missing env.tier-$$tier"; \
 			fi; \
 		fi; \
