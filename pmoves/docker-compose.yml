@@ -3,30 +3,37 @@
 # Tier architecture isolates secrets by service category (data, api, llm, worker, media, agent)
 x-env-tier-data: &id001
   env_file:
+    - env.shared
     - env.tier-data
 
 x-env-tier-api: &id002
   env_file:
+    - env.shared
     - env.tier-api
 
 x-env-tier-llm: &id006
   env_file:
+    - env.shared
     - env.tier-llm
 
 x-env-tier-worker: &id003
   env_file:
+    - env.shared
     - env.tier-worker
 
 x-env-tier-media: &id004
   env_file:
+    - env.shared
     - env.tier-media
 
 x-env-tier-agent: &id005
   env_file:
+    - env.shared
     - env.tier-agent
 
 x-env-tier-ui: &id007
   env_file:
+    - env.shared
     - env.tier-ui
 
 services:
