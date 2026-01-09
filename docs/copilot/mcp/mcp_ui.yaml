@@ -1,0 +1,13 @@
+servers:
+  hostinger:
+    image: mcp/api-mcp-server
+    enabled: true
+  dart:
+    image: mcp/dart
+    enabled: true
+  playwright:
+    image: mcp/playwright
+    enabled: true
+  fetch:
+    image: mcp/fetch
+    enabled: true
