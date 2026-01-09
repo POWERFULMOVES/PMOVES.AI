@@ -1273,7 +1273,7 @@ services:
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
-    networks: [ app_tier, api_tier, supabase_net ]
+    networks: [ pmoves_app, pmoves_api, supabase_net ]
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
