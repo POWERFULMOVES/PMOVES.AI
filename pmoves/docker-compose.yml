@@ -1235,7 +1235,7 @@ services:
       context: ./ui
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, .env.generated, .env.local ]
+    env_file: [ env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local ]
     environment:
       - NODE_ENV=production
       # Supabase
