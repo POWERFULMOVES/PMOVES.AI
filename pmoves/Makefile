@@ -532,6 +532,51 @@ check-tier-envs: ## Validate all tier environment files exist
 	fi; \
 	echo "✓ All tier env files exist."
 
+.PHONY: bootstrap-tier-envs
+bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
+	@echo "Bootstrapping tier environment files from examples..."
+	@created=""; \
+	for tier in data api llm worker media agent ui; do \
+		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \
+			echo "→ Creating env.tier-$$tier from example..."; \
+			cp "env.tier-$$tier.example" "env.tier-$$tier"; \
+			created="$$created env.tier-$$tier"; \
+		fi; \
+	done; \
+	if [ -n "$$created" ]; then \
+		echo "✓ Created tier env files:$$created"; \
+		echo "  Review and populate with real values before starting services."; \
+	else \
+		echo "✓ All tier env files already exist."; \
+	fi
+
+.PHONY: populate-tier-envs
+populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults from env.shared and .env.local
+	@echo "Populating tier env files with defaults..."
+	@. ./env.shared 2>/dev/null || true; \
+	. ./.env.local 2>/dev/null || true; \
+	if [ -f "env.tier-data" ]; then \
+		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
+		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
+		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
+		echo "✓ Populated env.tier-data"; \
+	fi; \
+	if [ -f "env.tier-api" ]; then \
+		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-api; \
+		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-api; \
+		sed -i "s|^MINIO_ACCESS_KEY=.*|MINIO_ACCESS_KEY=$${MINIO_ACCESS_KEY:-minioadmin}|" env.tier-api; \
+		sed -i "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=$${MINIO_SECRET_KEY:-minioadmin}|" env.tier-api; \
+		sed -i "s|^PRESIGN_SHARED_SECRET=.*|PRESIGN_SHARED_SECRET=$${PRESIGN_SHARED_SECRET:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		echo "✓ Populated env.tier-api"; \
+	fi; \
+	if [ -f "env.tier-llm" ]; then \
+		sed -i "s|^TENSORZERO_PG_PASSWORD=.*|TENSORZERO_PG_PASSWORD=$(shell openssl rand -base64 24)|" env.tier-llm; \
+		echo "✓ Populated env.tier-llm"; \
+	fi; \
+	echo "✓ Tier env files populated with defaults."
+
 # -------- GPU profile ----------
 .PHONY: up up-gpu up-both-gateways
 up: check-tier-envs ensure-env-shared ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
@@ -859,16 +904,18 @@ brand-defaults: ensure-env-shared ## Apply branded defaults and create required 
 .PHONY: neo4j-reset neo4j-status
 neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
 	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
-	@docker compose -p $(PROJECT) stop neo4j || true
-	@docker compose -p $(PROJECT) rm -f neo4j || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) stop neo4j || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) rm -f neo4j || true
 	@docker volume rm $(PROJECT)_neo4j-data || true
-	@docker compose -p $(PROJECT) up -d neo4j
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d neo4j
 	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
-	@auth=$$(awk -F= '/^NEO4J_AUTH/{print $$2}' .env.generated | xargs); \
-	user=$${auth%%/*}; pass=$${auth#*/}; \
-	echo "Testing auth ($$user/***)..."; \
-	( docker compose -p $(PROJECT) exec -T neo4j bash -lc \
-	  "/var/lib/neo4j/bin/cypher-shell -u '$$user' -p '$$pass' 'RETURN 1'" || true )
+	@$(LOAD_ENV_SHARED) bash -c ' \
+		user=$${NEO4J_AUTH%%/*}; \
+		pass=$${NEO4J_AUTH#*/}; \
+		echo "Testing auth ($$user/***) from env.tier-data..."; \
+		docker compose -p $(PROJECT) exec -T neo4j bash -lc \
+		  "/var/lib/neo4j/bin/cypher-shell -u \"$$user\" -p \"$$pass\" \"RETURN 1\""; \
+	'
 
 neo4j-status: ## Show Neo4j logs and health line
 	@docker compose -p $(PROJECT) ps neo4j || true
