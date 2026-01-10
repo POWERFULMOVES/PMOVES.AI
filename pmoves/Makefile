@@ -143,7 +143,7 @@ up-bus: ## Start message bus (NATS)
 	@timeout 30 bash -c 'until docker exec pmoves-nats-1 nc -z localhost 4222 2>/dev/null; do sleep 1; done' || echo "⚠️ NATS may still be starting"
 	@echo "✅ NATS ready"
 
-.PHONY: up-workers
+.PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
 	@$(DC) --profile workers up -d
@@ -514,12 +514,12 @@ check-tier-envs: ## Validate all tier environment files exist
 	@echo "Checking tier environment files..."
 	@missing=""; \
 	for tier in data api llm worker media agent ui; do \
-		if [ ! -f "pmoves/env.tier-$$tier" ]; then \
-			if [ -f "pmoves/env.tier-$$tier.example" ]; then \
-				echo "⚠️  WARNING: pmoves/env.tier-$$tier missing (example exists)"; \
-				echo "   Copy from example: cp pmoves/env.tier-$$tier.example pmoves/env.tier-$$tier"; \
+		if [ ! -f "env.tier-$$tier" ]; then \
+			if [ -f "env.tier-$$tier.example" ]; then \
+				echo "⚠️  WARNING: env.tier-$$tier missing (example exists)"; \
+				echo "   Copy from example: cp env.tier-$$tier.example env.tier-$$tier"; \
 			else \
-				echo "❌ ERROR: pmoves/env.tier-$$tier missing (no example found)"; \
+				echo "❌ ERROR: env.tier-$$tier missing (no example found)"; \
 				missing="$$missing env.tier-$$tier"; \
 			fi; \
 		fi; \
@@ -531,6 +531,51 @@ check-tier-envs: ## Validate all tier environment files exist
 		exit 1; \
 	fi; \
 	echo "✓ All tier env files exist."
+
+.PHONY: bootstrap-tier-envs
+bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
+	@echo "Bootstrapping tier environment files from examples..."
+	@created=""; \
+	for tier in data api llm worker media agent ui; do \
+		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \
+			echo "→ Creating env.tier-$$tier from example..."; \
+			cp "env.tier-$$tier.example" "env.tier-$$tier"; \
+			created="$$created env.tier-$$tier"; \
+		fi; \
+	done; \
+	if [ -n "$$created" ]; then \
+		echo "✓ Created tier env files:$$created"; \
+		echo "  Review and populate with real values before starting services."; \
+	else \
+		echo "✓ All tier env files already exist."; \
+	fi
+
+.PHONY: populate-tier-envs
+populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults from env.shared and .env.local
+	@echo "Populating tier env files with defaults..."
+	@. ./env.shared 2>/dev/null || true; \
+	. ./.env.local 2>/dev/null || true; \
+	if [ -f "env.tier-data" ]; then \
+		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
+		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
+		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
+		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
+		echo "✓ Populated env.tier-data"; \
+	fi; \
+	if [ -f "env.tier-api" ]; then \
+		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-api; \
+		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-api; \
+		sed -i "s|^MINIO_ACCESS_KEY=.*|MINIO_ACCESS_KEY=$${MINIO_ACCESS_KEY:-minioadmin}|" env.tier-api; \
+		sed -i "s|^MINIO_SECRET_KEY=.*|MINIO_SECRET_KEY=$${MINIO_SECRET_KEY:-minioadmin}|" env.tier-api; \
+		sed -i "s|^PRESIGN_SHARED_SECRET=.*|PRESIGN_SHARED_SECRET=$${PRESIGN_SHARED_SECRET:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-api; \
+		echo "✓ Populated env.tier-api"; \
+	fi; \
+	if [ -f "env.tier-llm" ]; then \
+		sed -i "s|^TENSORZERO_PG_PASSWORD=.*|TENSORZERO_PG_PASSWORD=$(shell openssl rand -base64 24)|" env.tier-llm; \
+		echo "✓ Populated env.tier-llm"; \
+	fi; \
+	echo "✓ Tier env files populated with defaults."
 
 # -------- GPU profile ----------
 .PHONY: up up-gpu up-both-gateways
@@ -727,7 +772,7 @@ notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundl
 	@bash -c '$(LOAD_ENV_SHARED) node scripts/notebook_workbench_smoke.mjs $(ARGS)'
 
 # Bring only worker services (ensures data deps are active)
-up-workers:
+up-workers-core:
 	@$(DC) --profile data --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
 
 # YouTube ingest + whisper stack
@@ -758,11 +803,11 @@ up-invidious:
 	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --profile invidious up -d invidious invidious-db invidious-companion'
 
 # TensorZero model gateway stack
-.PHONY: up-tensorzero down-tensorzero
-up-tensorzero:
+.PHONY: up-tensorzero up-tensorzero-full down-tensorzero-full
+up-tensorzero-full:
 	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
 
-down-tensorzero:
+down-tensorzero-full:
 	@$(DC) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || true
 	@echo "✔ TensorZero stack stopped."
 
@@ -859,16 +904,18 @@ brand-defaults: ensure-env-shared ## Apply branded defaults and create required 
 .PHONY: neo4j-reset neo4j-status
 neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
 	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
-	@docker compose -p $(PROJECT) stop neo4j || true
-	@docker compose -p $(PROJECT) rm -f neo4j || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) stop neo4j || true
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) rm -f neo4j || true
 	@docker volume rm $(PROJECT)_neo4j-data || true
-	@docker compose -p $(PROJECT) up -d neo4j
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d neo4j
 	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
-	@auth=$$(awk -F= '/^NEO4J_AUTH/{print $$2}' .env.generated | xargs); \
-	user=$${auth%%/*}; pass=$${auth#*/}; \
-	echo "Testing auth ($$user/***)..."; \
-	( docker compose -p $(PROJECT) exec -T neo4j bash -lc \
-	  "/var/lib/neo4j/bin/cypher-shell -u '$$user' -p '$$pass' 'RETURN 1'" || true )
+	@$(LOAD_ENV_SHARED) bash -c ' \
+		user=$${NEO4J_AUTH%%/*}; \
+		pass=$${NEO4J_AUTH#*/}; \
+		echo "Testing auth ($$user/***) from env.tier-data..."; \
+		docker compose -p $(PROJECT) exec -T neo4j bash -lc \
+		  "/var/lib/neo4j/bin/cypher-shell -u \"$$user\" -p \"$$pass\" \"RETURN 1\""; \
+	'
 
 neo4j-status: ## Show Neo4j logs and health line
 	@docker compose -p $(PROJECT) ps neo4j || true
@@ -1098,8 +1145,8 @@ up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
-.PHONY: up-agents
-up-agents: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
+.PHONY: up-agents up-agents-stack
+up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
 	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 
 .PHONY: agents-headless-smoke

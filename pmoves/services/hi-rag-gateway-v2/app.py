@@ -536,12 +536,14 @@ class QueryResp(BaseModel):
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage Hi-RAG Gateway lifespan with geometry realtime and swarm workers."""
+    # Declare global variables at the top - cannot re-declare after yield
+    global _geometry_realtime_task, _geometry_swarm_task, _geometry_swarm_stop
+
     # Startup
     if shape_store is None:
         logger.info("ShapeStore unavailable; geometry cache warm skipped")
     else:
         await _warm_shapes_from_supabase()
-        global _geometry_realtime_task
         if _geometry_realtime_task is None:
             ws_url = _derive_realtime_url()
             api_key = SUPABASE_REALTIME_KEY
@@ -550,7 +552,6 @@ async def lifespan(app: FastAPI):
                 logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
             else:
                 logger.info("Supabase realtime subscription skipped; missing URL or API key")
-        global _geometry_swarm_task
         if _geometry_swarm_task is None and NATS_URL:
             if hasattr(nats, "connect"):
                 _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
@@ -561,13 +562,11 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    global _geometry_realtime_task
     if _geometry_realtime_task is not None:
         _geometry_realtime_task.cancel()
         with contextlib.suppress(Exception):
             await _geometry_realtime_task
         _geometry_realtime_task = None
-    global _geometry_swarm_task, _geometry_swarm_stop
     if _geometry_swarm_stop is not None:
         _geometry_swarm_stop.set()
     if _geometry_swarm_task is not None:
