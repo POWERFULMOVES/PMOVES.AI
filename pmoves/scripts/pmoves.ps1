@@ -24,7 +24,7 @@ switch ($Cmd) {
       $running = $LASTEXITCODE -eq 0
       if (-not $running) { supabase start }
       # Point PMOVES to CLI endpoints reachable from inside containers via host.docker.internal
-      $hostBase = "http://host.docker.internal:65421"
+      $hostBase = "http://host.docker.internal:54321"
       if (-not $Env:SUPA_REST_URL) { $Env:SUPA_REST_URL = "$hostBase/rest/v1" }
       if (-not $Env:SUPABASE_STORAGE_URL) { $Env:SUPABASE_STORAGE_URL = "$hostBase/storage/v1" }
       if (-not $Env:SUPABASE_PUBLIC_STORAGE_BASE) { $Env:SUPABASE_PUBLIC_STORAGE_BASE = "$hostBase/storage/v1" }
