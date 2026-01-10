@@ -71,6 +71,9 @@
 [submodule "PMOVES-n8n"]
 	path = PMOVES-n8n
 	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
+[submodule "pmoves/vendor/agentgym-rl"]
+	path = pmoves/vendor/agentgym-rl
+	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
 [submodule "PMOVES-crush"]
 	path = PMOVES-crush
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
@@ -83,6 +86,7 @@
 [submodule "PMOVES-Ultimate-TTS-Studio"]
 	path = PMOVES-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
+	ignore = all
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
@@ -113,11 +117,7 @@
 [submodule "pmoves/vendor/e2b-surf"]
 	path = pmoves/vendor/e2b-surf
 	url = https://github.com/POWERFULMOVES/pmoves-surf.git
-[submodule "research/A2UI"]
-	path = research/A2UI
-	url = https://github.com/google/A2UI.git
-	ignore = all
 [submodule "PMOVES-A2UI"]
 	path = PMOVES-A2UI
-	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
-	branch = PMOVES.AI-Edition-Hardened
+	url = https://github.com/google/A2UI.git
+	ignore = all
