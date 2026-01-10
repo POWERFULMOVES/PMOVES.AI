@@ -19,8 +19,8 @@ DEFAULTS = {
     "INVIDIOUS_HMAC_KEY": "localhack",
     "INVIDIOUS_COMPANION_KEY": "localhack",
     # REST bases
-    "SUPA_REST_URL": "http://host.docker.internal:65421/rest/v1",
-    "SUPA_REST_INTERNAL_URL": "http://host.docker.internal:65421/rest/v1",
+    "SUPA_REST_URL": "http://host.docker.internal:54321/rest/v1",
+    "SUPA_REST_INTERNAL_URL": "http://host.docker.internal:54321/rest/v1",
     # Presign/Render webhook secrets (demo defaults – replace for production)
     "PRESIGN_SHARED_SECRET": "change_me",
     "RENDER_WEBHOOK_SHARED_SECRET": "change_me",
