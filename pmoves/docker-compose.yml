@@ -654,7 +654,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8080
-    - NATS_URL=${NATS_URL:-nats://nats:4222}
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
     - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
