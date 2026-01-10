@@ -37,45 +37,36 @@
 # YAML anchors for tier-based env file loading
 # Format: Maps with env_file key for <<: merge pattern
 # Tier architecture isolates secrets by service category (data, api, llm, worker, media, agent)
-
-# id001: Data tier - Qdrant, Meilisearch, Neo4j, MinIO
 x-env-tier-data: &id001
   env_file:
     - env.shared
     - env.tier-data
 
-# id002: API tier - Hi-RAG v1/v2 (CPU+GPU), TensorZero ClickHouse
 x-env-tier-api: &id002
   env_file:
     - env.shared
     - env.tier-api
 
-# id006: LLM tier - Ollama (note: no NATS_URL in tier-llm)
 x-env-tier-llm: &id006
   env_file:
     - env.shared
     - env.tier-llm
 
-# id003: Worker tier - Extract, LangExtract, PDF Ingest, Notebook Sync, FFmpeg-Whisper, Media Analyzers
 x-env-tier-worker: &id003
   env_file:
     - env.shared
     - env.tier-worker
 
-# id004: Media tier - Media-Video, Media-Audio, FFmpeg-Whisper (dual-tier)
 x-env-tier-media: &id004
   env_file:
     - env.shared
     - env.tier-media
 
-# id005: Agent tier - Agent Zero, Archon, DeepResearch, SupaSerch, Channel Monitor, GitHub Runner Controller
-#                 (NATS_URL with credentials: nats://nats:pmoves@nats:4222)
 x-env-tier-agent: &id005
   env_file:
     - env.shared
     - env.tier-agent
 
-# id007: UI tier - PMOVES-UI
 x-env-tier-ui: &id007
   env_file:
     - env.shared
@@ -282,6 +273,7 @@ services:
     - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
     - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
     - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     depends_on:
       extract-worker:
         condition: service_started
@@ -432,6 +424,7 @@ services:
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}}
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6)
@@ -489,17 +482,10 @@ services:
         condition: service_started
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
     - pmoves_app
     - pmoves_bus
     - pmoves_data
-    - pmoves
   hi-rag-gateway-v2:
     <<: *id002
     build:
@@ -748,9 +734,9 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:54321/rest/v1}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:54321}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
-      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321/rest/v1}
     depends_on:
       nats:
         condition: service_started
@@ -796,7 +782,7 @@ services:
     restart: unless-stopped
     <<: *id005
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -957,7 +943,7 @@ services:
     build: ./services/jellyfin-bridge
     restart: unless-stopped
     environment:
-    - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://jellyfin:8096}
+    - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}}
     ports:
     - 8093:8093
@@ -1098,6 +1084,7 @@ services:
       - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
       - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
       - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
     ports: ["8113:8113"]
     profiles: ["orchestration"]
     networks: [pmoves_app, pmoves_bus]
@@ -1150,6 +1137,7 @@ services:
     environment:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
       - PORT=8055
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
