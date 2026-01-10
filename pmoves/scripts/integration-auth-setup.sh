@@ -43,9 +43,9 @@ JELLYFIN_URL="${JELLYFIN_URL:-http://localhost:8096}"
 OPEN_NOTEBOOK_URL="${OPEN_NOTEBOOK_URL:-http://localhost:5055}"
 
 # Container names
-FIREFLY_CONTAINER="${FIREFLY_CONTAINER:-cataclysm-firefly}"
-WGER_CONTAINER="${WGER_CONTAINER:-cataclysm-wger}"
-JELLYFIN_CONTAINER="${JELLYFIN_CONTAINER:-cataclysm-jellyfin}"
+FIREFLY_CONTAINER="${FIREFLY_CONTAINER:-firefly}"
+WGER_CONTAINER="${WGER_CONTAINER:-pmoves-wger}"
+JELLYFIN_CONTAINER="${JELLYFIN_CONTAINER:-jellyfin}"
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
