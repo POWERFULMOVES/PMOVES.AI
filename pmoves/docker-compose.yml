@@ -1540,7 +1540,7 @@ networks:
         gateway: 172.30.5.1
   supabase_net:
     external: true
-    name: supabase_net
+    name: supabase_network_PMOVES.AI
   pmoves:
     external: true
     name: pmoves-net
