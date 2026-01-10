@@ -1236,7 +1236,7 @@ services:
     restart: unless-stopped
     <<: *id003
     environment:
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
