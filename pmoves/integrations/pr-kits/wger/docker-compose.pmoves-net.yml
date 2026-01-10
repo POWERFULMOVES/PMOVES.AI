@@ -1,0 +1,33 @@
+version: "3.9"
+services:
+  wger:
+    image: ghcr.io/POWERFULMOVES/Pmoves-Health-wger:main
+    restart: unless-stopped
+    networks: [pmoves-net]
+    environment:
+      - DJANGO_DEBUG=False
+      - WGER_USE_GUNICORN=True
+      - DJANGO_CLEAR_STATIC_FIRST=True
+    volumes:
+      - wger-static:/home/wger/static
+      - wger-media:/home/wger/media
+
+  wger-nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - wger
+    networks: [pmoves-net]
+    ports:
+      - "8000:80"
+    volumes:
+      - wger-static:/wger/static:ro
+      - wger-media:/wger/media:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+networks:
+  pmoves-net:
+    external: true
+
+volumes:
+  wger-static:
+  wger-media:
