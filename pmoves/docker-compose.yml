@@ -1,36 +1,81 @@
+# =============================================================================
+# PMOVES.AI - Hardened Architecture Docker Compose Configuration
+# =============================================================================
+#
+# Network Architecture (5-Tier Isolation Model):
+# -----------------------------------------------
+# 1. pmoves_data  - Data tier (vector DBs, graph DBs, search indexes)
+# 2. pmoves_api   - API tier (REST/GraphQL endpoints, gateways)
+# 3. pmoves_app   - Application tier (business logic services)
+# 4. pmoves_bus   - Message bus tier (NATS event streaming)
+# 5. pmoves_monitoring - Observability tier (Prometheus, Grafana, Loki)
+#
+# Additional Networks:
+# - pmoves        - Legacy compatibility bridge (Supabase connectivity)
+# - supabase_net  - Supabase CLI local stack (external dependency)
+#
+# Service Tier Assignment:
+# ------------------------
+# - Services connect ONLY to their required tiers (principle of least privilege)
+# - Cross-tier communication goes through gateways (not direct DB access)
+# - External access via host.docker.internal for local development
+#
+# Environment Variable Strategy:
+# ------------------------------
+# - env.shared      - Common configuration (URLs, ports, service names)
+# - env.tier-data   - Data tier credentials (Qdrant, Neo4j, Meilisearch)
+# - env.tier-api    - API tier credentials (Hi-RAG, TensorZero)
+# - env.tier-llm    - LLM provider credentials (via TensorZero gateway)
+# - env.tier-worker - Background worker credentials (extract, langextract)
+# - env.tier-media  - Media processing credentials (whisper, YOLO)
+# - env.tier-agent  - Agent orchestration credentials (Agent Zero, Archon)
+# - env.tier-ui     - Frontend credentials (React apps)
+#
+# YAML anchors below enable tier-based env loading via the <<: merge pattern.
+# =============================================================================
+#
 # YAML anchors for tier-based env file loading
 # Format: Maps with env_file key for <<: merge pattern
 # Tier architecture isolates secrets by service category (data, api, llm, worker, media, agent)
+
+# id001: Data tier - Qdrant, Meilisearch, Neo4j, MinIO
 x-env-tier-data: &id001
   env_file:
     - env.shared
     - env.tier-data
 
+# id002: API tier - Hi-RAG v1/v2 (CPU+GPU), TensorZero ClickHouse
 x-env-tier-api: &id002
   env_file:
     - env.shared
     - env.tier-api
 
+# id006: LLM tier - Ollama (note: no NATS_URL in tier-llm)
 x-env-tier-llm: &id006
   env_file:
     - env.shared
     - env.tier-llm
 
+# id003: Worker tier - Extract, LangExtract, PDF Ingest, Notebook Sync, FFmpeg-Whisper, Media Analyzers
 x-env-tier-worker: &id003
   env_file:
     - env.shared
     - env.tier-worker
 
+# id004: Media tier - Media-Video, Media-Audio, FFmpeg-Whisper (dual-tier)
 x-env-tier-media: &id004
   env_file:
     - env.shared
     - env.tier-media
 
+# id005: Agent tier - Agent Zero, Archon, DeepResearch, SupaSerch, Channel Monitor, GitHub Runner Controller
+#                 (NATS_URL with credentials: nats://nats:pmoves@nats:4222)
 x-env-tier-agent: &id005
   env_file:
     - env.shared
     - env.tier-agent
 
+# id007: UI tier - PMOVES-UI
 x-env-tier-ui: &id007
   env_file:
     - env.shared
@@ -380,7 +425,7 @@ services:
       - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-media has credentials: nats://nats:pmoves@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - YT_BUCKET=${YT_BUCKET:-assets}
@@ -430,7 +475,7 @@ services:
     build: ./services/channel-monitor
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
     - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
@@ -444,6 +489,12 @@ services:
         condition: service_started
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
     - pmoves_app
     - pmoves_bus
@@ -809,7 +860,7 @@ services:
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-llm has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
     - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
     - DEEPRESEARCH_TENSORZERO_BASE_URL=${DEEPRESEARCH_TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
@@ -840,7 +891,7 @@ services:
     image: ${SUPASERCH_IMAGE:-}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-llm has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
@@ -857,7 +908,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-llm has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     depends_on:
     - nats
@@ -873,7 +924,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-llm has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     depends_on:
     - nats
@@ -1011,7 +1062,7 @@ services:
     image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-llm has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - NVIDIA_VISIBLE_DEVICES=all
     - GPU_MODELS_CONFIG=/config/gpu-models.yaml
     - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
@@ -1041,7 +1092,7 @@ services:
     image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-llm has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - PORT=8113
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
       - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
@@ -1294,7 +1345,7 @@ services:
     restart: unless-stopped
     <<: *id005
     environment:
-    # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - PORT=8104
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
       - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
