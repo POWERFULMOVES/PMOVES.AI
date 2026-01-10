@@ -170,12 +170,20 @@ class ChannelMonitor:
                     redirect_uri=self.google_redirect_uri,
                     default_scopes=self._google_scopes,
                 )
-            except Exception as exc:  # pragma: no cover - guardrails
-                LOGGER.error("Failed to initialize YouTube client: %s", exc)
+            except (ValueError, TypeError) as exc:  # pragma: no cover - known config errors
+                LOGGER.warning("YouTube API integration disabled due to configuration error: %s", exc)
+                self._youtube_client = None  # Explicitly disable if init fails
 
     async def start(self) -> None:
         if self._pool is None:
-            self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=5)
+            try:
+                self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=5)
+            except (asyncpg.PostgresConnectionError, OSError) as exc:
+                LOGGER.critical("Failed to connect to database at %s: %s", self.database_url, exc)
+                raise RuntimeError(
+                    f"Database connection failed for channel-monitor. "
+                    f"Check network connectivity and Supabase status. URL: {self.database_url}"
+                ) from exc
         await self._ensure_tables()
         await self._load_processed_videos()
         await self._load_user_sources()
@@ -1240,6 +1248,29 @@ class ChannelMonitor:
 
     def channel_count(self) -> int:
         return len(self._active_channels())
+
+    async def check_database_health(self) -> bool:
+        """Check if the database connection is alive and queryable.
+
+        Executes a lightweight query to verify connectivity. Returns True if
+        the database responds successfully, False otherwise.
+
+        This method is safe to call even if the pool has not been initialized.
+        It handles connection errors gracefully and returns False rather than
+        raising exceptions.
+
+        Returns:
+            True if database connection is healthy, False otherwise.
+        """
+        if self._pool is None:
+            return False
+        try:
+            async with self._pool.acquire() as conn:
+                # Use SELECT 1 for a lightweight connection test
+                await conn.fetchval("SELECT 1")
+            return True
+        except (asyncpg.PostgresConnectionError, OSError):  # pragma: no cover
+            return False
 
     async def _update_status(
         self,
