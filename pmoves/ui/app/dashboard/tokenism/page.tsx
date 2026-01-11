@@ -9,9 +9,8 @@
 
 import { useState } from 'react';
 import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
-import DashboardShell from '@/components/DashboardShell';
-import DashboardHeader from '@/components/DashboardHeader';
-import ServiceCard from '@/components/ServiceCard';
+import { DashboardShell } from '@/components/DashboardNavigation';
+import { ServiceCard } from '@/components/services/ServiceCard';
 import TokenismSimulationPanel from '@/components/tokenism/SimulationPanel';
 import TokenismResultsPanel from '@/components/tokenism/ResultsPanel';
 import TokenismGeometricView from '@/components/tokenism/GeometricView';
@@ -29,13 +28,11 @@ export default function TokenismPage() {
   const tokenismUIService = SERVICE_CATALOG.find(s => s.slug === 'tokenism-ui');
 
   return (
-    <DashboardShell active="tokenism">
-      <DashboardHeader
-        title="Tokenism"
-        subtitle="Token economy simulation with business model validation"
-        active="tokenism"
-      />
-
+    <DashboardShell
+      title="Tokenism"
+      subtitle="Token economy simulation with business model validation"
+      active="tokenism"
+    >
       <div className="space-y-6 p-6">
         {/* Service Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
