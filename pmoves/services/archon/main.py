@@ -71,10 +71,78 @@ def _ensure_supabase_env() -> None:
 _ensure_supabase_env()
 
 
+async def _check_tensorzero_connectivity(base_url: str) -> bool:
+    """Check if TensorZero is reachable at the given URL.
+
+    Args:
+        base_url: The OpenAI-compatible base URL to check.
+
+    Returns:
+        True if reachable, False otherwise.
+    """
+    try:
+        import httpx
+        # Test the /models endpoint which all TensorZero deployments expose
+        test_url = base_url.replace("/openai/v1", "").replace("/openai", "")
+        test_url = f"{test_url.rstrip('/')}/models"
+
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get(test_url)
+            return response.status_code == 200
+    except Exception:
+        return False
+
+
+def _check_tensorzero_sync(base_url: str) -> bool:
+    """Synchronous wrapper for TensorZero connectivity check.
+
+    Args:
+        base_url: The OpenAI-compatible base URL to check.
+
+    Returns:
+        True if reachable, False otherwise.
+    """
+    try:
+        # Run async check in new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_check_tensorzero_connectivity(base_url))
+        finally:
+            loop.close()
+    except Exception:
+        return False
+
+
 def _tensorzero_openai_base() -> str:
+    """Return OpenAI-compatible base URL from TensorZero settings.
+
+    Priority for hybrid standalone mode:
+      1) TENSORZERO_BASE_URL (explicit, backward compatible)
+      2) TENSORZERO_URL (parent PMOVES.AI TensorZero)
+      3) host.docker.internal:3030 (hybrid mode default)
+
+    Returns:
+        OpenAI-compatible base URL or empty string if not configured.
+    """
+    # First, check explicit TENSORZERO_BASE_URL (backward compatibility)
     base = (os.environ.get("TENSORZERO_BASE_URL") or "").strip()
     if not base:
+        # Check for parent PMOVES.AI TensorZero in hybrid standalone mode
+        parent_tensorzero = os.environ.get("TENSORZERO_URL")
+        if parent_tensorzero:
+            base = parent_tensorzero
+        else:
+            # Fallback to host.docker.internal for hybrid mode
+            # This allows submodule to reach parent PMOVES.AI TensorZero
+            docked_mode = os.environ.get("DOCKED_MODE", "false").lower() == "true"
+            if not docked_mode:
+                # In standalone mode, try parent via host.docker.internal
+                base = "http://host.docker.internal:3030"
+
+    if not base:
         return ""
+
     base = base.rstrip("/")
     if base.endswith("/openai/v1"):
         return base
@@ -84,6 +152,11 @@ def _tensorzero_openai_base() -> str:
 
 
 def _sync_openai_compat_env() -> None:
+    """Sync TensorZero settings to OpenAI environment variables.
+
+    In hybrid standalone mode, verifies connectivity to parent TensorZero
+    via host.docker.internal and falls back gracefully if unreachable.
+    """
     resolved_base = ""
     for candidate in (
         os.environ.get("OPENAI_COMPATIBLE_BASE_URL"),
@@ -94,6 +167,20 @@ def _sync_openai_compat_env() -> None:
         if value:
             resolved_base = value
             break
+
+    if resolved_base:
+        # In hybrid mode, verify connectivity to parent TensorZero
+        if "host.docker.internal" in resolved_base:
+            if _check_tensorzero_sync(resolved_base):
+                logger.info("TensorZero reachable at %s (hybrid mode)", resolved_base)
+            else:
+                logger.warning(
+                    "TensorZero unreachable at %s (hybrid mode). "
+                    "Ensure PMOVES.AI is running or set TENSORZERO_URL explicitly.",
+                    resolved_base
+                )
+                # Don't set unreachable base - allow fallback to direct OpenAI
+                resolved_base = ""
 
     if resolved_base:
         targets = (
