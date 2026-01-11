@@ -21,7 +21,7 @@ const mockItems: JellyfinItem[] = [
     type: 'Series',
     seriesName: 'Test Series',
     seasonNumber: 1,
-    episodeNumber: 5,
+    episodeNumber: '5',
   },
   {
     id: '3',
@@ -29,7 +29,7 @@ const mockItems: JellyfinItem[] = [
     type: 'Episode',
     seriesName: 'Another Series',
     seasonNumber: 2,
-    episodeNumber: 3,
+    episodeNumber: '3',
     youtubeId: 'abc123',
   },
   {
