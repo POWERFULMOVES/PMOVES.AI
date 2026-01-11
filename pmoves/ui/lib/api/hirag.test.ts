@@ -12,6 +12,7 @@ global.fetch = jest.fn();
 // Mock errorUtils
 jest.mock('../errorUtils', () => ({
   logError: jest.fn(),
+  logForDebugging: jest.fn(),
   ok: (value: unknown) => ({ ok: true, data: value }),
   err: (error: string) => ({ ok: false, error }),
   getErrorMessage: (status: number) => `HTTP Error ${status}`,
