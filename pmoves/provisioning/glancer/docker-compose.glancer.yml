@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  glancer:
+    image: "${GLANCER_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-glancer:latest}"
+    env_file:
+      - ./glancer.env
+    ports:
+      - "${GLANCER_PORT:-8340}:8340"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsSL", "${GLANCER_HEALTH_URL:-http://localhost:8340/healthz}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
