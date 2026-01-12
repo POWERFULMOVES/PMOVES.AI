@@ -1041,26 +1041,30 @@ services:
     - pmoves_app
     - pmoves_data
   gpu-orchestrator:
-    <<: *id006
+    <<: *id002
     build:
       context: ./services/gpu-orchestrator
       dockerfile: Dockerfile
     image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-    - NVIDIA_VISIBLE_DEVICES=all
-    - GPU_MODELS_CONFIG=/config/gpu-models.yaml
-    - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
+      - PORT=8200
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://pmoves-vllm:8000}
+      - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
+      - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
+      - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro
-    - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/gpu-models.yaml:/app/config/gpu-models.yaml:ro
     deploy:
       resources:
         reservations:
           devices:
           - driver: nvidia
-            count: 1
+            count: all
             capabilities:
             - gpu
     profiles:
@@ -1068,8 +1072,13 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_monitoring
     ports:
-    - 8100:8100
+    - 8200:8200
+    depends_on:
+      nats:
+        condition: service_started
+        required: false
   evo-controller:
     <<: *id005
     build:
@@ -1343,6 +1352,7 @@ services:
     ports: ["8104:8104"]
     volumes:
       - ./services/github-runner-ctl/config:/app/config:ro
+      - ./secrets/github_pat:/run/secrets/github_pat:ro
     profiles: ["orchestration", "workers"]
     networks: [pmoves_api, pmoves_bus, pmoves_monitoring]
     healthcheck:
