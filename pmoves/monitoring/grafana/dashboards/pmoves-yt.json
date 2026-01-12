@@ -1,0 +1,131 @@
+{
+  "title": "PMOVES.YT",
+  "description": "YouTube ingestion service - Downloads, transcripts, and NATS publishing",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "pmoves-yt",
+  "tags": ["youtube", "ingestion", "transcript", "media"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Service Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Service Status",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "up{job=\"pmoves-yt\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Downloads",
+      "gridPos": { "x": 4, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(yt_download_requests_total)", "legendFormat": "Downloads" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Success Rate",
+      "gridPos": { "x": 9, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(yt_downloads_succeeded_total) / sum(yt_download_requests_total) * 100", "legendFormat": "Success %" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 80 }, { "color": "green", "value": 95 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Total Transcripts",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(yt_transcript_total)", "legendFormat": "Transcripts" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "purple", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "NATS Published",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(yt_nats_published_total)", "legendFormat": "Events" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "orange", "value": 0 }] } } }
+    },
+    {
+      "type": "row",
+      "title": "Download Metrics",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Download Rate",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(yt_download_requests_total[5m]))", "legendFormat": "Requests" },
+        { "expr": "sum(rate(yt_downloads_succeeded_total[5m]))", "legendFormat": "Succeeded" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Download Latency Percentiles",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(yt_download_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(yt_download_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(yt_download_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "type": "row",
+      "title": "Ingest & Transcript Metrics",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingest Duration Percentiles",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(yt_ingest_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(yt_ingest_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Transcript & Summary Rate",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(yt_transcript_total[5m]))", "legendFormat": "Transcripts" },
+        { "expr": "sum(rate(yt_summary_generated_total[5m]))", "legendFormat": "Summaries" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "row",
+      "title": "NATS Publishing",
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "NATS Events by Topic",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 },
+      "targets": [{ "expr": "sum(rate(yt_nats_published_total[5m])) by (topic)", "legendFormat": "{{topic}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" }
+}

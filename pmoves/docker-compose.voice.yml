@@ -1,0 +1,44 @@
+services:
+  vibevoice:
+    build:
+      context: .
+      dockerfile: services/vibevoice-realtime/Dockerfile
+      args:
+        - VIBEVOICE_GIT_REMOTE=${VIBEVOICE_GIT_REMOTE:-https://github.com/microsoft/VibeVoice.git}
+        - VIBEVOICE_GIT_REF=${VIBEVOICE_GIT_REF:-main}
+    image: pmoves/vibevoice-realtime:dev
+    container_name: pmoves-vibevoice
+    restart: unless-stopped
+    environment:
+      - VIBEVOICE_MODEL_ID=${VIBEVOICE_MODEL_ID:-microsoft/VibeVoice-Realtime-0.5B}
+      - VIBEVOICE_MODEL_DIR=/models
+      - VIBEVOICE_PORT=3000
+      # Use `auto` to fall back to CPU when PyTorch lacks SM support (common on RTX 5090 until nightly wheels land).
+      - VIBEVOICE_DEVICE=${VIBEVOICE_DEVICE:-auto}
+      # Cap generation so the service doesn't stay "busy" for minutes on short prompts.
+      - VIBEVOICE_MAX_NEW_TOKENS=${VIBEVOICE_MAX_NEW_TOKENS:-512}
+      # Hugging Face caches (optional). If you have gated models, set HF_TOKEN in env.shared.
+      - HF_HOME=/models/.hf
+      - HUGGINGFACE_HUB_CACHE=/models/.hf
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - vibevoice-models:/models
+    ports:
+      - "${VIBEVOICE_HOST_PORT:-3000}:3000"
+    profiles: ["voice"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute,utility]
+              count: ${GPU_COUNT:-all}
+    networks: [api_tier]
+
+networks:
+  api_tier:
+    external: true
+    name: pmoves_api
+
+volumes:
+  vibevoice-models: {}

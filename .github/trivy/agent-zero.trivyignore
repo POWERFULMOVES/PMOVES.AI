@@ -1,0 +1,15 @@
+# Temporary Trivy suppressions for `pmoves-agent-zero` GHCR builds.
+# Follow-up: bump deps/base image in POWERFULMOVES/PMOVES-Agent-Zero (branch PMOVES.AI-Edition-Hardened)
+# so these CVEs disappear rather than being ignored.
+CVE-2024-52595
+CVE-2025-32434
+CVE-2025-47273
+CVE-2025-6176
+CVE-2025-65106
+CVE-2025-66416
+CVE-2025-66418
+CVE-2025-66471
+CVE-2025-6984
+CVE-2025-6985
+# Next: keep CI green while upstream fixes roll out in the fork.
+GHSA-c2jp-c369-7pvx

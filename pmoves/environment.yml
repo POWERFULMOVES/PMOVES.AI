@@ -1,0 +1,18 @@
+name: pmoves-ai
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      # Core dev tooling; service-specific deps are installed from requirements.txt files
+      - uv>=0.2.0; python_version >= '3.8'
+      - pip-tools>=7.4.0
+      - wheel
+      - setuptools
+      - rich
+      - typer>=0.9.0
+      - httpx>=0.24
+      - pydantic>=1.10
+      - fastapi>=0.110
+

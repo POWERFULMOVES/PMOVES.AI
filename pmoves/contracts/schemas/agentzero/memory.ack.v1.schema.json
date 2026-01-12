@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Zero Memory Ack",
+  "type": "object",
+  "required": [
+    "session_id",
+    "op"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "op": {
+      "type": "string"
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
