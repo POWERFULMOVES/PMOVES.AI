@@ -97,6 +97,7 @@ class VramTracker:
                 free_vram_mb=free_mb,
                 temperature_c=temp,
                 utilization_percent=util.gpu,
+                is_mock=False,  # Real metrics from pynvml
                 power_draw_w=power_draw,
                 power_limit_w=power_limit,
             )
@@ -114,6 +115,7 @@ class VramTracker:
             free_vram_mb=32768,
             temperature_c=0,
             utilization_percent=0,
+            is_mock=True,  # Flag this as mock data
         )
 
     def get_processes(self) -> List[ProcessInfo]:
