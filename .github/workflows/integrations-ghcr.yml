@@ -310,7 +310,7 @@ jobs:
 
       - name: Upload SBOM artifact
         if: ${{ matrix.generate_sbom }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
@@ -359,7 +359,7 @@ jobs:
           scanners: 'vuln'
 
       - name: Upload Trivy report artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
