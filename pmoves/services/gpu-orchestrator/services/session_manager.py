@@ -118,6 +118,7 @@ class SessionManager:
         """Add a model to an existing session."""
         session = self._sessions.get(session_id)
         if not session:
+            logger.warning(f"Cannot add model {model_key} - session {session_id} not found")
             return False
 
         if model_key not in session.models:

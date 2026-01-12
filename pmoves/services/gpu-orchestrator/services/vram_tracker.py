@@ -121,6 +121,7 @@ class VramTracker:
     def get_processes(self) -> List[ProcessInfo]:
         """Get list of processes using the GPU."""
         if not self._initialized:
+            logger.debug("Cannot get GPU processes - VramTracker not initialized")
             return []
 
         processes = []
@@ -170,8 +171,8 @@ class VramTracker:
                 container_id=container_id,
                 container_name=container_name,
             )
-        except Exception as e:
-            logger.debug(f"Error building process info for PID {proc.pid}: {e}")
+        except (OSError, ValueError, TypeError) as e:
+            logger.warning(f"Error building process info for PID {proc.pid}: {e}")
             return None
 
     def _get_process_name(self, pid: int) -> str:
@@ -238,8 +239,8 @@ class VramTracker:
             if result.returncode == 0:
                 name = result.stdout.strip().lstrip("/")
                 return name if name else None
-        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
-            pass
+        except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError) as e:
+            logger.debug(f"Could not get container name for {container_id}: {e}")
         return None
 
     def get_available_vram(self, reserve_mb: int = 2048) -> int:

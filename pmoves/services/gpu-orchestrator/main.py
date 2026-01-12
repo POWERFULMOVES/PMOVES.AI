@@ -68,7 +68,8 @@ async def lifespan(app: FastAPI):
         # Initialize VRAM tracker
         vram_tracker = VramTracker(gpu_index=settings.gpu_index)
         metrics = vram_tracker.get_metrics()
-        logger.info(
+        log_fn = logger.warning if metrics.is_mock else logger.info
+        log_fn(
             "GPU detected",
             name=metrics.name,
             total_vram_mb=metrics.total_vram_mb,
@@ -185,8 +186,15 @@ app.include_router(api_router)
 @app.get("/healthz")
 async def health_check():
     """Health check endpoint."""
+    from fastapi import status
+
     try:
         metrics = vram_tracker.get_metrics()
+        if metrics.is_mock:
+            return {
+                "status": "degraded",
+                "error": "GPU monitoring unavailable - running in mock mode",
+            }, status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "healthy",
             "gpu": metrics.name,
@@ -194,9 +202,9 @@ async def health_check():
         }
     except Exception as e:
         return {
-            "status": "degraded",
+            "status": "unhealthy",
             "error": str(e),
-        }
+        }, status.HTTP_503_SERVICE_UNAVAILABLE
 
 
 # Prometheus metrics endpoint
