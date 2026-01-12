@@ -297,7 +297,7 @@ jobs:
 
       - name: Install Syft (SBOM)
         if: ${{ matrix.generate_sbom }}
-        uses: anchore/sbom-action/download-syft@v0.17.7
+        uses: anchore/sbom-action/download-syft@v0.21.0
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
