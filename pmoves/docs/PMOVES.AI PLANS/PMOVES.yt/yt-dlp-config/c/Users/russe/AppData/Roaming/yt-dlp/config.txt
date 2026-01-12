@@ -1,0 +1,59 @@
+# yt-dlp Configuration File
+# Place this file in %APPDATA%\yt-dlp\config.txt or use --config-location
+
+# === OUTPUT TEMPLATES ===
+# Organize downloads by date and platform
+-o "E:/Downloads/yt-dlp/%(uploader)s/%(upload_date>%Y-%m-%d)s - %(title)s [%(id)s].%(ext)s"
+
+# === FORMAT SELECTION ===
+# Best quality video + best audio, merge into MP4
+-f "bv+ba/b"
+
+# === AUDIO/VIDEO QUALITY ===
+# Prefer higher quality, fallback to available
+-S "res:1080,codec:h264"
+
+# === SUBTITLES ===
+# Download English subtitles, embed if available
+--sub-langs "en,en.*,live_chat"
+--write-subs
+--write-auto-subs
+--embed-subs
+
+# === METADATA ===
+--embed-metadata
+--embed-chapters
+--embed-thumbnail
+
+# === SPONSORBLOCK ===
+# Remove sponsor segments and mark chapters
+--sponsorblock-remove "sponsor,intro,outro,selfpromo,preview,filler,interaction"
+--sponsorblock-mark "all"
+
+# === POST-PROCESSING ===
+--keep-video
+--merge-output-format "mp4"
+--convert-thumbnail "jpg"
+
+# === NETWORK OPTIONS ===
+--socket-timeout 60
+--retries 10
+--fragment-retries 10
+
+# === PLAYLIST OPTIONS ===
+--download-archive "C:/Users/russe/yt-dlp-config/downloaded.txt"
+--playlist-reverse
+
+# === THROTTLING ===
+--sleep-interval 1
+--max-sleep-interval 3
+
+# === MISC ===
+--no-windows-filenames
+--restrict-filenames
+--continue
+
+# === ALIASES ===
+--alias "music,-x" "-f bestaudio/best --audio-format mp3 --embed-thumbnail --add-metadata"
+--alias "video-high" "-f best[height<=1080]+bestaudio/best --merge-output-format mp4"
+--alias "playlist-audio" "-x --audio-format mp3 --embed-metadata --download-archive"

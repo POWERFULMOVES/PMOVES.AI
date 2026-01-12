@@ -1,0 +1,294 @@
+{
+    "metadata": {
+        "name": "pmoves-firefly-sample",
+        "description": "Deterministic sample dataset covering 5-year projection categories for PMOVES finance demos.",
+        "version": "2025-02-17",
+        "currency_code": "USD"
+    },
+    "users": [
+        {
+            "email": "finance-demo@pmoves.ai",
+            "name": "PMOVES Finance Demo",
+            "password": "pmoves-demo-pass-2025",
+            "role": "owner",
+            "blocked": false
+        },
+        {
+            "email": "finance-analyst@pmoves.ai",
+            "name": "PMOVES Finance Analyst",
+            "password": "pmoves-analyst-pass-2025",
+            "role": "user",
+            "blocked": false
+        }
+    ],
+    "categories": [
+        {
+            "name": "AI-Enhanced Local Service Business",
+            "notes": "Tier 1 projection leader \u2014 1,821% ROI in 5 years with 75% success probability.",
+            "tags": [
+                "tier-1",
+                "ai-services",
+                "projection"
+            ]
+        },
+        {
+            "name": "Sustainable Energy AI Consulting",
+            "notes": "Tier 1 model \u2014 resilient consulting revenue with 60% success probability.",
+            "tags": [
+                "tier-1",
+                "energy",
+                "consulting"
+            ]
+        },
+        {
+            "name": "Community Token Pre-Order System",
+            "notes": "Tier 2 community currency pilot tracking adoption milestones.",
+            "tags": [
+                "tier-2",
+                "token",
+                "community"
+            ]
+        },
+        {
+            "name": "Creative Content + Token Rewards",
+            "notes": "Entry-level creative automation revenue loops with incentive grants.",
+            "tags": [
+                "entry-tier",
+                "creative",
+                "rewards"
+            ]
+        }
+    ],
+    "accounts": [
+        {
+            "name": "PMOVES Demo Operating",
+            "type": "asset",
+            "account_role": "mainAsset",
+            "currency_code": "USD",
+            "opening_balance": 25000,
+            "opening_balance_date": "2025-01-01",
+            "notes": "Operating cash pool for PMOVES demo scenarios.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "PMOVES Demo Reserve",
+            "type": "asset",
+            "currency_code": "USD",
+            "opening_balance": 15000,
+            "opening_balance_date": "2025-01-01",
+            "notes": "Capital reserve for long-term runway tracking.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "AI-Enhanced Local Service Business Revenue",
+            "type": "revenue",
+            "currency_code": "USD",
+            "notes": "Revenue stream for AI-enhanced field services tier.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "AI Service Delivery Costs",
+            "type": "expense",
+            "currency_code": "USD",
+            "notes": "Operating costs for AI-enhanced local service crews.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "Sustainable Energy AI Consulting Revenue",
+            "type": "revenue",
+            "currency_code": "USD",
+            "notes": "Consulting retainers and performance fees.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "Sustainable Energy R&D",
+            "type": "expense",
+            "currency_code": "USD",
+            "notes": "Prototype microgrid audits and compliance spend.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "Community Token Pre-Orders",
+            "type": "revenue",
+            "currency_code": "USD",
+            "notes": "Inbound funds from community token reservations.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "Community Adoption Incentives",
+            "type": "expense",
+            "currency_code": "USD",
+            "notes": "Education stipends and onboarding grants for community token pilots.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "Creative Content Token Rewards",
+            "type": "revenue",
+            "currency_code": "USD",
+            "notes": "Reward-backed media drops and sponsorship conversions.",
+            "owner_email": "finance-demo@pmoves.ai"
+        },
+        {
+            "name": "Creative Production Studio",
+            "type": "expense",
+            "currency_code": "USD",
+            "notes": "Artist stipends, audio mastering, and post-production tooling.",
+            "owner_email": "finance-demo@pmoves.ai"
+        }
+    ],
+    "transactions": [
+        {
+            "external_id": "pmoves-ai-services-year1",
+            "type": "deposit",
+            "date": "2025-01-15",
+            "description": "Year 1 AI-enhanced service retainers",
+            "amount": 4800,
+            "currency_code": "USD",
+            "category_name": "AI-Enhanced Local Service Business",
+            "source_name": "AI-Enhanced Local Service Business Revenue",
+            "destination_name": "PMOVES Demo Operating",
+            "notes": "Kickoff revenue for AI service packages (baseline scenario).",
+            "tags": [
+                "5-year-projection",
+                "year-1",
+                "tier-1"
+            ]
+        },
+        {
+            "external_id": "pmoves-ai-services-year5",
+            "type": "deposit",
+            "date": "2029-12-20",
+            "description": "Year 5 AI-enhanced service retainers",
+            "amount": 94277,
+            "currency_code": "USD",
+            "category_name": "AI-Enhanced Local Service Business",
+            "source_name": "AI-Enhanced Local Service Business Revenue",
+            "destination_name": "PMOVES Demo Reserve",
+            "notes": "Projected revenue at maturity (1,821% ROI scenario).",
+            "tags": [
+                "5-year-projection",
+                "year-5",
+                "tier-1"
+            ]
+        },
+        {
+            "external_id": "pmoves-ai-services-ops-year1",
+            "type": "withdrawal",
+            "date": "2025-02-05",
+            "description": "AI service delivery costs",
+            "amount": 1500,
+            "currency_code": "USD",
+            "category_name": "AI-Enhanced Local Service Business",
+            "source_name": "PMOVES Demo Operating",
+            "destination_name": "AI Service Delivery Costs",
+            "notes": "Technician onboarding, edge devices, and insurance riders.",
+            "tags": [
+                "5-year-projection",
+                "operating-cost",
+                "tier-1"
+            ]
+        },
+        {
+            "external_id": "pmoves-energy-consulting-year1",
+            "type": "deposit",
+            "date": "2025-03-18",
+            "description": "Energy AI consulting retainers",
+            "amount": 63020,
+            "currency_code": "USD",
+            "category_name": "Sustainable Energy AI Consulting",
+            "source_name": "Sustainable Energy AI Consulting Revenue",
+            "destination_name": "PMOVES Demo Operating",
+            "notes": "Composite of municipal and SME decarbonization audits.",
+            "tags": [
+                "5-year-projection",
+                "year-5",
+                "tier-1"
+            ]
+        },
+        {
+            "external_id": "pmoves-energy-consulting-rnd",
+            "type": "withdrawal",
+            "date": "2025-04-01",
+            "description": "Energy consulting R&D sprint",
+            "amount": 8200,
+            "currency_code": "USD",
+            "category_name": "Sustainable Energy AI Consulting",
+            "source_name": "PMOVES Demo Operating",
+            "destination_name": "Sustainable Energy R&D",
+            "notes": "Field pilot instrumentation and compliance documentation.",
+            "tags": [
+                "5-year-projection",
+                "rnd",
+                "tier-1"
+            ]
+        },
+        {
+            "external_id": "pmoves-community-token-preorders",
+            "type": "deposit",
+            "date": "2026-06-12",
+            "description": "Community token reservation tranche",
+            "amount": 12000,
+            "currency_code": "USD",
+            "category_name": "Community Token Pre-Order System",
+            "source_name": "Community Token Pre-Orders",
+            "destination_name": "PMOVES Demo Operating",
+            "notes": "Pilot launch across 250 founding members.",
+            "tags": [
+                "5-year-projection",
+                "year-2",
+                "tier-2"
+            ]
+        },
+        {
+            "external_id": "pmoves-community-adoption-grants",
+            "type": "withdrawal",
+            "date": "2026-07-01",
+            "description": "Community adoption incentives",
+            "amount": 4500,
+            "currency_code": "USD",
+            "category_name": "Community Token Pre-Order System",
+            "source_name": "PMOVES Demo Operating",
+            "destination_name": "Community Adoption Incentives",
+            "notes": "Education stipends and liquidity bootstrapping for early members.",
+            "tags": [
+                "5-year-projection",
+                "enablement",
+                "tier-2"
+            ]
+        },
+        {
+            "external_id": "pmoves-creative-rewards-year3",
+            "type": "deposit",
+            "date": "2027-09-09",
+            "description": "Creative content sponsorships",
+            "amount": 22000,
+            "currency_code": "USD",
+            "category_name": "Creative Content + Token Rewards",
+            "source_name": "Creative Content Token Rewards",
+            "destination_name": "PMOVES Demo Operating",
+            "notes": "Annualized brand deals tied to CGP showcase drops.",
+            "tags": [
+                "5-year-projection",
+                "year-3",
+                "entry-tier"
+            ]
+        },
+        {
+            "external_id": "pmoves-creative-production-costs",
+            "type": "withdrawal",
+            "date": "2027-10-01",
+            "description": "Creative studio production sprint",
+            "amount": 8900,
+            "currency_code": "USD",
+            "category_name": "Creative Content + Token Rewards",
+            "source_name": "PMOVES Demo Operating",
+            "destination_name": "Creative Production Studio",
+            "notes": "Artist stipends, live session capture, and community voting rewards.",
+            "tags": [
+                "5-year-projection",
+                "production",
+                "entry-tier"
+            ]
+        }
+    ]
+}

@@ -164,9 +164,7 @@ class GpuMetricsExporter:
                 idle_seconds
             )
 
-            # Use model's configured idle timeout, not hardcoded value
-            idle_timeout = model.get("idle_timeout_seconds", 300)
-            if idle_seconds > idle_timeout:
+            if idle_seconds > 300:  # 5 minutes
                 idle_count += 1
 
         gpu_idle_models.set(idle_count)

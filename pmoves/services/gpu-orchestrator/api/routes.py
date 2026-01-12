@@ -1,16 +1,11 @@
 """HTTP API routes for GPU Orchestrator."""
 
-import logging
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/gpu", tags=["gpu"])
-logger = logging.getLogger(__name__)
-
-# Valid providers
-VALID_PROVIDERS = {"ollama", "vllm", "tts"}
 
 
 # Request/Response models
@@ -18,25 +13,9 @@ class LoadModelRequest(BaseModel):
     """Request to load a model."""
 
     model_id: str
-    provider: Literal["ollama", "vllm", "tts"]  # Validated provider
+    provider: str  # ollama, vllm, tts
     priority: int = 5
     session_id: Optional[str] = None
-
-    @field_validator("model_id")
-    @classmethod
-    def validate_model_id(cls, v: str) -> str:
-        """Ensure model_id is not empty or just whitespace."""
-        if not v or not v.strip():
-            raise ValueError("model_id cannot be empty")
-        return v.strip()
-
-    @field_validator("priority")
-    @classmethod
-    def validate_priority(cls, v: int) -> int:
-        """Ensure priority is in valid range."""
-        if not 0 <= v <= 10:
-            raise ValueError("priority must be between 0 and 10")
-        return v
 
 
 class LoadModelResponse(BaseModel):
@@ -123,13 +102,6 @@ async def list_models(
     if not _lifecycle_manager or not _model_registry:
         raise HTTPException(status_code=503, detail="Service not initialized")
 
-    # Validate provider if provided
-    if provider is not None and provider not in VALID_PROVIDERS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid provider '{provider}'. Must be one of: {', '.join(sorted(VALID_PROVIDERS))}"
-        )
-
     loaded = _lifecycle_manager.get_loaded_models()
 
     result = {
@@ -191,11 +163,7 @@ async def load_model(request: LoadModelRequest):
             )
 
     except Exception as e:
-        logger.error(f"Error loading model {request.provider}/{request.model_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load model. Check server logs for details."
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/models/unload/{provider}/{model_id}", response_model=UnloadModelResponse)
@@ -210,17 +178,6 @@ async def unload_model(
     """
     if not _lifecycle_manager:
         raise HTTPException(status_code=503, detail="Service not initialized")
-
-    # Validate provider
-    if provider not in VALID_PROVIDERS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid provider '{provider}'. Must be one of: {', '.join(sorted(VALID_PROVIDERS))}"
-        )
-
-    # Validate model_id
-    if not model_id or not model_id.strip():
-        raise HTTPException(status_code=400, detail="model_id cannot be empty")
 
     model_key = f"{provider}/{model_id}"
 
@@ -245,11 +202,7 @@ async def unload_model(
             )
 
     except Exception as e:
-        logger.error(f"Error unloading model {model_key}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to unload model. Check server logs for details."
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/optimize", response_model=OptimizeResponse)
@@ -269,11 +222,7 @@ async def optimize_gpu():
             message=f"Optimization complete: {len(result['unloaded'])} models unloaded",
         )
     except Exception as e:
-        logger.error(f"Error optimizing GPU: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to optimize GPU. Check server logs for details."
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/queue")

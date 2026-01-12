@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Virtual environments
+.venv
+venv
+ENV
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Testing
+tests/
+*_test.py
+test_*.py
+
+# Documentation
+*.md
+docs/

@@ -1,0 +1,222 @@
+[
+  {
+    "name": "PMOVES Jellyfin Watcher",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "jellyfin/event",
+          "options": {
+            "responseData": "{\"ok\":true,\"message\":\"Event received\"}"
+          },
+          "httpMethod": "POST"
+        },
+        "id": "wh_jellyfin",
+        "name": "Jellyfin Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [200, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const body = $json;\n\n// Jellyfin event types: ItemAdded, PlaybackStart, PlaybackStop, etc.\nconst eventType = body.NotificationType || body.event_type || 'unknown';\nconst item = body.Item || body.item || {};\n\nconst result = {\n  event_type: eventType,\n  item_id: item.Id || body.ItemId || null,\n  item_type: item.Type || body.ItemType || null,\n  item_name: item.Name || body.Name || '',\n  series_name: item.SeriesName || null,\n  path: item.Path || body.Path || null,\n  provider_ids: item.ProviderIds || {},\n  user_id: body.UserId || body.User?.Id || null,\n  user_name: body.User?.Name || body.UserName || null,\n  server_id: body.ServerId || null,\n  timestamp: body.Timestamp || new Date().toISOString(),\n  raw_event: body\n};\n\nreturn [{ json: result }];"
+        },
+        "id": "parse_event",
+        "name": "Parse Jellyfin Event",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $json.event_type }}",
+                "operation": "contains",
+                "value2": "ItemAdded"
+              }
+            ]
+          }
+        },
+        "id": "is_item_added",
+        "name": "Is Item Added?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [720, 200]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $json.event_type }}",
+                "operation": "contains",
+                "value2": "Playback"
+              }
+            ]
+          }
+        },
+        "id": "is_playback",
+        "name": "Is Playback Event?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [720, 400]
+      },
+      {
+        "parameters": {
+          "functionCode": "const event = $json;\n\n// Determine content type from Jellyfin item type\nlet contentType = 'unknown';\nconst itemType = (event.item_type || '').toLowerCase();\n\nif (['movie', 'episode', 'video'].includes(itemType)) {\n  contentType = 'video';\n} else if (['audio', 'musicvideo', 'song'].includes(itemType)) {\n  contentType = 'audio';\n} else if (['photo', 'image'].includes(itemType)) {\n  contentType = 'image';\n}\n\nconst ingestRequest = {\n  source: 'jellyfin',\n  content_type: contentType,\n  item_id: event.item_id,\n  item_name: event.item_name,\n  path: event.path,\n  namespace: 'pmoves',\n  metadata: {\n    jellyfin_item_type: event.item_type,\n    series_name: event.series_name,\n    provider_ids: event.provider_ids\n  }\n};\n\nreturn [{ json: ingestRequest }];"
+        },
+        "id": "build_ingest",
+        "name": "Build Ingest Request",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [980, 200]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ subject: 'jellyfin.item.added.v1', data: $json }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "publish_added",
+        "name": "Publish Item Added Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1240, 100]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $node['Build Ingest Request'].json.content_type }}",
+                "operation": "equals",
+                "value2": "video"
+              }
+            ]
+          }
+        },
+        "id": "is_video",
+        "name": "Is Video Content?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1240, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://n8n:5678/webhook/pmoves/video-analysis",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ asset_url: $node['Build Ingest Request'].json.path, namespace: 'pmoves', source: 'jellyfin', metadata: $node['Build Ingest Request'].json.metadata }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "trigger_video",
+        "name": "Trigger Video Analysis",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1500, 200]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://n8n:5678/webhook/pmoves/audio-analysis",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ asset_url: $node['Build Ingest Request'].json.path, namespace: 'pmoves', source: 'jellyfin', metadata: $node['Build Ingest Request'].json.metadata }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "trigger_audio",
+        "name": "Trigger Audio Analysis",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1500, 400]
+      },
+      {
+        "parameters": {
+          "functionCode": "const event = $json;\n\n// Log playback engagement for analytics\nconst engagement = {\n  event_type: event.event_type,\n  item_id: event.item_id,\n  item_name: event.item_name,\n  user_id: event.user_id,\n  user_name: event.user_name,\n  timestamp: event.timestamp,\n  namespace: 'pmoves'\n};\n\nreturn [{ json: engagement }];"
+        },
+        "id": "log_playback",
+        "name": "Log Playback Event",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [980, 400]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ subject: 'jellyfin.playback.v1', data: $json }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "publish_playback",
+        "name": "Publish Playback Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1240, 400]
+      }
+    ],
+    "connections": {
+      "Jellyfin Webhook": {
+        "main": [[{"node": "Parse Jellyfin Event", "type": "main", "index": 0}]]
+      },
+      "Parse Jellyfin Event": {
+        "main": [[
+          {"node": "Is Item Added?", "type": "main", "index": 0},
+          {"node": "Is Playback Event?", "type": "main", "index": 0}
+        ]]
+      },
+      "Is Item Added?": {
+        "main": [
+          [{"node": "Build Ingest Request", "type": "main", "index": 0}],
+          []
+        ]
+      },
+      "Is Playback Event?": {
+        "main": [
+          [{"node": "Log Playback Event", "type": "main", "index": 0}],
+          []
+        ]
+      },
+      "Build Ingest Request": {
+        "main": [[
+          {"node": "Publish Item Added Event", "type": "main", "index": 0},
+          {"node": "Is Video Content?", "type": "main", "index": 0}
+        ]]
+      },
+      "Is Video Content?": {
+        "main": [
+          [{"node": "Trigger Video Analysis", "type": "main", "index": 0}],
+          [{"node": "Trigger Audio Analysis", "type": "main", "index": 0}]
+        ]
+      },
+      "Log Playback Event": {
+        "main": [[{"node": "Publish Playback Event", "type": "main", "index": 0}]]
+      }
+    },
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "description": "Jellyfin event watcher: handles item additions and playback events, triggers analysis pipelines"
+    },
+    "pinData": null,
+    "versionId": "jellyfin-watcher-v1",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": ["pmoves", "jellyfin", "media", "ingestion"]
+  }
+]

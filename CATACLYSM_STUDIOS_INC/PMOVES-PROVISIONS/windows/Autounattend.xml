@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideLocalAccountScreen>false</HideLocalAccountScreen>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+      <UserAccounts>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+            <Name>russell</Name>
+            <Group>Administrators</Group>
+            <Password>
+              <Value>ChangeMe123!</Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+      <AutoLogon>
+        <Password>
+          <Value>ChangeMe123!</Value>
+          <PlainText>true</PlainText>
+        </Password>
+        <Enabled>true</Enabled>
+        <Username>russell</Username>
+      </AutoLogon>
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add" wcm:keyValue="1" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <CommandLine>cmd /c for %%i in (D E F G H I J K L M N O P Q R S T U V W Y Z) do if exist %%i:\provision\windows\win-postinstall.ps1 powershell -ExecutionPolicy Bypass -File %%i:\provision\windows\win-postinstall.ps1 &amp; exit</CommandLine>
+          <Order>1</Order>
+          <RequiresUserInput>false</RequiresUserInput>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+      <TimeZone>Eastern Standard Time</TimeZone>
+      <RegisteredOwner>Cataclysm Studios</RegisteredOwner>
+      <RegisteredOrganization>Cataclysm Studios Inc.</RegisteredOrganization>
+    </component>
+  </settings>
+  <cpi:offlineImage cpi:source="wim:/sources/install.wim#Windows 11 Pro"
+    xmlns:cpi="urn:schemas-microsoft-com:cpi" />
+</unattend>
