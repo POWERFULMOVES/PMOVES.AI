@@ -206,8 +206,11 @@ class Session:
         metadata: Dict,
     ):
         self.session_id = session_id
-        self.models = models
-        self.metadata = metadata
+        # Create a copy of models list to prevent external mutation
+        # Use dict.fromkeys to remove duplicates while preserving order
+        self.models = list(dict.fromkeys(models))
+        # Create a copy of metadata to prevent external mutation
+        self.metadata = dict(metadata)
         self.created_at = datetime.now()
         self.last_activity = datetime.now()
 
