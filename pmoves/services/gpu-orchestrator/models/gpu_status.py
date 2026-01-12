@@ -6,7 +6,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from gpu_orchestrator.config.settings import Settings
+    from config.settings import Settings
 
 
 class ModelState(str, Enum):

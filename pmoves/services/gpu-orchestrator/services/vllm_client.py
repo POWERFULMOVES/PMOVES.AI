@@ -38,7 +38,10 @@ class VllmClient:
                     return data.get("data", [])
         except httpx.RequestError as e:
             logger.error(f"Error listing vLLM models: {e}")
-        return []
+            return []  # Empty list indicates vLLM unavailable
+        except (httpx.DecodeError, KeyError) as e:
+            logger.warning(f"Error parsing vLLM models response: {e}")
+            return []
 
     async def get_current_model(self) -> Optional[str]:
         """Get the currently loaded model name."""
