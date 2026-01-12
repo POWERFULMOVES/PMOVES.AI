@@ -130,6 +130,7 @@ class GpuNatsPublisher:
     async def publish_status(self, status: Dict) -> None:
         """Publish GPU status event."""
         if not self._connected:
+            logger.debug("Skipping status publish: not connected to NATS")
             return
 
         try:
@@ -155,6 +156,7 @@ class GpuNatsPublisher:
     async def publish_model_loaded(self, model_key: str, vram_mb: int) -> None:
         """Publish model loaded event."""
         if not self._connected:
+            logger.debug(f"Skipping model loaded publish for {model_key}: not connected to NATS")
             return
 
         await self._publish(
@@ -171,6 +173,7 @@ class GpuNatsPublisher:
     async def publish_model_unloaded(self, model_key: str) -> None:
         """Publish model unloaded event."""
         if not self._connected:
+            logger.debug(f"Skipping model unloaded publish for {model_key}: not connected to NATS")
             return
 
         await self._publish(
