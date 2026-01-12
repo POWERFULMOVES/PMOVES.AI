@@ -8,8 +8,12 @@ reviews:
   # Branches to review
   branches:
     - "PMOVES.AI-Edition-Hardened"
+    - "PMOVES.AI-Edition-Hardened-v3-clean"
     - "feat/hardened-*"
     - "fix/hardened-*"
+    - "gpu-*"          # GPU orchestrator fixes
+    - "remove-*"       # Submodule removals
+    - "revert-*"       # Revert PRs
 
   # Disable reviews on these branches
   excluded_branches:
@@ -17,4 +21,4 @@ reviews:
     - "origin/main"
 
 # Language setting (locale for reviews)
-language: "en"
+language: "en-US"
