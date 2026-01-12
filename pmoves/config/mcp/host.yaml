@@ -1,0 +1,9 @@
+id: host
+name: Host Operations MCP
+required_commands:
+  - bash
+setup_instructions:
+  - Install pmoves host MCP (pip install mcp-host) or equivalent.
+  - Review allowed command list in ~/.pmoves/mcp/host.yaml before enabling privileged tasks.
+health_check:
+  command: ["bash", "-lc", "echo host-ok"]

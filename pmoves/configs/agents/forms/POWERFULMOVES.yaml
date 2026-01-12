@@ -1,0 +1,16 @@
+name: POWERFULMOVES
+description: Default form emphasizing audio/visual rhythm-led exploration and geometry-first sharing.
+weights:
+  decode: 0.45
+  retrieve: 0.35
+  generate: 0.20
+band_emphasis:
+  low: 0.2
+  mid: 0.6
+  high: 0.2
+mesh_offload_threshold:
+  gpu_free_mem_gb: 6
+  latency_ms: 60
+sharing:
+  shapes_only_default: true
+  allow_artifacts_on_approve: true

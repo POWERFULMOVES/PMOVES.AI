@@ -1,0 +1,222 @@
+[
+  {
+    "name": "PMOVES Video Analysis Pipeline",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "pmoves/video-analysis",
+          "options": {
+            "responseData": "{\"ok\":true,\"message\":\"Video analysis started\"}"
+          },
+          "httpMethod": "POST"
+        },
+        "id": "wh_video",
+        "name": "Webhook Trigger",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [200, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const body = $json;\nconst assetUrl = body.asset_url || body.presigned_get || body.s3_uri;\nif (!assetUrl) {\n  throw new Error('asset_url is required for video analysis');\n}\n\nlet bucket = body.bucket;\nlet key = body.key;\nif (assetUrl.startsWith('s3://')) {\n  const parts = assetUrl.replace('s3://', '').split('/');\n  bucket = parts[0];\n  key = parts.slice(1).join('/');\n}\n\nconst result = {\n  asset_url: assetUrl,\n  bucket: bucket,\n  key: key,\n  namespace: body.namespace || 'pmoves',\n  source: body.source || 'ingestion_hub',\n  filename: body.filename || key?.split('/').pop() || 'video',\n  language: body.language || null,\n  diarize: body.diarize !== false,\n  frame_interval: body.frame_interval || 5,\n  metadata: body.metadata || {},\n  auto_research: body.auto_research || false,\n  received_at: body.received_at || new Date().toISOString()\n};\n\nreturn [{ json: result }];"
+        },
+        "id": "prepare_video",
+        "name": "Prepare Video Request",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://ffmpeg-whisper:8078/transcribe",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ bucket: $json.bucket, key: $json.key, language: $json.language, diarize: $json.diarize }) }}",
+          "options": {
+            "timeout": 600000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "transcribe_audio",
+        "name": "Transcribe Audio Track",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [720, 100]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://media-audio:8082/process",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ bucket: $node['Prepare Video Request'].json.bucket, key: $node['Prepare Video Request'].json.key }) }}",
+          "options": {
+            "timeout": 600000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "analyze_audio",
+        "name": "Analyze Audio Track",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [720, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://media-video:8079/detect",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ bucket: $node['Prepare Video Request'].json.bucket, key: $node['Prepare Video Request'].json.key, frame_interval: $node['Prepare Video Request'].json.frame_interval }) }}",
+          "options": {
+            "timeout": 600000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "analyze_video",
+        "name": "Analyze Video Frames",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [720, 500]
+      },
+      {
+        "parameters": {
+          "functionCode": "const transcriptResult = $node['Transcribe Audio Track'].json || {};\nconst audioResult = $node['Analyze Audio Track'].json || {};\nconst videoResult = $node['Analyze Video Frames'].json || {};\nconst original = $node['Prepare Video Request'].json;\n\nconst merged = {\n  asset_url: original.asset_url,\n  namespace: original.namespace,\n  source: original.source,\n  filename: original.filename,\n  transcript: {\n    text: transcriptResult.text || '',\n    language: transcriptResult.language || 'en',\n    segments: transcriptResult.segments || [],\n    word_segments: transcriptResult.word_segments || [],\n    speakers: transcriptResult.speakers || {}\n  },\n  audio_analysis: {\n    emotions: audioResult.emotions || [],\n    features: audioResult.features || {},\n    duration_sec: audioResult.features?.global?.duration || 0\n  },\n  video_analysis: {\n    detections: videoResult.detections || [],\n    scenes: videoResult.scenes || [],\n    captions: videoResult.captions || [],\n    moods: videoResult.moods || [],\n    reasoning: videoResult.reasoning || '',\n    frame_count: videoResult.frame_count || 0\n  },\n  metadata: original.metadata,\n  auto_research: original.auto_research,\n  processed_at: new Date().toISOString()\n};\n\nreturn [{ json: merged }];"
+        },
+        "id": "merge_results",
+        "name": "Merge All Results",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1020, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\nconst now = new Date().toISOString();\nconst namespace = data.namespace;\nconst filename = data.filename;\nconst slug = filename.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/\\.[^.]+$/, '');\n\n// Build points from all modalities\nconst points = [\n  {\n    id: `video:${slug}`,\n    modality: 'video',\n    ref_id: data.asset_url,\n    proj: 1.0,\n    summary: `Video: ${filename}`\n  }\n];\n\n// Add transcript\nif (data.transcript?.text) {\n  points.push({\n    id: `transcript:${slug}`,\n    modality: 'text',\n    ref_id: null,\n    proj: 0.9,\n    summary: data.transcript.text.slice(0, 500) + (data.transcript.text.length > 500 ? '...' : '')\n  });\n}\n\n// Add key video captions\nconst captions = data.video_analysis?.captions || [];\nfor (let i = 0; i < Math.min(3, captions.length); i++) {\n  points.push({\n    id: `caption:${slug}:${i}`,\n    modality: 'text',\n    ref_id: null,\n    proj: 0.7 - (i * 0.1),\n    summary: captions[i]?.caption || captions[i] || ''\n  });\n}\n\n// Calculate spectrum\nconst emotions = data.audio_analysis?.emotions || [];\nconst avgEmotionScore = emotions.length > 0 \n  ? emotions.reduce((sum, e) => sum + (e.score || 0), 0) / emotions.length \n  : 0.5;\nconst detectionCount = (data.video_analysis?.detections || []).length;\nconst visualRichness = Math.min(1, detectionCount / 50);\n\nconst spectrum = [avgEmotionScore, visualRichness];\n\nconst constellation = {\n  id: `video.analysis.${slug}`,\n  summary: data.video_analysis?.reasoning || data.transcript?.text?.slice(0, 200) || `Video: ${filename}`,\n  spectrum: spectrum,\n  points: points,\n  meta: {\n    namespace: namespace,\n    source: data.source,\n    language: data.transcript?.language,\n    duration_sec: data.audio_analysis?.duration_sec,\n    frame_count: data.video_analysis?.frame_count,\n    speaker_count: Object.keys(data.transcript?.speakers || {}).length,\n    detection_count: detectionCount,\n    scene_count: (data.video_analysis?.scenes || []).length\n  }\n};\n\nconst cgp = {\n  spec: 'chit.cgp.v0.1',\n  summary: `Video analysis: ${filename}`,\n  created_at: now,\n  super_nodes: [\n    {\n      id: `media:${namespace}`,\n      label: namespace,\n      summary: 'Video content',\n      constellations: [constellation]\n    }\n  ],\n  meta: {\n    source: 'n8n.video.analysis',\n    namespace: namespace,\n    pipeline: 'video_analysis'\n  }\n};\n\nreturn [{ json: { data: data, cgp_envelope: { type: 'geometry.cgp.v1', data: cgp } } }];"
+        },
+        "id": "build_cgp",
+        "name": "Build CGP Envelope",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1300, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://hi-rag-gateway-v2:8086/geometry/event",
+          "sendBody": true,
+          "body": "={{ JSON.stringify($json.cgp_envelope) }}",
+          "options": {
+            "timeout": 30000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "index_hirag",
+        "name": "Index to Hi-RAG",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1560, 200]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ subject: 'analysis.video.v1', data: $node['Build CGP Envelope'].json.data }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "publish_nats",
+        "name": "Publish NATS Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1560, 400]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $node['Build CGP Envelope'].json.data.auto_research }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "check_research",
+        "name": "Auto Research?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1820, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://n8n:5678/webhook/pmoves/deepresearch",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ query: ($node['Build CGP Envelope'].json.data.video_analysis?.reasoning || '') + ' ' + ($node['Build CGP Envelope'].json.data.transcript?.text?.slice(0, 800) || ''), source: 'video_analysis', context: { asset_url: $node['Build CGP Envelope'].json.data.asset_url } }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "trigger_research",
+        "name": "Trigger DeepResearch",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [2080, 200]
+      }
+    ],
+    "connections": {
+      "Webhook Trigger": {
+        "main": [[{"node": "Prepare Video Request", "type": "main", "index": 0}]]
+      },
+      "Prepare Video Request": {
+        "main": [
+          [
+            {"node": "Transcribe Audio Track", "type": "main", "index": 0},
+            {"node": "Analyze Audio Track", "type": "main", "index": 0},
+            {"node": "Analyze Video Frames", "type": "main", "index": 0}
+          ]
+        ]
+      },
+      "Transcribe Audio Track": {
+        "main": [[{"node": "Merge All Results", "type": "main", "index": 0}]]
+      },
+      "Analyze Audio Track": {
+        "main": [[{"node": "Merge All Results", "type": "main", "index": 0}]]
+      },
+      "Analyze Video Frames": {
+        "main": [[{"node": "Merge All Results", "type": "main", "index": 0}]]
+      },
+      "Merge All Results": {
+        "main": [[{"node": "Build CGP Envelope", "type": "main", "index": 0}]]
+      },
+      "Build CGP Envelope": {
+        "main": [
+          [
+            {"node": "Index to Hi-RAG", "type": "main", "index": 0},
+            {"node": "Publish NATS Event", "type": "main", "index": 0},
+            {"node": "Auto Research?", "type": "main", "index": 0}
+          ]
+        ]
+      },
+      "Auto Research?": {
+        "main": [
+          [{"node": "Trigger DeepResearch", "type": "main", "index": 0}],
+          []
+        ]
+      }
+    },
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "description": "Video analysis pipeline: transcription + audio analysis + video frame analysis (YOLO/BLIP) + Hi-RAG indexing"
+    },
+    "pinData": null,
+    "versionId": "video-analysis-v1",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": ["pmoves", "video", "analysis", "multimodal"]
+  }
+]

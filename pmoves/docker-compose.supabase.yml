@@ -1,0 +1,72 @@
+services:
+  gotrue:
+    image: supabase/gotrue:v2.151.0
+    restart: unless-stopped
+    environment:
+      GOTRUE_SITE_URL: ${GOTRUE_SITE_URL:-http://localhost:3000}
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${GOTRUE_API_EXTERNAL_URL:-http://localhost:9999}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_LOG_LEVEL: info
+      GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_jwt_secret}
+      GOTRUE_JWT_EXP: 3600
+      DATABASE_URL: postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}?sslmode=disable
+    ports: ["9999:9999"]
+    # Compose may be invoked standalone for Supabase; we rely on network DNS to reach 'postgres'
+    # and start order is handled by Makefile bringing data stack up first.
+    networks: [pmoves]
+
+  realtime:
+    image: supabase/realtime:v2.30.26
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-pmoves}
+      DB_USER: ${POSTGRES_USER:-pmoves}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-pmoves}
+      APP_NAME: ${SUPABASE_REALTIME_APP_NAME:-realtime}
+      PORT: 4000
+      RLIMIT_NOFILE: ${SUPABASE_RLIMIT_NOFILE:-1048576}
+      SECRET_KEY_BASE: ${SUPABASE_REALTIME_SECRET:-dev_realtime_secret}
+      JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_jwt_secret}
+    ports: ["4000:4000"]
+    # See note above; avoid hard depends_on across files.
+    networks: [pmoves]
+
+  storage:
+    image: supabase/storage-api:v1.0.10
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${SUPABASE_ANON_KEY:-dev_anon_key}
+      SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-dev_service_key}
+      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_jwt_secret}
+      POSTGREST_URL: http://postgrest:3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+    volumes:
+      - supabase-storage:/var/lib/storage
+    ports: ["5000:5000"]
+    # Avoid cross-file depends_on; postgrest lives in main compose.
+    networks: [pmoves]
+
+  studio:
+    image: supabase/studio:latest
+    restart: unless-stopped
+    environment:
+      STUDIO_PG_META_URL: http://postgrest:3000
+      SUPABASE_URL: http://localhost:9999
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-dev_anon_key}
+    ports: ["${SUPABASE_STUDIO_PORT:-54323}:3000"]
+    # Avoid cross-file depends_on to prevent invalid compose project errors.
+    networks: [pmoves]
+
+volumes:
+  supabase-storage: {}
+
+networks:
+  pmoves:
+    name: pmoves-net

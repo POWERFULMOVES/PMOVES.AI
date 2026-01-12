@@ -1,0 +1,103 @@
+### PMOVES Connectors — VS Code REST Client
+@presign_base = http://localhost:8088
+@presign_token = REPLACE_WITH_PRESIGN_SHARED_SECRET
+@webhook_base = http://localhost:8085
+@webhook_token = REPLACE_WITH_RENDER_WEBHOOK_SHARED_SECRET
+@hirag_base = http://localhost:8087
+@langextract_base = http://localhost:8092
+@supabase_rest = https://YOUR-PROJECT.supabase.co/rest/v1
+@supabase_key = REPLACE_WITH_SUPABASE_SERVICE_ROLE_OR_ANON
+@discord_webhook = https://discord.com/api/webhooks/REPLACE/ME
+
+### Presign PUT
+POST {{presign_base}}/presign/put
+Authorization: Bearer {{presign_token}}
+Content-Type: application/json
+
+{
+  "bucket": "assets",
+  "key": "test/{{datetime rfc1123}}.txt",
+  "content_type": "text/plain",
+  "expires": 3600
+}
+
+### Upload Object (copy `url` from previous response)
+# @name upload
+PUT {{url}}
+
+Hello from REST Client!
+
+### Presign GET
+POST {{presign_base}}/presign/get
+Authorization: Bearer {{presign_token}}
+Content-Type: application/json
+
+{
+  "bucket": "assets",
+  "key": "test/{{datetime rfc1123}}.txt",
+  "expires": 3600
+}
+
+### Download Object (copy `url`)
+GET {{url}}
+
+### Render Completion Webhook
+POST {{webhook_base}}/comfy/webhook
+Authorization: Bearer {{webhook_token}}
+Content-Type: application/json
+
+{
+  "s3_uri": "s3://assets/dummy.png",
+  "presigned_get": "https://example.com/dummy.png",
+  "title": "REST × PMOVES test",
+  "namespace": "default",
+  "author": "vscode-rest"
+}
+
+### Supabase: latest studio_board
+GET {{supabase_rest}}/studio_board?select=*&order=created_at.desc&limit=1
+apikey: {{supabase_key}}
+Authorization: Bearer {{supabase_key}}
+Content-Profile: public
+
+### Hi-RAG query
+POST {{hirag_base}}/hirag/query
+Content-Type: application/json
+
+{
+  "query": "explain the content publishing flow",
+  "use_rerank": true,
+  "rerank_topn": 50,
+  "rerank_k": 10
+}
+
+### LangExtract Text
+POST {{langextract_base}}/extract/text
+Content-Type: application/json
+
+{
+  "text": "Paste text here about your document. It will be chunked.",
+  "namespace": "docs",
+  "doc_id": "demo-001"
+}
+
+### Supabase insert
+POST {{supabase_rest}}/studio_board?select=*
+apikey: {{supabase_key}}
+Authorization: Bearer {{supabase_key}}
+Content-Profile: public
+Content-Type: application/json
+
+{
+  "title": "REST insert",
+  "namespace": "default",
+  "status": "pending"
+}
+
+### Discord post (optional)
+POST {{discord_webhook}}
+Content-Type: application/json
+
+{
+  "content": "Hello from VS Code REST Client × PMOVES"
+}

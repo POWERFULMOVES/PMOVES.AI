@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "gen.asset.v1.json",
+  "type": "object"
+}

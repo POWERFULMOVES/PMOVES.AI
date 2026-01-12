@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KB Search Request",
+  "type": "object",
+  "required": [
+    "query"
+  ],
+  "properties": {
+    "query": {
+      "type": "string"
+    },
+    "k": {
+      "type": "integer"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "use_semantic": {
+      "type": "boolean"
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}
