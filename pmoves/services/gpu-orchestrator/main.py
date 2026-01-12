@@ -99,6 +99,9 @@ async def lifespan(app: FastAPI):
         )
         await lifecycle_manager.start()
 
+        # Initialize metrics exporter (before callbacks that reference it)
+        metrics_exporter = GpuMetricsExporter(gpu_index=settings.gpu_index)
+
         # Initialize NATS publisher
         nats_publisher = GpuNatsPublisher(
             nats_url=settings.nats_url,
@@ -114,6 +117,7 @@ async def lifespan(app: FastAPI):
             return status.to_dict()
 
         nats_publisher.set_status_callback(get_status_for_nats)
+        metrics_exporter.set_status_callback(get_status_for_nats)
         await nats_publisher.start_status_loop()
 
         # Set up lifecycle callbacks for NATS events
@@ -131,10 +135,6 @@ async def lifespan(app: FastAPI):
 
         lifecycle_manager.set_on_load_callback(on_model_loaded)
         lifecycle_manager.set_on_unload_callback(on_model_unloaded)
-
-        # Initialize metrics exporter
-        metrics_exporter = GpuMetricsExporter(gpu_index=settings.gpu_index)
-        metrics_exporter.set_status_callback(get_status_for_nats)
 
         # Set dependencies for routes
         set_dependencies(lifecycle_manager, vram_tracker, model_registry)
