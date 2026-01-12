@@ -1,10 +1,13 @@
 """Model registry for known models and their VRAM requirements."""
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -73,30 +76,50 @@ class ModelRegistry:
         """Load model definitions from YAML file."""
         config_path = Path(path)
         if not config_path.exists():
+            logger.warning(f"Config file not found: {path}, using defaults")
             self._load_defaults()
             return
 
-        with open(config_path) as f:
-            data = yaml.safe_load(f)
+        try:
+            with open(config_path) as f:
+                data = yaml.safe_load(f)
+        except (OSError, IOError) as e:
+            logger.error(f"Error reading config file {path}: {e}")
+            self._load_defaults()
+            return
+        except yaml.YAMLError as e:
+            logger.error(f"Error parsing YAML from {path}: {e}")
+            self._load_defaults()
+            return
 
-        if "models" in data:
-            for model_data in data["models"]:
-                model = ModelDefinition(
-                    id=model_data["id"],
-                    provider=model_data["provider"],
-                    vram_mb=model_data["vram_mb"],
-                    description=model_data.get("description"),
-                    priority_default=model_data.get("priority_default", 5),
-                    quantization=model_data.get("quantization"),
-                    context_length=model_data.get("context_length"),
-                )
-                self.models[f"{model.provider}/{model.id}"] = model
+        if not data or not isinstance(data, dict):
+            logger.warning(f"Invalid config data in {path}, using defaults")
+            self._load_defaults()
+            return
 
-        if "thresholds" in data:
-            self.thresholds.update(data["thresholds"])
+        try:
+            if "models" in data:
+                for model_data in data["models"]:
+                    model = ModelDefinition(
+                        id=model_data["id"],
+                        provider=model_data["provider"],
+                        vram_mb=model_data["vram_mb"],
+                        description=model_data.get("description"),
+                        priority_default=model_data.get("priority_default", 5),
+                        quantization=model_data.get("quantization"),
+                        context_length=model_data.get("context_length"),
+                    )
+                    self.models[f"{model.provider}/{model.id}"] = model
 
-        if "rtx5090" in data:
-            self.hardware.update(data["rtx5090"])
+            if "thresholds" in data:
+                self.thresholds.update(data["thresholds"])
+
+            if "rtx5090" in data:
+                self.hardware.update(data["rtx5090"])
+
+        except (KeyError, TypeError, ValueError) as e:
+            logger.error(f"Error processing model definitions from {path}: {e}")
+            self._load_defaults()
 
     def get_model(self, provider: str, model_id: str) -> Optional[ModelDefinition]:
         """Get model definition by provider and ID."""
