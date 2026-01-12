@@ -231,8 +231,8 @@ class ModelLifecycleManager:
                 if request:
                     try:
                         await self.load_queue.complete(request.request_id)
-                    except Exception:
-                        pass
+                    except Exception as complete_err:
+                        logger.error(f"Error completing queue request {request.request_id}: {complete_err}")
 
     async def _process_load_request(self, request: LoadRequest) -> None:
         """Process a single load request."""

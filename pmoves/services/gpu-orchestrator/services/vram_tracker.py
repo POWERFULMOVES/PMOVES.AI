@@ -53,8 +53,8 @@ class VramTracker:
         if PYNVML_AVAILABLE and self._initialized:
             try:
                 pynvml.nvmlShutdown()
-            except pynvml.NVMLError:
-                pass
+            except pynvml.NVMLError as e:
+                logger.warning(f"Error shutting down pynvml: {e}")
 
     def get_metrics(self) -> GpuMetrics:
         """Get current GPU metrics."""
@@ -141,8 +141,10 @@ class VramTracker:
                         proc_info = self._build_process_info(proc)
                         if proc_info:
                             processes.append(proc_info)
-            except pynvml.NVMLError:
-                pass  # Graphics processes not supported on all GPUs
+            except pynvml.NVMLError as e:
+                # Graphics processes not supported on all GPUs (NVML_ERROR_NOT_SUPPORTED)
+                if e.code != pynvml.NVML_ERROR_NOT_SUPPORTED:
+                    logger.warning(f"Error getting graphics processes: {e}")
 
         except pynvml.NVMLError as e:
             logger.error(f"Error getting GPU processes: {e}")
