@@ -1,0 +1,10 @@
+{
+  "endpoint": "http://localhost:8051",
+  "reachable": true,
+  "probes": {
+    "/": 404,
+    "/health": 200,
+    "/tools": 404,
+    "/openapi.json": 404
+  }
+}

@@ -1,0 +1,2156 @@
+{
+    "name": "[v3.4_COS-3.0] Content Creator - Blogpost Trigger (BM Approved)",
+    "flow": [
+        {
+            "id": 1,
+            "module": "gateway:CustomWebHook",
+            "version": 1,
+            "parameters": {
+                "hook": 2016752,
+                "maxResults": 1
+            },
+            "mapper": {},
+            "metadata": {
+                "designer": {
+                    "x": 0,
+                    "y": 1050
+                },
+                "restore": {
+                    "parameters": {
+                        "hook": {
+                            "data": {
+                                "editable": "true"
+                            },
+                            "label": "test-cos3-blogpost"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "hook",
+                        "type": "hook:gateway-webhook",
+                        "label": "Webhook",
+                        "required": true
+                    },
+                    {
+                        "name": "maxResults",
+                        "type": "number",
+                        "label": "Maximum number of results"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 2,
+            "module": "gateway:WebhookRespond",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "body": "<script>window.close()</script>",
+                "status": "200",
+                "headers": []
+            },
+            "metadata": {
+                "designer": {
+                    "x": 300,
+                    "y": 1050
+                },
+                "restore": {
+                    "expect": {
+                        "headers": {
+                            "mode": "chose"
+                        }
+                    }
+                },
+                "expect": [
+                    {
+                        "name": "status",
+                        "type": "uinteger",
+                        "label": "Status",
+                        "required": true,
+                        "validate": {
+                            "min": 100
+                        }
+                    },
+                    {
+                        "name": "body",
+                        "type": "any",
+                        "label": "Body"
+                    },
+                    {
+                        "name": "headers",
+                        "spec": [
+                            {
+                                "name": "key",
+                                "type": "text",
+                                "label": "Key",
+                                "required": true,
+                                "validate": {
+                                    "max": 256
+                                }
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value",
+                                "required": true,
+                                "validate": {
+                                    "max": 4096
+                                }
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Custom headers",
+                        "validate": {
+                            "maxItems": 16
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "id": 3,
+            "module": "airtable:makeApiCall",
+            "version": 3,
+            "parameters": {
+                "__IMTCONN__": 2096224
+            },
+            "mapper": {
+                "url": "v0/{{1.base_id}}/{{1.table_id}}/{{1.record_id}}",
+                "method": "GET",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ]
+            },
+            "metadata": {
+                "designer": {
+                    "x": 600,
+                    "y": 1050
+                },
+                "restore": {
+                    "expect": {
+                        "qs": {
+                            "mode": "chose"
+                        },
+                        "method": {
+                            "mode": "chose",
+                            "label": "GET"
+                        },
+                        "headers": {
+                            "mode": "chose",
+                            "items": [
+                                null
+                            ]
+                        }
+                    },
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "data": {
+                                "scoped": "true",
+                                "connection": "airtable3"
+                            },
+                            "label": "Connection1 (User ID: usrdCHJdcPKhGglOp)"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "__IMTCONN__",
+                        "type": "account:airtable3,airtable2",
+                        "label": "Connection",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "url",
+                        "type": "text",
+                        "label": "URL",
+                        "required": true
+                    },
+                    {
+                        "name": "method",
+                        "type": "select",
+                        "label": "Method",
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "GET",
+                                "POST",
+                                "PUT",
+                                "PATCH",
+                                "DELETE"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "headers",
+                        "spec": [
+                            {
+                                "name": "key",
+                                "type": "text",
+                                "label": "Key"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Headers"
+                    },
+                    {
+                        "name": "qs",
+                        "spec": [
+                            {
+                                "name": "key",
+                                "type": "text",
+                                "label": "Key"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Query String"
+                    },
+                    {
+                        "name": "body",
+                        "type": "any",
+                        "label": "Body"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 5,
+            "module": "airtable:makeApiCall",
+            "version": 3,
+            "parameters": {
+                "__IMTCONN__": 2096224
+            },
+            "mapper": {
+                "url": "v0/{{1.base_id}}/{{1.table_id}}/{{1.record_id}}",
+                "body": "{\n  \"fields\": {\n    \"AI Status\": \"AI Writing...\"\n  }\n}",
+                "method": "PATCH",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ]
+            },
+            "metadata": {
+                "designer": {
+                    "x": 900,
+                    "y": 1050,
+                    "name": "Update"
+                },
+                "restore": {
+                    "expect": {
+                        "qs": {
+                            "mode": "chose"
+                        },
+                        "method": {
+                            "mode": "chose",
+                            "label": "PATCH"
+                        },
+                        "headers": {
+                            "mode": "chose",
+                            "items": [
+                                null
+                            ]
+                        }
+                    },
+                    "parameters": {
+                        "__IMTCONN__": {
+                            "data": {
+                                "scoped": "true",
+                                "connection": "airtable3"
+                            },
+                            "label": "Connection1 (User ID: usrdCHJdcPKhGglOp)"
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "__IMTCONN__",
+                        "type": "account:airtable3,airtable2",
+                        "label": "Connection",
+                        "required": true
+                    }
+                ],
+                "expect": [
+                    {
+                        "name": "url",
+                        "type": "text",
+                        "label": "URL",
+                        "required": true
+                    },
+                    {
+                        "name": "method",
+                        "type": "select",
+                        "label": "Method",
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "GET",
+                                "POST",
+                                "PUT",
+                                "PATCH",
+                                "DELETE"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "headers",
+                        "spec": [
+                            {
+                                "name": "key",
+                                "type": "text",
+                                "label": "Key"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Headers"
+                    },
+                    {
+                        "name": "qs",
+                        "spec": [
+                            {
+                                "name": "key",
+                                "type": "text",
+                                "label": "Key"
+                            },
+                            {
+                                "name": "value",
+                                "type": "text",
+                                "label": "Value"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Query String"
+                    },
+                    {
+                        "name": "body",
+                        "type": "any",
+                        "label": "Body"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 15,
+            "module": "util:SetVariables",
+            "version": 1,
+            "parameters": {},
+            "mapper": {
+                "scope": "roundtrip",
+                "variables": [
+                    {
+                        "name": "Content Name",
+                        "value": "{{5.body.fields.`Content Title (ID)`}}"
+                    },
+                    {
+                        "name": "inputBrief",
+                        "value": "{{5.body.fields.`packagedTemplatePromptText Rollup (from Prompt Library)`}}"
+                    },
+                    {
+                        "name": "AI Model",
+                        "value": "{{5.body.fields.`OpenRouter Code (from AI Models)`[]}}"
+                    },
+                    {
+                        "name": "Content Type",
+                        "value": "{{5.body.fields.`Content Type`}}"
+                    },
+                    {
+                        "name": "Content Title",
+                        "value": "{{5.body.fields.`Content Title (ID)`}}"
+                    },
+                    {
+                        "name": "Image Size",
+                        "value": "{{5.body.fields.`Image Size`}}"
+                    },
+                    {
+                        "name": "Writing Grade",
+                        "value": "{{5.body.fields.`Writing Grade Level (from Brand Assets)`[]}}"
+                    },
+                    {
+                        "name": "Excluded Words",
+                        "value": "{{5.body.fields.`Excluded Words & Phrases (from Brand Assets)`[]}}"
+                    },
+                    {
+                        "name": "Brand Voice",
+                        "value": "{{5.body.fields.`Brand Voice Guidelines (from Brand Assets)`[]}}"
+                    },
+                    {
+                        "name": "Newsletter Type",
+                        "value": "{{5.body.fields.`Newsletter Type`}}"
+                    },
+                    {
+                        "name": "Newsletter Angle",
+                        "value": "{{5.body.fields.`Newsletter Angle`}}"
+                    },
+                    {
+                        "name": "Newsletter Key Points",
+                        "value": "{{5.body.fields.`Newsletter Key Points`}}"
+                    },
+                    {
+                        "name": "Newsletter Image Prompt",
+                        "value": "{{5.body.fields.`Newsletter Image Prompt`}}"
+                    },
+                    {
+                        "name": "Newsletter Final Version",
+                        "value": "{{5.body.fields.`Newsletter Final Version`}}"
+                    },
+                    {
+                        "name": "Content Context",
+                        "value": "{{3.body.fields.`Content Context`}}"
+                    },
+                    {
+                        "name": "Transcript",
+                        "value": "{{5.body.fields.`Transcript `}}"
+                    },
+                    {
+                        "name": "SEO Keywords",
+                        "value": "{{5.body.fields.`SEO Keyword(s)`}}"
+                    },
+                    {
+                        "name": "Brand Asset",
+                        "value": "{{5.body.fields.`Brand Assets`[]}}"
+                    },
+                    {
+                        "name": "Blogpost Title",
+                        "value": "{{5.body.fields.`Blogpost Title`}}"
+                    },
+                    {
+                        "name": "Internal Links",
+                        "value": "{{5.body.fields.`Blogpost Internal Links`}}"
+                    },
+                    {
+                        "name": "External Links",
+                        "value": "{{5.body.fields.`Blogpost External Links`}}"
+                    },
+                    {
+                        "name": "Blogpost Type",
+                        "value": "{{5.body.fields.`packagedTemplatePromptText Rollup (from Prompt Library)`}}"
+                    },
+                    {
+                        "name": "Extra Context",
+                        "value": "{{5.body.fields.`Transcript Or Context (All Workflows)`}}"
+                    },
+                    {
+                        "name": "Language",
+                        "value": "{{3.body.fields.`Language (from Brand Assets)`[]}}"
+                    },
+                    {
+                        "name": "AI Developer Account",
+                        "value": "{{5.body.fields.`AI Developer Account (from AI Models)`[]}}"
+                    },
+                    {
+                        "name": "AI Max Tokens",
+                        "value": "{{5.body.fields.`Max Tokens (from AI Models)`[]}}"
+                    },
+                    {
+                        "name": "AI Anthropic Model",
+                        "value": "{{5.body.fields.`Anthropic Code (from AI Models)`[]}}"
+                    },
+                    {
+                        "name": "AI Temperature",
+                        "value": "{{5.body.fields.`Temperature (from AI Models)`[]}}"
+                    },
+                    {
+                        "name": "AI OpenAI Model",
+                        "value": "{{5.body.fields.`OpenAI Code (from AI Models)`[]}}"
+                    },
+                    {
+                        "name": "YouTube Description",
+                        "value": "{{5.body.fields.`YouTube Description`}}"
+                    },
+                    {
+                        "name": "YouTube Title",
+                        "value": "{{5.body.fields.`YouTube Title`}}"
+                    }
+                ]
+            },
+            "metadata": {
+                "designer": {
+                    "x": 1200,
+                    "y": 1050
+                },
+                "restore": {
+                    "expect": {
+                        "scope": {
+                            "label": "One cycle"
+                        },
+                        "variables": {
+                            "items": [
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null
+                            ]
+                        }
+                    }
+                },
+                "expect": [
+                    {
+                        "name": "variables",
+                        "spec": [
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "label": "Variable name",
+                                "required": true
+                            },
+                            {
+                                "name": "value",
+                                "type": "any",
+                                "label": "Variable value"
+                            }
+                        ],
+                        "type": "array",
+                        "label": "Variables"
+                    },
+                    {
+                        "name": "scope",
+                        "type": "select",
+                        "label": "Variable lifetime",
+                        "required": true,
+                        "validate": {
+                            "enum": [
+                                "roundtrip",
+                                "execution"
+                            ]
+                        }
+                    }
+                ],
+                "interface": [
+                    {
+                        "name": "Content Name",
+                        "type": "any",
+                        "label": "Content Name"
+                    },
+                    {
+                        "name": "inputBrief",
+                        "type": "any",
+                        "label": "inputBrief"
+                    },
+                    {
+                        "name": "AI Model",
+                        "type": "any",
+                        "label": "AI Model"
+                    },
+                    {
+                        "name": "Content Type",
+                        "type": "any",
+                        "label": "Content Type"
+                    },
+                    {
+                        "name": "Content Title",
+                        "type": "any",
+                        "label": "Content Title"
+                    },
+                    {
+                        "name": "Image Size",
+                        "type": "any",
+                        "label": "Image Size"
+                    },
+                    {
+                        "name": "Writing Grade",
+                        "type": "any",
+                        "label": "Writing Grade"
+                    },
+                    {
+                        "name": "Excluded Words",
+                        "type": "any",
+                        "label": "Excluded Words"
+                    },
+                    {
+                        "name": "Brand Voice",
+                        "type": "any",
+                        "label": "Brand Voice"
+                    },
+                    {
+                        "name": "Newsletter Type",
+                        "type": "any",
+                        "label": "Newsletter Type"
+                    },
+                    {
+                        "name": "Newsletter Angle",
+                        "type": "any",
+                        "label": "Newsletter Angle"
+                    },
+                    {
+                        "name": "Newsletter Key Points",
+                        "type": "any",
+                        "label": "Newsletter Key Points"
+                    },
+                    {
+                        "name": "Newsletter Image Prompt",
+                        "type": "any",
+                        "label": "Newsletter Image Prompt"
+                    },
+                    {
+                        "name": "Newsletter Final Version",
+                        "type": "any",
+                        "label": "Newsletter Final Version"
+                    },
+                    {
+                        "name": "Content Context",
+                        "type": "any",
+                        "label": "Content Context"
+                    },
+                    {
+                        "name": "Transcript",
+                        "type": "any",
+                        "label": "Transcript"
+                    },
+                    {
+                        "name": "SEO Keywords",
+                        "type": "any",
+                        "label": "SEO Keywords"
+                    },
+                    {
+                        "name": "Brand Asset",
+                        "type": "any",
+                        "label": "Brand Asset"
+                    },
+                    {
+                        "name": "Blogpost Title",
+                        "type": "any",
+                        "label": "Blogpost Title"
+                    },
+                    {
+                        "name": "Internal Links",
+                        "type": "any",
+                        "label": "Internal Links"
+                    },
+                    {
+                        "name": "External Links",
+                        "type": "any",
+                        "label": "External Links"
+                    },
+                    {
+                        "name": "Blogpost Type",
+                        "type": "any",
+                        "label": "Blogpost Type"
+                    },
+                    {
+                        "name": "Extra Context",
+                        "type": "any",
+                        "label": "Extra Context"
+                    },
+                    {
+                        "name": "Language",
+                        "type": "any",
+                        "label": "Language"
+                    },
+                    {
+                        "name": "AI Developer Account",
+                        "type": "any",
+                        "label": "AI Developer Account"
+                    },
+                    {
+                        "name": "AI Max Tokens",
+                        "type": "any",
+                        "label": "AI Max Tokens"
+                    },
+                    {
+                        "name": "AI Anthropic Model",
+                        "type": "any",
+                        "label": "AI Anthropic Model"
+                    },
+                    {
+                        "name": "AI Temperature",
+                        "type": "any",
+                        "label": "AI Temperature"
+                    },
+                    {
+                        "name": "AI OpenAI Model",
+                        "type": "any",
+                        "label": "AI OpenAI Model"
+                    },
+                    {
+                        "name": "YouTube Description",
+                        "type": "any",
+                        "label": "YouTube Description"
+                    },
+                    {
+                        "name": "YouTube Title",
+                        "type": "any",
+                        "label": "YouTube Title"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 35,
+            "module": "builtin:BasicRouter",
+            "version": 1,
+            "mapper": null,
+            "metadata": {
+                "designer": {
+                    "x": 1500,
+                    "y": 1050
+                }
+            },
+            "routes": [
+                {
+                    "flow": [
+                        {
+                            "id": 92,
+                            "module": "open-router:createAChatCompletion",
+                            "version": 1,
+                            "parameters": {
+                                "__IMTCONN__": 3927944
+                            },
+                            "filter": {
+                                "name": "OpenRouter",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{15.`AI Developer Account`}}",
+                                            "b": "OpenRouter",
+                                            "o": "text:contain"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "n": "1",
+                                "model": "{{15.`AI Model`}}",
+                                "top_p": "1",
+                                "fallback": true,
+                                "messages": [
+                                    {
+                                        "role": "user",
+                                        "content": "###Context###\nContent Name: {{15.`Content Name`}}.\nContent Type: {{15.`Content Type`}}.\nContent Title: {{15.`Content Title`}}.\nYouTube Title: {{15.`YouTube Title`}}.\nYouTube Description: {{15.`YouTube Description`}}.\nImage Size: {{15.`Image Size`}}.\nNewsletter Type: {{15.`Newsletter Type`}}.\nNewsletter Angle: {{15.`Newsletter Angle`}}.\nNewsletter Key Points: {{15.`Newsletter Key Points`}}.\nNewsletter Image Prompt: {{15.`Newsletter Image Prompt`}}.\nNewsletter Final Version: {{15.`Newsletter Final Version`}}.\nSEO Keywords: {{15.`SEO Keywords`}}.\nBlogpost Title: {{15.`Blogpost Title`}}.\n###Instruction###\nIn the context above, there are some fields that do not have any data. Your task is to remove those fields and keep the fields that have data. "
+                                    }
+                                ],
+                                "json_mode": false,
+                                "temperature": "1"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 1916,
+                                    "y": 1049,
+                                    "name": "Remove Missing Fields Prompt"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "stop": {
+                                            "mode": "chose"
+                                        },
+                                        "model": {
+                                            "mode": "edit"
+                                        },
+                                        "fallback": {
+                                            "mode": "chose"
+                                        },
+                                        "messages": {
+                                            "mode": "chose",
+                                            "items": [
+                                                {
+                                                    "role": {
+                                                        "mode": "chose",
+                                                        "label": "User"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "json_mode": {
+                                            "mode": "chose"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "open-router-4ur2vj"
+                                            },
+                                            "label": "BigMoves OpenRouter AI (Feb 4 2025)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:open-router-4ur2vj",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "messages",
+                                        "spec": [
+                                            {
+                                                "name": "content",
+                                                "type": "text",
+                                                "label": "Content",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "role",
+                                                "type": "select",
+                                                "label": "Role",
+                                                "options": [
+                                                    {
+                                                        "label": "User",
+                                                        "value": "user"
+                                                    },
+                                                    {
+                                                        "label": "Assistant",
+                                                        "value": "assistant"
+                                                    },
+                                                    {
+                                                        "label": "System",
+                                                        "value": "system"
+                                                    }
+                                                ],
+                                                "required": true
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Messages",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "model",
+                                        "type": "select",
+                                        "label": "Model",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "fallback",
+                                        "type": "boolean",
+                                        "label": "Enable automatic Fallback?"
+                                    },
+                                    {
+                                        "name": "json_mode",
+                                        "type": "boolean",
+                                        "label": "Enable JSON Mode?"
+                                    },
+                                    {
+                                        "name": "max_tokens",
+                                        "type": "integer",
+                                        "label": "Max Tokens"
+                                    },
+                                    {
+                                        "name": "n",
+                                        "type": "integer",
+                                        "label": "Number of Choices",
+                                        "validate": {
+                                            "min": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "temperature",
+                                        "type": "number",
+                                        "label": "Temperature",
+                                        "validate": {
+                                            "max": 2,
+                                            "min": 0
+                                        }
+                                    },
+                                    {
+                                        "name": "top_p",
+                                        "type": "number",
+                                        "label": "Top P",
+                                        "validate": {
+                                            "max": 1,
+                                            "min": 0
+                                        }
+                                    },
+                                    {
+                                        "name": "frequency_penalty",
+                                        "type": "number",
+                                        "label": "Frequency Penalty",
+                                        "validate": {
+                                            "max": 2,
+                                            "min": -2
+                                        }
+                                    },
+                                    {
+                                        "name": "presence_penalty",
+                                        "type": "number",
+                                        "label": "Presence Penalty",
+                                        "validate": {
+                                            "min": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "seed",
+                                        "type": "integer",
+                                        "label": "Seed"
+                                    },
+                                    {
+                                        "name": "stop",
+                                        "spec": {
+                                            "name": "value",
+                                            "type": "text"
+                                        },
+                                        "type": "array",
+                                        "label": "Stop Sequences"
+                                    },
+                                    {
+                                        "name": "top_k",
+                                        "type": "number",
+                                        "label": "Top k"
+                                    }
+                                ],
+                                "advanced": true
+                            }
+                        },
+                        {
+                            "id": 93,
+                            "module": "open-router:createAChatCompletion",
+                            "version": 1,
+                            "parameters": {
+                                "__IMTCONN__": 3927944
+                            },
+                            "mapper": {
+                                "n": "1",
+                                "model": "{{15.`AI Model`}}",
+                                "top_p": "1",
+                                "fallback": true,
+                                "messages": [
+                                    {
+                                        "role": "user",
+                                        "content": "###Context###\nTitle: {{15.`Content Title`}}.\nPrimaryKeyword: {{15.`SEO Keywords`}}.\nInternal Links: {{15.`Internal Links`}}.\nExternalLinks: {{15.`External Links`}}.\nMore context about article: {{15.`Extra Context`}}.\nBlogpost Type: {{15.`Blogpost Type`}}.\nTranscript: {{15.Transcript}}.\n###Instruction###\nYour task is to prepare an article outline for the context provided.\nYour output should be in {{15.Language}} language. Your output must be written in Markdown format (atx). Remember, this is just an outline, you should add bulletpoints of what to cover in each section, not write the section. The headline must begin with #, but then ensure each of the other sections begin with ##, instead of just #"
+                                    }
+                                ],
+                                "json_mode": false,
+                                "temperature": "0.4"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2266,
+                                    "y": 1053,
+                                    "name": "Outline"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "stop": {
+                                            "mode": "chose"
+                                        },
+                                        "model": {
+                                            "mode": "edit"
+                                        },
+                                        "fallback": {
+                                            "mode": "chose"
+                                        },
+                                        "messages": {
+                                            "mode": "chose",
+                                            "items": [
+                                                {
+                                                    "role": {
+                                                        "mode": "chose",
+                                                        "label": "User"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "json_mode": {
+                                            "mode": "chose"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "open-router-4ur2vj"
+                                            },
+                                            "label": "BigMoves OpenRouter AI (Feb 4 2025)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:open-router-4ur2vj",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "messages",
+                                        "spec": [
+                                            {
+                                                "name": "content",
+                                                "type": "text",
+                                                "label": "Content",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "role",
+                                                "type": "select",
+                                                "label": "Role",
+                                                "options": [
+                                                    {
+                                                        "label": "User",
+                                                        "value": "user"
+                                                    },
+                                                    {
+                                                        "label": "Assistant",
+                                                        "value": "assistant"
+                                                    },
+                                                    {
+                                                        "label": "System",
+                                                        "value": "system"
+                                                    }
+                                                ],
+                                                "required": true
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Messages",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "model",
+                                        "type": "select",
+                                        "label": "Model",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "fallback",
+                                        "type": "boolean",
+                                        "label": "Enable automatic Fallback?"
+                                    },
+                                    {
+                                        "name": "json_mode",
+                                        "type": "boolean",
+                                        "label": "Enable JSON Mode?"
+                                    },
+                                    {
+                                        "name": "max_tokens",
+                                        "type": "integer",
+                                        "label": "Max Tokens"
+                                    },
+                                    {
+                                        "name": "n",
+                                        "type": "integer",
+                                        "label": "Number of Choices",
+                                        "validate": {
+                                            "min": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "temperature",
+                                        "type": "number",
+                                        "label": "Temperature",
+                                        "validate": {
+                                            "max": 2,
+                                            "min": 0
+                                        }
+                                    },
+                                    {
+                                        "name": "top_p",
+                                        "type": "number",
+                                        "label": "Top P",
+                                        "validate": {
+                                            "max": 1,
+                                            "min": 0
+                                        }
+                                    },
+                                    {
+                                        "name": "frequency_penalty",
+                                        "type": "number",
+                                        "label": "Frequency Penalty",
+                                        "validate": {
+                                            "max": 2,
+                                            "min": -2
+                                        }
+                                    },
+                                    {
+                                        "name": "presence_penalty",
+                                        "type": "number",
+                                        "label": "Presence Penalty",
+                                        "validate": {
+                                            "min": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "seed",
+                                        "type": "integer",
+                                        "label": "Seed"
+                                    },
+                                    {
+                                        "name": "stop",
+                                        "spec": {
+                                            "name": "value",
+                                            "type": "text"
+                                        },
+                                        "type": "array",
+                                        "label": "Stop Sequences"
+                                    },
+                                    {
+                                        "name": "top_k",
+                                        "type": "number",
+                                        "label": "Top k"
+                                    }
+                                ],
+                                "advanced": true
+                            }
+                        },
+                        {
+                            "id": 23,
+                            "module": "util:SetVariable2",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "name": "inputBrief",
+                                "scope": "roundtrip",
+                                "value": "{{93.choices[].message.content}}"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2596,
+                                    "y": 1047,
+                                    "name": "InputBrief"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "scope": {
+                                            "label": "One cycle"
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Variable name",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "scope",
+                                        "type": "select",
+                                        "label": "Variable lifetime",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "roundtrip",
+                                                "execution"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "any",
+                                        "label": "Variable value"
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "name": "inputBrief",
+                                        "type": "any",
+                                        "label": "inputBrief"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 24,
+                            "module": "builtin:BasicFeeder",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "array": "{{split(23.inputBrief; newline)}}"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 2896,
+                                    "y": 1047
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "array": {
+                                            "mode": "edit"
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "mode": "edit",
+                                        "name": "array",
+                                        "spec": [],
+                                        "type": "array",
+                                        "label": "Array"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 25,
+                            "module": "util:SetVariable2",
+                            "version": 1,
+                            "parameters": {},
+                            "filter": {
+                                "name": "Section starts with ##",
+                                "conditions": [
+                                    [
+                                        {
+                                            "a": "{{24.value}}",
+                                            "b": "##",
+                                            "o": "text:startwith"
+                                        }
+                                    ]
+                                ]
+                            },
+                            "mapper": {
+                                "name": "sectionInput",
+                                "scope": "roundtrip",
+                                "value": "{{replace(23.inputBrief; 24.value; 24.value + \"<-\")}}"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 3196,
+                                    "y": 1047
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "scope": {
+                                            "label": "One cycle"
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Variable name",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "scope",
+                                        "type": "select",
+                                        "label": "Variable lifetime",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "roundtrip",
+                                                "execution"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "any",
+                                        "label": "Variable value"
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "name": "sectionInput",
+                                        "type": "any",
+                                        "label": "sectionInput"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 94,
+                            "module": "open-router:createAChatCompletion",
+                            "version": 1,
+                            "parameters": {
+                                "__IMTCONN__": 3927944
+                            },
+                            "mapper": {
+                                "n": "1",
+                                "model": "{{15.`AI Model`}}",
+                                "top_p": "1",
+                                "fallback": true,
+                                "messages": [
+                                    {
+                                        "role": "user",
+                                        "content": "###Brand Details###\nBrand voice: {{15.`Brand Voice`}}.\nExclude these words & phrases: {{15.`Excluded Words`}}.\nWrite at a {{15.`Writing Grade`}} grade level.###Context###\nBlogpost Title: {{15.`Blogpost Title`}}.\nBlogpost Type: {{15.`Blogpost Type`}}.\nTranscript: {{15.Transcript}}.\n###Instruction###\nWrite an award winning article. Your task is to write one section and one section only: the one marked by a \"<-\". \nYour output should be in {{15.Language}} language.\n---\n{{25.sectionInput}}"
+                                    }
+                                ],
+                                "json_mode": false,
+                                "temperature": "0.4"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 3517,
+                                    "y": 1049,
+                                    "name": "Section Prompts"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "stop": {
+                                            "mode": "chose"
+                                        },
+                                        "model": {
+                                            "mode": "edit"
+                                        },
+                                        "fallback": {
+                                            "mode": "chose"
+                                        },
+                                        "messages": {
+                                            "mode": "chose",
+                                            "items": [
+                                                {
+                                                    "role": {
+                                                        "mode": "chose",
+                                                        "label": "User"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "json_mode": {
+                                            "mode": "chose"
+                                        }
+                                    },
+                                    "parameters": {
+                                        "__IMTCONN__": {
+                                            "data": {
+                                                "scoped": "true",
+                                                "connection": "open-router-4ur2vj"
+                                            },
+                                            "label": "BigMoves OpenRouter AI (Feb 4 2025)"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "__IMTCONN__",
+                                        "type": "account:open-router-4ur2vj",
+                                        "label": "Connection",
+                                        "required": true
+                                    }
+                                ],
+                                "expect": [
+                                    {
+                                        "name": "messages",
+                                        "spec": [
+                                            {
+                                                "name": "content",
+                                                "type": "text",
+                                                "label": "Content",
+                                                "required": true
+                                            },
+                                            {
+                                                "name": "role",
+                                                "type": "select",
+                                                "label": "Role",
+                                                "options": [
+                                                    {
+                                                        "label": "User",
+                                                        "value": "user"
+                                                    },
+                                                    {
+                                                        "label": "Assistant",
+                                                        "value": "assistant"
+                                                    },
+                                                    {
+                                                        "label": "System",
+                                                        "value": "system"
+                                                    }
+                                                ],
+                                                "required": true
+                                            }
+                                        ],
+                                        "type": "array",
+                                        "label": "Messages",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "model",
+                                        "type": "select",
+                                        "label": "Model",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "fallback",
+                                        "type": "boolean",
+                                        "label": "Enable automatic Fallback?"
+                                    },
+                                    {
+                                        "name": "json_mode",
+                                        "type": "boolean",
+                                        "label": "Enable JSON Mode?"
+                                    },
+                                    {
+                                        "name": "max_tokens",
+                                        "type": "integer",
+                                        "label": "Max Tokens"
+                                    },
+                                    {
+                                        "name": "n",
+                                        "type": "integer",
+                                        "label": "Number of Choices",
+                                        "validate": {
+                                            "min": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "temperature",
+                                        "type": "number",
+                                        "label": "Temperature",
+                                        "validate": {
+                                            "max": 2,
+                                            "min": 0
+                                        }
+                                    },
+                                    {
+                                        "name": "top_p",
+                                        "type": "number",
+                                        "label": "Top P",
+                                        "validate": {
+                                            "max": 1,
+                                            "min": 0
+                                        }
+                                    },
+                                    {
+                                        "name": "frequency_penalty",
+                                        "type": "number",
+                                        "label": "Frequency Penalty",
+                                        "validate": {
+                                            "max": 2,
+                                            "min": -2
+                                        }
+                                    },
+                                    {
+                                        "name": "presence_penalty",
+                                        "type": "number",
+                                        "label": "Presence Penalty",
+                                        "validate": {
+                                            "min": 1
+                                        }
+                                    },
+                                    {
+                                        "name": "seed",
+                                        "type": "integer",
+                                        "label": "Seed"
+                                    },
+                                    {
+                                        "name": "stop",
+                                        "spec": {
+                                            "name": "value",
+                                            "type": "text"
+                                        },
+                                        "type": "array",
+                                        "label": "Stop Sequences"
+                                    },
+                                    {
+                                        "name": "top_k",
+                                        "type": "number",
+                                        "label": "Top k"
+                                    }
+                                ],
+                                "advanced": true
+                            }
+                        },
+                        {
+                            "id": 27,
+                            "module": "util:SetVariable2",
+                            "version": 1,
+                            "parameters": {},
+                            "mapper": {
+                                "name": "SectionText",
+                                "scope": "roundtrip",
+                                "value": "{{94.choices[].message.content}}"
+                            },
+                            "metadata": {
+                                "designer": {
+                                    "x": 3842,
+                                    "y": 1042,
+                                    "name": "SectionText"
+                                },
+                                "restore": {
+                                    "expect": {
+                                        "scope": {
+                                            "label": "One cycle"
+                                        }
+                                    }
+                                },
+                                "expect": [
+                                    {
+                                        "name": "name",
+                                        "type": "text",
+                                        "label": "Variable name",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "scope",
+                                        "type": "select",
+                                        "label": "Variable lifetime",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "roundtrip",
+                                                "execution"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "any",
+                                        "label": "Variable value"
+                                    }
+                                ],
+                                "interface": [
+                                    {
+                                        "name": "SectionText",
+                                        "type": "any",
+                                        "label": "SectionText"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 67,
+                            "module": "util:FunctionIncrement",
+                            "version": 1,
+                            "parameters": {
+                                "reset": "run"
+                            },
+                            "mapper": {},
+                            "metadata": {
+                                "designer": {
+                                    "x": 4142,
+                                    "y": 1042
+                                },
+                                "restore": {
+                                    "parameters": {
+                                        "reset": {
+                                            "label": "After one cycle"
+                                        }
+                                    }
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "reset",
+                                        "type": "select",
+                                        "label": "Reset a value",
+                                        "required": true,
+                                        "validate": {
+                                            "enum": [
+                                                "run",
+                                                "execution",
+                                                "scenario"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "id": 28,
+                            "module": "builtin:BasicRouter",
+                            "version": 1,
+                            "mapper": null,
+                            "metadata": {
+                                "designer": {
+                                    "x": 4442,
+                                    "y": 1042
+                                }
+                            },
+                            "routes": [
+                                {
+                                    "flow": [
+                                        {
+                                            "id": 95,
+                                            "module": "open-router:createAChatCompletion",
+                                            "version": 1,
+                                            "parameters": {
+                                                "__IMTCONN__": 3927944
+                                            },
+                                            "filter": {
+                                                "name": "Every 4th Run",
+                                                "conditions": [
+                                                    [
+                                                        {
+                                                            "a": "{{67.i}}",
+                                                            "b": "4",
+                                                            "o": "text:equal"
+                                                        }
+                                                    ],
+                                                    [
+                                                        {
+                                                            "a": "{{67.i}}",
+                                                            "b": "8",
+                                                            "o": "text:equal"
+                                                        }
+                                                    ],
+                                                    [
+                                                        {
+                                                            "a": "{{67.i}}",
+                                                            "b": "12",
+                                                            "o": "text:equal"
+                                                        }
+                                                    ]
+                                                ]
+                                            },
+                                            "mapper": {
+                                                "n": "1",
+                                                "model": "{{15.`AI Model`}}",
+                                                "top_p": "1",
+                                                "fallback": true,
+                                                "messages": [
+                                                    {
+                                                        "role": "user",
+                                                        "content": "Edit the following text to break up the flow. Add bullet points and subheadings where needed for variety. Use Markdown (atx) format. Your output should be in {{15.Language}} language.\n--\n{{27.SectionText}}"
+                                                    }
+                                                ],
+                                                "json_mode": false,
+                                                "max_tokens": "2048",
+                                                "temperature": "0.4"
+                                            },
+                                            "metadata": {
+                                                "designer": {
+                                                    "x": 4753,
+                                                    "y": 856,
+                                                    "name": "Split Writing Style"
+                                                },
+                                                "restore": {
+                                                    "expect": {
+                                                        "stop": {
+                                                            "mode": "chose"
+                                                        },
+                                                        "model": {
+                                                            "mode": "edit"
+                                                        },
+                                                        "fallback": {
+                                                            "mode": "chose"
+                                                        },
+                                                        "messages": {
+                                                            "mode": "chose",
+                                                            "items": [
+                                                                {
+                                                                    "role": {
+                                                                        "mode": "chose",
+                                                                        "label": "User"
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        "json_mode": {
+                                                            "mode": "chose"
+                                                        }
+                                                    },
+                                                    "parameters": {
+                                                        "__IMTCONN__": {
+                                                            "data": {
+                                                                "scoped": "true",
+                                                                "connection": "open-router-4ur2vj"
+                                                            },
+                                                            "label": "BigMoves OpenRouter AI (Feb 4 2025)"
+                                                        }
+                                                    }
+                                                },
+                                                "parameters": [
+                                                    {
+                                                        "name": "__IMTCONN__",
+                                                        "type": "account:open-router-4ur2vj",
+                                                        "label": "Connection",
+                                                        "required": true
+                                                    }
+                                                ],
+                                                "expect": [
+                                                    {
+                                                        "name": "messages",
+                                                        "spec": [
+                                                            {
+                                                                "name": "content",
+                                                                "type": "text",
+                                                                "label": "Content",
+                                                                "required": true
+                                                            },
+                                                            {
+                                                                "name": "role",
+                                                                "type": "select",
+                                                                "label": "Role",
+                                                                "options": [
+                                                                    {
+                                                                        "label": "User",
+                                                                        "value": "user"
+                                                                    },
+                                                                    {
+                                                                        "label": "Assistant",
+                                                                        "value": "assistant"
+                                                                    },
+                                                                    {
+                                                                        "label": "System",
+                                                                        "value": "system"
+                                                                    }
+                                                                ],
+                                                                "required": true
+                                                            }
+                                                        ],
+                                                        "type": "array",
+                                                        "label": "Messages",
+                                                        "required": true
+                                                    },
+                                                    {
+                                                        "name": "model",
+                                                        "type": "select",
+                                                        "label": "Model",
+                                                        "required": true
+                                                    },
+                                                    {
+                                                        "name": "fallback",
+                                                        "type": "boolean",
+                                                        "label": "Enable automatic Fallback?"
+                                                    },
+                                                    {
+                                                        "name": "json_mode",
+                                                        "type": "boolean",
+                                                        "label": "Enable JSON Mode?"
+                                                    },
+                                                    {
+                                                        "name": "max_tokens",
+                                                        "type": "integer",
+                                                        "label": "Max Tokens"
+                                                    },
+                                                    {
+                                                        "name": "n",
+                                                        "type": "integer",
+                                                        "label": "Number of Choices",
+                                                        "validate": {
+                                                            "min": 1
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "temperature",
+                                                        "type": "number",
+                                                        "label": "Temperature",
+                                                        "validate": {
+                                                            "max": 2,
+                                                            "min": 0
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "top_p",
+                                                        "type": "number",
+                                                        "label": "Top P",
+                                                        "validate": {
+                                                            "max": 1,
+                                                            "min": 0
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "frequency_penalty",
+                                                        "type": "number",
+                                                        "label": "Frequency Penalty",
+                                                        "validate": {
+                                                            "max": 2,
+                                                            "min": -2
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "presence_penalty",
+                                                        "type": "number",
+                                                        "label": "Presence Penalty",
+                                                        "validate": {
+                                                            "min": 1
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "seed",
+                                                        "type": "integer",
+                                                        "label": "Seed"
+                                                    },
+                                                    {
+                                                        "name": "stop",
+                                                        "spec": {
+                                                            "name": "value",
+                                                            "type": "text"
+                                                        },
+                                                        "type": "array",
+                                                        "label": "Stop Sequences"
+                                                    },
+                                                    {
+                                                        "name": "top_k",
+                                                        "type": "number",
+                                                        "label": "Top k"
+                                                    }
+                                                ],
+                                                "advanced": true
+                                            }
+                                        },
+                                        {
+                                            "id": 30,
+                                            "module": "util:SetVariable2",
+                                            "version": 1,
+                                            "parameters": {},
+                                            "mapper": {
+                                                "name": "sectionText",
+                                                "scope": "roundtrip",
+                                                "value": "{{95.choices[].message.content}}"
+                                            },
+                                            "metadata": {
+                                                "designer": {
+                                                    "x": 5050,
+                                                    "y": 862,
+                                                    "name": "SectionText"
+                                                },
+                                                "restore": {
+                                                    "expect": {
+                                                        "scope": {
+                                                            "label": "One cycle"
+                                                        }
+                                                    }
+                                                },
+                                                "expect": [
+                                                    {
+                                                        "name": "name",
+                                                        "type": "text",
+                                                        "label": "Variable name",
+                                                        "required": true
+                                                    },
+                                                    {
+                                                        "name": "scope",
+                                                        "type": "select",
+                                                        "label": "Variable lifetime",
+                                                        "required": true,
+                                                        "validate": {
+                                                            "enum": [
+                                                                "roundtrip",
+                                                                "execution"
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "value",
+                                                        "type": "any",
+                                                        "label": "Variable value"
+                                                    }
+                                                ],
+                                                "interface": [
+                                                    {
+                                                        "name": "sectionText",
+                                                        "type": "any",
+                                                        "label": "sectionText"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "flow": [
+                                        {
+                                            "id": 31,
+                                            "module": "util:GetVariable2",
+                                            "version": 1,
+                                            "parameters": {},
+                                            "mapper": {
+                                                "name": "SectionText"
+                                            },
+                                            "metadata": {
+                                                "designer": {
+                                                    "x": 4742,
+                                                    "y": 1192,
+                                                    "name": "Get SectionText"
+                                                },
+                                                "restore": {},
+                                                "expect": [
+                                                    {
+                                                        "name": "name",
+                                                        "type": "text",
+                                                        "label": "Variable name",
+                                                        "required": true
+                                                    }
+                                                ],
+                                                "interface": [
+                                                    {
+                                                        "name": "SectionText",
+                                                        "type": "any",
+                                                        "label": "SectionText"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        {
+                                            "id": 32,
+                                            "module": "util:TextAggregator",
+                                            "version": 1,
+                                            "parameters": {
+                                                "feeder": 24,
+                                                "rowSeparator": "\n"
+                                            },
+                                            "mapper": {
+                                                "value": "{{31.SectionText}}"
+                                            },
+                                            "metadata": {
+                                                "designer": {
+                                                    "x": 5042,
+                                                    "y": 1192
+                                                },
+                                                "restore": {
+                                                    "extra": {
+                                                        "feeder": {
+                                                            "label": "Iterator [24]"
+                                                        }
+                                                    },
+                                                    "parameters": {
+                                                        "rowSeparator": {
+                                                            "label": "New row"
+                                                        }
+                                                    }
+                                                },
+                                                "parameters": [
+                                                    {
+                                                        "name": "rowSeparator",
+                                                        "type": "select",
+                                                        "label": "Row separator",
+                                                        "validate": {
+                                                            "enum": [
+                                                                "\n",
+                                                                "\t",
+                                                                "other"
+                                                            ]
+                                                        }
+                                                    }
+                                                ],
+                                                "expect": [
+                                                    {
+                                                        "name": "value",
+                                                        "type": "text",
+                                                        "label": "Text"
+                                                    }
+                                                ],
+                                                "advanced": true
+                                            }
+                                        },
+                                        {
+                                            "id": 34,
+                                            "module": "json:TransformToJSON",
+                                            "version": 1,
+                                            "parameters": {
+                                                "space": ""
+                                            },
+                                            "mapper": {
+                                                "object": "{{32.text}}"
+                                            },
+                                            "metadata": {
+                                                "designer": {
+                                                    "x": 5342,
+                                                    "y": 1192
+                                                },
+                                                "restore": {
+                                                    "parameters": {
+                                                        "space": {
+                                                            "label": "Empty"
+                                                        }
+                                                    }
+                                                },
+                                                "parameters": [
+                                                    {
+                                                        "name": "space",
+                                                        "type": "select",
+                                                        "label": "Indentation",
+                                                        "validate": {
+                                                            "enum": [
+                                                                "tab",
+                                                                "2",
+                                                                "4"
+                                                            ]
+                                                        }
+                                                    }
+                                                ],
+                                                "expect": [
+                                                    {
+                                                        "name": "object",
+                                                        "type": "any",
+                                                        "label": "Object"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        {
+                                            "id": 33,
+                                            "module": "airtable:makeApiCall",
+                                            "version": 3,
+                                            "parameters": {
+                                                "__IMTCONN__": 2096224
+                                            },
+                                            "mapper": {
+                                                "url": "v0/{{1.base_id}}/{{1.table_id}}/{{1.record_id}}",
+                                                "body": "{\n  \"fields\": {\n    \"AI Status\": \"AI Complete\",\n    \"Blogpost Final Version\": {{34.json}}\n  }\n}",
+                                                "method": "PATCH",
+                                                "headers": [
+                                                    {
+                                                        "key": "Content-Type",
+                                                        "value": "application/json"
+                                                    }
+                                                ]
+                                            },
+                                            "metadata": {
+                                                "designer": {
+                                                    "x": 5642,
+                                                    "y": 1192,
+                                                    "name": "Update"
+                                                },
+                                                "restore": {
+                                                    "expect": {
+                                                        "qs": {
+                                                            "mode": "chose"
+                                                        },
+                                                        "method": {
+                                                            "mode": "chose",
+                                                            "label": "PATCH"
+                                                        },
+                                                        "headers": {
+                                                            "mode": "chose",
+                                                            "items": [
+                                                                null
+                                                            ]
+                                                        }
+                                                    },
+                                                    "parameters": {
+                                                        "__IMTCONN__": {
+                                                            "data": {
+                                                                "scoped": "true",
+                                                                "connection": "airtable3"
+                                                            },
+                                                            "label": "Connection1 (User ID: usrdCHJdcPKhGglOp)"
+                                                        }
+                                                    }
+                                                },
+                                                "parameters": [
+                                                    {
+                                                        "name": "__IMTCONN__",
+                                                        "type": "account:airtable3,airtable2",
+                                                        "label": "Connection",
+                                                        "required": true
+                                                    }
+                                                ],
+                                                "expect": [
+                                                    {
+                                                        "name": "url",
+                                                        "type": "text",
+                                                        "label": "URL",
+                                                        "required": true
+                                                    },
+                                                    {
+                                                        "name": "method",
+                                                        "type": "select",
+                                                        "label": "Method",
+                                                        "required": true,
+                                                        "validate": {
+                                                            "enum": [
+                                                                "GET",
+                                                                "POST",
+                                                                "PUT",
+                                                                "PATCH",
+                                                                "DELETE"
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "headers",
+                                                        "spec": [
+                                                            {
+                                                                "name": "key",
+                                                                "type": "text",
+                                                                "label": "Key"
+                                                            },
+                                                            {
+                                                                "name": "value",
+                                                                "type": "text",
+                                                                "label": "Value"
+                                                            }
+                                                        ],
+                                                        "type": "array",
+                                                        "label": "Headers"
+                                                    },
+                                                    {
+                                                        "name": "qs",
+                                                        "spec": [
+                                                            {
+                                                                "name": "key",
+                                                                "type": "text",
+                                                                "label": "Key"
+                                                            },
+                                                            {
+                                                                "name": "value",
+                                                                "type": "text",
+                                                                "label": "Value"
+                                                            }
+                                                        ],
+                                                        "type": "array",
+                                                        "label": "Query String"
+                                                    },
+                                                    {
+                                                        "name": "body",
+                                                        "type": "any",
+                                                        "label": "Body"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "instant": true,
+        "version": 1,
+        "scenario": {
+            "roundtrips": 1,
+            "maxErrors": 3,
+            "autoCommit": true,
+            "autoCommitTriggerLast": true,
+            "sequential": false,
+            "slots": null,
+            "confidential": false,
+            "dataloss": false,
+            "dlq": false,
+            "freshVariables": false
+        },
+        "designer": {
+            "orphans": []
+        },
+        "zone": "us1.make.com",
+        "notes": []
+    }
+}

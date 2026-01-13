@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeepResearch Result v1",
+  "type": "object",
+  "required": ["query", "status", "mode", "metadata", "duration_ms"],
+  "additionalProperties": false,
+  "properties": {
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Original research query."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "error"],
+      "description": "Outcome status of the DeepResearch run."
+    },
+    "mode": {
+      "type": "string",
+      "description": "Execution mode that produced the result (openrouter, local, etc.)."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Concise narrative summary of the findings."
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Supporting bullet points or observations."
+    },
+    "sources": {
+      "type": "array",
+      "description": "List of supporting sources or citations.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Human-readable source title."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Link to the underlying source if available."
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Quoted or summarised supporting text."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence score associated with the source."
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Echoed metadata and service annotations."
+    },
+    "raw_log": {
+      "type": "string",
+      "description": "Optional raw log output for debugging."
+    },
+    "error": {
+      "type": "string",
+      "description": "Error message when status=error."
+    },
+    "iterations": {
+      "type": "array",
+      "description": "Optional breakdown of intermediate reasoning steps.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "End-to-end runtime in milliseconds."
+    },
+    "notebook_entry_id": {
+      "type": "string",
+      "description": "Identifier returned by Open Notebook when a source is created."
+    }
+  }
+}

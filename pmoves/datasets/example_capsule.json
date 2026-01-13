@@ -1,0 +1,26 @@
+{
+  "type": "shape-capsule",
+  "capsule": {
+    "kind": "cgp",
+    "from": "demo",
+    "ts": 1736467200,
+    "data": {
+      "spec": "chit.cgp.v0.1",
+      "super_nodes": [
+        {
+          "constellations": [
+            {
+              "id": "c.demo.1",
+              "summary": "demo constellation",
+              "spectrum": [0.1, 0.2, 0.3, 0.4],
+              "points": [
+                { "id": "p.demo.1", "modality": "video", "ref_id": "yt_demo", "t_start": 5.0, "frame_idx": 120, "proj": 0.7, "conf": 0.9, "text": "sample" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+

@@ -1,0 +1,28 @@
+version: "3.9"
+services:
+  agent-zero:
+    # image: <your existing agent-zero image>
+    env_file:
+      - .env
+      - .env.agent-zero.override
+    environment:
+      - OPENAI_COMPAT_BASE_URL=${OPENAI_COMPAT_BASE_URL:-http://tensorzero:3000}
+    depends_on: [tensorzero]
+
+  hi-rag-gateway-v2:
+    # image: <your existing hi-rag gateway image>
+    env_file:
+      - .env
+      - .env.hirag.override
+
+  # Optional Archon web UI: replace image with your UI container if used
+  archon-ui:
+    image: ghcr.io/pmoves/archon-ui:latest # replace if different
+    restart: unless-stopped
+    env_file:
+      - .env
+      - .env.hirag.override
+    environment:
+      - OPENAI_COMPAT_BASE_URL=${OPENAI_COMPAT_BASE_URL:-http://tensorzero:3000}
+    ports: ["8099:8080"]
+    depends_on: [hi-rag-gateway-v2, tensorzero]

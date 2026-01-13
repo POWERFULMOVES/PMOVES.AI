@@ -1,0 +1,99 @@
+# Enhanced yt-dlp Configuration for Complete Media Collection
+# This configuration downloads ALL media types with comprehensive metadata
+
+# === OUTPUT TEMPLATES ===
+# Organize by type for complete collection
+-o "E:/Downloads/yt-dlp/complete/%(uploader)s/%(upload_date>%Y-%m-%d)s/%(title)s [%(id)s]/%(title)s [%(id)s].%(ext)s"
+# Separate paths for different media types
+--paths "E:/Downloads/yt-dlp/complete/%(uploader)s/%(upload_date>%Y-%m-%d)s/%(title)s [%(id)s]"
+# Thumbnail path
+--paths "thumbnail:E:/Downloads/yt-dlp/complete/%(uploader)s/%(upload_date>%Y-%m-%d)s/%(title)s [%(id)s]/thumbnails"
+# Description path
+--paths "description:E:/Downloads/yt-dlp/complete/%(uploader)s/%(upload_date>%Y-%m-%d)s/%(title)s [%(id)s]/metadata"
+# Subtitle path
+--paths "subtitle:E:/Downloads/yt-dlp/complete/%(uploader)s/%(upload_date>%Y-%m-%d)s/%(title)s [%(id)s]/subtitles"
+
+# === COMBINED DOWNLOAD ===
+# Best combined video+audio
+-f "bv+ba/b" --merge-output-format "mp4" --output "combined:%(title)s [%(id)s].mp4"
+
+# === SEPARATE DOWNLOADS ===
+# Video only (best quality)
+--write-video --output "video:%(title)s [%(id)s].video.%(ext)s"
+
+# Audio only (best quality)
+--extract-audio --audio-format "mp3" --audio-quality "0" --output "audio:%(title)s [%(id)s].audio.%(ext)s"
+--extract-audio --audio-format "flac" --output "audio:%(title)s [%(id)s].audio.flac"
+
+# === METADATA AND MEDIA FILES ===
+--write-info-json
+--write-description
+--write-annotations
+--write-comments
+--write-thumbnail
+--write-all-thumbnails
+--embed-metadata
+--embed-chapters
+--embed-thumbnail
+--embed-subs
+--embed-info-json
+
+# === SUBTITLES AND TRANSCRIPTS ===
+--sub-langs "all,live_chat"
+--write-subs
+--write-auto-subs
+--convert-subs "srt"
+--convert-subs "vtt"
+--convert-subs "ass"
+
+# === AUTHENTICATION ===
+# YouTube Premium authentication (requires cookies.txt)
+--cookies "C:/Users/russe/yt-dlp-config/cookies.txt"
+--cookies-from-browser "chrome"
+--mark-watched
+
+# === PLAYLIST AND CHANNEL TRACKING ===
+--download-archive "C:/Users/russe/yt-dlp-config/downloaded.txt"
+--break-on-existing
+--match-filters "upload_date >= now-7days"  # Only recent videos for tracking
+
+# === NETWORK AND RATE LIMITING ===
+--socket-timeout 120
+--retries 20
+--fragment-retries 20
+--sleep-interval 2
+--max-sleep-interval 8
+--limit-rate "10M"
+
+# === QUALITY SETTINGS ===
+-S "res:2160,codec:h265,h264"  # Prefer 4K H.265, fallback H.264
+--embed-chapters
+
+# === SPONSORBLOCK ===
+--sponsorblock-mark "all"
+--sponsorblock-remove "sponsor,intro,outro,selfpromo,preview"
+
+# === POST-PROCESSING ===
+--keep-video
+--post-overwrites
+--convert-thumbnails "jpg"
+--convert-thumbnails "png"
+
+# === ADVANCED OPTIONS ===
+--no-playlist  # Default to single video, use separate scripts for playlists
+--no-windows-filenames
+--restrict-filenames
+--continue
+--ignore-errors
+
+# === THUMBNAIL QUALITY ===
+--thumbnail-format "jpg"
+--thumbnail-quality "0"
+
+# === CHAPTER AND SEGMENTATION ===
+--split-chapters
+--force-keyframes-at-cuts
+
+# === CUSTOM FIELDS FOR METADATA ===
+--parse-metadata "title:%(meta_title)s"
+--parse-metadata "description:%(meta_description)s"

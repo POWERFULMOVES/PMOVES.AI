@@ -1,0 +1,59 @@
+name: graph-ci
+on:
+  push: { branches: [ main, dev ] }
+  pull_request:
+jobs:
+  graph:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: pmoves
+          POSTGRES_USER: pmoves
+          POSTGRES_PASSWORD: pmoves
+        ports: [ "5432:5432" ]
+        options: >-
+          --health-cmd="pg_isready -U pmoves -d pmoves"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+      neo4j:
+        image: neo4j:5.22
+        env:
+          NEO4J_AUTH: neo4j/password
+          NEO4J_PLUGINS: '["apoc"]'
+        ports: [ "7474:7474", "7687:7687" ]
+        options: >-
+          --health-cmd="wget --spider -q localhost:7474 || exit 1"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgres://pmoves:pmoves@localhost:5432/pmoves
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client cypher-shell
+      - name: Apply Postgres CHIT migration
+        run: |
+          test -f db/migrations/0001_chit.sql || (echo "missing db/migrations/0001_chit.sql" && exit 1)
+          psql "$DATABASE_URL" -f db/migrations/0001_chit.sql
+      - name: Seed Postgres fixture
+        run: |
+          test -f db/seed/001_fixture.sql && psql "$DATABASE_URL" -f db/seed/001_fixture.sql || echo "no SQL seed; skipping"
+      - name: Export CHIT CSVs
+        run: |
+          chmod +x scripts/export_chit_to_csv.sh
+          ./scripts/export_chit_to_csv.sh exports
+          ls -l exports
+      - name: Neo4j migrate + seed (online via cypher-shell)
+        env:
+          NEO4J_AUTH: neo4j/password
+        run: |
+          sleep 5
+          cypher-shell -u neo4j -p password -a bolt://localhost:7687 < neo4j/migrations/001_chit.cql
+          cypher-shell -u neo4j -p password -a bolt://localhost:7687 < neo4j/seed/001_fixture.cql
+          test -f neo4j/seed/002_smoke.cql && cypher-shell -u neo4j -p password -a bolt://localhost:7687 < neo4j/seed/002_smoke.cql || true
+      - name: Smoke assert (mind-map returns both text & video)
+        run: |
+          cypher-shell -u neo4j -p password -a bolt://localhost:7687             "MATCH (c:Constellation {id:'8c1b7a8c-7b38-4a6b-9bc3-3f1fdc9a1111'})-[:HAS]->(p:Point)-[:LOCATES]->(m:MediaRef)              RETURN size(collect(DISTINCT m.modality)) >= 2 AS ok" | tee out.txt
+          grep -q "true" out.txt

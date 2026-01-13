@@ -113,36 +113,13 @@ class VllmClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(f"{self.base_url}/metrics")
                 if response.status_code == 200:
-                    # Parse vLLM Prometheus metrics for GPU usage
+                    # Look for gpu_cache_usage_perc or similar metrics
                     for line in response.text.split("\n"):
-                        line = line.strip()
-                        if not line or line.startswith("#"):
-                            continue
-
-                        # Look for vLLM GPU memory metrics
-                        # Format: vllm:num_gpu_blocks{...} value
-                        # or vllm:gpu_cache_usage_perc{...} value
-                        if "vllm:num_gpu_blocks" in line:
-                            try:
-                                # Extract metric value (last space-separated value)
-                                parts = line.split()
-                                if len(parts) >= 2:
-                                    num_blocks = int(parts[-1])
-                                    # Each block is typically 1-2MB, use 2MB as estimate
-                                    return num_blocks * 2
-                            except (ValueError, IndexError):
-                                pass
-                        elif "vllm:gpu_cache_usage_perc" in line:
-                            try:
-                                parts = line.split()
-                                if len(parts) >= 2:
-                                    usage_percent = float(parts[-1])
-                                    # Estimate based on RTX 5090 32GB
-                                    return int(32768 * usage_percent / 100)
-                            except (ValueError, IndexError):
-                                pass
-        except httpx.RequestError as e:
-            logger.debug(f"Could not fetch vLLM metrics: {e}")
+                        if "gpu_cache" in line.lower() and not line.startswith("#"):
+                            # Try to parse cache usage
+                            pass
+        except httpx.RequestError:
+            pass
 
         # Default estimate for vLLM models (16GB is common for 70B models)
         return 16384

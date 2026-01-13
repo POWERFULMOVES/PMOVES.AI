@@ -146,7 +146,3 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
 	ignore = all
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "PMOVES-transcribe-and-fetch"]
-	path = PMOVES-transcribe-and-fetch
-	url = https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git
-	ignore = all
