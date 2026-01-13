@@ -144,7 +144,7 @@ class VramTracker:
                             processes.append(proc_info)
             except pynvml.NVMLError as e:
                 # Graphics processes not supported on all GPUs (NVML_ERROR_NOT_SUPPORTED)
-                if e.code != pynvml.NVML_ERROR_NOT_SUPPORTED:
+                if e.value != pynvml.NVML_ERROR_NOT_SUPPORTED:
                     logger.warning(f"Error getting graphics processes: {e}")
 
         except pynvml.NVMLError as e:

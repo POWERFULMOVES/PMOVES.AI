@@ -38,9 +38,9 @@ class LoadRequest:
     request_id: str = field(compare=False, default="")
 
     def __post_init__(self):
-        # Validate priority range
-        if not 0 < self.priority <= 10:
-            raise ValueError(f"Priority must be 1-10, got {self.priority}")
+        # Validate priority range (0-10 to match API validation)
+        if not 0 <= self.priority <= 10:
+            raise ValueError(f"Priority must be 0-10, got {self.priority}")
 
         # Validate provider
         if self.provider not in VALID_PROVIDERS:
