@@ -146,6 +146,8 @@ class GpuNatsPublisher:
             metrics = status.get("metrics", {})
             vram_percent = metrics.get("vram_usage_percent", 0)
 
+            # vram_warning_threshold is stored as decimal (e.g., 0.8 for 80%)
+            # Multiply by 100 to compare with percentage value
             if vram_percent >= self.vram_warning_threshold * 100:
                 await self._maybe_send_vram_warning(metrics)
 

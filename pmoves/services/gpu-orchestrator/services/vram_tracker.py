@@ -53,8 +53,8 @@ class VramTracker:
         if PYNVML_AVAILABLE and self._initialized:
             try:
                 pynvml.nvmlShutdown()
-            except pynvml.NVMLError:
-                pass
+            except pynvml.NVMLError as e:
+                logger.warning(f"Error shutting down pynvml: {e}")
 
     def get_metrics(self) -> GpuMetrics:
         """Get current GPU metrics."""
@@ -119,6 +119,7 @@ class VramTracker:
     def get_processes(self) -> List[ProcessInfo]:
         """Get list of processes using the GPU."""
         if not self._initialized:
+            logger.debug("Cannot get GPU processes - VramTracker not initialized")
             return []
 
         processes = []
@@ -139,8 +140,10 @@ class VramTracker:
                         proc_info = self._build_process_info(proc)
                         if proc_info:
                             processes.append(proc_info)
-            except pynvml.NVMLError:
-                pass  # Graphics processes not supported on all GPUs
+            except pynvml.NVMLError as e:
+                # Graphics processes not supported on all GPUs (NVML_ERROR_NOT_SUPPORTED)
+                if e.value != pynvml.NVML_ERROR_NOT_SUPPORTED:
+                    logger.warning(f"Error getting graphics processes: {e}")
 
         except pynvml.NVMLError as e:
             logger.error(f"Error getting GPU processes: {e}")
@@ -166,8 +169,8 @@ class VramTracker:
                 container_id=container_id,
                 container_name=container_name,
             )
-        except Exception as e:
-            logger.debug(f"Error building process info for PID {proc.pid}: {e}")
+        except (OSError, ValueError, TypeError) as e:
+            logger.warning(f"Error building process info for PID {proc.pid}: {e}")
             return None
 
     def _get_process_name(self, pid: int) -> str:
@@ -234,8 +237,8 @@ class VramTracker:
             if result.returncode == 0:
                 name = result.stdout.strip().lstrip("/")
                 return name if name else None
-        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
-            pass
+        except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError) as e:
+            logger.debug(f"Could not get container name for {container_id}: {e}")
         return None
 
     def get_available_vram(self, reserve_mb: int = 2048) -> int:

@@ -3,7 +3,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from config.settings import Settings
 
 
 class ModelState(str, Enum):
@@ -46,13 +49,14 @@ class LoadedModel:
     state: ModelState
     loaded_at: datetime
     last_used: datetime
+    idle_timeout_seconds: int = 300  # Configurable idle threshold
     session_id: Optional[str] = None
     error_message: Optional[str] = None
 
     @property
     def is_idle(self) -> bool:
         """Check if model has been idle beyond threshold."""
-        return (datetime.now() - self.last_used).total_seconds() > 300
+        return (datetime.now() - self.last_used).total_seconds() > self.idle_timeout_seconds
 
     @property
     def idle_seconds(self) -> float:
@@ -71,6 +75,7 @@ class LoadedModel:
             "state": self.state.value,
             "loaded_at": self.loaded_at.isoformat(),
             "last_used": self.last_used.isoformat(),
+            "idle_timeout_seconds": self.idle_timeout_seconds,
             "session_id": self.session_id,
             "idle_seconds": self.idle_seconds,
             "error_message": self.error_message,
@@ -88,6 +93,7 @@ class GpuMetrics:
     free_vram_mb: int
     temperature_c: int
     utilization_percent: int
+    is_mock: bool = False  # True if data is from mock/fallback mode
     power_draw_w: Optional[float] = None
     power_limit_w: Optional[float] = None
 
@@ -108,6 +114,7 @@ class GpuMetrics:
             "vram_usage_percent": round(self.vram_usage_percent, 2),
             "temperature_c": self.temperature_c,
             "utilization_percent": self.utilization_percent,
+            "is_mock": self.is_mock,
             "power_draw_w": self.power_draw_w,
             "power_limit_w": self.power_limit_w,
         }
