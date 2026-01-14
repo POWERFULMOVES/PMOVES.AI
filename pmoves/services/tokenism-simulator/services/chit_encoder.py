@@ -12,7 +12,7 @@ Following CHIT/Geometry Bus patterns:
 
 import logging
 from typing import Any
-from datetime import datetime, timezone
+from datetime import datetime
 import json
 
 import numpy as np
@@ -61,7 +61,7 @@ class CHITEncoder:
             metrics = result.weekly_metrics[-1] if result.weekly_metrics else None
 
         if metrics is None:
-            logger.warning(f"No metrics found for week {week}, using zero defaults")
+            logger.warning(f"No metrics found for week {week}")
             metrics = WeeklyMetrics(
                 week_number=0,
                 avg_wealth=0,
@@ -71,8 +71,6 @@ class CHITEncoder:
                 total_transactions=0,
                 total_volume=0,
                 active_participants=0,
-                new_participants=0,
-                staked_tokens=0,
                 circulating_supply=0,
             )
 
@@ -91,7 +89,7 @@ class CHITEncoder:
                 "final_avg_wealth": result.final_avg_wealth,
                 "final_gini": result.final_gini,
                 "systemic_risk": result.systemic_risk_score,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.utcnow().isoformat(),
             },
         )
 
@@ -220,7 +218,7 @@ class CHITEncoder:
                 "scenario": result.scenario,
                 "contract_type": result.parameters.contract_type,
                 "total_weeks": len(weeks),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.utcnow().isoformat(),
             },
         )
 
@@ -268,7 +266,7 @@ class CHITEncoder:
             metadata={
                 "parameter_name": parameter_name,
                 "confidence": confidence,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.utcnow().isoformat(),
             },
         )
 

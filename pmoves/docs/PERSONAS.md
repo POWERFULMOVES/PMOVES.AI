@@ -272,25 +272,25 @@ JSON configuration for persona behavior limits:
 
 ## Implementation Roadmap
 
-### Phase 1: Core Personas (Target: Q1 2026)
+### Phase 1: Core Personas (Q1 2026)
 - [ ] Define 12 core agent personas
 - [ ] Implement persona schema in Supabase
 - [ ] Link to existing voice personas
 - [ ] Basic CHIT attribution integration
 
-### Phase 2: Domain Expansion (Target: Q2 2026)
+### Phase 2: Domain Expansion (Q2 2026)
 - [ ] Add 85 domain expert personas
 - [ ] Implement inheritance system
 - [ ] Geometric signature generation
 - [ ] Similarity search via pgvector
 
-### Phase 3: Full Catalog (Target: Q3 2026)
+### Phase 3: Full Catalog (Q3 2026)
 - [ ] Complete 325+ persona catalog
 - [ ] Advanced Dirichlet attribution
 - [ ] Swarm consensus for multi-persona responses
 - [ ] Avatar generation pipeline
 
-### Phase 4: Evolution (Target: Q4 2026)
+### Phase 4: Evolution (Q4 2026)
 - [ ] Persona learning from interactions
 - [ ] Dynamic trait adjustment
 - [ ] User-created personas

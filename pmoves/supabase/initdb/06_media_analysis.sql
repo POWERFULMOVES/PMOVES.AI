@@ -51,20 +51,55 @@ CREATE INDEX IF NOT EXISTS idx_emotions_namespace_video_ts
 CREATE INDEX IF NOT EXISTS idx_emotions_label
   ON public.emotions (label);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.detections TO anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.segments TO anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.emotions TO anon;
+-- HARDENED: Remove anonymous grants - access via authenticated JWT only
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.detections TO anon;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.segments TO anon;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.emotions TO anon;
 
 ALTER TABLE public.detections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.segments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.emotions ENABLE ROW LEVEL SECURITY;
 
+-- SECURITY: Tenant-scoped RLS policies with namespace isolation (HARDENED)
+-- Uses app.current_tenant setting to isolate data by namespace column
+-- Set tenant with: SET LOCAL app.current_tenant = 'tenant_name';
+-- HARDENED: Requires authentication (TO authenticated) and no 'pmoves' fallback
 DO $$ BEGIN
-  CREATE POLICY detections_anon_all ON public.detections FOR ALL TO anon USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  CREATE POLICY detections_tenant_isolation ON public.detections FOR ALL
+  TO authenticated
+  USING (namespace = current_setting('app.current_tenant', true))
+  WITH CHECK (namespace = current_setting('app.current_tenant', true));
+EXCEPTION WHEN duplicate_object THEN
+  -- Drop old policy if exists
+  DROP POLICY IF EXISTS detections_tenant_isolation ON public.detections;
+  CREATE POLICY detections_tenant_isolation ON public.detections FOR ALL
+  TO authenticated
+  USING (namespace = current_setting('app.current_tenant', true))
+  WITH CHECK (namespace = current_setting('app.current_tenant', true));
+END $$;
+
 DO $$ BEGIN
-  CREATE POLICY segments_anon_all ON public.segments FOR ALL TO anon USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  CREATE POLICY segments_tenant_isolation ON public.segments FOR ALL
+  TO authenticated
+  USING (namespace = current_setting('app.current_tenant', true))
+  WITH CHECK (namespace = current_setting('app.current_tenant', true));
+EXCEPTION WHEN duplicate_object THEN
+  DROP POLICY IF EXISTS segments_tenant_isolation ON public.segments;
+  CREATE POLICY segments_tenant_isolation ON public.segments FOR ALL
+  TO authenticated
+  USING (namespace = current_setting('app.current_tenant', true))
+  WITH CHECK (namespace = current_setting('app.current_tenant', true));
+END $$;
+
 DO $$ BEGIN
-  CREATE POLICY emotions_anon_all ON public.emotions FOR ALL TO anon USING (true) WITH CHECK (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  CREATE POLICY emotions_tenant_isolation ON public.emotions FOR ALL
+  TO authenticated
+  USING (namespace = current_setting('app.current_tenant', true))
+  WITH CHECK (namespace = current_setting('app.current_tenant', true));
+EXCEPTION WHEN duplicate_object THEN
+  DROP POLICY IF EXISTS emotions_tenant_isolation ON public.emotions;
+  CREATE POLICY emotions_tenant_isolation ON public.emotions FOR ALL
+  TO authenticated
+  USING (namespace = current_setting('app.current_tenant', true))
+  WITH CHECK (namespace = current_setting('app.current_tenant', true));
+END $$;

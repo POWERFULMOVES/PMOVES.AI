@@ -68,7 +68,7 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Request: `{"query": "...", "top_k": 10, "rerank": true}`
 - **Use for:** Knowledge retrieval, semantic search, RAG queries
 
-**Hi-RAG Gateway v1** [Port 8089 CPU, 8110 GPU] **[LEGACY]**
+**Hi-RAG Gateway v1** [Port 8089 CPU, 8090 GPU] **[LEGACY]**
 - Original hybrid RAG implementation
 - Use v2 instead for new features
 
@@ -339,35 +339,22 @@ docker compose --profile agents --profile workers up -d
 
 ## Git & CI Patterns
 
-**Submodules (25 total):**
-- Core: `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES-BoTZ`, `PMOVES.YT`
-- RAG/Research: `PMOVES-HiRAG`, `PMOVES-Deep-Serch`, `PMOVES-Open-Notebook`
-- Media: `PMOVES-Jellyfin`, `PMOVES-Ultimate-TTS-Studio`, `PMOVES-Pipecat`
-- Integration: `PMOVES-tensorzero`, `PMOVES-n8n`, `PMOVES-ToKenism-Multi`
-- Plus health/wealth integrations and more
+**Submodules:**
+- `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES.YT`
+- `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Deep-Serch`
+- `PMOVES-BoTZ`, `PMOVES-DoX`, `PMOVES-HiRAG`
+- Plus health/wealth integrations and more (20 total)
 - **See:** `.claude/context/submodules.md` for complete catalog
-
-**Security Posture (as of 2025-12-23):**
-- CODEOWNERS: 24/24 (100%) - All submodules have code owners
-- Dependabot: 24/24 (100%) - All submodules have automated security updates
-- Branch Protection: 24/24 (100%) - All submodules have branch protection rules
-- **See:** `.claude/learnings/submodule-security-audit-2025-12.md`
 
 **CI/CD:**
 - GitHub Actions for multi-arch builds (amd64, arm64)
-- Self-hosted runners: ai-lab (GPU), vps (CPU), cloudstartup (staging), kvm4 (production)
 - Published to GHCR + Docker Hub
 - Smoke tests via `make verify-all`
-- **See:** `.claude/context/ci-runners.md` for runner deployment
 
 **Branch Strategy:**
 - Main branch: `main`
 - Feature branches: `feature/*`
-- Hardened branches: `PMOVES.AI-Edition-Hardened` (in submodules)
 - PR target: `main`
-- **NEVER delete branches after merging** - User needs them for review
-  - Use `gh pr merge --squash` without `--delete-branch`
-  - Branches are cleaned up manually by user
 
 ## Testing Workflow
 
@@ -422,10 +409,8 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
-- `tier-architecture.md` - **6-tier environment + 5-tier network architecture (SECURITY)**
 - `services-catalog.md` - Complete service listing with all details
-- `submodules.md` - Complete submodules catalog (25 submodules)
-- `ci-runners.md` - Self-hosted runner deployment and configuration
+- `submodules.md` - Complete submodules catalog (20 submodules)
 - `nats-subjects.md` - Comprehensive NATS subject catalog
 - `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference

@@ -111,6 +111,38 @@ PDF_NATS_PUBLISHED = Counter(
     ["topic"]
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Metrics
+# ─────────────────────────────────────────────────────────────────────────────
+PDF_INGEST_REQUESTS = Counter(
+    "pdf_ingest_requests_total",
+    "Total PDF ingest requests",
+    ["status"]
+)
+PDF_INGEST_CHUNKS = Counter(
+    "pdf_ingest_chunks_total",
+    "Total chunks extracted from PDFs"
+)
+PDF_INGEST_BYTES = Counter(
+    "pdf_ingest_bytes_total",
+    "Total bytes processed from PDFs"
+)
+PDF_INGEST_LATENCY = Histogram(
+    "pdf_ingest_latency_seconds",
+    "PDF ingest processing latency in seconds",
+    buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]
+)
+PDF_MINIO_OPS = Counter(
+    "pdf_ingest_minio_ops_total",
+    "Total MinIO operations",
+    ["operation", "status"]
+)
+PDF_NATS_PUBLISHED = Counter(
+    "pdf_ingest_nats_published_total",
+    "Total NATS events published",
+    ["topic"]
+)
+
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")

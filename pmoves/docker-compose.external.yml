@@ -1,36 +1,40 @@
+# YAML anchor for app-tier env loading (matches id008 in main docker-compose.yml)
+x-env-tier-app: &id008
+  env_file:
+    - env.shared
+    - env.tier-app
+
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
-    container_name: cataclysm-wger
+    container_name: pmoves-wger
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
-          - cataclysm-wger
           - pmoves-wger
+          - wger
     environment:
       DJANGO_DEBUG: "${WGER_DJANGO_DEBUG:-False}"
       WGER_USE_GUNICORN: "${WGER_USE_GUNICORN:-True}"
       DJANGO_CLEAR_STATIC_FIRST: "${WGER_CLEAR_STATIC_FIRST:-True}"
       TIME_ZONE: "${WGER_TIME_ZONE:-America/New_York}"
       SITE_URL: "${WGER_SITE_URL:-http://localhost:8000}"
-      FROM_EMAIL: "${WGER_FROM_EMAIL:-PMOVES Health Coach <ops@cataclysmstudios.com>}"
-      DJANGO_ADMINS: "${WGER_DJANGO_ADMINS:-PMOVES Ops <ops@cataclysmstudios.com>}"
     volumes:
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
 
   wger-nginx:
     image: ${WGER_NGINX_IMAGE:-nginx:1.27-alpine}
-    container_name: cataclysm-wger-nginx
+    container_name: pmoves-wger-nginx
     restart: unless-stopped
     depends_on:
       - wger
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
-          - cataclysm-wger-nginx
+          - pmoves-wger-nginx
     ports:
       - "${WGER_HOST_PORT:-8000}:80"
     volumes:
@@ -40,39 +44,39 @@ services:
 
   firefly:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
-    container_name: cataclysm-firefly
+    container_name: pmoves-firefly
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
-          - cataclysm-firefly
+          - pmoves-firefly
+          - firefly
     environment:
       # Keep secrets sourced from env files / runtime secrets. Do not inline defaults.
       APP_KEY: ${FIREFLY_APP_KEY}
       APP_ENV: ${FIREFLY_APP_ENV:-production}
-      SITE_OWNER: ${FIREFLY_SITE_OWNER:-ops@cataclysmstudios.com}
       DB_CONNECTION: ${FIREFLY_DB_CONNECTION:-sqlite}
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
     ports:
-      - "${FIREFLY_PORT:-8080}:8080"
+      - "${FIREFLY_PORT:-8800}:8080"
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
 
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
-    container_name: cataclysm-open-notebook-surrealdb
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
-    command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} rocksdb:/mydata/mydatabase.db
+    container_name: pmoves-open-notebook-surrealdb
+    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
+    command: start --log info --user ${SURREL_USER} --pass ${SURREL_PASS} rocksdb:/mydata/mydatabase.db
     restart: unless-stopped
     user: "0:0"
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
-          - cataclysm-open-notebook-surrealdb
+          - pmoves-open-notebook-surrealdb
           - open-notebook-surrealdb-ext
     volumes:
       - ./data/open-notebook/surreal_data:/mydata
@@ -80,36 +84,40 @@ services:
   open-notebook-ext:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
-    container_name: cataclysm-open-notebook
+    container_name: pmoves-open-notebook-ext
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
-          - cataclysm-open-notebook
-      pmoves:
-        aliases:
-          - cataclysm-open-notebook
+          - pmoves-open-notebook-ext
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
     ports:
-      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"    # UI
-      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"  # API
+      - "${OPEN_NOTEBOOK_UI_PORT_EXT:-8504}:8502"    # UI (alternate port to avoid conflict)
+      - "${OPEN_NOTEBOOK_API_PORT_EXT:-5056}:5055"  # API (alternate port)
     volumes:
-      - ./data/open-notebook/notebook_data:/app/data
+      - ./data/open-notebook/notebook_data_ext:/app/data
+    profiles:
+      - alternate
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
-    container_name: cataclysm-jellyfin
+    container_name: pmoves-jellyfin
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    user: "65532:65532"
+    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
-          - cataclysm-jellyfin
+          - pmoves-jellyfin
+          - jellyfin
+      pmoves_bus:
+        aliases:
+          - jellyfin
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
@@ -122,12 +130,12 @@ services:
       - ./data/jellyfin/media:/media
 
 networks:
-  cataclysm:
+  pmoves_app:
     external: true
-    name: cataclysm-net
-  pmoves:
+    name: pmoves_app
+  pmoves_bus:
     external: true
-    name: pmoves-net
+    name: pmoves_bus
 
 volumes:
   firefly-storage:

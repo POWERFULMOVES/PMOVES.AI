@@ -1,0 +1,24 @@
+# CodeRabbit Configuration for PMOVES.AI
+# Settings for automated code reviews on the hardened (production) branch
+
+reviews:
+  # Enable reviews on the default hardened branch
+  review_status: true
+
+  # Branches to review
+  branches:
+    - "PMOVES.AI-Edition-Hardened"
+    - "PMOVES.AI-Edition-Hardened-v3-clean"
+    - "feat/hardened-*"
+    - "fix/hardened-*"
+    - "gpu-*"          # GPU orchestrator fixes
+    - "remove-*"       # Submodule removals
+    - "revert-*"       # Revert PRs
+
+  # Disable reviews on these branches
+  excluded_branches:
+    - "main"
+    - "origin/main"
+
+# Language setting (locale for reviews)
+language: "en-US"

@@ -113,14 +113,16 @@ RUN pip install -c /tmp/constraints.txt mcp
 # Step 12: Download spacy model
 RUN python -m spacy download en_core_web_sm || true
 
-# Step 12b: FINAL FIX - Ensure scipy/numpy ABI compatibility and version constraints
-# Use pip to forcefully overwrite any mixed conda/pip state with standard wheels
-# Remove deepspeed to prevent transformers from crashing on missing ops
-# Upgrade numba/llvmlite to fix runtime deprecation error
+# Step 12b: FINAL FIX - Ensure scipy/numpy ABI compatibility
+# - Force reinstall numpy/scipy to fix mixed conda/pip state
+# - Remove deepspeed to prevent transformers runtime crashes
+# - Upgrade numba/llvmlite to fix deprecation errors
+# - Nuke numpy/_core artifact if it survives reinstall
 RUN pip uninstall -y numpy deepspeed || true && \
     rm -rf /opt/conda/lib/python3.11/site-packages/numpy* && \
     pip install --force-reinstall "numpy==1.26.4" "scipy==1.11.4" && \
-    pip install --upgrade numba llvmlite
+    pip install --upgrade numba llvmlite && \
+    rm -rf /opt/conda/lib/python3.11/site-packages/numpy/_core
 
 # Step 13: Pre-download model checkpoints (matches Pinokio model download)
 RUN huggingface-cli download cocktailpeanut/oa --local-dir ./checkpoints/openaudio-s1-mini --quiet || \

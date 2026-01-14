@@ -1,3 +1,9 @@
+# YAML anchors for tier-based env file loading
+x-env-tier-worker: &env-tier-worker
+  env_file:
+    - path: env.tier-worker
+      required: false
+
 services:
   n8n:
     build:
@@ -6,7 +12,7 @@ services:
     image: pmoves/n8n:2.1.0-sqlite
     container_name: pmoves-n8n
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-worker
     environment:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
@@ -26,9 +32,9 @@ services:
       - FIREFLY_BASE_URL=${FIREFLY_BASE_URL:-http://cataclysm-firefly:8080}
       - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
       - N8N_NATIVE_PYTHON_RUNNER=true
-      # Supabase REST — n8n reaches host via host.docker.internal
-      - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://host.docker.internal:65421/rest/v1}
-      - SUPA_REST_URL=${SUPA_REST_URL:-${SUPABASE_REST_URL:-http://host.docker.internal:65421/rest/v1}}
+      # Supabase REST — use tier-based URL from env.tier-api
+      - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://postgrest:3000}
+      - SUPA_REST_URL=${SUPA_REST_URL:-${SUPABASE_REST_URL:-http://postgrest:3000/rest/v1}}
       # Agent Zero in same compose project (service name)
       - AGENT_ZERO_BASE_URL=${AGENT_ZERO_BASE_URL:-http://agent-zero:8080}
       # Discord webhook for echo publisher
@@ -46,7 +52,7 @@ services:
     image: n8nio/runners:2.1.0
     container_name: pmoves-n8n-runners
     restart: unless-stopped
-    env_file: [env.shared.generated, env.shared, .env.generated, .env.local]
+    <<: *env-tier-worker
     environment:
       - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300

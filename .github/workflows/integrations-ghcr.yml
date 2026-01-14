@@ -54,7 +54,7 @@ env:
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
-    runs-on: [self-hosted, vps]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -153,7 +153,7 @@ jobs:
             build_args: ''
             platforms: linux/amd64
             generate_sbom: false
-            trivy_ignorefile: .github/trivy/deepresearch.trivyignore
+            trivy_ignorefile: ''
           - name: supaserch
             git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
             ref: main
@@ -191,7 +191,7 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout (stub)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Clone integration repo
         run: |
@@ -283,17 +283,7 @@ jobs:
           COSIGN_EXPERIMENTAL: "1"
         run: |
           set -euo pipefail
-          # Keyless signing relies on GitHub OIDC. We've seen occasional transient 401/invalid-token
-          # responses from the OIDC credential endpoint; retry a few times before failing the job.
-          for attempt in 1 2 3; do
-            echo "→ cosign sign attempt ${attempt}/3"
-            if cosign sign --yes "$IMAGE_DIGEST_REF"; then
-              exit 0
-            fi
-            sleep $((attempt * 5))
-          done
-          echo "✖ cosign sign failed after retries"
-          exit 1
+          cosign sign --yes "$IMAGE_DIGEST_REF"
 
       - name: Install Syft (SBOM)
         if: ${{ matrix.generate_sbom }}
@@ -315,13 +305,13 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (docker build cache)
+      - name: Free disk space (docker prune)
         run: |
           set -euxo pipefail
           docker system df || true
           docker buildx prune -af || true
           docker builder prune -af || true
-          docker system df || true
+          docker system prune -af --volumes || true
           df -h
 
       - name: Pull image for Trivy (private GHCR)
@@ -372,12 +362,4 @@ jobs:
           set -euo pipefail
           issuer="https://token.actions.githubusercontent.com"
           identity="https://github.com/${GITHUB_WORKFLOW_REF}"
-          for attempt in 1 2 3; do
-            echo "→ cosign verify attempt ${attempt}/3"
-            if cosign verify --certificate-oidc-issuer "$issuer" --certificate-identity "$identity" "$IMAGE_DIGEST_REF"; then
-              exit 0
-            fi
-            sleep $((attempt * 3))
-          done
-          echo "✖ cosign verify failed after retries"
-          exit 1
+          cosign verify --certificate-oidc-issuer "$issuer" --certificate-identity "$identity" "$IMAGE_DIGEST_REF"

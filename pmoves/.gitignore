@@ -64,4 +64,5 @@ env.tier-agent
 env.tier-data
 env.tier-llm
 env.tier-media
+env.tier-ui
 env.tier-worker

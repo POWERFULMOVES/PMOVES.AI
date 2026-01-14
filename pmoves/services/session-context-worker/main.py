@@ -12,17 +12,13 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import nats
 from fastapi import FastAPI
-from contextlib import asynccontextmanager
 from nats.aio.client import Client as NATS
-from nats.aio.msg import Msg
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
-from jsonschema import validate, ValidationError as JsonSchemaValidationError
-from services.common.events import load_schema
 
 # Prometheus metrics
 messages_received = Counter(
@@ -58,32 +54,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("session_context_worker")
 
-# Load schemas for payload validation (follows coding guidelines)
-# "Validate payloads against schemas before publishing events using services/common/events.py"
-try:
-    _SESSION_CONTEXT_SCHEMA = load_schema("claude.code.session.context.v1")
-    _KB_UPSERT_SCHEMA = load_schema("kb.upsert.request.v1")
-    logger.info("Loaded schemas: claude.code.session.context.v1, kb.upsert.request.v1")
-except Exception as exc:
-    logger.error("Failed to load schemas: %s", exc, exc_info=True)
-    # Fallback: allow startup but validation will fail
-    _SESSION_CONTEXT_SCHEMA = None
-    _KB_UPSERT_SCHEMA = None
-
-
-def _parse_int_env(env_var: str, default: int) -> int:
-    """Parse integer environment variable with validation and fallback."""
-    value = os.environ.get(env_var, str(default))
-    try:
-        return int(value)
-    except ValueError:
-        logger.warning("Invalid %s value %r, using default %s", env_var, value, default)
-        return default
-
-
 # Environment variables
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
-HEALTH_PORT = _parse_int_env("HEALTH_PORT", 8100)
+HEALTH_PORT = int(os.environ.get("HEALTH_PORT", "8100"))
 SESSION_CONTEXT_SUBJECT = "claude.code.session.context.v1"
 KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 
@@ -91,55 +64,8 @@ KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
 
-
-def _nats_loop_done(task: asyncio.Task) -> None:
-    """Callback for NATS resilience loop task completion."""
-    if not task.cancelled():
-        exc = task.exception()
-        if exc:
-            logger.error("NATS resilience loop crashed unexpectedly: %s", exc, exc_info=True)
-
-
 # FastAPI app for health endpoint
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
-    global _nats_loop_task, _nc
-    # Startup
-    if _nats_loop_task is None or _nats_loop_task.done():
-        logger.info("Starting NATS resilience loop")
-        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
-        _nats_loop_task.add_done_callback(_nats_loop_done)
-    yield
-    # Shutdown
-
-    if _nats_loop_task:
-        _nats_loop_task.cancel()
-        try:
-            await _nats_loop_task
-        except asyncio.CancelledError:
-            logger.debug("NATS resilience loop cancelled successfully")
-        except Exception as e:
-            logger.warning("Unexpected error during NATS loop shutdown: %s", e)
-        _nats_loop_task = None
-
-    if _nc:
-        try:
-            await _nc.close()
-            logger.info("NATS connection closed cleanly")
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning("NATS close error during shutdown: %s", e)
-        _nc = None
-
-
-app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=HEALTH_PORT)
+app = FastAPI(title="Session Context Worker", version="0.1.0")
 
 
 def _extract_searchable_content(context: Dict[str, Any]) -> str:
@@ -233,7 +159,7 @@ def _build_metadata(context: Dict[str, Any]) -> Dict[str, Any]:
         "source": "claude-code",
         "session_id": context.get("session_id", ""),
         "context_type": context.get("context_type", "unknown"),
-        "timestamp": context.get("timestamp", datetime.now(timezone.utc).isoformat()),
+        "timestamp": context.get("timestamp", datetime.utcnow().isoformat()),
     }
 
     # Add optional fields if present
@@ -280,7 +206,7 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     session_id = context.get("session_id", "unknown")
     context_type = context.get("context_type", "unknown")
-    timestamp = context.get("timestamp", datetime.now(timezone.utc).isoformat())
+    timestamp = context.get("timestamp", datetime.utcnow().isoformat())
 
     # Generate unique ID for this KB entry
     kb_id = f"claude-session-{session_id}-{context_type}-{timestamp}"
@@ -304,14 +230,14 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
         "meta": {
             "worker": "session-context-worker",
             "version": "0.1.0",
-            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "processed_at": datetime.utcnow().isoformat(),
         }
     }
 
     return kb_upsert
 
 
-async def _handle_session_context(msg: Msg) -> None:
+async def _handle_session_context(msg: NATS.Msg) -> None:
     """
     Handle incoming session context messages.
 
@@ -326,31 +252,16 @@ async def _handle_session_context(msg: Msg) -> None:
         data = json.loads(msg.data.decode("utf-8"))
 
         if not isinstance(data, dict):
-            logger.warning("Invalid message format: expected dict, got %s", type(data))
+            logger.warning(f"Invalid message format: expected dict, got {type(data)}")
             messages_failed.labels("invalid_format").inc()
             processing_duration.labels("unknown").observe(time.time() - start_time)
             return
-
-        # Validate incoming payload against schema (prevents schema drift)
-        if _SESSION_CONTEXT_SCHEMA:
-            try:
-                validate(instance=data, schema=_SESSION_CONTEXT_SCHEMA)
-            except JsonSchemaValidationError as exc:
-                logger.warning(
-                    "Session context payload validation failed: %s",
-                    exc.message,
-                    extra={"session_id": data.get("session_id", "unknown"), "validation_error": exc.message}
-                )
-                messages_failed.labels("schema_validation").inc()
-                processing_duration.labels("unknown").observe(time.time() - start_time)
-                return
 
         session_id = data.get("session_id", "unknown")
         context_type = data.get("context_type", "unknown")
 
         logger.info(
-            "Processing session context: session_id=%s, type=%s",
-            session_id, context_type,
+            f"Processing session context: session_id={session_id}, type={context_type}",
             extra={
                 "session_id": session_id,
                 "context_type": context_type,
@@ -360,20 +271,6 @@ async def _handle_session_context(msg: Msg) -> None:
         # Transform to kb.upsert format
         kb_upsert = _transform_to_kb_upsert(data)
 
-        # Validate outgoing payload against schema (prevents schema drift)
-        if _KB_UPSERT_SCHEMA:
-            try:
-                validate(instance=kb_upsert, schema=_KB_UPSERT_SCHEMA)
-            except JsonSchemaValidationError as exc:
-                logger.error(
-                    "KB upsert payload validation failed: %s",
-                    exc.message,
-                    extra={"session_id": session_id, "validation_error": exc.message}
-                )
-                messages_failed.labels("kb_schema_validation").inc()
-                processing_duration.labels(context_type).observe(time.time() - start_time)
-                return
-
         # Publish to kb.upsert.request.v1
         if _nc:
             await _nc.publish(
@@ -382,8 +279,7 @@ async def _handle_session_context(msg: Msg) -> None:
             )
             kb_upserts_published.labels("claude-code-sessions").inc()
             logger.info(
-                "Published KB upsert for session %s",
-                session_id,
+                f"Published KB upsert for session {session_id}",
                 extra={
                     "session_id": session_id,
                     "kb_id": kb_upsert["items"][0]["id"],
@@ -399,12 +295,12 @@ async def _handle_session_context(msg: Msg) -> None:
         messages_processed.labels(context_type).inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         logger.exception("Failed to decode JSON")
         messages_failed.labels("json_decode_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
-    except Exception as exc:
-        logger.error("Error processing session context: %s", exc, exc_info=True)
+    except Exception as e:
+        logger.error(f"Error processing session context: {e}", exc_info=True)
         messages_failed.labels("processing_error").inc()
         processing_duration.labels(context_type).observe(time.time() - start_time)
 
@@ -414,14 +310,12 @@ async def _register_nats_subscriptions(nc: NATS) -> None:
     try:
         await nc.subscribe(SESSION_CONTEXT_SUBJECT, cb=_handle_session_context)
         logger.info(
-            "Subscribed to %s",
-            SESSION_CONTEXT_SUBJECT,
+            f"Subscribed to {SESSION_CONTEXT_SUBJECT}",
             extra={"subject": SESSION_CONTEXT_SUBJECT}
         )
     except Exception as exc:
         logger.error(
-            "Failed to subscribe to %s: %s",
-            SESSION_CONTEXT_SUBJECT, exc,
+            f"Failed to subscribe to {SESSION_CONTEXT_SUBJECT}: {exc}",
             exc_info=True
         )
 
@@ -480,7 +374,7 @@ async def _nats_resilience_loop() -> None:
         # Connection successful
         _nc = nc
         backoff = 1.0
-        logger.info("NATS connected: %s", NATS_URL, extra={"servers": [NATS_URL]})
+        logger.info(f"NATS connected: {NATS_URL}", extra={"servers": [NATS_URL]})
 
         # Register subscriptions
         await _register_nats_subscriptions(nc)
@@ -491,8 +385,8 @@ async def _nats_resilience_loop() -> None:
         except asyncio.CancelledError:
             try:
                 await nc.close()
-            except Exception as e:
-                logger.debug("Error closing NATS connection during cancellation: %s", e)
+            except Exception:
+                pass
             if _nc is nc:
                 _nc = None
             raise
@@ -500,8 +394,8 @@ async def _nats_resilience_loop() -> None:
         # Clean up connection
         try:
             await nc.close()
-        except Exception as e:
-            logger.debug("Error closing NATS connection during cleanup: %s", e)
+        except Exception:
+            pass
 
 
 @app.get("/healthz")
@@ -520,4 +414,37 @@ async def metrics():
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
+@app.on_event("startup")
+async def startup():
+    """Start NATS connection loop on app startup."""
+    global _nats_loop_task
 
+    if _nats_loop_task is None or _nats_loop_task.done():
+        logger.info("Starting NATS resilience loop")
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Clean shutdown of NATS connection."""
+    global _nats_loop_task, _nc
+
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        try:
+            await _nats_loop_task
+        except Exception:
+            pass
+        _nats_loop_task = None
+
+    if _nc:
+        try:
+            await _nc.close()
+        except Exception:
+            pass
+        _nc = None
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=HEALTH_PORT)

@@ -2,6 +2,7 @@
 	path = PMOVES-ToKenism-Multi
 	url = https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git
 	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-Creator"]
 	path = PMOVES-Creator
 	url = https://github.com/POWERFULMOVES/PMOVES-Creator.git
@@ -10,6 +11,7 @@
 	path = PMOVES-Agent-Zero
 	url = https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-Archon"]
 	path = PMOVES-Archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
@@ -50,6 +52,7 @@
 	path = PMOVES-BoTZ
 	url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
 	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-DoX"]
 	path = PMOVES-DoX
 	url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
@@ -68,9 +71,10 @@
 [submodule "PMOVES-n8n"]
 	path = PMOVES-n8n
 	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
-[submodule "pmoves/vendor/agentgym-rl"]
-	path = pmoves/vendor/agentgym-rl
+[submodule "Pmoves-AgentGym-RL"]
+	path = Pmoves-AgentGym-RL
 	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
+	ignore = all
 [submodule "PMOVES-crush"]
 	path = PMOVES-crush
 	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
@@ -96,24 +100,49 @@
 	path = Pmoves-hyperdimensions
 	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
 	ignore = all
-[submodule "pmoves/vendor/e2b"]
-	path = pmoves/vendor/e2b
+[submodule "e2b"]
+	path = e2b
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-[submodule "pmoves/vendor/e2b-desktop"]
-	path = pmoves/vendor/e2b-desktop
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
-[submodule "pmoves/vendor/e2b-infra"]
-	path = pmoves/vendor/e2b-infra
-	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
-[submodule "pmoves/vendor/e2b-mcp-server"]
-	path = pmoves/vendor/e2b-mcp-server
-	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-[submodule "pmoves/vendor/e2b-spells"]
-	path = pmoves/vendor/e2b-spells
-	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
-[submodule "pmoves/vendor/e2b-surf"]
-	path = pmoves/vendor/e2b-surf
-	url = https://github.com/POWERFULMOVES/pmoves-surf.git
+	ignore = all
 [submodule "research/A2UI"]
 	path = research/A2UI
 	url = https://github.com/google/A2UI.git
+	ignore = all
+[submodule "PMOVES-A2UI"]
+	path = PMOVES-A2UI
+	url = https://github.com/google/A2UI.git
+	ignore = all
+[submodule "PMOVES-MAI-UI"]
+	path = PMOVES-MAI-UI
+	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
+	ignore = all
+[submodule "PMOVES-BotZ-gateway"]
+	path = PMOVES-BotZ-gateway
+	url = https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git
+	ignore = all
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-Danger-infra"]
+	path = PMOVES-Danger-infra
+	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+	ignore = all
+[submodule "PMOVES-E2B-Danger-Room-Desktop"]
+	path = PMOVES-E2B-Danger-Room-Desktop
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
+	ignore = all
+[submodule "PMOVES-E2b-Spells"]
+	path = PMOVES-E2b-Spells
+	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+	ignore = all
+[submodule "pmoves-e2b-mcp-server"]
+	path = pmoves-e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+	ignore = all
+[submodule "pmoves-surf"]
+	path = pmoves-surf
+	url = https://github.com/POWERFULMOVES/pmoves-surf.git
+	ignore = all
+[submodule "PMOVES-E2B-Danger-Room-Deskdesktop"]
+	path = PMOVES-E2B-Danger-Room-Deskdesktop
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
+	ignore = all
+	branch = PMOVES.AI-Edition-Hardened

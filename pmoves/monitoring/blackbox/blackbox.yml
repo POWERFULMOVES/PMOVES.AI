@@ -1,11 +1,62 @@
+# Blackbox Exporter configuration for PMOVES.AI
+# HTTP, TCP, and ICMP probes for service health monitoring
+
 modules:
+  # HTTP 2xx probe for web endpoints
   http_2xx:
     prober: http
     timeout: 10s
     http:
-      preferred_ip_protocol: ip4
-      valid_http_versions: ["HTTP/1.1", "HTTP/2"]
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 204, 301, 302]
       method: GET
-      tls_config:
-        insecure_skip_verify: true
+      follow_redirects: true
+      preferred_ip_protocol: ip4
 
+  # HTTP with POST for API endpoints
+  http_post_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 204]
+      method: POST
+      follow_redirects: true
+      preferred_ip_protocol: ip4
+
+  # TCP connect probe for ports
+  tcp_connect:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+
+  # ICMP ping probe
+  icmp:
+    prober: icmp
+    timeout: 10s
+    icmp:
+      preferred_ip_protocol: ip4
+
+  # DNS query probe
+  dns_udp:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "localhost"
+      query_type: "A"
+      valid_rcodes: ["NOERROR"]
+      preferred_ip_protocol: ip4
+
+  # Specific probe for PMOVES health endpoints
+  pmoves_healthz:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 204, 401]  # 401 is OK for auth-required endpoints
+      method: GET
+      headers:
+        Accept: application/json
+      follow_redirects: true
+      preferred_ip_protocol: ip4

@@ -39,30 +39,7 @@ from providers import (
     WhisperProvider,
     UltimateTTSError,
     UltimateTTSProvider,
-    VoiceCloningProvider,
 )
-
-# Prosodic sidecar imports
-from prosodic import (
-    BoundaryType,
-    ProsodicChunk,
-    parse_prosodic,
-    format_prosodic_analysis,
-    prosodic_stitch,
-    stitch_chunks,
-)
-
-# Pipecat integration (optional - enable with PIPECAT_ENABLED=true)
-from pipecat.config import get_pipecat_config
-PIPECAT_CONFIG = get_pipecat_config()
-
-try:
-    from pipecat.transports import FluteFastAPIWebsocketTransport, FluteFastAPIWebsocketParams
-    from pipecat.pipelines import VoiceAgentConfig, build_voice_agent_pipeline
-    from pipecat.processors import TensorZeroLLMProcessor
-    PIPECAT_AVAILABLE = True
-except ImportError:
-    PIPECAT_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -80,7 +57,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:7861").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7860")
-PRESIGN_URL = os.getenv("PRESIGN_URL", "http://presign:8088")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
 
@@ -153,33 +129,11 @@ STT_DURATION = Histogram(
     "STT recognition duration in seconds",
     ["provider"]
 )
-PROSODIC_TTFS = Histogram(
-    "flute_prosodic_ttfs_seconds",
-    "Time-to-first-speech for prosodic synthesis",
-    ["provider"],
-    buckets=(0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0)
-)
-PROSODIC_CHUNKS = Histogram(
-    "flute_prosodic_chunks",
-    "Number of prosodic chunks per synthesis",
-    buckets=(1, 2, 3, 4, 5, 7, 10, 15)
-)
-PROSODIC_CHUNKS_FAILED = Counter(
-    "flute_prosodic_chunks_failed_total",
-    "Number of prosodic chunks that failed to synthesize",
-    ["provider", "reason"]
-)
-CHIT_EVENTS_FAILED = Counter(
-    "flute_chit_events_failed_total",
-    "Number of CHIT geometry bus publish failures",
-    ["reason"]
-)
 
 # Provider instances (initialized on startup)
 vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
-cloning_provider: Optional[VoiceCloningProvider] = None
 nats_client = None
 
 
@@ -247,40 +201,6 @@ class SynthesizeRequest(BaseModel):
     output_format: str = Field("wav", description="Output format: wav, mp3, pcm")
 
 
-class ProsodicAnalyzeRequest(BaseModel):
-    """Request for prosodic text analysis."""
-    text: str = Field(..., description="Text to analyze", max_length=5000)
-    first_chunk_words: int = Field(2, ge=1, le=10, description="Words in first chunk (for TTFS)")
-    max_syllables_before_breath: int = Field(10, ge=5, le=20, description="Syllables before forced breath")
-
-
-class ProsodicChunkResponse(BaseModel):
-    """A single prosodic chunk in the analysis."""
-    text: str
-    boundary_after: str
-    pause_ms: float
-    is_first: bool
-    is_final: bool
-    estimated_syllables: int
-
-
-class ProsodicAnalyzeResponse(BaseModel):
-    """Response for prosodic text analysis."""
-    chunks: List[ProsodicChunkResponse]
-    total_chunks: int
-    estimated_ttfs_benefit: str
-
-
-class ProsodicSynthesizeRequest(BaseModel):
-    """Request for prosodic TTS synthesis (low-latency with natural pauses)."""
-    text: str = Field(..., description="Text to synthesize", max_length=5000)
-    provider: Optional[str] = Field(None, description="Provider override (vibevoice, ultimate_tts)")
-    voice: Optional[str] = Field(None, description="Voice preset for provider")
-    engine: Optional[str] = Field(None, description="TTS engine for ultimate_tts")
-    first_chunk_words: int = Field(2, ge=1, le=10, description="Words in first chunk (for TTFS)")
-    output_format: str = Field("wav", description="Output format: wav, pcm")
-
-
 class SynthesizeResponse(BaseModel):
     """Response for TTS synthesis."""
     audio_uri: Optional[str] = Field(None, description="MinIO URI if stored")
@@ -326,43 +246,10 @@ class ConfigResponse(BaseModel):
     features: Dict[str, bool]
 
 
-# Voice cloning request/response models
-class VoiceCloneRegisterResponse(BaseModel):
-    """Response for voice sample registration."""
-    persona_id: str
-    status: str
-    sample_uri: str
-    message: str
-
-
-class VoiceCloneTrainRequest(BaseModel):
-    """Request to start voice cloning training."""
-    persona_id: str = Field(..., description="Voice persona UUID")
-
-
-class VoiceCloneStatusResponse(BaseModel):
-    """Response for voice cloning status."""
-    persona_id: str
-    voice_cloning_status: Optional[str] = None
-    training_progress: Optional[int] = None
-    training_message: Optional[str] = None
-    rvc_model_uri: Optional[str] = None
-    rvc_index_uri: Optional[str] = None
-    training_started_at: Optional[str] = None
-    training_completed_at: Optional[str] = None
-
-
-class VoiceCloneSynthesizeRequest(BaseModel):
-    """Request to synthesize with cloned voice."""
-    text: str = Field(..., description="Text to synthesize", max_length=5000)
-    persona_id: str = Field(..., description="Voice persona UUID with trained model")
-    output_format: str = Field("wav", description="Output format: wav, pcm")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
-    global vibevoice_provider, whisper_provider, ultimate_tts_provider, cloning_provider, nats_client
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, nats_client
 
     logger.info("Starting Flute Gateway...")
 
@@ -387,7 +274,7 @@ async def lifespan(app: FastAPI):
         ultimate_tts_provider = None
         logger.info("Ultimate-TTS disabled (set ULTIMATE_TTS_URL to enable).")
 
-    # Initialize NATS (optional) - must be before cloning_provider
+    # Initialize NATS (optional)
     try:
         import nats
         nats_client = await nats.connect(NATS_URL)
@@ -396,16 +283,6 @@ async def lifespan(app: FastAPI):
         logger.warning("NATS connection failed: %s (continuing without NATS)", e)
         nats_client = None
 
-    # Initialize Voice Cloning provider (after NATS for nats_client)
-    cloning_provider = VoiceCloningProvider(
-        supabase_url=SUPABASE_URL,
-        supabase_key=SUPABASE_KEY,
-        ultimate_tts_url=ULTIMATE_TTS_URL,
-        presign_url=PRESIGN_URL,
-        nats_client=nats_client,
-    )
-    logger.info("Voice Cloning provider enabled")
-
     logger.info("Flute Gateway started successfully")
     yield
 
@@ -413,8 +290,6 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Flute Gateway...")
     if nats_client:
         await nats_client.close()
-    if cloning_provider:
-        await cloning_provider.close()
 
 
 # Create FastAPI app
@@ -495,9 +370,8 @@ async def get_config():
             "tts_batch": True,
             "tts_stream": True,
             "stt_batch": True,
-            "stt_stream": PIPECAT_CONFIG.enabled and PIPECAT_AVAILABLE,
-            "duplex_voice": PIPECAT_CONFIG.enabled and PIPECAT_AVAILABLE,
-            "voice_cloning": True,
+            "stt_stream": False,  # TODO: Implement
+            "voice_cloning": False,  # TODO: Implement
             "personas": True,
         }
     )
@@ -600,7 +474,7 @@ async def synthesize_speech(request: SynthesizeRequest):
     except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="500").inc()
         logger.exception("TTS synthesis failed")
-        raise HTTPException(status_code=500, detail="TTS synthesis failed") from e
+        raise HTTPException(status_code=500, detail="TTS synthesis failed")
 
 
 @app.post("/v1/voice/synthesize/audio", dependencies=[Depends(verify_api_key)])
@@ -689,280 +563,7 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
     except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
         logger.exception("TTS synthesis (audio) failed")
-        raise HTTPException(status_code=500, detail="TTS synthesis failed") from e
-
-
-# Prosodic analysis endpoint
-@app.post("/v1/voice/analyze/prosodic", response_model=ProsodicAnalyzeResponse, dependencies=[Depends(verify_api_key)])
-async def analyze_prosodic(request: ProsodicAnalyzeRequest):
-    """
-    Analyze text for prosodic chunking without synthesizing.
-
-    Returns the chunking structure that would be used for prosodic TTS,
-    useful for debugging and understanding how text will be split.
-    """
-    chunks = parse_prosodic(
-        request.text,
-        first_chunk_words=request.first_chunk_words,
-        max_syllables_before_breath=request.max_syllables_before_breath,
-    )
-
-    if not chunks:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="400").inc()
-        raise HTTPException(status_code=400, detail="No text to analyze (empty or whitespace-only input)")
-
-    chunk_responses = [
-        ProsodicChunkResponse(
-            text=chunk.text,
-            boundary_after=chunk.boundary_after.name,
-            pause_ms=chunk.pause_after,
-            is_first=chunk.is_first,
-            is_final=chunk.is_final,
-            estimated_syllables=chunk.estimated_syllables,
-        )
-        for chunk in chunks
-    ]
-
-    # Estimate TTFS benefit: compare first chunk vs full text word count
-    total_words = len(request.text.strip().split())
-    first_chunk_words = len(chunks[0].text.split())
-    ratio = first_chunk_words / total_words if total_words > 0 else 1.0
-    benefit = f"~{int((1 - ratio) * 100)}% faster TTFS (first {first_chunk_words}/{total_words} words)"
-
-    REQUESTS_TOTAL.labels(endpoint="/v1/voice/analyze/prosodic", status="200").inc()
-
-    return ProsodicAnalyzeResponse(
-        chunks=chunk_responses,
-        total_chunks=len(chunks),
-        estimated_ttfs_benefit=benefit,
-    )
-
-
-# Prosodic TTS synthesis endpoint
-@app.post("/v1/voice/synthesize/prosodic", dependencies=[Depends(verify_api_key)])
-async def synthesize_prosodic(request: ProsodicSynthesizeRequest):
-    """
-    Synthesize speech with prosodic chunking for ultra-low TTFS.
-
-    Uses the prosodic sidecar approach:
-    1. Parse text into natural prosodic chunks
-    2. Synthesize first chunk immediately (tiny, for fast TTFS)
-    3. Synthesize remaining chunks in parallel
-    4. Stitch with natural pauses and optional breath sounds
-
-    Returns audio with ~160ms TTFS vs ~750ms for baseline synthesis.
-    """
-    import time
-    import numpy as np
-    start_time = time.time()
-
-    provider_name = request.provider or DEFAULT_PROVIDER
-    output_format = (request.output_format or "wav").lower().strip()
-
-    if output_format not in {"wav", "pcm"}:
-        raise HTTPException(status_code=400, detail=f"output_format '{output_format}' not supported")
-
-    # Parse into prosodic chunks
-    chunks = parse_prosodic(request.text, first_chunk_words=request.first_chunk_words)
-    if not chunks:
-        raise HTTPException(status_code=400, detail="No text to synthesize")
-
-    PROSODIC_CHUNKS.observe(len(chunks))
-
-    try:
-        if provider_name == "vibevoice" and vibevoice_provider:
-            sample_rate = 24000
-
-            # Synthesize first chunk for TTFS measurement
-            first_pcm = await vibevoice_provider.synthesize(
-                text=chunks[0].text,
-                voice=request.voice,
-            )
-            ttfs = time.time() - start_time
-            PROSODIC_TTFS.labels(provider="vibevoice").observe(ttfs)
-
-            if not first_pcm:
-                raise HTTPException(status_code=502, detail="VibeVoice returned empty audio")
-
-            # Convert to float32 for processing
-            first_audio = np.frombuffer(first_pcm, dtype=np.int16).astype(np.float32) / 32768.0
-
-            # Synthesize remaining chunks (could be parallelized in future)
-            audio_chunks = [first_audio]
-            boundaries = []
-
-            for chunk_idx, chunk in enumerate(chunks[1:], start=1):
-                pcm = await vibevoice_provider.synthesize(
-                    text=chunk.text,
-                    voice=request.voice,
-                )
-                if not pcm:
-                    logger.error(
-                        "VibeVoice returned empty audio for chunk %d/%d: %r",
-                        chunk_idx + 1, len(chunks), chunk.text[:50]
-                    )
-                    PROSODIC_CHUNKS_FAILED.labels(provider="vibevoice", reason="empty_audio").inc()
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"VibeVoice failed to synthesize chunk {chunk_idx + 1}/{len(chunks)}"
-                    )
-                audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-                audio_chunks.append(audio)
-                boundaries.append(chunks[chunk_idx - 1].boundary_after)
-
-            # Stitch with prosodic transitions
-            if len(audio_chunks) > 1:
-                final_audio = stitch_chunks(audio_chunks, boundaries, sample_rate=sample_rate)
-            else:
-                final_audio = audio_chunks[0]
-
-            # Convert back to PCM16
-            final_pcm = (final_audio * 32767).astype(np.int16).tobytes()
-
-            duration = time.time() - start_time
-            TTS_DURATION.labels(provider="vibevoice_prosodic").observe(duration)
-            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="200").inc()
-
-            # Publish CHIT voice attribution event
-            audio_duration = len(final_pcm) / 48000  # 24kHz * 2 bytes
-            await _publish_chit_voice_event(
-                provider="vibevoice_prosodic",
-                text_length=len(request.text),
-                audio_duration=audio_duration,
-                voice=request.voice,
-            )
-
-            if output_format == "pcm":
-                return Response(content=final_pcm, media_type="application/octet-stream")
-
-            wav_bytes = _pcm16_to_wav_bytes(final_pcm, sample_rate=sample_rate)
-            return Response(
-                content=wav_bytes,
-                media_type="audio/wav",
-                headers={
-                    "Content-Disposition": 'attachment; filename="prosodic_tts.wav"',
-                    "X-Prosodic-TTFS-Ms": str(int(ttfs * 1000)),
-                    "X-Prosodic-Chunks": str(len(chunks)),
-                },
-            )
-
-        elif provider_name == "ultimate_tts" and ultimate_tts_provider:
-            sample_rate = 24000
-
-            # Synthesize first chunk
-            first_wav = await ultimate_tts_provider.synthesize(
-                text=chunks[0].text,
-                voice=request.voice,
-                engine=request.engine or "kitten_tts",
-            )
-            ttfs = time.time() - start_time
-            PROSODIC_TTFS.labels(provider="ultimate_tts").observe(ttfs)
-
-            if not first_wav:
-                raise HTTPException(status_code=502, detail="Ultimate-TTS returned empty audio")
-
-            # Extract PCM from WAV and convert to float32
-            try:
-                with io.BytesIO(first_wav) as buf:
-                    with wave.open(buf, "rb") as wf:
-                        sample_rate = wf.getframerate()
-                        first_pcm = wf.readframes(wf.getnframes())
-            except wave.Error as wav_err:
-                logger.error("WAV parsing failed for first chunk (%d bytes): %s", len(first_wav), wav_err)
-                PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="wav_parse_error").inc()
-                raise HTTPException(
-                    status_code=502,
-                    detail="WAV parsing failed for first chunk"
-                ) from wav_err
-            first_audio = np.frombuffer(first_pcm, dtype=np.int16).astype(np.float32) / 32768.0
-
-            audio_chunks = [first_audio]
-            boundaries = []
-
-            for chunk_idx, chunk in enumerate(chunks[1:], start=1):
-                wav_data = await ultimate_tts_provider.synthesize(
-                    text=chunk.text,
-                    voice=request.voice,
-                    engine=request.engine or "kitten_tts",
-                )
-                if not wav_data:
-                    logger.error(
-                        "Ultimate-TTS returned empty audio for chunk %d/%d: %r",
-                        chunk_idx + 1, len(chunks), chunk.text[:50]
-                    )
-                    PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="empty_audio").inc()
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"Ultimate-TTS failed to synthesize chunk {chunk_idx + 1}/{len(chunks)}"
-                    )
-                try:
-                    with io.BytesIO(wav_data) as buf:
-                        with wave.open(buf, "rb") as wf:
-                            pcm_data = wf.readframes(wf.getnframes())
-                except wave.Error as wav_err:
-                    logger.error(
-                        "WAV parsing failed for chunk %d/%d (%d bytes): %s",
-                        chunk_idx + 1, len(chunks), len(wav_data), wav_err
-                    )
-                    PROSODIC_CHUNKS_FAILED.labels(provider="ultimate_tts", reason="wav_parse_error").inc()
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"WAV parsing failed for chunk {chunk_idx + 1}/{len(chunks)}"
-                    ) from wav_err
-                audio = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
-                audio_chunks.append(audio)
-                boundaries.append(chunks[chunk_idx - 1].boundary_after)
-
-            # Stitch with prosodic transitions
-            if len(audio_chunks) > 1:
-                final_audio = stitch_chunks(audio_chunks, boundaries, sample_rate=sample_rate)
-            else:
-                final_audio = audio_chunks[0]
-
-            final_pcm = (final_audio * 32767).astype(np.int16).tobytes()
-
-            duration = time.time() - start_time
-            TTS_DURATION.labels(provider="ultimate_tts_prosodic").observe(duration)
-            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="200").inc()
-
-            audio_duration = len(final_pcm) / (sample_rate * 2)
-            await _publish_chit_voice_event(
-                provider="ultimate_tts_prosodic",
-                text_length=len(request.text),
-                audio_duration=audio_duration,
-                voice=request.voice,
-            )
-
-            if output_format == "pcm":
-                return Response(content=final_pcm, media_type="application/octet-stream")
-
-            wav_bytes = _pcm16_to_wav_bytes(final_pcm, sample_rate=sample_rate)
-            return Response(
-                content=wav_bytes,
-                media_type="audio/wav",
-                headers={
-                    "Content-Disposition": 'attachment; filename="prosodic_tts.wav"',
-                    "X-Prosodic-TTFS-Ms": str(int(ttfs * 1000)),
-                    "X-Prosodic-Chunks": str(len(chunks)),
-                },
-            )
-
-        if provider_name == "vibevoice" and not vibevoice_provider:
-            raise HTTPException(status_code=503, detail="VibeVoice provider not configured")
-        if provider_name == "ultimate_tts" and not ultimate_tts_provider:
-            raise HTTPException(status_code=503, detail="Ultimate-TTS provider not configured")
-        raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available for prosodic synthesis")
-
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError) as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="502").inc()
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except HTTPException as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status=str(exc.status_code)).inc()
-        raise
-    except Exception as e:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="500").inc()
-        logger.exception("Prosodic TTS synthesis failed")
-        raise HTTPException(status_code=500, detail="Prosodic TTS synthesis failed") from e
+        raise HTTPException(status_code=500, detail="TTS synthesis failed")
 
 
 # STT recognition endpoint
@@ -1010,7 +611,7 @@ async def recognize_speech(
     except Exception as e:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/recognize", status="500").inc()
         logger.exception("STT recognition failed")
-        raise HTTPException(status_code=500, detail="STT recognition failed") from e
+        raise HTTPException(status_code=500, detail="STT recognition failed")
 
 
 # Voice personas endpoints
@@ -1031,15 +632,12 @@ async def list_personas() -> List[Dict[str, Any]]:
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="200").inc()
                 return resp.json()
             else:
-                logger.error(
+                logger.warning(
                     "Supabase persona query failed: status=%s body=%s",
                     resp.status_code, resp.text[:200] if resp.text else "empty"
                 )
                 REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status=str(resp.status_code)).inc()
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Failed to fetch personas from database (status {resp.status_code})"
-                )
+                return []
     except Exception:
         logger.exception("Failed to fetch personas")
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/personas", status="500").inc()
@@ -1071,201 +669,6 @@ async def get_persona(persona_id: str) -> Dict[str, Any]:
     except (httpx.HTTPError, httpx.RequestError) as exc:
         logger.exception("Failed to fetch persona")
         raise HTTPException(status_code=500, detail="Failed to fetch persona") from exc
-
-
-# ============================================================================
-# Voice Cloning Endpoints
-# ============================================================================
-
-@app.post("/v1/voice/clone/register", response_model=VoiceCloneRegisterResponse, dependencies=[Depends(verify_api_key)])
-async def register_voice_sample(
-    persona_slug: str = Form(...),
-    audio: UploadFile = File(...),
-):
-    """
-    Register a voice sample for cloning.
-
-    Uploads a voice sample and queues it for RVC training.
-    The sample should be 10-30 seconds of clear speech.
-
-    Args:
-        persona_slug: Voice persona slug to attach the sample to
-        audio: Audio file (WAV or MP3 format, 10-30 seconds recommended)
-
-    Returns:
-        Registration confirmation with persona_id and status
-    """
-    import time
-    start_time = time.time()
-
-    try:
-        # Read audio data
-        audio_data = await audio.read()
-        audio_format = audio.filename.split(".")[-1].lower() if audio.filename else "wav"
-
-        if audio_format not in {"wav", "mp3"}:
-            REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="400").inc()
-            raise HTTPException(status_code=400, detail="Audio format must be WAV or MP3")
-
-        # Validate audio size (max 10MB)
-        if len(audio_data) > 10 * 1024 * 1024:
-            REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="400").inc()
-            raise HTTPException(status_code=400, detail="Audio file too large (max 10MB)")
-
-        # Register sample
-        result = await cloning_provider.register_voice_sample(
-            persona_slug=persona_slug,
-            sample_audio_data=audio_data,
-            sample_format=audio_format,
-        )
-
-        duration = time.time() - start_time
-        logger.info("Voice sample registered for %s in %.2fs", persona_slug, duration)
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="200").inc()
-
-        return VoiceCloneRegisterResponse(**result)
-
-    except ValueError as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="400").inc()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as e:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/register", status="500").inc()
-        logger.exception("Voice sample registration failed")
-        raise HTTPException(status_code=500, detail="Failed to register voice sample") from e
-
-
-@app.post("/v1/voice/clone/train", dependencies=[Depends(verify_api_key)])
-async def start_voice_training(request: VoiceCloneTrainRequest):
-    """
-    Start RVC training for a registered voice sample.
-
-    Triggers the GPU training job for the registered voice sample.
-    Training typically takes 10-30 minutes depending on GPU availability.
-
-    Args:
-        request: Training request with persona_id
-
-    Returns:
-        Training job confirmation
-    """
-    try:
-        result = await cloning_provider.start_training(request.persona_id)
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="200").inc()
-        return result
-
-    except ValueError as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="400").inc()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as e:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/train", status="500").inc()
-        logger.exception("Voice training start failed")
-        raise HTTPException(status_code=500, detail="Failed to start voice training") from e
-
-
-@app.get("/v1/voice/clone/status/{persona_id}", response_model=VoiceCloneStatusResponse, dependencies=[Depends(verify_api_key)])
-async def get_voice_training_status(persona_id: str):
-    """
-    Get training status for a voice clone.
-
-    Returns the current training status, progress, and model URIs.
-
-    Args:
-        persona_id: Voice persona UUID
-
-    Returns:
-        Training status with progress and model URIs (if completed)
-    """
-    try:
-        result = await cloning_provider.get_training_status(persona_id)
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/status", status="200").inc()
-        return VoiceCloneStatusResponse(**result)
-
-    except ValueError as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/status", status="404").inc()
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/status", status="500").inc()
-        logger.exception("Failed to get training status")
-        raise HTTPException(status_code=500, detail="Failed to get training status")
-
-
-@app.get("/v1/voice/clone/jobs", dependencies=[Depends(verify_api_key)])
-async def list_voice_training_jobs(status: Optional[str] = None):
-    """
-    List all voice cloning training jobs.
-
-    Args:
-        status: Optional filter by status (pending, training, completed, failed)
-
-    Returns:
-        List of training job summaries
-    """
-    try:
-        if status and status not in {"pending", "training", "completed", "failed"}:
-            REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="400").inc()
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid status. Must be one of: pending, training, completed, failed"
-            )
-
-        jobs = await cloning_provider.list_training_jobs(status=status)
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="200").inc()
-        return {"jobs": jobs, "count": len(jobs)}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/jobs", status="500").inc()
-        logger.exception("Failed to list training jobs")
-        raise HTTPException(status_code=500, detail="Failed to list training jobs") from e
-
-
-@app.post("/v1/voice/clone/synthesize", dependencies=[Depends(verify_api_key)])
-async def synthesize_cloned_voice(request: VoiceCloneSynthesizeRequest):
-    """
-    Synthesize speech using a trained cloned voice.
-
-    Requires the voice training to be completed before synthesis.
-
-    Args:
-        request: Synthesis request with text and persona_id
-
-    Returns:
-        Audio file (WAV or PCM format)
-    """
-    import time
-    start_time = time.time()
-
-    try:
-        audio_data = await cloning_provider.synthesize_cloned(
-            text=request.text,
-            persona_id=request.persona_id,
-        )
-
-        duration = time.time() - start_time
-        logger.info("Cloned voice synthesis completed in %.2fs", duration)
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="200").inc()
-
-        output_format = request.output_format.lower()
-        if output_format == "pcm":
-            return Response(content=audio_data, media_type="application/octet-stream")
-        else:
-            return Response(
-                content=audio_data,
-                media_type="audio/wav",
-                headers={"Content-Disposition": 'attachment; filename="cloned_voice.wav"'},
-            )
-
-    except ValueError as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="400").inc()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except NotImplementedError as exc:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="501").inc()
-        raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except Exception:
-        REQUESTS_TOTAL.labels(endpoint="/v1/voice/clone/synthesize", status="500").inc()
-        logger.exception("Cloned voice synthesis failed")
-        raise HTTPException(status_code=500, detail="Cloned voice synthesis failed")
 
 
 # WebSocket TTS streaming endpoint
@@ -1324,127 +727,6 @@ async def websocket_tts(websocket: WebSocket):
             pass  # WebSocket already closed
     finally:
         await websocket.close()
-
-
-# Full duplex voice agent WebSocket endpoint (pipecat)
-@app.websocket("/v1/voice/stream/duplex")
-async def websocket_duplex(websocket: WebSocket, persona: Optional[str] = None):
-    """
-    Full duplex voice conversation WebSocket endpoint.
-
-    Uses pipecat pipeline: VAD → STT → LLM → TTS
-
-    Protocol:
-        Client → Server:
-            - Binary: Audio frames (PCM16, 24kHz, mono)
-            - JSON: {"type": "start", "voice": "default", "persona": "assistant"}
-            - JSON: {"type": "text", "text": "direct input"} (skip STT)
-            - JSON: {"type": "interrupt"} (cancel current generation)
-            - JSON: {"type": "stop"} (end conversation)
-
-        Server → Client:
-            - Binary: TTS audio frames (PCM16, 24kHz, mono)
-            - JSON: {"type": "transcription", "text": "user speech"}
-            - JSON: {"type": "llm_text", "text": "assistant response"}
-            - JSON: {"type": "response_start"}
-            - JSON: {"type": "response_end"}
-            - JSON: {"type": "error", "message": "..."}
-
-    Query Parameters:
-        persona: Optional persona name (determines system prompt and voice)
-
-    Requires:
-        - PIPECAT_ENABLED=true in environment
-        - pipecat-ai[silero] installed
-    """
-    if not PIPECAT_CONFIG.enabled:
-        await websocket.accept()
-        await websocket.send_json({
-            "type": "error",
-            "message": "Pipecat not enabled. Set PIPECAT_ENABLED=true in environment."
-        })
-        await websocket.close()
-        return
-
-    if not PIPECAT_AVAILABLE:
-        await websocket.accept()
-        await websocket.send_json({
-            "type": "error",
-            "message": "Pipecat not installed. Install with: pip install pipecat-ai[silero]"
-        })
-        await websocket.close()
-        return
-
-    await websocket.accept()
-
-    try:
-        # Configure transport
-        transport_params = FluteFastAPIWebsocketParams(
-            sample_rate=PIPECAT_CONFIG.sample_rate,
-            vad_enabled=True,
-            vad_start_threshold=PIPECAT_CONFIG.vad_threshold,
-        )
-        transport = FluteFastAPIWebsocketTransport(websocket, transport_params)
-
-        # Configure voice agent
-        voice_config = VoiceAgentConfig(
-            persona=persona or "assistant",
-            voice=PIPECAT_CONFIG.default_voice,
-            llm_model=PIPECAT_CONFIG.default_llm_model,
-            max_tokens=PIPECAT_CONFIG.default_max_tokens,
-            temperature=0.7,
-            vad_threshold=PIPECAT_CONFIG.vad_threshold,
-            enable_interruption=True,
-        )
-
-        # Build pipeline
-        pipeline = await build_voice_agent_pipeline(
-            transport=transport,
-            config=voice_config,
-            vibevoice_provider=vibevoice_provider,
-            whisper_provider=whisper_provider,
-            tensorzero_url=PIPECAT_CONFIG.tensorzero_url,
-        )
-
-        # Send ready status
-        await websocket.send_json({
-            "type": "status",
-            "status": "ready",
-            "config": {
-                "persona": voice_config.persona,
-                "voice": voice_config.voice,
-                "model": voice_config.llm_model,
-                "sample_rate": transport_params.sample_rate,
-            }
-        })
-
-        # Run pipeline (this blocks until client disconnects or sends stop)
-        try:
-            from pipecat.pipeline.runner import PipelineRunner
-            runner = PipelineRunner()
-            await runner.run(pipeline)
-        except ImportError:
-            # Fallback: simple frame loop if PipelineRunner not available
-            await transport.start()
-            async for frame in transport.input():
-                # Process frames through pipeline stages
-                pass
-            await transport.stop()
-
-    except Exception as e:
-        logger.exception("Duplex WebSocket error: %s", e)
-        try:
-            await websocket.send_json({
-                "type": "error",
-                "message": f"Pipeline error: {str(e)}"
-            })
-        except Exception as close_err:
-            logger.error("Failed to send error to WebSocket: %s", close_err)
-    finally:
-        try:
-            await websocket.close()
-        except Exception as close_err:
-            logger.warning("Failed to close WebSocket: %s", close_err)
 
 
 # Prometheus metrics endpoint

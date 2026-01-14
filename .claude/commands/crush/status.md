@@ -1,6 +1,6 @@
-# PMOVES CLI Status
+# PMOVES-Crush Status
 
-Check the status of PMOVES CLI (Crush) configuration and BoTZ registration.
+Check the status of PMOVES-Crush CLI and BoTZ registration.
 
 ## Instructions
 
@@ -15,25 +15,20 @@ Check the status of PMOVES CLI (Crush) configuration and BoTZ registration.
      echo "crush.json found"
      cat crush.json | jq '.options.attribution, .providers[0]'
    else
-     echo "crush.json not found - run: pmoves crush setup"
+     echo "crush.json not found - run /crush:setup"
    fi
    ```
 
-3. **Check via PMOVES CLI**:
-   ```bash
-   pmoves crush status
-   ```
-
-4. **Check BoTZ Gateway connectivity**:
+3. **Check BoTZ Gateway connectivity**:
    ```bash
    curl -sf http://localhost:8054/healthz 2>/dev/null && echo "BoTZ Gateway: OK" || echo "BoTZ Gateway: Not running"
    ```
 
-5. **Query BoTZ registration status**:
+4. **Query BoTZ registration status**:
    - Check if this instance is registered in `botz_instances` table
    - Show current skill level and available MCP tools
 
-6. **Show current work item assignments**:
+5. **Show current work item assignments**:
    - Query `integration_work_items` for items assigned to this BoTZ
    - Display in-progress and recently completed items
 
@@ -42,7 +37,6 @@ Check the status of PMOVES CLI (Crush) configuration and BoTZ registration.
 Report the following:
 - Crush CLI version
 - Configuration status (crush.json present/valid)
-- PMOVES providers configured
 - BoTZ Gateway connectivity
 - Registration status (registered/unregistered)
 - Skill level (basic/tac_enabled/mcp_augmented/agentic)
@@ -52,6 +46,6 @@ Report the following:
 ## Troubleshooting
 
 If not registered:
-1. Run `pmoves crush setup` to configure
+1. Run `/crush:setup` to configure
 2. Ensure BoTZ Gateway is running
 3. Check Supabase connectivity

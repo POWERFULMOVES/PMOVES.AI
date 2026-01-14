@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONTAINER="${WGER_CONTAINER_NAME:-cataclysm-wger}"
+CONTAINER="${WGER_CONTAINER_NAME:-pmoves-wger}"
 WAIT_SECS="${WGER_BRAND_WAIT_SECS:-120}"
 
 if ! command -v docker >/dev/null 2>&1; then

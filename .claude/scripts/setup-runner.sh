@@ -12,8 +12,8 @@ REPO_URL="https://github.com/POWERFULMOVES/PMOVES.AI"
 RUNNER_VERSION="2.321.0"
 
 # Registration token (valid for 1 hour from generation)
-# Regenerate with: gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners/registration-token -X POST --jq '.token'
-REG_TOKEN="${RUNNER_TOKEN:-BB5OGYBWSUNB4WGF7FI5FETJJK2BY}"
+# Generate with: gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners/registration-token -X POST --jq '.token'
+REG_TOKEN="${RUNNER_TOKEN:?RUNNER_TOKEN environment variable is required}"
 
 # Host-specific labels
 declare -A HOST_LABELS
