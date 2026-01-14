@@ -13,6 +13,8 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from fastapi import Body, Depends, FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -701,6 +703,44 @@ app = _import_archon_app() if not FORCE_PLACEHOLDER else FastAPI(title="Archon (
 # Re-sync OpenAI-compatible env after the vendored app loads, since upstream imports
 # may mutate OpenAI-compatible environment variables.
 _sync_openai_compat_env()
+
+
+# ============================================================================
+# Archon UI - Static file serving (embedded UI pattern like Agent-Zero)
+# ============================================================================
+# NOTE: This must come AFTER app = _import_archon_app() above, otherwise the UI
+# mount would be lost when app is reassigned to the vendor Archon app.
+
+ARCHON_UI_STATIC_DIR = os.environ.get("ARCHON_UI_STATIC_DIR", "/app/static/archon-ui")
+
+# Mount UI static files if the directory exists
+if Path(ARCHON_UI_STATIC_DIR).exists():
+    try:
+        # Mount assets at /assets/ for Vite-built SPA (uses root-relative paths)
+        app.mount("/assets", StaticFiles(directory=str(Path(ARCHON_UI_STATIC_DIR) / "assets")), name="ui-assets")
+
+        # Mount UI at /ui/ for direct access
+        app.mount("/ui", StaticFiles(directory=ARCHON_UI_STATIC_DIR, html=True), name="ui")
+        logger.info("Archon UI static files mounted at /ui -> %s", ARCHON_UI_STATIC_DIR)
+        logger.info("Archon UI assets mounted at /assets -> %s/assets", ARCHON_UI_STATIC_DIR)
+
+        # Override root path to serve UI index.html
+        @app.get("/", include_in_schema=False)
+        async def serve_ui_root():
+            """Serve the Archon UI index.html at the root path."""
+            ui_index = Path(ARCHON_UI_STATIC_DIR) / "index.html"
+            if ui_index.exists():
+                return FileResponse(str(ui_index))
+            return {
+                "status": "ok",
+                "service": "archon",
+                "message": "Archon API running. UI not available - check ARCHON_UI_STATIC_DIR",
+                "ui_path": ARCHON_UI_STATIC_DIR,
+            }
+    except Exception as e:
+        logger.warning("Failed to mount Archon UI static files: %s", e)
+else:
+    logger.warning("Archon UI static directory not found at %s", ARCHON_UI_STATIC_DIR)
 
 
 @app.get("/healthz")
