@@ -1,1 +1,53 @@
--r requirements.lock
+# Archon Server Dependencies
+# Generated from vendor/archon/python/pyproject.toml
+# Combines server + server-reranking + mcp dependency groups
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.20
+watchfiles>=0.18
+
+# Web crawling
+crawl4ai==0.7.4
+
+# Database and storage
+supabase==2.15.1
+asyncpg>=0.29.0
+
+# AI/ML libraries
+openai>=1.71.0
+
+# Document processing
+pypdf2>=3.0.1
+pdfplumber>=0.11.6
+python-docx>=1.1.2
+markdown>=3.8
+
+# Security and utilities
+python-jose[cryptography]>=3.3.0
+cryptography>=41.0.0
+slowapi>=0.1.9
+
+# Core utilities
+httpx>=0.24.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+tldextract>=5.0.0
+
+# Logging
+logfire>=0.30.0
+
+# Testing (needed for UI-triggered tests)
+pytest>=8.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.12.0
+
+# MCP dependencies (for Agent Zero integration)
+mcp>=1.12.0
+
+# NATS message bus client
+nats
+
+# Playwright (for web crawling)
+playwright>=1.40.0
