@@ -8,7 +8,7 @@ WORKDIR /app
 # Environment
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8100
+# PORT set at runtime via docker-compose (default 8100 for local dev)
 
 # Install system dependencies
 RUN apt-get update \
