@@ -148,9 +148,23 @@ path.write_text(patched, encoding="utf-8")
 print("→ Patched Archon check_migrations_table_exists (removed /rpc/sql probe)")
 PY
 
-COPY services/archon/requirements.txt services/archon/requirements.lock ./
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+# ============================================================================
+# Dependency installation using uv (like upstream Archon)
+# ============================================================================
+# Install uv for fast Python package installation
+RUN pip install --no-cache-dir uv
+
+# Create virtual environment and install dependencies using uv
+# Install from the vendor archon package with server+mcp dependency groups
+# NOTE: This runs after /app/vendor/archon is created by git clone above
+RUN cd /app/vendor/archon/python && \
+    uv venv /venv && \
+    . /venv/bin/activate && \
+    uv pip install . --group server --group mcp --group agents && \
+    uv pip install nats-py
+
+# Set PATH to use the virtual environment
+ENV PATH="/venv/bin:$PATH"
 
 # Pre-install Playwright browsers (Chromium) so crawl workflows succeed out of the box.
 RUN python -m playwright install chromium
@@ -160,11 +174,13 @@ COPY services /app/services
 # Prepare directories used at runtime
 RUN mkdir -p /app/static/archon-ui /app/config/mcp
 
-# Build the Archon UI if sources are present in the build context
+# Build the Archon UI if sources are present in the vendor/archon directory
+# NOTE: After line 89, _local_vendor is removed. UI must come from /app/vendor/archon
 ARG ARCHON_UI_DIR=archon-ui-main
 ARG ARCHON_UI_BUILD_DIR=dist
-RUN if [ -d "$ARCHON_UI_DIR" ]; then \
-        cd "$ARCHON_UI_DIR" \
+RUN if [ -d "/app/vendor/archon/${ARCHON_UI_DIR}" ]; then \
+        echo "→ Building Archon UI from /app/vendor/archon/${ARCHON_UI_DIR}"; \
+        cd "/app/vendor/archon/${ARCHON_UI_DIR}" \
         && if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile && pnpm build; \
            elif [ -f yarn.lock ]; then yarn install --frozen-lockfile && yarn build; \
            elif [ -f package-lock.json ]; then npm ci && npm run build; \
@@ -172,7 +188,7 @@ RUN if [ -d "$ARCHON_UI_DIR" ]; then \
         && mkdir -p "$ARCHON_UI_STATIC_DIR" \
         && cp -R "$ARCHON_UI_BUILD_DIR"/* "$ARCHON_UI_STATIC_DIR"/; \
     else \
-        echo "Archon UI directory '$ARCHON_UI_DIR' not found. Skipping UI build."; \
+        echo "→ Archon UI directory 'vendor/archon/${ARCHON_UI_DIR}' not found. Skipping UI build."; \
     fi
 
 # Security: Run as non-root user
@@ -182,5 +198,5 @@ RUN groupadd -r pmoves --gid=65532 && \
 
 USER pmoves:pmoves
 
-EXPOSE 8090
+EXPOSE 8090 3737
 CMD ["python", "-m", "services.archon.main"]
