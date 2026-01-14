@@ -68,7 +68,8 @@ async def lifespan(app: FastAPI):
         # Initialize VRAM tracker
         vram_tracker = VramTracker(gpu_index=settings.gpu_index)
         metrics = vram_tracker.get_metrics()
-        logger.info(
+        log_fn = logger.warning if metrics.is_mock else logger.info
+        log_fn(
             "GPU detected",
             name=metrics.name,
             total_vram_mb=metrics.total_vram_mb,
@@ -98,6 +99,9 @@ async def lifespan(app: FastAPI):
         )
         await lifecycle_manager.start()
 
+        # Initialize metrics exporter (before callbacks that reference it)
+        metrics_exporter = GpuMetricsExporter(gpu_index=settings.gpu_index)
+
         # Initialize NATS publisher
         nats_publisher = GpuNatsPublisher(
             nats_url=settings.nats_url,
@@ -113,6 +117,7 @@ async def lifespan(app: FastAPI):
             return status.to_dict()
 
         nats_publisher.set_status_callback(get_status_for_nats)
+        metrics_exporter.set_status_callback(get_status_for_nats)
         await nats_publisher.start_status_loop()
 
         # Set up lifecycle callbacks for NATS events
@@ -130,10 +135,6 @@ async def lifespan(app: FastAPI):
 
         lifecycle_manager.set_on_load_callback(on_model_loaded)
         lifecycle_manager.set_on_unload_callback(on_model_unloaded)
-
-        # Initialize metrics exporter
-        metrics_exporter = GpuMetricsExporter(gpu_index=settings.gpu_index)
-        metrics_exporter.set_status_callback(get_status_for_nats)
 
         # Set dependencies for routes
         set_dependencies(lifecycle_manager, vram_tracker, model_registry)
@@ -185,8 +186,15 @@ app.include_router(api_router)
 @app.get("/healthz")
 async def health_check():
     """Health check endpoint."""
+    from fastapi import status
+
     try:
         metrics = vram_tracker.get_metrics()
+        if metrics.is_mock:
+            return {
+                "status": "degraded",
+                "error": "GPU monitoring unavailable - running in mock mode",
+            }, status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "healthy",
             "gpu": metrics.name,
@@ -194,9 +202,9 @@ async def health_check():
         }
     except Exception as e:
         return {
-            "status": "degraded",
+            "status": "unhealthy",
             "error": str(e),
-        }
+        }, status.HTTP_503_SERVICE_UNAVAILABLE
 
 
 # Prometheus metrics endpoint

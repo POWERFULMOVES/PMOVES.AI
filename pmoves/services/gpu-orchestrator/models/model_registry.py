@@ -1,13 +1,16 @@
 """Model registry for known models and their VRAM requirements."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import yaml
 
 logger = logging.getLogger(__name__)
+
+# Valid providers for validation
+VALID_PROVIDERS: Set[str] = {"ollama", "vllm", "tts"}
 
 
 @dataclass
@@ -21,6 +24,22 @@ class ModelDefinition:
     priority_default: int = 5
     quantization: Optional[str] = None
     context_length: Optional[int] = None
+
+    def __post_init__(self):
+        """Validate model definition fields."""
+        if self.provider not in VALID_PROVIDERS:
+            raise ValueError(
+                f"Invalid provider '{self.provider}'. "
+                f"Must be one of: {sorted(VALID_PROVIDERS)}"
+            )
+        if self.vram_mb < 0:
+            raise ValueError(f"vram_mb must be non-negative, got {self.vram_mb}")
+        if not 0 <= self.priority_default <= 10:
+            raise ValueError(
+                f"priority_default must be 0-10, got {self.priority_default}"
+            )
+        if not self.id:
+            raise ValueError("id cannot be empty")
 
     def to_dict(self) -> dict:
         return {
@@ -38,12 +57,12 @@ class ModelRegistry:
     """Registry of known models and their VRAM requirements."""
 
     def __init__(self, config_path: Optional[str] = None):
-        self.models: Dict[str, ModelDefinition] = {}
-        self.thresholds = {
+        self._models: Dict[str, ModelDefinition] = {}
+        self._thresholds = {
             "vram_warning_percent": 80,
             "idle_timeout_seconds": 300,
         }
-        self.hardware = {
+        self._hardware = {
             "total_vram_mb": 32768,  # RTX 5090 default
             "system_reserve_mb": 2048,
         }
@@ -70,7 +89,7 @@ class ModelRegistry:
             ModelDefinition("default", "vllm", 16384, "Default vLLM model"),
         ]
         for model in defaults:
-            self.models[f"{model.provider}/{model.id}"] = model
+            self._models[f"{model.provider}/{model.id}"] = model
 
     def load_from_file(self, path: str) -> None:
         """Load model definitions from YAML file."""
@@ -109,13 +128,13 @@ class ModelRegistry:
                         quantization=model_data.get("quantization"),
                         context_length=model_data.get("context_length"),
                     )
-                    self.models[f"{model.provider}/{model.id}"] = model
+                    self._models[f"{model.provider}/{model.id}"] = model
 
             if "thresholds" in data:
-                self.thresholds.update(data["thresholds"])
+                self._thresholds.update(data["thresholds"])
 
             if "rtx5090" in data:
-                self.hardware.update(data["rtx5090"])
+                self._hardware.update(data["rtx5090"])
 
         except (KeyError, TypeError, ValueError) as e:
             logger.error(f"Error processing model definitions from {path}: {e}")
@@ -124,7 +143,7 @@ class ModelRegistry:
     def get_model(self, provider: str, model_id: str) -> Optional[ModelDefinition]:
         """Get model definition by provider and ID."""
         key = f"{provider}/{model_id}"
-        return self.models.get(key)
+        return self._models.get(key)
 
     def get_vram_estimate(self, provider: str, model_id: str) -> int:
         """Get estimated VRAM usage for a model."""
@@ -137,18 +156,33 @@ class ModelRegistry:
 
     def list_models(self, provider: Optional[str] = None) -> List[ModelDefinition]:
         """List all known models, optionally filtered by provider."""
-        models = list(self.models.values())
+        models = list(self._models.values())
         if provider:
             models = [m for m in models if m.provider == provider]
         return models
 
     def get_available_vram(self) -> int:
         """Get available VRAM after system reserve."""
-        return self.hardware["total_vram_mb"] - self.hardware["system_reserve_mb"]
+        return self._hardware["total_vram_mb"] - self._hardware["system_reserve_mb"]
+
+    @property
+    def models(self) -> Dict[str, ModelDefinition]:
+        """Get models dictionary (read-only access)."""
+        return dict(self._models)
+
+    @property
+    def thresholds(self) -> Dict:
+        """Get thresholds dictionary (read-only access)."""
+        return dict(self._thresholds)
+
+    @property
+    def hardware(self) -> Dict:
+        """Get hardware dictionary (read-only access)."""
+        return dict(self._hardware)
 
     def to_dict(self) -> dict:
         return {
-            "models": [m.to_dict() for m in self.models.values()],
-            "thresholds": self.thresholds,
-            "hardware": self.hardware,
+            "models": [m.to_dict() for m in self._models.values()],
+            "thresholds": self._thresholds,
+            "hardware": self._hardware,
         }

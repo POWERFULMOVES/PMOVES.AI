@@ -1,0 +1,19 @@
+no such service: neo4j
+\n--- v2 stats (8086) ---
+\n--- v2-gpu stats (8087) ---
+\n--- smoke-qwen-rerank ---
+[Qwen] Inspect v2 stats...
+Model () is not Qwen; set RERANK_MODEL=Qwen/Qwen3-Reranker-4B on v2-gpu and retry.
+\n--- smoke-gpu ---
+[GPU] Check v2-gpu (:8087) up...
+OK
+[GPU] v2-gpu stats...
+OK
+[GPU] v2-gpu rerank query...
+OK
+[GPU] v1-gpu (:8090) (optional)...
+OK
+--- v2-gpu stats (8087) ---
+--- smoke-qwen-rerank ---
+[Qwen] Inspect v2 stats...
+Model () is not Qwen; set RERANK_MODEL=Qwen/Qwen3-Reranker-4B on v2-gpu and retry.

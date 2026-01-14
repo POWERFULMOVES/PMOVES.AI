@@ -1,0 +1,7 @@
+Run: Qwen reranker smoke + GPU smoke
+Date: Sun Oct 19 07:48:29 UTC 2025
+
+time="2025-10-19T03:48:29-04:00" level=warning msg="The \"OPEN_NOTEBOOK_API_URL\" variable is not set. Defaulting to a blank string."
+no such service: neo4j
+--- smoke-qwen-rerank ---
+--- smoke-gpu ---

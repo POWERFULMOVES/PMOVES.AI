@@ -106,6 +106,7 @@ class GpuMetricsExporter:
     async def update_metrics(self) -> None:
         """Update all Prometheus metrics from current state."""
         if not self._get_status_callback:
+            logger.warning("Cannot update metrics - no status callback set")
             return
 
         try:
@@ -115,6 +116,8 @@ class GpuMetricsExporter:
             self._update_process_metrics(status)
         except Exception as e:
             logger.error(f"Error updating metrics: {e}")
+            # Mark metrics as stale - set gauge values to -1 to indicate staleness
+            gpu_vram_used.labels(gpu_index=str(self.gpu_index)).set(-1)
 
     def _update_gpu_metrics(self, status: dict) -> None:
         """Update GPU-level metrics."""
@@ -164,9 +167,7 @@ class GpuMetricsExporter:
                 idle_seconds
             )
 
-            # Use model's configured idle timeout, not hardcoded value
-            idle_timeout = model.get("idle_timeout_seconds", 300)
-            if idle_seconds > idle_timeout:
+            if idle_seconds > 300:  # 5 minutes
                 idle_count += 1
 
         gpu_idle_models.set(idle_count)

@@ -1,0 +1,48 @@
+server:
+  mode: mcp
+  transport: http
+  port: 8765
+providers:
+  ollama:
+    type: openai
+    base_url: ${OLLAMA_BASE_URL}
+  huggingface:
+    type: huggingface
+    api_key: ${HF_API_KEY}
+models:
+  embeddings:
+    - name: primary-ollama-qwen3
+      provider: ollama
+      id: dengcao/Qwen3-Embedding-4B:Q8_0
+      on_fail: next
+    - name: fallback-hf-qwen3
+      provider: huggingface
+      id: Qwen/Qwen3-Embedding-4B
+      on_fail: next
+    - name: fallback-ollama-nomic
+      provider: ollama
+      id: nomic-embed-text
+      on_fail: stop
+memory:
+  store: postgres
+  postgres:
+    url: ${PMOVES_PG_DSN_NET}
+    schema: pmoves_core
+    tables:
+      messages: messages
+      memory: memory
+      sessions: sessions
+      events: event_log
+  vectors:
+    type: pgvector
+    pgvector:
+      url: ${PMOVES_PG_DSN_NET}
+      schema: pmoves_core
+      table: embeddings
+      dim: ${EMBEDDING_DIM}
+search:
+  enabled: ${USE_MEILI:-false}
+  meilisearch:
+    url: ${MEILI_URL}
+    api_key: ${MEILI_API_KEY}
+    index: pmoves_chunks

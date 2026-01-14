@@ -231,8 +231,8 @@ class ModelLifecycleManager:
                 if request:
                     try:
                         await self.load_queue.complete(request.request_id)
-                    except Exception:
-                        pass
+                    except Exception as complete_err:
+                        logger.error(f"Error completing queue request {request.request_id}: {complete_err}")
 
     async def _process_load_request(self, request: LoadRequest) -> None:
         """Process a single load request."""
@@ -272,8 +272,11 @@ class ModelLifecycleManager:
                 if request.callback:
                     try:
                         await request.callback(False, model_key)
-                    except Exception as e:
-                        logger.error(f"Load callback error: {e}")
+                    except Exception as callback_err:
+                        logger.error(
+                            f"Load callback error for {model_key} "
+                            f"(request_id: {request.request_id}): {callback_err}"
+                        )
                 return
 
         # Create loaded model record
@@ -305,8 +308,11 @@ class ModelLifecycleManager:
             if request.callback:
                 try:
                     await request.callback(True, model_key)
-                except Exception as e:
-                    logger.error(f"Load callback error: {e}")
+                except Exception as callback_err:
+                    logger.error(
+                        f"Load callback error for {model_key} "
+                        f"(request_id: {request.request_id}): {callback_err}"
+                    )
         else:
             model.state = ModelState.ERROR
             model.error_message = "Failed to load model"
@@ -315,8 +321,11 @@ class ModelLifecycleManager:
             if request.callback:
                 try:
                     await request.callback(False, model_key)
-                except Exception as e:
-                    logger.error(f"Load callback error: {e}")
+                except Exception as callback_err:
+                    logger.error(
+                        f"Load callback error for {model_key} "
+                        f"(request_id: {request.request_id}): {callback_err}"
+                    )
 
     async def _load_via_provider(self, model_id: str, provider: str) -> bool:
         """Load model using the appropriate provider."""

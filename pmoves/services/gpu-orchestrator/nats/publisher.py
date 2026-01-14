@@ -130,7 +130,6 @@ class GpuNatsPublisher:
     async def publish_status(self, status: Dict) -> None:
         """Publish GPU status event."""
         if not self._connected:
-            logger.debug("Skipping status publish: not connected to NATS")
             return
 
         try:
@@ -147,6 +146,8 @@ class GpuNatsPublisher:
             metrics = status.get("metrics", {})
             vram_percent = metrics.get("vram_usage_percent", 0)
 
+            # vram_warning_threshold is stored as decimal (e.g., 0.8 for 80%)
+            # Multiply by 100 to compare with percentage value
             if vram_percent >= self.vram_warning_threshold * 100:
                 await self._maybe_send_vram_warning(metrics)
 
@@ -156,7 +157,6 @@ class GpuNatsPublisher:
     async def publish_model_loaded(self, model_key: str, vram_mb: int) -> None:
         """Publish model loaded event."""
         if not self._connected:
-            logger.debug(f"Skipping model loaded publish for {model_key}: not connected to NATS")
             return
 
         await self._publish(
@@ -173,7 +173,6 @@ class GpuNatsPublisher:
     async def publish_model_unloaded(self, model_key: str) -> None:
         """Publish model unloaded event."""
         if not self._connected:
-            logger.debug(f"Skipping model unloaded publish for {model_key}: not connected to NATS")
             return
 
         await self._publish(
