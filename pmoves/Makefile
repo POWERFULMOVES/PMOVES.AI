@@ -113,7 +113,7 @@ up-bots: ## Start bot services (BotZ + messaging gateway)
 .PHONY: up-obs
 up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
 	@echo "📊 Starting observability stack (monitoring FIRST)..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
+	@cd $(CURDIR)/monitoring && $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.monitoring.yml up -d
 	@echo "⏳ Waiting for observability to be ready..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || echo "⚠️ Prometheus not ready (may still be starting)"
 	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || echo "⚠️ Grafana not ready (may still be starting)"
@@ -132,7 +132,7 @@ up-supabase: ## Start Supabase (Postgres + Kong + Studio)
 .PHONY: up-data-tier
 up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@echo "💾 Starting data tier..."
-	@$(DC) --profile data up -d
+	@$(DC_DATA) --profile data up -d
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
 
@@ -262,7 +262,7 @@ down-bus: ## Stop message bus
 .PHONY: down-data
 down-data: ## Stop data tier
 	@echo "💾 Stopping data tier..."
-	@$(DC) --profile data down
+	@$(DC_DATA) --profile data down
 
 .PHONY: down-obs
 down-obs: ## Stop observability stack
@@ -658,9 +658,8 @@ else
   N8N_DB_STACK_FILE :=
 endif
 
-# VibeVoice compose file is always included so compose invocations remain consistent.
-# The service itself is still gated behind the `voice` compose profile (see docker-compose.voice.yml).
-VOICE_STACK_FILE := -f docker-compose.voice.yml
+# VibeVoice services are now in main docker-compose.yml under voice profile.
+# Voice compose file removed - services integrated into main compose.
 
 # Always pass the same compose file set for the $(PROJECT) stack.
 # Otherwise, invoking docker compose with different -f subsets causes noisy
@@ -668,16 +667,21 @@ VOICE_STACK_FILE := -f docker-compose.voice.yml
 STACK_FILES ?= \
 	-f docker-compose.yml \
 	-f docker-compose.n8n.yml \
-	$(VOICE_STACK_FILE) \
 	$(N8N_DB_STACK_FILE) \
-	-f docker-compose.comfyui.yml \
-	-f docker-compose.ultimate-tts-studio.yml \
 	-f docker-compose.external.yml \
 	-f docker-compose.archon.submodule.yml \
 	-f docker-compose.archon-ui.submodule.yml \
 	-f monitoring/docker-compose.monitoring.yml
 
 DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) $(STACK_FILES)
+
+# Data tier uses minimal compose files (no external submodule services that require env.tier-app)
+DC_DATA := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	-f docker-compose.yml \
+	-f docker-compose.n8n.yml \
+	$(N8N_DB_STACK_FILE) \
+	-f docker-compose.archon.submodule.yml \
+	-f docker-compose.archon-ui.submodule.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml

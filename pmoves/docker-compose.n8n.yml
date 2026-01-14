@@ -23,13 +23,14 @@ services:
       - TZ=${TZ:-America/New_York}
       - N8N_RUNNERS_ENABLED=true
       - N8N_RUNNERS_MODE=external
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN:-pmoves-n8n-runners-auth-token-2025}
       - N8N_RUNNERS_PAYLOAD_MODE=filesystem
       - N8N_PUBLIC_API_ENABLED=true
       # Public API auth (n8n >= 1.0)
       - N8N_API_AUTH_ACTIVE=true
       # External integrations for sync flows
-      - WGER_BASE_URL=${WGER_BASE_URL:-http://cataclysm-wger:8000}
-      - FIREFLY_BASE_URL=${FIREFLY_BASE_URL:-http://cataclysm-firefly:8080}
+      - WGER_BASE_URL=${WGER_BASE_URL:-http://pmoves-wger:8000}
+      - FIREFLY_BASE_URL=${FIREFLY_BASE_URL:-http://pmoves-firefly:8080}
       - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
       - N8N_NATIVE_PYTHON_RUNNER=true
       # Supabase REST — use tier-based URL from env.tier-api
@@ -42,7 +43,7 @@ services:
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
-    networks: [cataclysm, api_tier]
+    networks: [api_tier]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -56,14 +57,15 @@ services:
     environment:
       - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
-    networks: [cataclysm, api_tier]
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN:-pmoves-n8n-runners-auth-token-2025}
+    networks: [api_tier]
     depends_on:
       - n8n
     volumes:
       - n8n-data:/home/node/.n8n
 networks:
-  cataclysm:
+  api_tier:
     external: true
-    name: cataclysm-net
+    name: pmoves_api
 volumes:
   n8n-data: {}

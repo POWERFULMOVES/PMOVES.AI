@@ -8,7 +8,7 @@ services:
   open-notebook:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
-    container_name: cataclysm-open-notebook
+    container_name: pmoves-open-notebook
     restart: unless-stopped
     <<: *env-tier-worker
     environment:
@@ -20,12 +20,9 @@ services:
     volumes:
       - ./data/open-notebook/notebook_data:/app/data
     networks:
-      cataclysm:
-        aliases:
-          - cataclysm-open-notebook
       pmoves:
         aliases:
-          - cataclysm-open-notebook
+          - pmoves-open-notebook
           - open-notebook
       pmoves_api:
         aliases:
@@ -34,9 +31,6 @@ services:
         aliases:
           - open-notebook
 networks:
-  cataclysm:
-    external: true
-    name: cataclysm-net
   pmoves:
     external: true
     name: pmoves-net

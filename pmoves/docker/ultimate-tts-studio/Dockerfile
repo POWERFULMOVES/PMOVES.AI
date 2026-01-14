@@ -58,10 +58,11 @@ RUN git clone --depth 1 https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Stu
 
 WORKDIR /build/app
 
-# Step 3: Install gradio and devicetorch FIRST (matches Pinokio pre-install step)
+# Step 3: Install gradio[mcp] and devicetorch FIRST (matches Pinokio pre-install step)
 # This establishes correct dependency versions before requirements.txt
+# NOTE: gradio[mcp] is required for GRADIO_MCP_SERVER=true support
 RUN pip install --upgrade pip && \
-    pip install gradio devicetorch
+    pip install 'gradio[mcp]' devicetorch
 
 # Step 4: Pin huggingface-hub to <1.0 BEFORE requirements.txt
 # CRITICAL: Many TTS engines require huggingface-hub>=0.25.0,<1.0
