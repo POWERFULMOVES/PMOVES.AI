@@ -109,6 +109,9 @@ services:
     restart: unless-stopped
     environment:
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    # Override NEO4J_PASSWORD to empty string (not valid for Neo4j 5.x)
+    # The real auth is via NEO4J_AUTH from env.tier-data
+    - NEO4J_PASSWORD=
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
@@ -192,7 +195,7 @@ services:
     depends_on:
     - hi-rag-gateway-v2
     ports:
-    - ${RETRIEVAL_EVAL_PORT:-8090}:8090
+    - ${RETRIEVAL_EVAL_PORT:-8111}:8090
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
@@ -754,6 +757,7 @@ services:
       args:
       - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
       - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
+      - ARCHON_UI_DIR=archon-ui-main
     restart: unless-stopped
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
@@ -779,6 +783,7 @@ services:
     - ${ARCHON_PORT:-8091}:8091
     - ${ARCHON_PORT:-8051}:8051
     - ${ARCHON_PORT:-8052}:8052
+    - ${ARCHON_UI_PORT:-3737}:3737
     networks:
       pmoves_app:
         aliases:
@@ -1221,9 +1226,10 @@ services:
       start_period: 30s
 
   # PMOVES Tokenism UI - Interactive dashboard for token economy simulation
+  # NOTE: Build context uses ../ because PMOVES-ToKenism-Multi is a sibling submodule (not in pmoves/)
   tokenism-ui:
     build:
-      context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
+      context: ../PMOVES-ToKenism-Multi/pmoves-nextjs
       dockerfile: Dockerfile
     image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
     restart: unless-stopped
