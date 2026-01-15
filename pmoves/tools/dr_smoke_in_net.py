@@ -1,8 +1,3 @@
-"""Smoke Test for Deep Research Network Integration.
-
-Tests Deep Research service connectivity and response handling.
-"""
-
 from __future__ import annotations
 
 import asyncio

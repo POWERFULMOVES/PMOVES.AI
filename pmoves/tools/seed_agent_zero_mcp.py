@@ -1,9 +1,3 @@
-"""Agent Zero MCP Server Configuration Seeding.
-
-Writes the A0_MCP_SERVERS environment variable to the runtime directory
-for Agent Zero to discover available MCP servers.
-"""
-
 from __future__ import annotations
 
 import os

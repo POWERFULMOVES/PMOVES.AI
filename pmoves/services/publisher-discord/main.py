@@ -40,35 +40,14 @@ from services.common.telemetry import PublisherMetrics, PublishTelemetry, comput
 async def lifespan(app: FastAPI):
     """Manage application lifespan for Publisher Discord."""
     global _nats_loop_task, _nc
-
-    # Startup - Validate configuration and start NATS
-    if not DISCORD_WEBHOOK_URL:
-        logger.warning(
-            "discord_webhook_url_not_configured",
-            extra={"event": "discord_webhook_url_not_configured"},
-        )
-    else:
-        logger.info(
-            "discord_webhook_url_configured",
-            extra={"event": "discord_webhook_url_configured", "domain": _extract_webhook_domain(DISCORD_WEBHOOK_URL)},
-        )
-
-    if _nats_loop_task and _nats_loop_task.done():
-        try:
-            _nats_loop_task.result()
-        except Exception as exc:  # pragma: no cover - startup diagnostics
-            logger.warning(
-                "nats_loop_previous_failure",
-                extra={"event": "nats_loop_previous_failure", "error": str(exc)},
-            )
-
-    if YT_NATS_ENABLE and NATS_URL and (_nats_loop_task is None or _nats_loop_task.done()):
+    # Startup - Discord webhooks are configured at runtime
+    # Non-blocking, quiet NATS init
+    if YT_NATS_ENABLE and NATS_URL:
         logger.info(
             "nats_loop_start",
             extra={"event": "nats_loop_start", "servers": [NATS_URL]},
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
-
     yield
 
     # Shutdown
@@ -123,16 +102,12 @@ def _extract_webhook_domain(webhook_url: str) -> str:
     # Discord webhook URLs are: https://discord.com/api/webhooks/<id>/<token>
     # Extract just the domain for logging
     try:
-        from urllib.parse import urlparse
-        parsed = urlparse(webhook_url)
-        hostname = parsed.hostname
-        if hostname:
-            # Check for exact match or subdomain of discord.com
-            if hostname == "discord.com" or hostname.endswith(".discord.com"):
-                return "discord.com"
-            elif hostname == "discord.gg" or hostname.endswith(".discord.gg"):
-                return "discord.gg"
-        return "unknown"
+        if "discord.com" in webhook_url:
+            return "discord.com"
+        elif "discord.gg" in webhook_url:
+            return "discord.gg"
+        else:
+            return "unknown"
     except Exception:
         return "invalid"
 

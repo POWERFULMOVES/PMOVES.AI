@@ -1,6 +1,5 @@
--- Enable RLS and add authentication-required policies for Geometry Bus tables
+-- Enable RLS and add permissive read policies for Geometry Bus tables
 -- Date: 2025-09-08
--- Updated: 2026-01-07 - Require authentication for all access
 
 -- Optional read-only role for direct DB access (non-Supabase JWT)
 DO $$
@@ -19,23 +18,14 @@ ALTER TABLE public.constellations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shape_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shape_index ENABLE ROW LEVEL SECURITY;
 
--- Authentication-required read policies
--- All reads require a valid JWT (auth.uid() IS NOT NULL)
--- For production, consider adding tenant/namespace scoping
+-- Permissive read policies (dev). Tighten for prod (e.g., tenant/namespace scoping).
 DROP POLICY IF EXISTS read_anchors_all ON public.anchors;
-CREATE POLICY read_anchors_all ON public.anchors
-FOR SELECT USING (auth.uid() IS NOT NULL);
-
+CREATE POLICY read_anchors_all ON public.anchors FOR SELECT USING (true);
 DROP POLICY IF EXISTS read_constellations_all ON public.constellations;
-CREATE POLICY read_constellations_all ON public.constellations
-FOR SELECT USING (auth.uid() IS NOT NULL);
-
+CREATE POLICY read_constellations_all ON public.constellations FOR SELECT USING (true);
 DROP POLICY IF EXISTS read_shape_points_all ON public.shape_points;
-CREATE POLICY read_shape_points_all ON public.shape_points
-FOR SELECT USING (auth.uid() IS NOT NULL);
-
+CREATE POLICY read_shape_points_all ON public.shape_points FOR SELECT USING (true);
 DROP POLICY IF EXISTS read_shape_index_all ON public.shape_index;
-CREATE POLICY read_shape_index_all ON public.shape_index
-FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY read_shape_index_all ON public.shape_index FOR SELECT USING (true);
 
 -- No write policies: inserts/updates/deletes require service role (bypass RLS)

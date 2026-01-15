@@ -1,8 +1,3 @@
-"""NATS Handshake Publisher Utility.
-
-Publishes handshake events to NATS for service discovery coordination.
-"""
-
 from __future__ import annotations
 
 import argparse

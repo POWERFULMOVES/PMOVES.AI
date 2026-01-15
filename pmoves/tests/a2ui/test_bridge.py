@@ -149,7 +149,7 @@ class TestMetricsEndpoint:
         # Verify key metrics are present
         assert "a2ui_events_published_total" in content
         assert "a2ui_events_received_total" in content
-        assert "a2ui_geometry_events_total" in content
+        assert "a2ui_events_forwarded_total" in content
         assert "a2ui_active_websockets" in content
         assert "a2ui_nats_connected" in content
 
@@ -214,3 +214,59 @@ class TestWebSocketEndpoints:
         """Test /ws/client route is registered."""
         routes = [route.path for route in app.routes]
         assert "/ws/client" in routes
+
+
+class TestA2UIEventTypes:
+    """Test all A2UI event types have proper validation."""
+
+    def test_all_event_types_validated(self):
+        """Test all standard A2UI event types can be parsed."""
+        event_types = [
+            "createSurface",
+            "beginRendering",
+            "surfaceUpdate",
+            "updateComponents",
+            "updateDataModel",
+            "dataModelUpdate",
+            "userAction",
+            "closeSurface"
+        ]
+        for event_type in event_types:
+            data = {event_type: {"surfaceId": "test-surface"}}
+            event = A2UIEvent.from_a2ui_dict(data)
+            assert event.event_type == event_type
+            assert event.surface_id == "test-surface"
+
+    def test_beginRendering_event(self):
+        """Test beginRendering event parsing."""
+        data = {
+            "beginRendering": {
+                "surfaceId": "render-surface",
+                "width": 1920,
+                "height": 1080
+            }
+        }
+        event = A2UIEvent.from_a2ui_dict(data)
+        assert event.event_type == "beginRendering"
+        assert event.surface_id == "render-surface"
+        assert event.payload["width"] == 1920
+
+    def test_updateDataModel_event(self):
+        """Test updateDataModel event parsing."""
+        data = {
+            "updateDataModel": {
+                "surfaceId": "data-surface",
+                "dataModel": {"counter": 42}
+            }
+        }
+        event = A2UIEvent.from_a2ui_dict(data)
+        assert event.event_type == "updateDataModel"
+        assert event.payload["dataModel"]["counter"] == 42
+
+    def test_closeSurface_event(self):
+        """Test closeSurface event parsing."""
+        data = {"closeSurface": {"surfaceId": "closing-surface"}}
+        event = A2UIEvent.from_a2ui_dict(data)
+        assert event.event_type == "closeSurface"
+        assert event.surface_id == "closing-surface"
+
