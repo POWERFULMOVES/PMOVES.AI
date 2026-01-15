@@ -3,12 +3,16 @@
 import asyncio
 import heapq
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
+
+# Valid providers for validation
+VALID_PROVIDERS: Set[str] = {"ollama", "vllm", "tts"}
 
 
 class Priority(IntEnum):
@@ -34,9 +38,26 @@ class LoadRequest:
     request_id: str = field(compare=False, default="")
 
     def __post_init__(self):
+        # Validate priority range (0-10 to match API validation)
+        if not 0 <= self.priority <= 10:
+            raise ValueError(f"Priority must be 0-10, got {self.priority}")
+
+        # Validate provider
+        if self.provider not in VALID_PROVIDERS:
+            raise ValueError(
+                f"Invalid provider '{self.provider}'. "
+                f"Must be one of: {sorted(VALID_PROVIDERS)}"
+            )
+
+        # Validate model_id
+        if not self.model_id:
+            raise ValueError("model_id cannot be empty")
+
+        # Generate request_id if not provided
         if not self.request_id:
-            import uuid
             self.request_id = str(uuid.uuid4())
+
+        # Set timestamp if not provided
         if not self.timestamp:
             self.timestamp = datetime.now().timestamp()
 

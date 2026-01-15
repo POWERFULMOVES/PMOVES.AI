@@ -1203,7 +1203,7 @@ services:
       - NODE_ENV=production
       - PORT=8504
     ports: ["${TOKENISM_UI_HOST_PORT:-8504}:8504"]
-    profiles: ["data"]
+    profiles: ["agents", "botz"]
     networks: [pmoves_app]
 
   # PMOVES Central UI - Main dashboard (port 4482)

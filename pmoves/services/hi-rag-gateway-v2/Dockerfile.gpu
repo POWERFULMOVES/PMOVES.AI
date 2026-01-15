@@ -25,7 +25,6 @@ RUN python3 -m pip install --index-url https://download.pytorch.org/whl/${TORCH_
 
 # Base requirements
 COPY services/hi-rag-gateway-v2/requirements.txt /app/requirements.txt
-COPY services/hi-rag-gateway-v2/requirements.lock /app/requirements.lock
 RUN python3 -m pip install -r /app/requirements.txt
 
 # CLAP (uses torch)
@@ -41,8 +40,8 @@ RUN chmod +x /app/scripts/wait-for-deps.sh
 # Create wrapper entrypoint with two-phase startup:
 #   Phase 1: wait-for-deps.sh blocks until Supabase realtime is ready
 #            (exec's /bin/true which returns immediately after deps are ready)
-#   Phase 2: Run the service directly (skip nvidia_entrypoint.sh as it breaks PATH)
-RUN printf '#!/bin/bash\nset -e\nexport PATH="/home/pmoves/.local/bin:/usr/local/bin:/usr/bin:${PATH}"\n/app/scripts/wait-for-deps.sh /bin/true\nexec "$@"\n' > /app/entrypoint-wrapper.sh && \
+#   Phase 2: NVIDIA entrypoint initializes GPU environment and runs CMD
+RUN printf '#!/bin/bash\nset -e\n/app/scripts/wait-for-deps.sh /bin/true\nexec /opt/nvidia/nvidia_entrypoint.sh "$@"\n' > /app/entrypoint-wrapper.sh && \
     chmod +x /app/entrypoint-wrapper.sh
 
 # Security: Run as non-root user (GPU services need video group for device access)
@@ -55,8 +54,5 @@ USER pmoves:pmoves
 ENV HIRAG_HTTP_PORT=8086
 EXPOSE 8086
 
-# Ensure Python user bin is in PATH for uvicorn
-ENV PATH="/home/pmoves/.local/bin:${PATH}"
-
 ENTRYPOINT ["/app/entrypoint-wrapper.sh"]
-CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8086"]

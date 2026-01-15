@@ -19,33 +19,27 @@ from platforms.telegram import TelegramPlatform
 from platforms.whatsapp import WhatsAppPlatform
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Lifecycle Management
-# ─────────────────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan for messaging gateway.
-
-    Startup:
-        - Initialize platform handlers (Discord, Telegram, WhatsApp)
-        - Start NATS resilience loop
-
-    Shutdown:
-        - Cancel NATS loop task and close connection
-    """
-    global _nats_loop_task, _nc
+    """Manage application lifespan - startup and shutdown."""
+    global _nats_loop_task
 
     # Startup
     logger.info("Starting messaging gateway...")
+
+    # Initialize platform handlers
     await discord_platform.initialize()
     await telegram_platform.initialize()
     await whatsapp_platform.initialize()
+
+    # Start NATS loop
     _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
     logger.info("Messaging gateway started")
 
     yield
 
     # Shutdown
+    global _nc
     if _nats_loop_task:
         _nats_loop_task.cancel()
         try:
@@ -57,7 +51,8 @@ async def lifespan(app: FastAPI):
     if _nc:
         await _nc.close()
         _nc = None
-    logger.info("Messaging gateway stopped")
+
+    logger.info("Messaging gateway shut down")
 
 
 app = FastAPI(title="Messaging Gateway", version="0.1.0", lifespan=lifespan)
@@ -347,3 +342,5 @@ async def _nats_resilience_loop() -> None:
             raise
 
         await nc.close()
+
+    logger.info("Messaging gateway stopped")

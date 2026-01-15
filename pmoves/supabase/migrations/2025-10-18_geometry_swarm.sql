@@ -38,17 +38,25 @@ CREATE INDEX IF NOT EXISTS idx_geom_swarm_runs_population_created
 CREATE INDEX IF NOT EXISTS idx_geom_swarm_runs_pack
   ON public.geometry_swarm_runs (pack_id);
 
--- RLS (dev posture: read-only to anon; writes via service role)
+-- RLS with tenant isolation (namespace-based)
 ALTER TABLE public.geometry_parameter_packs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.geometry_swarm_runs ENABLE ROW LEVEL SECURITY;
 
-DO $$ BEGIN
-  DROP POLICY IF EXISTS read_geom_param_packs_all ON public.geometry_parameter_packs;
-  CREATE POLICY read_geom_param_packs_all ON public.geometry_parameter_packs FOR SELECT USING (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Tenant-scoped read policies for Geometry Swarm tables
+-- SECURITY: Uses namespace-based tenant isolation via app.current_tenant setting
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='geometry_parameter_packs' AND policyname='read_geom_param_packs_tenant'
+  ) THEN
+    EXECUTE 'CREATE POLICY read_geom_param_packs_tenant ON public.geometry_parameter_packs FOR SELECT USING (namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves'')';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='geometry_swarm_runs' AND policyname='read_geom_swarm_runs_tenant'
+  ) THEN
+    EXECUTE 'CREATE POLICY read_geom_swarm_runs_tenant ON public.geometry_swarm_runs FOR SELECT USING (pack_id IN (SELECT id FROM public.geometry_parameter_packs WHERE namespace = current_setting(''app.current_tenant'', true) OR namespace = ''pmoves''))';
+  END IF;
+END$$;
 
-DO $$ BEGIN
-  DROP POLICY IF EXISTS read_geom_swarm_runs_all ON public.geometry_swarm_runs;
-  CREATE POLICY read_geom_swarm_runs_all ON public.geometry_swarm_runs FOR SELECT USING (true);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- No write policies: inserts/updates/deletes require service role (bypass RLS)
 

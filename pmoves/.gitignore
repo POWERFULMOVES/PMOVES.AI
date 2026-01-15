@@ -27,3 +27,12 @@ vendor/node_modules/
 *.gif
 *.tmp
 *.log
+
+# Tier environment files (actual secrets - use .example for tracked templates)
+env.tier-api
+env.tier-agent
+env.tier-data
+env.tier-llm
+env.tier-media
+env.tier-ui
+env.tier-worker
