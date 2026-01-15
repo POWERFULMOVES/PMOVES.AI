@@ -52,6 +52,12 @@ PULL ?= missing
 HIRAG_CPU_PORT := $(if $(HIRAG_V2_HOST_PORT),$(HIRAG_V2_HOST_PORT),8086)
 HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
 
+# -------- Service Discovery Helper ----------
+# Resolve service URL using PMOVES service discovery (hybrid support)
+# Supports docked (NATS/Supabase) and standalone (Docker DNS) modes
+# Usage: $(call SERVICE_URL,service-slug,default-port)
+SERVICE_URL = python3 tools/service_health_check.py $(1) --port $(2)
+
 # env.shared is dotenv-style and may contain values that are not safe to `source` directly (multi-line, etc).
 # Use the repo's sanitizer/loader so scripts get stable, safe environment variables.
 LOAD_ENV_SHARED := . ./scripts/with-env.sh;
@@ -442,13 +448,14 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence under pmoves/docs/logs/
 	@mkdir -p pmoves/docs/logs
 	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
-	  echo "→ Archon MCP describe"; \
-	  curl -sf http://localhost:8091/mcp/describe | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_describe.json; \
+	  ARCHON_URL=$${SERVICE_ARCHON_URL:-$${ARCHON_BASE_URL:-http://localhost:8091}}; \
+	  echo "→ Archon MCP describe ($$ARCHON_URL)"; \
+	  curl -sf "$$ARCHON_URL/mcp/describe" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_describe.json; \
 	  echo "→ Archon MCP commands"; \
-	  curl -sf http://localhost:8091/mcp/commands | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json; \
+	  curl -sf "$$ARCHON_URL/mcp/commands" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json; \
 	  tool=$$(jq -r 'first(.commands[] | select(.name=="form.get").name) // .commands[0].name' pmoves/docs/logs/$${STAMP}_archon_mcp_commands.json); \
 	  echo "→ Archon MCP execute $$tool"; \
-	  curl -sS -X POST http://localhost:8091/mcp/execute -H 'content-type: application/json' -d "{\"tool\":\"$$tool\",\"arguments\":{}}" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_execute.json; \
+	  curl -sS -X POST "$$ARCHON_URL/mcp/execute" -H 'content-type: application/json' -d "{\"tool\":\"$$tool\",\"arguments\":{}}" | jq . > pmoves/docs/logs/$${STAMP}_archon_mcp_execute.json; \
 	  echo "✔ Evidence saved under pmoves/docs/logs/ with stamp $$STAMP"
 
 .PHONY: archon-submodule-extract

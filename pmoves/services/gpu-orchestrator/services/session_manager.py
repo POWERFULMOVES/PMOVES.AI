@@ -118,7 +118,6 @@ class SessionManager:
         """Add a model to an existing session."""
         session = self._sessions.get(session_id)
         if not session:
-            logger.warning(f"Cannot add model {model_key} - session {session_id} not found")
             return False
 
         if model_key not in session.models:
@@ -206,11 +205,8 @@ class Session:
         metadata: Dict,
     ):
         self.session_id = session_id
-        # Create a copy of models list to prevent external mutation
-        # Use dict.fromkeys to remove duplicates while preserving order
-        self.models = list(dict.fromkeys(models))
-        # Create a copy of metadata to prevent external mutation
-        self.metadata = dict(metadata)
+        self.models = models
+        self.metadata = metadata
         self.created_at = datetime.now()
         self.last_activity = datetime.now()
 
