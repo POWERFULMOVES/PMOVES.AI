@@ -734,9 +734,9 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:54321}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase_kong_PMOVES.AI:8000}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_PMOVES.AI:8000/rest/v1}
     depends_on:
       nats:
         condition: service_started
@@ -1203,7 +1203,7 @@ services:
       - NODE_ENV=production
       - PORT=8504
     ports: ["${TOKENISM_UI_HOST_PORT:-8504}:8504"]
-    profiles: ["agents", "botz"]
+    profiles: ["data"]
     networks: [pmoves_app]
 
   # PMOVES Central UI - Main dashboard (port 4482)
