@@ -15,7 +15,6 @@ const mockClipboard = {
 Object.assign(navigator, { clipboard: mockClipboard });
 
 const mockResult: ResearchResult = {
-  taskId: 'research-task-123',
   summary: 'This is a comprehensive summary of the research findings about quantum computing.',
   notes: [
     'Key point 1: Quantum bits can exist in superposition',
@@ -39,7 +38,6 @@ const mockResult: ResearchResult = {
 };
 
 const emptyResult: ResearchResult = {
-  taskId: 'research-task-empty',
   summary: 'Minimal result',
   notes: [],
   sources: [],
