@@ -86,8 +86,7 @@ class TtsClient:
         """
         is_healthy = await self.health_check()
         if not is_healthy:
-            logger.warning("Ultimate TTS Studio unhealthy, returning estimated VRAM")
-            return dict(self.engine_vram_estimates)
+            return {}
 
         # Ultimate TTS Studio loads all engines at startup
         # Return estimates for all known engines

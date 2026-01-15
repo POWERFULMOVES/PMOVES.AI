@@ -227,12 +227,6 @@ class ModelLifecycleManager:
                 break
             except Exception as e:
                 logger.error(f"Error in load worker: {e}")
-                # Still complete the request to avoid queue exhaustion
-                if request:
-                    try:
-                        await self.load_queue.complete(request.request_id)
-                    except Exception as complete_err:
-                        logger.error(f"Error completing queue request {request.request_id}: {complete_err}")
 
     async def _process_load_request(self, request: LoadRequest) -> None:
         """Process a single load request."""
@@ -249,34 +243,10 @@ class ModelLifecycleManager:
             available = self.vram_tracker.get_available_vram(self.vram_reserve)
 
             if vram_needed > available:
-                error_msg = (
+                logger.error(
                     f"Insufficient VRAM for {model_key}: "
                     f"need {vram_needed}MB, have {available}MB"
                 )
-                logger.error(error_msg)
-
-                # Create error model record for tracking
-                model = LoadedModel(
-                    model_id=request.model_id,
-                    provider=request.provider,
-                    vram_mb=vram_needed,
-                    state=ModelState.ERROR,
-                    loaded_at=datetime.now(),
-                    last_used=datetime.now(),
-                    idle_timeout_seconds=self.idle_timeout,
-                    error_message=error_msg,
-                )
-                self.loaded_models[model_key] = model
-
-                # Notify callback of failure
-                if request.callback:
-                    try:
-                        await request.callback(False, model_key)
-                    except Exception as callback_err:
-                        logger.error(
-                            f"Load callback error for {model_key} "
-                            f"(request_id: {request.request_id}): {callback_err}"
-                        )
                 return
 
         # Create loaded model record
@@ -287,7 +257,6 @@ class ModelLifecycleManager:
             state=ModelState.LOADING,
             loaded_at=datetime.now(),
             last_used=datetime.now(),
-            idle_timeout_seconds=self.idle_timeout,
             session_id=request.session_id,
         )
         self.loaded_models[model_key] = model
@@ -308,11 +277,8 @@ class ModelLifecycleManager:
             if request.callback:
                 try:
                     await request.callback(True, model_key)
-                except Exception as callback_err:
-                    logger.error(
-                        f"Load callback error for {model_key} "
-                        f"(request_id: {request.request_id}): {callback_err}"
-                    )
+                except Exception as e:
+                    logger.error(f"Load callback error: {e}")
         else:
             model.state = ModelState.ERROR
             model.error_message = "Failed to load model"
@@ -321,11 +287,8 @@ class ModelLifecycleManager:
             if request.callback:
                 try:
                     await request.callback(False, model_key)
-                except Exception as callback_err:
-                    logger.error(
-                        f"Load callback error for {model_key} "
-                        f"(request_id: {request.request_id}): {callback_err}"
-                    )
+                except Exception as e:
+                    logger.error(f"Load callback error: {e}")
 
     async def _load_via_provider(self, model_id: str, provider: str) -> bool:
         """Load model using the appropriate provider."""
