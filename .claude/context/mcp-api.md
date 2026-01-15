@@ -394,6 +394,95 @@ MCP activity is logged to NATS subjects:
 - Completion events
 - Error notifications
 
+## Persona-Based Agent Creation
+
+**NEW:** `POST /mcp/subordinate/create-with-persona`
+
+Create a subordinate agent from a persona configuration stored in Supabase. Personas define agent behavior, tools, and personality.
+
+```bash
+curl -X POST http://localhost:8080/mcp/subordinate/create-with-persona \
+  -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "persona_id": "uuid",
+    "context_allocation": 0.3,
+    "parent_agent_id": "agent-0",
+    "overrides": {
+      "model": "claude-opus-4-5",
+      "temperature": 0.5
+    },
+    "enhancement_ids": ["uuid1", "uuid2"],
+    "create_subordinate": true
+  }'
+```
+
+**Request Parameters:**
+- `persona_id` (required): UUID of persona from Supabase `pmoves_core.personas`
+- `context_allocation` (optional): Context window allocation (0.0-1.0, default: 0.3)
+- `parent_agent_id` (optional): Parent agent for subordinate relationship
+- `overrides` (optional): Runtime parameter overrides (model, temperature, max_tokens, tools)
+- `enhancement_ids` (optional): Specific enhancement IDs to apply
+- `create_subordinate` (optional): Whether to create the agent (default: true)
+
+**Response:**
+```json
+{
+  "agent_id": "agent-2",
+  "config": {
+    "name": "Developer",
+    "specialization": "Software engineering specialist for PMOVES.AI",
+    "thread_type": "chained",
+    "model": "claude-sonnet-4-5",
+    "temperature": 0.3,
+    "max_tokens": 4096,
+    "tools": ["git", "code-review", "testing", "documentation"],
+    "behavior_weights": {"decode": 0.3, "retrieve": 0.4, "generate": 0.3},
+    "nats_subscriptions": ["claude.code.tool.executed.v1"],
+    "grounding_packs": ["pmoves-architecture@1.0", "python-patterns@1.0"]
+  },
+  "persona": {
+    "persona_id": "uuid",
+    "name": "Developer",
+    "version": "1.0",
+    "thread_type": "chained"
+  },
+  "enhancements_applied": [
+    {"enhancement_id": "uuid1", "type": "tool", "name": "code-review-access"}
+  ]
+}
+```
+
+### Thread Types
+
+Personas support different orchestration patterns via `thread_type`:
+
+| Thread Type | Description | Use Case | Coordination |
+|-------------|-------------|----------|--------------|
+| `base` | Single agent, single task | Simple queries, direct actions | none |
+| `parallel` | Multiple independent agents | Multi-source research, concurrent tasks | result_aggregation |
+| `chained` | Sequential agent handoff | Multi-step workflows, validation pipelines | sequential_handoff |
+| `fusion` | Collaborative single output | Complex analysis, consensus building | collaborative_merge |
+| `big` | Large context orchestration | Complex projects, architectural design | central_planner |
+| `zero_touch` | Fully automated execution | Background tasks, scheduled operations | event_driven |
+
+### Persona Management Endpoints
+
+**`GET /api/persona/list`** - List available personas
+```bash
+curl http://localhost:8080/api/persona/list?active_only=true&thread_type=chained
+```
+
+**`GET /api/persona/{persona_id}`** - Get persona details
+```bash
+curl http://localhost:8080/api/persona/{uuid}
+```
+
+**`GET /api/persona/enhancements/{persona_id}`** - Get persona enhancements
+```bash
+curl http://localhost:8080/api/persona/enhancements/{uuid}
+```
+
 ## Future MCP Enhancements
 
 Planned features:
@@ -401,6 +490,8 @@ Planned features:
 - **Batch operations** - Submit multiple tasks in one call
 - **Agent scheduling** - Schedule tasks for future execution
 - **Agent pools** - Dedicated agent groups for specific workloads
+- **Persona versioning** - A/B test different persona versions
+- **Persona analytics** - Track persona performance metrics
 
 ## Developer Notes
 

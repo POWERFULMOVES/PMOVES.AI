@@ -34,10 +34,7 @@ class OllamaClient:
                     return data.get("models", [])
         except httpx.RequestError as e:
             logger.error(f"Error listing Ollama models: {e}")
-            return []  # Empty list indicates Ollama unavailable
-        except (httpx.DecodeError, KeyError) as e:
-            logger.warning(f"Error parsing Ollama models response: {e}")
-            return []
+        return []
 
     async def list_running_models(self) -> List[Dict[str, Any]]:
         """List currently running/loaded models (Ollama 0.5+)."""
