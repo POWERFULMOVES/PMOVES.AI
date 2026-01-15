@@ -5,12 +5,21 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+
+# NATS service announcement integration
+try:
+    from services.common.nats_service_listener import announce_service, ServiceTier
+    NATS_ANNOUNCE_AVAILABLE = True
+except ImportError:
+    NATS_ANNOUNCE_AVAILABLE = False
 
 try:  # pragma: no cover - exercised in production
     import boto3
@@ -38,7 +47,43 @@ ProviderLiteral = Literal["faster-whisper", "whisper", "qwen2-audio"]
 logger = logging.getLogger(__name__)
 
 
-app = FastAPI(title="FFmpeg+Whisper", version="4.0.0")
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifespan with NATS service announcement
+# ─────────────────────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage FFmpeg-Whisper service lifespan with NATS service announcement."""
+    # Get service configuration for announcement
+    port = int(os.getenv("PORT", "8078"))
+    hostname = os.getenv("HOSTNAME", socket.gethostname())
+    slug = os.getenv("SERVICE_SLUG", "ffmpeg-whisper")
+    name = os.getenv("SERVICE_NAME", "PMOVES FFmpeg-Whisper")
+    url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
+    health_check = f"{url}/healthz"
+
+    # Announce service on NATS
+    if NATS_ANNOUNCE_AVAILABLE:
+        try:
+            await announce_service(
+                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+                slug=slug,
+                name=name,
+                url=url,
+                health_check=health_check,
+                tier=ServiceTier.MEDIA,
+                port=port,
+                metadata={"version": "4.0.0"},
+                retry=True,
+            )
+            logger.info("NATS service announcement published: %s at %s", slug, url)
+        except Exception as e:
+            logger.warning("Failed to publish NATS service announcement: %s", e)
+
+    yield
+
+
+app = FastAPI(title="FFmpeg+Whisper", version="4.0.0", lifespan=lifespan)
 
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
