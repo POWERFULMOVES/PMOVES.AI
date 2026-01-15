@@ -1,69 +1,29 @@
-# Core
-.env
-.env.*
-.env *
-.env.local
-.env.supa.remote
-env.shared
-env.shared.*
-supa.md
-# But keep templates checked in
-!.env.*.example
-!.env.local.example
-!env.shared.example
-*.log
-.last_logs.txt
+env.tier-*
 
-# Backup files (may contain credentials)
-*.backup*
-*-backup-*
-*.bak
+# Generated environment files
+.env.generated
+env.cgp.json
+env.shared.generated
 
-# WSL artifacts
-.wsl/
+# Archon MCP logs
+*_archon_mcp_*.json
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-.pytest_cache/
-.ipynb_checkpoints/
+# VSCode/user-specific files
+launch.json
+extensions.json
 
-# OS/editor
-.DS_Store
-.idea/
-.vscode/
-Thumbs.db
-
-# Build/output
-dist/
-build/
-*.egg-info/
-
-# Binaries and large docs
-*.zip
-tools/bin/
-
-# Local data
-neo4j/data/
-minio-data/
-supabase-data/
+# Data directories (generated)
+data/chit/
 data/jellyfin/
 data/open-notebook/
-data/chit/
-cloudflared/
-# Agent Zero runtime data (keep structure, ignore runtime)
-pmoves/data/agent-zero/memory/
-pmoves/data/agent-zero/runtime/
-pmoves/data/agent-zero/tmp/
-pmoves/data/agent-zero/logs/
+notebook_data/
+surreal_data/
 
-# Tier environment files (actual secrets - use .example for tracked templates)
-env.tier-api
-env.tier-agent
-env.tier-data
-env.tier-llm
-env.tier-media
-env.tier-ui
-env.tier-worker
-pmoves/secrets/
+# Vendor
+vendor/python/
+vendor/node_modules/
+
+# Temporary files
+*.gif
+*.tmp
+*.log
