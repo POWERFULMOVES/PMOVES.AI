@@ -18,6 +18,8 @@ Architecture:
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 import asyncio
 import json
 import os
@@ -83,10 +85,36 @@ async def get_api_key(api_key_header: str = Security(api_key_header)) -> Optiona
     return None
 
 # FastAPI app
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifecycle Management
+# ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan for Gateway Agent."""
+    # Startup
+    logger.info("Gateway Agent starting up...")
+    logger.info(f"Agent Zero URL: {AGENT_ZERO_URL}")
+    logger.info(f"Cipher URL: {CIPHER_URL}")
+    logger.info(f"TensorZero URL: {TENSORZERO_URL}")
+
+    # Initial tool discovery
+    await tool_registry.discover_tools(force_refresh=True)
+
+    # Log available secrets count
+    secrets = SecretManager.get_all_credentials()
+    logger.info(f"Loaded {len(secrets)} service credentials from environment")
+
+    yield
+
+    # Shutdown
+    logger.info("Gateway Agent shutting down...")
+
 app = FastAPI(
     title="PMOVES Gateway Agent",
     description="Orchestrates 100+ MCP tools with Cipher memory integration",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -413,8 +441,15 @@ async def list_tools(category: str = None, force_refresh: bool = False):
 
 
 @app.post("/tools/execute", response_model=ToolExecuteResponse)
-async def execute_tool(request: ToolExecuteRequest):
-    """Execute an MCP tool via the Gateway"""
+async def execute_tool(
+    request: ToolExecuteRequest,
+    _auth: Optional[str] = Depends(get_api_key)
+):
+    """
+    Execute an MCP tool via the Gateway.
+
+    Requires authentication when GATEWAY_API_KEY is set.
+    """
     start_time = datetime.now()
 
     try:
@@ -473,8 +508,16 @@ async def _route_to_upstream(tool: ToolDefinition, parameters: Dict[str, Any]) -
 
 
 @app.post("/skills/store", response_model=dict)
-async def store_skill(request: SkillStoreRequest, background_tasks: BackgroundTasks):
-    """Store a learned skill pattern in Cipher memory"""
+async def store_skill(
+    request: SkillStoreRequest,
+    background_tasks: BackgroundTasks,
+    _auth: Optional[str] = Depends(get_api_key)
+):
+    """
+    Store a learned skill pattern in Cipher memory.
+
+    Requires authentication when GATEWAY_API_KEY is set.
+    """
     try:
         # Store in Cipher memory
         skill_data = {
@@ -502,8 +545,15 @@ async def store_skill(request: SkillStoreRequest, background_tasks: BackgroundTa
 
 
 @app.post("/skills/search", response_model=dict)
-async def search_skills(request: SkillSearchRequest):
-    """Search for skills in Cipher memory"""
+async def search_skills(
+    request: SkillSearchRequest,
+    _auth: Optional[str] = Depends(get_api_key)
+):
+    """
+    Search for skills in Cipher memory.
+
+    Requires authentication when GATEWAY_API_KEY is set.
+    """
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             params = {"query": request.query, "limit": request.limit}
@@ -537,32 +587,15 @@ async def list_secrets():
 # Main Entry Point
 # ============================================================================
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize tool registry on startup"""
-    logger.info("Gateway Agent starting up...")
-    logger.info(f"Agent Zero URL: {AGENT_ZERO_URL}")
-    logger.info(f"Cipher URL: {CIPHER_URL}")
-    logger.info(f"TensorZero URL: {TENSORZERO_URL}")
-
-    # Initial tool discovery
-    await tool_registry.discover_tools(force_refresh=True)
-
-    # Log available secrets count
-    secrets = SecretManager.get_all_credentials()
-    logger.info(f"Loaded {len(secrets)} service credentials from environment")
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("Gateway Agent shutting down...")
+
 
 
 if __name__ == "__main__":
     uvicorn.run(
         "app:app",
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=PORT,
         reload=os.environ.get("ENV", "production") == "development",
         log_level="info"

@@ -1,7 +1,5 @@
 """FastAPI application entrypoint for the PMOVES gateway service."""
 
-import asyncio
-import contextlib
 import logging
 import os
 import sys
