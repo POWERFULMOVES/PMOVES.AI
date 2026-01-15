@@ -4,7 +4,7 @@
 
 import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
-import type { ServiceHealth, ServiceHealthStatus } from '../../lib/serviceHealth';
+import type { ServiceHealthStatus } from '../../lib/serviceHealth';
 import type { ServiceDefinition, ServiceCategory, ServiceColor } from '../../lib/serviceCatalog';
 
 // =============================================================================
@@ -14,12 +14,11 @@ import type { ServiceDefinition, ServiceCategory, ServiceColor } from '../../lib
 /**
  * Creates a mock service health object with optional overrides
  */
-export function mockServiceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHealth {
+export function mockServiceHealth(overrides: Partial<ServiceHealthStatus> = {}): ServiceHealthStatus {
   return {
-    slug: 'test-service',
     status: 'healthy',
-    lastCheck: new Date(),
     responseTime: 50,
+    lastCheck: new Date(),
     ...overrides,
   };
 }
@@ -28,11 +27,11 @@ export function mockServiceHealth(overrides: Partial<ServiceHealth> = {}): Servi
  * Creates a mock service health map for multiple services
  */
 export function mockServiceHealthMap(
-  services: Array<{ slug: string; status?: Partial<ServiceHealth> }>
-): Record<string, ServiceHealth> {
-  const map: Record<string, ServiceHealth> = {};
+  services: Array<{ slug: string; status?: ServiceHealthStatus }>
+): Record<string, ServiceHealthStatus> {
+  const map: Record<string, ServiceHealthStatus> = {};
   for (const service of services) {
-    map[service.slug] = mockServiceHealth({ ...service.status, slug: service.slug });
+    map[service.slug] = mockServiceHealth(service.status);
   }
   return map;
 }
@@ -58,7 +57,15 @@ export function mockServiceEndpoint(overrides: Partial<{
 /**
  * Creates a mock service definition
  */
-export function mockServiceDefinition(overrides: Partial<ServiceDefinition> = {}): ServiceDefinition {
+export function mockServiceDefinition(overrides: Partial<{
+  slug: string;
+  title: string;
+  summary: string;
+  category: ServiceCategory;
+  color: ServiceColor;
+  endpoints: Array<{ name: string; port: string; path: string; type: string }>;
+  healthCheck: string;
+}> = {}): ServiceDefinition {
   return {
     slug: 'test-service',
     title: 'Test Service',
@@ -113,7 +120,7 @@ export function renderWithAuth(
  */
 export function renderWithServiceHealth(
   ui: ReactElement,
-  healthMap: Record<string, ServiceHealth> = {},
+  healthMap: Record<string, ServiceHealthStatus> = {},
   options: Omit<RenderOptions, 'wrapper'> = {}
 ) {
   // TODO: Add service health context wrapper when available
