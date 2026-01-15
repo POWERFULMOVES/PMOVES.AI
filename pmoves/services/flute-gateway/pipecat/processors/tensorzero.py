@@ -2,6 +2,11 @@
 
 Routes LLM calls through the TensorZero gateway for unified model access
 and observability. Supports streaming for faster TTS handoff.
+
+Service URL resolution (in order of priority):
+1. TENSORZERO_URL environment variable (explicit override)
+2. Service catalog (Supabase) via service registry
+3. Docker DNS fallback (tensorzero:3030)
 """
 
 from __future__ import annotations
@@ -14,6 +19,17 @@ from typing import AsyncGenerator, Optional
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# Service discovery integration
+try:
+    from services.common.service_registry import get_service_url_sync
+    SERVICE_REGISTRY_AVAILABLE = True
+except ImportError:
+    SERVICE_REGISTRY_AVAILABLE = False
+
+    def get_service_url_sync(slug: str, *, default_port: int = 80) -> str:
+        """Fallback when service registry is not available."""
+        return f"http://{slug}:{default_port}"
 
 # Pipecat imports - gracefully handle if not installed
 try:
@@ -61,17 +77,21 @@ class TensorZeroLLMProcessor(FrameProcessor):
         model: Default model to use for completions.
         stream: Whether to stream responses.
 
+    Service URL resolution:
+        If base_url is None or "auto", the URL is resolved via:
+        1. TENSORZERO_URL environment variable
+        2. Service catalog (Supabase) via service registry
+        3. Docker DNS fallback (tensorzero:3030)
+
     Example:
-        >>> llm = TensorZeroLLMProcessor(
-        ...     base_url="http://localhost:3030",
-        ...     model="claude-sonnet-4-5"
-        ... )
+        >>> llm = TensorZeroLLMProcessor(model="claude-sonnet-4-5")
+        >>> # URL automatically resolved to TensorZero gateway
         >>> pipeline = Pipeline([..., llm, ...])
     """
 
     def __init__(
         self,
-        base_url: str = "http://localhost:3030",
+        base_url: str | None = None,
         model: str = "claude-sonnet-4-5",
         stream: bool = True,
         max_tokens: int = 1024,
@@ -81,7 +101,7 @@ class TensorZeroLLMProcessor(FrameProcessor):
         """Initialize TensorZero LLM processor.
 
         Args:
-            base_url: TensorZero gateway URL.
+            base_url: TensorZero gateway URL. If None, uses service discovery.
             model: Model name for completions.
             stream: Enable streaming responses.
             max_tokens: Maximum tokens in response.
@@ -95,6 +115,14 @@ class TensorZeroLLMProcessor(FrameProcessor):
             )
 
         super().__init__()
+
+        # Resolve TensorZero URL via service discovery if not provided
+        if base_url is None or base_url == "auto":
+            import os
+            base_url = os.getenv("TENSORZERO_URL")
+            if not base_url:
+                base_url = get_service_url_sync("tensorzero", default_port=3030)
+
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._stream = stream
