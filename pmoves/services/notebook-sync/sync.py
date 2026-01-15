@@ -2,14 +2,13 @@ import asyncio
 import logging
 import os
 import sqlite3
-import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import httpx
 from dateutil import parser as date_parser
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
@@ -551,29 +550,22 @@ def _load_syncer() -> NotebookSyncer:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Lifecycle Management
-# ─────────────────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan for Notebook Sync."""
-    global syncer
-
-    # Startup
+    """Manage application lifespan."""
+    syncer = _load_syncer()
+    app.state.syncer = syncer
     await syncer.start()
-
     yield
-
-    # Shutdown
     await syncer.stop()
 
 
 app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0", lifespan=lifespan)
-syncer = _load_syncer()
 
 
 @app.get("/healthz")
-async def healthz() -> Dict[str, Any]:
+async def healthz(request: Request) -> Dict[str, Any]:
+    syncer = request.app.state.syncer
     return {
         "ok": True,
         "last_sync": syncer.last_sync_time.isoformat().replace("+00:00", "Z")
@@ -588,7 +580,8 @@ def metrics():
 
 
 @app.post("/sync")
-async def trigger_sync() -> Dict[str, Any]:
+async def trigger_sync(request: Request) -> Dict[str, Any]:
+    syncer = request.app.state.syncer
     if syncer._lock.locked():  # pylint: disable=protected-access
         raise HTTPException(status_code=409, detail="Sync already in progress")
     await syncer.trigger_once()

@@ -203,8 +203,12 @@ def sign_cgp(
     passphrase = passphrase or CHITConfig.get_passphrase()
     doc = deepcopy(cgp)
     ts = int(datetime.now().timestamp())
-    # Note: SHA256 here is for key ID generation, not password hashing.
+    # IMPORTANT: This SHA256 is NOT used for password hashing/authentication.
+    # It is only used to generate a key identifier (kid) from the passphrase.
     # The actual cryptographic integrity comes from HMAC-SHA256 below.
+    # This is safe because: (1) The passphrase is a CHIT secret key, not a user password
+    # (2) The kid is just an identifier, not used for authentication itself
+    # (3) All signature verification uses HMAC, not the SHA256 hash directly
     kid = kid or hashlib.sha256(passphrase.encode()).hexdigest()[:16]
 
     meta = {

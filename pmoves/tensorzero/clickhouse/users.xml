@@ -1,10 +1,11 @@
 <clickhouse>
   <users>
     <tensorzero>
-      <password></password>
+      <password>tensorzero</password>
       <profile>default</profile>
       <networks>
         <ip>::/0</ip>
+        <ip>0.0.0.0/0</ip>
       </networks>
     </tensorzero>
   </users>

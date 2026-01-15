@@ -96,24 +96,7 @@ monitor = ChannelMonitor(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage Channel Monitor application lifespan.
-
-    Handles startup and shutdown events for the FastAPI application.
-    On startup, initializes the channel monitor and ensures metrics
-    counters are properly initialized. On shutdown, gracefully closes
-    database connections and stops background tasks.
-
-    Args:
-        app: FastAPI application instance.
-
-    Yields:
-        None. Control is yielded back to FastAPI for the application lifetime.
-
-    Notes:
-        - Stores monitor instance in app.state.monitor for dependency injection
-        - Initializes Prometheus metric counters with zero values to ensure
-          all label combinations exist before first use
-    """
+    """Manage Channel Monitor application lifespan."""
     # Startup
     await monitor.start()
     app.state.monitor = monitor
@@ -345,20 +328,24 @@ async def healthz() -> Dict[str, Any]:
 
     Returns:
         Dictionary containing:
-            - 'status': 'ok' if service is healthy
+            - 'status': 'ok' if service is healthy, 'error' if database is down
             - 'queue_url': Configured ingestion queue URL
             - 'database_url': Configured database connection string
             - 'channels': Number of channels currently being monitored
+            - 'database_healthy': True if database is queryable
 
     Notes:
         This endpoint does not require authentication and is suitable for
         use as a Kubernetes liveness/readiness probe.
+        The database connectivity is verified via a lightweight query.
     """
+    db_healthy = await monitor.check_database_health()
     return {
-        "status": "ok",
+        "status": "ok" if db_healthy else "error",
         "queue_url": QUEUE_URL,
         "database_url": DATABASE_URL,
         "channels": monitor.channel_count(),
+        "database_healthy": db_healthy,
     }
 
 

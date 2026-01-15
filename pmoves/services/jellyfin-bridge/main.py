@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import time
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from difflib import SequenceMatcher
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -20,27 +20,67 @@ from starlette.responses import Response
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifecycle Management
 # ─────────────────────────────────────────────────────────────────────────────
-_autolink_task: Optional[asyncio.Task] = None
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan for Jellyfin Bridge."""
-    global _autolink_task
     # Startup
     if AUTOLINK and JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID:
-        _autolink_task = asyncio.create_task(_autolink_loop())
+        asyncio.create_task(_autolink_loop())
 
     yield
 
-    # Shutdown
-    if _autolink_task:
-        _autolink_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await _autolink_task
-        _autolink_task = None
+    # Shutdown - no cleanup needed
 
 
 app = FastAPI(title="Jellyfin Bridge", version="0.1.0", lifespan=lifespan)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus Metrics
+# ─────────────────────────────────────────────────────────────────────────────
+JELLYFIN_REQUESTS = Counter(
+    "jellyfin_bridge_requests_total",
+    "Total Jellyfin Bridge requests",
+    ["endpoint", "status"]
+)
+JELLYFIN_SEARCH_LATENCY = Histogram(
+    "jellyfin_bridge_search_latency_seconds",
+    "Jellyfin search latency in seconds",
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+)
+JELLYFIN_LINKS = Counter(
+    "jellyfin_bridge_links_total",
+    "Total Jellyfin video link operations",
+    ["result"]
+)
+JELLYFIN_NOTEBOOK_PUBLISHES = Counter(
+    "jellyfin_bridge_notebook_publishes_total",
+    "Total Open Notebook publish attempts",
+    ["status"]
+)
+
+LOGGER = logging.getLogger("jellyfin_bridge")
+
+# ---------------------------------------------------------------------------
+# Open Notebook Publishing Configuration
+# ---------------------------------------------------------------------------
+OPEN_NOTEBOOK_API_URL = os.environ.get("OPEN_NOTEBOOK_API_URL", "")
+OPEN_NOTEBOOK_API_TOKEN = os.environ.get("OPEN_NOTEBOOK_API_TOKEN", "")
+OPEN_NOTEBOOK_NOTEBOOK_ID = os.environ.get("OPEN_NOTEBOOK_NOTEBOOK_ID", "") or os.environ.get("DEEPRESEARCH_NOTEBOOK_ID", "")
+JELLYFIN_NOTEBOOK_PUBLISH = os.environ.get("JELLYFIN_NOTEBOOK_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
+
+# Initialize notebook publisher if available
+_notebook_publisher = None
+try:
+    from libs.notebook_publisher import NotebookPublisher
+    if OPEN_NOTEBOOK_API_URL and OPEN_NOTEBOOK_API_TOKEN and JELLYFIN_NOTEBOOK_PUBLISH:
+        _notebook_publisher = NotebookPublisher(
+            base_url=OPEN_NOTEBOOK_API_URL,
+            api_token=OPEN_NOTEBOOK_API_TOKEN,
+            notebook_id=OPEN_NOTEBOOK_NOTEBOOK_ID,
+        )
+        LOGGER.info("Open Notebook publisher initialized for Jellyfin bridge")
+except ImportError:
+    LOGGER.info("notebook_publisher library not available")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prometheus Metrics

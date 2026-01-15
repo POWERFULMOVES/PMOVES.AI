@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -67,12 +68,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PMOVES-SUPASERCH", version="0.1.0", lifespan=lifespan)
-
-# CGP NATS subject for GEOMETRY BUS integration
-CGP_SUBJECT = "tokenism.cgp.ready.v1"
-
-# Enable CGP publishing via environment variable (default: enabled)
-CGP_PUBLISH_ENABLED = os.getenv("SUPASERCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
 
 
 # Prometheus metrics -------------------------------------------------------
