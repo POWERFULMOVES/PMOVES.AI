@@ -16,6 +16,17 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
+# Service discovery integration
+try:
+    from services.common.service_registry import get_service_url_sync
+    SERVICE_REGISTRY_AVAILABLE = True
+except ImportError:
+    SERVICE_REGISTRY_AVAILABLE = False
+
+    def get_service_url_sync(slug: str, *, default_port: int = 80) -> str:
+        """Fallback when service registry is not available."""
+        return f"http://{slug}:{default_port}"
+
 
 @dataclass
 class PipecatConfig:
@@ -58,7 +69,18 @@ class PipecatConfig:
 
 
 def get_pipecat_config() -> PipecatConfig:
-    """Load pipecat configuration from environment variables."""
+    """Load pipecat configuration from environment variables.
+
+    URL resolution priority (for TensorZero):
+    1. TENSORZERO_URL environment variable (explicit override)
+    2. Service catalog (Supabase) via service registry
+    3. Docker DNS fallback (tensorzero:3030)
+    """
+    # Resolve TensorZero URL using service registry fallback
+    tensorzero_url = os.getenv("TENSORZERO_URL")
+    if not tensorzero_url:
+        tensorzero_url = get_service_url_sync("tensorzero", default_port=3030)
+
     return PipecatConfig(
         enabled=os.getenv("PIPECAT_ENABLED", "false").lower() == "true",
         sample_rate=int(os.getenv("PIPECAT_SAMPLE_RATE", "24000")),
@@ -72,7 +94,7 @@ def get_pipecat_config() -> PipecatConfig:
         webrtc_turn_server=os.getenv("WEBRTC_TURN_SERVER"),
         webrtc_turn_username=os.getenv("WEBRTC_TURN_USERNAME"),
         webrtc_turn_password=os.getenv("WEBRTC_TURN_PASSWORD"),
-        tensorzero_url=os.getenv("TENSORZERO_URL", "http://localhost:3030"),
+        tensorzero_url=tensorzero_url,
         default_llm_model=os.getenv("PIPECAT_DEFAULT_LLM_MODEL", "claude-sonnet-4-5"),
         default_tts_provider=os.getenv("PIPECAT_DEFAULT_TTS", "vibevoice"),
         default_stt_provider=os.getenv("PIPECAT_DEFAULT_STT", "whisper"),
