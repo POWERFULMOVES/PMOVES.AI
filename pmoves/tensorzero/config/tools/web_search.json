@@ -4,22 +4,18 @@
     "properties": {
         "query": {
             "type": "string",
-            "description": "The search query string."
+            "description": "The query to search for. Be specific."
         },
         "num_results": {
             "type": "integer",
             "description": "Number of results to return.",
-            "default": 10,
+            "default": 5,
             "minimum": 1,
-            "maximum": 50
-        },
-        "query_type": {
-            "type": "string",
-            "description": "Type of search query.",
-            "enum": ["web", "news", "images"],
-            "default": "web"
+            "maximum": 10
         }
     },
-    "required": ["query"],
+    "required": [
+        "query"
+    ],
     "additionalProperties": false
 }

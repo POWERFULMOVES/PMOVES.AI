@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Utility script for PMOVES.AI operations."""
-
 from __future__ import annotations
 
 import argparse

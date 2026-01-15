@@ -1,25 +1,6 @@
 from __future__ import annotations
 
-"""SupaSerch multimodal holographic deep research orchestrator.
-
-SupaSerch coordinates complex research queries across multiple PMOVES services:
-- DeepResearch for LLM-based research planning
-- Hi-RAG v2 for hybrid retrieval (vectors + graph + full-text)
-- Archon/Agent Zero MCP tools for advanced capabilities
-
-Key endpoints:
-    POST /search          - Execute multimodal search query
-    GET  /metrics        - Prometheus metrics endpoint
-    GET  /healthz        - Health check endpoint
-
-Environment Variables:
-    SUPASERCH_MODE: Research mode (tensorzero, openrouter, or deepresearch)
-    NATS_URL: NATS connection string (default: nats://nats:4222)
-    HIRAG_URL: Hi-RAG gateway URL (default: http://hi-rag-gateway-v2:8086)
-"""
-
 import asyncio
-import contextlib
 import json
 import logging
 import os
@@ -86,6 +67,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PMOVES-SUPASERCH", version="0.1.0", lifespan=lifespan)
+
+# CGP NATS subject for GEOMETRY BUS integration
+CGP_SUBJECT = "tokenism.cgp.ready.v1"
+
+# Enable CGP publishing via environment variable (default: enabled)
+CGP_PUBLISH_ENABLED = os.getenv("SUPASERCH_CGP_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
 
 
 # Prometheus metrics -------------------------------------------------------
