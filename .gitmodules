@@ -121,3 +121,11 @@
 	path = PMOVES-A2UI
 	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves/vendor/agentgym-rl"]
+	path = pmoves/vendor/agentgym-rl
+	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves/vendor/agentgym"]
+	path = pmoves/vendor/agentgym
+	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
+	branch = PMOVES.AI-Edition-Hardened
