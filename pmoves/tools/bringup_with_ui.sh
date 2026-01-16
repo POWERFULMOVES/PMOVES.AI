@@ -118,7 +118,7 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_http_bg "Jellyfin" "http://localhost:8096" "$WAIT_T_SHORT"
   check_http_bg "Firefly" "http://localhost:8082" "$WAIT_T_SHORT"
   check_http_bg "Wger" "http://localhost:8000" "$WAIT_T_SHORT"
-  check_http_bg "Open Notebook" "http://localhost:8503" "$WAIT_T_SHORT"
+  check_http_bg "Open Notebook" "http://localhost:8504" "$WAIT_T_SHORT"
   check_http_bg "Supabase Studio" "http://127.0.0.1:65433" "$WAIT_T_SHORT"
   ready_barrier || true
   wait_prom_targets "$WAIT_T_MED" || true
@@ -151,7 +151,7 @@ else
   wait_http "http://localhost:8096" $WAIT_T_SHORT || true
   wait_http "http://localhost:8082" $WAIT_T_SHORT || true
   wait_http "http://localhost:8000" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8503" $WAIT_T_SHORT || true
+  wait_http "http://localhost:8504" $WAIT_T_SHORT || true
   wait_http "http://127.0.0.1:65433" $WAIT_T_SHORT || true
 fi
 

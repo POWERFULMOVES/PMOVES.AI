@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Model registry
     model_registry_path: str = "/app/config/gpu-models.yaml"
 
+    # Supabase integration for model deployment tracking
+    supabase_url: Optional[str] = None
+    supabase_service_key: Optional[str] = None
+    node_id: str = "gpu-node-1"
+
     # GPU settings
     gpu_index: int = 0
     system_vram_reserve_mb: int = 2048  # Reserve 2GB for system

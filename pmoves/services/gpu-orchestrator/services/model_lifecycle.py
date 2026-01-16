@@ -8,6 +8,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from config import get_settings
 from models import GpuStatus, LoadedModel, ModelRegistry, ModelState
 from .ollama_client import OllamaClient
+from .supabase_client import SupabaseRegistryClient
 from .priority_queue import LoadRequest, Priority, PriorityQueue
 from .session_manager import SessionManager
 from .tts_client import TtsClient
@@ -34,12 +35,14 @@ class ModelLifecycleManager:
         ollama_client: OllamaClient,
         vllm_client: VllmClient,
         tts_client: TtsClient,
+        registry_client: Optional[SupabaseRegistryClient] = None,
     ):
         self.vram_tracker = vram_tracker
         self.registry = model_registry
         self.ollama = ollama_client
         self.vllm = vllm_client
         self.tts = tts_client
+        self.registry_client = registry_client
 
         settings = get_settings()
         self.idle_timeout = settings.idle_timeout_seconds
@@ -156,6 +159,17 @@ class ModelLifecycleManager:
             del self.loaded_models[model_key]
             self.session_manager.remove_model_from_session(model_key)
             logger.info(f"Unloaded model {model_key}")
+
+            # Sync unload to Supabase registry
+            if self.registry_client:
+                try:
+                    await self.registry_client.update_deployment_status(
+                        model_id=model_id,
+                        provider=provider,
+                        status="unloaded",
+                    )
+                except Exception as sync_err:
+                    logger.error(f"Failed to sync unload to Supabase: {sync_err}")
 
             if self._on_unload_callback:
                 await self._on_unload_callback(model_key)
@@ -292,6 +306,18 @@ class ModelLifecycleManager:
         )
         self.loaded_models[model_key] = model
 
+        # Sync loading state to Supabase registry
+        if self.registry_client:
+            try:
+                await self.registry_client.register_deployment(
+                    model_id=request.model_id,
+                    provider=request.provider,
+                    status="loading",
+                    vram_mb=vram_needed,
+                )
+            except Exception as sync_err:
+                logger.error(f"Failed to sync loading state to Supabase: {sync_err}")
+
         # Load via provider
         success = await self._load_via_provider(request.model_id, request.provider)
 
@@ -305,6 +331,18 @@ class ModelLifecycleManager:
             if self._on_load_callback:
                 await self._on_load_callback(model_key)
 
+            # Sync deployment to Supabase registry
+            if self.registry_client:
+                try:
+                    await self.registry_client.register_deployment(
+                        model_id=request.model_id,
+                        provider=request.provider,
+                        status="loaded",
+                        vram_mb=vram_needed,
+                    )
+                except Exception as sync_err:
+                    logger.error(f"Failed to sync deployment to Supabase: {sync_err}")
+
             if request.callback:
                 try:
                     await request.callback(True, model_key)
@@ -317,6 +355,18 @@ class ModelLifecycleManager:
             model.state = ModelState.ERROR
             model.error_message = "Failed to load model"
             logger.error(f"Failed to load {model_key}")
+
+            # Sync error to Supabase registry
+            if self.registry_client:
+                try:
+                    await self.registry_client.update_deployment_status(
+                        model_id=request.model_id,
+                        provider=request.provider,
+                        status="error",
+                        error_message=model.error_message,
+                    )
+                except Exception as sync_err:
+                    logger.error(f"Failed to sync error to Supabase: {sync_err}")
 
             if request.callback:
                 try:

@@ -57,7 +57,7 @@
 - Channel Monitor — `GET /healthz`, `GET /api/monitor/status`, `GET /api/monitor/stats` → 200.
 - Archon API/UI — `GET http://localhost:8091/healthz` 200; UI at http://localhost:3737.
 - Monitoring — Prometheus :9090, Grafana :3002, Blackbox :9115 (cAdvisor when `MON_INCLUDE_CADVISOR=true`).
-- Invidious :3005 (127.0.0.1 bind), Jellyfin :8096, Notebook :8503.
+- Invidious :3005 (127.0.0.1 bind), Jellyfin :8096, Notebook :8504.
 
 ### Quick verification commands
 - `make -C pmoves smoke` (core) and `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` (strict rerank).
@@ -192,7 +192,7 @@ Pin images by setting `AGENT_ZERO_IMAGE`, `ARCHON_IMAGE`, `ARCHON_UI_IMAGE`, and
 - Jellyfin Media Hub → http://localhost:8096 (`make -C pmoves up-external-jellyfin`; run `make -C pmoves jellyfin-folders` and drop media into `pmoves/data/jellyfin` if you need the legacy stack).
 - Jellyfin AI Overlay → http://localhost:9096 (`make -C pmoves up-jellyfin-ai`; exposes API gateway on http://localhost:8300 and dashboard on http://localhost:8400; seed a sample asset with `python scripts/seed_jellyfin_media.py` so smoketests have something to link).
 - Invidious + Companion → http://127.0.0.1:3000 / http://127.0.0.1:8282 (`make -C pmoves up-invidious`; provides YouTube fallback for pmoves.yt).
-- Open Notebook UI → http://localhost:8503 (`docker start cataclysm-open-notebook` or `make -C pmoves notebook-up`; keep password/token aligned).
+- Open Notebook UI → http://localhost:8504 (`docker start pmoves-open-notebook-ext` or `make -C pmoves notebook-up`; keep password/token aligned).
 - n8n Automation → http://localhost:5678 (`make -C pmoves up-n8n`; flows sync from `pmoves/integrations`).
 
 ## Commit & Pull Request Guidelines
