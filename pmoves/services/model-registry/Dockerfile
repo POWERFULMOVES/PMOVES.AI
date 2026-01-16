@@ -15,11 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Create non-root user (PMOVES standard: UID/GID 65532)
 RUN groupadd -r pmoves --gid=65532 && \
-    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
-    chown -R pmoves:pmoves /app
+    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves
 
-# Copy application (after user creation, before USER switch)
-COPY main.py .
+# Copy application with correct ownership
+COPY --chown=pmoves:pmoves main.py .
 
 # Switch to non-root user
 USER pmoves:pmoves
@@ -31,4 +30,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 # Run the application
 EXPOSE 8110
 
-CMD ["uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8110"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8110"]
