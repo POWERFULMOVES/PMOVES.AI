@@ -238,6 +238,36 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+  model-registry:
+    <<: *id002
+    build:
+      context: ./services/model-registry
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://host.docker.internal:54321}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+    - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${MODEL_REGISTRY_PORT:-8110}:8110
+    profiles:
+    - orchestration
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://localhost:8110/healthz || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
   extract-worker:
     <<: *id003
     build: ./services/extract-worker
@@ -734,9 +764,9 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:54321}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase_kong_PMOVES.AI:8000/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
     depends_on:
       nats:
         condition: service_started
