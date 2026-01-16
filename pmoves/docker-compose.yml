@@ -202,6 +202,36 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+  model-registry:
+    <<: *id002
+    build:
+      context: ./services/model-registry
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+    - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+    - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${MODEL_REGISTRY_PORT:-8110}:8110
+    profiles:
+    - orchestration
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://localhost:8110/healthz || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
   extract-worker:
     <<: *id003
     build: ./services/extract-worker

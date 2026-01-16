@@ -70,6 +70,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 8097 | Channel Monitor | External content watcher |
 | 8098 | DeepResearch | Research planner |
 | 8099 | SupaSerch | Multimodal search orchestrator |
+| 8110 | Model Registry | Dynamic model configuration service |
 
 ### Agent/Worker Services (Tier 3)
 
