@@ -40,7 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://supabase_kong_PMOVES.AI:8000")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://host.docker.internal:54321")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 PORT = int(os.environ.get("PORT", "8110"))
