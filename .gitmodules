@@ -43,6 +43,7 @@
 [submodule "PMOVES-DoX"]
 	path = PMOVES-DoX
 	url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
+	branch = main
 [submodule "PMOVES-Remote-View"]
 	path = PMOVES-Remote-View
 	url = https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
