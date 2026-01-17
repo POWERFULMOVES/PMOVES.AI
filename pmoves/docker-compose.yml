@@ -1071,7 +1071,7 @@ services:
     - pmoves_app
     - pmoves_data
   gpu-orchestrator:
-    <<: *id002
+    <<: *id006
     build:
       context: ./services/gpu-orchestrator
       dockerfile: Dockerfile
