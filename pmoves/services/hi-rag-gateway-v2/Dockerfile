@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir --upgrade pip
-# With build context at repo root
+# With build context at pmoves/ directory (contains docker-compose.yml)
 COPY libs /app/libs
 COPY services/common /app/services/common
 COPY services/hi-rag-gateway-v2/requirements.txt ./
