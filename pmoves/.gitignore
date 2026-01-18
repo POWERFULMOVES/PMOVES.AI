@@ -16,6 +16,7 @@ extensions.json
 data/chit/
 data/jellyfin/
 data/open-notebook/
+data/ports.json
 notebook_data/
 surreal_data/
 

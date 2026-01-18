@@ -297,6 +297,7 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 
 .PHONY: mesh-setup mesh-status mesh-disconnect nats-tls-setup
 .PHONY: registry-start registry-status registry-sync
+.PHONY: ports-auto-detect ports-validate ports-reset ports-show
 
 mesh-setup: ## Setup Tailscale mesh network for multi-host service discovery
 	@echo "🔗 Setting up PMOVES mesh network..."
@@ -343,6 +344,32 @@ registry-sync: ## Force sync service registry across mesh
 	@echo "🔄 Syncing service registry..."
 	@curl -sf -X POST http://localhost:8100/api/sync 2>/dev/null || echo "⚠️  Sync request sent"
 
+# ============================================================================
+# Dynamic Port Management
+# ============================================================================
+
+ports-auto-detect: ## Auto-detect port conflicts and assign ports
+	@echo "🔍 Detecting port conflicts..."
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh detect
+	@echo "✅ Port allocation complete"
+
+ports-validate: ## Check for port conflicts
+	@echo "🔍 Validating port assignments..."
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh validate || echo "⚠️  Port conflicts detected"
+
+ports-reset: ## Reset all port assignments
+	@echo "🔄 Resetting port assignments..."
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh reset
+	@echo "✅ Port assignments reset"
+
+ports-show: ## Show current port assignments
+	@echo "📋 Current port assignments:"
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh show
+
 .PHONY: first-run-multi-host
 first-run-multi-host: ## Guided first-run with multi-host mesh setup
 	@echo "🚀 PMOVES Multi-Host First-Run"
@@ -351,6 +378,7 @@ first-run-multi-host: ## Guided first-run with multi-host mesh setup
 	@echo "This will set up:"
 	@echo "  ✓ Tool validation"
 	@echo "  ✓ Environment files"
+	@echo "  ✓ Port allocation (conflict detection)"
 	@echo "  ✓ Tailscale mesh network"
 	@echo "  ✓ NATS TLS certificates"
 	@echo "  ✓ Service registry"
@@ -359,6 +387,7 @@ first-run-multi-host: ## Guided first-run with multi-host mesh setup
 	@echo ""
 	@$(MAKE) --no-print-directory check-tools
 	@$(MAKE) --no-print-directory ensure-env-shared
+	@$(MAKE) --no-print-directory ports-auto-detect
 	@$(MAKE) --no-print-directory mesh-setup
 	@$(MAKE) --no-print-directory nats-tls-setup
 	@$(MAKE) --no-print-directory registry-start
