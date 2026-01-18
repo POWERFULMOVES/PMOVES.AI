@@ -565,6 +565,7 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_data
   hi-rag-gateway-gpu:
     <<: *id002
     build:
@@ -604,7 +605,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_V2_GPU_HOST_PORT:-8090}:8086
+    - ${HIRAG_V2_GPU_HOST_PORT:-8070}:8086
     depends_on:
       qdrant:
         condition: service_started
@@ -680,7 +681,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
+    - ${HIRAG_V2_GPU_HOST_PORT:-8070}:8086
     depends_on:
       qdrant:
         condition: service_started
@@ -802,9 +803,49 @@ services:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
       - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
-    depends_on: [nats]
+    # Service Registry Integration
+      - SERVICE_REGISTRY_URL=${SERVICE_REGISTRY_URL:-http://service-registry:8100}
+      - SERVICE_MODE=${SERVICE_MODE:-docked}
+      - NODE_CAPABILITIES=${NODE_CAPABILITIES:-clip,clap,t5,rag,agent}
+    # Mesh Configuration
+      - MESH_HOSTNAME=${MESH_HOSTNAME:-}
+      - PMOVES_MESH_NAME=${PMOVES_MESH_NAME:-pmoves-mesh}
+    depends_on:
+      nats:
+        condition: service_started
+      service-registry:
+        condition: service_healthy
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
+
+  # Tier: api (Service Registry - Multi-host service discovery)
+  service-registry:
+    <<: *id005
+    build:
+      context: .
+      dockerfile: ./services/service-registry/Dockerfile
+    restart: unless-stopped
+    environment:
+      - SERVICE_REGISTRY_PORT=${SERVICE_REGISTRY_PORT:-8100}
+      - SERVICE_REGISTRY_HOST=${SERVICE_REGISTRY_HOST:-0.0.0.0}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_EXTERNAL_URL=${NATS_EXTERNAL_URL:-}
+      - MESH_HOSTNAME=${MESH_HOSTNAME:-}
+      - PMOVES_MESH_NAME=${PMOVES_MESH_NAME:-pmoves-mesh}
+      - HOSTNAME=${HOSTNAME:-}
+    ports:
+      - "${SERVICE_REGISTRY_HOST_PORT:-8100}:8100"
+    depends_on:
+      nats:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [pmoves_api, pmoves_bus]
+    profiles: ["agents", "discovery"]
 
   # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
   botz-gateway:
@@ -1578,47 +1619,20 @@ volumes:
   comfy-watcher-state: {}
 networks:
   pmoves_data:
+    external: true
     name: pmoves_data
-    driver: bridge
-    internal: true
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.4.0/24
-        gateway: 172.30.4.1
   pmoves_api:
+    external: true
     name: pmoves_api
-    driver: bridge
-    internal: true
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.1.0/24
-        gateway: 172.30.1.1
   pmoves_app:
+    external: true
     name: pmoves_app
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.2.0/24
-        gateway: 172.30.2.1
   pmoves_bus:
+    external: true
     name: pmoves_bus
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.3.0/24
-        gateway: 172.30.3.1
   pmoves_monitoring:
+    external: true
     name: pmoves_monitoring
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.5.0/24
-        gateway: 172.30.5.1
   supabase_net:
     external: true
     name: supabase_network_PMOVES.AI
