@@ -80,9 +80,10 @@
 [submodule "Pmoves-hyperdimensions"]
 	path = Pmoves-hyperdimensions
 	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
-[submodule "pmoves/pmoves/vendor/e2b"]
-	path = pmoves/pmoves/vendor/e2b
+[submodule "e2b"]
+	path = e2b
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "research/A2UI"]
 	path = research/A2UI
 	url = https://github.com/google/A2UI.git
