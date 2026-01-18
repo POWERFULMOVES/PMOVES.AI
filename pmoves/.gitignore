@@ -1,9 +1,21 @@
+# Tier environment files
 env.tier-*
 
 # Generated environment files
 .env.generated
 env.cgp.json
 env.shared.generated
+
+# Secrets (DO NOT COMMIT)
+.env.local
+.env.supa.remote
+env.shared
+env.shared.*
+supa.md
+# But keep templates checked in
+!.env.*.example
+!.env.local.example
+!env.shared.example
 
 # Archon MCP logs
 *_archon_mcp_*.json
@@ -19,21 +31,3 @@ data/open-notebook/
 data/ports.json
 notebook_data/
 surreal_data/
-
-# Vendor
-vendor/python/
-vendor/node_modules/
-
-# Temporary files
-*.gif
-*.tmp
-*.log
-
-# Tier environment files (actual secrets - use .example for tracked templates)
-env.tier-api
-env.tier-agent
-env.tier-data
-env.tier-llm
-env.tier-media
-env.tier-ui
-env.tier-worker
