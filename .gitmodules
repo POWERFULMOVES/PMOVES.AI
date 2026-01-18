@@ -50,6 +50,7 @@
 [submodule "PMOVES-Tailscale"]
 	path = PMOVES-Tailscale
 	url = https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "pmoves/integrations/archon"]
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
@@ -67,16 +68,20 @@
 [submodule "PMOVES-Pipecat"]
 	path = PMOVES-Pipecat
 	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-Ultimate-TTS-Studio"]
 	path = PMOVES-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
+	branch = PMOVES.AI-Edition-Hardened
 	ignore = all
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-tensorzero"]
 	path = PMOVES-tensorzero
 	url = https://github.com/POWERFULMOVES/PMOVES-tensorzero.git
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "Pmoves-hyperdimensions"]
 	path = Pmoves-hyperdimensions
 	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
