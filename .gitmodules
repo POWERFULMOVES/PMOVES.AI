@@ -94,7 +94,8 @@
 	url = https://github.com/google/A2UI.git
 [submodule "PMOVES-A2UI"]
 	path = PMOVES-A2UI
-	url = https://github.com/google/A2UI.git
+	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-MAI-UI"]
 	path = PMOVES-MAI-UI
 	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
