@@ -109,7 +109,7 @@ HTTP_HEALTH = [
     ("postgrest", "http://localhost:3010", "http_200"),
     ("neo4j-ui", "http://localhost:7474", "http_200"),
     ("agent-zero", "http://localhost:8080/healthz", "ok_true"),
-    ("extract-worker", "http://localhost:8083/healthz", "ok_true"),
+    ("extract-worker", "http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/healthz", "ok_true"),
     ("media-audio", "http://localhost:8082/healthz", "ok_true"),
     ("media-video", "http://localhost:8079/healthz", "ok_true"),
     ("presign", "http://localhost:8088/healthz", "ok_true"),

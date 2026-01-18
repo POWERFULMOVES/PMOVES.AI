@@ -15,6 +15,22 @@ import httpx
 logger = logging.getLogger("agentgym.trajectory")
 
 
+# Custom exceptions for trajectory processing
+class TrajectoryDecodeError(ValueError):
+    """Raised when geometry event JSON is invalid."""
+    pass
+
+
+class TrajectoryValidationError(ValueError):
+    """Raised when geometry event structure is invalid."""
+    pass
+
+
+class TrajectoryProcessingError(RuntimeError):
+    """Raised when geometry event processing fails."""
+    pass
+
+
 class TrajectoryAccumulator:
     """Accumulates trajectory data from NATS geometry events.
 
@@ -73,11 +89,11 @@ class TrajectoryAccumulator:
             event = json.loads(data.decode("utf-8"))
             return await self._accumulate_event(event, subject)
         except json.JSONDecodeError as e:
-            logger.error("Failed to decode geometry event: %s", e)
-            return None
+            raise TrajectoryDecodeError(f"Invalid JSON: {e}") from e
+        except (KeyError, TypeError) as e:
+            raise TrajectoryValidationError(f"Invalid structure: {e}") from e
         except Exception as e:
-            logger.exception("Failed to process geometry event")
-            return None
+            raise TrajectoryProcessingError(f"Processing failed: {e}") from e
 
     async def _accumulate_event(
         self,

@@ -111,7 +111,7 @@ def build_metadata(context):
         "source": "claude-code",
         "session_id": context.get("session_id", ""),
         "context_type": context.get("context_type", "unknown"),
-        "timestamp": context.get("timestamp", datetime.utcnow().isoformat()),
+        "timestamp": context.get("timestamp", datetime.now(timezone.utc).isoformat()),
     }
 
     for field in ["worktree", "branch", "repository", "working_directory", "parent_session_id"]:
@@ -136,7 +136,7 @@ def transform_to_kb_upsert(context):
     """Transform session context to kb.upsert.request.v1."""
     session_id = context.get("session_id", "unknown")
     context_type = context.get("context_type", "unknown")
-    timestamp = context.get("timestamp", datetime.utcnow().isoformat())
+    timestamp = context.get("timestamp", datetime.now(timezone.utc).isoformat())
 
     kb_id = f"claude-session-{session_id}-{context_type}-{timestamp}"
     text = extract_searchable_content(context)
@@ -154,7 +154,7 @@ def transform_to_kb_upsert(context):
         "meta": {
             "worker": "session-context-worker",
             "version": "0.1.0",
-            "processed_at": datetime.utcnow().isoformat(),
+            "processed_at": datetime.now(timezone.utc).isoformat(),
         }
     }
 

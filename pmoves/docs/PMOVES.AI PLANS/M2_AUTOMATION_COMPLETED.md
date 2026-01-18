@@ -1,6 +1,7 @@
 # M2 Automation Loop - Implementation Complete
+_Last updated: 2026-01-02_
 
-**Status**: ✅ Core infrastructure complete, ready for end-to-end testing  
+**Status**: ✅ Infrastructure complete; end-to-end validation blocked pending n8n poller activation  
 **Date**: October 17, 2025  
 **Branch**: `docs/m2-automation-cron-debug`
 
@@ -76,6 +77,8 @@
 - Agent Zero `/events/publish` endpoint validation error resolution
 - Supabase row status update (`published` + `meta.publish_event_sent_at`)
 
+> **Status note:** Infrastructure is complete, but the automation loop is not validated until the n8n approval poller is activated and observed processing real `studio_board` rows.
+
 ## Next Steps
 
 1. **Debug Agent Zero validation**: Investigate 422 Unprocessable Entity errors
@@ -133,4 +136,3 @@ curl -X POST "$DISCORD_WEBHOOK_URL" \
 3. **Parameter migration patterns**: Document old→new format mappings for future workflows
 4. **Workflow state management**: Activation state separate from configuration updates
 5. **Environment abstraction**: Use env vars in workflows (e.g., `$env.AGENT_ZERO_BASE_URL`)
-

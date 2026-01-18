@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+from contextlib import asynccontextmanager
 import logging
 import os
 import shlex
@@ -10,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
-from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query
+from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
 from pydantic import BaseModel, Field
 
 try:
@@ -626,7 +627,7 @@ async def lifespan(app: FastAPI):
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
             loop.add_signal_handler(
-                sig, lambda: asyncio.create_task(process_manager.stop())
+                sig, lambda s=sig: asyncio.create_task(process_manager.stop())
             )
         except (NotImplementedError, RuntimeError, ValueError):
             # Tests run event loops in worker threads where signal handlers are unsupported.
@@ -642,10 +643,8 @@ async def lifespan(app: FastAPI):
             await _controller_task
         _controller_task = None
     if event_controller.is_started:
-        try:
+        with contextlib.suppress(Exception):
             await event_controller.stop()
-        except Exception:
-            logger.debug("Exception during event controller shutdown", exc_info=True)
 
 
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
@@ -697,16 +696,23 @@ async def _controller_connect_loop() -> None:
                 _controller_ready.clear()
             break
 
-    await process_manager.stop()
-    _controller_shutdown.set()
-    global _controller_task
-    if _controller_task:
-        with contextlib.suppress(asyncio.CancelledError):
-            await _controller_task
-        _controller_task = None
-    if event_controller.is_started:
-        with contextlib.suppress(Exception):
-            await event_controller.stop()
+
+def _warn_missing_notebook_config() -> None:
+    """Log startup warnings for missing Open Notebook configuration."""
+    nb_url = service_config.open_notebook_api_url
+    nb_token = service_config.open_notebook_token_present
+    if not nb_url:
+        logger.warning(
+            "OPEN_NOTEBOOK_API_URL not configured; notebook.search MCP command will fail. "
+            "Set OPEN_NOTEBOOK_API_URL to enable notebook integration."
+        )
+    elif not nb_token:
+        logger.warning(
+            "OPEN_NOTEBOOK_API_TOKEN not configured; notebook.search MCP command will fail. "
+            "Set OPEN_NOTEBOOK_API_TOKEN to enable notebook integration."
+        )
+    elif nb_url and nb_token:
+        logger.info("Open Notebook integration configured: %s", nb_url)
 
 
 @app.get("/healthz")
@@ -737,7 +743,14 @@ async def healthz() -> Dict[str, Any]:
             detail["runtime"] = runtime_health
         except AgentZeroRequestError as exc:
             detail["runtime"] = {"status": "error", "detail": str(exc)}
+    http_requests_total.labels(method='GET', endpoint='/healthz', status='200').inc()
     return detail
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    """Prometheus metrics endpoint."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/config/environment", response_model=AgentZeroServiceConfig)
@@ -767,15 +780,27 @@ async def _execute_command(cmd: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 @app.post("/mcp/execute", response_model=MCPExecuteResponse)
 async def execute_mcp_command(request: MCPExecuteRequest) -> MCPExecuteResponse:
-    if request.cmd not in mcp_server.COMMAND_REGISTRY:
+    cmd_name = request.cmd
+    if cmd_name not in mcp_server.COMMAND_REGISTRY:
+        mcp_commands_total.labels(command=cmd_name, status='404').inc()
+        http_requests_total.labels(method='POST', endpoint='/mcp/execute', status='404').inc()
         raise HTTPException(
-            status_code=404, detail=f"Unknown MCP command: {request.cmd}"
+            status_code=404, detail=f"Unknown MCP command: {cmd_name}"
         )
     try:
-        result = await _execute_command(request.cmd, request.arguments)
+        with mcp_execute_duration.time():
+            result = await _execute_command(cmd_name, request.arguments)
+        mcp_commands_total.labels(command=cmd_name, status='200').inc()
+        http_requests_total.labels(method='POST', endpoint='/mcp/execute', status='200').inc()
     except ValueError as exc:
+        mcp_commands_total.labels(command=cmd_name, status='400').inc()
+        http_requests_total.labels(method='POST', endpoint='/mcp/execute', status='400').inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return MCPExecuteResponse(cmd=request.cmd, result=result)
+    except Exception:
+        mcp_commands_total.labels(command=cmd_name, status='500').inc()
+        http_requests_total.labels(method='POST', endpoint='/mcp/execute', status='500').inc()
+        raise
+    return MCPExecuteResponse(cmd=cmd_name, result=result)
 
 
 @app.post("/events/publish", response_model=Dict[str, str])
@@ -832,8 +857,12 @@ async def submit_task(
         payload["lifetime_hours"] = request.lifetime_hours
     payload.update(request.metadata)
     try:
-        return await client.send_message(payload)
+        result = await client.send_message(payload)
+        tasks_created_total.inc()
+        http_requests_total.labels(method='POST', endpoint='/tasks', status='200').inc()
+        return result
     except AgentZeroRequestError as exc:
+        http_requests_total.labels(method='POST', endpoint='/tasks', status=str(exc.status_code)).inc()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
@@ -867,8 +896,12 @@ async def list_memories(
     if offset is not None:
         params["offset"] = offset
     try:
-        return await client.list_memories(params)
+        result = await client.list_memories(params)
+        memory_operations_total.labels(operation='list').inc()
+        http_requests_total.labels(method='GET', endpoint='/memory', status='200').inc()
+        return result
     except AgentZeroRequestError as exc:
+        http_requests_total.labels(method='GET', endpoint='/memory', status=str(exc.status_code)).inc()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
@@ -878,8 +911,12 @@ async def get_memory(
     _: None = Depends(ensure_runtime_running),
 ) -> Any:
     try:
-        return await client.get_memory(memory_id)
+        result = await client.get_memory(memory_id)
+        memory_operations_total.labels(operation='get').inc()
+        http_requests_total.labels(method='GET', endpoint='/memory/{id}', status='200').inc()
+        return result
     except AgentZeroRequestError as exc:
+        http_requests_total.labels(method='GET', endpoint='/memory/{id}', status=str(exc.status_code)).inc()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
@@ -889,8 +926,12 @@ async def create_memory(
     _: None = Depends(ensure_runtime_running),
 ) -> Any:
     try:
-        return await client.create_memory(body.payload)
+        result = await client.create_memory(body.payload)
+        memory_operations_total.labels(operation='create').inc()
+        http_requests_total.labels(method='POST', endpoint='/memory', status='200').inc()
+        return result
     except AgentZeroRequestError as exc:
+        http_requests_total.labels(method='POST', endpoint='/memory', status=str(exc.status_code)).inc()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
@@ -901,8 +942,12 @@ async def update_memory(
     _: None = Depends(ensure_runtime_running),
 ) -> Any:
     try:
-        return await client.update_memory(memory_id, body.payload)
+        result = await client.update_memory(memory_id, body.payload)
+        memory_operations_total.labels(operation='update').inc()
+        http_requests_total.labels(method='PUT', endpoint='/memory/{id}', status='200').inc()
+        return result
     except AgentZeroRequestError as exc:
+        http_requests_total.labels(method='PUT', endpoint='/memory/{id}', status=str(exc.status_code)).inc()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
@@ -912,8 +957,12 @@ async def delete_memory(
     _: None = Depends(ensure_runtime_running),
 ) -> Any:
     try:
-        return await client.delete_memory(memory_id)
+        result = await client.delete_memory(memory_id)
+        memory_operations_total.labels(operation='delete').inc()
+        http_requests_total.labels(method='DELETE', endpoint='/memory/{id}', status='200').inc()
+        return result
     except AgentZeroRequestError as exc:
+        http_requests_total.labels(method='DELETE', endpoint='/memory/{id}', status=str(exc.status_code)).inc()
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 

@@ -62,7 +62,7 @@ your own before or after `make first-run`.
     values in sync when you rotate.
 
 - **Invidious**
-  - UI at `http://127.0.0.1:3000` (when `make -C pmoves up-invidious` is used).
+  - UI at `http://127.0.0.1:3005` (when `make -C pmoves up-invidious` is used).
   - Defaults follow the upstream image:
     - Admin user: `kemal`
     - Password: the default set by the container on first boot (rotate immediately; see upstream Invidious docs).

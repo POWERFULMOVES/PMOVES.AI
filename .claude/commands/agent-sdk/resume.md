@@ -2,65 +2,184 @@
 
 Resume a previous agent session with full context preservation.
 
-## Arguments
+## Prerequisites
 
-- `$ARGUMENTS` - Session ID to resume (or "list" to show recent sessions)
+Before resuming sessions, ensure:
 
-## Instructions
+1. **Submodules initialized:**
+   ```bash
+   git submodule update --init --recursive PMOVES-BoTZ
+   ```
 
-### List Sessions
+2. **Dependencies installed:**
+   ```bash
+   pip install -r pmoves/requirements.txt
+   ```
 
-If argument is "list" or empty:
-```python
-from pmoves_botz.features.agent_sdk import PMOVESSessionManager
+3. **Services running:**
+   ```bash
+   # Check NATS
+   curl http://localhost:4222
 
-manager = PMOVESSessionManager()
-sessions = await manager.list_sessions(limit=10)
-for s in sessions:
-    print(f"{s.session_id}: {s.agent_id} ({s.status}) - {s.created_at}")
+   # Check TensorZero
+   curl http://localhost:3030/v1/models
+
+   # Check Hi-RAG v2
+   curl http://localhost:8086/healthz
+   ```
+
+4. **Storage backend accessible:**
+   - **File:** Check `~/.pmoves/sessions/` exists
+   - **Supabase:** Test connection with curl (see Storage Backends below)
+   - **SurrealDB:** Verify Open Notebook is running
+
+## Usage
+
+Use this command when:
+- Continuing an interrupted task
+- Resuming from a previous checkpoint
+- Picking up work from an earlier session
+
+## Implementation
+
+Execute via PMOVES CLI:
+
+```bash
+pmoves agent-sdk resume list
+# List recent sessions
+
+pmoves agent-sdk resume session-abc123
+# Resume specific session with full context
+
+pmoves agent-sdk resume session-abc123 "Continue the analysis"
+# Resume with additional task context
 ```
 
-### Resume Session
+### Arguments
 
-1. Load session state from storage (file/Supabase/SurrealDB)
-2. Restore agent configuration and context
-3. Continue from last checkpoint:
+- `session-id` - Session ID to resume, or "list" to show recent sessions
 
-```python
-from pmoves_botz.features.agent_sdk import PMOVESSessionManager
+### Options
 
-manager = PMOVESSessionManager()
-async for message in manager.resume(
-    session_id="$ARGUMENTS",
-    task="Continue from where we left off"
-):
-    print(message.content)
-```
+- `--task` - Additional task context for resumption (optional)
+
+## What It Does
+
+- ✅ Lists recent sessions with status
+- ✅ Loads session state from storage
+- ✅ Restores agent configuration and context
+- ✅ Continues from last checkpoint
+- ✅ Preserves conversation history
+- ✅ Maintains tool execution state
 
 ### Session States
 
-| State | Description |
-|-------|-------------|
-| `active` | Currently running |
-| `paused` | Suspended, can resume |
-| `completed` | Finished successfully |
-| `failed` | Terminated with error |
-| `forked` | Branched into new session |
+| State | Description | Can Resume |
+|-------|-------------|------------|
+| `active` | Currently running | ❌ Already running |
+| `paused` | Suspended, can resume | ✅ Ready to resume |
+| `completed` | Finished successfully | ✅ Can fork new session |
+| `failed` | Terminated with error | ✅ Can retry |
+| `forked` | Branched into new session | ❌ Use child session |
 
 ### Storage Backends
 
 Sessions are stored based on `SESSION_STORAGE` env var:
-- `file` (default): `~/.pmoves/sessions/`
-- `supabase`: `agent_sessions` table
-- `surrealdb`: Open Notebook integration
+
+**File System** (default):
+```bash
+export SESSION_STORAGE=file
+# Sessions stored in: ~/.pmoves/sessions/
+# No additional configuration required
+```
+
+**Supabase:**
+```bash
+export SESSION_STORAGE=supabase
+export SUPABASE_URL=http://localhost:3010
+export SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# Verify connection:
+curl http://localhost:3010/rest/v1/agent_sessions?limit=1 \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}"
+```
+
+**SurrealDB (Open Notebook):**
+```bash
+export SESSION_STORAGE=surrealdb
+export OPEN_NOTEBOOK_API_URL=http://localhost:8085
+export OPEN_NOTEBOOK_API_TOKEN=your_api_token
+# Verify connection:
+curl ${OPEN_NOTEBOOK_API_URL}/health \
+  -H "Authorization: Bearer ${OPEN_NOTEBOOK_API_TOKEN}"
+```
+
+## Timeouts
+
+- **Session load:** 30 seconds default
+- **Context restoration:** 60 seconds default
+- **HTTP requests:** 30 seconds
+- **NATS connection:** 10 seconds
+
+Configure via environment variables:
+```bash
+export AGENT_SESSION_LOAD_TIMEOUT=30      # Session load timeout in seconds
+export AGENT_CONTEXT_RESTORE_TIMEOUT=60   # Context restoration timeout in seconds
+export AGENT_HTTP_TIMEOUT=30              # HTTP timeout in seconds
+export AGENT_NATS_TIMEOUT=10              # NATS connection timeout in seconds
+```
 
 ## Example
 
 ```bash
-/agent-sdk:resume list
-# Shows: session-abc123: pmoves-researcher-1703123456 (paused) - 2025-01-15
+$ pmoves agent-sdk resume list
 
-/agent-sdk:resume session-abc123
-# Resumes session with full context
-# Agent continues from last checkpoint
+📋 Recent Sessions:
+   session-abc123: pmoves-researcher-1735123456 (paused) - 2025-01-15 14:23:01
+   session-def456: pmoves-code-reviewer-1735123490 (completed) - 2025-01-15 15:10:22
+   session-ghi789: pmoves-researcher-1735123456 (failed) - 2025-01-15 16:05:33
+
+$ pmoves agent-sdk resume session-abc123
+
+🔄 Loading session: session-abc123
+📦 Agent: pmoves-researcher-1735123456
+📝 Last Task: "Analyze PMOVES architecture"
+✅ Context restored from checkpoint
+
+Continuing from where we left off...
+[Agent continues with full conversation history]
 ```
+
+## Related Commands
+
+- `pmoves agent-sdk create` - Create new agent instance
+- `pmoves agent-sdk run` - Execute task with agent
+- `pmoves agent-sdk list` - List all agents
+- `pmoves agent-sdk status` - Check agent status
+
+## Notes
+
+- **Session ID Required**: Use `list` argument to find session IDs
+- **Context Preservation**: Full conversation history and tool state restored
+- **Checkpoint System**: Agents auto-save progress at key milestones
+- **Storage Location**: Configured via `SESSION_STORAGE` environment variable
+
+## Troubleshooting
+
+**"Session not found"**
+- Verify session ID with: `pmoves agent-sdk resume list`
+- Check storage backend is accessible (file system, Supabase, etc.)
+
+**"Session state corrupted"**
+- Session may have been interrupted during save
+- Try creating new session instead: `pmoves agent-sdk create`
+
+**"Cannot resume active session"**
+- Session is currently running in another process
+- Wait for completion or use `pmoves agent-sdk status` to check
+
+**"Storage backend unavailable"**
+- Check `SESSION_STORAGE` environment variable
+- Verify backend connectivity:
+  - File: Check `~/.pmoves/sessions/` exists
+  - Supabase: Test connection with `psql`
+  - SurrealDB: Verify Open Notebook is running

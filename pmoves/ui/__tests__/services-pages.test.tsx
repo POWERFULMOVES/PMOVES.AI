@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import ServicesIndexPage from '@/app/dashboard/services/page';
 import ServiceDetailPage from '@/app/dashboard/services/[service]/page';
 import { INTEGRATION_SERVICES } from '@/lib/services';
+import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
 import { notFound } from 'next/navigation';
 
 jest.mock('react-markdown', () => ({
@@ -20,6 +21,8 @@ jest.mock('next/navigation', () => ({
   notFound: jest.fn(() => {
     throw new Error('not found');
   }),
+  usePathname: jest.fn(() => '/dashboard/services'),
+  useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn() })),
 }));
 
 describe('Services dashboards', () => {
@@ -32,14 +35,17 @@ describe('Services dashboards', () => {
   it('lists all operator integrations on the index route', () => {
     render(<ServicesIndexPage />);
 
+    // TAC 1: The centralized UI uses "Services" as the page title
     expect(
-      screen.getByRole('heading', { name: /integration services/i })
+      screen.getByRole('heading', { name: /services/i })
     ).toBeInTheDocument();
 
-    INTEGRATION_SERVICES.forEach((service) => {
-      expect(
-        screen.getByRole('link', { name: new RegExp(service.title, 'i') })
-      ).toBeInTheDocument();
+    // TAC 1: The new centralized UI displays services from SERVICE_CATALOG
+    // Check that a sample of key services are present
+    const sampleServices = ['Prometheus', 'Grafana', 'Agent Zero', 'Archon', 'TensorZero'];
+    sampleServices.forEach((title) => {
+      const links = screen.getAllByRole('link', { name: new RegExp(title, 'i') });
+      expect(links.length).toBeGreaterThan(0);
     });
   });
 

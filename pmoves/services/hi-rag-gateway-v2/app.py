@@ -544,7 +544,53 @@ class QueryResp(BaseModel):
     rerank_provider: Optional[str] = None
     hits: List[QueryHit]
 
-app = FastAPI(title="PMOVES Hi-RAG Gateway v2 (hybrid + rerank)", version="2.1.0")
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage Hi-RAG Gateway lifespan with geometry realtime and swarm workers."""
+    # Startup
+    if shape_store is None:
+        logger.info("ShapeStore unavailable; geometry cache warm skipped")
+    else:
+        await _warm_shapes_from_supabase()
+        global _geometry_realtime_task
+        if _geometry_realtime_task is None:
+            ws_url = _derive_realtime_url()
+            api_key = SUPABASE_REALTIME_KEY
+            if ws_url and api_key:
+                _geometry_realtime_task = asyncio.create_task(_geometry_realtime_worker(ws_url, api_key))
+                logger.info("Supabase realtime geometry listener started (url=%s)", ws_url)
+            else:
+                logger.info("Supabase realtime subscription skipped; missing URL or API key")
+        global _geometry_swarm_task
+        if _geometry_swarm_task is None and NATS_URL:
+            if hasattr(nats, "connect"):
+                _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
+                logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+            else:
+                logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
+
+    yield
+
+    # Shutdown
+    global _geometry_realtime_task
+    if _geometry_realtime_task is not None:
+        _geometry_realtime_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_realtime_task
+        _geometry_realtime_task = None
+    global _geometry_swarm_task, _geometry_swarm_stop
+    if _geometry_swarm_stop is not None:
+        _geometry_swarm_stop.set()
+    if _geometry_swarm_task is not None:
+        _geometry_swarm_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_swarm_task
+        _geometry_swarm_task = None
+    _geometry_swarm_stop = None
+
+
+app = FastAPI(title="PMOVES Hi-RAG Gateway v2 (hybrid + rerank)", version="2.1.0", lifespan=lifespan)
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST

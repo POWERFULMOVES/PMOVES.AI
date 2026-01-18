@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   PMOVES Service Catalog
-   Comprehensive catalog of all 94+ services organized by tier/category
+   PMOVES Multi-Stack Service Catalog
+   Comprehensive catalog of 100+ services across all stacks organized by tier/category
+   Stacks: PMOVES Main, PMOVES-DoX, BotZ Gateway, Cataclysm
    Cataclysm Studios Inc.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -15,7 +16,9 @@ export type ServiceCategory =
   | 'media'
   | 'llm'
   | 'ui'
-  | 'integration';
+  | 'integration'
+  | 'dox'  // PMOVES-DoX document intelligence
+  | 'mcp';  // Model Context Protocol servers
 
 export type ServiceColor = 'cyan' | 'ember' | 'gold' | 'forest' | 'violet';
 
@@ -56,16 +59,16 @@ const CATEGORY_COLORS: Record<ServiceCategory, ServiceColor> = {
   llm: 'gold',
   ui: 'violet',
   integration: 'cyan',
+  dox: 'forest',  // Document intelligence (green)
+  mcp: 'gold',    // MCP servers (yellow)
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Service Catalog - All 94+ Services
+   Service Catalog - All 100+ Services
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const SERVICE_CATALOG: ServiceDefinition[] = [
-  // ============================================================================
   // OBSERVABILITY TIER
-  // ============================================================================
   {
     slug: 'prometheus',
     title: 'Prometheus',
@@ -122,9 +125,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Container stats', 'Resource usage'],
   },
 
-  // ============================================================================
   // DATABASE TIER
-  // ============================================================================
   {
     slug: 'postgres',
     title: 'PostgreSQL',
@@ -160,9 +161,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Table editor', 'SQL editor', 'Auth UI'],
   },
 
-  // ============================================================================
   // DATA TIER
-  // ============================================================================
   {
     slug: 'qdrant',
     title: 'Qdrant',
@@ -220,9 +219,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Object storage', 'Buckets', 'Presigned URLs'],
   },
 
-  // ============================================================================
   // BUS TIER
-  // ============================================================================
   {
     slug: 'nats',
     title: 'NATS',
@@ -236,9 +233,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Pub/Sub', 'JetStream', 'Request/Reply'],
   },
 
-  // ============================================================================
   // AGENTS TIER
-  // ============================================================================
   {
     slug: 'agent-zero',
     title: 'Agent Zero',
@@ -344,9 +339,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     healthCheck: 'http://localhost:8054/healthz',
   },
 
-  // ============================================================================
   // WORKERS TIER
-  // ============================================================================
   {
     slug: 'extract-worker',
     title: 'Extract Worker',
@@ -513,9 +506,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Sandboxed code execution'],
   },
 
-  // ============================================================================
   // GPU TIER
-  // ============================================================================
   {
     slug: 'gpu-orchestrator',
     title: 'GPU Orchestrator',
@@ -609,9 +600,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Prosodic TTS', 'WebSocket streaming', 'Pipecat'],
   },
 
-  // ============================================================================
   // MEDIA TIER
-  // ============================================================================
   {
     slug: 'pmoves-yt',
     title: 'PMOVES.YT',
@@ -673,9 +662,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Emotion detection', 'Speaker diarization'],
   },
 
-  // ============================================================================
   // LLM TIER
-  // ============================================================================
   {
     slug: 'tensorzero-gateway',
     title: 'TensorZero Gateway',
@@ -726,9 +713,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Local inference', 'Model management'],
   },
 
-  // ============================================================================
   // UI TIER
-  // ============================================================================
   {
     slug: 'pmoves-ui',
     title: 'PMOVES UI',
@@ -744,9 +729,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     capabilities: ['Service catalog', 'Health monitoring', 'Branded portal'],
   },
 
-  // ============================================================================
   // INTEGRATION TIER
-  // ============================================================================
   {
     slug: 'n8n',
     title: 'n8n',
@@ -783,6 +766,226 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     ],
     capabilities: ['Multi-platform', 'Plugin system'],
   },
+
+  // PMOVES-DOX TIER (Document Intelligence)
+
+  // MCP TIER (Model Context Protocol Servers)
+
+  // CATACLYSM STACK (Health, Wealth, Notes)
+  {
+    slug: 'dox-backend',
+    title: 'DoX Backend',
+    summary: 'Document intelligence API for PDF analysis and extraction',
+    category: 'dox',
+    color: 'forest',
+    endpoints: [
+      { name: 'API', port: '8484', path: '/', type: 'api' },
+      { name: 'Health', port: '8484', path: '/health', type: 'health' },
+      { name: 'Search', port: '8484', path: '/search', type: 'api' },
+      { name: 'Ingest', port: '8484', path: '/ingest', type: 'api' },
+    ],
+    healthCheck: 'http://localhost:8484/health',
+    capabilities: ['PDF parsing', 'Vector search', 'QA engine', 'CHR pipeline'],
+    dependencies: ['tensorzero-gateway', 'neo4j', 'nats'],
+  },
+  {
+    slug: 'dox-frontend',
+    title: 'DoX Frontend',
+    summary: 'Next.js UI for document analysis and visualization',
+    category: 'dox',
+    color: 'forest',
+    endpoints: [
+      { name: 'Web UI', port: '3001', path: '/', type: 'ui' },
+    ],
+    external: true,
+    capabilities: ['Document viewer', 'Search interface', 'Visualization'],
+  },
+  {
+    slug: 'dox-nats',
+    title: 'DoX NATS',
+    summary: 'Dedicated message bus for DoX geometry events',
+    category: 'dox',
+    color: 'gold',
+    endpoints: [
+      { name: 'Client', port: '4223', path: '/', type: 'api' },
+      { name: 'Monitoring', port: '8223', path: '/varz', type: 'api' },
+      { name: 'WebSocket', port: '9223', path: '/', type: 'ws' },
+    ],
+    capabilities: ['Geometry bus', 'CHIT packets', 'Event streaming'],
+  },
+  {
+    slug: 'dox-neo4j',
+    title: 'DoX Neo4j',
+    summary: 'Local knowledge graph for DoX document relationships',
+    category: 'dox',
+    color: 'violet',
+    endpoints: [
+      { name: 'HTTP API', port: '17474', path: '/', type: 'api' },
+      { name: 'Bolt Protocol', port: '17687', path: '/', type: 'api' },
+      { name: 'Web UI', port: '17474', path: '/', type: 'ui' },
+    ],
+    capabilities: ['Document graph', 'Relationship mapping', 'Cypher queries'],
+  },
+  {
+    slug: 'dox-ollama',
+    title: 'DoX Ollama',
+    summary: 'Local LLM inference for DoX document processing',
+    category: 'dox',
+    color: 'gold',
+    endpoints: [
+      { name: 'API', port: '11435', path: '/', type: 'api' },
+    ],
+    capabilities: ['Local inference', 'Tag extraction', 'Embeddings'],
+  },
+  {
+    slug: 'dox-cipher',
+    title: 'DoX Cipher Service',
+    summary: 'CHIT geometry protocol for mathematical visualization',
+    category: 'dox',
+    color: 'violet',
+    endpoints: [
+      { name: 'API', port: '3000', path: '/', type: 'api' },
+      { name: 'Health', port: '3000', path: '/health', type: 'health' },
+    ],
+    capabilities: ['CHIT protocol', 'Geometry packets', 'Manifold detection'],
+  },
+  {
+    slug: 'mcp-cipher',
+    title: 'MCP Cipher',
+    summary: 'CHIT geometry and mathematical protocol server',
+    category: 'mcp',
+    color: 'gold',
+    endpoints: [
+      { name: 'MCP API', port: '3025', path: '/', type: 'api' },
+      { name: 'Health', port: '3025', path: '/health', type: 'health' },
+    ],
+    healthCheck: 'http://localhost:3025/health',
+    capabilities: ['CHIT protocol', 'Geometry encoding', 'Memory framework'],
+  },
+  {
+    slug: 'mcp-docling',
+    title: 'MCP Docling',
+    summary: 'Document parsing MCP server with OCR and table extraction',
+    category: 'mcp',
+    color: 'gold',
+    endpoints: [
+      { name: 'MCP API', port: '3020', path: '/', type: 'api' },
+      { name: 'Health', port: '3020', path: '/health', type: 'health' },
+    ],
+    healthCheck: 'http://localhost:3020/health',
+    capabilities: ['PDF parsing', 'OCR', 'Table extraction', 'Document understanding'],
+  },
+  {
+    slug: 'mcp-postman',
+    title: 'MCP Postman',
+    summary: 'Postman API collection testing MCP server',
+    category: 'mcp',
+    color: 'gold',
+    endpoints: [
+      { name: 'MCP API', port: '3026', path: '/', type: 'api' },
+    ],
+    capabilities: ['API testing', 'Collection runner', 'Request validation'],
+  },
+  {
+    slug: 'cataclysm-firefly',
+    title: 'Firefly III',
+    summary: 'Personal finance manager (Cataclysm stack)',
+    category: 'integration',
+    color: 'violet',
+    endpoints: [
+      { name: 'Web UI', port: '8080', path: '/', type: 'ui' },
+      { name: 'API', port: '8080', path: '/api/v1', type: 'api' },
+    ],
+    external: true,
+    capabilities: ['Budget tracking', 'Transaction management', 'Financial reports'],
+  },
+  {
+    slug: 'cataclysm-jellyfin',
+    title: 'Jellyfin (Cataclysm)',
+    summary: 'Media server (Cataclysm stack)',
+    category: 'media',
+    color: 'ember',
+    endpoints: [
+      { name: 'Web UI', port: '8096', path: '/', type: 'ui' },
+    ],
+    external: true,
+    capabilities: ['Media streaming', 'Video library', 'Music'],
+  },
+  {
+    slug: 'cataclysm-open-notebook',
+    title: 'Open Notebook (Cataclysm)',
+    summary: 'SurrealDB note-taking and knowledge base',
+    category: 'integration',
+    color: 'violet',
+    endpoints: [
+      { name: 'API', port: '5055', path: '/', type: 'api' },
+      { name: 'WebSocket', port: '8503', path: '/', type: 'ws' },
+    ],
+    capabilities: ['Note-taking', 'Knowledge base', 'SurrealDB'],
+  },
+  {
+    slug: 'cataclysm-wger',
+    title: 'Wger',
+    summary: 'Workout and fitness tracker (Cataclysm stack)',
+    category: 'integration',
+    color: 'ember',
+    endpoints: [
+      { name: 'Web UI', port: '8002', path: '/', type: 'ui' },
+    ],
+    external: true,
+    capabilities: ['Workout tracking', 'Exercise library', 'Nutrition'],
+  },
+  // TOKENISM - Token Economy Simulation & Business Model Validation
+  // Powered by EVO Swarm Intelligence
+  {
+    slug: 'tokenism',
+    title: 'Tokenism',
+    summary: 'Token economy simulation with business model validation powered by EVO swarm intelligence',
+    category: 'integration',
+    color: 'gold',
+    endpoints: [
+      { name: 'API', port: '8103', path: '/api/v1/simulate', type: 'api' },
+      { name: 'Health', port: '8103', path: '/healthz', type: 'health' },
+      { name: 'Metrics', port: '8103', path: '/metrics', type: 'metrics' },
+      { name: 'Scenarios', port: '8103', path: '/api/v1/scenarios', type: 'api' },
+      { name: 'Contracts', port: '8103', path: '/api/v1/contracts', type: 'api' },
+    ],
+    healthCheck: 'http://localhost:8103/healthz',
+    description: 'Mathematical token economy simulator for validating business models and ideas. Features 5 contract types (GroToken, FoodUSD, GroupPurchase, GroVault, CoopGovernor), CHIT geometry bus integration for wealth visualization, and LLM-powered analysis via TensorZero.',
+    capabilities: [
+      'Token economy simulation',
+      'Business model validation',
+      '5 contract types',
+      'Wealth distribution analysis',
+      'Gini coefficient tracking',
+      'Risk assessment',
+      'EVO swarm optimization',
+      'CHIT geometry visualization',
+      'NATS event publishing',
+    ],
+    dependencies: ['nats', 'tensorzero-gateway', 'postgrest'],
+    profile: 'agents',
+  },
+  {
+    slug: 'tokenism-ui',
+    title: 'Tokenism UI',
+    summary: 'Interactive dashboard for token economy simulation and analysis',
+    category: 'ui',
+    color: 'gold',
+    endpoints: [
+      { name: 'Dashboard', port: '8504', path: '/', type: 'ui' },
+    ],
+    external: true,
+    description: 'Next.js-based interactive UI for running token economy simulations, visualizing wealth distributions, and analyzing business models with EVO swarm intelligence.',
+    capabilities: [
+      'Simulation interface',
+      'Wealth distribution charts',
+      'Time series visualization',
+      'Risk assessment dashboards',
+      'Geometric CHIT visualization',
+    ],
+    dependencies: ['tokenism'],
+  },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -801,6 +1004,8 @@ export const SERVICES_BY_CATEGORY: Record<ServiceCategory, ServiceDefinition[]> 
   llm: SERVICE_CATALOG.filter((s) => s.category === 'llm'),
   ui: SERVICE_CATALOG.filter((s) => s.category === 'ui'),
   integration: SERVICE_CATALOG.filter((s) => s.category === 'integration'),
+  dox: SERVICE_CATALOG.filter((s) => s.category === 'dox'),
+  mcp: SERVICE_CATALOG.filter((s) => s.category === 'mcp'),
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════

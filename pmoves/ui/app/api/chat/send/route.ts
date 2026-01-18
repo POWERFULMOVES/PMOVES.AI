@@ -1,32 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceSupabaseClient } from '@/lib/supabaseServer';
-import { getBootJwt } from '@/lib/supabaseClient';
-
-function ownerFromJwt(): string | null {
-  try {
-    const token = getBootJwt();
-    if (!token) return null;
-    const [, payload] = token.split('.') as [string, string, string];
-    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
-    return typeof json.sub === 'string' ? json.sub : null;
-  } catch {
-    return null;
-  }
-}
+import { ownerFromJwt } from '@/lib/jwtUtils';
+import { logError, logForDebugging } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 export async function POST(req: NextRequest) {
   const supabase = getServiceSupabaseClient();
-  const body = await req.json().catch(() => ({}));
-  const { content, role = 'user', agent, avatar_url, ownerId } = body as any;
-  const owner = ownerId ?? ownerFromJwt();
-  if (!owner) return NextResponse.json({ error: 'ownerId missing' }, { status: 400 });
-  if (!content || typeof content !== 'string') return NextResponse.json({ error: 'content required' }, { status: 400 });
+
+  // Parse JSON body with explicit error logging
+  let body: Record<string, unknown> = {};
+  try {
+    body = await req.json();
+  } catch (e) {
+    logForDebugging('Failed to parse request JSON', e, { component: 'chat/send' });
+    return NextResponse.json(
+      { ok: false, error: 'Invalid request body (malformed JSON)' },
+      { status: 400 }
+    );
+  }
+
+  const { content, role = 'user', agent, avatar_url } = body as {
+    content?: string;
+    role?: string;
+    agent?: string;
+    avatar_url?: string;
+  };
+  // Security: User identity must come from JWT only, never from request body
+  const { ownerId: jwtOwner, error: jwtError } = ownerFromJwt('chat/send');
+  const owner = jwtOwner;
+
+  if (!owner) {
+    return NextResponse.json(
+      { ok: false, error: jwtError || 'Authentication required' },
+      { status: 401 }
+    );
+  }
+  if (!content || typeof content !== 'string') {
+    return NextResponse.json({ ok: false, error: 'content required' }, { status: 400 });
+  }
+
   const { data, error } = await supabase
     .from('chat_messages')
     .insert([{ owner_id: owner, content, role, agent, avatar_url }])
     .select('id,role,agent,avatar_url,content,created_at')
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    logError('Failed to send chat message', error, 'error', {
+      errorId: ErrorIds.CHAT_SEND_FAILED,
+      component: 'chat/send',
+      owner,
+    });
+    return NextResponse.json(
+      { ok: false, error: 'Failed to send message. Please try again.' },
+      { status: 500 }
+    );
+  }
   return NextResponse.json({ ok: true, message: data });
 }
-

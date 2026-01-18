@@ -1,0 +1,127 @@
+[tool.pytest.ini_options]
+# Pytest configuration for PMOVES.AI unified test framework
+# This file complements pytest.ini in the repository root
+
+# Test discovery patterns
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+# Test paths (should match pytest.ini)
+testpaths = [
+    "pmoves/tests",
+    "pmoves/tests/smoke",
+    "pmoves/tests/integration",
+    "pmoves/tests/performance",
+    "pmoves/tests/services",
+]
+
+# Pytest markers (should match pytest.ini)
+markers = [
+    "smoke: Quick health checks (5-30s) - validates service endpoints",
+    "integration: Service-to-service communication tests (1-5m)",
+    "functional: End-to-end user workflow tests (2-10m)",
+    "performance: Load benchmarks and latency tests (5-30m)",
+    "slow: Tests that take >10s to run",
+    "gpu: Tests requiring GPU acceleration",
+    "dependency: Tests using pytest-dependency for ordering",
+]
+
+# Async test mode
+asyncio_mode = "auto"
+
+# Output options
+addopts = [
+    "--import-mode=importlib",
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+
+# Coverage options (can be enabled with --cov)
+[tool.coverage.run]
+source = ["pmoves"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.ruff]
+# Exclude common cache and build directories
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+# Same as Black
+line-length = 100
+indent-width = 4
+
+# Assume Python 3.10+
+target-version = "py310"
+
+[tool.ruff.lint]
+# Enable recommended rules plus specific FastAPI/deprecation checks
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "FAST",   # FastAPI-specific rules
+    "RUF",    # Ruff-specific rules
+]
+
+# Ignore specific rules that may conflict
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Do not perform function calls in argument defaults (needed for FastAPI Depends())
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when prefixed with underscore
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can have more relaxed rules
+"tests/**/*.py" = ["ARG", "SIM"]
+
+[tool.ruff.lint.flake8-unused-arguments]
+# Allow unused arguments that start with an underscore
+ignore-variadic-names = true
+
+# Custom deprecation warnings for FastAPI patterns
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.format]
+# Use double quotes by default
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -31,11 +32,17 @@ NOTEBOOK_WORKSPACE = os.environ.get(
     "OPEN_NOTEBOOK_WORKSPACE", os.environ.get("NOTEBOOK_WORKSPACE")
 )
 
+# E2B Configuration
+E2B_MCP_SERVER_URL = os.environ.get("E2B_MCP_SERVER_URL", "http://e2b-mcp-server:7073")
+E2B_API_KEY = os.environ.get("E2B_API_KEY", "")
+E2B_SANDBOX_URL = os.environ.get("E2B_SANDBOX_URL", "http://e2b-sandbox:7070")
+E2B_DESKTOP_URL = os.environ.get("E2B_DESKTOP_URL", "http://e2b-desktop:6080")
+
 
 def load_form(name: str) -> Dict[str, Any]:
     p = FORMS_DIR / f"{name}.yaml"
     if not p.exists():
-        raise RuntimeError(f"form not found: {p}")
+        raise RuntimeError(f"Form not found: {name}")
     return yaml.safe_load(p.read_text(encoding="utf-8"))
 
 
@@ -211,6 +218,265 @@ def _stdout(msg: Dict[str, Any]):
     sys.stdout.write(json.dumps(msg) + "\n"); sys.stdout.flush()
 
 
+# =============================================================================
+# E2B Agentic Computer Use Functions
+# =============================================================================
+
+def _e2b_headers() -> Dict[str, str]:
+    """Get headers for E2B API requests."""
+    headers = {"Content-Type": "application/json"}
+    if E2B_API_KEY and E2B_API_KEY.strip():
+        headers["X-E2B-API-Key"] = E2B_API_KEY
+    return headers
+
+
+def _generate_error_id() -> str:
+    """Generate unique error ID for tracking."""
+    return str(uuid.uuid4())[:8]
+
+
+def _e2b_request(
+    method: str,
+    url: str,
+    json_body: Dict = None,
+    timeout: int = 30
+) -> Optional[requests.Response]:
+    """
+    Make E2B API request with proper error handling.
+
+    Returns None on network errors, allowing caller to handle gracefully.
+    """
+    try:
+        response = requests.request(
+            method,
+            url,
+            json=json_body,
+            headers=_e2b_headers(),
+            timeout=timeout
+        )
+        return response
+    except requests.exceptions.Timeout:
+        return None
+    except requests.exceptions.ConnectionError:
+        return None
+    except requests.exceptions.RequestException:
+        return None
+
+
+def _e2b_json_response(response: requests.Response, error_context: str) -> Dict[str, Any]:
+    """
+    Safely parse JSON response from E2B API.
+
+    Handles:
+    - 204 No Content responses
+    - Malformed JSON responses
+    - Error responses (>= 400)
+
+    Args:
+        response: The HTTP response object
+        error_context: Context string for error messages (e.g., "sandbox_create")
+
+    Returns:
+        Dict with 'ok' status and response data or error details
+    """
+    # Error responses
+    if response.status_code >= 400:
+        error_id = _generate_error_id()
+        return {
+            "ok": False,
+            "status": response.status_code,
+            "detail": response.text[:300],
+            "error_id": f"e2b_{error_context}_{error_id}"
+        }
+
+    # 204 No Content - no JSON body
+    if response.status_code == 204:
+        return {"ok": True, "data": None}
+
+    # Successful response - parse JSON safely
+    try:
+        result = response.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        error_id = _generate_error_id()
+        return {
+            "ok": False,
+            "status": response.status_code,
+            "detail": f"Invalid JSON response: {str(e)}",
+            "error_id": f"e2b_{error_context}_{error_id}"
+        }
+
+    # Add ok status to result
+    if isinstance(result, dict):
+        result["ok"] = True
+    else:
+        result = {"ok": True, "data": result}
+
+    return result
+
+
+def e2b_sandbox_create(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new E2B sandbox for code execution."""
+    duration = int(payload.get("duration", 3600))
+    memory_mb = int(payload.get("memory_mb", 2048))
+    cpu_limit = int(payload.get("cpu_limit", 2))
+
+    request_body = {
+        "duration": duration,
+        "memory_mb": memory_mb,
+        "cpu_limit": cpu_limit
+    }
+
+    response = _e2b_request(
+        "POST",
+        f"{E2B_MCP_SERVER_URL}/sandbox/create",
+        request_body,
+        timeout=30
+    )
+
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
+
+    return _e2b_json_response(response, "sandbox_create")
+
+
+def e2b_sandbox_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute code in an existing E2B sandbox."""
+    sandbox_id = payload.get("sandbox_id")
+    if not sandbox_id:
+        raise ValueError("'sandbox_id' is required")
+
+    language = payload.get("language", "python")
+    code = payload.get("code", "")
+
+    if not code:
+        raise ValueError("'code' is required")
+
+    request_body = {
+        "sandbox_id": sandbox_id,
+        "language": language,
+        "code": code
+    }
+
+    response = _e2b_request(
+        "POST",
+        f"{E2B_MCP_SERVER_URL}/sandbox/execute",
+        request_body,
+        timeout=120
+    )
+
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
+
+    return _e2b_json_response(response, "sandbox_execute")
+
+
+def e2b_sandbox_terminate(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Terminate an existing E2B sandbox."""
+    sandbox_id = payload.get("sandbox_id")
+    if not sandbox_id:
+        raise ValueError("'sandbox_id' is required")
+
+    response = _e2b_request(
+        "DELETE",
+        f"{E2B_MCP_SERVER_URL}/sandbox/{sandbox_id}",
+        timeout=10
+    )
+
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
+
+    return _e2b_json_response(response, "sandbox_terminate")
+
+
+def e2b_desktop_create(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a new E2B desktop sandbox with GUI access."""
+    duration = int(payload.get("duration", 3600))
+    memory_mb = int(payload.get("memory_mb", 2048))
+    resolution = payload.get("resolution", "1920x1080")
+
+    request_body = {
+        "duration": duration,
+        "memory_mb": memory_mb,
+        "resolution": resolution
+    }
+
+    response = _e2b_request(
+        "POST",
+        f"{E2B_MCP_SERVER_URL}/desktop/create",
+        request_body,
+        timeout=60
+    )
+
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
+
+    result = _e2b_json_response(response, "desktop_create")
+
+    # Add NoVNC URL if available
+    if result.get("ok") and isinstance(result.get("data"), dict) and "desktop_id" in result.get("data", {}):
+        result["novnc_url"] = f"{E2B_DESKTOP_URL}/desktop/{result['data']['desktop_id']}"
+
+    return result
+
+
+def e2b_spell_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute an E2B spell (predefined code pattern)."""
+    spell_name = payload.get("spell_name")
+    if not spell_name:
+        raise ValueError("'spell_name' is required")
+
+    parameters = payload.get("parameters", {})
+    timeout = int(payload.get("timeout", 300))
+
+    request_body = {
+        "spell_name": spell_name,
+        "parameters": parameters,
+        "timeout": timeout
+    }
+
+    response = _e2b_request(
+        "POST",
+        f"{E2B_MCP_SERVER_URL}/spell/execute",
+        request_body,
+        timeout=timeout + 10
+    )
+
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
+
+    return _e2b_json_response(response, "spell_execute")
+
+
+def e2b_surf_scrape(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Scrape/web surf a URL and extract content."""
+    url = payload.get("url")
+    if not url:
+        raise ValueError("'url' is required")
+
+    depth = int(payload.get("depth", 2))
+    extract_content = payload.get("extract_content", True)
+    follow_links = payload.get("follow_links", False)
+
+    request_body = {
+        "url": url,
+        "depth": depth,
+        "extract_content": extract_content,
+        "follow_links": follow_links
+    }
+
+    response = _e2b_request(
+        "POST",
+        f"{E2B_MCP_SERVER_URL}/surf/scrape",
+        request_body,
+        timeout=120
+    )
+
+    if response is None:
+        return {"ok": False, "error": "request_failed", "detail": "Failed to reach E2B server"}
+
+    return _e2b_json_response(response, "surf_scrape")
+
+
 COMMAND_REGISTRY: Dict[str, str] = {
     "geometry.publish_cgp": "Publish a constellation graph program to the geometry gateway",
     "geometry.jump": "Jump to a geometry point by ID",
@@ -222,6 +488,13 @@ COMMAND_REGISTRY: Dict[str, str] = {
     "notebook.search": "Search Open Notebook for curated notes",
     "form.get": "Return the currently configured MCP form",
     "form.switch": "Switch the active MCP form",
+    # E2B Agentic Computer Use Commands
+    "e2b.sandbox.create": "Create a new E2B sandbox for code execution (duration, memory_mb, cpu_limit)",
+    "e2b.sandbox.execute": "Execute code in an existing E2B sandbox (sandbox_id, language, code)",
+    "e2b.sandbox.terminate": "Terminate an existing E2B sandbox (sandbox_id)",
+    "e2b.desktop.create": "Create a new E2B desktop sandbox with GUI access (duration, memory_mb, resolution)",
+    "e2b.spell.execute": "Execute an E2B spell (predefined code pattern) (spell_name, parameters, timeout)",
+    "e2b.surf.scrape": "Scrape/web surf a URL and extract content (url, depth, extract_content, follow_links)",
 }
 
 
@@ -273,7 +546,20 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
         name = payload.get("name", FORM_NAME)
         new_form = load_form(name)
         return {"ok": True, "form": new_form}
-    raise ValueError(f"unknown_cmd:{cmd}")
+    # E2B Agentic Computer Use Commands
+    if cmd == "e2b.sandbox.create":
+        return e2b_sandbox_create(payload)
+    if cmd == "e2b.sandbox.execute":
+        return e2b_sandbox_execute(payload)
+    if cmd == "e2b.sandbox.terminate":
+        return e2b_sandbox_terminate(payload)
+    if cmd == "e2b.desktop.create":
+        return e2b_desktop_create(payload)
+    if cmd == "e2b.spell.execute":
+        return e2b_spell_execute(payload)
+    if cmd == "e2b.surf.scrape":
+        return e2b_surf_scrape(payload)
+    raise ValueError(f"Unknown E2B command: {cmd}")
 
 
 def list_commands() -> List[Dict[str, Any]]:

@@ -228,3 +228,53 @@ groups:
         annotations:
           summary: "Bucket access denials for {{ $labels.bucket }}"
           description: "Clients attempting to access unauthorized bucket {{ $labels.bucket }}."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # GitHub Runner Alerts
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: github_runners
+    rules:
+      - alert: RunnerQueueBacklog
+        expr: github_runner_queue_depth > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Runner queue backlog on {{ $labels.runner }}"
+          description: "Runner {{ $labels.runner }} has {{ $value }} jobs waiting for more than 10 minutes."
+
+      - alert: RunnerQueueCritical
+        expr: github_runner_queue_depth > 20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical runner queue backlog on {{ $labels.runner }}"
+          description: "Runner {{ $labels.runner }} has {{ $value }} jobs waiting - immediate attention needed."
+
+      - alert: RunnerDiskLow
+        expr: github_runner_disk_bytes < 10737418240
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Runner {{ $labels.runner }} low on disk space"
+          description: "Runner {{ $labels.runner }} has less than 10GB disk space remaining."
+
+      - alert: RunnerOffline
+        expr: github_runner_up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Runner {{ $labels.runner }} is offline"
+          description: "Runner {{ $labels.runner }} has been unreachable for 5+ minutes."
+
+      - alert: GitHubAPIRateLimitLow
+        expr: github_runner_github_api_rate_limit < 100
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GitHub API rate limit running low"
+          description: "Less than 100 API calls remaining - may need to wait for reset."

@@ -8,10 +8,10 @@ pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient
 
-from pmoves.services.gateway.gateway.main import app
-from pmoves.services.gateway.gateway.api import chit
-from pmoves.services.gateway.gateway.api.chit import compute_shape_id
-from pmoves.services.common.shape_store import ShapeStore
+from services.gateway.gateway.main import app
+from services.gateway.gateway.api import chit
+from services.gateway.gateway.api.chit import compute_shape_id
+from services.common.shape_store import ShapeStore
 
 
 def _reset_shape_store():

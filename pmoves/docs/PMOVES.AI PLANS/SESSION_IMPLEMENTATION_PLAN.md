@@ -1,9 +1,11 @@
 # M2 Automation Kickoff & Roadmap Prep Plan
-_Last updated: 2025-10-24_
+_Last updated: 2026-01-02_
 
 This working session establishes the concrete implementation tasks needed to close Milestone M2 while warming up broader roadmap threads for Milestones M3–M5. It consolidates the operational reminders from the sprint brief and ties each step to the canonical checklists in `pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`, `pmoves/docs/NEXT_STEPS.md`, and `pmoves/docs/ROADMAP.md`.
 
 ## 1. Automation Loop Activation (Supabase → Agent Zero → Discord)
+
+**Status note:** Infrastructure is complete, but end-to-end validation remains blocked until the n8n approval poller is activated and observed processing `studio_board` rows.
 
 | Step | Owner | Dependencies | Evidence to Capture |
 | --- | --- | --- | --- |

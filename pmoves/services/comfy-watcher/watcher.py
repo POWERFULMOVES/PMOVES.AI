@@ -9,9 +9,9 @@ import pathlib
 import shutil
 import time
 
-import os, time, json, hashlib, pathlib, datetime
 from minio import Minio
 from nats.aio.client import Client as NATS
+
 from services.common.events import envelope
 
 logger = logging.getLogger("comfy-watcher")
@@ -58,27 +58,9 @@ def load_state() -> dict:
     try:
         with open(STATE_PATH) as f:
             return json.load(f)
-    except FileNotFoundError:
-        logger.info(f"State file not found, starting fresh: {STATE_PATH}")
-        return {"uploaded": {}}
-    except json.JSONDecodeError as exc:
-        logger.error(f"Corrupted state file at {STATE_PATH}, backing up and starting fresh: {exc}")
-        # Backup corrupted file for investigation
-        backup_path = f"{STATE_PATH}.corrupted.{int(time.time())}"
-        try:
-            shutil.copy(STATE_PATH, backup_path)
-            logger.info(f"Backed up corrupted state to: {backup_path}")
-        except Exception as backup_exc:
-            logger.warning(f"Could not backup corrupted state file: {backup_exc}")
-        return {"uploaded": {}}
-    except Exception as exc:
-        logger.error(f"Unexpected error loading state from {STATE_PATH}: {exc}")
+    except Exception:
         return {"uploaded": {}}
 
-def save_state(state):
-    pathlib.Path("/state").mkdir(parents=True, exist_ok=True)
-    with open(STATE_PATH,"w") as f:
-        json.dump(state,f)
 
 def save_state(state: dict) -> None:
     """Save the watcher state to disk.
@@ -120,10 +102,11 @@ def file_hash(path: str) -> str:
         PermissionError: If the file cannot be read due to permissions.
     """
     h = hashlib.sha256()
-    with open(p,"rb") as f:
+    with open(path, "rb") as f:
         while True:
-            b = f.read(1<<20)
-            if not b: break
+            b = f.read(1 << 20)
+            if not b:
+                break
             h.update(b)
     return h.hexdigest()
 
@@ -281,7 +264,8 @@ async def run():
                     h = file_hash(path)
                     if state["uploaded"].get(h):
                         continue
-                    key = datetime.datetime.utcnow().strftime("comfyui/%Y/%m/%d/") + fn
+
+                    key = datetime.datetime.now(datetime.timezone.utc).strftime("comfyui/%Y/%m/%d/") + fn
                     client.fput_object(BUCKET, key, path, content_type="image/png")
                     state["uploaded"][h] = {"key": key, "ts": time.time(), "size": size}
                     save_state(state)
@@ -307,6 +291,4 @@ async def run():
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(run())
-

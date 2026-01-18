@@ -1,3 +1,15 @@
+"""NATS controller for Agent Zero orchestration.
+
+Provides NATS jetstream integration for:
+- Agent coordination via subscriptions
+- Message persistence with streams/consumers
+- Request-response patterns
+
+Environment Variables:
+    NATS_URL: NATS connection string (default: nats://localhost:4222)
+    AGENTZERO_JETSTREAM: Enable JetStream (default: true)
+"""
+
 import asyncio
 import json
 import logging
@@ -51,7 +63,6 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency for tests
         filter_subject: Optional[str] = None
 
     @dataclass
-    @dataclass
     class StreamConfig:  # type: ignore[no-redef]
         name: str
         subjects: List[str]
@@ -70,6 +81,7 @@ try:
     from services.common.events import envelope
 except Exception:  # pragma: no cover - optional dependency for unit tests
     import datetime
+    from datetime import timezone
     import uuid
 
     def envelope(
@@ -83,7 +95,7 @@ except Exception:  # pragma: no cover - optional dependency for unit tests
         event: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
             "topic": topic,
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.datetime.now(timezone.utc).isoformat() + "Z",
             "version": "v1",
             "source": source,
             "payload": payload,

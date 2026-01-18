@@ -39,4 +39,22 @@ load_env_file "$ROOT_DIR/env.shared"
 load_env_file "$ROOT_DIR/.env.generated"
 load_env_file "$ROOT_DIR/.env.local"
 
+# Back-compat: some docs/manifests use MINIO_USER/MINIO_PASSWORD. Services use MINIO_ACCESS_KEY/MINIO_SECRET_KEY.
+if [ -z "${MINIO_ACCESS_KEY:-}" ] && [ -n "${MINIO_USER:-}" ]; then
+  export MINIO_ACCESS_KEY="$MINIO_USER"
+fi
+if [ -z "${MINIO_SECRET_KEY:-}" ] && [ -n "${MINIO_PASSWORD:-}" ]; then
+  export MINIO_SECRET_KEY="$MINIO_PASSWORD"
+fi
+
+# Local MinIO defaults:
+# If only the unified S3 creds (MINIO_ACCESS_KEY/MINIO_SECRET_KEY) are configured,
+# mirror them into MINIO_ROOT_USER/MINIO_ROOT_PASSWORD so the optional local MinIO service can boot.
+if [ -z "${MINIO_ROOT_USER:-}" ] && [ -n "${MINIO_ACCESS_KEY:-}" ]; then
+  export MINIO_ROOT_USER="$MINIO_ACCESS_KEY"
+fi
+if [ -z "${MINIO_ROOT_PASSWORD:-}" ] && [ -n "${MINIO_SECRET_KEY:-}" ]; then
+  export MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY"
+fi
+
 export PMOVES_ENV_LOADER=1
