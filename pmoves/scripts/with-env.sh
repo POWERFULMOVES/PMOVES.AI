@@ -34,13 +34,15 @@ load_env_file() {
   set -H 2>/dev/null || true
 }
 
-# Hardened 6-tier architecture: load tier env files first
+# Hardened 8-tier architecture: load tier env files first
 load_env_file "$ROOT_DIR/pmoves/env.tier-data"
 load_env_file "$ROOT_DIR/pmoves/env.tier-api"
 load_env_file "$ROOT_DIR/pmoves/env.tier-llm"
 load_env_file "$ROOT_DIR/pmoves/env.tier-media"
 load_env_file "$ROOT_DIR/pmoves/env.tier-agent"
 load_env_file "$ROOT_DIR/pmoves/env.tier-worker"
+load_env_file "$ROOT_DIR/pmoves/env.tier-app"
+load_env_file "$ROOT_DIR/pmoves/env.tier-ui"
 
 # Legacy env files (loaded after tiers for backward compatibility)
 load_env_file "$ROOT_DIR/env.shared.generated"
