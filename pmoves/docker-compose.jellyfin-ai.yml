@@ -57,7 +57,7 @@ services:
     ports:
       - "${JELLYFIN_HTTP_PORT:-8096}:8096"
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
           - jellyfin-ai
     restart: unless-stopped
@@ -106,7 +106,7 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/import:/var/lib/neo4j/import
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/neo4j/plugins:/plugins
     networks:
-      cataclysm:
+      pmoves_data:
         aliases:
           - jellyfin-neo4j
     restart: unless-stopped
@@ -125,7 +125,7 @@ services:
     ports:
       - "11434:11434"
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
           - jellyfin-qwen-audio
     restart: unless-stopped
@@ -160,7 +160,7 @@ services:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/output:/app/output
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/logs:/app/logs
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
           - jellyfin-audio-processor
     restart: unless-stopped
@@ -177,7 +177,7 @@ services:
     volumes:
       - ./${JELLYFIN_AI_BASE:-jellyfin-ai}/redis:/data
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
           - jellyfin-redis
     restart: unless-stopped
@@ -203,7 +203,7 @@ services:
     ports:
       - "${JELLYFIN_API_PORT:-8300}:3000"
     networks:
-      cataclysm:
+      pmoves_api:
         aliases:
           - jellyfin-api
     restart: unless-stopped
@@ -226,7 +226,7 @@ services:
     ports:
       - "${JELLYFIN_DASHBOARD_PORT:-8400}:80"
     networks:
-      cataclysm:
+      pmoves_app:
         aliases:
           - jellyfin-dashboard
     restart: unless-stopped
@@ -234,6 +234,15 @@ services:
       - jellyfin-api-gateway
 
 networks:
-  cataclysm:
+  pmoves:
     external: true
-    name: cataclysm-net
+    name: pmoves-net
+  pmoves_api:
+    external: true
+    name: pmoves_api
+  pmoves_app:
+    external: true
+    name: pmoves_app
+  pmoves_data:
+    external: true
+    name: pmoves_data
