@@ -1,6 +1,6 @@
 services:
   hi-rag-gateway-v2-gpu:
-    image: ${HIRAG_V2_GPU_IMAGE:-ghcr.io/cataclysm-studios-inc/hi-rag-gateway-v2-gpu:cu128-py310-stable}
+    image: ${HIRAG_V2_GPU_IMAGE:-ghcr.io/powerfulmoves/hi-rag-gateway-v2-gpu:cu128-py310-stable}
     runtime: nvidia
     restart: unless-stopped
     env_file: [env.shared.generated, env.shared, .env.generated, .env.local]

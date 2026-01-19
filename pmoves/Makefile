@@ -1427,7 +1427,7 @@ up-jellyfin-single: ## Single Jellyfin using your forked image (8096)
 	@$(MAKE) --no-print-directory down-jellyfin-ai
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@bash -lc '$(LOAD_ENV_SHARED) files="-f docker-compose.external.yml"; if [ -f docker-compose.jellyfin.hosts.yml ]; then files="$$files -f docker-compose.jellyfin.hosts.yml"; fi; exec docker compose -p $(PROJECT) $$files up -d --pull $(PULL) jellyfin-ext'
-	@echo "✔ Jellyfin (single) up at http://localhost:8096 using $${JELLYFIN_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-jellyfin:pmoves-latest}"
+	@echo "✔ Jellyfin (single) up at http://localhost:8096 using $${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}"
 
 .PHONY: jellyfin-enhanced-smoke
 jellyfin-enhanced-smoke: ## Validate Jellyfin core (/System/Info, /Plugins) and web assets on single instance
