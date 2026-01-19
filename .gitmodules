@@ -99,3 +99,33 @@
 	path = PMOVES-A2UI
 	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-BotZ-gateway"]
+	path = PMOVES-BotZ-gateway
+	url = https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-Danger-infra"]
+	path = PMOVES-Danger-infra
+	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+[submodule "PMOVES-MAI-UI"]
+	path = PMOVES-MAI-UI
+	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
+[submodule "Pmoves-AgentGym-RL"]
+	path = Pmoves-AgentGym-RL
+	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
+[submodule "e2b"]
+	path = e2b
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves-e2b-mcp-server"]
+	path = pmoves-e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+[submodule "pmoves-surf"]
+	path = pmoves-surf
+	url = https://github.com/POWERFULMOVES/pmoves-surf.git
+[submodule "PMOVES-E2B-Danger-Room-Deskdesktop"]
+	path = PMOVES-E2B-Danger-Room-Deskdesktop
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
+[submodule "PMOVES-E2b-Spells"]
+	path = PMOVES-E2b-Spells
+	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+	branch = PMOVES.AI-Edition-Hardened
