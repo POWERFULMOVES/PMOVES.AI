@@ -2,18 +2,18 @@
 # These reference the tier env files from parent docker-compose.yml
 x-env-tier-data: &env-tier-data
   env_file:
-    - path: env.tier-data
-      required: false
+    - env.shared
+    - env.tier-data
 
 x-env-tier-worker: &env-tier-worker
   env_file:
-    - path: env.tier-worker
-      required: false
+    - env.shared
+    - env.tier-worker
 
 x-env-tier-media: &env-tier-media
   env_file:
-    - path: env.tier-media
-      required: false
+    - env.shared
+    - env.tier-media
 
 services:
   wger:

@@ -1,126 +1,46 @@
-# YAML anchors for tier-based env file loading
-# These anchors allow services to load environment variables from tier-specific env files
-# Tier architecture isolates secrets by service category (data, api, llm, worker, media, agent)
-x-env-tier-data: &id001
+# PMOVES Tier-Based Environment File Anchors
+# Each tier receives ONLY the secrets it needs (principle of least privilege)
+x-env-tier-data: &env-tier-data
   env_file:
-    - path: env.tier-data
-      required: false
+    - env.shared
+    - env.tier-data
 
-x-env-tier-api: &id002
+x-env-tier-api: &env-tier-api
   env_file:
-    - path: env.tier-api
-      required: false
+    - env.shared
+    - env.tier-api
 
-x-env-tier-llm: &id006
+x-env-tier-worker: &env-tier-worker
   env_file:
-    - path: env.tier-llm
-      required: false
+    - env.shared
+    - env.tier-worker
 
-x-env-tier-worker: &id003
+x-env-tier-agent: &env-tier-agent
   env_file:
-    - path: env.tier-worker
-      required: false
+    - env.shared
+    - env.tier-agent
 
-x-env-tier-media: &id004
+x-env-tier-media: &env-tier-media
   env_file:
-    - path: env.tier-media
-      required: false
+    - env.shared
+    - env.tier-media
 
-x-env-tier-agent: &id005
+x-env-tier-llm: &env-tier-llm
   env_file:
-    - path: env.tier-agent
-      required: false
+    - env.shared
+    - env.tier-llm
 
-x-env-tier-ui: &id007
+x-env-tier-ui: &env-tier-ui
   env_file:
-    - path: env.tier-ui
-      required: false
+    - env.shared
+    - env.tier-ui
 
 services:
-  postgres:
-    env_file: *id001
-    image: ankane/pgvector
-    restart: unless-stopped
-    environment:
-    - POSTGRES_DB=pmoves
-    - POSTGRES_USER=pmoves
-    - DOCKED_MODE=${DOCKED_MODE:-true}
-    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
-    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    ports:
-    - ${POSTGRES_PORT:-5432}:5432
-    volumes:
-    - supabase-data:/var/lib/postgresql/data
-    - ./supabase/initdb:/docker-entrypoint-initdb.d:ro
-    networks:
-    - pmoves_data
-    - supabase_net
-    healthcheck:
-      test:
-      - CMD-SHELL
-      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  postgrest:
-    env_file: *id002
-    image: postgrest/postgrest:latest
-    restart: unless-stopped
-    depends_on:
-    - postgres
-    environment:
-    - PGRST_DB_URI=postgres://${POSTGRES_USER:-pmoves}:${POSTGRES_PASSWORD:-pmoves}@postgres:5432/${POSTGRES_DB:-pmoves}
-    - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
-    - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
-    - PGRST_SERVER_PORT=3000
-    - DOCKED_MODE=${DOCKED_MODE:-true}
-    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
-    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    ports:
-    - ${POSTGREST_PORT:-3010}:3000
-    networks:
-    - pmoves_api
-    - supabase_net
-  postgrest-health:
-    image: curlimages/curl:8.6.0
-    restart: unless-stopped
-    command:
-    - tail
-    - -f
-    - /dev/null
-    depends_on:
-    - postgrest
-    profiles:
-    - orchestration
-    - workers
-    - supabase-local
-    networks:
-    - pmoves_api
-    - pmoves_bus
-    healthcheck:
-      test:
-      - CMD-SHELL
-      - curl -fsS http://postgrest:3000/ >/dev/null || exit 1
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 10s
-  postgrest-cli:
-    env_file: *id002
-    image: postgrest/postgrest:latest
-    restart: unless-stopped
-    environment:
-    - PGRST_DB_URI=postgres://${SUPABASE_DB_USER:-postgres}:${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:${SUPABASE_DB_PORT:-65432}/${SUPABASE_DB_NAME:-postgres}
-    - PGRST_DB_SCHEMA=${PGRST_DB_SCHEMA:-public,pmoves_core}
-    - PGRST_DB_ANON_ROLE=${PGRST_DB_ANON_ROLE:-anon}
-    - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-3000}
-    ports:
-    - ${POSTGREST_CLI_PORT:-3011}:3000
-    profiles:
-    - supabase-cli-rest
-    networks:
-    - pmoves_api
-    - supabase_net
+  # NOTE: postgres and postgrest now run via Supabase CLI
+  # Use: supabase start
+  # Postgres: host.docker.internal:54322 (supabase_db_PMOVES.AI container)
+  # PostgREST/Kong: host.docker.internal:54321 (supabase_kong_PMOVES.AI container)
+
   qdrant:
     image: qdrant/qdrant:v1.10.0
     restart: unless-stopped
@@ -133,7 +53,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
   meilisearch:
-    env_file: *id001
+    env_file: *env-tier-data
     image: getmeili/meilisearch:v1.8
     restart: unless-stopped
     environment:
@@ -146,7 +66,7 @@ services:
     networks:
     - pmoves_data
   neo4j:
-    env_file: *id001
+    env_file: *env-tier-data
     image: neo4j:5.22
     restart: unless-stopped
     environment:
@@ -172,7 +92,7 @@ services:
       retries: 12
       start_period: 20s
   minio:
-    env_file: *id001
+    env_file: *env-tier-data
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
@@ -189,7 +109,7 @@ services:
     - pmoves_data
     - pmoves_bus
   hi-rag-gateway:
-    env_file: *id002
+    env_file: *env-tier-api
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
@@ -225,7 +145,7 @@ services:
     - pmoves_api
     - pmoves_bus
   retrieval-eval:
-    env_file: *id003
+    env_file: *env-tier-worker
     build: ./services/retrieval-eval
     restart: unless-stopped
     environment:
@@ -246,7 +166,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   presign:
-    env_file: *id002
+    env_file: *env-tier-api
     build: ./services/presign
     restart: unless-stopped
     environment:
@@ -263,7 +183,7 @@ services:
     - pmoves_api
     - pmoves_bus
   render-webhook:
-    env_file: *id002
+    env_file: *env-tier-api
     build: ./services/render-webhook
     restart: unless-stopped
     environment:
@@ -282,7 +202,7 @@ services:
     - postgrest:host-gateway
     - host.docker.internal:host-gateway
   extract-worker:
-    env_file: *id003
+    env_file: *env-tier-worker
     build: ./services/extract-worker
     restart: unless-stopped
     environment:
@@ -303,7 +223,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   pdf-ingest:
-    env_file: *id003
+    env_file: *env-tier-worker
     build:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
@@ -330,7 +250,7 @@ services:
     - pmoves_app
     - pmoves_bus
   langextract:
-    env_file: *id003
+    env_file: *env-tier-worker
     build:
       context: .
       dockerfile: services/langextract/Dockerfile
@@ -343,7 +263,7 @@ services:
     networks:
     - pmoves_app
   notebook-sync:
-    env_file: *id003
+    env_file: *env-tier-worker
     build: ./services/notebook-sync
     restart: unless-stopped
     environment:
@@ -369,7 +289,7 @@ services:
     - pmoves_app
     - pmoves_bus
   ffmpeg-whisper:
-    env_file: *id004
+    env_file: *env-tier-media
     build:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
@@ -401,7 +321,7 @@ services:
     - pmoves_app
     - pmoves_bus
   media-video:
-    env_file: *id004
+    env_file: *env-tier-media
     build: ./services/media-video
     restart: unless-stopped
     environment:
@@ -427,7 +347,7 @@ services:
     - pmoves_app
     - pmoves_bus
   media-audio:
-    env_file: *id004
+    env_file: *env-tier-media
     build: ./services/media-audio
     restart: unless-stopped
     environment:
@@ -451,7 +371,7 @@ services:
     - pmoves_app
     - pmoves_bus
   pmoves-yt:
-    env_file: *id004
+    env_file: *env-tier-media
     image: ${PMOVES_YT_IMAGE:-}
     build:
       context: ./services/pmoves-yt
@@ -505,7 +425,7 @@ services:
     - pmoves_app
     - pmoves_bus
   channel-monitor:
-    env_file: *id005
+    env_file: *env-tier-agent
     build: ./services/channel-monitor
     restart: unless-stopped
     environment:
@@ -531,7 +451,7 @@ services:
     - pmoves_app
     - pmoves_bus
   hi-rag-gateway-v2:
-    env_file: *id002
+    env_file: *env-tier-api
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
@@ -579,7 +499,7 @@ services:
     - pmoves_api
     - pmoves_bus
   hi-rag-gateway-gpu:
-    env_file: *id002
+    env_file: *env-tier-api
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
@@ -629,7 +549,7 @@ services:
     - pmoves_api
     - pmoves_bus
   hi-rag-gateway-v2-gpu:
-    env_file: *id002
+    env_file: *env-tier-api
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
@@ -707,7 +627,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   nats:
-    env_file: *id001
+    env_file: *env-tier-data
     image: nats:2.10-alpine
     command:
     - -js
@@ -732,7 +652,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
   agent-zero:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
@@ -764,7 +684,7 @@ services:
     - pmoves_app
     - pmoves_bus
   archon:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: .
       dockerfile: ./services/archon/Dockerfile
@@ -811,7 +731,7 @@ services:
       retries: 12
       start_period: 15s
   mesh-agent:
-    env_file: *id005
+    env_file: *env-tier-agent
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
@@ -826,7 +746,7 @@ services:
   botz-gateway:
     build: ./services/botz-gateway
     restart: unless-stopped
-    <<: *id005
+    <<: *env-tier-agent
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:3000}
@@ -849,7 +769,7 @@ services:
 
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
   a2ui-nats-bridge:
-    env_file: *id005
+    env_file: *env-tier-agent
     build: ./services/a2ui-nats-bridge
     image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
     container_name: pmoves-a2ui-nats-bridge
@@ -885,7 +805,7 @@ services:
     security_opt:
     - no-new-privileges:true
   deepresearch:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: ./services
       dockerfile: deepresearch/Dockerfile
@@ -916,7 +836,7 @@ services:
     - pmoves_app
     - pmoves_bus
   supaserch:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: ./services
       dockerfile: supaserch/Dockerfile
@@ -934,7 +854,7 @@ services:
     - pmoves_app
     - pmoves_bus
   nats-echo-req:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: ./services
       dockerfile: nats-echo/Dockerfile
@@ -950,7 +870,7 @@ services:
     networks:
     - pmoves_bus
   nats-echo-res:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: ./services
       dockerfile: nats-echo/Dockerfile
@@ -966,7 +886,7 @@ services:
     networks:
     - pmoves_bus
   publisher-discord:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
@@ -985,7 +905,7 @@ services:
     - pmoves_app
     - pmoves_bus
   jellyfin-bridge:
-    env_file: *id005
+    env_file: *env-tier-agent
     build: ./services/jellyfin-bridge
     restart: unless-stopped
     environment:
@@ -999,7 +919,7 @@ services:
     - pmoves_app
     - pmoves_bus
   pmoves-ollama:
-    env_file: *id006
+    env_file: *env-tier-llm
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6}
     restart: unless-stopped
     environment:
@@ -1013,7 +933,7 @@ services:
     networks:
     - pmoves_api
   tensorzero-clickhouse:
-    env_file: *id006
+    env_file: *env-tier-llm
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped
     environment:
@@ -1039,7 +959,7 @@ services:
     networks:
     - pmoves_data
   tensorzero-gateway:
-    env_file: *id006
+    env_file: *env-tier-llm
     image: tensorzero/gateway:latest
     restart: unless-stopped
     command:
@@ -1063,7 +983,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   tensorzero-ui:
-    env_file: *id006
+    env_file: *env-tier-llm
     image: tensorzero/ui:latest
     restart: unless-stopped
     environment:
@@ -1086,7 +1006,7 @@ services:
     networks:
     - pmoves_app
   gpu-orchestrator:
-    env_file: *id006
+    env_file: *env-tier-llm
     build:
       context: ./services/gpu-orchestrator
       dockerfile: Dockerfile
@@ -1116,7 +1036,7 @@ services:
     ports:
     - 8100:8100
   evo-controller:
-    env_file: *id005
+    env_file: *env-tier-agent
     build:
       context: ./services/evo-controller
       dockerfile: Dockerfile
@@ -1140,7 +1060,7 @@ services:
       dockerfile: Dockerfile
     image: ${ULTIMATE_TTS_IMAGE:-ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:pmoves-latest}
     restart: unless-stopped
-    <<: *id004
+    <<: *env-tier-media
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
       - GRADIO_SERVER_PORT=7861
@@ -1172,7 +1092,7 @@ services:
 
   # Flute Gateway - Multimodal voice communication layer (TTS/STT)
   flute-gateway:
-    env_file: *id004
+    env_file: *env-tier-media
     build:
       context: ./services/flute-gateway
       dockerfile: Dockerfile
@@ -1195,7 +1115,7 @@ services:
       dockerfile: Dockerfile
     image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
     restart: unless-stopped
-    <<: *id005
+    <<: *env-tier-agent
     environment:
       - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
       - TOKENISM_PORT=${TOKENISM_PORT:-8100}
@@ -1231,7 +1151,7 @@ services:
       dockerfile: Dockerfile
     image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
     restart: unless-stopped
-    <<: *id007
+    <<: *env-tier-ui
     environment:
       - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
       - NODE_ENV=production
@@ -1295,7 +1215,7 @@ services:
 
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
-    env_file: *id003
+    env_file: *env-tier-worker
     build:
       context: ./services/session-context-worker
       dockerfile: Dockerfile
@@ -1321,7 +1241,7 @@ services:
       context: .
       dockerfile: services/comfy-watcher/Dockerfile
     restart: unless-stopped
-    <<: *id003
+    <<: *env-tier-worker
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - MINIO_ENDPOINT=minio:9000
@@ -1377,7 +1297,7 @@ services:
   github-runner-ctl:
     build: ./services/github-runner-ctl
     restart: unless-stopped
-    <<: *id005
+    <<: *env-tier-agent
     environment:
       - PORT=8104
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -1423,7 +1343,7 @@ services:
   invidious-companion:
     image: quay.io/invidious/invidious-companion:latest
     restart: unless-stopped
-    env_file: *id004
+    env_file: *env-tier-media
     environment:
     - PORT=8282
     - HOST=0.0.0.0
@@ -1445,7 +1365,7 @@ services:
   invidious:
     image: quay.io/invidious/invidious:2024.12.09
     restart: unless-stopped
-    env_file: *id004
+    env_file: *env-tier-media
     environment:
     - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n\
       \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
