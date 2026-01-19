@@ -8,6 +8,7 @@ reviews:
   # Branches to review
   branches:
     - "PMOVES.AI-Edition-Hardened"
+    - "PMOVES.AI-Edition-Hardened-v3-clean"
     - "feat/hardened-*"
     - "fix/hardened-*"
 
@@ -22,9 +23,6 @@ documentation:
   coverage:
     minimum: 80
     patch: 80
-
-# Language-specific settings
-language: "python"
 
 # Review depth settings
 review:
