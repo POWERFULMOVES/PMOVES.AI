@@ -21,7 +21,11 @@ const mockItems: JellyfinItem[] = [
     type: 'Series',
     seriesName: 'Test Series',
     seasonNumber: 1,
+<<<<<<< HEAD
     episodeNumber: 5,
+=======
+    episodeNumber: '5',
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
   },
   {
     id: '3',
@@ -29,7 +33,11 @@ const mockItems: JellyfinItem[] = [
     type: 'Episode',
     seriesName: 'Another Series',
     seasonNumber: 2,
+<<<<<<< HEAD
     episodeNumber: 3,
+=======
+    episodeNumber: '3',
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     youtubeId: 'abc123',
   },
   {

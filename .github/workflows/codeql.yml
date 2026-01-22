@@ -31,6 +31,18 @@ jobs:
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
     continue-on-error: ${{ matrix.language == 'c-cpp' }}
+<<<<<<< HEAD
+=======
+    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
+    paths-ignore:
+      - 'integrations-workspace/**'
+      - '**/.venv/**'
+      - '**/venv/**'
+      - '**/vendor/**'
+      - '**/node_modules/**'
+      - '**/site-packages/**'
+      - '**/.eggs/**'
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     permissions:
       # required for all workflows
       security-events: write
@@ -64,7 +76,11 @@ jobs:
         # your codebase is analyzed, see https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages
     steps:
     - name: Checkout repository
+<<<<<<< HEAD
       uses: actions/checkout@v4
+=======
+      uses: actions/checkout@v6
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
     # Add any setup steps before running the `github/codeql-action/init` action.
     # This includes steps like installing compilers or runtimes (`actions/setup-node`

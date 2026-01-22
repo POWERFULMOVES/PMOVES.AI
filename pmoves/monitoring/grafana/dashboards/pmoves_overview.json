@@ -1,0 +1,44 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Gateway Up",
+      "datasource": {"type": "prometheus", "uid": "__DS_PROM__"},
+      "targets": [{"expr": "mcp_proxy_up", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "type": "stat",
+      "title": "Docling Up",
+      "datasource": {"type": "prometheus", "uid": "__DS_PROM__"},
+      "targets": [{"expr": "docling_mcp_up", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "type": "graph",
+      "title": "Gateway HTTP Requests",
+      "datasource": {"type": "prometheus", "uid": "__DS_PROM__"},
+      "targets": [
+        {"expr": "sum by (path) (rate(http_requests_total[5m]))", "legendFormat": "{{path}}", "refId": "A"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["pmoves"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "PMOVES Overview",
+  "uid": "pmoves-overview",
+  "version": 1
+}
+

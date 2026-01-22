@@ -34,9 +34,12 @@ services:
         aliases:
           - open-notebook
 networks:
+<<<<<<< HEAD
   cataclysm:
     external: true
     name: cataclysm-net
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
   pmoves:
     external: true
     name: pmoves-net

@@ -1,0 +1,82 @@
+# === PMOVES ALL-IN-ONE v10 ===
+
+# Database (full schema & RPCs)
+[tasks.db_all_in_one]
+desc = "Apply PMOVES base schema, multimodal, groups, actions, snapshots, RPCs, oEmbed"
+run = [
+  "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f docs/ops/sql/00_chat_notebook.sql",
+  "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f docs/ops/sql/01_multimodal_views.sql",
+  "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f docs/ops/sql/02_groups_and_actions.sql",
+  "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f docs/ops/sql/03_snapshots_and_rpcs.sql",
+  "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f docs/ops/sql/04_oembed_cache.sql"
+]
+
+# Edge functions: copy & deploy
+[tasks.functions_install_all]
+desc = "Copy all edge functions into supabase/functions"
+run = [
+  "mkdir -p supabase/functions/jellyfin_sign supabase/functions/jellyfin_hls_proxy supabase/functions/youtube_oembed_cache supabase/functions/yt_chapters_ingest",
+  "cp docs/edge/functions/jellyfin_sign/index.ts supabase/functions/jellyfin_sign/index.ts",
+  "cp docs/edge/functions/jellyfin_hls_proxy/index.ts supabase/functions/jellyfin_hls_proxy/index.ts",
+  "cp docs/edge/functions/youtube_oembed_cache/index.ts supabase/functions/youtube_oembed_cache/index.ts",
+  "cp docs/edge/functions/yt_chapters_ingest/index.ts supabase/functions/yt_chapters_ingest/index.ts"
+]
+
+[tasks.functions_deploy_all]
+desc = "Deploy all PMOVES edge functions"
+run = [
+  "supabase functions deploy jellyfin_sign",
+  "supabase functions deploy jellyfin_hls_proxy",
+  "supabase functions deploy youtube_oembed_cache",
+  "supabase functions deploy yt_chapters_ingest"
+]
+
+# UI scaffolds & runtime
+[tasks.ui_install_runtime]
+desc = "Install skin system + notebook runtime (editors, groups, snapshots, media)"
+run = [
+  "mkdir -p ui/runtime/skin ui/runtime/notebook ui/examples/pages public/skins/comic-pop/1.1.0/img public/styles",
+  "cp docs/ui/runtime/skin/SkinProvider.tsx ui/runtime/skin/SkinProvider.tsx",
+  "cp docs/ui/runtime/skin/ComicBubble.tsx ui/runtime/skin/ComicBubble.tsx",
+  "cp docs/ui/runtime/skin/bubbleSynth.ts ui/runtime/skin/bubbleSynth.ts",
+  "cp docs/ui/runtime/skin/rng.ts ui/runtime/skin/rng.ts",
+  "cp docs/ui/runtime/notebook/* ui/runtime/notebook/",
+  "cp docs/ui/examples/pages/* ui/app/pages/",
+  "cp docs/examples/skins/comic-pop/1.1.0/skin.json public/skins/comic-pop/1.1.0/skin.json",
+  "cp docs/examples/skins/comic-pop/1.1.0/img/bubble.svg public/skins/comic-pop/1.1.0/img/bubble.svg",
+  "cp docs/examples/skins/comic-pop/1.1.0/img/tail.svg public/skins/comic-pop/1.1.0/img/tail.svg",
+  "cp docs/ui/pbnj/pbnj.css public/styles/pbnj.css"
+]
+
+# n8n
+[tasks.n8n_install_all]
+desc = "Copy n8n blueprints"
+run = [
+  "mkdir -p ops/n8n",
+  "cp docs/n8n/yt_ingest.json ops/n8n/yt_ingest.json",
+  "cp docs/n8n/jellyfin_webhook.json ops/n8n/jellyfin_webhook.json",
+  "cp docs/n8n/yt_channel_poll.json ops/n8n/yt_channel_poll.json"
+]
+
+# Scripts
+[tasks.scripts_install]
+desc = "Copy demo/worker/export scripts"
+run = [
+  "mkdir -p scripts",
+  "cp docs/scripts/seed_demo_variety.mjs scripts/seed_demo_variety.mjs",
+  "cp docs/scripts/export_storyboard.mjs scripts/export_storyboard.mjs",
+  "cp docs/scripts/export_storyboard_playwright.mjs scripts/export_storyboard_playwright.mjs",
+  "cp docs/scripts/ingest_youtube_channel.mjs scripts/ingest_youtube_channel.mjs"
+]
+
+# One button
+[tasks.pmoves_all_install]
+desc = "Apply DB, install functions, UI, n8n, and scripts"
+run = [
+  "codex run db_all_in_one SUPABASE_DB_URL=\"$SUPABASE_DB_URL\"",
+  "codex run functions_install_all",
+  "codex run functions_deploy_all",
+  "codex run ui_install_runtime",
+  "codex run n8n_install_all",
+  "codex run scripts_install"
+]

@@ -19,6 +19,10 @@ import io
 import json
 import logging
 import os
+<<<<<<< HEAD
+=======
+import socket
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 import wave
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -41,6 +45,38 @@ from providers import (
     UltimateTTSProvider,
 )
 
+<<<<<<< HEAD
+=======
+# Prosodic sidecar imports
+from prosodic import (
+    BoundaryType,
+    ProsodicChunk,
+    parse_prosodic,
+    format_prosodic_analysis,
+    prosodic_stitch,
+    stitch_chunks,
+)
+
+# Pipecat integration (optional - enable with PIPECAT_ENABLED=true)
+from pipecat.config import get_pipecat_config
+PIPECAT_CONFIG = get_pipecat_config()
+
+# NATS service announcement integration
+try:
+    from services.common.nats_service_listener import announce_service, ServiceTier
+    NATS_ANNOUNCE_AVAILABLE = True
+except ImportError:
+    NATS_ANNOUNCE_AVAILABLE = False
+
+try:
+    from pipecat.transports import FluteFastAPIWebsocketTransport, FluteFastAPIWebsocketParams
+    from pipecat.pipelines import VoiceAgentConfig, build_voice_agent_pipeline
+    from pipecat.processors import TensorZeroLLMProcessor
+    PIPECAT_AVAILABLE = True
+except ImportError:
+    PIPECAT_AVAILABLE = False
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -248,11 +284,27 @@ class ConfigResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+<<<<<<< HEAD
     """Application lifespan - startup and shutdown."""
     global vibevoice_provider, whisper_provider, ultimate_tts_provider, nats_client
 
     logger.info("Starting Flute Gateway...")
 
+=======
+    """Application lifespan - startup and shutdown with NATS service announcement."""
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, cloning_provider, nats_client
+
+    logger.info("Starting Flute Gateway...")
+
+    # Get service configuration for announcement
+    port = int(os.getenv("FLUTE_HTTP_PORT", "8055"))
+    hostname = os.getenv("HOSTNAME", socket.gethostname())
+    slug = os.getenv("SERVICE_SLUG", "flute-gateway")
+    name = os.getenv("SERVICE_NAME", "PMOVES Flute Gateway")
+    url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
+    health_check = f"{url}/healthz"
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     # Validate critical environment variables
     if not SUPABASE_KEY:
         logger.error("SUPABASE_SERVICE_ROLE_KEY is not set")
@@ -279,6 +331,27 @@ async def lifespan(app: FastAPI):
         import nats
         nats_client = await nats.connect(NATS_URL)
         logger.info("Connected to NATS at %s", NATS_URL)
+<<<<<<< HEAD
+=======
+
+        # Announce service on NATS after connection is established
+        if NATS_ANNOUNCE_AVAILABLE:
+            try:
+                await announce_service(
+                    nats_url=NATS_URL,
+                    slug=slug,
+                    name=name,
+                    url=url,
+                    health_check=health_check,
+                    tier=ServiceTier.MEDIA,
+                    port=port,
+                    metadata={"version": "0.1.0", "publishes": ["tokenism.geometry.event.v1"]},
+                    retry=True,
+                )
+                logger.info("NATS service announcement published: %s at %s", slug, url)
+            except Exception as e:
+                logger.warning("Failed to publish NATS service announcement: %s", e)
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     except Exception as e:
         logger.warning("NATS connection failed: %s (continuing without NATS)", e)
         nats_client = None

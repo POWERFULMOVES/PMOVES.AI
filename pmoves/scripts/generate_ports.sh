@@ -68,6 +68,10 @@ PORTS[deepresearch]=8098
 PORTS[supaserch]=8099
 PORTS[pmoves-yt]=8077
 PORTS[channel-monitor]=8097
+<<<<<<< HEAD
+=======
+PORTS[pdf-ingest]=8092
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 PORTS[notebook-sync]=8095
 PORTS[retrieval-eval]=8090
 PORTS[session-context-worker]=8100

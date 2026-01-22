@@ -1,3 +1,19 @@
+<<<<<<< HEAD
+=======
+/**
+ * PMOVES Presign Service Client
+ *
+ * Generates short-lived, presigned URLs for secure S3/MinIO access.
+ *
+ * Service URL resolution via PMOVES service discovery:
+ * 1. PRESIGN_SHARED_SECRET / NEXT_PUBLIC_PRESIGN_URL environment variables
+ * 2. Service catalog (Supabase) via service registry
+ * 3. Docker DNS fallback (presign:8088)
+ */
+
+import { getServiceUrl } from './serviceDiscovery';
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 export type PresignMethod = 'put' | 'get' | 'post';
 
 export type PresignOptions = {
@@ -15,6 +31,7 @@ export type PresignResult = {
   fields?: Record<string, string>;
 };
 
+<<<<<<< HEAD
 function resolveServiceBase(): string {
   const base =
     process.env.PRESIGN_SERVICE_URL ||
@@ -22,6 +39,33 @@ function resolveServiceBase(): string {
     process.env.NEXT_PUBLIC_PRESIGN_URL ||
     'http://localhost:8088';
   return base.replace(/\/$/, '');
+=======
+/**
+ * Resolves Presign service URL using PMOVES service discovery.
+ *
+ * Resolution priority:
+ * 1. NEXT_PUBLIC_PRESIGN_URL environment variable (explicit override)
+ * 2. Service catalog (Supabase) via service registry
+ * 3. Docker DNS fallback (presign:8088)
+ */
+async function resolveServiceBase(): Promise<string> {
+  // Check environment variable first
+  const envUrl =
+    process.env.PRESIGN_SERVICE_URL ||
+    process.env.PRESIGN_BASE_URL ||
+    process.env.NEXT_PUBLIC_PRESIGN_URL;
+
+  if (envUrl) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  // Use service discovery
+  return getServiceUrl({
+    slug: 'presign',
+    defaultPort: 8088,
+    envVar: 'NEXT_PUBLIC_PRESIGN_URL',
+  });
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 }
 
 function buildEndpoint(method: PresignMethod): string {
@@ -38,7 +82,11 @@ function buildEndpoint(method: PresignMethod): string {
 
 export async function callPresignService(options: PresignOptions): Promise<PresignResult> {
   const { bucket, key, contentType, expires, method = 'put' } = options;
+<<<<<<< HEAD
   const base = resolveServiceBase();
+=======
+  const base = await resolveServiceBase();
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
   const endpoint = `${base}${buildEndpoint(method)}`;
   const headers: Record<string, string> = {
     'content-type': 'application/json',

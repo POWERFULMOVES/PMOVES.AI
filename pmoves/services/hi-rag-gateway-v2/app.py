@@ -941,14 +941,24 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         if "apikey=" not in full_url:
             sep = "&" if "?" in full_url else "?"
             full_url = f"{full_url}{sep}apikey={api_key}&vsn=1.0.0"
+<<<<<<< HEAD
         # Note: extra_headers not supported with uvloop; pass Authorization via URL if needed
         # The apikey parameter above provides authentication for Supabase realtime
+=======
+        headers = {}
+        if SUPABASE_REALTIME_KEY:
+            headers["Authorization"] = f"Bearer {SUPABASE_REALTIME_KEY}"
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
         try:
             async with websockets.connect(
                 full_url,
                 ping_interval=20,
                 ping_timeout=20,
                 max_queue=None,
+<<<<<<< HEAD
+=======
+                extra_headers=headers or None,
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
             ) as ws:
                 join_payload = {
                     "topic": "realtime:geometry.cgp.v1",

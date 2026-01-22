@@ -1,0 +1,122 @@
+{
+  "title": "Archon",
+  "description": "Supabase-driven agent service with knowledge management and MCP tools",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "archon",
+  "tags": ["archon", "knowledge", "mcp", "agent"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Service Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Service Status",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "up{job=\"archon\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Requests",
+      "gridPos": { "x": 4, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(archon_requests_total)", "legendFormat": "Requests" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Knowledge Ops",
+      "gridPos": { "x": 9, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(archon_knowledge_ops_total)", "legendFormat": "Ops" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "purple", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "MCP Tool Calls",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(archon_mcp_tool_calls_total)", "legendFormat": "MCP Calls" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "orange", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "P95 Latency",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(archon_request_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "s", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } } }
+    },
+    {
+      "type": "row",
+      "title": "Request Metrics",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate by Endpoint",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(rate(archon_requests_total[5m])) by (endpoint)", "legendFormat": "{{endpoint}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Latency Percentiles",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(archon_request_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(archon_request_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(archon_request_latency_seconds_bucket[5m])) by (le))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "type": "row",
+      "title": "Knowledge Operations",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Knowledge Ops by Operation",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(rate(archon_knowledge_ops_total[5m])) by (operation)", "legendFormat": "{{operation}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Knowledge Ops by Status",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(rate(archon_knowledge_ops_total[5m])) by (status)", "legendFormat": "{{status}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "row",
+      "title": "MCP Tools",
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "MCP Tool Calls by Tool",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 },
+      "targets": [{ "expr": "sum(rate(archon_mcp_tool_calls_total[5m])) by (tool)", "legendFormat": "{{tool}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" }
+}

@@ -1,4 +1,13 @@
+<<<<<<< HEAD
 import os, time, hmac, hashlib
+=======
+import os
+import socket
+import time
+import hmac
+import hashlib
+from contextlib import asynccontextmanager
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 from typing import Optional, List, Dict
 from fastapi import FastAPI, HTTPException, Header, Query
 from pydantic import BaseModel, Field
@@ -6,6 +15,16 @@ import boto3
 from botocore.config import Config
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
+<<<<<<< HEAD
+=======
+
+# NATS service announcement integration
+try:
+    from services.common.nats_service_listener import announce_service, ServiceTier
+    NATS_ANNOUNCE_AVAILABLE = True
+except ImportError:
+    NATS_ANNOUNCE_AVAILABLE = False
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 def get_s3():
     endpoint = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT")
@@ -31,6 +50,46 @@ ALLOWED_BUCKETS = set([b.strip() for b in os.environ.get("ALLOWED_BUCKETS","").s
 SHARED_SECRET = os.environ.get("PRESIGN_SHARED_SECRET","")
 
 # ─────────────────────────────────────────────────────────────────────────────
+<<<<<<< HEAD
+=======
+# Lifespan with NATS service announcement
+# ─────────────────────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage Presign service lifespan with NATS service announcement."""
+    # Get service configuration for announcement
+    port = int(os.getenv("PORT", "8088"))
+    hostname = os.getenv("HOSTNAME", socket.gethostname())
+    slug = os.getenv("SERVICE_SLUG", "presign")
+    name = os.getenv("SERVICE_NAME", "PMOVES Presign Service")
+    url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
+    health_check = f"{url}/healthz"
+
+    # Announce service on NATS
+    if NATS_ANNOUNCE_AVAILABLE:
+        try:
+            await announce_service(
+                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+                slug=slug,
+                name=name,
+                url=url,
+                health_check=health_check,
+                tier=ServiceTier.API,
+                port=port,
+                metadata={"version": "1.0.0"},
+                retry=True,
+            )
+            logger = logging.getLogger(__name__)
+            logger.info(f"NATS service announcement published: {slug} at {url}")
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to publish NATS service announcement: %s", e)
+
+    yield
+
+# ─────────────────────────────────────────────────────────────────────────────
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 # Prometheus Metrics
 # ─────────────────────────────────────────────────────────────────────────────
 PRESIGN_REQUESTS = Counter(
@@ -80,7 +139,7 @@ class PresignPostReq(BaseModel):
     content_type: Optional[str] = None
     acl: Optional[str] = None
 
-app = FastAPI(title="PMOVES Presign", version="1.0.0")
+app = FastAPI(title="PMOVES Presign", version="1.0.0", lifespan=lifespan)
 
 @app.get("/healthz")
 def healthz():

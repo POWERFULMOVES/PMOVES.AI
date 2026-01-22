@@ -3,12 +3,76 @@
  *
  * Hybrid RAG combining Qdrant (vectors) + Neo4j (graph) + Meilisearch (full-text)
  *
+<<<<<<< HEAD
+=======
+ * Service URL resolution via PMOVES service discovery:
+ * 1. NEXT_PUBLIC_HIRAG_URL environment variable (explicit override)
+ * 2. Service catalog (Supabase) via service registry
+ * 3. Docker DNS fallback (hi-rag-gateway-v2:8086)
+ *
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
  * @module api/hirag
  */
 
 import { logError, logForDebugging, Result, ok, err, getErrorMessage } from '../errorUtils';
 import { ErrorIds } from '../constants/errorIds';
 
+<<<<<<< HEAD
+=======
+// Service discovery integration
+import { getServiceUrl, clearServiceCache } from '../serviceDiscovery';
+
+/**
+ * Service configuration for Hi-RAG v2.
+ */
+const HIRAG_SERVICE_CONFIG = {
+  slug: 'hirag-v2',
+  defaultPort: 8086,
+  envVar: 'NEXT_PUBLIC_HIRAG_URL',
+} as const;
+
+const HIRAG_TIMEOUT = 30000; // 30 seconds
+
+/**
+ * Cached service URL to avoid repeated lookups.
+ * Cache is cleared when service becomes unavailable.
+ */
+let cachedHiragUrl: string | null = null;
+
+/**
+ * Resolves Hi-RAG base URL using PMOVES service discovery.
+ *
+ * Resolution priority:
+ * 1. NEXT_PUBLIC_HIRAG_URL environment variable (explicit override)
+ * 2. Service catalog (Supabase) via service registry
+ * 3. Docker DNS fallback (hi-rag-gateway-v2:8086)
+ *
+ * @returns Resolved Hi-RAG base URL
+ */
+async function getHiragBaseUrl(): Promise<string> {
+  // Check cache first
+  if (cachedHiragUrl) {
+    return cachedHiragUrl;
+  }
+
+  // Use service discovery
+  const url = await getServiceUrl(HIRAG_SERVICE_CONFIG);
+
+  // Cache successful resolution
+  cachedHiragUrl = url;
+  return url;
+}
+
+/**
+ * Clear cached Hi-RAG service URL.
+ * Call this if the service becomes unavailable and needs to be re-resolved.
+ */
+export function clearHiragCache(): void {
+  cachedHiragUrl = null;
+  clearServiceCache(HIRAG_SERVICE_CONFIG.slug);
+}
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 /**
  * Content source types for search results.
  */
@@ -83,6 +147,7 @@ export interface HiragSearchOptions {
 }
 
 /**
+<<<<<<< HEAD
  * Default configuration for Hi-RAG API.
  */
 const HIRAG_DEFAULT_URL = 'http://localhost:8086';
@@ -100,6 +165,8 @@ function getHiragBaseUrl(): string {
 }
 
 /**
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
  * Executes a hybrid search query against Hi-RAG v2.
  *
  * @param query - Search query string
@@ -146,7 +213,12 @@ export async function hiragQuery(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), HIRAG_TIMEOUT);
 
+<<<<<<< HEAD
     const response = await fetch(`${getHiragBaseUrl()}/hirag/query`, {
+=======
+    const baseUrl = await getHiragBaseUrl();
+    const response = await fetch(`${baseUrl}/hirag/query`, {
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -196,7 +268,12 @@ export async function hiragHealth(): Promise<
   Result<{ healthy: boolean; version?: string }, string>
 > {
   try {
+<<<<<<< HEAD
     const response = await fetch(`${getHiragBaseUrl()}/healthz`, {
+=======
+    const baseUrl = await getHiragBaseUrl();
+    const response = await fetch(`${baseUrl}/healthz`, {
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
       signal: AbortSignal.timeout(5000),
     });
 

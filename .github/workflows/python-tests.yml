@@ -26,6 +26,13 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+<<<<<<< HEAD
+=======
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     strategy:
       fail-fast: false
       matrix:

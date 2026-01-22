@@ -24,6 +24,15 @@ const mockItems: IngestionQueueItem[] = [
     approved_by: null,
     approved_at: null,
     rejection_reason: null,
+<<<<<<< HEAD
+=======
+    processor_id: null,
+    processing_started_at: null,
+    processed_at: null,
+    error_message: null,
+    retry_count: 0,
+    output_refs: {},
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     created_at: '2025-01-15T10:00:00Z',
     updated_at: '2025-01-15T10:00:00Z',
   },
@@ -43,6 +52,15 @@ const mockItems: IngestionQueueItem[] = [
     approved_by: null,
     approved_at: null,
     rejection_reason: null,
+<<<<<<< HEAD
+=======
+    processor_id: null,
+    processing_started_at: null,
+    processed_at: null,
+    error_message: null,
+    retry_count: 0,
+    output_refs: {},
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     created_at: '2025-01-15T09:30:00Z',
     updated_at: '2025-01-15T09:30:00Z',
   },
@@ -62,6 +80,15 @@ const mockItems: IngestionQueueItem[] = [
     approved_by: null,
     approved_at: null,
     rejection_reason: null,
+<<<<<<< HEAD
+=======
+    processor_id: null,
+    processing_started_at: null,
+    processed_at: null,
+    error_message: null,
+    retry_count: 0,
+    output_refs: {},
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     created_at: '2025-01-14T14:00:00Z',
     updated_at: '2025-01-14T14:00:00Z',
   },
@@ -81,6 +108,15 @@ const mockItems: IngestionQueueItem[] = [
     approved_by: null,
     approved_at: null,
     rejection_reason: null,
+<<<<<<< HEAD
+=======
+    processor_id: null,
+    processing_started_at: null,
+    processed_at: null,
+    error_message: null,
+    retry_count: 0,
+    output_refs: {},
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     created_at: '2025-01-14T10:00:00Z',
     updated_at: '2025-01-14T10:00:00Z',
   },
@@ -100,6 +136,15 @@ const mockItems: IngestionQueueItem[] = [
     approved_by: null,
     approved_at: null,
     rejection_reason: null,
+<<<<<<< HEAD
+=======
+    processor_id: null,
+    processing_started_at: null,
+    processed_at: null,
+    error_message: null,
+    retry_count: 0,
+    output_refs: {},
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     created_at: '2025-01-14T08:00:00Z',
     updated_at: '2025-01-14T08:00:00Z',
   },

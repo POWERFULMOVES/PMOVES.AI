@@ -16,13 +16,32 @@ Key Features:
 - Channel/playlist bulk ingestion with concurrency control
 - Event publishing via NATS message bus
 - Prometheus metrics and health monitoring
+<<<<<<< HEAD
+=======
+- Service discovery via PMOVES service catalog (Supabase)
+
+Service URL Resolution:
+    Service URLs are resolved via PMOVES service discovery with fallback chain:
+    1. Environment variable (e.g., HIRAG_URL for explicit override)
+    2. Service catalog (Supabase) via service registry
+    3. Docker DNS fallback (e.g., hi-rag-gateway-v2:8086)
+
+    Configured services:
+    - HIRAG_URL: Hi-RAG v2 knowledge retrieval (slug: hirag-v2, port 8086)
+    - FFW_URL: FFmpeg-Whisper transcription (slug: ffmpeg-whisper, port 8078)
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 Environment Variables:
     MINIO_ENDPOINT: MinIO/S3 endpoint for media storage
     SUPABASE_REST_URL: Supabase/PostgREST URL for metadata storage
     NATS_URL: NATS message broker URL
+<<<<<<< HEAD
     FFW_URL: FFmpeg-Whisper service URL for transcription
     HIRAG_URL: Hi-RAG Gateway v2 URL for knowledge indexing
+=======
+    FFW_URL: FFmpeg-Whisper service URL for transcription (optional, uses service discovery)
+    HIRAG_URL: Hi-RAG Gateway v2 URL for knowledge indexing (optional, uses service discovery)
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     YT_SUMMARY_PROVIDER: Summary provider (ollama|hf)
     YT_CONCURRENCY: Max concurrent downloads (default: 2)
     YT_PLAYLIST_MAX: Max items from playlist/channel (default: 50)
@@ -104,6 +123,50 @@ except Exception:  # pragma: no cover - fallback when module unavailable
     def clear_cache() -> None:
         return None
 
+<<<<<<< HEAD
+=======
+# Service discovery integration
+try:
+    from services.common.service_registry import get_service_url_sync
+    SERVICE_REGISTRY_AVAILABLE = True
+except ImportError:
+    SERVICE_REGISTRY_AVAILABLE = False
+
+    def get_service_url_sync(slug: str, *, default_port: int = 80) -> str:
+        """Fallback when service registry is not available."""
+        return f"http://{slug}:{default_port}"
+
+
+def _resolve_service_url(
+    env_var: str,
+    service_slug: str,
+    default_port: int,
+    docker_fallback: str,
+) -> str:
+    """Resolve service URL using PMOVES service discovery.
+
+    Resolution priority:
+    1. Environment variable (explicit override)
+    2. Service catalog (Supabase) via service registry
+    3. Docker DNS fallback (for containerized deployment)
+
+    Args:
+        env_var: Environment variable name to check first
+        service_slug: Service slug for service catalog lookup
+        default_port: Default port for service registry fallback
+        docker_fallback: Docker DNS fallback URL
+
+    Returns:
+        Resolved service URL
+    """
+    url = os.environ.get(env_var)
+    if url:
+        return url
+    if SERVICE_REGISTRY_AVAILABLE:
+        return get_service_url_sync(service_slug, default_port=default_port)
+    return docker_fallback
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
@@ -237,8 +300,13 @@ SUPA_SERVICE_KEY = (
 )
 NATS_URL = (os.environ.get("NATS_URL") or "").strip()
 YT_NATS_ENABLE = os.environ.get("YT_NATS_ENABLE", "false").lower() == "true"
+<<<<<<< HEAD
 FFW_URL = os.environ.get("FFW_URL","http://ffmpeg-whisper:8078")
 HIRAG_URL = os.environ.get("HIRAG_URL","http://hi-rag-gateway-v2:8086")
+=======
+FFW_URL = _resolve_service_url("FFW_URL", "ffmpeg-whisper", 8078, "http://ffmpeg-whisper:8078")
+HIRAG_URL = _resolve_service_url("HIRAG_URL", "hirag-v2", 8086, "http://hi-rag-gateway-v2:8086")
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 INVIDIOUS_BASE_URL = os.environ.get("INVIDIOUS_BASE_URL")
 
 CHANNEL_MONITOR_STATUS_URL = os.environ.get("CHANNEL_MONITOR_STATUS_URL")
@@ -3100,6 +3168,20 @@ def _upsert_chunks_to_hirag(
 
 
 def _geometry_url_candidates() -> List[str]:
+<<<<<<< HEAD
+=======
+    """Build list of candidate URLs for geometry/CHIT event submission.
+
+    Resolution priority:
+    1. HIRAG_URL, HIRAG_GPU_URL, HIRAG_CPU_URL environment variables
+    2. Service catalog (Supabase) via service registry for hirag-v2
+    3. Derive GPU/CPU variants from primary URL
+    4. Docker DNS and localhost fallbacks
+
+    Returns:
+        List of candidate URLs to try, in priority order.
+    """
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     candidates: List[str] = []
 
     def _push(url: Optional[str]) -> None:
@@ -3109,11 +3191,24 @@ def _geometry_url_candidates() -> List[str]:
         if cleaned and cleaned not in candidates:
             candidates.append(cleaned)
 
+<<<<<<< HEAD
+=======
+    # Environment variables (explicit override)
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     base = os.environ.get("HIRAG_URL")
     _push(base)
     _push(os.environ.get("HIRAG_GPU_URL"))
     _push(os.environ.get("HIRAG_CPU_URL"))
 
+<<<<<<< HEAD
+=======
+    # Service registry fallback (if no env var set)
+    if not base and SERVICE_REGISTRY_AVAILABLE:
+        _push(get_service_url_sync("hirag-v2", default_port=8086))
+        # Try GPU variant
+        _push(get_service_url_sync("hirag-v2-gpu", default_port=8087))
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     # Derive common fallbacks from the primary base URL (CPU ↔ GPU, port swap, host bridge).
     derived_hosts: List[str] = []
     if base:
@@ -3150,8 +3245,11 @@ def _geometry_url_candidates() -> List[str]:
     _push("http://hi-rag-gateway-v2:8086")
     _push("http://host.docker.internal:8087")
     _push("http://host.docker.internal:8086")
+<<<<<<< HEAD
     _push("http://localhost:8087")
     _push("http://localhost:8086")
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
     return candidates
 

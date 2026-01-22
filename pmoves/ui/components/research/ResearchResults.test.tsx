@@ -15,6 +15,10 @@ const mockClipboard = {
 Object.assign(navigator, { clipboard: mockClipboard });
 
 const mockResult: ResearchResult = {
+<<<<<<< HEAD
+=======
+  taskId: 'research-task-123',
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
   summary: 'This is a comprehensive summary of the research findings about quantum computing.',
   notes: [
     'Key point 1: Quantum bits can exist in superposition',
@@ -38,6 +42,10 @@ const mockResult: ResearchResult = {
 };
 
 const emptyResult: ResearchResult = {
+<<<<<<< HEAD
+=======
+  taskId: 'research-task-empty',
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
   summary: 'Minimal result',
   notes: [],
   sources: [],

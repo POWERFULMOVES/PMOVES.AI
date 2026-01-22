@@ -22,6 +22,10 @@ import asyncio
 import json
 import os
 import logging
+<<<<<<< HEAD
+=======
+from contextlib import asynccontextmanager
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -82,11 +86,46 @@ async def get_api_key(api_key_header: str = Security(api_key_header)) -> Optiona
 
     return None
 
+<<<<<<< HEAD
+=======
+
+# ============================================================================
+# Lifespan Management
+# ============================================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    # Startup
+    logger.info("Gateway Agent starting up...")
+    logger.info(f"Agent Zero URL: {AGENT_ZERO_URL}")
+    logger.info(f"Cipher URL: {CIPHER_URL}")
+    logger.info(f"TensorZero URL: {TENSORZERO_URL}")
+
+    # Initial tool discovery
+    await tool_registry.discover_tools(force_refresh=True)
+
+    # Log available secrets count
+    secrets = SecretManager.get_all_credentials()
+    logger.info(f"Loaded {len(secrets)} service credentials from environment")
+
+    yield
+
+    # Shutdown
+    logger.info("Gateway Agent shutting down...")
+
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 # FastAPI app
 app = FastAPI(
     title="PMOVES Gateway Agent",
     description="Orchestrates 100+ MCP tools with Cipher memory integration",
+<<<<<<< HEAD
     version="1.0.0"
+=======
+    version="1.0.0",
+    lifespan=lifespan
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 )
 
 
@@ -537,6 +576,7 @@ async def list_secrets():
 # Main Entry Point
 # ============================================================================
 
+<<<<<<< HEAD
 @app.on_event("startup")
 async def startup_event():
     """Initialize tool registry on startup"""
@@ -559,6 +599,8 @@ async def shutdown_event():
     logger.info("Gateway Agent shutting down...")
 
 
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 if __name__ == "__main__":
     uvicorn.run(
         "app:app",

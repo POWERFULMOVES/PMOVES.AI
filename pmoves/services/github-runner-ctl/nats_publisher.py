@@ -8,7 +8,10 @@ with correlation IDs, versioning, and source attribution.
 import asyncio
 import json
 import logging
+<<<<<<< HEAD
 import re
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 import uuid
 import datetime
 from datetime import timezone
@@ -54,6 +57,7 @@ def create_event_envelope(
 
 
 class NATSPublisher:
+<<<<<<< HEAD
     """NATS event publisher with connection management and offline buffering."""
 
     # Maximum number of events to buffer while disconnected
@@ -66,10 +70,16 @@ class NATSPublisher:
         nats_user: Optional[str] = None,
         nats_pass: Optional[str] = None,
     ):
+=======
+    """NATS event publisher with connection management."""
+
+    def __init__(self, nats_url: str):
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
         """Initialize NATS publisher.
 
         Args:
             nats_url: NATS connection URL (e.g., "nats://nats:4222")
+<<<<<<< HEAD
             max_buffer_size: Maximum events to buffer while disconnected
             nats_user: Optional NATS username (overrides URL if provided)
             nats_pass: Optional NATS password (overrides URL if provided)
@@ -90,6 +100,12 @@ class NATSPublisher:
         self._connected = False
         self._max_buffer_size = max_buffer_size
         self._event_buffer: list[Dict[str, Any]] = []
+=======
+        """
+        self.nats_url = nats_url
+        self._nc: Optional[NATS] = None
+        self._connected = False
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
     @property
     def is_connected(self) -> bool:
@@ -114,12 +130,15 @@ class NATSPublisher:
                 await self._nc.connect(self.nats_url)
                 self._connected = True
                 logger.info(f"Connected to NATS at {self.nats_url}")
+<<<<<<< HEAD
 
                 # Flush buffered events after successful reconnection
                 if self._event_buffer:
                     logger.info(f"Flushing {len(self._event_buffer)} buffered events...")
                     await self._flush_buffer()
 
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
                 return True
             except Exception as e:
                 logger.warning(f"NATS connection failed: {e}")
@@ -159,11 +178,25 @@ class NATSPublisher:
             parent_id: Optional parent event ID for causality
 
         Returns:
+<<<<<<< HEAD
             True if published or queued successfully, False otherwise
         """
         if not self.is_connected:
             # Queue event for later delivery instead of dropping
             return await self._queue_event(subject, payload, source, correlation_id, parent_id)
+=======
+            True if published successfully, False otherwise
+        """
+        if not self.is_connected:
+            # Log event details when dropping due to no connection
+            payload_summary = str(payload)[:200] if payload else 'empty'
+            logger.warning(
+                f"NATS not connected, dropping event: {subject} | "
+                f"correlation_id={correlation_id} | payload_preview={payload_summary}"
+            )
+            NATS_EVENTS_FAILED.labels(subject=subject, reason="not_connected").inc()
+            return False
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
         try:
             envelope = create_event_envelope(
@@ -271,6 +304,7 @@ class NATSPublisher:
             **(data or {})
         }
         return await self.publish(subject, payload)
+<<<<<<< HEAD
 
     async def _queue_event(
         self,
@@ -355,3 +389,5 @@ class NATSPublisher:
     def buffer_size(self) -> int:
         """Return the current size of the event buffer."""
         return len(self._event_buffer)
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean

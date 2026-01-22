@@ -7,7 +7,15 @@ jsonschema
 PyYAML
 
 # Metrics
+<<<<<<< HEAD
 prometheus-client==0.20.0
+=======
+<<<<<<< HEAD
+prometheus-client==0.20.0
+=======
+prometheus-client==0.24.1
+>>>>>>> origin/main
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 # Testing
 pytest

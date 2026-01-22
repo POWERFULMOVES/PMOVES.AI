@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # YAML anchors for tier-based env file loading
 # These reference the tier env files from parent docker-compose.yml
 x-env-tier-data: &env-tier-data
@@ -14,10 +15,13 @@ x-env-tier-media: &env-tier-media
   env_file:
     - path: env.tier-media
       required: false
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
+<<<<<<< HEAD
     container_name: cataclysm-wger
     restart: unless-stopped
     <<: *env-tier-worker
@@ -25,6 +29,13 @@ services:
       cataclysm:
         aliases:
           - cataclysm-wger
+=======
+    container_name: pmoves-wger
+    restart: unless-stopped
+    networks:
+      pmoves_app:
+        aliases:
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
           - pmoves-wger
     environment:
       DJANGO_DEBUG: "${WGER_DJANGO_DEBUG:-False}"
@@ -32,22 +43,35 @@ services:
       DJANGO_CLEAR_STATIC_FIRST: "${WGER_CLEAR_STATIC_FIRST:-True}"
       TIME_ZONE: "${WGER_TIME_ZONE:-America/New_York}"
       SITE_URL: "${WGER_SITE_URL:-http://localhost:8000}"
+<<<<<<< HEAD
       FROM_EMAIL: "${WGER_FROM_EMAIL:-PMOVES Health Coach <ops@cataclysmstudios.com>}"
       DJANGO_ADMINS: "${WGER_DJANGO_ADMINS:-PMOVES Ops <ops@cataclysmstudios.com>}"
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     volumes:
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
 
   wger-nginx:
     image: ${WGER_NGINX_IMAGE:-nginx:1.27-alpine}
+<<<<<<< HEAD
     container_name: cataclysm-wger-nginx
+=======
+    container_name: pmoves-wger-nginx
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     restart: unless-stopped
     depends_on:
       - wger
     networks:
+<<<<<<< HEAD
       cataclysm:
         aliases:
           - cataclysm-wger-nginx
+=======
+      pmoves_app:
+        aliases:
+          - pmoves-wger-nginx
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     ports:
       - "${WGER_HOST_PORT:-8000}:80"
     volumes:
@@ -57,6 +81,7 @@ services:
 
   firefly:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
+<<<<<<< HEAD
     container_name: cataclysm-firefly
     restart: unless-stopped
     <<: *env-tier-worker
@@ -64,23 +89,38 @@ services:
       cataclysm:
         aliases:
           - cataclysm-firefly
+=======
+    container_name: pmoves-firefly
+    restart: unless-stopped
+    networks:
+      pmoves_app:
+        aliases:
+          - pmoves-firefly
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     environment:
       # Keep secrets sourced from env files / runtime secrets. Do not inline defaults.
       APP_KEY: ${FIREFLY_APP_KEY}
       APP_ENV: ${FIREFLY_APP_ENV:-production}
+<<<<<<< HEAD
       SITE_OWNER: ${FIREFLY_SITE_OWNER:-ops@cataclysmstudios.com}
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
       DB_CONNECTION: ${FIREFLY_DB_CONNECTION:-sqlite}
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
     ports:
+<<<<<<< HEAD
       - "${FIREFLY_PORT:-8080}:8080"
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
 
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
+<<<<<<< HEAD
     container_name: cataclysm-open-notebook-surrealdb
     <<: *env-tier-data
     command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} rocksdb:/mydata/mydatabase.db
@@ -90,6 +130,15 @@ services:
       cataclysm:
         aliases:
           - cataclysm-open-notebook-surrealdb
+=======
+    container_name: pmoves-open-notebook-surrealdb
+    restart: unless-stopped
+    user: "0:0"
+    networks:
+      pmoves_app:
+        aliases:
+          - pmoves-open-notebook-surrealdb
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
           - open-notebook-surrealdb-ext
     volumes:
       - ./data/open-notebook/surreal_data:/mydata
@@ -97,6 +146,7 @@ services:
   open-notebook-ext:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
+<<<<<<< HEAD
     container_name: cataclysm-open-notebook
     restart: unless-stopped
     <<: *env-tier-worker
@@ -109,10 +159,18 @@ services:
       pmoves:
         aliases:
           - cataclysm-open-notebook
+=======
+    depends_on:
+      - open-notebook-surrealdb-ext
+    networks:
+      pmoves_app:
+        aliases:
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
     ports:
+<<<<<<< HEAD
       - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"    # UI
       - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"  # API
     volumes:
@@ -127,6 +185,17 @@ services:
       cataclysm:
         aliases:
           - cataclysm-jellyfin
+=======
+
+  jellyfin-ext:
+    image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
+    container_name: pmoves-jellyfin
+    restart: unless-stopped
+    networks:
+      pmoves_app:
+        aliases:
+          - pmoves-jellyfin
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
@@ -139,12 +208,17 @@ services:
       - ./data/jellyfin/media:/media
 
 networks:
+<<<<<<< HEAD
   cataclysm:
     external: true
     name: cataclysm-net
   pmoves:
     external: true
     name: pmoves-net
+=======
+  pmoves_app:
+    external: true
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 volumes:
   firefly-storage:

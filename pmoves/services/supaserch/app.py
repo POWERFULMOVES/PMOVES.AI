@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+<<<<<<< HEAD
 """SupaSerch multimodal holographic deep research orchestrator.
 
 SupaSerch coordinates complex research queries across multiple PMOVES services:
@@ -18,6 +19,8 @@ Environment Variables:
     HIRAG_URL: Hi-RAG gateway URL (default: http://hi-rag-gateway-v2:8086)
 """
 
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 import asyncio
 import contextlib
 import json

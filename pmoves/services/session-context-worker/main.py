@@ -12,6 +12,10 @@ import logging
 import os
 import sys
 import time
+<<<<<<< HEAD
+=======
+from contextlib import asynccontextmanager
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -64,8 +68,45 @@ KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
 
+<<<<<<< HEAD
 # FastAPI app for health endpoint
 app = FastAPI(title="Session Context Worker", version="0.1.0")
+=======
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    global _nats_loop_task, _nc
+
+    # Startup
+    if _nats_loop_task is None or _nats_loop_task.done():
+        logger.info("Starting NATS resilience loop")
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+
+    yield
+
+    # Shutdown
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        try:
+            await _nats_loop_task
+        except Exception:
+            pass
+        _nats_loop_task = None
+
+    if _nc:
+        try:
+            await _nc.close()
+        except Exception:
+            pass
+        _nc = None
+
+    logger.info("Session Context Worker shut down")
+
+
+# FastAPI app for health endpoint
+app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 
 def _extract_searchable_content(context: Dict[str, Any]) -> str:
@@ -414,6 +455,7 @@ async def metrics():
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
+<<<<<<< HEAD
 @app.on_event("startup")
 async def startup():
     """Start NATS connection loop on app startup."""
@@ -443,6 +485,8 @@ async def shutdown():
         except Exception:
             pass
         _nc = None
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 
 if __name__ == "__main__":

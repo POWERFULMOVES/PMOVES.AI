@@ -13,9 +13,27 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from fastapi import Body, Depends, FastAPI, HTTPException
+<<<<<<< HEAD
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel, Field, HttpUrl
 
+=======
+<<<<<<< HEAD
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+=======
+>>>>>>> origin/main
+from nats.aio.client import Client as NATS
+from pydantic import BaseModel, Field, HttpUrl
+
+# NATS service announcement integration
+try:
+    from services.common.nats_service_listener import announce_service, ServiceTier
+    NATS_ANNOUNCE_AVAILABLE = True
+except ImportError:
+    NATS_ANNOUNCE_AVAILABLE = False
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 try:
     _services_root = Path(__file__).resolve().parents[2]
     if str(_services_root) not in sys.path:
@@ -71,10 +89,85 @@ def _ensure_supabase_env() -> None:
 _ensure_supabase_env()
 
 
+<<<<<<< HEAD
 def _tensorzero_openai_base() -> str:
     base = (os.environ.get("TENSORZERO_BASE_URL") or "").strip()
     if not base:
         return ""
+=======
+async def _check_tensorzero_connectivity(base_url: str) -> bool:
+    """Check if TensorZero is reachable at the given URL.
+
+    Args:
+        base_url: The OpenAI-compatible base URL to check.
+
+    Returns:
+        True if reachable, False otherwise.
+    """
+    try:
+        import httpx
+        # Test the /models endpoint which all TensorZero deployments expose
+        test_url = base_url.replace("/openai/v1", "").replace("/openai", "")
+        test_url = f"{test_url.rstrip('/')}/models"
+
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            response = await client.get(test_url)
+            return response.status_code == 200
+    except Exception:
+        return False
+
+
+def _check_tensorzero_sync(base_url: str) -> bool:
+    """Synchronous wrapper for TensorZero connectivity check.
+
+    Args:
+        base_url: The OpenAI-compatible base URL to check.
+
+    Returns:
+        True if reachable, False otherwise.
+    """
+    try:
+        # Run async check in new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_check_tensorzero_connectivity(base_url))
+        finally:
+            loop.close()
+    except Exception:
+        return False
+
+
+def _tensorzero_openai_base() -> str:
+    """Return OpenAI-compatible base URL from TensorZero settings.
+
+    Priority for hybrid standalone mode:
+      1) TENSORZERO_BASE_URL (explicit, backward compatible)
+      2) TENSORZERO_URL (parent PMOVES.AI TensorZero)
+      3) host.docker.internal:3030 (hybrid mode default)
+
+    Returns:
+        OpenAI-compatible base URL or empty string if not configured.
+    """
+    # First, check explicit TENSORZERO_BASE_URL (backward compatibility)
+    base = (os.environ.get("TENSORZERO_BASE_URL") or "").strip()
+    if not base:
+        # Check for parent PMOVES.AI TensorZero in hybrid standalone mode
+        parent_tensorzero = os.environ.get("TENSORZERO_URL")
+        if parent_tensorzero:
+            base = parent_tensorzero
+        else:
+            # Fallback to host.docker.internal for hybrid mode
+            # This allows submodule to reach parent PMOVES.AI TensorZero
+            docked_mode = os.environ.get("DOCKED_MODE", "false").lower() == "true"
+            if not docked_mode:
+                # In standalone mode, try parent via host.docker.internal
+                base = "http://host.docker.internal:3030"
+
+    if not base:
+        return ""
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     base = base.rstrip("/")
     if base.endswith("/openai/v1"):
         return base
@@ -84,6 +177,14 @@ def _tensorzero_openai_base() -> str:
 
 
 def _sync_openai_compat_env() -> None:
+<<<<<<< HEAD
+=======
+    """Sync TensorZero settings to OpenAI environment variables.
+
+    In hybrid standalone mode, verifies connectivity to parent TensorZero
+    via host.docker.internal and falls back gracefully if unreachable.
+    """
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     resolved_base = ""
     for candidate in (
         os.environ.get("OPENAI_COMPATIBLE_BASE_URL"),
@@ -96,6 +197,23 @@ def _sync_openai_compat_env() -> None:
             break
 
     if resolved_base:
+<<<<<<< HEAD
+=======
+        # In hybrid mode, verify connectivity to parent TensorZero
+        if "host.docker.internal" in resolved_base:
+            if _check_tensorzero_sync(resolved_base):
+                logger.info("TensorZero reachable at %s (hybrid mode)", resolved_base)
+            else:
+                logger.warning(
+                    "TensorZero unreachable at %s (hybrid mode). "
+                    "Ensure PMOVES.AI is running or set TENSORZERO_URL explicitly.",
+                    resolved_base
+                )
+                # Don't set unreachable base - allow fallback to direct OpenAI
+                resolved_base = ""
+
+    if resolved_base:
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
         targets = (
             "OPENAI_COMPATIBLE_BASE_URL",
             "OPENAI_API_BASE",
@@ -237,6 +355,40 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Archon (PMOVES v5)", lifespan=lifespan)
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+# Mount Archon UI static files if available
+# This fixes the "white screen" issue where assets at /assets/ were not accessible
+ARCHON_UI_STATIC_DIR = os.environ.get("ARCHON_UI_STATIC_DIR", "/app/static/archon-ui")
+if Path(ARCHON_UI_STATIC_DIR).exists():
+    try:
+        # Mount assets at /assets/ for Vite-built SPA (uses root-relative paths)
+        app.mount("/assets", StaticFiles(directory=str(Path(ARCHON_UI_STATIC_DIR) / "assets")), name="ui-assets")
+        # Mount UI at /ui/ for direct access
+        app.mount("/ui", StaticFiles(directory=ARCHON_UI_STATIC_DIR, html=True), name="ui")
+        logger.info("Archon UI static files mounted at /ui -> %s", ARCHON_UI_STATIC_DIR)
+        logger.info("Archon UI assets mounted at /assets -> %s/assets", ARCHON_UI_STATIC_DIR)
+    except Exception as e:
+        logger.warning("Failed to mount Archon UI static files: %s", e)
+
+# Root path handler - serves UI if available, otherwise API status
+@app.get("/", include_in_schema=False)
+async def serve_ui_root():
+    """Serve the Archon UI index.html at root path, or API status if UI not available."""
+    ui_index = Path(ARCHON_UI_STATIC_DIR) / "index.html"
+    if ui_index.exists():
+        return FileResponse(str(ui_index))
+    return {
+        "status": "ok",
+        "service": "archon",
+        "message": "Archon API running. UI not available - check ARCHON_UI_STATIC_DIR",
+        "ui_path": ARCHON_UI_STATIC_DIR,
+    }
+
+=======
+>>>>>>> origin/main
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
 def get_archon_service() -> ArchonService:
     service = getattr(app.state, "service", None)
@@ -1008,6 +1160,35 @@ SUPERVISOR = ArchonServiceSupervisor()
 
 @asynccontextmanager
 async def _supervisor_lifespan(app: FastAPI):
+<<<<<<< HEAD
+=======
+    # Get service configuration for announcement
+    port = int(ENV_PORTS["server_port"])
+    hostname = os.getenv("HOSTNAME", socket.gethostname())
+    slug = os.getenv("SERVICE_SLUG", "archon")
+    name = os.getenv("SERVICE_NAME", "PMOVES Archon")
+    url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
+    health_check = f"{url}/healthz"
+
+    # Announce service on NATS
+    if NATS_ANNOUNCE_AVAILABLE:
+        try:
+            await announce_service(
+                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+                slug=slug,
+                name=name,
+                url=url,
+                health_check=health_check,
+                tier=ServiceTier.AGENT,
+                port=port,
+                metadata={"version": "5.0.0"},
+                retry=True,
+            )
+            LOGGER.info("NATS service announcement published: %s at %s", slug, url)
+        except Exception as e:
+            LOGGER.warning("Failed to publish NATS service announcement: %s", e)
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     await SUPERVISOR.start()
     try:
         yield

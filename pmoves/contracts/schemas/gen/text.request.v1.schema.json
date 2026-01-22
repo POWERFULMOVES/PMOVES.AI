@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gen Text Request",
+  "type": "object",
+  "required": [
+    "prompt"
+  ],
+  "properties": {
+    "prompt": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "max_tokens": {
+      "type": "integer"
+    },
+    "temperature": {
+      "type": "number"
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

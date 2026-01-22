@@ -5,6 +5,10 @@ import logging
 import os
 import shlex
 import signal
+<<<<<<< HEAD
+=======
+import socket
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +18,16 @@ import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
 from pydantic import BaseModel, Field
 
+<<<<<<< HEAD
+=======
+# NATS service announcement integration
+try:
+    from services.common.nats_service_listener import announce_service, ServiceTier
+    NATS_ANNOUNCE_AVAILABLE = True
+except ImportError:
+    NATS_ANNOUNCE_AVAILABLE = False
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 try:
     _services_root = Path(__file__).resolve().parents[2]
     if str(_services_root) not in sys.path:
@@ -616,6 +630,35 @@ async def lifespan(app: FastAPI):
     # Declare globals for assignment
     global _controller_task
 
+<<<<<<< HEAD
+=======
+    # Get service configuration for announcement
+    port = service_config.port
+    hostname = os.getenv("HOSTNAME", socket.gethostname())
+    slug = os.getenv("SERVICE_SLUG", "agent-zero")
+    name = os.getenv("SERVICE_NAME", "PMOVES Agent Zero")
+    url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
+    health_check = f"{url}/healthz"
+
+    # Announce service on NATS
+    if NATS_ANNOUNCE_AVAILABLE:
+        try:
+            await announce_service(
+                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+                slug=slug,
+                name=name,
+                url=url,
+                health_check=health_check,
+                tier=ServiceTier.AGENT,
+                port=port,
+                metadata={"version": "1.0.0", "publishes": ["geometry.*", "tokenism.*"]},
+                retry=True,
+            )
+            logger.info("NATS service announcement published: %s at %s", slug, url)
+        except Exception as e:
+            logger.warning("Failed to publish NATS service announcement: %s", e)
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     # Startup
     _warn_missing_notebook_config()
     await process_manager.start()

@@ -1,0 +1,29 @@
+# PMOVES Model Registry Service Dependencies
+# Python 3.11
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# HTTP Client
+httpx>=0.25.0
+
+# Database
+supabase>=2.0.0
+psycopg2-binary>=2.9.0
+
+# TOML Generation
+toml>=0.10.2
+
+# Validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# NATS
+asyncio-nats-client>=0.11.0
+
+# Observability
+prometheus-client>=0.19.0
+
+# Logging
+python-json-logger>=2.0.0
