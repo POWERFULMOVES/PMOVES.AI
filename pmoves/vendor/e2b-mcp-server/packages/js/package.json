@@ -1,0 +1,34 @@
+{
+  "name": "@e2b/mcp-server",
+  "version": "0.2.1",
+  "description": "A Model Context Protocol server",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/e2b-dev/mcp-server",
+    "directory": "packages/js"
+  },
+  "type": "module",
+  "bin": {
+    "@e2b/mcp-server": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "dependencies": {
+    "@e2b/code-interpreter": "^1.0.4",
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
+  }
+}

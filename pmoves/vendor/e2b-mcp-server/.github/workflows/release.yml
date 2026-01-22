@@ -1,0 +1,71 @@
+name: Release MCP Packages
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  is_release:
+    name: Is release?
+    runs-on: ubuntu-22.04
+    outputs:
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        id: pnpm-install
+        with:
+          version: 9.5
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "22.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Configure pnpm
+        run: |
+          pnpm config set auto-install-peers true
+          pnpm config set exclude-links-from-lockfile true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check if new version
+        id: version
+        run: |
+          IS_RELEASE=$(./.github/scripts/is_release.sh)
+          echo "release=$IS_RELEASE" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish
+    needs: [is_release]
+    if: (!cancelled()) && !contains(needs.*.result, 'failure') && needs.is_release.outputs.release == 'true'
+    uses: ./.github/workflows/publish_packages.yml
+    secrets: inherit
+
+  report-failure:
+    needs: [publish]
+    if: failure()
+    name: Release Failed - Slack Notification
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Release Failed - Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_COLOR: "#ff0000"
+          SLACK_MESSAGE: ":here-we-go-again: :bob-the-destroyer: We need :fix-parrot: ASAP :pray:"
+          SLACK_TITLE: Release Failed
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

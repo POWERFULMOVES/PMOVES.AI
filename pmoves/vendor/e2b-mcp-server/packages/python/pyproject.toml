@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "e2b-mcp-server"
+version = "0.1.0"
+description = "E2B MCP Server"
+authors = ["e2b <hello@e2b.dev>"]
+license = "Apache-2.0"
+readme = "README.md"
+homepage = "https://e2b.dev/"
+repository = "https://github.com/e2b-dev/mcp-server/tree/main/packages/python"
+packages = [{ include = "e2b_mcp_server" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+
+e2b-code-interpreter = "^1.0.2"
+mcp = "^1.0.0"
+pydantic = "^2.10.2"
+python-dotenv = "1.0.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/e2b-dev/mcp-server/issues"

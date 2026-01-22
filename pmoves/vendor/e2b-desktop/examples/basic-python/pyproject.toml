@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "basic-python"
+version = "0.1.0"
+description = ""
+authors = ["Vasek Mlejnsky <vasek.mlejnsky@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+e2b-desktop = "^1.2.0"
+pywebview = "^5.4"
+python-dotenv = "^1.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

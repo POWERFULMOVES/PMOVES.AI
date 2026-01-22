@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+@import './variables.css';
+@import './theme.css';
+
+@layer theme, base, components, utilities;
+
+@layer base {
+  * {
+    @apply border-border ring-ring;
+  }
+
+  body {
+    @apply bg-gradient-to-tr from-bg to-bg-100 text-fg tracking-wide antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-mono font-light uppercase;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-accent/20;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-bg-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-bg-400;
+  }
+}
+
+.lucide {
+  stroke-width: 1.5px;
+}
