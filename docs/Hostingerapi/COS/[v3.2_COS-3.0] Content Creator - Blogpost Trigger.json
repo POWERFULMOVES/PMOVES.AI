@@ -1,0 +1,530 @@
+{
+  "name": "[v3.2_COS-3.0] Content Creator - Blogpost Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<script>window.close()</script>",
+        "options": {}
+      },
+      "id": "d3de23a7-3f75-4b08-a629-07b4afb5e8eb",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        920,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook').item.json.query.base_id }}/{{ $('Webhook').item.json.query.table_id }}/{{ $('Webhook').item.json.query.record_id }}",
+        "options": {}
+      },
+      "id": "038e17bf-0980-4b29-ad99-84bc69097ab9",
+      "name": "GET Airtable Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook').item.json.query.base_id }}/{{ $('Webhook').item.json.query.table_id }}/{{ $('Webhook').item.json.query.record_id }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"fields\": {\n    \"AI Status\": \"AI Writing...\"\n  }\n}",
+        "options": {}
+      },
+      "id": "72e5b143-baec-4e1d-92ce-9105a2065c6c",
+      "name": "Set Record Status to AI Writing (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Get the setOutline field from the current item\n  const SetOutline = item.json.SetOutline;\n\n  // Ensure SetOutline exists and is valid\n  if (!SetOutline) {\n    throw new Error(\"SetOutline field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = SetOutline\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      outlineOutput: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "bb4bf821-d8da-4a01-8934-5b09aa83713e",
+      "name": "Convert SetOutline into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"n\":\"1\",\n   \"model\":\"{{ $('GET Airtable Record').item.json.fields['AI Model (Plain Text) (from AI Models)'][0] }}\",\n   \"top_p\":1,\n   \"fallback\":true,\n   \"messages\":[\n      {\n         \"role\":\"user\",\n         \"content\":\"{{ $json.outlineOutput }}\"\n      }\n   ],\n   \"json_mode\":true,\n   \"max_tokens\":{{ $('GET Airtable Record').item.json.fields['Max Tokens (from AI Models)'][0] }},\n   \"temperature\":{{ $('GET Airtable Record').item.json.fields['Temperature (from AI Models)'][0] }}\n}",
+        "options": {}
+      },
+      "id": "424829d2-d8ed-466a-a431-7258fa7551bd",
+      "name": "Outline Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1900,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Access the message content within choices array\n  const messageContent = item.json.choices[0]?.message?.content;\n\n  // Ensure message content exists and is valid\n  if (!messageContent) {\n    throw new Error(\"message.content field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = messageContent\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      outlineJson: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "0f448b51-35d9-43c4-8b6e-e5c5be38d459",
+      "name": "Convert Outline Output into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Access the 'outlineJson' field from the input item\nconst outlineJson = $json.outlineJson || \"\";\n\n// Split the outlineJson content into lines\nconst lines = outlineJson.split(/\\\\n/);\n\n// Initialize variables for grouping\nlet currentSection = null;\nconst sections = [];\n\n// Iterate through the lines and group by sections\nlines.forEach((line) => {\n  const trimmedLine = line.trim();\n\n  if (trimmedLine.startsWith(\"##\")) {\n    // Start a new section\n    if (currentSection) {\n      sections.push(currentSection);\n    }\n    currentSection = trimmedLine; // Initialize the new section with the title\n  } else if (currentSection && trimmedLine) {\n    // Append the point to the current section\n    currentSection += \"\\n\" + trimmedLine;\n  }\n});\n\n// Add the last section if it exists\nif (currentSection) {\n  sections.push(currentSection);\n}\n\n// Create individual outputs for each merged section\nreturn sections.map((section) => ({\n  json: {\n    mergedSection: section,\n  },\n}));\n"
+      },
+      "id": "3f350e4b-3f5b-434f-a678-d37e7bb76b5d",
+      "name": "Segregate sections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "167f3ee1-cb22-4885-81a5-3f08b8405248",
+              "name": "sectionPrompt",
+              "value": "=###Brand Details###\nBrand voice: {{ $('GET Airtable Record').item.json.fields['Brand Voice Guidelines (from Brand Assets)'][0] }}.\nExclude these words & phrases: {{ $('GET Airtable Record').item.json.fields['Excluded Words & Phrases (from Brand Assets)'][0] }}.\nWrite at a {{ $('GET Airtable Record').item.json.fields['Writing Grade Level (from Brand Assets)'][0] }} grade level.\n\n###Context###\nBlogpost Title: {{ $('GET Airtable Record').item.json.fields['Blogpost Title'] }}.\nBlogpost Type: {{ $('GET Airtable Record').item.json.fields['packagedTemplatePromptText Rollup (from Prompt Library)'] }}.\nTranscript: {{ $('GET Airtable Record').item.json.fields['Transcript Or Context (All Workflows) CLEANED'] }}.\n\n###Instruction###\nWrite an award winning article. Your task is to write one section and one section only.\nYour output should be in {{ $('GET Airtable Record').item.json.fields['Language (from Brand Assets)'][0] }} language.\n---\n{{ $json.mergedSection }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "05b4a39f-6eed-4153-b3d5-da7f0c19486e",
+      "name": "Set Section Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2520,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Get the setOutline field from the current item\n  const sectionPrompt = item.json.sectionPrompt;\n\n  // Ensure sectionPrompt exists and is valid\n  if (!sectionPrompt) {\n    throw new Error(\"SetOutline field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = sectionPrompt\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      sectionPromptJson: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "530be78f-a640-4470-bcc4-7942b7431ccd",
+      "name": "Convert Section Prompt into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2740,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"n\":\"1\",\n   \"model\":\"{{ $('GET Airtable Record').item.json.fields['AI Model (Plain Text) (from AI Models)'][0] }}\",\n   \"top_p\":1,\n   \"fallback\":true,\n   \"messages\":[\n      {\n         \"role\":\"user\",\n         \"content\":\"{{ $json.sectionPromptJson }}\"\n      }\n   ],\n   \"json_mode\":true,\n   \"max_tokens\":{{ $('GET Airtable Record').item.json.fields['Max Tokens (from AI Models)'][0] }},\n   \"temperature\":{{ $('GET Airtable Record').item.json.fields['Temperature (from AI Models)'][0] }}\n}",
+        "options": {}
+      },
+      "id": "54b205a8-dd8b-4521-b60a-97f934484906",
+      "name": "Section Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2960,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Access the message content within choices array\n  const messageContent = item.json.choices[0]?.message?.content;\n\n  // Ensure message content exists and is valid\n  if (!messageContent) {\n    throw new Error(\"message.content field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = messageContent\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      sectionOutputJson: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "755ac4a9-b215-4adb-b1e4-20f785d43d0f",
+      "name": "Convert Section Prompt output into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3180,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "167f3ee1-cb22-4885-81a5-3f08b8405248",
+              "name": "SetOutline",
+              "value": "=###Context###\nTitle: {{ $json.fields['Content Title (ID)'] }}.\nPrimaryKeyword: {{ $json.fields['SEO Keyword(s)'] }}.\nInternal Links: {{ $json.fields['Blogpost Internal Links'] }}.\nExternalLinks: {{ $json.fields['Blogpost External Links'] }}.\nMore context about article: {{ $json.fields['Transcript Or Context (All Workflows) CLEANED'] }}.\nBlogpost Type: {{ $json.fields['packagedTemplatePromptText Rollup (from Prompt Library)'] }}\n\n###Instruction###\nYour task is to prepare an article outline for the context provided.\nYour output should be in {{ $json.fields['Language (from Brand Assets)'][0] }} language. Your output must be written in Markdown format (atx). Remember, this is just an outline, you should add bulletpoints of what to cover in each section, not write the section. The headline must begin with #, but then ensure each of the other sections begin with ##, instead of just #",
+              "type": "string"
+            },
+            {
+              "id": "f045a2fc-3fc5-4fb6-b1a5-052d86f4cf32",
+              "name": "base_id",
+              "value": "={{ $('Webhook').item.json.query.base_id }}",
+              "type": "string"
+            },
+            {
+              "id": "5ca43b05-002b-407d-9f4c-8e1dec61679a",
+              "name": "table_id",
+              "value": "={{ $('Webhook').item.json.query.table_id }}",
+              "type": "string"
+            },
+            {
+              "id": "1a23949a-dcd9-44fd-8433-26472871e0a7",
+              "name": "record_id",
+              "value": "={{ $('Webhook').item.json.query.record_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1b16b26-f8be-43a7-b91f-f5cc518daf0a",
+      "name": "Set Outline and Airtable IDs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1540,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize an array to collect all 'sectionOutputJson' fields\nlet mergedContents = [];\n\n// Iterate through all input items and collect 'sectionOutputJson'\n$input.all().forEach(item => {\n  const sectionOutputJson = item.json.sectionOutputJson || '';\n  if (sectionOutputJson) {\n    mergedContents.push(sectionOutputJson);\n  }\n});\n\n// Combine all collected 'sectionOutputJson' into one string\nconst mergedContent = mergedContents.join('\\n\\n');\n\n// Access fields from the 'Set Outline and Airtable IDs' node\nconst base_id = $('Set Outline and Airtable IDs').item.json.base_id || '';\nconst table_id = $('Set Outline and Airtable IDs').item.json.table_id || '';\nconst record_id = $('Set Outline and Airtable IDs').item.json.record_id || '';\n\n// Return the merged content and additional fields as a single item\nreturn [\n  {\n    json: {\n      mergedSectionOutputJson: mergedContent,\n      base_id: base_id,\n      table_id: table_id,\n      record_id: record_id\n    }\n  }\n];\n"
+      },
+      "id": "1da070da-93af-4290-bc9a-a856f84c7f54",
+      "name": "Aggregate Sections",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $json.base_id }}/{{ $json.table_id }}/{{ $json.record_id }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"fields\": {\n    \"AI Status\": \"AI Complete\",\n    \"Blogpost Final Version\": \"{{$json.mergedSectionOutputJson.replace(/\\n/g, '\\\\n')}}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "f35caefa-837b-421e-b510-4afaba2dd003",
+      "name": "Update Record Status to AI Complete (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3620,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "path": "47ab64a9-1af2-4a9e-92c5-03d3fa6420c2",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "5ab1f213-3d81-4cf3-af06-9c39ec20cf99",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        720,
+        380
+      ],
+      "webhookId": "47ab64a9-1af2-4a9e-92c5-03d3fa6420c2"
+    },
+    {
+      "parameters": {
+        "content": "## Iteration for Section Prompts",
+        "height": 258.51731860267483,
+        "width": 1047.4794697489972,
+        "color": 4
+      },
+      "id": "2b1a55fb-645d-483c-bf49-e90810eb6847",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2280,
+        300
+      ]
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "bigmovesio.app.n8n.cloud",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.7",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "49.149.74.185",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "PH",
+            "cf-ray": "8f45d7c2136b07ae-HKG",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "cookie": "rl_page_init_referrer=RudderEncrypt%3AU2FsdGVkX19gr8CU0pEuczSz0NS%2BOzU98id3USb9%2F3Q%3D; rl_page_init_referring_domain=RudderEncrypt%3AU2FsdGVkX19spLsVXssW3bPaSeKxFMutQdpAbdDzyZM%3D; n8n-auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjM4NmZjM2RmLWM3ZmMtNGE5Zi05ZjQyLTMxYTYwZmQzYmQzNyIsImhhc2giOiJpdkZEb2w0YjREIiwiYnJvd3NlcklkIjoiWGljMXhOOGgvWWNxRWVRZVdTcXlKU2xoYWNTNFJBSEVFczFYMVBRZ09WMD0iLCJpYXQiOjE3MzQ0ODM1NjgsImV4cCI6MTczNTA4ODM2OH0.gB_EUgLG1da0FanRrWtZxgpuH3ls9gxWBXwlzhU2NI8; ajs_anonymous_id=%2277234ef4-0f62-4273-933e-4bb663b3f5c5%22; rl_anonymous_id=RudderEncrypt%3AU2FsdGVkX1%2B8USacmWnTpyFRv4%2BtsmDZ3CIITRKLYVA33B%2FBmZkPF9mWM7Ps5DZlT1cXCdT3KS2QbVRvCIt%2FTg%3D%3D; rl_user_id=RudderEncrypt%3AU2FsdGVkX1%2FMU5vxtCUW3Scl1ygCfPDWQf5pjlBsG3d64ORP5hLgrsOEgVJ3Xk5X%2FBkH5d13xJ6NJm0k9%2FxGg5sBQUboWC4LSf2WgxW%2Fp4xFoPtrVTiRI1hp%2FXXQcLYHn%2FDTnrSi%2F7nHVyKKV0PgX4NDhUyq26nFx1n%2B4P8Pmxg%3D; rl_trait=RudderEncrypt%3AU2FsdGVkX19CsBCDQT%2FI12rmZmOXYMjtu9w6d7Kw3%2FXIhoSKxicpJMOwMF3w5duTGBBee%2Fheyw565VFbgkm8lHw4i9eAau9fEc8evV6AGxUMQJOgNDuyhfTWAC%2BpbQAf8PHN8VtiyQGhKPezoy6LYv0B%2FIzV%2FgW%2B5at8VfPF2EU%3D; n8n_anonymous_id=eff17cdc-0fd0-482b-8cfd-b4525435d5bf; rl_session=RudderEncrypt%3AU2FsdGVkX19h%2FLULlRunjiygQGLv6wXUdP0x7Ix7T5B0ZX5T1ozNEfIG5dT8BDEFEooNUfBz%2FkJqqSrpVYlVDhbLPYXALAVnN%2BpkdtKia3cM1BY0f%2Bh4n4vb3DwaGUOLqMrC12c44xygH6cIuUeslA%3D%3D; ph_phc_4URIAm1uYfJO7j8kWSe0J8lc8IqnstRLS7Jx8NcakHo_posthog=%7B%22distinct_id%22%3A%22fa8972778f1b26c95c2f56e5dcac0460449919a72b08cf533215bb49c07cb34d%23386fc3df-c7fc-4a9f-9f42-31a60fd3bd37%22%2C%22%24sesid%22%3A%5B1734595048661%2C%220193ddc8-6b72-7b12-8825-829947fe856c%22%2C1734592719724%5D%2C%22%24epp%22%3Atrue%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fbigmovesio.app.n8n.cloud%2Fsignin%22%7D%7D",
+            "priority": "u=0, i",
+            "sec-ch-ua": "\"Not)A;Brand\";v=\"99\", \"Brave\";v=\"127\", \"Chromium\";v=\"127\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-user": "?1",
+            "sec-gpc": "1",
+            "upgrade-insecure-requests": "1",
+            "x-forwarded-for": "49.149.74.185, 172.68.225.23",
+            "x-forwarded-host": "bigmovesio.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-2-ddc688d69-ww475",
+            "x-is-trusted": "yes",
+            "x-real-ip": "49.149.74.185"
+          },
+          "params": {},
+          "query": {
+            "base_id": "apppsc8i7GDCJyR6I",
+            "table_id": "tblhOGoFDwKBDIh1u",
+            "outputTable_id": "tbljgMgNIsPZM8Cfo",
+            "record_id": "recntVKKNhUyLniQj"
+          },
+          "body": {},
+          "webhookUrl": "https://bigmovesio.app.n8n.cloud/webhook-test/41e6e3f9-0916-470e-a45e-ad0b22631d80",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "GET Airtable Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Airtable Record": {
+      "main": [
+        [
+          {
+            "node": "Set Record Status to AI Writing (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Record Status to AI Writing (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Set Outline and Airtable IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert SetOutline into JSON": {
+      "main": [
+        [
+          {
+            "node": "Outline Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Outline Prompt": {
+      "main": [
+        [
+          {
+            "node": "Convert Outline Output into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Outline Output into JSON": {
+      "main": [
+        [
+          {
+            "node": "Segregate sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segregate sections": {
+      "main": [
+        [
+          {
+            "node": "Set Section Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Section Prompt": {
+      "main": [
+        [
+          {
+            "node": "Convert Section Prompt into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Section Prompt into JSON": {
+      "main": [
+        [
+          {
+            "node": "Section Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Section Prompt": {
+      "main": [
+        [
+          {
+            "node": "Convert Section Prompt output into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Outline and Airtable IDs": {
+      "main": [
+        [
+          {
+            "node": "Convert SetOutline into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Section Prompt output into JSON": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Sections": {
+      "main": [
+        [
+          {
+            "node": "Update Record Status to AI Complete (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6dadf9bd-2c53-4484-b5b7-e75ff4b85688",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fa8972778f1b26c95c2f56e5dcac0460449919a72b08cf533215bb49c07cb34d"
+  },
+  "id": "jljV0sorSeHuFlzw",
+  "tags": [
+    {
+      "createdAt": "2024-12-17T22:38:04.164Z",
+      "updatedAt": "2024-12-17T22:38:04.164Z",
+      "id": "gGvm1CJL8gd1R8EN",
+      "name": "OS 3.2"
+    },
+    {
+      "createdAt": "2025-01-07T06:23:59.510Z",
+      "updatedAt": "2025-01-07T06:23:59.510Z",
+      "id": "mPrqlIkZQr0cgqJa",
+      "name": "template"
+    }
+  ]
+}

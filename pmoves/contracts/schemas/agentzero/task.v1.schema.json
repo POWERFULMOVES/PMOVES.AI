@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Zero Task Request",
+  "type": "object",
+  "required": [
+    "session_id",
+    "task_id",
+    "instructions"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "instructions": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "input": {
+      "type": [
+        "string",
+        "object"
+      ]
+    },
+    "priority": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

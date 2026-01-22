@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Zero Session Log Event",
+  "type": "object",
+  "required": [
+    "session_id",
+    "source_topic"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "source_topic": {
+      "type": "string"
+    },
+    "message": {
+      "type": [
+        "string",
+        "object",
+        "array",
+        "number",
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

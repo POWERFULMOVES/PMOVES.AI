@@ -1,0 +1,33 @@
+id: jetson-nano
+name: "Jetson Nano Super"
+description: >
+  Jetson Nano configured with CSI cameras. Targets lightweight edge inference and
+  acts as a sensor gateway for PMOVES.
+hardware:
+  cpu:
+    vendor: NVIDIA
+    model: Jetson Nano
+    cores: 4
+    threads: 4
+  gpu:
+    type: nvidia-tegra
+    models: ["Jetson Nano"]
+    memory_gb: 4
+  ram_gb: 4
+  tags: [edge, jetson, arm64]
+compose_overrides:
+  - docker-compose.edge.jetson.yaml
+model_bundles:
+  - jetson-yolov8n
+  - whisper-small-int8
+mcp:
+  - docker
+  - host
+messaging:
+  telegram: optional
+  discord: false
+  whatsapp: false
+  webrtc: true
+notes:
+  - Enable CSI camera with `sudo systemctl restart nvargus-daemon` prior to capture.
+  - Use JetPack 6.x; ensure docker runtime = nvidia.

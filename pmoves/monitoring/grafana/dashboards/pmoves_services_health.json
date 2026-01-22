@@ -1,0 +1,20 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {"type":"stat","title":"Gateway Up","targets":[{"expr":"max(mcp_proxy_up)"}],"gridPos":{"h":4,"w":6,"x":0,"y":0}},
+    {"type":"stat","title":"Docling Up","targets":[{"expr":"max(docling_mcp_up)"}],"gridPos":{"h":4,"w":6,"x":6,"y":0}},
+    {"type":"stat","title":"Gateway Probe","targets":[{"expr":"max(probe_success{job=\"blackbox\",service=\"gateway\"})"}],"gridPos":{"h":4,"w":6,"x":12,"y":0}},
+    {"type":"stat","title":"Docling Probe","targets":[{"expr":"max(probe_success{job=\"blackbox\",service=\"docling\"})"}],"gridPos":{"h":4,"w":6,"x":18,"y":0}},
+    {"type":"stat","title":"E2B Probe","targets":[{"expr":"max(probe_success{job=\"blackbox\",service=\"e2b\"})"}],"gridPos":{"h":4,"w":6,"x":0,"y":4}},
+    {"type":"stat","title":"VL Probe","targets":[{"expr":"max(probe_success{job=\"blackbox\",service=\"vl\"})"}],"gridPos":{"h":4,"w":6,"x":6,"y":4}},
+    {"type":"graph","title":"Gateway 5xx Ratio","targets":[{"expr":"(sum(rate(http_requests_total{status=~\"5..\"}[5m])))/(sum(rate(http_requests_total[5m])))","legendFormat":"5xx ratio"}],"gridPos":{"h":8,"w":12,"x":12,"y":4}}
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "title": "PMOVES Services Health",
+  "uid": "pmoves-health",
+  "version": 1
+}
+
