@@ -53,17 +53,10 @@ def create_event_envelope(
 
 
 class NATSPublisher:
-    """NATS event publisher with connection management."""
-
-    def __init__(self, nats_url: str):
         """Initialize NATS publisher.
 
         Args:
             nats_url: NATS connection URL (e.g., "nats://nats:4222")
-        """
-        self.nats_url = nats_url
-        self._nc: Optional[NATS] = None
-        self._connected = False
 
     @property
     def is_connected(self) -> bool:
@@ -127,17 +120,6 @@ class NATSPublisher:
             parent_id: Optional parent event ID for causality
 
         Returns:
-            True if published successfully, False otherwise
-        """
-        if not self.is_connected:
-            # Log event details when dropping due to no connection
-            payload_summary = str(payload)[:200] if payload else 'empty'
-            logger.warning(
-                f"NATS not connected, dropping event: {subject} | "
-                f"correlation_id={correlation_id} | payload_preview={payload_summary}"
-            )
-            NATS_EVENTS_FAILED.labels(subject=subject, reason="not_connected").inc()
-            return False
 
         try:
             envelope = create_event_envelope(

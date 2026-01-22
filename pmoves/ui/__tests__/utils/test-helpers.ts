@@ -4,22 +4,13 @@
 
 import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
-import type { ServiceHealth, ServiceHealthStatus } from '../../lib/serviceHealth';
 import type { ServiceDefinition, ServiceCategory, ServiceColor } from '../../lib/serviceCatalog';
 
-// =============================================================================
 // Mock Factories
-// =============================================================================
 
 /**
  * Creates a mock service health object with optional overrides
  */
-export function mockServiceHealth(overrides: Partial<ServiceHealth> = {}): ServiceHealth {
-  return {
-    slug: 'test-service',
-    status: 'healthy',
-    lastCheck: new Date(),
-    responseTime: 50,
     ...overrides,
   };
 }
@@ -28,11 +19,6 @@ export function mockServiceHealth(overrides: Partial<ServiceHealth> = {}): Servi
  * Creates a mock service health map for multiple services
  */
 export function mockServiceHealthMap(
-  services: Array<{ slug: string; status?: Partial<ServiceHealth> }>
-): Record<string, ServiceHealth> {
-  const map: Record<string, ServiceHealth> = {};
-  for (const service of services) {
-    map[service.slug] = mockServiceHealth({ ...service.status, slug: service.slug });
   }
   return map;
 }
@@ -58,7 +44,6 @@ export function mockServiceEndpoint(overrides: Partial<{
 /**
  * Creates a mock service definition
  */
-export function mockServiceDefinition(overrides: Partial<ServiceDefinition> = {}): ServiceDefinition {
   return {
     slug: 'test-service',
     title: 'Test Service',
@@ -86,9 +71,7 @@ export function mockServiceCatalog(count: number = 5): ServiceDefinition[] {
   }));
 }
 
-// =============================================================================
 // Custom Render Functions
-// =============================================================================
 
 /**
  * Renders a component with auth context wrapper
@@ -113,16 +96,13 @@ export function renderWithAuth(
  */
 export function renderWithServiceHealth(
   ui: ReactElement,
-  healthMap: Record<string, ServiceHealth> = {},
   options: Omit<RenderOptions, 'wrapper'> = {}
 ) {
   // TODO: Add service health context wrapper when available
   return render(ui, options);
 }
 
-// =============================================================================
 // Test Helpers
-// =============================================================================
 
 /**
  * Waits for a health update to complete (for polling tests)
@@ -167,9 +147,7 @@ export function runAllTimers() {
   jest.runAllTimers();
 }
 
-// =============================================================================
 // Jest Setup Helpers
-// =============================================================================
 
 /**
  * Sets up common mocks for Supabase client
@@ -214,9 +192,7 @@ export function clearAllMocks() {
   jest.clearAllTimers();
 }
 
-// =============================================================================
 // Export all
-// =============================================================================
 
 export default {
   mockServiceHealth,

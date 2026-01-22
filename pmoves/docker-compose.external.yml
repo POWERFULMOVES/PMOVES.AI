@@ -2,11 +2,6 @@
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
-    container_name: pmoves-wger
-    restart: unless-stopped
-    networks:
-      pmoves_app:
-        aliases:
           - pmoves-wger
     environment:
       DJANGO_DEBUG: "${WGER_DJANGO_DEBUG:-False}"
@@ -20,14 +15,10 @@ services:
 
   wger-nginx:
     image: ${WGER_NGINX_IMAGE:-nginx:1.27-alpine}
-    container_name: pmoves-wger-nginx
     restart: unless-stopped
     depends_on:
       - wger
     networks:
-      pmoves_app:
-        aliases:
-          - pmoves-wger-nginx
     ports:
       - "${WGER_HOST_PORT:-8000}:80"
     volumes:
@@ -37,12 +28,6 @@ services:
 
   firefly:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
-    container_name: pmoves-firefly
-    restart: unless-stopped
-    networks:
-      pmoves_app:
-        aliases:
-          - pmoves-firefly
     environment:
       # Keep secrets sourced from env files / runtime secrets. Do not inline defaults.
       APP_KEY: ${FIREFLY_APP_KEY}
@@ -58,13 +43,6 @@ services:
 
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
-    container_name: pmoves-open-notebook-surrealdb
-    restart: unless-stopped
-    user: "0:0"
-    networks:
-      pmoves_app:
-        aliases:
-          - pmoves-open-notebook-surrealdb
           - open-notebook-surrealdb-ext
     volumes:
       - ./data/open-notebook/surreal_data:/mydata
@@ -72,24 +50,10 @@ services:
   open-notebook-ext:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
-    depends_on:
-      - open-notebook-surrealdb-ext
-    networks:
-      pmoves_app:
-        aliases:
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
     ports:
-
-  jellyfin-ext:
-    image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
-    container_name: pmoves-jellyfin
-    restart: unless-stopped
-    networks:
-      pmoves_app:
-        aliases:
-          - pmoves-jellyfin
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
@@ -102,8 +66,6 @@ services:
       - ./data/jellyfin/media:/media
 
 networks:
-  pmoves_app:
-    external: true
 
 volumes:
   firefly-storage:

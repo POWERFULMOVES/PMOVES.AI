@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import os
-from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -18,44 +17,6 @@ from platforms.discord import DiscordPlatform
 from platforms.telegram import TelegramPlatform
 from platforms.whatsapp import WhatsAppPlatform
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifespan - startup and shutdown."""
-    global _nats_loop_task
-
-    # Startup
-    logger.info("Starting messaging gateway...")
-
-    # Initialize platform handlers
-    await discord_platform.initialize()
-    await telegram_platform.initialize()
-    await whatsapp_platform.initialize()
-
-    # Start NATS loop
-    _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
-    logger.info("Messaging gateway started")
-
-    yield
-
-    # Shutdown
-    global _nc
-    if _nats_loop_task:
-        _nats_loop_task.cancel()
-        try:
-            await _nats_loop_task
-        except asyncio.CancelledError:
-            pass
-        _nats_loop_task = None
-
-    if _nc:
-        await _nc.close()
-        _nc = None
-
-    logger.info("Messaging gateway shut down")
-
-
-app = FastAPI(title="Messaging Gateway", version="0.1.0", lifespan=lifespan)
 
 # Environment configuration
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
