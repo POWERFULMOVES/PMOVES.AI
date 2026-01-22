@@ -1,4 +1,0 @@
-# Jellyfin upstream image currently triggers Trivy library findings in jellyfin.deps.json
-# (historical dotnet-core dependency CVEs). Track and revisit when upstream runtime updates land.
-CVE-2019-0980
-CVE-2019-0981

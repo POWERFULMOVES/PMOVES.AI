@@ -1,26 +1,39 @@
-# YAML anchor for app-tier env loading (matches id008 in main docker-compose.yml)
-x-env-tier-app: &id008
+# YAML anchors for tier-based env file loading
+# These reference the tier env files from parent docker-compose.yml
+x-env-tier-data: &env-tier-data
   env_file:
-    - env.shared
-    - env.tier-app
+    - path: env.tier-data
+      required: false
+
+x-env-tier-worker: &env-tier-worker
+  env_file:
+    - path: env.tier-worker
+      required: false
+
+x-env-tier-media: &env-tier-media
+  env_file:
+    - path: env.tier-media
+      required: false
 
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     container_name: pmoves-wger
     restart: unless-stopped
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
+    <<: *env-tier-worker
     networks:
       pmoves_app:
         aliases:
           - pmoves-wger
-          - wger
+          - pmoves-wger
     environment:
       DJANGO_DEBUG: "${WGER_DJANGO_DEBUG:-False}"
       WGER_USE_GUNICORN: "${WGER_USE_GUNICORN:-True}"
       DJANGO_CLEAR_STATIC_FIRST: "${WGER_CLEAR_STATIC_FIRST:-True}"
       TIME_ZONE: "${WGER_TIME_ZONE:-America/New_York}"
       SITE_URL: "${WGER_SITE_URL:-http://localhost:8000}"
+      FROM_EMAIL: "${WGER_FROM_EMAIL:-PMOVES Health Coach <ops@cataclysmstudios.com>}"
+      DJANGO_ADMINS: "${WGER_DJANGO_ADMINS:-PMOVES Ops <ops@cataclysmstudios.com>}"
     volumes:
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
@@ -46,22 +59,22 @@ services:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     container_name: pmoves-firefly
     restart: unless-stopped
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
+    <<: *env-tier-worker
     networks:
       pmoves_app:
         aliases:
           - pmoves-firefly
-          - firefly
     environment:
       # Keep secrets sourced from env files / runtime secrets. Do not inline defaults.
       APP_KEY: ${FIREFLY_APP_KEY}
       APP_ENV: ${FIREFLY_APP_ENV:-production}
+      SITE_OWNER: ${FIREFLY_SITE_OWNER:-ops@cataclysmstudios.com}
       DB_CONNECTION: ${FIREFLY_DB_CONNECTION:-sqlite}
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
     ports:
-      - "${FIREFLY_PORT:-8800}:8080"
+      - "${FIREFLY_PORT:-8080}:8080"
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
@@ -69,8 +82,8 @@ services:
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: pmoves-open-notebook-surrealdb
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
-    command: start --log info --user ${SURREL_USER} --pass ${SURREL_PASS} rocksdb:/mydata/mydatabase.db
+    <<: *env-tier-data
+    command: start --log info --user ${SURREAL_USER} --pass ${SURREAL_PASS} rocksdb:/mydata/mydatabase.db
     restart: unless-stopped
     user: "0:0"
     networks:
@@ -84,40 +97,36 @@ services:
   open-notebook-ext:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
-    container_name: pmoves-open-notebook-ext
+    container_name: pmoves-open-notebook
     restart: unless-stopped
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
+    <<: *env-tier-worker
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
       pmoves_app:
         aliases:
-          - pmoves-open-notebook-ext
+          - pmoves-open-notebook
+      pmoves:
+        aliases:
+          - pmoves-open-notebook
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
     ports:
-      - "${OPEN_NOTEBOOK_UI_PORT_EXT:-8504}:8502"    # UI (alternate port to avoid conflict)
-      - "${OPEN_NOTEBOOK_API_PORT_EXT:-5056}:5055"  # API (alternate port)
+      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"    # UI
+      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"  # API
     volumes:
-      - ./data/open-notebook/notebook_data_ext:/app/data
-    profiles:
-      - alternate
+      - ./data/open-notebook/notebook_data:/app/data
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
-    user: "65532:65532"
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
+    <<: *env-tier-media
     networks:
       pmoves_app:
         aliases:
           - pmoves-jellyfin
-          - jellyfin
-      pmoves_bus:
-        aliases:
-          - jellyfin
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
@@ -132,10 +141,10 @@ services:
 networks:
   pmoves_app:
     external: true
-    name: pmoves_app
-  pmoves_bus:
+    name: cataclysm-net
+  pmoves:
     external: true
-    name: pmoves_bus
+    name: pmoves-net
 
 volumes:
   firefly-storage:

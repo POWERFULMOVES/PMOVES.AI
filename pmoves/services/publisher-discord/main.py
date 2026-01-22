@@ -1158,6 +1158,34 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
     logger.info("claude_session_ended", extra={"session_id": session_id, "end_reason": end_reason})
 
 
+    global _nats_loop_task
+    # Validate critical environment configuration
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning(
+            "discord_webhook_url_not_configured",
+            extra={"event": "discord_webhook_url_not_configured"},
+        )
+    else:
+        logger.info(
+            "discord_webhook_url_configured",
+            extra={"event": "discord_webhook_url_configured", "domain": _extract_webhook_domain(DISCORD_WEBHOOK_URL)},
+        )
+    if _nats_loop_task and _nats_loop_task.done():
+        try:
+            _nats_loop_task.result()
+        except Exception as exc:  # pragma: no cover - startup diagnostics
+            logger.warning(
+                "nats_loop_previous_failure",
+                extra={"event": "nats_loop_previous_failure", "error": str(exc)},
+            )
+    if _nats_loop_task is None or _nats_loop_task.done():
+        logger.info(
+            "nats_loop_start",
+            extra={"event": "nats_loop_start", "servers": [NATS_URL]},
+        )
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+
+
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):
     """Test endpoint for publishing messages to Discord webhook."""

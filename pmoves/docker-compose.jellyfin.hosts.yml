@@ -1,6 +1,0 @@
-services:
-  jellyfin-ext:
-    volumes:
-    - /mnt/d:/media/host/WindowsD:rw
-    - //PMOVES-Z890/Media:/media/host/PMOVES_Z890_Media:rw
-    - /mnt/z:/media/host/WindowsZ:rw

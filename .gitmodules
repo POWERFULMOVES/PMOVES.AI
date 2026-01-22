@@ -69,7 +69,6 @@
 [submodule "PMOVES-Ultimate-TTS-Studio"]
 	path = PMOVES-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
-	ignore = all
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
 	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
@@ -87,7 +86,7 @@
 	url = https://github.com/google/A2UI.git
 [submodule "PMOVES-A2UI"]
 	path = PMOVES-A2UI
-	url = https://github.com/google/A2UI.git
+	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
 [submodule "PMOVES-MAI-UI"]
 	path = PMOVES-MAI-UI
 	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
@@ -124,4 +123,3 @@
 [submodule "pmoves/vendor/agentgym"]
 	path = pmoves/vendor/agentgym
 	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
-	branch = PMOVES.AI-Edition-Hardened
