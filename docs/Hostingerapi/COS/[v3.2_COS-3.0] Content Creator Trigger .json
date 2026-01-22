@@ -1,0 +1,593 @@
+{
+  "name": "[v3.2_COS-3.0] Content Creator Trigger (Template)",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const input = items.map(item => item.json);\n\nfunction cleanJsonFields(data) {\n  return data.map(entry => {\n    const cleanedContext = entry.context\n      .split('\\n')\n      .filter(line => {\n        const keyValue = line.split(':');\n        const value = keyValue.slice(1).join(':').trim();\n        // Keep lines that are not empty, not a dot, and have meaningful content\n        return value && value !== '.' && value !== '..';\n      })\n      .join('\\n');\n\n    return { context: cleanedContext };\n  });\n}\n\nconst cleanedData = cleanJsonFields(input);\nreturn cleanedData;\n"
+      },
+      "id": "efce5fdb-4b63-4181-81ee-0125ede131bf",
+      "name": "Clean Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "82448119-da86-4336-9ed7-3376129d0631",
+              "name": "context",
+              "value": "=###Context###\nContent Type: {{ $json.fields['Content Type'] }}.  \nContent Title: {{ $json.fields['Content Title (ID)'] }}.  \nYouTube Title: {{ $json.fields['YouTube Title'] }}.  \nYouTube Description: {{ $json.fields['YouTube Description'] }}.  \nNewsletter Type: {{ $json.fields['Newsletter Type'] }}.  \nNewsletter Angle: {{ $json.fields['Newsletter Angle'] }}.  \nNewsletter Key Points: {{ $json.fields['Newsletter Key Points'] }}.  \nNewsletter Final Version: {{ $json.fields['Newsletter Final Version'] }}.  \nSEO Keyword(s): {{ $json.fields['SEO Keyword(s)'] }}.  \nBlogpost Title: {{ $json.fields['Blogpost Title'] }}.  \nBlogpost Internal Links: {{ $json.fields['Blogpost Internal Links'] }}.  \nBlogpost External Links: {{ $json.fields['Blogpost External Links'] }}.  ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        380
+      ],
+      "id": "2c9b17d5-628a-4254-9581-63837df3ceec",
+      "name": "Set Prompt Fields"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<script>window.close()</script>",
+        "options": {}
+      },
+      "id": "0d889207-82e9-44f5-b413-5604c623ecf9",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        920,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook').item.json.query.base_id }}/{{ $('Webhook').item.json.query.table_id }}/{{ $('Webhook').item.json.query.record_id }}",
+        "options": {}
+      },
+      "id": "865a5928-5dbf-47bd-ae64-a04a0ae3035f",
+      "name": "GET Airtable Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Access the 'inputBrief' field from the input item\nconst inputBrief = $json.inputBrief || \"\";\n\n// Split the inputBrief based on \"## Prompt Type\"\nconst splitParts = inputBrief.split(/## Prompt Type/).filter(part => part.trim() !== \"\");\n\n// Create individual outputs for each split part with the name 'inputBrief_clean'\nreturn splitParts.map((part) => ({\n  json: {\n    inputBrief_clean: \"## Prompt Type\" + part.trim(), // Re-add the delimiter for clarity\n  },\n}));"
+      },
+      "id": "622b98a3-2019-4490-b950-584353b06c47",
+      "name": "Split inputBrief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "300e5a13-e2fe-4992-9cc8-0d60dd97d87f",
+              "name": "inputBrief",
+              "value": "={{ $('GET Airtable Record').item.json.fields['packagedTemplatePromptText Rollup (from Prompt Library)'] }}",
+              "type": "string"
+            },
+            {
+              "id": "1f190113-2039-4321-941c-b9fb78523cdf",
+              "name": "context",
+              "value": "={{ $json.context }}",
+              "type": "string"
+            },
+            {
+              "id": "46b0f153-d465-4e82-b2ec-a930e51ffdf7",
+              "name": "base_id",
+              "value": "={{ $('Webhook').item.json.query.base_id }}",
+              "type": "string"
+            },
+            {
+              "id": "e5bc6dd4-3756-4172-bd44-89e9dc55a80d",
+              "name": "table_id",
+              "value": "={{ $('Webhook').item.json.query.table_id }}",
+              "type": "string"
+            },
+            {
+              "id": "ad2ca673-d589-49be-b87a-9c0dc1b03fe5",
+              "name": "record_id",
+              "value": "={{ $('Webhook').item.json.query.record_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2000,
+        380
+      ],
+      "id": "be2d2189-9f08-4623-97ba-8ba2e3bedcd1",
+      "name": "Set InputFields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "167f3ee1-cb22-4885-81a5-3f08b8405248",
+              "name": "brandGuidelines",
+              "value": "=BRAND GUIDELINES:\nBrand Voice: {{ $('GET Airtable Record').item.json.fields['Brand Voice Guidelines (from Brand Assets)'][0] }}.\nExclude These Words: {{ $('GET Airtable Record').item.json.fields['Excluded Words & Phrases (from Brand Assets)'][0] }}. \nCustomer Avatar: {{ $('GET Airtable Record').item.json.fields['Customer Avatar (from Brand Assets)'][0] }}.\nWrite at a {{ $('GET Airtable Record').item.json.fields['Writing Grade Level (from Brand Assets)'][0] }} grade level.\nCONTEXT:\nBlogpost: {{ $('GET Airtable Record').item.json.fields['Blogpost Final Version'] }}.\nTranscript: {{ $('GET Airtable Record').item.json.fields['Transcript Or Context (All Workflows)'] }}.\n\n{{ $('Set InputFields').item.json.context }}.\n\nDETAILS OF HOW TO STRUCTURE OUTPUT:\nAI Output: This is where you will add your output. Do not provide any extra context, lines, headings or spaces. \nYou must also append to the end of your output the following on a new line for each:\nPrompt Type: {insert exactly as my input prompt}\nProduct Type: {insert exactly as my input prompt}\nCopy ID: {insert exactly as my input prompt}\nPROMPT: Here is the prompt to complete: {{ $json.inputBrief_clean }}\nCreate {{ $('GET Airtable Record').item.json.fields['Output Variations'] }} variations in your output.\nYour output must be in {{ $('GET Airtable Record').item.json.fields['Language (from Brand Assets)'][0] }} language.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "827519ec-e9ee-4211-aa4c-0c35e8d44bd9",
+      "name": "Set Brand Guideline",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2420,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"n\":\"1\",\n   \"model\":\"{{ $('GET Airtable Record').item.json.fields['OpenRouter Code (from AI Models)'][0] }}\",\n   \"top_p\":1,\n   \"fallback\":true,\n   \"messages\":[\n      {\n         \"role\":\"user\",\n         \"content\":\"{{ $json.result }}\"\n      }\n   ],\n   \"json_mode\":true,\n   \"max_tokens\":{{ $('GET Airtable Record').item.json.fields['Max Tokens (from AI Models)'][0] }},\n   \"temperature\":{{ $('GET Airtable Record').item.json.fields['Temperature (from AI Models)'][0] }}\n}",
+        "options": {}
+      },
+      "id": "d61cc163-fcb0-49fc-872f-9e1eb438974d",
+      "name": "Content Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook').item.json.query.base_id }}/{{ $('Webhook').item.json.query.table_id }}/{{ $('Webhook').item.json.query.record_id }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"fields\": {\n    \"AI Status\": \"AI Writing...\"\n  }\n}",
+        "options": {}
+      },
+      "id": "828eb850-5ab9-417c-b06b-d2fa4c1a12d7",
+      "name": "Set Record Status to AI Writing (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook').item.json.query.base_id }}/{{ $('Webhook').item.json.query.outputTable_id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"fields\":{\n      \"Final Content\":\"{{$('Convert OpenAI Output into JSON').item.json.result.replace(/\\n/g, '\\\\n')}}\",\n      \"Input ID\":\"{{ $('GET Airtable Record').item.json.fields['Content Title (ID)'] }}\",\n      \"Copy ID\":\"{{ $json['Copy ID'] }}\",\n      \"Prompt Type\":\"{{ $json['Prompt Type'] }}\",\n      \"Product Type\":\"{{ $json['Product Type'] }}\",\n      \"Brand Assets\":[\n         \"{{ $('GET Airtable Record').item.json.fields['Brand Assets'][0] }}\"\n      ],\n      \"Content Status\":\"To-Do\"\n   }\n}",
+        "options": {}
+      },
+      "id": "cae46c34-1b8a-4d22-9605-39024d3e3cb8",
+      "name": "Create AI Output Record (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3540,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Get the brandGuidelines field from the current item\n  const brandGuidelines = item.json.brandGuidelines;\n\n  // Ensure brandGuidelines exists and is valid\n  if (!brandGuidelines) {\n    throw new Error(\"brandGuidelines field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = brandGuidelines\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      result: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "c4baaa09-569e-4c4a-9a03-40d33d4ff74d",
+      "name": "Convert Brand Guideline into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process all input items\nconst output = items.map(item => {\n  // Access the result field\n  const resultContent = item.json.result;\n\n  // Ensure result content exists and is valid\n  if (!resultContent) {\n    return {\n      \"Prompt Type\": null,\n      \"Product Type\": null,\n      \"Copy ID\": null,\n      \"Error\": \"result content is missing or undefined\"\n    };\n  }\n\n  // Extract Prompt Type, Product Type, and Copy ID using regex\n  const promptTypeMatch = resultContent.match(/Prompt Type: (.+?)(?:\\\\n|$)/);\n  const productTypeMatch = resultContent.match(/Product Type: (.+?)(?:\\\\n|$)/);\n  const copyIdMatch = resultContent.match(/Copy ID: (.+?)(?:\\\\n|$)/);\n\n  // Return the extracted values for the current item\n  return {\n    \"Prompt Type\": promptTypeMatch ? promptTypeMatch[1].trim() : null,\n    \"Product Type\": productTypeMatch ? productTypeMatch[1].trim() : null,\n    \"Copy ID\": copyIdMatch ? copyIdMatch[1].trim() : null\n  };\n});\n\n// Return the mapped output\nreturn output;\n"
+      },
+      "id": "b1b9cc72-2be9-45f8-8202-ef94bb0c1a42",
+      "name": "Map Prompt Type, Product Type and Copy ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        380
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// This code should be placed in an n8n Function node.\n\n// Process all input items\nconst output = items.map(item => {\n  // Access the message content within choices array\n  const messageContent = item.json.choices[0]?.message?.content;\n\n  // Ensure message content exists and is valid\n  if (!messageContent) {\n    throw new Error(\"message.content field is missing or undefined in one of the items.\");\n  }\n\n  // Replace real line breaks with the visible \\n character\n  const formattedOutput = messageContent\n    .replace(/\\n/g, \"\\\\n\") // Replace real line breaks with visible \\n\n    .replace(/\"/g, '\\\\\"'); // Escape double quotes\n\n  // Return the formatted output for the current item\n  return {\n    json: {\n      result: formattedOutput\n    }\n  };\n});\n\n// Return all processed items\nreturn output;\n"
+      },
+      "id": "fb473083-68e4-4fd2-ae7d-6998620ed3b2",
+      "name": "Convert OpenAI Output into JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3100,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Access input items from the current inputs\nconst input1 = $input.all()[0]; // First input\nconst input2 = $input.all()[1]; // Second input\n\n// Extract 'Final Content' fields\nconst finalContent1 = input1.json.fields['Final Content'] || '';\nconst finalContent2 = input2.json.fields['Final Content'] || '';\n\n// Merge the Final Content into one string\nconst mergedContent = `${finalContent1}\\n\\n${finalContent2}`;\n\n// Access fields from the 'Set InputFields' node\nconst context = $('Set InputFields').item.json.context || '';\nconst base_id = $('Set InputFields').item.json.base_id || '';\nconst table_id = $('Set InputFields').item.json.table_id || '';\nconst record_id = $('Set InputFields').item.json.record_id || '';\n\n// Return the merged content and additional fields as a new item\nreturn [\n  {\n    json: {\n      mergedFinalContent: mergedContent,\n      context: context,\n      base_id: base_id,\n      table_id: table_id,\n      record_id: record_id\n    }\n  }\n];\n"
+      },
+      "id": "47262af9-07b2-4122-81a1-d10d12ca465f",
+      "name": "Aggregate Data into 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3760,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $json.base_id }}/{{ $json.table_id }}/{{ $json.record_id }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"fields\": {\n    \"AI Status\": \"AI Complete\",\n    \"Content Context (Debugging)\": \"{{$json.context.replace(/\\n/g, '\\\\n')}}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "121eada0-9562-4c3c-919d-4cbb70cf9a43",
+      "name": "Update Record Status to AI Complete (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3980,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Sets prompts for AI",
+        "height": 250.4026827500513,
+        "width": 612.7562672296658
+      },
+      "id": "506415a9-b25e-450e-b75c-6de5a78b7c9f",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Iterates prompts and adds output into AI output table",
+        "height": 250.40268275005127,
+        "width": 1537.8357742747157,
+        "color": 4
+      },
+      "id": "b1ac4c6e-77ed-4e6e-aed8-7bf8c45a7398",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Aggregates and updates airtable",
+        "height": 250.40268275005127,
+        "width": 426.9973300720251,
+        "color": 5
+      },
+      "id": "0cabc013-c2e8-4e2e-977e-aee1074cb8bf",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "path": "5a9d6e3b-4e97-4197-804f-1b0a61ffb075",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "cdfe678a-8edb-4de0-bfe6-e7a431cec591",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        720,
+        380
+      ],
+      "webhookId": "5a9d6e3b-4e97-4197-804f-1b0a61ffb075"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "bigmovesio.app.n8n.cloud",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.7",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "49.149.64.29",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "PH",
+            "cf-ray": "8fe1729a43371053-HKG",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "cookie": "rl_page_init_referrer=RudderEncrypt%3AU2FsdGVkX19s8mt0nLwSKOAWckJO%2BfhhpEZFGBr6exU%3D; rl_page_init_referring_domain=RudderEncrypt%3AU2FsdGVkX1%2BuwugQmn5SpOg4hEvV1dT2rVXzd6WiOVk%3D; n8n-auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjM4NmZjM2RmLWM3ZmMtNGE5Zi05ZjQyLTMxYTYwZmQzYmQzNyIsImhhc2giOiJpdkZEb2w0YjREIiwiYnJvd3NlcklkIjoiWGljMXhOOGgvWWNxRWVRZVdTcXlKU2xoYWNTNFJBSEVFczFYMVBRZ09WMD0iLCJpYXQiOjE3MzYxMjU0MDIsImV4cCI6MTczNjczMDIwMn0.wyzS8ATdxVjPK6pM8Pin3SVjM-CxOu5oNdwVqNWxs0U; rl_anonymous_id=RudderEncrypt%3AU2FsdGVkX1%2FOzq90Zcn4p4CEdWOD6Y4xOC4ISv0WxzL%2B6AmyWr9xhyf6RrX0%2FFTJHXPBM5jDvzYTnchmrFU%2FWg%3D%3D; rl_user_id=RudderEncrypt%3AU2FsdGVkX1%2B413JKOu%2B4Ioislvnyn0pcE%2BzlFQZ4kq9%2BtKw3GOijuW6YzeuFh3%2B4ITZogQ1h2TCFLwcP%2BWLjpzKTNWWzlaAgYoBo%2FIhJV7T13Lyw11F%2FzmERmQuYrkTjpZzptV7%2B0vs2w9JhfD2uD4tGsrFJyVc2jKdGohY6mJk%3D; rl_trait=RudderEncrypt%3AU2FsdGVkX1%2BtIRS2Qe1ZH2nxPt564TwOsf%2Btbx1Yx9msKN6fBvod1FHG%2B4pgOQvkbpRzzTMATa0x7WKEa263kKwGsHsdxVN0LZkz4cNGzZszxODIG9bcWlcvbIBmKC5b9XdfJgjlFwK97Q4Rc7tWLmFOTJh3XCO8X1MX34Khtk4%3D; n8n_anonymous_id=0827efd0-e42d-461f-8142-8f2d29e93eaa; rl_session=RudderEncrypt%3AU2FsdGVkX1%2Bmx8CRpKxyNuKvKiaV7cV53RWD0EoKrJugEpSqtLPjWyr9ZPqeCL7UdHqxnbi5D21kiR%2B%2BFtpz1Ai2R0xJBoWUp4RO3Fkmogy3SHzG6L0QlG5lOCK54ZNM83r9U9924iC9X3UhwqfHCA%3D%3D; ph_phc_4URIAm1uYfJO7j8kWSe0J8lc8IqnstRLS7Jx8NcakHo_posthog=%7B%22distinct_id%22%3A%22fa8972778f1b26c95c2f56e5dcac0460449919a72b08cf533215bb49c07cb34d%23386fc3df-c7fc-4a9f-9f42-31a60fd3bd37%22%2C%22%24sesid%22%3A%5B1736226688747%2C%2201943f27-c7fa-7036-af07-3983d13b5c6d%22%2C1736226359287%5D%2C%22%24epp%22%3Atrue%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fbigmovesio.app.n8n.cloud%2Fsignin%22%7D%7D",
+            "priority": "u=0, i",
+            "sec-ch-ua": "\"Not)A;Brand\";v=\"99\", \"Brave\";v=\"127\", \"Chromium\";v=\"127\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"macOS\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-user": "?1",
+            "sec-gpc": "1",
+            "upgrade-insecure-requests": "1",
+            "x-forwarded-for": "49.149.64.29, 162.158.114.87",
+            "x-forwarded-host": "bigmovesio.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-2-ddc688d69-lkgnp",
+            "x-is-trusted": "yes",
+            "x-real-ip": "49.149.64.29"
+          },
+          "params": {},
+          "query": {
+            "base_id": "apppsc8i7GDCJyR6I",
+            "table_id": "tblhOGoFDwKBDIh1u",
+            "outputTable_id": "tbljgMgNIsPZM8Cfo",
+            "record_id": "recVYAmdyM5idfEn0"
+          },
+          "body": {},
+          "webhookUrl": "https://bigmovesio.app.n8n.cloud/webhook-test/5a4eac68-0f29-4e8c-945e-b65ba8a51f48",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Set Prompt Fields": {
+      "main": [
+        [
+          {
+            "node": "Clean Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "GET Airtable Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Airtable Record": {
+      "main": [
+        [
+          {
+            "node": "Set Record Status to AI Writing (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Context": {
+      "main": [
+        [
+          {
+            "node": "Set InputFields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set InputFields": {
+      "main": [
+        [
+          {
+            "node": "Split inputBrief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split inputBrief": {
+      "main": [
+        [
+          {
+            "node": "Set Brand Guideline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Prompt": {
+      "main": [
+        [
+          {
+            "node": "Convert OpenAI Output into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Record Status to AI Writing (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Set Prompt Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Brand Guideline": {
+      "main": [
+        [
+          {
+            "node": "Convert Brand Guideline into JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Brand Guideline into JSON": {
+      "main": [
+        [
+          {
+            "node": "Content Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Prompt Type, Product Type and Copy ID": {
+      "main": [
+        [
+          {
+            "node": "Create AI Output Record (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert OpenAI Output into JSON": {
+      "main": [
+        [
+          {
+            "node": "Map Prompt Type, Product Type and Copy ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create AI Output Record (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Data into 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Data into 1": {
+      "main": [
+        [
+          {
+            "node": "Update Record Status to AI Complete (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6798fa9f-2b44-47f9-ab78-9dd7a03a2be0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fa8972778f1b26c95c2f56e5dcac0460449919a72b08cf533215bb49c07cb34d"
+  },
+  "id": "5dqfw304mcEhAKrU",
+  "tags": [
+    {
+      "createdAt": "2024-12-17T22:38:04.164Z",
+      "updatedAt": "2024-12-17T22:38:04.164Z",
+      "id": "gGvm1CJL8gd1R8EN",
+      "name": "OS 3.2"
+    },
+    {
+      "createdAt": "2025-01-07T06:23:59.510Z",
+      "updatedAt": "2025-01-07T06:23:59.510Z",
+      "id": "mPrqlIkZQr0cgqJa",
+      "name": "template"
+    }
+  ]
+}

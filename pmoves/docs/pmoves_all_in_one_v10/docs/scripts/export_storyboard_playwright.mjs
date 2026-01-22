@@ -1,0 +1,6 @@
+import { chromium } from 'playwright';
+const OUT = process.env.OUT || 'storyboard.pdf';
+const ITEMS = JSON.parse(process.env.ITEMS || '[]');
+function html(items){ const cards=items.map((it,i)=>`<div class="card"><h3>${i+1}. ${it.text||''}</h3><div class="box">${it.archetype||'speech.round'} / ${it.variant||'primary'}</div></div>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;background:#0b0b10;color:#f3f3f7;font-family:system-ui,sans-serif}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{border:1px solid #333;border-radius:10px;padding:12px;background:#0f1115}.box{height:200px;border:1px dashed #444;border-radius:8px;display:grid;place-items:center}</style></head><body><div class="grid">${cards}</div></body></html>`; }
+(async()=>{ const browser=await chromium.launch(); const page=await browser.newPage({ viewport:{ width:1280, height:720 } }); await page.setContent(html(ITEMS),{ waitUntil:'networkidle' }); if(OUT.endsWith('.pdf')) await page.pdf({ path:OUT, printBackground:true, width:'1360px', height:'768px' }); else await page.screenshot({ path:OUT, fullPage:true }); await browser.close(); console.log("Exported", OUT); })().catch(e=>{ console.error(e); process.exit(1); });

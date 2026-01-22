@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Zero Task Status",
+  "type": "object",
+  "required": [
+    "session_id",
+    "task_id",
+    "status"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true
+}

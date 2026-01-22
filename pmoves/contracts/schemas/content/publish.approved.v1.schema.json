@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content Publish Approved",
+  "type": "object",
+  "required": [
+    "artifact_uri",
+    "title"
+  ],
+  "properties": {
+    "artifact_uri": {
+      "type": "string",
+      "pattern": "^s3://"
+    },
+    "title": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "description": {
+      "type": "string"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

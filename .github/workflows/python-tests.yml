@@ -26,6 +26,10 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      checks: write
     strategy:
       fail-fast: false
       matrix:
