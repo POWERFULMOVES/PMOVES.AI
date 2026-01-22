@@ -11,11 +11,19 @@ reviews:
     - "PMOVES.AI-Edition-Hardened-v3-clean"
     - "feat/hardened-*"
     - "fix/hardened-*"
+    - "feat/*"          # Feature branches
+    - "fix/*"           # Fix branches
+    - "gpu-*"           # GPU orchestrator fixes
+    - "remove-*"        # Submodule removals
+    - "revert-*"        # Revert PRs
 
   # Disable reviews on these branches
   excluded_branches:
     - "main"
     - "origin/main"
+
+# Language setting (locale for reviews)
+language: "en-US"
 
 # Documentation comment requirements
 documentation:
