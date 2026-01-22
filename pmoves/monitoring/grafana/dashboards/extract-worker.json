@@ -1,0 +1,129 @@
+{
+  "title": "Extract Worker",
+  "description": "Text embedding and indexing service - Qdrant + Meilisearch ingestion",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "extract-worker",
+  "tags": ["embedding", "indexing", "extract", "qdrant", "meilisearch"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Service Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Service Status",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "up{job=\"extract-worker\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Ingests",
+      "gridPos": { "x": 4, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(ingest_requests_total)", "legendFormat": "Ingests" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Total Chunks",
+      "gridPos": { "x": 9, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(ingest_chunks_total)", "legendFormat": "Chunks" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "purple", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "P95 Ingest Duration",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(ingest_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "s", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 15 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Errors",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(ingest_errors_total)", "legendFormat": "Errors" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] } } }
+    },
+    {
+      "type": "row",
+      "title": "Ingest Metrics",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingest Rate",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(rate(ingest_requests_total[5m]))", "legendFormat": "Ingests/sec" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingest Duration Percentiles",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(ingest_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(ingest_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(ingest_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "type": "row",
+      "title": "Backend Metrics",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Embeddings by Backend",
+      "gridPos": { "x": 0, "y": 15, "w": 8, "h": 8 },
+      "targets": [{ "expr": "sum(rate(embeddings_generated_total[5m])) by (backend)", "legendFormat": "{{backend}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Qdrant Upserts",
+      "gridPos": { "x": 8, "y": 15, "w": 8, "h": 8 },
+      "targets": [{ "expr": "sum(rate(qdrant_upserts_total[5m]))", "legendFormat": "Upserts/sec" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Meilisearch Indexed",
+      "gridPos": { "x": 16, "y": 15, "w": 8, "h": 8 },
+      "targets": [{ "expr": "sum(rate(meilisearch_indexed_total[5m]))", "legendFormat": "Indexed/sec" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "row",
+      "title": "Chunks Metrics",
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Chunks Generated Rate",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 6 },
+      "targets": [{ "expr": "sum(rate(ingest_chunks_total[5m]))", "legendFormat": "Chunks/sec" }],
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 30 } } }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" }
+}

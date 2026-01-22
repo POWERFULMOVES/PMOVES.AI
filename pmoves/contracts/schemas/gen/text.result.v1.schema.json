@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gen Text Result",
+  "type": "object",
+  "required": [
+    "completion"
+  ],
+  "properties": {
+    "completion": {
+      "type": "string"
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "prompt_tokens": {
+          "type": "integer"
+        },
+        "completion_tokens": {
+          "type": "integer"
+        },
+        "total_tokens": {
+          "type": "integer"
+        }
+      }
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

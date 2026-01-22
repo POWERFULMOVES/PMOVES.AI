@@ -1,0 +1,22 @@
+version: "3.8"
+services:
+  netdata:
+    image: netdata/netdata:stable
+    pid: host
+    network_mode: host
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    restart: unless-stopped
+    volumes:
+      - netdata_lib:/var/lib/netdata
+      - netdata_cache:/var/cache/netdata
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+volumes:
+  netdata_lib:
+  netdata_cache:

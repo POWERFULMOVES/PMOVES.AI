@@ -1,0 +1,214 @@
+[
+  {
+    "name": "PMOVES Social Publisher",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "pmoves/publish",
+          "options": {
+            "responseData": "{\"ok\":true,\"message\":\"Publishing initiated\"}"
+          },
+          "httpMethod": "POST"
+        },
+        "id": "wh_publish",
+        "name": "Webhook Trigger",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [200, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const body = $json;\n\nif (!body.content_url && !body.asset_url && !body.text) {\n  throw new Error('content_url, asset_url, or text is required');\n}\n\nconst contentUrl = body.content_url || body.asset_url || null;\nconst contentType = body.content_type || body.type || 'text';\n\n// Determine platforms to publish to\nlet platforms = body.platforms || ['discord'];\nif (typeof platforms === 'string') {\n  platforms = platforms.split(',').map(p => p.trim());\n}\n\nconst result = {\n  content_url: contentUrl,\n  content_type: contentType,\n  title: body.title || 'PMOVES Content',\n  description: body.description || body.text || '',\n  text: body.text || body.description || '',\n  platforms: platforms,\n  namespace: body.namespace || 'pmoves',\n  persona: body.persona || 'PMOVES',\n  tags: body.tags || [],\n  metadata: body.metadata || {},\n  studio_board_id: body.studio_board_id || null,\n  thread_id: body.thread_id || null,\n  created_at: new Date().toISOString()\n};\n\nreturn [{ json: result }];"
+        },
+        "id": "prepare_publish",
+        "name": "Prepare Publish Request",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json;\n\n// Build Discord embed\nconst embed = {\n  title: data.title,\n  description: data.description?.slice(0, 4096) || '',\n  color: 0x7C3AED,\n  timestamp: data.created_at,\n  footer: {\n    text: `${data.namespace} | ${data.persona}`\n  },\n  fields: []\n};\n\n// Add content type field\nembed.fields.push({\n  name: 'Type',\n  value: data.content_type,\n  inline: true\n});\n\n// Add tags if present\nif (data.tags && data.tags.length > 0) {\n  embed.fields.push({\n    name: 'Tags',\n    value: data.tags.slice(0, 10).join(', '),\n    inline: true\n  });\n}\n\n// Handle media\nif (data.content_url) {\n  if (data.content_type === 'image' || /\\.(jpg|jpeg|png|gif|webp)$/i.test(data.content_url)) {\n    embed.image = { url: data.content_url };\n  } else if (data.content_type === 'video' || /\\.(mp4|webm|mov)$/i.test(data.content_url)) {\n    embed.fields.push({\n      name: 'Video',\n      value: `[Watch](${data.content_url})`,\n      inline: false\n    });\n  } else if (data.content_type === 'audio' || /\\.(mp3|wav|m4a)$/i.test(data.content_url)) {\n    embed.fields.push({\n      name: 'Audio',\n      value: `[Listen](${data.content_url})`,\n      inline: false\n    });\n  }\n}\n\nconst discordPayload = {\n  embeds: [embed]\n};\n\n// Add text content if present\nif (data.text && data.text.length > 0) {\n  discordPayload.content = data.text.slice(0, 2000);\n}\n\nreturn [{ json: { data: data, discord_payload: discordPayload } }];"
+        },
+        "id": "build_discord",
+        "name": "Build Discord Payload",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [720, 200]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $json.data;\n\n// Build Twitter/X thread\nconst maxTweetLength = 280;\nconst text = data.description || data.text || data.title;\nconst tweets = [];\n\n// First tweet with main content\nlet mainTweet = text.slice(0, maxTweetLength - 30);\nif (data.tags && data.tags.length > 0) {\n  const hashtags = data.tags.slice(0, 3).map(t => `#${t.replace(/[^a-zA-Z0-9]/g, '')}`).join(' ');\n  if (mainTweet.length + hashtags.length + 1 <= maxTweetLength) {\n    mainTweet += ' ' + hashtags;\n  }\n}\ntweets.push({ text: mainTweet });\n\n// Add media if present\nif (data.content_url) {\n  tweets[0].media_url = data.content_url;\n}\n\n// If text is long, create thread\nif (text.length > maxTweetLength) {\n  const remaining = text.slice(maxTweetLength - 30);\n  const chunks = remaining.match(/.{1,270}/g) || [];\n  for (let i = 0; i < Math.min(chunks.length, 4); i++) {\n    tweets.push({ text: `${i + 2}/${chunks.length + 1} ${chunks[i]}` });\n  }\n}\n\nreturn [{ json: { data: data, twitter_thread: tweets } }];"
+        },
+        "id": "build_twitter",
+        "name": "Build Twitter Thread",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [720, 400]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
+          "sendBody": true,
+          "body": "={{ JSON.stringify($node['Build Discord Payload'].json.discord_payload) }}",
+          "options": {
+            "timeout": 30000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "post_discord",
+        "name": "Post to Discord",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1000, 200]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $node['Prepare Publish Request'].json.platforms.join(',') }}",
+                "operation": "contains",
+                "value2": "twitter"
+              }
+            ]
+          }
+        },
+        "id": "check_twitter",
+        "name": "Publish to Twitter?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1000, 400]
+      },
+      {
+        "parameters": {
+          "functionCode": "// Twitter API integration placeholder\n// In production, this would use Twitter API v2\nconst thread = $node['Build Twitter Thread'].json.twitter_thread;\n\n// For now, just log what would be posted\nconst result = {\n  platform: 'twitter',\n  status: 'skipped',\n  message: 'Twitter API credentials not configured',\n  would_post: thread\n};\n\nreturn [{ json: result }];"
+        },
+        "id": "post_twitter",
+        "name": "Post to Twitter",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1260, 400]
+      },
+      {
+        "parameters": {
+          "functionCode": "const data = $node['Prepare Publish Request'].json;\nconst discordResult = $node['Post to Discord'].json || {};\nconst twitterResult = $node['Post to Twitter']?.json || { status: 'skipped' };\n\nconst results = {\n  studio_board_id: data.studio_board_id,\n  platforms: {\n    discord: {\n      status: 'posted',\n      timestamp: new Date().toISOString()\n    },\n    twitter: twitterResult\n  },\n  content_url: data.content_url,\n  title: data.title,\n  published_at: new Date().toISOString()\n};\n\nreturn [{ json: results }];"
+        },
+        "id": "collect_results",
+        "name": "Collect Results",
+        "type": "n8n-nodes-base.function",
+        "typeVersion": 2,
+        "position": [1520, 300]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://agent-zero:8080/events/publish",
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ subject: 'social.publish.complete.v1', data: $json }) }}",
+          "options": {
+            "timeout": 10000,
+            "bodyContentType": "json"
+          }
+        },
+        "id": "publish_event",
+        "name": "Publish Completion Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1780, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $node['Prepare Publish Request'].json.studio_board_id }}",
+                "operation": "isNotEmpty"
+              }
+            ]
+          }
+        },
+        "id": "has_studio_id",
+        "name": "Has Studio Board ID?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1780, 500]
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPA_REST_URL }}/studio_board?id=eq.{{ $node['Prepare Publish Request'].json.studio_board_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {"name": "content-type", "value": "application/json"},
+              {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"},
+              {"name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}
+            ]
+          },
+          "sendBody": true,
+          "body": "={{ JSON.stringify({ status: 'published', meta: { published_at: new Date().toISOString(), platforms: $node['Collect Results'].json.platforms } }) }}",
+          "options": {"timeout": 10000}
+        },
+        "id": "update_studio",
+        "name": "Update Studio Board",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [2040, 500]
+      }
+    ],
+    "connections": {
+      "Webhook Trigger": {
+        "main": [[{"node": "Prepare Publish Request", "type": "main", "index": 0}]]
+      },
+      "Prepare Publish Request": {
+        "main": [[
+          {"node": "Build Discord Payload", "type": "main", "index": 0},
+          {"node": "Build Twitter Thread", "type": "main", "index": 0}
+        ]]
+      },
+      "Build Discord Payload": {
+        "main": [[{"node": "Post to Discord", "type": "main", "index": 0}]]
+      },
+      "Build Twitter Thread": {
+        "main": [[{"node": "Publish to Twitter?", "type": "main", "index": 0}]]
+      },
+      "Publish to Twitter?": {
+        "main": [
+          [{"node": "Post to Twitter", "type": "main", "index": 0}],
+          [{"node": "Collect Results", "type": "main", "index": 0}]
+        ]
+      },
+      "Post to Discord": {
+        "main": [[{"node": "Collect Results", "type": "main", "index": 0}]]
+      },
+      "Post to Twitter": {
+        "main": [[{"node": "Collect Results", "type": "main", "index": 0}]]
+      },
+      "Collect Results": {
+        "main": [[
+          {"node": "Publish Completion Event", "type": "main", "index": 0},
+          {"node": "Has Studio Board ID?", "type": "main", "index": 0}
+        ]]
+      },
+      "Has Studio Board ID?": {
+        "main": [
+          [{"node": "Update Studio Board", "type": "main", "index": 0}],
+          []
+        ]
+      }
+    },
+    "settings": {},
+    "staticData": null,
+    "active": false,
+    "meta": {
+      "description": "Multi-platform social publisher: Discord + Twitter/X with studio_board tracking"
+    },
+    "pinData": null,
+    "versionId": "social-publisher-v1",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": ["pmoves", "publishing", "discord", "twitter", "social"]
+  }
+]

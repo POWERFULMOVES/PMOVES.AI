@@ -1,0 +1,124 @@
+{
+  "title": "SupaSerch",
+  "description": "Multimodal holographic deep research orchestrator - NATS connectivity and process health",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "supaserch",
+  "tags": ["search", "research", "supaserch", "orchestration"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Service Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Service Status",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "up{job=\"supaserch-metrics\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "NATS Connected",
+      "gridPos": { "x": 4, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "supaserch_nats_connected", "legendFormat": "NATS" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DISCONNECTED", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "CONNECTED", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CPU Usage",
+      "gridPos": { "x": 9, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "rate(process_cpu_seconds_total{job=\"supaserch-metrics\"}[5m]) * 100", "legendFormat": "CPU" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 80 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Memory (RSS)",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "process_resident_memory_bytes{job=\"supaserch-metrics\"}", "legendFormat": "Memory" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "type": "stat",
+      "title": "Uptime",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "time() - process_start_time_seconds{job=\"supaserch-metrics\"}", "legendFormat": "Uptime" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "row",
+      "title": "Process Metrics",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU Usage Over Time",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "rate(process_cpu_seconds_total{job=\"supaserch-metrics\"}[5m]) * 100", "legendFormat": "CPU %" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory Usage Over Time",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "process_resident_memory_bytes{job=\"supaserch-metrics\"}", "legendFormat": "Resident" },
+        { "expr": "process_virtual_memory_bytes{job=\"supaserch-metrics\"}", "legendFormat": "Virtual" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "row",
+      "title": "GC Metrics",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "GC Collections",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 6 },
+      "targets": [{ "expr": "rate(python_gc_collections_total{job=\"supaserch-metrics\"}[5m])", "legendFormat": "Gen {{generation}}" }],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "GC Objects Collected",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 6 },
+      "targets": [{ "expr": "rate(python_gc_objects_collected_total{job=\"supaserch-metrics\"}[5m])", "legendFormat": "Gen {{generation}}" }],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "text",
+      "title": "Metrics Note",
+      "gridPos": { "x": 0, "y": 21, "w": 24, "h": 3 },
+      "options": {
+        "mode": "markdown",
+        "content": "## SupaSerch Metrics\n\n**Available:** NATS connection status, process metrics (CPU, memory, GC)\n\n**NATS Subjects:**\n- `supaserch.request.v1` - Incoming research requests\n- `supaserch.result.v1` - Research results\n\n**To Add:** Request counts, query latency, source breakdown. See `pmoves/services/supaserch/` for implementation."
+      }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" }
+}

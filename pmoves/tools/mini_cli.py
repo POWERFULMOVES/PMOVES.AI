@@ -85,6 +85,7 @@ profile_app = typer.Typer(help="Hardware profile management")
 mcp_app = typer.Typer(help="Manage MCP toolkits")
 automations_app = typer.Typer(help="n8n automations")
 crush_app = typer.Typer(help="Crush CLI integration")
+agent_sdk_app = typer.Typer(help="PMOVES Agent SDK management")
 deps_app = typer.Typer(help="Host tooling dependency helpers")
 tailscale_app = typer.Typer(help="Tailscale helpers")
 env_app = typer.Typer(help="Environment management (tier layout)")
@@ -93,6 +94,7 @@ app.add_typer(profile_app, name="profile")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(automations_app, name="automations")
 app.add_typer(crush_app, name="crush")
+app.add_typer(agent_sdk_app, name="agent-sdk")
 app.add_typer(deps_app, name="deps")
 app.add_typer(tailscale_app, name="tailscale")
 app.add_typer(env_app, name="env")
@@ -1682,7 +1684,11 @@ def agent_sdk_list(
     status: str = typer.Option("active", "--status", help="Filter by status"),
     limit: int = typer.Option(20, "--limit", "-n", help="Maximum number to show"),
 ) -> None:
-    """List existing PMOVES Agent instances.
+    """List existing PMOVES Agent instances."""
+
+    typer.echo("Agent listing not yet implemented.")
+
+
 def main() -> None:
     app()
 

@@ -4,12 +4,18 @@ This FastAPI worker periodically fetches recent geometry packets, evaluates fitn
 metrics, and publishes updated parameter packs for CGP builders and decoders.
 The concrete evolutionary logic will be filled in subsequent iterations; for now
 we scaffold configuration, health endpoints, and background scheduling hooks.
+
+Service URL resolution via PMOVES service discovery:
+1. AGENT_ZERO_BASE_URL environment variable (explicit override)
+2. Service catalog (Supabase) via service registry
+3. Docker DNS fallback (agent-zero:8080)
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+import socket
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
@@ -21,17 +27,63 @@ from contextlib import asynccontextmanager
 logger = logging.getLogger("evo-controller")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
+# Service discovery integration
+try:
+    from services.common.service_registry import get_service_url_sync
+    SERVICE_REGISTRY_AVAILABLE = True
+except ImportError:
+    SERVICE_REGISTRY_AVAILABLE = False
+
+    def get_service_url_sync(slug: str, *, default_port: int = 80) -> str:
+        """Fallback when service registry is not available."""
+        return f"http://{slug}:{default_port}"
+
+# NATS service announcement integration
+try:
+    from services.common.nats_service_listener import announce_service, ServiceTier
+    NATS_ANNOUNCE_AVAILABLE = True
+except ImportError:
+    NATS_ANNOUNCE_AVAILABLE = False
+
 _controller: Optional[EvoSwarmController] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage EvoSwarm controller application lifespan."""
+    """Manage EvoSwarm controller application lifespan with NATS service announcement."""
     global _controller
+
+    # Get service configuration for announcement
+    port = int(os.getenv("PORT", "8113"))
+    hostname = os.getenv("HOSTNAME", socket.gethostname())
+    slug = os.getenv("SERVICE_SLUG", "evo-controller")
+    name = os.getenv("SERVICE_NAME", "PMOVES EvoSwarm Controller")
+    url = os.getenv("SERVICE_URL") or f"http://{hostname}:{port}"
+    health_check = f"{url}/health"
+
+    # Announce service on NATS
+    if NATS_ANNOUNCE_AVAILABLE:
+        try:
+            await announce_service(
+                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+                slug=slug,
+                name=name,
+                url=url,
+                health_check=health_check,
+                tier=ServiceTier.AGENT,
+                port=port,
+                metadata={"version": "0.1.0", "publishes": ["geometry.swarm.meta.v1"]},
+                retry=True,
+            )
+            logger.info(f"NATS service announcement published: {slug} at {url}")
+        except Exception as e:
+            logger.warning(f"Failed to publish NATS service announcement: {e}")
+
     # Startup
     _controller = EvoSwarmController(config=EvoConfig())
     await _controller.start()
     yield
+
     # Shutdown
     if _controller:
         await _controller.shutdown()
@@ -192,7 +244,16 @@ class EvoSwarmController:
             return False
 
     async def _publish_swarm_meta(self, pack: Dict[str, Any]) -> None:
-        base = os.getenv("AGENT_ZERO_BASE_URL") or os.getenv("AGENTZERO_BASE_URL") or "http://agent-zero:8080"
+        """Publish swarm metadata via Agent Zero events API.
+
+        Agent Zero URL resolution priority:
+        1. AGENT_ZERO_BASE_URL environment variable (explicit override)
+        2. Service catalog (Supabase) via service registry
+        3. Docker DNS fallback (agent-zero:8080)
+        """
+        base = os.getenv("AGENT_ZERO_BASE_URL") or os.getenv("AGENTZERO_BASE_URL")
+        if not base:
+            base = get_service_url_sync("agent-zero", default_port=8080)
         url = base.rstrip("/") + "/events/publish"
         body = {
             "topic": "geometry.swarm.meta.v1",

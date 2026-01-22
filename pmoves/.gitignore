@@ -1,7 +1,13 @@
-# Core
-.env
-.env.*
-.env *
+<<<<<<< HEAD
+# Tier environment files
+env.tier-*
+
+# Generated environment files
+.env.generated
+env.cgp.json
+env.shared.generated
+
+# Secrets (DO NOT COMMIT)
 .env.local
 .env.supa.remote
 env.shared
@@ -11,52 +17,51 @@ supa.md
 !.env.*.example
 !.env.local.example
 !env.shared.example
-*.log
-.last_logs.txt
 
-# Backup files (may contain credentials)
-*.backup*
-*-backup-*
-*.bak
+# Archon MCP logs
+*_archon_mcp_*.json
 
-# WSL artifacts
-.wsl/
+# VSCode/user-specific files
+launch.json
+extensions.json
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-.pytest_cache/
-.ipynb_checkpoints/
-
-# OS/editor
-.DS_Store
-.idea/
-.vscode/
-Thumbs.db
-
-# Build/output
-dist/
-build/
-*.egg-info/
-
-# Binaries and large docs
-*.zip
-tools/bin/
-
-# Local data
-neo4j/data/
-minio-data/
-supabase-data/
+# Data directories (generated)
+data/chit/
 data/jellyfin/
 data/open-notebook/
+data/ports.json
+notebook_data/
+surreal_data/
+=======
+env.tier-*
+
+# Generated environment files
+.env.generated
+env.cgp.json
+env.shared.generated
+
+# Archon MCP logs
+*_archon_mcp_*.json
+
+# VSCode/user-specific files
+launch.json
+extensions.json
+
+# Data directories (generated)
 data/chit/
-cloudflared/
-# Agent Zero runtime data (keep structure, ignore runtime)
-pmoves/data/agent-zero/memory/
-pmoves/data/agent-zero/runtime/
-pmoves/data/agent-zero/tmp/
-pmoves/data/agent-zero/logs/
+data/jellyfin/
+data/open-notebook/
+notebook_data/
+surreal_data/
+
+# Vendor
+vendor/python/
+vendor/node_modules/
+
+# Temporary files
+*.gif
+*.tmp
+*.log
 
 # Tier environment files (actual secrets - use .example for tracked templates)
 env.tier-api
@@ -66,3 +71,4 @@ env.tier-llm
 env.tier-media
 env.tier-ui
 env.tier-worker
+>>>>>>> origin/main

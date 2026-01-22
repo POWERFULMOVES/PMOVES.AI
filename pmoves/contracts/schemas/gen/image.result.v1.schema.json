@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gen Image Result",
+  "type": "object",
+  "required": [
+    "artifact_uri"
+  ],
+  "properties": {
+    "artifact_uri": {
+      "type": "string"
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

@@ -551,39 +551,31 @@ def _load_syncer() -> NotebookSyncer:
 
 
 <<<<<<< HEAD
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+=======
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifecycle Management
 # ─────────────────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan for Notebook Sync."""
-    global syncer
-
-    # Startup
-    await syncer.start()
-
-    yield
-
-    # Shutdown
-=======
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
+>>>>>>> origin/main
     syncer = _load_syncer()
     app.state.syncer = syncer
     await syncer.start()
     yield
->>>>>>> origin/feat/hardened-chit-geometry
     await syncer.stop()
 
 
 app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0", lifespan=lifespan)
+
 <<<<<<< HEAD
-syncer = _load_syncer()
+
 =======
->>>>>>> origin/feat/hardened-chit-geometry
-
-
+>>>>>>> origin/main
 @app.get("/healthz")
 async def healthz(request: Request) -> Dict[str, Any]:
     syncer = request.app.state.syncer
