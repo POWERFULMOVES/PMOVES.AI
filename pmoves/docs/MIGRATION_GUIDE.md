@@ -1,6 +1,49 @@
 # PMOVES.AI Migration Guide
 
-This guide helps you migrate from legacy PMOVES.AI environments to the new 7-tier architecture.
+This guide helps you migrate from legacy PMOVES.AI environments to the new tier architecture.
+
+## Latest Migration: v5.12 → v5.13 Hardened (2026-01-22)
+
+### Breaking Changes for Hardened Production Merge
+
+#### 1. Root Makefile Restored
+Root `Makefile` now delegates to `pmoves/Makefile`:
+```bash
+make help                    # Show help
+make update-service-docs      # Update docs
+make smoke                    # Run smoke tests
+```
+
+#### 2. Authentication Required for Geometry API
+RLS policies changed from `USING (true)` to `USING (auth.uid() IS NOT NULL)`.
+
+**Action:** Ensure all geometry API clients include JWT authentication.
+
+#### 3. Submodules on Hardened Branches
+All 34 submodules now track `PMOVES.AI-Edition-Hardened` branches.
+
+**Verify:**
+```bash
+git submodule status | grep -v "PMOVES.AI-Edition-Hardened"
+# Should return empty
+```
+
+#### 4. Service Binding
+Services bind to `127.0.0.1` instead of `0.0.0.0` for security.
+
+#### 5. Port Registry
+New dynamic port allocation via `pmoves/docs/PORT_REGISTRY.md`.
+
+**Shared Port 8100:**
+- Gateway Agent (profile: agents)
+- Session Context Worker (profile: base)
+- Activate only one profile at a time.
+
+---
+
+## Legacy Migration (7-Tier Architecture)
+
+This guide helps you migrate from legacy PMOVES.AI environments to the tier architecture.
 
 ## What Changed?
 
