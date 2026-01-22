@@ -133,3 +133,7 @@
 	path = PMOVES-MAI-UI
 	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-transcribe-and-fetch"]
+	path = PMOVES-transcribe-and-fetch
+	url = https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git
+	branch = PMOVES.AI-Edition-Hardened
