@@ -13,8 +13,11 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 from fastapi import Body, Depends, FastAPI, HTTPException
+<<<<<<< HEAD
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+=======
+>>>>>>> origin/main
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -333,6 +336,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Archon (PMOVES v5)", lifespan=lifespan)
 
+<<<<<<< HEAD
 # Mount Archon UI static files if available
 # This fixes the "white screen" issue where assets at /assets/ were not accessible
 ARCHON_UI_STATIC_DIR = os.environ.get("ARCHON_UI_STATIC_DIR", "/app/static/archon-ui")
@@ -361,6 +365,8 @@ async def serve_ui_root():
         "ui_path": ARCHON_UI_STATIC_DIR,
     }
 
+=======
+>>>>>>> origin/main
 
 def get_archon_service() -> ArchonService:
     service = getattr(app.state, "service", None)

@@ -1,20 +1,13 @@
-# YAML anchor for app-tier env loading (matches id008 in main docker-compose.yml)
-x-env-tier-app: &id008
-  env_file:
-    - env.shared
-    - env.tier-app
 
 services:
   wger:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     container_name: pmoves-wger
     restart: unless-stopped
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     networks:
       pmoves_app:
         aliases:
           - pmoves-wger
-          - wger
     environment:
       DJANGO_DEBUG: "${WGER_DJANGO_DEBUG:-False}"
       WGER_USE_GUNICORN: "${WGER_USE_GUNICORN:-True}"
@@ -46,12 +39,10 @@ services:
     image: ${FIREFLY_IMAGE:-ghcr.io/powerfulmoves/pmoves-wealth:pmoves-latest}
     container_name: pmoves-firefly
     restart: unless-stopped
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     networks:
       pmoves_app:
         aliases:
           - pmoves-firefly
-          - firefly
     environment:
       # Keep secrets sourced from env files / runtime secrets. Do not inline defaults.
       APP_KEY: ${FIREFLY_APP_KEY}
@@ -61,7 +52,6 @@ services:
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
     ports:
-      - "${FIREFLY_PORT:-8800}:8080"
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
@@ -69,8 +59,6 @@ services:
   open-notebook-surrealdb-ext:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: pmoves-open-notebook-surrealdb
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
-    command: start --log info --user ${SURREL_USER} --pass ${SURREL_PASS} rocksdb:/mydata/mydatabase.db
     restart: unless-stopped
     user: "0:0"
     networks:
@@ -84,40 +72,24 @@ services:
   open-notebook-ext:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
     # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
-    container_name: pmoves-open-notebook-ext
-    restart: unless-stopped
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
       pmoves_app:
         aliases:
-          - pmoves-open-notebook-ext
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
     ports:
-      - "${OPEN_NOTEBOOK_UI_PORT_EXT:-8504}:8502"    # UI (alternate port to avoid conflict)
-      - "${OPEN_NOTEBOOK_API_PORT_EXT:-5056}:5055"  # API (alternate port)
-    volumes:
-      - ./data/open-notebook/notebook_data_ext:/app/data
-    profiles:
-      - alternate
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
-    user: "65532:65532"
-    <<: *id008  # Use app-tier env loading (env.shared + env.tier-app)
     networks:
       pmoves_app:
         aliases:
           - pmoves-jellyfin
-          - jellyfin
-      pmoves_bus:
-        aliases:
-          - jellyfin
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
@@ -132,10 +104,6 @@ services:
 networks:
   pmoves_app:
     external: true
-    name: pmoves_app
-  pmoves_bus:
-    external: true
-    name: pmoves_bus
 
 volumes:
   firefly-storage:

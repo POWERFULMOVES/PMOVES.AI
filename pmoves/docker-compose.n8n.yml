@@ -42,7 +42,6 @@ services:
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
-    networks: [pmoves_api, pmoves_app]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -56,18 +55,9 @@ services:
     environment:
       - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
-    networks: [pmoves_api, pmoves_app]
     depends_on:
       - n8n
     volumes:
       - n8n-data:/home/node/.n8n
-
-networks:
-  pmoves_api:
-    external: true
-    name: pmoves_api
-  pmoves_app:
-    external: true
-    name: pmoves_app
 volumes:
   n8n-data: {}

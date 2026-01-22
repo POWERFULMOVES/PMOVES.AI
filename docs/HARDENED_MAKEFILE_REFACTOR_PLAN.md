@@ -54,7 +54,11 @@ up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 
 ## Part 2: Hardened Branch Requirements
 
+<<<<<<< HEAD
 ### 2.1 8-Tier Environment Architecture
+=======
+### 2.1 6-Tier Environment Architecture
+>>>>>>> origin/main
 
 The hardened branch implements tier-based environment segmentation:
 
@@ -63,11 +67,17 @@ The hardened branch implements tier-based environment segmentation:
 | `env.tier-data` | Infrastructure | Postgres, Qdrant, Neo4j, Meilisearch, MinIO, NATS | DB passwords, master keys, root credentials only |
 | `env.tier-api` | Data Access APIs | PostgREST, Presign, Hi-RAG Gateway | Neo4j/Meili/Qdrant credentials, NO external API keys |
 | `env.tier-llm` | LLM Gateway | TensorZero Gateway, TensorZero UI | **ALL** external LLM provider API keys |
+<<<<<<< HEAD
 | `env.tier-media` | Media Processing | PMOVES.YT, FFmpeg-Whisper, Media-Video/Audio | DATABASE_URL, MinIO, NATS URLs |
 | `env.tier-agent` | Agent Orchestration | Agent Zero, Archon, SupaSerch, DeepResearch | Supabase/Hi-RAG URLs, NO external API keys |
 | `env.tier-worker` | Background Workers | Extract, LangExtract, PDF-ingest, Notebook-sync | Internal URLs only |
 | `env.tier-app` | External Integrations | Wger, Firefly, Jellyfin, Open Notebook | Integration-specific credentials |
 | `env.tier-ui` | User Interface | PMOVES UI, Tokenism UI | Supabase anon keys, public URLs |
+=======
+| `env.tier-worker` | Background Workers | Extract, LangExtract, PDF-ingest, Notebook-sync | Internal URLs only |
+| `env.tier-media` | Media Processing | PMOVES.YT, FFmpeg-Whisper, Media-Video/Audio | DATABASE_URL, MinIO, NATS URLs |
+| `env.tier-agent` | Agent Orchestration | Agent Zero, Archon, SupaSerch, DeepResearch | Supabase/Hi-RAG URLs, NO external API keys |
+>>>>>>> origin/main
 
 **Critical Security Rule:** External API keys (OpenAI, Anthropic, etc.) MUST only be in `env.tier-llm`. All LLM calls go through TensorZero Gateway.
 
