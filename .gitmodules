@@ -62,10 +62,6 @@
 	path = PMOVES-Tailscale
 	url = https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "pmoves/integrations/archon"]
-	path = pmoves/integrations/archon
-	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
-	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-n8n"]
 	path = PMOVES-n8n
 	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
@@ -97,10 +93,6 @@
 [submodule "PMOVES-E2B-Danger-Room"]
 	path = PMOVES-E2B-Danger-Room
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-	branch = PMOVES.AI-Edition-Hardened
-[submodule "PMOVES-E2B-Danger-Room-Desktop"]
-	path = PMOVES-E2B-Danger-Room-Desktop
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
 	branch = PMOVES.AI-Edition-Hardened
 [submodule "PMOVES-E2B-Danger-Room-Deskdesktop"]
 	path = PMOVES-E2B-Danger-Room-Deskdesktop
