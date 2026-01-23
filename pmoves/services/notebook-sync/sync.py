@@ -550,35 +550,29 @@ def _load_syncer() -> NotebookSyncer:
     )
 
 
-<<<<<<< HEAD
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
-=======
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifecycle Management
 # ─────────────────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan for Notebook Sync."""
->>>>>>> origin/main
-    syncer = _load_syncer()
-    app.state.syncer = syncer
+    global syncer
+
+    # Startup
     await syncer.start()
+
     yield
+
+    # Shutdown
     await syncer.stop()
 
 
 app = FastAPI(title="PMOVES Notebook Sync", version="1.0.0", lifespan=lifespan)
+syncer = _load_syncer()
 
-<<<<<<< HEAD
 
-=======
->>>>>>> origin/main
 @app.get("/healthz")
 async def healthz(request: Request) -> Dict[str, Any]:
-    syncer = request.app.state.syncer
     return {
         "ok": True,
         "last_sync": syncer.last_sync_time.isoformat().replace("+00:00", "Z")
@@ -594,7 +588,6 @@ def metrics():
 
 @app.post("/sync")
 async def trigger_sync(request: Request) -> Dict[str, Any]:
-    syncer = request.app.state.syncer
     if syncer._lock.locked():  # pylint: disable=protected-access
         raise HTTPException(status_code=409, detail="Sync already in progress")
     await syncer.trigger_once()

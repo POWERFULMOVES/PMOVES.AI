@@ -9,12 +9,9 @@
 -- 3. Checking health status via health_check_url
 -- 4. Using metadata for custom service properties
 
-<<<<<<< HEAD
 -- Create the pmoves_core schema (must exist before creating tables)
 CREATE SCHEMA IF NOT EXISTS pmoves_core;
 
-=======
->>>>>>> origin/main
 -- Create the service catalog table
 CREATE TABLE IF NOT EXISTS pmoves_core.service_catalog (
   -- Primary identification
@@ -30,13 +27,8 @@ CREATE TABLE IF NOT EXISTS pmoves_core.service_catalog (
   default_port INTEGER,
   env_var TEXT,  -- Environment variable name for custom URL override
 
-<<<<<<< HEAD
-  -- Tier classification (matches 8-tier environment architecture)
-  tier TEXT NOT NULL CHECK (tier IN ('data', 'api', 'llm', 'media', 'agent', 'worker', 'app', 'ui')),
-=======
   -- Tier classification (matches 6-tier environment architecture)
   tier TEXT NOT NULL CHECK (tier IN ('data', 'api', 'llm', 'worker', 'media', 'agent', 'ui')),
->>>>>>> origin/main
 
   -- Extensibility
   tags JSONB DEFAULT '{}'::jsonb,

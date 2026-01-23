@@ -96,7 +96,6 @@ SUPASERCH = ServiceDefinition(
     description="Multimodal holographic deep research orchestrator",
 )
 
-<<<<<<< HEAD
 MODEL_REGISTRY = ServiceDefinition(
     name="model-registry",
     port=8110,
@@ -108,8 +107,6 @@ MODEL_REGISTRY = ServiceDefinition(
     description="Dynamic model configuration service with Supabase backend",
 )
 
-=======
->>>>>>> origin/main
 CONSCIOUSNESS_SERVICE = ServiceDefinition(
     name="consciousness-service",
     port=0,  # NATS worker only
@@ -553,10 +550,7 @@ SERVICES = [
     ARCHON,
     DEEPRESEARCH,
     SUPASERCH,
-<<<<<<< HEAD
     MODEL_REGISTRY,
-=======
->>>>>>> origin/main
     TENSORZERO_GATEWAY,
     TENSORZERO_CLICKHOUSE,
     TENSORZERO_UI,

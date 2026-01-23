@@ -1157,9 +1157,6 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
     _session_threads.pop(session_id, None)
     logger.info("claude_session_ended", extra={"session_id": session_id, "end_reason": end_reason})
 
-<<<<<<< HEAD
-=======
-
     global _nats_loop_task
     # Validate critical environment configuration
     if not DISCORD_WEBHOOK_URL:
@@ -1187,7 +1184,6 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
         )
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 
->>>>>>> origin/main
 
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):
