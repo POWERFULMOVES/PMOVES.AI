@@ -8,6 +8,9 @@ WAIT_T_SHORT=${WAIT_T_SHORT:-60}
 WAIT_T_MED=${WAIT_T_MED:-120}
 WAIT_T_LONG=${WAIT_T_LONG:-180}
 
+# Service URLs
+YTB=${YTB:-http://localhost:8077}
+
 wait_http() { # url timeout_seconds
   local url="$1"; local timeout="${2:-$WAIT_T_SHORT}"; local start=$(date +%s)
   echo "→ Waiting for $url (timeout ${timeout}s)"
