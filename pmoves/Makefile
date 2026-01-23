@@ -60,7 +60,7 @@ SERVICE_URL = python3 tools/service_health_check.py $(1) --port $(2)
 
 # env.shared is dotenv-style and may contain values that are not safe to `source` directly (multi-line, etc).
 # Use the repo's sanitizer/loader so scripts get stable, safe environment variables.
-LOAD_ENV_SHARED := . ./scripts/with-env.sh;
+LOAD_ENV_SHARED := . ./scripts/with-env.sh
 export LOAD_ENV_SHARED
 
 .PHONY: ensure-env-shared
@@ -119,7 +119,7 @@ up-bots: ## Start bot services (BotZ + messaging gateway)
 .PHONY: up-obs
 up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
 	@echo "📊 Starting observability stack (monitoring FIRST)..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
 	@echo "⏳ Waiting for observability to be ready..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || echo "⚠️ Prometheus not ready (may still be starting)"
 	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || echo "⚠️ Grafana not ready (may still be starting)"
@@ -540,7 +540,7 @@ down-data: ## Stop data tier
 .PHONY: down-obs
 down-obs: ## Stop observability stack
 	@echo "📊 Stopping observability..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring down
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring down
 
 .PHONY: down-ui
 down-ui: ## Stop PMOVES UI
@@ -1002,7 +1002,7 @@ clean:
 	@$(DC) down -v --remove-orphans
 
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
-	@$(LOAD_ENV_SHARED) \
+	@$(LOAD_ENV_SHARED); \
 	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ] && [ -z "$$CLOUDFLARE_TUNNEL_NAME" ]; then \
 	  echo "↷ Set CLOUDFLARE_TUNNEL_TOKEN (Zero Trust token) or CLOUDFLARE_TUNNEL_NAME + credentials in $(ENV_SHARED_FILE) before running make up-cloudflare."; \
 	  exit 1; \
@@ -1178,10 +1178,10 @@ brand-defaults: ensure-env-shared ## Apply branded defaults and create required 
 .PHONY: neo4j-reset neo4j-status
 neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
 	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) stop neo4j || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) rm -f neo4j || true
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) stop neo4j || true
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) rm -f neo4j || true
 	@docker volume rm $(PROJECT)_neo4j-data || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d neo4j
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) up -d neo4j
 	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
 	@$(LOAD_ENV_SHARED) bash -c ' \
 		user=$${NEO4J_AUTH%%/*}; \
