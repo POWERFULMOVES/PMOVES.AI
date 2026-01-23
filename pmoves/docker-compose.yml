@@ -1462,7 +1462,7 @@ services:
     - pmoves_app
     - pmoves_bus
   invidious:
-    image: quay.io/invidious/invidious:2024.12.09
+    image: quay.io/invidious/invidious:latest
     restart: unless-stopped
     <<: *id004
     environment:

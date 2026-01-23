@@ -622,7 +622,7 @@
         },
         {
           "key": "PRESIGN_SHARED_SECRET",
-          "file": "pmoves/env.presign.additions",
+          "file": "pmoves/env.shared",
           "prompt": "Presign shared secret",
           "help": "Used to authenticate webhook callbacks from ComfyUI.",
           "required": true,

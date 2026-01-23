@@ -81,6 +81,17 @@ def upsert_env(path: Path, pairs: dict) -> None:
     m = re.search(r"^\s*INVIDIOUS_HMAC_KEY\s*=(.*)$", text, re.M)
     if not m or len(m.group(1).strip()) < 32:
         text = _set_kv(text, "INVIDIOUS_HMAC_KEY", _strong_random(24))
+
+    # Strengthen PRESIGN_SHARED_SECRET if placeholder/weak
+    m = re.search(r"^\s*PRESIGN_SHARED_SECRET\s*=(.*)$", text, re.M)
+    if not m or m.group(1).strip() in ("change_me", "changeme", ""):
+        text = _set_kv(text, "PRESIGN_SHARED_SECRET", _strong_random(32))
+
+    # Strengthen RENDER_WEBHOOK_SHARED_SECRET if placeholder/weak
+    m = re.search(r"^\s*RENDER_WEBHOOK_SHARED_SECRET\s*=(.*)$", text, re.M)
+    if not m or m.group(1).strip() in ("change_me", "changeme", ""):
+        text = _set_kv(text, "RENDER_WEBHOOK_SHARED_SECRET", _strong_random(32))
+
     # Ensure NEO4J_PASSWORD exists; generate if missing/empty
     pwdm = re.search(r"^\s*NEO4J_PASSWORD\s*=(.*)$", text, re.M)
     needs_pw = True

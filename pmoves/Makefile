@@ -1649,6 +1649,14 @@ up-n8n: ensure-env-shared
 	  $(DC) up -d n8n n8n-runners; \
 	fi
 
+.PHONY: up-external
+up-external: ## Start external stacks (placeholder for future integrations)
+	@echo "→ No external stacks configured (up-external is a stub target)"
+
+.PHONY: up-jellyfin-ai
+up-jellyfin-ai: ## Start Jellyfin AI overlay (placeholder for future integrations)
+	@echo "→ No Jellyfin AI overlay configured (up-jellyfin-ai is a stub target)"
+
 .PHONY: up-comfyui comfyui-smoke
 up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)
 	@$(DC) --profile creator up -d comfyui
