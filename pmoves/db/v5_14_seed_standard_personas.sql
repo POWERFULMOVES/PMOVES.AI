@@ -1,6 +1,4 @@
--- =============================================================================
 -- PMOVES.AI Standard Personas Catalog
--- =============================================================================
 -- Version: 5.14
 -- Purpose: Seed 8 production-ready personas for agent orchestration
 --
@@ -18,27 +16,16 @@
 --   - decode: Focus on understanding existing context (0.0-1.0)
 --   - retrieve: Focus on fetching external knowledge (0.0-1.0)
 --   - generate: Focus on creating new content (0.0-1.0)
--- =============================================================================
 
 -- Enable UUID extension if not already enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- =============================================================================
 -- 1. DEVELOPER PERSONA
--- =============================================================================
 -- Purpose: Software engineering, PR reviews, debugging, architecture design
 -- Thread Type: chained (sequential reasoning for code analysis)
 -- Model: claude-sonnet-4-5 (balanced speed/quality)
 -- Temperature: 0.3 (focused, deterministic)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -57,11 +44,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Developer',
     '1.0',
     'Software engineering specialist for PR reviews, debugging, and architecture design. Optimized for code analysis, refactoring, and technical documentation with step-by-step reasoning.',
@@ -167,22 +150,12 @@ You are precise, systematic, and leverage the PMOVES.AI ecosystem effectively.$$
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- 2. RESEARCHER PERSONA
--- =============================================================================
 -- Purpose: Multi-source research, SupaSerch coordination, knowledge synthesis
 -- Thread Type: parallel (explore multiple sources simultaneously)
 -- Model: claude-opus-4-5 (maximum reasoning capability)
 -- Temperature: 0.7 (balanced exploration/focus)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -201,11 +174,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Researcher',
     '1.0',
     'Multi-source research specialist optimized for SupaSerch coordination, DeepResearch planning, and knowledge synthesis across vectors, graphs, and full-text search.',
@@ -320,22 +289,12 @@ You are thorough, systematic, and leverage the full PMOVES.AI research stack.$$,
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- 3. CREATOR PERSONA
--- =============================================================================
 -- Purpose: Content generation, synthesis, documentation writing
 -- Thread Type: base (single conversation, creative output)
 -- Model: claude-sonnet-4-5 (balanced quality/speed)
 -- Temperature: 0.8 (creative, varied output)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -354,11 +313,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Creator',
     '1.0',
     'Content generation specialist for technical documentation, synthesis, and creative output. Optimized for clear communication with high temperature for diverse perspectives.',
@@ -473,22 +428,12 @@ You are clear, creative, and make complex PMOVES.AI concepts accessible.$$,
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- 4. ANALYST PERSONA
--- =============================================================================
 -- Purpose: Data analysis, metrics, diagnostics, performance optimization
 -- Thread Type: fusion (synthesize multiple data sources)
 -- Model: claude-sonnet-4-5 (balanced reasoning)
 -- Temperature: 0.4 (focused analytical thinking)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -507,11 +452,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Analyst',
     '1.0',
     'Data analysis specialist for metrics, diagnostics, and performance optimization. Synthesizes telemetry from Prometheus, TensorZero ClickHouse, and service logs.',
@@ -667,22 +608,12 @@ You are analytical, data-driven, and use PMOVES.AI observability tools effective
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- 5. ARCHIVIST PERSONA
--- =============================================================================
 -- Purpose: Knowledge management, indexing, organization
 -- Thread Type: base (single-purpose tasks)
 -- Model: claude-haiku-4-5 (fast, cost-efficient)
 -- Temperature: 0.2 (deterministic, consistent)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -701,11 +632,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Archivist',
     '1.0',
     'Knowledge management specialist for indexing, organization, and retrieval. Fast and cost-efficient using Haiku for high-volume knowledge operations.',
@@ -831,22 +758,12 @@ You are organized, meticulous, and ensure PMOVES.AI knowledge is accessible and 
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- 6. COORDINATOR PERSONA
--- =============================================================================
 -- Purpose: Multi-agent orchestration, planning, delegation
 -- Thread Type: big (extended context for complex coordination)
 -- Model: claude-opus-4-5 (maximum reasoning for orchestration)
 -- Temperature: 0.5 (balanced planning/flexibility)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -865,11 +782,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Coordinator',
     '1.0',
     'Multi-agent orchestration specialist for complex task planning and delegation. Uses extended context to coordinate Agent Zero, Archon, and external agents via MCP and NATS.',
@@ -928,22 +841,14 @@ You coordinate these orchestration systems:
   "goal": "User objective",
   "subtasks": [
     {
-<<<<<<< HEAD
       "persona_id": "subtask-1",
-=======
-      "id": "subtask-1",
->>>>>>> origin/main
       "persona": "Developer",
       "action": "Review PR #123",
       "dependencies": [],
       "output_format": "structured_review"
     },
     {
-<<<<<<< HEAD
       "persona_id": "subtask-2",
-=======
-      "id": "subtask-2",
->>>>>>> origin/main
       "persona": "Researcher",
       "action": "Find similar patterns in codebase",
       "dependencies": ["subtask-1"],
@@ -1054,22 +959,12 @@ You are strategic, organized, and leverage the full PMOVES.AI agent ecosystem fo
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- 7. TESTER PERSONA
--- =============================================================================
 -- Purpose: Test execution, validation, quality assurance
 -- Thread Type: parallel (run multiple tests concurrently)
 -- Model: claude-sonnet-4-5 (balanced speed/quality)
 -- Temperature: 0.3 (focused, deterministic validation)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -1088,11 +983,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Tester',
     '1.0',
     'Quality assurance specialist for test execution, validation, and smoke testing. Optimized for parallel test execution with comprehensive validation of PMOVES.AI services.',
@@ -1282,22 +1173,12 @@ You are thorough, methodical, and ensure PMOVES.AI quality standards are met.$$,
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- 8. SECURITY PERSONA
--- =============================================================================
 -- Purpose: Security audits, vulnerability analysis, compliance
 -- Thread Type: chained (systematic security analysis)
 -- Model: claude-opus-4-5 (maximum reasoning for security)
 -- Temperature: 0.2 (highly focused, conservative)
--- =============================================================================
 
-<<<<<<< HEAD
-INSERT INTO pmoves_core.personas (
-    persona_id,
-=======
-INSERT INTO pmoves_core.agent_personas (
-    id,
->>>>>>> origin/main
     name,
     version,
     description,
@@ -1316,11 +1197,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-<<<<<<< HEAD
     gen_random_uuid(),
-=======
-    uuid_generate_v4(),
->>>>>>> origin/main
     'Security',
     '1.0',
     'Security specialist for audits, vulnerability analysis, and compliance validation. Systematic threat modeling with focus on secrets, authentication, and attack surface reduction.',
@@ -1520,62 +1397,30 @@ You are vigilant, systematic, and ensure PMOVES.AI security posture is strong.$$
     behavior_weights = EXCLUDED.behavior_weights,
     updated_at = NOW();
 
--- =============================================================================
 -- INDEXES FOR PERFORMANCE
--- =============================================================================
 
 -- Index for persona lookup by name and version
 CREATE INDEX IF NOT EXISTS idx_agent_personas_name_version
-<<<<<<< HEAD
-    ON pmoves_core.personas(name, version);
-
--- Index for active personas
-CREATE INDEX IF NOT EXISTS idx_agent_personas_active
-    ON pmoves_core.personas(is_active)
-=======
-    ON pmoves_core.agent_personas(name, version);
-
--- Index for active personas
-CREATE INDEX IF NOT EXISTS idx_agent_personas_active
-    ON pmoves_core.agent_personas(is_active)
->>>>>>> origin/main
     WHERE is_active = true;
 
 -- Index for thread type lookups
 CREATE INDEX IF NOT EXISTS idx_agent_personas_thread_type
-<<<<<<< HEAD
     ON pmoves_core.personas(thread_type)
-=======
-    ON pmoves_core.agent_personas(thread_type)
->>>>>>> origin/main
     WHERE is_active = true;
 
 -- Index for model preference lookups
 CREATE INDEX IF NOT EXISTS idx_agent_personas_model
-<<<<<<< HEAD
     ON pmoves_core.personas(model_preference)
-=======
-    ON pmoves_core.agent_personas(model_preference)
->>>>>>> origin/main
     WHERE is_active = true;
 
 -- GIN index for JSONB fields (tools_access, behavior_weights)
 CREATE INDEX IF NOT EXISTS idx_agent_personas_tools_access
-<<<<<<< HEAD
     ON pmoves_core.personas USING GIN (tools_access);
 
 CREATE INDEX IF NOT EXISTS idx_agent_personas_behavior_weights
     ON pmoves_core.personas USING GIN (behavior_weights);
-=======
-    ON pmoves_core.agent_personas USING GIN (tools_access);
 
-CREATE INDEX IF NOT EXISTS idx_agent_personas_behavior_weights
-    ON pmoves_core.agent_personas USING GIN (behavior_weights);
->>>>>>> origin/main
-
--- =============================================================================
 -- VERIFICATION QUERY
--- =============================================================================
 
 -- Verify all personas are seeded correctly
 SELECT
@@ -1586,52 +1431,20 @@ SELECT
     temperature,
     is_active,
     created_at
-<<<<<<< HEAD
-FROM pmoves_core.personas
-=======
-FROM pmoves_core.agent_personas
->>>>>>> origin/main
 WHERE version = '1.0'
 ORDER BY name;
 
 -- Expected output: 8 rows (Developer, Researcher, Creator, Analyst, Archivist, Coordinator, Tester, Security)
 
--- =============================================================================
 -- EXAMPLE USAGE QUERIES
--- =============================================================================
 
 -- Get Developer persona with full configuration
-<<<<<<< HEAD
--- SELECT * FROM pmoves_core.personas WHERE name = 'Developer' AND version = '1.0';
-
--- Get all personas suitable for parallel execution
--- SELECT name, description, model_preference FROM pmoves_core.personas
--- WHERE thread_type = 'parallel' AND is_active = true;
-
--- Get personas with specific tool access
--- SELECT name, model_preference FROM pmoves_core.personas
-=======
--- SELECT * FROM pmoves_core.agent_personas WHERE name = 'Developer' AND version = '1.0';
-
--- Get all personas suitable for parallel execution
--- SELECT name, description, model_preference FROM pmoves_core.agent_personas
--- WHERE thread_type = 'parallel' AND is_active = true;
-
--- Get personas with specific tool access
--- SELECT name, model_preference FROM pmoves_core.agent_personas
->>>>>>> origin/main
 -- WHERE tools_access->>'hirag_query' = 'true' AND is_active = true;
 
 -- Get personas sorted by generate behavior weight (highest first)
 -- SELECT name, thread_type, behavior_weights->>'generate' as generate_weight
-<<<<<<< HEAD
 -- FROM pmoves_core.personas
-=======
--- FROM pmoves_core.agent_personas
->>>>>>> origin/main
 -- WHERE is_active = true
 -- ORDER BY (behavior_weights->>'generate')::numeric DESC;
 
--- =============================================================================
 -- END OF STANDARD PERSONAS SEED
--- =============================================================================
