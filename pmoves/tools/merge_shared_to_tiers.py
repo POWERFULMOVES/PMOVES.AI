@@ -3,7 +3,8 @@
 
 from pathlib import Path
 
-env_shared = Path("/home/pmoves/PMOVES.AI/pmoves/env.shared")
+ROOT = Path(__file__).resolve().parents[1]
+env_shared = ROOT / "env.shared"
 tier_files = [
     "env.tier-llm",
     "env.tier-agent",
@@ -22,7 +23,7 @@ print(f"Read {len(shared_values)} values from env.shared")
 
 # Update each tier file with values from env.shared
 for tier_file in tier_files:
-    tier_path = Path(f"/home/pmoves/PMOVES.AI/pmoves/{tier_file}")
+    tier_path = ROOT / tier_file
     if not tier_path.exists():
         print(f"Skipping {tier_file} (not found)")
         continue

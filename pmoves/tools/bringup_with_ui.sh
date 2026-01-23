@@ -48,7 +48,7 @@ check_http_bg() { # name url timeout
 }
 
 ready_barrier() {
-  echo "⏳ Parallel readiness — waiting on ${{#READY_CMDS[@]}} checks"
+  echo "⏳ Parallel readiness — waiting on ${#READY_CMDS[@]} checks"
   local rc=0
   for entry in "${READY_CMDS[@]}"; do
     IFS='|' read -r name url out pid to <<<"$entry"

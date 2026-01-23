@@ -209,7 +209,7 @@ supabase-bootstrap: ## Apply Supabase migrations + v5.12 seeds (expects CLI runn
 		$(MAKE) --no-print-directory supa-start; \
 	fi
 	@echo "   Running migrations..."
-	@cd .. && supabase db reset --db-url "postgresql://postgres:postgres@localhost:54322/postgres" || { \
+	@PGSSLMODE=disable cd .. && supabase db reset --yes --db-url "postgresql://postgres:postgres@localhost:54322/postgres" || { \
 		echo "❌ Migration failed. Check logs above."; \
 		echo "   To retry: make supabase-bootstrap"; \
 		echo "   To view logs: cd .. && supabase logs"; \
