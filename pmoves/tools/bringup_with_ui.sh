@@ -62,8 +62,18 @@ ready_barrier() {
 
 echo "⛳ Bootstrap env + Supabase CLI"
 make ensure-env-shared >/dev/null 2>&1 || true
-make supa-start
-make supabase-bootstrap || true
+
+# Production: only start Supabase, don't reset DB
+if make supa-status >/dev/null 2>&1; then
+  echo "✔ Supabase already running"
+else
+  make supa-start || true
+fi
+
+# Only run bootstrap/migrations in dev mode (explicit flag)
+if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
+  make supabase-bootstrap || true
+fi
 
 echo "⛳ Start core services"
 make up
@@ -117,7 +127,7 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_http_bg "Console UI" "http://localhost:3001" "$WAIT_T_LONG"
   check_http_bg "n8n UI" "http://localhost:5678" "$WAIT_T_SHORT"
   check_http_bg "TensorZero UI" "http://localhost:4000" "$WAIT_T_SHORT"
-  check_http_bg "TensorZero GW" "http://localhost:3000" "$WAIT_T_SHORT"
+  check_http_bg "TensorZero GW" "http://localhost:3030" "$WAIT_T_SHORT"
   check_http_bg "Jellyfin" "http://localhost:8096" "$WAIT_T_SHORT"
   check_http_bg "Firefly" "http://localhost:8082" "$WAIT_T_SHORT"
   check_http_bg "Wger" "http://localhost:8000" "$WAIT_T_SHORT"
@@ -150,7 +160,7 @@ else
   fi
   wait_http "http://localhost:5678" $WAIT_T_SHORT || true
   wait_http "http://localhost:4000" $WAIT_T_SHORT || true
-  wait_http "http://localhost:3000" $WAIT_T_SHORT || true
+  wait_http "http://localhost:3030" $WAIT_T_SHORT || true
   wait_http "http://localhost:8096" $WAIT_T_SHORT || true
   wait_http "http://localhost:8082" $WAIT_T_SHORT || true
   wait_http "http://localhost:8000" $WAIT_T_SHORT || true
