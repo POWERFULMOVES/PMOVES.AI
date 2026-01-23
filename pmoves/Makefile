@@ -1649,14 +1649,6 @@ up-n8n: ensure-env-shared
 	  $(DC) up -d n8n n8n-runners; \
 	fi
 
-.PHONY: up-external
-up-external: ## Start external stacks (placeholder for future integrations)
-	@echo "→ No external stacks configured (up-external is a stub target)"
-
-.PHONY: up-jellyfin-ai
-up-jellyfin-ai: ## Start Jellyfin AI overlay (placeholder for future integrations)
-	@echo "→ No Jellyfin AI overlay configured (up-jellyfin-ai is a stub target)"
-
 .PHONY: up-comfyui comfyui-smoke
 up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)
 	@$(DC) --profile creator up -d comfyui
@@ -1747,3 +1739,29 @@ ps:
 	@$(DC) ps
 
 # -------- External stacks (forks / published images) ----------
+
+.PHONY: up-external
+up-external: ensure-env-shared ## Start external integration services (Wger, Firefly, Open Notebook, Jellyfin)
+	@echo "→ Starting external stacks (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@$(DC) -f docker-compose.external.yml up -d
+	@echo "✔ External stacks up"
+
+.PHONY: down-external
+down-external: ## Stop external integration services
+	@$(DC) -f docker-compose.external.yml down
+	@echo "✔ External stacks down"
+
+.PHONY: up-jellyfin-ai
+up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
+	@echo "→ Starting Jellyfin AI overlay..."
+	@if [ ! -f "env.jellyfin-ai" ]; then \
+	  echo "  Creating env.jellyfin-ai from example..."; \
+	  cp env.jellyfin-ai.example env.jellyfin-ai; \
+	fi
+	@$(DC) --profile jellyfin-ai up -d jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-audio-processor jellyfin-redis jellyfin-api-gateway jellyfin-dashboard
+	@echo "✔ Jellyfin AI overlay up (Jellyfin: http://localhost:8096, API: http://localhost:8300, Dashboard: http://localhost:8400)"
+
+.PHONY: down-jellyfin-ai
+down-jellyfin-ai: ## Stop Jellyfin AI overlay
+	@$(DC) --profile jellyfin-ai down
+	@echo "✔ Jellyfin AI overlay down"
