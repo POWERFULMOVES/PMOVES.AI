@@ -35,25 +35,14 @@ from supabase import Client
 
 
 class ServiceTier(str, Enum):
-<<<<<<< HEAD
-    """PMOVES service tiers following 8-tier environment architecture."""
-=======
     """PMOVES service tiers following 6-tier environment architecture."""
->>>>>>> origin/main
 
     DATA = "data"
     API = "api"
     LLM = "llm"
-<<<<<<< HEAD
-    MEDIA = "media"
-    AGENT = "agent"
-    WORKER = "worker"
-    APP = "app"
-=======
     WORKER = "worker"
     MEDIA = "media"
     AGENT = "agent"
->>>>>>> origin/main
     UI = "ui"
 
 
