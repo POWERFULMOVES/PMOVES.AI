@@ -328,20 +328,40 @@ async def healthz() -> Dict[str, Any]:
 
     Returns:
         Dictionary containing:
+<<<<<<< HEAD
             - 'status': 'ok' if service is healthy
             - 'queue_url': Configured ingestion queue URL
             - 'database_url': Configured database connection string
             - 'channels': Number of channels currently being monitored
+=======
+            - 'status': 'ok' if service is healthy, 'error' if database is down
+            - 'queue_url': Configured ingestion queue URL
+            - 'database_url': Configured database connection string
+            - 'channels': Number of channels currently being monitored
+            - 'database_healthy': True if database is queryable
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
     Notes:
         This endpoint does not require authentication and is suitable for
         use as a Kubernetes liveness/readiness probe.
+<<<<<<< HEAD
     """
     return {
         "status": "ok",
         "queue_url": QUEUE_URL,
         "database_url": DATABASE_URL,
         "channels": monitor.channel_count(),
+=======
+        The database connectivity is verified via a lightweight query.
+    """
+    db_healthy = await monitor.check_database_health()
+    return {
+        "status": "ok" if db_healthy else "error",
+        "queue_url": QUEUE_URL,
+        "database_url": DATABASE_URL,
+        "channels": monitor.channel_count(),
+        "database_healthy": db_healthy,
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     }
 
 
