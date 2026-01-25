@@ -8,6 +8,44 @@ WAIT_T_SHORT=${WAIT_T_SHORT:-60}
 WAIT_T_MED=${WAIT_T_MED:-120}
 WAIT_T_LONG=${WAIT_T_LONG:-180}
 
+# Service URLs
+YTB=${YTB:-http://localhost:8077}
+
+# Track failed services for reporting
+declare -a FAILED_SERVICES=()
+declare -a TIMEOUT_SERVICES=()
+
+# Error reporting function
+report_failure() {
+    local service="$1"
+    local message="${2:-Failed to start}"
+    echo "❌ $service: $message" >&2
+    FAILED_SERVICES+=("$service")
+}
+
+# Service start wrapper with error handling
+start_service() {
+    local name="$1"
+    local target="${2:-up}"
+    local is_critical="${3:-true}"
+
+    echo "→ Starting $name..."
+    if make "$target" 2>&1; then
+        echo "  ✓ $name started"
+        return 0
+    else
+        local rc=$?
+        if [ "$is_critical" = "true" ]; then
+            report_failure "$name" "exited with code $rc"
+            return 1
+        else
+            echo "  ⚠ $name failed (non-critical for now)"
+            TIMEOUT_SERVICES+=("$name")
+            return 0
+        fi
+    fi
+}
+
 wait_http() { # url timeout_seconds
   local url="$1"; local timeout="${2:-$WAIT_T_SHORT}"; local start=$(date +%s)
   echo "→ Waiting for $url (timeout ${timeout}s)"
@@ -45,52 +83,80 @@ check_http_bg() { # name url timeout
 }
 
 ready_barrier() {
-  echo "⏳ Parallel readiness — waiting on ${{#READY_CMDS[@]}} checks"
+  echo "⏳ Parallel readiness — waiting on ${#READY_CMDS[@]} checks"
   local rc=0
   for entry in "${READY_CMDS[@]}"; do
     IFS='|' read -r name url out pid to <<<"$entry"
-    if wait "$pid"; then status="OK"; else status="TIMEOUT"; rc=1; fi
+    if wait "$pid"; then status="OK"; else status="TIMEOUT"; rc=1; TIMEOUT_SERVICES+=("$name"); fi
     if [ -f "$out" ]; then status=$(cat "$out"); fi
     printf "  • %-24s %-60s %s\n" "$name" "$url" "$status"
   done
-  rm -rf "$READY_TMP_DIR" || true
+  rm -rf "$READY_TMP_DIR" || echo "  ⚠ Failed to cleanup $READY_TMP_DIR" >&2
   return $rc
 }
 
 echo "⛳ Bootstrap env + Supabase CLI"
-make ensure-env-shared >/dev/null 2>&1 || true
-make supa-start
-make supabase-bootstrap || true
+if ! make ensure-env-shared 2>&1; then
+    echo "❌ Environment setup failed. Run 'make ensure-env-shared' separately to diagnose."
+    exit 1
+fi
+
+# Production: only start Supabase, don't reset DB
+if make supa-status >/dev/null 2>&1; then
+  echo "✔ Supabase already running"
+else
+  if ! make supa-start; then
+      echo "❌ Supabase failed to start. Check Docker and port availability."
+      exit 1
+  fi
+fi
+
+# Only run bootstrap/migrations in dev mode (explicit flag) - FAIL ON ERROR
+if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
+  if ! make supabase-bootstrap; then
+    echo "❌ Database migrations failed. This is required when RUN_MIGRATIONS=1."
+    echo "   Fix migration issues and re-run, or unset RUN_MIGRATIONS to skip."
+    exit 1
+  fi
+fi
 
 echo "⛳ Start core services"
-make up
+start_service "Core Services" "up" "true" || exit 1
 
 echo "⛳ Start agents (APIs + UIs)"
 if [ "${PUBLISHED_AGENTS:-0}" = "1" ]; then
-  make up-agents-published || true
+  start_service "Published Agents" "up-agents-published" "true" || exit 1
+  PRODUCTION_MODE=1
 else
-  make up-agents-ui || true
+  start_service "Agents + UIs" "up-agents-ui" "true" || exit 1
+  PRODUCTION_MODE=0
 fi
 
-echo "⛳ Start external stacks"
-make up-external || true
+echo "⛳ Start integration services"
+start_service "External Stacks" "up-external" "true" || exit 1
+start_service "PMOVES.YT" "up-yt" "true" || exit 1
+start_service "Invidious" "up-invidious" "true" || exit 1
+start_service "Channel Monitor" "channel-monitor-up" "true" || exit 1
 
-echo "⛳ Start yt + invidious + channel-monitor"
-make up-yt || true
-make up-invidious || true
-make channel-monitor-up || true
+echo "⛳ Start media and AI services"
+start_service "Media Pipeline" "up-media" "true" || exit 1
+start_service "TensorZero" "up-tensorzero" "true" || exit 1
+start_service "n8n" "up-n8n" "true" || exit 1
+start_service "Jellyfin AI" "up-jellyfin-ai" "true" || exit 1
 
-echo "⛳ Start optional media analyzers + tensorzero + n8n + Jellyfin AI"
-make up-media || true
-make up-tensorzero || true
-make up-n8n || true
-make up-jellyfin-ai || true
+echo "⛳ Start monitoring stack"
+start_service "Monitoring" "up-monitoring" "true" || exit 1
 
-echo "⛳ Start monitoring"
-make up-monitoring || true
-
-echo "⛳ Start Console UI (dev)"
-make ui-dev-start || true
+echo "⛳ Start Console UI"
+if [ "${PRODUCTION_MODE:-0}" = "1" ]; then
+  start_service "Production UI" "up-ui" "true" || exit 1
+  UI_PORT=4482
+  UI_NAME="PMOVES UI"
+else
+  start_service "Console UI" "ui-dev-start" "true" || exit 1
+  UI_PORT=3001
+  UI_NAME="Console UI"
+fi
 
 echo "⛳ Waiting on key endpoints"
 if [ "${PARALLEL:-0}" = "1" ]; then
@@ -111,56 +177,104 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_http_bg "Channel Monitor" "http://localhost:8097/healthz" "$WAIT_T_SHORT"
   check_http_bg "Monitor Status" "http://localhost:8097/api/monitor/status" "$WAIT_T_SHORT"
   check_http_bg "yt-dlp catalog" "${YTB}/yt/docs/catalog" "$WAIT_T_SHORT"
-  check_http_bg "Console UI" "http://localhost:3001" "$WAIT_T_LONG"
+  check_http_bg "$UI_NAME" "http://localhost:${UI_PORT}" "$WAIT_T_LONG"
   check_http_bg "n8n UI" "http://localhost:5678" "$WAIT_T_SHORT"
   check_http_bg "TensorZero UI" "http://localhost:4000" "$WAIT_T_SHORT"
-  check_http_bg "TensorZero GW" "http://localhost:3000" "$WAIT_T_SHORT"
+  check_http_bg "TensorZero GW" "http://localhost:3030" "$WAIT_T_SHORT"
   check_http_bg "Jellyfin" "http://localhost:8096" "$WAIT_T_SHORT"
   check_http_bg "Firefly" "http://localhost:8082" "$WAIT_T_SHORT"
   check_http_bg "Wger" "http://localhost:8000" "$WAIT_T_SHORT"
   check_http_bg "Open Notebook" "http://localhost:8503" "$WAIT_T_SHORT"
   check_http_bg "Supabase Studio" "http://127.0.0.1:65433" "$WAIT_T_SHORT"
-  ready_barrier || true
-  wait_prom_targets "$WAIT_T_MED" || true
+  ready_barrier
+  wait_prom_targets "$WAIT_T_MED"
 else
-  wait_http "http://127.0.0.1:65421/rest/v1" $WAIT_T_LONG || true
-  wait_http "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" $WAIT_T_MED || true
-  wait_http "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" $WAIT_T_LONG || true
-  wait_http "http://localhost:8088/healthz" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8091/healthz" $WAIT_T_SHORT || true
-  wait_http "http://localhost:3737" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8091/mcp/describe" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8080/healthz" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8081" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8080/config/environment" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8080/mcp/commands" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8077/" $WAIT_T_SHORT || true
-  wait_http "http://localhost:3002" $WAIT_T_SHORT || true
-  wait_http "http://localhost:3100/ready" $WAIT_T_SHORT || true
-  wait_prom_targets $WAIT_T_MED || true
-  wait_http "http://localhost:8097/healthz" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8097/api/monitor/status" $WAIT_T_SHORT || true
-  wait_http "${YTB}/yt/docs/catalog" $WAIT_T_SHORT || true
-  if ! wait_http "http://localhost:3001" $WAIT_T_LONG; then \
-    echo "⚠ Console UI not responding on :3001; recent dev log:"; \
-    tail -n 80 ui/.pmoves_ui_dev.log 2>/dev/null || true; \
+  wait_http "http://127.0.0.1:65421/rest/v1" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase REST")
+  wait_http "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" $WAIT_T_MED || TIMEOUT_SERVICES+=("Hi-RAG v2 CPU")
+  wait_http "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Hi-RAG v2 GPU")
+  wait_http "http://localhost:8088/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Presign")
+  wait_http "http://localhost:8091/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon API")
+  wait_http "http://localhost:3737" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon UI")
+  wait_http "http://localhost:8091/mcp/describe" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon MCP")
+  wait_http "http://localhost:8080/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero API")
+  wait_http "http://localhost:8081" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero UI")
+  wait_http "http://localhost:8080/config/environment" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero Env")
+  wait_http "http://localhost:8080/mcp/commands" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero MCP")
+  wait_http "http://localhost:8077/" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("PMOVES.YT")
+  wait_http "http://localhost:3002" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Grafana")
+  wait_http "http://localhost:3100/ready" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Loki")
+  wait_prom_targets $WAIT_T_MED || TIMEOUT_SERVICES+=("Prometheus targets")
+  wait_http "http://localhost:8097/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Channel Monitor")
+  wait_http "http://localhost:8097/api/monitor/status" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Monitor Status API")
+  wait_http "${YTB}/yt/docs/catalog" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("yt-dlp catalog")
+  if ! wait_http "http://localhost:${UI_PORT}" $WAIT_T_LONG; then
+    if [ "${PRODUCTION_MODE:-0}" = "1" ]; then
+      echo "⚠ Production UI not responding on :4482"
+      docker logs pmoves-ui-1 --tail 80 2>/dev/null || echo "  (No container logs found)"
+    else
+      echo "⚠ Console UI not responding on :3001; recent dev log:"
+      tail -n 80 ui/.pmoves_ui_dev.log 2>/dev/null || echo "  (No log file found)"
+    fi
+    TIMEOUT_SERVICES+=("$UI_NAME")
   fi
-  wait_http "http://localhost:5678" $WAIT_T_SHORT || true
-  wait_http "http://localhost:4000" $WAIT_T_SHORT || true
-  wait_http "http://localhost:3000" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8096" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8082" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8000" $WAIT_T_SHORT || true
-  wait_http "http://localhost:8503" $WAIT_T_SHORT || true
-  wait_http "http://127.0.0.1:65433" $WAIT_T_SHORT || true
+  wait_http "http://localhost:5678" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("n8n UI")
+  wait_http "http://localhost:4000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero UI")
+  wait_http "http://localhost:3030" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero GW")
+  wait_http "http://localhost:8096" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Jellyfin")
+  wait_http "http://localhost:8082" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Firefly")
+  wait_http "http://localhost:8000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Wger")
+  wait_http "http://localhost:8503" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Open Notebook")
+  wait_http "http://127.0.0.1:65433" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Supabase Studio")
 fi
 
 echo "⛳ Capturing evidence"
 # Ensure PMOVES.YT docs are fresh before capture
-make yt-docs-sync || true
-make evidence-auto || true
+make yt-docs-sync
+make evidence-auto
 
 echo "⛳ Retro preflight summary (parallel table)"
-PMOVES_RETRO_TIMEOUT=5 python3 pmoves/tools/flight_check_retro.py || true
+PMOVES_RETRO_TIMEOUT=5 python3 pmoves/tools/flight_check_retro.py
 
-echo "✔ Bring-up complete. Console: http://localhost:3001  Grafana: http://localhost:3002"
+# Final status report
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  BRING-UP STATUS REPORT"
+echo "═══════════════════════════════════════════════════════════"
+
+if [ ${#FAILED_SERVICES[@]} -gt 0 ]; then
+    echo ""
+    echo "❌ FAILED SERVICES (startup failed):"
+    for svc in "${FAILED_SERVICES[@]}"; do
+        echo "   • $svc"
+    done
+    echo ""
+    echo "   Run 'make logs' to view error logs for failed services."
+    echo "   Check port conflicts with: 'docker ps' and 'netstat -tulpn | grep LISTEN'"
+    echo ""
+    exit 1
+fi
+
+if [ ${#TIMEOUT_SERVICES[@]} -gt 0 ]; then
+    echo ""
+    echo "⚠️  TIMEOUT SERVICES (not ready within expected time):"
+    for svc in "${TIMEOUT_SERVICES[@]}"; do
+        echo "   • $svc"
+    done
+    echo ""
+    echo "   Services may still be starting. Check with: 'make ps'"
+    echo "   View logs: 'make logs' or 'docker logs <service>'"
+    echo ""
+fi
+
+if [ ${#FAILED_SERVICES[@]} -eq 0 ] && [ ${#TIMEOUT_SERVICES[@]} -eq 0 ]; then
+    echo ""
+    echo "✅ ALL SERVICES STARTED SUCCESSFULLY"
+    echo ""
+    echo "   Console:    http://localhost:${UI_PORT}"
+    echo "   Grafana:    http://localhost:3002"
+    echo "   Agent Zero: http://localhost:8081"
+    echo "   Archon:     http://localhost:3737"
+    echo ""
+fi
+
+echo "═══════════════════════════════════════════════════════════"

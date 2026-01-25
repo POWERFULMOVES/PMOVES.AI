@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -64,8 +65,40 @@ KB_UPSERT_SUBJECT = "kb.upsert.request.v1"
 _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    global _nats_loop_task, _nc
+
+    # Startup
+    if _nats_loop_task is None or _nats_loop_task.done():
+        logger.info("Starting NATS resilience loop")
+        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
+
+    yield
+
+    # Shutdown
+    if _nats_loop_task:
+        _nats_loop_task.cancel()
+        try:
+            await _nats_loop_task
+        except Exception:
+            pass
+        _nats_loop_task = None
+
+    if _nc:
+        try:
+            await _nc.close()
+        except Exception:
+            pass
+        _nc = None
+
+    logger.info("Session Context Worker shut down")
+
+
 # FastAPI app for health endpoint
-app = FastAPI(title="Session Context Worker", version="0.1.0")
+app = FastAPI(title="Session Context Worker", version="0.1.0", lifespan=lifespan)
 
 
 def _extract_searchable_content(context: Dict[str, Any]) -> str:
@@ -414,35 +447,6 @@ async def metrics():
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.on_event("startup")
-async def startup():
-    """Start NATS connection loop on app startup."""
-    global _nats_loop_task
-
-    if _nats_loop_task is None or _nats_loop_task.done():
-        logger.info("Starting NATS resilience loop")
-        _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    """Clean shutdown of NATS connection."""
-    global _nats_loop_task, _nc
-
-    if _nats_loop_task:
-        _nats_loop_task.cancel()
-        try:
-            await _nats_loop_task
-        except Exception:
-            pass
-        _nats_loop_task = None
-
-    if _nc:
-        try:
-            await _nc.close()
-        except Exception:
-            pass
-        _nc = None
 
 
 if __name__ == "__main__":

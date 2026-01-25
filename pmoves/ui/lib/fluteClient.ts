@@ -4,6 +4,11 @@
  * Provides HTTP and WebSocket interfaces to the Flute-Gateway voice service.
  * Supports both synchronous TTS synthesis and real-time streaming.
  *
+ * Service URL resolution via PMOVES service discovery:
+ * 1. NEXT_PUBLIC_FLUTE_GATEWAY_URL environment variable (explicit override)
+ * 2. Service catalog (Supabase) via service registry
+ * 3. Docker DNS fallback (flute-gateway:8055)
+ *
  * No authentication required for basic synthesis operations.
  *
  * @see .claude/context/flute-gateway.md for API reference
@@ -22,6 +27,8 @@
  * });
  * ```
  */
+
+import { getServiceUrl } from './serviceDiscovery';
 
 export interface SynthesizeOptions {
   voice?: string;
@@ -49,11 +56,17 @@ export interface FluteSession {
  * Provides both synchronous TTS synthesis and real-time WebSocket streaming.
  * Session management is recommended for production use with multiple
  * concurrent voice interactions.
+ *
+ * Service URLs are resolved lazily on first use via PMOVES service discovery.
  */
 export class FluteClient {
   private ws: WebSocket | null = null;
-  private readonly httpUrl: string;
-  private readonly wsUrl: string;
+  private httpUrl?: string;
+  private wsUrl?: string;
+  private serviceSlug = 'flute-gateway';
+  private httpPort = 8055;
+  private wsPort = 8056;
+  private urlResolved = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 3;
   private currentCallbacks: {
@@ -64,13 +77,69 @@ export class FluteClient {
   } = {};
 
   constructor(options?: { httpUrl?: string; wsUrl?: string }) {
-    // Use environment variables with fallbacks for local development
-    this.httpUrl = options?.httpUrl
-      || process.env.NEXT_PUBLIC_FLUTE_GATEWAY_URL
-      || 'http://localhost:8055';
-    this.wsUrl = options?.wsUrl
-      || process.env.NEXT_PUBLIC_FLUTE_WS_URL
-      || 'ws://localhost:8056';
+    // Use explicit URLs if provided, otherwise resolve via service discovery
+    if (options?.httpUrl) {
+      this.httpUrl = options.httpUrl.replace(/\/$/, '');
+      this.urlResolved = true;
+    }
+    if (options?.wsUrl) {
+      this.wsUrl = options.wsUrl.replace(/\/$/, '');
+    }
+    // Check environment variables for explicit override
+    if (!this.urlResolved) {
+      const envHttpUrl = process.env.NEXT_PUBLIC_FLUTE_GATEWAY_URL;
+      const envWsUrl = process.env.NEXT_PUBLIC_FLUTE_WS_URL;
+      if (envHttpUrl) {
+        this.httpUrl = envHttpUrl.replace(/\/$/, '');
+        this.urlResolved = true;
+      }
+      if (envWsUrl) {
+        this.wsUrl = envWsUrl.replace(/\/$/, '');
+      }
+    }
+  }
+
+  /**
+   * Resolve service URLs using PMOVES service discovery.
+   * Called lazily on first API use to avoid blocking constructor.
+   */
+  private async resolveUrls(): Promise<void> {
+    if (this.urlResolved) return;
+
+    // Resolve HTTP URL
+    if (!this.httpUrl) {
+      this.httpUrl = await getServiceUrl({
+        slug: this.serviceSlug,
+        defaultPort: this.httpPort,
+      });
+    }
+
+    // Resolve WebSocket URL (convert HTTP to WS protocol)
+    if (!this.wsUrl && this.httpUrl) {
+      this.wsUrl = this.httpUrl.replace(/^http/, 'ws').replace(':8055', ':8056');
+    }
+
+    this.urlResolved = true;
+  }
+
+  /**
+   * Get the HTTP URL, resolving via service discovery if needed.
+   */
+  private async getHttpUrl(): Promise<string> {
+    if (!this.urlResolved) {
+      await this.resolveUrls();
+    }
+    return this.httpUrl!;
+  }
+
+  /**
+   * Get the WebSocket URL, resolving via service discovery if needed.
+   */
+  private async getWsUrl(): Promise<string> {
+    if (!this.urlResolved) {
+      await this.resolveUrls();
+    }
+    return this.wsUrl!;
   }
 
   /**
@@ -83,7 +152,8 @@ export class FluteClient {
    * @throws {Error} If synthesis request fails or network error occurs
    */
   async synthesize(text: string, options?: SynthesizeOptions): Promise<ArrayBuffer> {
-    const response = await fetch(`${this.httpUrl}/v1/voice/synthesize/prosodic`, {
+    const httpUrl = await this.getHttpUrl();
+    const response = await fetch(`${httpUrl}/v1/voice/synthesize/prosodic`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -112,7 +182,8 @@ export class FluteClient {
    * @throws {Error} If session creation fails
    */
   async createSession(): Promise<FluteSession> {
-    const response = await fetch(`${this.httpUrl}/v1/sessions`, {
+    const httpUrl = await this.getHttpUrl();
+    const response = await fetch(`${httpUrl}/v1/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -137,7 +208,8 @@ export class FluteClient {
    */
   async isHealthy(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.httpUrl}/healthz`, {
+      const httpUrl = await this.getHttpUrl();
+      const response = await fetch(`${httpUrl}/healthz`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000),
       });
@@ -159,13 +231,14 @@ export class FluteClient {
    * @param onClose - Optional close handler
    * @param onReconnectExhausted - Optional callback when max reconnection attempts exhausted
    */
-  connect(
+  async connect(
     onMessage: (data: ArrayBuffer) => void,
     onError?: (error: Event) => void,
     onClose?: (event: CloseEvent) => void,
     onReconnectExhausted?: () => void,
-  ): void {
-    this.connectToUrl(this.wsUrl, onMessage, onError, onClose, onReconnectExhausted);
+  ): Promise<void> {
+    const wsUrl = await this.getWsUrl();
+    this.connectToUrl(wsUrl, onMessage, onError, onClose, onReconnectExhausted);
   }
 
   /**

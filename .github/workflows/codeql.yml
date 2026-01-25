@@ -13,9 +13,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "main", "PMOVES.AI-Edition-Hardened", "PMOVES.AI-Edition-Hardened-v3-clean" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    branches: [ "main" ]
   schedule:
     - cron: '16 20 * * 5'
 
