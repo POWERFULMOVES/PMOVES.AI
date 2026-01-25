@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """NATS controller for Agent Zero orchestration.
 
 Provides NATS jetstream integration for:
@@ -10,6 +11,8 @@ Environment Variables:
     AGENTZERO_JETSTREAM: Enable JetStream (default: true)
 """
 
+=======
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 import asyncio
 import json
 import logging

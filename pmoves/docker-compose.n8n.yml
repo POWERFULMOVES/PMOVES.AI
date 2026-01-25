@@ -42,7 +42,6 @@ services:
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
-    networks: [cataclysm, api_tier]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -56,14 +55,9 @@ services:
     environment:
       - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
-    networks: [cataclysm, api_tier]
     depends_on:
       - n8n
     volumes:
       - n8n-data:/home/node/.n8n
-networks:
-  cataclysm:
-    external: true
-    name: cataclysm-net
 volumes:
   n8n-data: {}

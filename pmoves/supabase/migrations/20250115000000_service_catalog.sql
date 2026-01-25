@@ -10,11 +10,17 @@
 -- 4. Using metadata for custom service properties
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 -- Create the pmoves_core schema (must exist before creating tables)
 CREATE SCHEMA IF NOT EXISTS pmoves_core;
 
 =======
 >>>>>>> origin/main
+=======
+-- Create the pmoves_core schema (must exist before creating tables)
+CREATE SCHEMA IF NOT EXISTS pmoves_core;
+
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 -- Create the service catalog table
 CREATE TABLE IF NOT EXISTS pmoves_core.service_catalog (
   -- Primary identification
@@ -31,12 +37,17 @@ CREATE TABLE IF NOT EXISTS pmoves_core.service_catalog (
   env_var TEXT,  -- Environment variable name for custom URL override
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   -- Tier classification (matches 8-tier environment architecture)
   tier TEXT NOT NULL CHECK (tier IN ('data', 'api', 'llm', 'media', 'agent', 'worker', 'app', 'ui')),
 =======
   -- Tier classification (matches 6-tier environment architecture)
   tier TEXT NOT NULL CHECK (tier IN ('data', 'api', 'llm', 'worker', 'media', 'agent', 'ui')),
 >>>>>>> origin/main
+=======
+  -- Tier classification (matches 6-tier environment architecture)
+  tier TEXT NOT NULL CHECK (tier IN ('data', 'api', 'llm', 'worker', 'media', 'agent', 'ui')),
+>>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
 
   -- Extensibility
   tags JSONB DEFAULT '{}'::jsonb,
