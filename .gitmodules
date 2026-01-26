@@ -17,6 +17,9 @@
 [submodule "PMOVES-AgentGym"]
 	path = PMOVES-AgentGym
 	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
+[submodule "Pmoves-AgentGym-RL"]
+	path = Pmoves-AgentGym-RL
+	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
 [submodule "PMOVES-MAI-UI"]
 	path = PMOVES-MAI-UI
 	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
