@@ -29,40 +29,55 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# OS/editor
-.DS_Store
-.idea/
-.vscode/
-Thumbs.db
-
-# Build/output
+# Node
+node_modules/
 dist/
 build/
-*.egg-info/
+.next/
+out/
 
-# Binaries and large docs
-*.zip
-tools/bin/
+# Tier environment files (generated from env.shared)
+env.tier-*
 
-# Local data
-neo4j/data/
-minio-data/
-supabase-data/
-data/jellyfin/
-data/open-notebook/
+# Generated environment files
+.env.generated
+env.cgp.json
+env.shared.generated
+
+# CHIT/Geometry data
 data/chit/
-cloudflared/
-# Agent Zero runtime data (keep structure, ignore runtime)
-pmoves/data/agent-zero/memory/
-pmoves/data/agent-zero/runtime/
-pmoves/data/agent-zero/tmp/
-pmoves/data/agent-zero/logs/
 
-# Tier environment files (actual secrets - use .example for tracked templates)
-env.tier-api
-env.tier-agent
-env.tier-data
-env.tier-llm
-env.tier-media
-env.tier-ui
-env.tier-worker
+# Jellyfin integration data
+data/jellyfin/
+
+# Archon MCP logs
+*_archon_mcp_*.json
+
+# VSCode/user-specific files
+.vscode/launch.json
+.vscode/extensions.json
+
+# Docker
+*.log
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+.DS_Store
+
+# Credentials (NEVER commit these)
+*.key
+*.pem
+secrets/
+credentials/
+
+# PMOVES specific
+pmoves/data/chit/
+pmoves/data/jellyfin/
+pmoves/.env.local

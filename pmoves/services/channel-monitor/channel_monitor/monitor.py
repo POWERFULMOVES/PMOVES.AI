@@ -170,14 +170,6 @@ class ChannelMonitor:
                     redirect_uri=self.google_redirect_uri,
                     default_scopes=self._google_scopes,
                 )
-<<<<<<< HEAD
-            except Exception as exc:  # pragma: no cover - guardrails
-                LOGGER.error("Failed to initialize YouTube client: %s", exc)
-
-    async def start(self) -> None:
-        if self._pool is None:
-            self._pool = await asyncpg.create_pool(self.database_url, min_size=1, max_size=5)
-=======
             except (ValueError, TypeError) as exc:  # pragma: no cover - known config errors
                 LOGGER.warning("YouTube API integration disabled due to configuration error: %s", exc)
                 self._youtube_client = None  # Explicitly disable if init fails
@@ -192,7 +184,6 @@ class ChannelMonitor:
                     f"Database connection failed for channel-monitor. "
                     f"Check network connectivity and Supabase status. URL: {self.database_url}"
                 ) from exc
->>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
         await self._ensure_tables()
         await self._load_processed_videos()
         await self._load_user_sources()
@@ -1258,8 +1249,6 @@ class ChannelMonitor:
     def channel_count(self) -> int:
         return len(self._active_channels())
 
-<<<<<<< HEAD
-=======
     async def check_database_health(self) -> bool:
         """Check if the database connection is alive and queryable.
 
@@ -1283,7 +1272,6 @@ class ChannelMonitor:
         except (asyncpg.PostgresConnectionError, OSError):  # pragma: no cover
             return False
 
->>>>>>> origin/PMOVES.AI-Edition-Hardened-v3-clean
     async def _update_status(
         self,
         video_id: str,

@@ -11,31 +11,53 @@ import time
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 
+def _get_url(
+    env_var: str | None,
+    default: str,
+) -> str:
+    """Get service URL with environment variable override.
+
+    Priority:
+    1. SERVICE_*_URL environment variable (service discovery override)
+    2. Legacy environment variable (backward compatibility)
+    3. Default localhost URL
+
+    This supports hybrid operation:
+    - Docked mode: Use SERVICE_*_URL overrides from service discovery
+    - Standalone mode: Use localhost with port overrides
+    """
+    if env_var:
+        url = os.environ.get(env_var)
+        if url:
+            return url.rstrip("/")
+    return default
+
+
 ENDPOINTS = [
-    ("Supabase REST", f"http://127.0.0.1:{os.environ.get('SUPABASE_REST_PORT','65421')}/rest/v1"),
-    ("Hi-RAG v2 CPU", f"http://localhost:{os.environ.get('HIRAG_V2_HOST_PORT','8086')}/"),
-    ("Hi-RAG v2 GPU", f"http://localhost:{os.environ.get('HIRAG_V2_GPU_HOST_PORT','8087')}/"),
-    ("Presign", "http://localhost:8088/healthz"),
-    ("Archon API", "http://localhost:8091/healthz"),
-    ("Archon MCP", "http://localhost:8091/mcp/describe"),
-    ("Agent Zero API", "http://localhost:8080/healthz"),
-    ("Agent Zero Env", "http://localhost:8080/config/environment"),
-    ("Agent Zero MCP", "http://localhost:8080/mcp/commands"),
-    ("PMOVES.YT", "http://localhost:8077/"),
-    ("YT docs catalog", f"{os.environ.get('PMOVES_YT_BASE_URL','http://localhost:8077')}/yt/docs/catalog"),
-    ("Grafana", "http://localhost:3002"),
-    ("Loki /ready", "http://localhost:3100/ready"),
-    ("Channel Monitor", "http://localhost:8097/healthz"),
-    ("Monitor Status", "http://localhost:8097/api/monitor/status"),
-    ("Console UI", "http://localhost:3001"),
-    ("n8n UI", "http://localhost:5678"),
-    ("TensorZero UI", "http://localhost:4000"),
-    ("TensorZero GW", "http://localhost:3000"),
-    ("Jellyfin", "http://localhost:8096"),
-    ("Firefly", "http://localhost:8082"),
-    ("Wger", "http://localhost:8000"),
-    ("Open Notebook", "http://localhost:8503"),
-    ("Supabase Studio", "http://127.0.0.1:65433"),
+    ("Supabase REST", _get_url("SERVICE_POSTGREST_URL", f"http://127.0.0.1:{os.environ.get('SUPABASE_REST_PORT','65421')}/rest/v1")),
+    ("Hi-RAG v2 CPU", _get_url("SERVICE_HIRAG_V2_URL", f"http://localhost:{os.environ.get('HIRAG_V2_HOST_PORT','8086')}/")),
+    ("Hi-RAG v2 GPU", _get_url("SERVICE_HIRAG_V2_GPU_URL", f"http://localhost:{os.environ.get('HIRAG_V2_GPU_HOST_PORT','8087')}/")),
+    ("Presign", _get_url("SERVICE_PRESIGN_URL", "http://localhost:8088/healthz")),
+    ("Archon API", _get_url("SERVICE_ARCHON_URL", "http://localhost:8091/healthz")),
+    ("Archon MCP", _get_url("SERVICE_ARCHON_URL", "http://localhost:8091/mcp/describe")),
+    ("Agent Zero API", _get_url("SERVICE_AGENT_ZERO_URL", "http://localhost:8080/healthz")),
+    ("Agent Zero Env", _get_url("SERVICE_AGENT_ZERO_URL", "http://localhost:8080/config/environment")),
+    ("Agent Zero MCP", _get_url("SERVICE_AGENT_ZERO_URL", "http://localhost:8080/mcp/commands")),
+    ("PMOVES.YT", _get_url("SERVICE_PMOVES_YT_URL", "http://localhost:8077/")),
+    ("YT docs catalog", _get_url("SERVICE_PMOVES_YT_URL", f"{os.environ.get('PMOVES_YT_BASE_URL','http://localhost:8077')}/yt/docs/catalog")),
+    ("Grafana", _get_url("SERVICE_GRAFANA_URL", "http://localhost:3002")),
+    ("Loki /ready", _get_url("SERVICE_LOKI_URL", "http://localhost:3100/ready")),
+    ("Channel Monitor", _get_url("SERVICE_CHANNEL_MONITOR_URL", "http://localhost:8097/healthz")),
+    ("Monitor Status", _get_url("SERVICE_CHANNEL_MONITOR_URL", "http://localhost:8097/api/monitor/status")),
+    ("Console UI", _get_url(None, "http://localhost:3001")),
+    ("n8n UI", _get_url(None, "http://localhost:5678")),
+    ("TensorZero UI", _get_url(None, "http://localhost:4000")),
+    ("TensorZero GW", _get_url("SERVICE_TENSORZERO_URL", "http://localhost:3000")),
+    ("Jellyfin", _get_url(None, "http://localhost:8096")),
+    ("Firefly", _get_url(None, "http://localhost:8082")),
+    ("Wger", _get_url(None, "http://localhost:8000")),
+    ("Open Notebook", _get_url(None, "http://localhost:8503")),
+    ("Supabase Studio", _get_url(None, "http://127.0.0.1:65433")),
 ]
 
 TIMEOUT = int(os.environ.get("PMOVES_RETRO_TIMEOUT", "5"))

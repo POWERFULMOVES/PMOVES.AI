@@ -19,8 +19,8 @@ DEFAULTS = {
     "INVIDIOUS_HMAC_KEY": "localhack",
     "INVIDIOUS_COMPANION_KEY": "localhack",
     # REST bases
-    "SUPA_REST_URL": "http://host.docker.internal:65421/rest/v1",
-    "SUPA_REST_INTERNAL_URL": "http://host.docker.internal:65421/rest/v1",
+    "SUPA_REST_URL": "http://host.docker.internal:54321/rest/v1",
+    "SUPA_REST_INTERNAL_URL": "http://host.docker.internal:54321/rest/v1",
     # Presign/Render webhook secrets (demo defaults – replace for production)
     "PRESIGN_SHARED_SECRET": "change_me",
     "RENDER_WEBHOOK_SHARED_SECRET": "change_me",
@@ -81,6 +81,17 @@ def upsert_env(path: Path, pairs: dict) -> None:
     m = re.search(r"^\s*INVIDIOUS_HMAC_KEY\s*=(.*)$", text, re.M)
     if not m or len(m.group(1).strip()) < 32:
         text = _set_kv(text, "INVIDIOUS_HMAC_KEY", _strong_random(24))
+
+    # Strengthen PRESIGN_SHARED_SECRET if placeholder/weak
+    m = re.search(r"^\s*PRESIGN_SHARED_SECRET\s*=(.*)$", text, re.M)
+    if not m or m.group(1).strip() in ("change_me", "changeme", ""):
+        text = _set_kv(text, "PRESIGN_SHARED_SECRET", _strong_random(32))
+
+    # Strengthen RENDER_WEBHOOK_SHARED_SECRET if placeholder/weak
+    m = re.search(r"^\s*RENDER_WEBHOOK_SHARED_SECRET\s*=(.*)$", text, re.M)
+    if not m or m.group(1).strip() in ("change_me", "changeme", ""):
+        text = _set_kv(text, "RENDER_WEBHOOK_SHARED_SECRET", _strong_random(32))
+
     # Ensure NEO4J_PASSWORD exists; generate if missing/empty
     pwdm = re.search(r"^\s*NEO4J_PASSWORD\s*=(.*)$", text, re.M)
     needs_pw = True

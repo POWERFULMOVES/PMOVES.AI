@@ -1,5 +1,5 @@
 # CodeRabbit Configuration for PMOVES.AI
-# Settings for automated code reviews on the hardened (production) branch
+# Settings for automated code reviews
 
 reviews:
   # Enable reviews on the default hardened branch
@@ -9,6 +9,8 @@ reviews:
   branches:
     - "PMOVES.AI-Edition-Hardened"
     - "PMOVES.AI-Edition-Hardened-v3-clean"
+    - "pr/hirag-legacy-decoders-v3-clean"
+    - "pr/*"          # PR branches
     - "feat/hardened-*"
     - "fix/hardened-*"
     - "feat/*"          # Feature branches

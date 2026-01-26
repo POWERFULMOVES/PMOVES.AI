@@ -622,7 +622,7 @@
         },
         {
           "key": "PRESIGN_SHARED_SECRET",
-          "file": "pmoves/env.presign.additions",
+          "file": "pmoves/env.shared",
           "prompt": "Presign shared secret",
           "help": "Used to authenticate webhook callbacks from ComfyUI.",
           "required": true,
@@ -724,6 +724,37 @@
           "help": "Alternative auth mechanism for Open Notebook.",
           "required": false,
           "sensitive": true
+        }
+      ]
+    },
+    {
+      "id": "invidious",
+      "name": "Invidious",
+      "description": "YouTube front-end with privacy features, used by PMOVES.YT.",
+      "variables": [
+        {
+          "key": "INVIDIOUS_HMAC_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Invidious HMAC signing key",
+          "help": "Secret key for signing Invidious API requests. Auto-generated for development.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 64
+          }
+        },
+        {
+          "key": "INVIDIOUS_COMPANION_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Invidious Companion API key",
+          "help": "API key for Invidious Companion service. Auto-generated for development.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 64
+          }
         }
       ]
     }
