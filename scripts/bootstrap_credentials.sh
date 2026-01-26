@@ -118,9 +118,19 @@ load_from_parent() {
     # Source env.shared first (has structure)
     if [ -f "$env_shared" ]; then
         log_info "Loading env.shared structure..."
-        # Copy env.shared to output, filtering out comments and empty lines
-        grep -E '^[A-Z_]+=|^export ' "$env_shared" 2>/dev/null | sed 's/^export //' > "$output_file"
-        log_success "Loaded $(grep -c '^' "$output_file") variables from env.shared"
+        # Copy env.shared to output, filtering out:
+        # - comments and empty lines
+        # - placeholder values (any line ending with -here, -if-needed, descriptive placeholders)
+        grep -E '^[A-Z_]+=|^export ' "$env_shared" 2>/dev/null | \
+            sed 's/^export //' | \
+            grep -vE '-here$|-if-needed$|-when-needed$|-optional$' | \
+            grep -vE '@your-' | \
+            grep -vE '=TEMPLATE_' | \
+            grep -vE '^TEMPLATE_' | \
+            grep -vE '=super-secret-jwt-token-with-at-least' | \
+            grep -vE '=Replace this with actual' \
+            > "$output_file"
+        log_success "Loaded $(grep -c '^' "$output_file") variables from env.shared (placeholders filtered)"
     else
         log_warning "env.shared not found at $env_shared"
     fi
@@ -210,9 +220,18 @@ except ImportError:
 " 2>/dev/null || true)
 
         if [ -n "$decoded" ]; then
-            echo "$decoded" >> "$output_file"
-            local count=$(echo "$decoded" | wc -l)
-            log_success "  Decoded $count secrets from CHIT Geometry Packet"
+            # Filter out placeholders before writing
+            local filtered
+            filtered=$(echo "$decoded" | \
+                grep -vE '-here$|-if-needed$|-when-needed$|-optional$' | \
+                grep -vE '@your-' | \
+                grep -vE '=TEMPLATE_' | \
+                grep -vE '^TEMPLATE_' | \
+                grep -vE '\*\*\*CHIT_HEX_ENCODED\*\*\*' | \
+                grep -vE '=Replace this with actual' || true)
+            echo "$filtered" >> "$output_file" || true
+            local count=$(echo "$filtered" | wc -l)
+            log_success "  Decoded $count secrets from CHIT Geometry Packet (placeholders filtered)"
             return 0
         fi
     fi
@@ -261,10 +280,16 @@ load_from_git_crypt() {
     # git-crypt encrypted files start with specific bytes
     # If we can read a normal-looking line, it's decrypted
     if [[ "$first_line" == *"#"* ]] || [[ "$first_line" == *"[A-Z_"* ]] || [[ "$first_line" == *"PMOVES"* ]]; then
-        # File is decrypted, load it
-        grep -E '^[A-Z_]+=' "$enc_file" 2>/dev/null >> "$output_file" || true
+        # File is decrypted, load it (filtering placeholders)
+        grep -E '^[A-Z_]+=' "$enc_file" 2>/dev/null | \
+            grep -vE '-here$|-if-needed$|-when-needed$|-optional$' | \
+            grep -vE '@your-' | \
+            grep -vE '=TEMPLATE_' | \
+            grep -vE '^TEMPLATE_' | \
+            grep -vE '=Replace this with actual' \
+            >> "$output_file" || true
         local count=$(grep -c '^' "$output_file" 2>/dev/null || echo "0")
-        log_success "  Loaded $count credentials from git-crypt (decrypted)"
+        log_success "  Loaded $count credentials from git-crypt (decrypted, placeholders filtered)"
         return 0
     else
         log_warning "  git-crypt file is encrypted. Run: git-crypt unlock"
