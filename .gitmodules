@@ -14,6 +14,12 @@
 	path = PMOVES-DoX
 	url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
 	ignore = all
+[submodule "PMOVES-AgentGym"]
+	path = PMOVES-AgentGym
+	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
+[submodule "PMOVES-MAI-UI"]
+	path = PMOVES-MAI-UI
+	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
 [submodule "PMOVES-Remote-View"]
 	path = PMOVES-Remote-View
 	url = https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
@@ -35,8 +41,8 @@
 	path = PMOVES-tensorzero
 	url = https://github.com/POWERFULMOVES/PMOVES-tensorzero.git
 	ignore = all
-[submodule "pmoves/pmoves/vendor/e2b"]
-	path = pmoves/pmoves/vendor/e2b
+[submodule "pmoves/vendor/e2b"]
+	path = pmoves/vendor/e2b
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
 [submodule "pmoves/vendor/e2b-desktop"]
 	path = pmoves/vendor/e2b-desktop
