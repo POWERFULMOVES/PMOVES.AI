@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# PMOVES.AI Universal Credential Bootstrap (v3)
+# PMOVES.AI Universal Credential Bootstrap (v4)
 # =============================================================================
 # Run this script in ANY PMOVES.AI submodule to load credentials.
 #
@@ -8,18 +8,23 @@
 #
 # MODES:
 #   DOCKED MODE:   ONLY loads from parent PMOVES.AI (detected via env vars)
-#   STANDALONE:    Loads from CHIT -> git-crypt -> Docker Secrets -> Parent
+#   STANDALONE:    Loads from GitHub Secrets -> CHIT -> git-crypt -> Docker Secrets -> Parent
 #
 # Usage: source scripts/bootstrap_credentials.sh
 #        OR ./scripts/bootstrap_credentials.sh && source .env.bootstrap
 #
-# Platforms: Linux, macOS, WSL2, Git Bash (Windows)
+# Platforms: Linux, macOS, WSL2, Git Bash (Windows), GitHub Actions, Codespaces
 #
 # Credential Sources (tried in order):
-#   1. CHIT Geometry Packet (env.cgp.json) - Encoded secrets in git
-#   2. git-crypt (.env.enc) - GPG-encrypted files in git
-#   3. Docker Secrets (/run/secrets/) - Container-standard secrets
-#   4. Parent PMOVES.AI - Fallback to parent env.shared
+#   1. GitHub Secrets - Environment variables in GitHub Actions/Codespaces
+#   2. CHIT Geometry Packet (env.cgp.json) - Encoded secrets in git
+#   3. git-crypt (.env.enc) - GPG-encrypted files in git
+#   4. Docker Secrets (/run/secrets/) - Container-standard secrets
+#   5. Parent PMOVES.AI - Fallback to parent env.shared
+#
+# Empty Value Filtering:
+#   - Keys ending in _KEY, _TOKEN, _SECRET, _PASSWORD must have values
+#   - Exception: OPENAI_API_BASE= is valid (means use default endpoint)
 # =============================================================================
 
 set -euo pipefail
@@ -299,6 +304,71 @@ load_from_git_crypt() {
 }
 
 # =============================================================================
+# Load Credentials from GitHub Secrets (GitHub Actions/Codespaces)
+# =============================================================================
+
+load_from_github_secrets() {
+    local output_file="${1:-.env.bootstrap}"
+
+    # Check if running in GitHub Actions or Codespaces
+    if [ -z "${GITHUB_ACTIONS:-}" ] && [ -z "${CODESPACES:-}" ]; then
+        return 1
+    fi
+
+    log_info "Attempting to load from GitHub Secrets..."
+
+    # List of GitHub Secrets to try loading
+    # These match common GitHub Secret names for PMOVES.AI
+    local secret_vars=(
+        "OPENAI_API_KEY"
+        "ANTHROPIC_API_KEY"
+        "GOOGLE_API_KEY"
+        "GEMINI_API_KEY"
+        "OPENROUTER_API_KEY"
+        "VENICE_API_KEY"
+        "HUGGINGFACE_HUB_TOKEN"
+        "VOYAGE_API_KEY"
+        "COHERE_API_KEY"
+        "TELEGRAM_BOT_TOKEN"
+        "TELEGRAM_BOT_NAME"
+        "DISCORD_BOT_TOKEN"
+        "SUPABASE_URL"
+        "SUPABASE_SERVICE_KEY"
+        "SUPABASE_ANON_KEY"
+        "RESEND_API_KEY"
+        "TENSORZERO_API_KEY"
+        "OPEN_NOTEBOOK_API_KEY"
+        "E2B_API_KEY"
+        "JINA_API_KEY"
+        "FIREWORKS_API_KEY"
+        "REPLICATE_API_TOKEN"
+        "LANGCHAIN_API_KEY"
+        "TAVILY_API_KEY"
+        "SERPER_API_KEY"
+        "BRIGHTDATA_API_KEY"
+    )
+
+    local found=0
+    for var in "${secret_vars[@]}"; do
+        # Use indirect expansion to get the variable's value
+        local value="${!var:-}"
+        if [ -n "$value" ]; then
+            echo "${var}=${value}" >> "$output_file"
+            log_info "  Loaded $var from GitHub Secret"
+            ((found++))
+        fi
+    done
+
+    if [ $found -gt 0 ]; then
+        log_success "  Loaded $found credentials from GitHub Secrets"
+        return 0
+    else
+        log_info "  No GitHub Secrets found"
+        return 1
+    fi
+}
+
+# =============================================================================
 # Load Credentials from Docker Secrets
 # =============================================================================
 
@@ -341,6 +411,39 @@ load_from_docker_secrets() {
 }
 
 # =============================================================================
+# Filter out truly empty values that should have content
+# =============================================================================
+
+filter_empty_values() {
+    local output_file="${1:-.env.bootstrap}"
+
+    if [ ! -f "$output_file" ]; then
+        return 0
+    fi
+
+    # Filter out empty values for keys that SHOULD have content
+    # Keys ending in _KEY, _TOKEN, _SECRET, _PASSWORD must have values
+    # Exception: _API_BASE= is valid (means use default)
+    local temp_file="${output_file}.tmp"
+    grep -E '^[A-Z_]+=' "$output_file" 2>/dev/null | \
+        grep -vE '^(OPENAI_API_BASE|OPENAI_COMPATIBLE_BASE|CUSTOM_.*|ALTERNATIVE_.*|FALLBACK_.*)=$' | \
+        grep -vE '(_KEY|_TOKEN|_SECRET|_PASSWORD|_API_KEY)=$' \
+        > "$temp_file" || true
+
+    # Check if any entries were removed
+    local original_count=$(grep -c '^[A-Z_]+=' "$output_file" 2>/dev/null || echo "0")
+    local filtered_count=$(grep -c '^[A-Z_]+=' "$temp_file" 2>/dev/null || echo "0")
+
+    if [ "$original_count" -gt "$filtered_count" ]; then
+        local removed=$((original_count - filtered_count))
+        log_info "  Filtered $rem empty credential values (keys without values)"
+        mv "$temp_file" "$output_file"
+    else
+        rm -f "$temp_file"
+    fi
+}
+
+# =============================================================================
 # Main Bootstrap Flow
 # =============================================================================
 
@@ -368,21 +471,29 @@ main() {
             return 1
         fi
     else
-        log_mode "STANDALONE MODE detected - trying CHIT, git-crypt, Docker secrets"
+        log_mode "STANDALONE MODE detected - trying GitHub Secrets, CHIT, git-crypt, Docker secrets"
         echo ""
 
         # STANDALONE MODE: Try multiple sources
         local sources_tried=()
 
-        # 1. Try CHIT decode first
+        # 1. Try GitHub Secrets FIRST (highest priority in GitHub Actions/Codespaces)
+        if load_from_github_secrets "$output_file"; then
+            source_used="GitHub Secrets"
+            sources_tried+=("GitHub Secrets: success")
+        else
+            sources_tried+=("GitHub Secrets: skipped (not in GitHub environment)")
+        fi
+
+        # 2. Try CHIT decode
         if load_from_chit "$output_file"; then
-            source_used="CHIT Geometry Packet"
+            source_used="${source_used:+$source_used + }CHIT Geometry Packet"
             sources_tried+=("CHIT: success")
         else
             sources_tried+=("CHIT: failed")
         fi
 
-        # 2. Try git-crypt
+        # 3. Try git-crypt
         if [ ! -s "$output_file" ] || [ $(grep -c '^' "$output_file" 2>/dev/null || echo "0") -lt 3 ]; then
             if load_from_git_crypt "$output_file"; then
                 source_used="${source_used:+$source_used + }git-crypt"
@@ -392,7 +503,7 @@ main() {
             fi
         fi
 
-        # 3. Try Docker Secrets
+        # 4. Try Docker Secrets
         if [ ! -s "$output_file" ] || [ $(grep -c '^' "$output_file" 2>/dev/null || echo "0") -lt 3 ]; then
             if load_from_docker_secrets "$output_file"; then
                 source_used="${source_used:+$source_used + }Docker Secrets"
@@ -402,7 +513,7 @@ main() {
             fi
         fi
 
-        # 4. Fallback: Try parent (last resort in standalone)
+        # 5. Fallback: Try parent (last resort in standalone)
         if [ ! -s "$output_file" ] || [ $(grep -c '^' "$output_file" 2>/dev/null || echo "0") -lt 3 ]; then
             parent_dir="$(find_parent_pmoves)" || true
             if [ -n "$parent_dir" ]; then
@@ -418,6 +529,9 @@ main() {
         echo ""
         log_info "Sources tried: ${sources_tried[*]}"
     fi
+
+    # Filter out empty credential values
+    filter_empty_values "$output_file"
 
     # Final check and output
     if [ -f "$output_file" ] && [ -s "$output_file" ]; then
@@ -436,10 +550,11 @@ main() {
         log_error "Failed to bootstrap credentials from any source"
         echo ""
         log_info "Manual setup required:"
-        log_info "  1. Create CHIT Geometry Packet: python3 -m pmoves.tools.chit_encode_secrets"
-        log_info "  2. OR setup git-crypt: git-crypt init && git-crypt add-gpg-user you@email.com"
-        log_info "  3. OR create Docker secrets for your stack"
-        log_info "  4. OR create .env file manually with required credentials"
+        log_info "  1. Set GitHub Secrets in repository settings"
+        log_info "  2. Create CHIT Geometry Packet: python3 -m pmoves.tools.chit_encode_secrets"
+        log_info "  3. OR setup git-crypt: git-crypt init && git-crypt add-gpg-user you@email.com"
+        log_info "  4. OR create Docker secrets for your stack"
+        log_info "  5. OR create .env file manually with required credentials"
         echo ""
         log_info "Full documentation: pmoves/docs/SECRETS.md"
         return 1
