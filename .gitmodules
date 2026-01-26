@@ -49,7 +49,7 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
 [submodule "pmoves/vendor/e2b-desktop"]
 	path = pmoves/vendor/e2b-desktop
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
 [submodule "pmoves/vendor/e2b-infra"]
 	path = pmoves/vendor/e2b-infra
 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
