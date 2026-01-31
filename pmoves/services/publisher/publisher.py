@@ -1155,7 +1155,18 @@ async def _handle_metrics_request(reader: asyncio.StreamReader, writer: asyncio.
     try:
         request = await reader.read(4096)
         request_line = request.split(b"\r\n", 1)[0].decode(errors="ignore")
-        if request_line.startswith("GET /metrics ") or request_line.startswith("GET /metrics\r") or request_line.startswith("GET /metrics\n") or request_line.startswith("GET /metrics"):
+        if request_line.startswith("GET /healthz ") or request_line.startswith("GET /healthz\r") or request_line.startswith("GET /healthz\n") or request_line.startswith("GET /healthz"):
+            # PMOVES.AI: Health check endpoint for Kubernetes and monitoring
+            payload = json.dumps({"status": "healthy", "service": "pmoves-publisher"}).encode()
+            headers = (
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(payload)}\r\n"
+                "Cache-Control: no-store\r\n"
+                "Connection: close\r\n\r\n"
+            ).encode()
+            writer.write(headers + payload)
+        elif request_line.startswith("GET /metrics ") or request_line.startswith("GET /metrics\r") or request_line.startswith("GET /metrics\n") or request_line.startswith("GET /metrics"):
             # Always serve JSON at /metrics to satisfy tests and simplify tooling
             payload = json.dumps(METRICS.summary()).encode()
             headers = (

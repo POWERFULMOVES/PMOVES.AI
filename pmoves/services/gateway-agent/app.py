@@ -421,6 +421,19 @@ async def health_check():
     )
 
 
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint for observability."""
+    from fastapi import Response
+    return Response(
+        "# PMOVES Gateway Agent metrics\n"
+        "# HELP pmoves_gateway_agent_up Service availability\n"
+        "# TYPE pmoves_gateway_agent_up gauge\n"
+        "pmoves_gateway_agent_up 1\n",
+        media_type="text/plain",
+    )
+
+
 @app.get("/tools", response_model=ToolListResponse)
 async def list_tools(category: str = None, force_refresh: bool = False):
     """List all available MCP tools"""

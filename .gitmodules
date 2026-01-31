@@ -107,9 +107,6 @@
 [submodule "PMOVES-E2b-Spells"]
 	path = PMOVES-E2b-Spells
 	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
-[submodule "pmoves-e2b-mcp-server"]
-	path = pmoves-e2b-mcp-server
-	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
 [submodule "pmoves-surf"]
 	path = pmoves-surf
 	url = https://github.com/POWERFULMOVES/pmoves-surf.git
@@ -123,3 +120,7 @@
 [submodule "pmoves/vendor/agentgym"]
 	path = pmoves/vendor/agentgym
 	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves-e2b-mcp-server"]
+	path = pmoves-e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git

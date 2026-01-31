@@ -1,26 +1,92 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 # CodeRabbit Configuration for PMOVES.AI
 # Settings for automated code reviews on the hardened (production) branch
 
+# Enable reviews for all targeted PR branches targeting PMOVES.AI-Edition-Hardened
 reviews:
-  # Enable reviews on the default hardened branch
+  # Enable reviews on non-default branches (important for PRs targeting Hardened)
   review_status: true
 
-  # Branches to review
-  branches:
+  # Base branches to enable reviews for (target branches of PRs)
+  base_branches:
     - "PMOVES.AI-Edition-Hardened"
     - "PMOVES.AI-Edition-Hardened-v3-clean"
+    - "main"
+
+  # Branch patterns to review (source branches creating PRs)
+  branch_patterns:
     - "feat/hardened-*"
     - "fix/hardened-*"
+    - "pr/*"            # Targeted PR branches (v3-clean migration)
+    - "pr-*"            # Alternative PR branch pattern
     - "feat/*"          # Feature branches
     - "fix/*"           # Fix branches
     - "gpu-*"           # GPU orchestrator fixes
     - "remove-*"        # Submodule removals
     - "revert-*"        # Revert PRs
 
-  # Disable reviews on these branches
-  excluded_branches:
-    - "main"
-    - "origin/main"
-
 # Language setting (locale for reviews)
 language: "en-US"
+
+# Path-specific instructions for different file types
+path_instructions:
+  - path: "*.yaml"
+    instructions: |
+      YAML files must follow PMOVES.AI conventions:
+      - Use 2-space indentation (not tabs)
+      - Include language specifier in markdown code blocks: ```yaml
+      - Docker compose: use lowercase hostnames (e.g., pmoves.ai, not PMOVES.AI)
+      - Environment files: sync from env.shared for tier architecture
+      - 6-tier architecture: tier-data, tier-api, tier-llm, tier-worker, tier-media, tier-agent
+      - GitHub Actions workflows: validate with actionlint
+
+  - path: "*.yml"
+    instructions: |
+      YAML files must follow PMOVES.AI conventions:
+      - Use 2-space indentation (not tabs)
+      - Include language specifier in markdown code blocks: ```yaml
+      - GitHub Actions workflows: validate with actionlint
+      - CI/CD workflows must include security checks
+
+  - path: "docker-compose.yml"
+    instructions: |
+      Docker compose configuration validation:
+      - All services must have healthcheck or /healthz endpoint
+      - Use lowercase hostnames for DNS compatibility
+      - Services should specify restart: unless-stopped
+      - GPU services require deploy.resources.reservations.devices
+
+  - path: "env.tier-*"
+    instructions: |
+      Tier environment files (6-tier architecture):
+      - Auto-generated from env.shared via merge_shared_to_tiers.py
+      - Do not edit directly - use env.shared as source of truth
+      - Tiers: tier-data, tier-api, tier-llm, tier-worker, tier-media, tier-agent
+
+  - path: "*.md"
+    instructions: |
+      Markdown documentation standards:
+      - Code blocks MUST include language specifier (e.g., ```bash, ```python, ```yaml)
+      - Tables must have blank lines before and after
+      - Use lowercase for service names in documentation
+      - Include API examples with curl
+
+  - path: "pmoves/services/**/*.py"
+    instructions: |
+      Python service files must:
+      - Include docstrings for all public functions (target: >=80% coverage)
+      - Use logging.exception() for exception handling, not logging.error(str(e))
+      - Catch specific exceptions, avoid bare except: clauses
+      - Define __all__ with alphabetically sorted exports
+
+  - path: "pmoves/tests/**/*.py"
+    instructions: |
+      Test files must:
+      - Use descriptive test names (test_<function>_<condition>)
+      - Include docstrings for complex test scenarios
+      - Clean up resources in tearDown/teardown_class
+      - Mock external dependencies appropriately
+
+# Suppress common non-issue alerts
+suppress:
+  - "CodeQL.*alerts"  # Security scanning handles these separately

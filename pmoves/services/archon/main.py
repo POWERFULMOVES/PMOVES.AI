@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from fastapi import Body, Depends, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException, Response
 from nats.aio.client import Client as NATS
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, HttpUrl
 
 # NATS service announcement integration
@@ -343,6 +344,12 @@ def get_archon_service() -> ArchonService:
 async def healthz(service: ArchonService = Depends(get_archon_service)) -> Dict[str, Any]:
     status = "ok" if service.is_connected else "degraded"
     return {"status": status, "service": "archon", "nats": service.is_connected}
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    """Prometheus metrics endpoint for observability."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/events/publish")

@@ -103,6 +103,30 @@ app.mount(
 )
 
 
+# PMOVES.AI: Health and metrics endpoints for observability
+@app.get("/healthz")
+async def healthz():
+    """Health check endpoint for Kubernetes and monitoring."""
+    return {"status": "healthy", "service": "pmoves-gateway"}
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint placeholder.
+
+    Note: Full metrics instrumentation to be added with prometheus_client.
+    Currently returns basic service availability.
+    """
+    from fastapi import Response
+    return Response(
+        "# PMOVES Gateway metrics\n"
+        "# HELP pmoves_gateway_up Service availability\n"
+        "# TYPE pmoves_gateway_up gauge\n"
+        "pmoves_gateway_up 1\n",
+        media_type="text/plain",
+    )
+
+
 @app.get("/demo/shapes-webrtc")
 def demo() -> FileResponse:
     return FileResponse(str(_service_root / "web" / "demo_shapes_webrtc.html"))
