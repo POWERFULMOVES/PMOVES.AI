@@ -1,0 +1,59 @@
+# PMOVES.AI Security Constitution
+# Implements "Defense in Depth" as per BoTZ specification
+
+global_protection:
+  # BLOCKING RULES: Commands that are strictly forbidden
+  blocked_commands:
+    - pattern: "rm -rf /"
+      reason: "Catastrophic system destruction risk. BLOCKED."
+    - pattern: "rm -rf \\."
+      reason: "Current directory destruction. BLOCKED."
+    - pattern: "git push --force"
+      reason: "History rewriting is forbidden for agents. Ask a human."
+    - pattern: "drop database"
+      reason: "Database destruction requires human 'Ask' permission."
+      case_insensitive: true
+    - pattern: "chmod 777"
+      reason: "Insecure permission setting."
+
+  # PATH PROTECTION: Granular file access control
+  protected_paths:
+    # Zero Access - Agent cannot see or modify
+    zero_access:
+      - ".env*"
+      - "*.pem"
+      - "*.key"
+      - "**/secrets/**"
+      - "**/.ssh/**"
+
+    # Read Only - Agent can read but not modify
+    read_only:
+      - ".git/"
+      - "patterns.yaml"
+      - "*.lock"
+      - "requirements*.txt"
+
+    # No Delete - Agent can modify but not delete
+    no_delete:
+      - "src/core/**"
+      - "features/**"
+      - "docs/**"
+      - "pmoves/services/agent-zero/**"
+
+hooks:
+  pre_execution:
+    - name: "Deterministic Safety Check"
+      type: "regex"
+      file: "hooks/deterministic.py"
+
+    - name: "Probabilistic Safety Check"
+      type: "llm_eval"
+      model: "claude-3-haiku-20240307"
+      file: "hooks/probabilistic.py"
+      trigger_on: "shell_command"
+      action_on_risk: "ask_user"
+
+  audit:
+    enabled: true
+    path: "memory/audit/"
+    format: "jsonl"

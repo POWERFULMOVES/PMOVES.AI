@@ -1,0 +1,3 @@
+{"id": "1770058076425", "timestamp": "2026-02-02T18:47:56.425445", "type": "command_execution", "data": {"command": "ls -la", "result": "success", "duration_ms": 45, "agent_id": "agent-zero-test"}}
+{"id": "1770058076425", "timestamp": "2026-02-02T18:47:56.425905", "type": "tool_use", "data": {"tool": "read_file", "parameters": {"file_path": "/tmp/test.txt"}, "agent_id": "agent-zero-test"}}
+{"id": "1770058076425", "timestamp": "2026-02-02T18:47:56.425931", "type": "custom_event", "data": {"key": "value"}}
