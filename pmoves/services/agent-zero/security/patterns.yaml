@@ -4,17 +4,94 @@
 global_protection:
   # BLOCKING RULES: Commands that are strictly forbidden
   blocked_commands:
+    # System destruction commands
     - pattern: "rm -rf /"
       reason: "Catastrophic system destruction risk. BLOCKED."
     - pattern: "rm -rf \\."
       reason: "Current directory destruction. BLOCKED."
+    - pattern: "rm -rf /.*"
+      reason: "Recursive root deletion is forbidden. BLOCKED."
+    - pattern: "dd if=/dev/zero"
+      reason: "Disk wiping command. BLOCKED."
+    - pattern: "mkfs\\."
+      reason: "Filesystem creation destroys data. BLOCKED."
+    - pattern: "format .*:"
+      reason: "Disk formatting destroys data. BLOCKED."
+
+    # Git history manipulation
     - pattern: "git push --force"
       reason: "History rewriting is forbidden for agents. Ask a human."
+    - pattern: "git reset --hard"
+      reason: "Hard reset can destroy work. Ask a human."
+    - pattern: "git rebase .*--onto"
+      reason: "Complex rebases can destroy history. Ask a human."
+    - pattern: "\\+\\+\\+\\+\\+\\+"  # Note: escaped for YAML
+      reason: "Force push detected. BLOCKED."
+
+    # Database destruction
     - pattern: "drop database"
       reason: "Database destruction requires human 'Ask' permission."
       case_insensitive: true
+    - pattern: "truncate table"
+      reason: "Table truncation requires human 'Ask' permission."
+      case_insensitive: true
+    - pattern: "delete from .*where"
+      reason: "Mass deletion requires human 'Ask' permission."
+      case_insensitive: true
+
+    # Permission escalation
     - pattern: "chmod 777"
       reason: "Insecure permission setting."
+    - pattern: "chmod a\\+rwx"
+      reason: "Insecure permission setting."
+    - pattern: "chown .*root"
+      reason: "Ownership changes require human permission."
+    - pattern: "sudo.*chmod"
+      reason: "Permission escalation with chmod is forbidden."
+
+    # User/credential manipulation
+    - pattern: "useradd .*-s /bin/bash"
+      reason: "User creation requires human permission."
+    - pattern: "userdel .*-r"
+      reason: "User deletion is forbidden."
+    - pattern: "passwd .*root"
+      reason: "Password changes require human permission."
+
+    # Network attacks
+    - pattern: "iptables -F"
+      reason: "Firewall flush is dangerous. Ask a human."
+    - pattern: "curl.*POST.*http"
+      reason: "Unmonitored HTTP POST requires permission."
+    - pattern: "wget.*--post-data"
+      reason: "Unmonitored HTTP POST requires permission."
+
+    # System reboot/shutdown
+    - pattern: "shutdown -"
+      reason: "System shutdown is forbidden."
+    - pattern: "reboot"
+      reason: "System reboot is forbidden."
+    - pattern: "systemctl.*poweroff"
+      reason: "System poweroff is forbidden."
+    - pattern: "init 0"
+      reason: "System init to runlevel 0 is forbidden."
+    - pattern: "halt"
+      reason: "System halt is forbidden."
+    - pattern: "poweroff"
+      reason: "System poweroff is forbidden."
+
+    # Cryptomining prevention
+    - pattern: "\\|.*bash"
+      reason: "Pipe to bash is dangerous. BLOCKED."
+    - pattern: "\\|.*sh"
+      reason: "Pipe to shell is dangerous. BLOCKED."
+    - pattern: "eval.*\\$\\(.*curl"
+      reason: "Command substitution with remote content. BLOCKED."
+    - pattern: "eval.*\\$\\(.*wget"
+      reason: "Command substitution with remote content. BLOCKED."
+    - pattern: "curl.*\\|"
+      reason: "Curl piped to command is dangerous. BLOCKED."
+    - pattern: "wget.*\\|"
+      reason: "Wget piped to command is dangerous. BLOCKED."
 
   # PATH PROTECTION: Granular file access control
   protected_paths:
