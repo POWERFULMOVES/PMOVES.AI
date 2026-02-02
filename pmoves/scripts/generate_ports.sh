@@ -124,6 +124,15 @@ PORTS[gpu-orchestrator]=8090
 PORTS[pmoves-ollama]=11434
 
 # ============================================================================
+# Distributed Compute Services
+# ============================================================================
+PORTS[node-registry]=8115
+PORTS[resource-detector]=8116
+PORTS[vllm-orchestrator]=8117
+PORTS[work-marshaling]=8118
+PORTS[benchmark-runner]=8119
+
+# ============================================================================
 # Monitoring Tier Services (9000-9999) - Observability
 # ============================================================================
 PORTS[prometheus]=9090

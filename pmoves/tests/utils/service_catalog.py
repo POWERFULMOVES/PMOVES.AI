@@ -227,6 +227,66 @@ GPU_ORCHESTRATOR = ServiceDefinition(
 )
 
 # ============================================================================
+# DISTRIBUTED COMPUTE SERVICES
+# ============================================================================
+
+NODE_REGISTRY = ServiceDefinition(
+    name="node-registry",
+    port=8115,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "nodes_count"],
+    profile="distributed,orchestration",
+    dependencies=["nats", "postgres"],
+    description="NATS-based P2P node discovery and capability tracking",
+)
+
+RESOURCE_DETECTOR = ServiceDefinition(
+    name="resource-detector",
+    port=8116,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "tier"],
+    profile="distributed,orchestration",
+    description="Hardware detection with tier classification",
+)
+
+VLLM_ORCHESTRATOR = ServiceDefinition(
+    name="vllm-orchestrator",
+    port=8117,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "instances"],
+    profile="distributed,orchestration,gpu",
+    dependencies=["nats", "node-registry", "tensorzero-gateway"],
+    gpu_required=True,
+    description="Dynamic vLLM deployment with optimal parallelism configuration",
+)
+
+WORK_MARSHALING = ServiceDefinition(
+    name="work-marshaling",
+    port=8118,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "pending"],
+    profile="distributed,orchestration",
+    dependencies=["nats", "node-registry"],
+    description="NATS-based work allocation with retry and blacklisting",
+)
+
+BENCHMARK_RUNNER = ServiceDefinition(
+    name="benchmark-runner",
+    port=8119,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status"],
+    profile="distributed,benchmark",
+    dependencies=["nats", "tensorzero-gateway"],
+    gpu_required=True,
+    description="LLM performance testing via llama-throughput-lab",
+)
+
+# ============================================================================
 # MEDIA INGESTION & PROCESSING
 # ============================================================================
 
@@ -548,6 +608,12 @@ SERVICES = [
     HIRAG_V1_GPU,
     FLUTE_GATEWAY,
     ULTIMATE_TTS_STUDIO,
+    # Distributed Compute Services
+    NODE_REGISTRY,
+    RESOURCE_DETECTOR,
+    VLLM_ORCHESTRATOR,
+    WORK_MARSHALING,
+    BENCHMARK_RUNNER,
     PMOVES_YT,
     FFMPEG_WHISPER,
     MEDIA_VIDEO,

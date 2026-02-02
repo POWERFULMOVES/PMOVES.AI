@@ -1110,6 +1110,172 @@ services:
       nats:
         condition: service_started
         required: false
+
+  # Distributed Compute Services - P2P node discovery, work allocation, and vLLM deployment
+  # Profile: docker compose --profile distributed up -d
+  node-registry:
+    <<: *id002
+    build:
+      context: ./services/node-registry
+      dockerfile: Dockerfile
+    image: ${NODE_REGISTRY_IMAGE:-ghcr.io/powerfulmoves/pmoves-node-registry:latest}
+    restart: unless-stopped
+    environment:
+      - NODE_REGISTRY_HOST=0.0.0.0
+      - NODE_REGISTRY_PORT=8115
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - STALE_THRESHOLD_SECONDS=${STALE_THRESHOLD_SECONDS:-60}
+      - CLEANUP_INTERVAL_SECONDS=${CLEANUP_INTERVAL_SECONDS:-300}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - 8115:8115
+    profiles: ["distributed", "orchestration"]
+    networks: [pmoves_api, pmoves_bus, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8115/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      nats:
+        condition: service_started
+        required: false
+
+  resource-detector:
+    <<: *id002
+    build:
+      context: ./services/resource-detector
+      dockerfile: Dockerfile
+    image: ${RESOURCE_DETECTOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-resource-detector:latest}
+    restart: unless-stopped
+    environment:
+      - RESOURCE_DETECTOR_HOST=0.0.0.0
+      - RESOURCE_DETECTOR_PORT=8116
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-60}
+    ports:
+      - 8116:8116
+    profiles: ["distributed", "orchestration"]
+    networks: [pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8116/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Privileged mode for hardware detection
+    cap_add:
+      - SYS_RAWIO
+    devices:
+      - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  vllm-orchestrator:
+    <<: *id002
+    build:
+      context: ./services/vllm-orchestrator
+      dockerfile: Dockerfile
+    image: ${VLLM_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-vllm-orchestrator:latest}
+    restart: unless-stopped
+    environment:
+      - VLLM_ORCHESTRATOR_HOST=0.0.0.0
+      - VLLM_ORCHESTRATOR_PORT=8117
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - VLLM_MODEL_PATH=${VLLM_MODEL_PATH:-/models}
+      - VLLM_COMPOSE_DIR=${VLLM_COMPOSE_DIR:-/tmp/vllm-compose}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - 8117:8117
+    profiles: ["distributed", "orchestration", "gpu"]
+    networks: [pmoves_api, pmoves_bus, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8117/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      nats:
+        condition: service_started
+        required: false
+      node-registry:
+        condition: service_started
+        required: false
+      tensorzero-gateway:
+        condition: service_started
+        required: false
+
+  work-marshaling:
+    <<: *id002
+    build:
+      context: ./services/work-marshaling
+      dockerfile: Dockerfile
+    image: ${WORK_MARSHALING_IMAGE:-ghcr.io/powerfulmoves/pmoves-work-marshaling:latest}
+    restart: unless-stopped
+    environment:
+      - WORK_MARSHALING_HOST=0.0.0.0
+      - WORK_MARSHALING_PORT=8118
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NODE_REGISTRY_URL=${NODE_REGISTRY_URL:-http://node-registry:8115}
+      - ASSIGNMENT_TIMEOUT_SECONDS=${ASSIGNMENT_TIMEOUT_SECONDS:-30}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - STALE_CHECK_INTERVAL_SECONDS=${STALE_CHECK_INTERVAL_SECONDS:-60}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - 8118:8118
+    profiles: ["distributed", "orchestration"]
+    networks: [pmoves_api, pmoves_bus, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8118/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      nats:
+        condition: service_started
+        required: false
+      node-registry:
+        condition: service_started
+        required: false
+
+  benchmark-runner:
+    <<: *id002
+    build:
+      context: ./services/benchmark-runner
+      dockerfile: Dockerfile
+    image: ${BENCHMARK_RUNNER_IMAGE:-ghcr.io/powerfulmoves/pmoves-benchmark-runner:latest}
+    restart: unless-stopped
+    environment:
+      - PORT=8119
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3030}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - 8119:8119
+    profiles: ["distributed", "benchmark"]
+    networks: [pmoves_api, pmoves_bus, pmoves_monitoring]
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: all
+            capabilities:
+            - gpu
+    depends_on:
+      nats:
+        condition: service_started
+        required: false
+
   evo-controller:
     <<: *id005
     build:
