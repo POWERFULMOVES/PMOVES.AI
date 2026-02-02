@@ -25,6 +25,7 @@ from gateway.threads import (
     ThreadFactory,
     ThreadType,
     ThreadStatus,
+    BaseSimpleThread,
     ParallelThread,
     ChainedThread,
     FusionThread,
@@ -58,9 +59,32 @@ class ThreadTester:
             output_preview = str(result["output"])[:150]
             print(f"  Output: {output_preview}...")
 
+    async def test_base_thread(self) -> dict:
+        """Test Base (Simple) thread execution."""
+        self.print_header("Test 1: Base Thread (B)")
+
+        thread = BaseSimpleThread(
+            thread_id="test-base-1",
+            context={"test": True, "user": "alice"},
+            prompt="What is the weather today?",
+            agent="weather-agent"
+        )
+
+        start = datetime.utcnow()
+        result = await thread.execute()
+        duration = int((datetime.utcnow() - start).total_seconds() * 1000)
+
+        self.print_result("Base Thread", {
+            "success": result.status == ThreadStatus.COMPLETED,
+            "status": result.status.value,
+            "output": result.result
+        }, duration)
+
+        return {"name": "base", "passed": result.status == ThreadStatus.COMPLETED}
+
     async def test_parallel_thread(self) -> dict:
         """Test Parallel thread execution."""
-        self.print_header("Test 1: Parallel Thread (P)")
+        self.print_header("Test 2: Parallel Thread (P)")
 
         thread = ParallelThread(
             thread_id="test-parallel-1",
@@ -87,7 +111,7 @@ class ThreadTester:
 
     async def test_chained_thread(self) -> dict:
         """Test Chained thread execution."""
-        self.print_header("Test 2: Chained Thread (C)")
+        self.print_header("Test 3: Chained Thread (C)")
 
         thread = ChainedThread(
             thread_id="test-chained-1",
@@ -113,7 +137,7 @@ class ThreadTester:
 
     async def test_fusion_thread(self) -> dict:
         """Test Fusion thread execution."""
-        self.print_header("Test 3: Fusion Thread (F)")
+        self.print_header("Test 4: Fusion Thread (F)")
 
         thread = FusionThread(
             thread_id="test-fusion-1",
@@ -136,7 +160,7 @@ class ThreadTester:
 
     async def test_big_thread(self) -> dict:
         """Test Big thread execution."""
-        self.print_header("Test 4: Big Thread (L)")
+        self.print_header("Test 5: Big Thread (L)")
 
         plan_steps = [{"name": f"step_{i}", "task": f"Execute step {i}"} for i in range(1, 21)]
 
@@ -161,7 +185,7 @@ class ThreadTester:
 
     async def test_long_thread(self) -> dict:
         """Test Long thread execution (with quick stop)."""
-        self.print_header("Test 5: Long Thread (Z)")
+        self.print_header("Test 6: Long Thread (Z)")
 
         thread = LongThread(
             thread_id="test-long-1",
@@ -185,12 +209,13 @@ class ThreadTester:
 
     async def test_thread_factory(self) -> dict:
         """Test ThreadFactory."""
-        self.print_header("Test 6: ThreadFactory")
+        self.print_header("Test 7: ThreadFactory")
 
         factory_results = []
 
         # Test creating each thread type
         thread_types = [
+            (ThreadType.BASE, {"prompt": "test prompt"}),
             (ThreadType.PARALLEL, {"tasks": []}),
             (ThreadType.CHAINED, {"stages": []}),
             (ThreadType.FUSION, {"models": ["opus-4-5"]}),
@@ -230,7 +255,7 @@ class ThreadTester:
 
     async def test_gateway_dispatch(self) -> dict:
         """Test Gateway task dispatch."""
-        self.print_header("Test 7: Gateway Task Dispatch")
+        self.print_header("Test 8: Gateway Task Dispatch")
 
         gateway = Gateway()
         await gateway.initialize()
@@ -267,6 +292,38 @@ class ThreadTester:
 
         return {"name": "gateway", "passed": all_passed}
 
+    async def test_metrics_endpoint(self) -> dict:
+        """Test Gateway metrics endpoint."""
+        self.print_header("Test 9: Gateway Metrics Endpoint")
+
+        gateway = Gateway()
+        await gateway.initialize()
+
+        # Execute a few tasks to generate metrics
+        tasks = [
+            {"intent": "Test task 1", "requirements": {"complexity": "low"}},
+            {"intent": "Test task 2", "requirements": {"complexity": "medium"}},
+        ]
+
+        for task in tasks:
+            await gateway.dispatch_task(task)
+
+        # Get metrics
+        metrics = await gateway.metrics()
+
+        self.print_result("Metrics Endpoint", {
+            "success": bool(metrics),
+            "status": "completed",
+            "output": {
+                "total_threads": metrics.get("thread_executions_total"),
+                "completed": metrics.get("thread_executions_completed"),
+                "failed": metrics.get("thread_executions_failed"),
+                "by_type": metrics.get("thread_executions_by_type")
+            }
+        }, 0)
+
+        return {"name": "metrics", "passed": bool(metrics)}
+
     async def run_all_tests(self):
         """Run all thread execution tests."""
         print("\n" + "="*70)
@@ -276,13 +333,15 @@ class ThreadTester:
 
         # Run tests
         tests = [
+            self.test_base_thread(),
             self.test_parallel_thread(),
             self.test_chained_thread(),
             self.test_fusion_thread(),
             self.test_big_thread(),
             self.test_long_thread(),
             self.test_thread_factory(),
-            self.test_gateway_dispatch()
+            self.test_gateway_dispatch(),
+            self.test_metrics_endpoint()
         ]
 
         results = await asyncio.gather(*tests)

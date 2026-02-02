@@ -31,6 +31,8 @@ from gateway.threads import (
     ThreadFactory,
     ThreadType,
     ThreadResult,
+    ThreadStatus,
+    run_base,
     run_parallel,
     run_chained
 )
@@ -46,7 +48,7 @@ class GatewayConfig:
     """Gateway configuration from environment variables."""
 
     # mprocs remote control server
-    MPROCS_SERVER: str = os.environ.get("MPLCROCS_SERVER", "127.0.0.1:4050")
+    MPROCS_SERVER: str = os.environ.get("MPROCS_SERVER", "127.0.0.1:4050")
 
     # TensorZero for LLM routing (docked mode)
     TENSORZERO_BASE_URL: str = os.environ.get(
@@ -278,16 +280,41 @@ class Gateway:
         task: Dict[str, Any],
         analysis: Dict[str, Any]
     ) -> ThreadResult:
-        """Execute task using the specified thread type."""
+        """
+        Execute task using the specified thread type.
 
+        Args:
+            thread_type: The type of thread to execute
+            task_id: Unique identifier for the task
+            task: Task definition dictionary
+            analysis: Task analysis result with execution plan
+
+        Returns:
+            ThreadResult with execution outcome
+
+        Examples:
+            >>> result = await gateway._execute_thread(
+            ...     ThreadType.BASE,
+            ...     "task-1",
+            ...     {"intent": "hello"},
+            ...     analysis
+            ... )
+        """
         context = {
             "task": task,
             "analysis": analysis,
             "timestamp": datetime.utcnow().isoformat()
         }
 
-        # Create thread using factory
-        if thread_type == ThreadType.PARALLEL:
+        # Route to appropriate execution function
+        if thread_type == ThreadType.BASE:
+            return await run_base(
+                prompt=task.get("intent", ""),
+                context=context,
+                thread_id=task_id
+            )
+
+        elif thread_type == ThreadType.PARALLEL:
             return await run_parallel(
                 tasks=analysis["execution_plan"],
                 context=context,
@@ -312,7 +339,24 @@ class Gateway:
             return await thread.execute()
 
     def _get_thread_kwargs(self, thread_type: ThreadType, analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Get thread-specific kwargs from analysis."""
+        """
+        Get thread-specific keyword arguments from analysis.
+
+        Extracts and formats parameters required for specific thread types
+        based on the task analysis.
+
+        Args:
+            thread_type: The type of thread being created
+            analysis: Task analysis result with execution plan and parameters
+
+        Returns:
+            Dictionary of keyword arguments for thread initialization
+
+        Examples:
+            >>> kwargs = gateway._get_thread_kwargs(ThreadType.FUSION, analysis)
+            >>> print(kwargs)
+            {'models': ['opus-4-5', 'sonnet-4-5', 'haiku']}
+        """
         if thread_type == ThreadType.FUSION:
             return {"models": ["opus-4-5", "sonnet-4-5", "haiku"]}
         elif thread_type == ThreadType.BIG:
@@ -340,15 +384,47 @@ class Gateway:
         return None
 
     async def get_thread_status(self, thread_id: str) -> Optional[ThreadResult]:
-        """Get status of an active or completed thread."""
+        """
+        Get status of an active or completed thread.
+
+        Args:
+            thread_id: Unique identifier of the thread to query
+
+        Returns:
+            ThreadResult if found, None otherwise
+
+        Examples:
+            >>> result = await gateway.get_thread_status("thread-1")
+            >>> if result:
+            ...     print(f"Status: {result.status.value}")
+        """
         return self.active_threads.get(thread_id)
 
     async def list_active_threads(self) -> Dict[str, ThreadResult]:
-        """List all active and completed threads."""
+        """
+        List all active and completed threads.
+
+        Returns:
+            Dictionary mapping thread IDs to their ThreadResult objects
+
+        Examples:
+            >>> threads = await gateway.list_active_threads()
+            >>> print(f"Total threads: {len(threads)}")
+        """
         return self.active_threads.copy()
 
     async def health_check(self) -> Dict[str, Any]:
-        """Perform health check and return status."""
+        """
+        Perform health check and return status.
+
+        Returns:
+            Dictionary containing health status, service info, and metrics
+
+        Examples:
+            >>> health = await gateway.health_check()
+            >>> print(health["status"])
+            'healthy'
+        """
         return {
             "status": "healthy",
             "service": "Gateway Agent",
@@ -356,6 +432,57 @@ class Gateway:
             "version": "1.0.0",
             "mode": "docked" if self.config.PMOVES_DOCKED_MODE else "standalone",
             "active_threads": len(self.active_threads),
+            "nats_connected": self.nats_connected,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    async def metrics(self) -> Dict[str, Any]:
+        """
+        Get Prometheus-style metrics for thread execution.
+
+        Returns:
+            Dictionary containing thread execution metrics for observability
+
+        Examples:
+            >>> metrics = await gateway.metrics()
+            >>> print(f"Total threads: {metrics['thread_executions_total']}")
+        """
+        # Calculate metrics from active threads
+        total_threads = len(self.active_threads)
+        completed_threads = sum(
+            1 for t in self.active_threads.values()
+            if t.status == ThreadStatus.COMPLETED
+        )
+        failed_threads = sum(
+            1 for t in self.active_threads.values()
+            if t.status == ThreadStatus.FAILED
+        )
+
+        # Count by thread type
+        thread_type_counts = {}
+        for thread in self.active_threads.values():
+            ttype = thread.thread_type.value
+            thread_type_counts[ttype] = thread_type_counts.get(ttype, 0) + 1
+
+        # Calculate average duration (in milliseconds)
+        durations = []
+        for thread in self.active_threads.values():
+            if thread.started_at and thread.completed_at:
+                delta = thread.completed_at - thread.started_at
+                durations.append(int(delta.total_seconds() * 1000))
+
+        avg_duration_ms = sum(durations) / len(durations) if durations else 0
+
+        return {
+            "# HELP": "Thread execution metrics for Gateway Agent",
+            "# TYPE": "gateway_thread_metrics counter",
+            "thread_executions_total": total_threads,
+            "thread_executions_completed": completed_threads,
+            "thread_executions_failed": failed_threads,
+            "thread_executions_by_type": thread_type_counts,
+            "thread_duration_avg_ms": avg_duration_ms,
+            "gateway_role": self.role,
+            "docked_mode": self.config.PMOVES_DOCKED_MODE,
             "nats_connected": self.nats_connected,
             "timestamp": datetime.utcnow().isoformat()
         }

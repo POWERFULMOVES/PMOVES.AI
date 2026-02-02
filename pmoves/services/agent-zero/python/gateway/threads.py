@@ -80,6 +80,17 @@ class BaseThread(ABC):
     2. Validate (check preconditions)
     3. Execute (run the thread logic)
     4. Finalize (cleanup, return results)
+
+    Attributes:
+        thread_id (str): Unique identifier for the thread
+        context (Dict[str, Any]): Execution context containing task data
+        agents (List[str]): List of agent identifiers assigned to this thread
+        metadata (Dict[str, Any]): Additional metadata for the thread
+        status (ThreadStatus): Current execution status
+        result (Any): Result data from thread execution
+        error (Optional[str]): Error message if execution failed
+        started_at (Optional[datetime]): Timestamp when thread started
+        completed_at (Optional[datetime]): Timestamp when thread completed
     """
 
     def __init__(
@@ -89,6 +100,20 @@ class BaseThread(ABC):
         agents: List[str] = None,
         metadata: Dict[str, Any] = None
     ):
+        """
+        Initialize a BaseThread instance.
+
+        Args:
+            thread_id: Unique identifier for this thread instance
+            context: Execution context containing task data, parameters, and state
+            agents: Optional list of agent identifiers to use for execution
+            metadata: Optional metadata dictionary for tracking and observability
+
+        Examples:
+            >>> thread = BaseThread("thread-1", {"task": "data"}, agents=["agent-a"])
+            >>> print(thread.thread_id)
+            'thread-1'
+        """
         self.thread_id = thread_id
         self.context = context
         self.agents = agents or []
@@ -102,7 +127,16 @@ class BaseThread(ABC):
     @property
     @abstractmethod
     def thread_type(self) -> ThreadType:
-        """Return the thread type identifier."""
+        """
+        Return the thread type identifier.
+
+        Returns:
+            ThreadType enum value indicating the specific thread type
+
+        Examples:
+            >>> thread.thread_type
+            <ThreadType.BASE>
+        """
         pass
 
     @abstractmethod
@@ -110,8 +144,16 @@ class BaseThread(ABC):
         """
         Execute the thread logic.
 
+        This method must be implemented by all thread subclasses to define
+        the specific execution logic for that thread type.
+
         Returns:
-            ThreadResult with execution outcome
+            ThreadResult with execution outcome, status, and optional result data
+
+        Examples:
+            >>> result = await thread.execute()
+            >>> print(result.status)
+            <ThreadStatus.COMPLETED>
         """
         pass
 
@@ -119,8 +161,15 @@ class BaseThread(ABC):
         """
         Validate preconditions before execution.
 
+        Checks that the thread has a valid context and required parameters.
+
         Returns:
             True if validation passes, False otherwise
+
+        Examples:
+            >>> valid = await thread.validate()
+            >>> if not valid:
+            ...     print("Thread validation failed")
         """
         if not self.context:
             logger.warning(f"Thread {self.thread_id} has empty context")
@@ -128,13 +177,35 @@ class BaseThread(ABC):
         return True
 
     def _mark_started(self):
-        """Mark thread as started."""
+        """
+        Mark thread as started.
+
+        Sets status to RUNNING and records start timestamp.
+
+        Examples:
+            >>> thread._mark_started()
+            >>> thread.status
+            <ThreadStatus.RUNNING>
+        """
         self.status = ThreadStatus.RUNNING
         self.started_at = datetime.utcnow()
         logger.info(f"Thread {self.thread_id} ({self.thread_type.value}) started")
 
     def _mark_completed(self, result: Any = None, error: str = None):
-        """Mark thread as completed."""
+        """
+        Mark thread as completed.
+
+        Sets completion status, timestamp, result, and optional error.
+
+        Args:
+            result: Optional result data from execution
+            error: Optional error message if execution failed
+
+        Examples:
+            >>> thread._mark_completed(result={"output": "success"})
+            >>> thread.status
+            <ThreadStatus.COMPLETED>
+        """
         self.completed_at = datetime.utcnow()
         self.result = result
         self.error = error
@@ -147,7 +218,17 @@ class BaseThread(ABC):
             logger.info(f"Thread {self.thread_id} completed successfully")
 
     def to_result(self) -> ThreadResult:
-        """Convert thread state to ThreadResult."""
+        """
+        Convert thread state to ThreadResult.
+
+        Returns:
+            ThreadResult object containing current thread state
+
+        Examples:
+            >>> result = thread.to_result()
+            >>> print(result.thread_id)
+            'thread-1'
+        """
         return ThreadResult(
             thread_id=self.thread_id,
             thread_type=self.thread_type,
@@ -158,6 +239,145 @@ class BaseThread(ABC):
             started_at=self.started_at,
             completed_at=self.completed_at
         )
+
+
+class BaseSimpleThread(BaseThread):
+    """
+    Base Thread (B): Single prompt-response interaction.
+
+    The simplest thread type for direct single-agent execution.
+    Use for straightforward tasks that don't require coordination.
+
+    Use Cases:
+    - Simple queries and responses
+    - Single-agent tasks
+    - Direct command execution
+    - Quick information retrieval
+
+    Example:
+        User: "What's the weather today?"
+        Agent: [Checks weather service]
+        Agent: "It's sunny and 72°F"
+
+    Attributes:
+        prompt (str): The primary prompt or task to execute
+        agent (Optional[str]): Specific agent to use, if any
+
+    Examples:
+        >>> thread = BaseSimpleThread(
+        ...     thread_id="base-1",
+        ...     context={"query": "weather today"},
+        ...     prompt="What's the weather?"
+        ... )
+        >>> result = await thread.execute()
+        >>> print(result.status)
+        <ThreadStatus.COMPLETED>
+    """
+
+    def __init__(
+        self,
+        thread_id: str,
+        context: Dict[str, Any],
+        prompt: str,
+        agent: Optional[str] = None,
+        agents: List[str] = None,
+        metadata: Dict[str, Any] = None
+    ):
+        """
+        Initialize a BaseSimpleThread instance.
+
+        Args:
+            thread_id: Unique identifier for this thread
+            context: Execution context containing task data
+            prompt: The primary prompt or task to execute
+            agent: Optional specific agent to use for execution
+            agents: Optional list of agents (for compatibility with BaseThread)
+            metadata: Optional metadata for tracking
+
+        Examples:
+            >>> thread = BaseSimpleThread(
+            ...     thread_id="base-1",
+            ...     context={"user": "alice"},
+            ...     prompt="Summarize the report"
+            ... )
+        """
+        super().__init__(thread_id, context, agents, metadata)
+        self.prompt = prompt
+        self.agent = agent
+
+    @property
+    def thread_type(self) -> ThreadType:
+        """Return ThreadType.BASE."""
+        return ThreadType.BASE
+
+    async def execute(self) -> ThreadResult:
+        """
+        Execute the base thread with a single prompt-response interaction.
+
+        This method:
+        1. Validates the thread context and prompt
+        2. Marks the thread as started
+        3. Simulates agent execution (in production, routes to MCP)
+        4. Returns the response result
+
+        Returns:
+            ThreadResult with the execution outcome and response data
+
+        Examples:
+            >>> result = await thread.execute()
+            >>> print(result.result)
+            {'response': 'Task completed successfully'}
+        """
+        self._mark_started()
+
+        if not await self.validate():
+            self._mark_completed(error="Validation failed: empty context or prompt")
+            return self.to_result()
+
+        try:
+            logger.info(f"Executing Base thread: {self.prompt[:100]}...")
+
+            # In production: Route to agent via MCP
+            # Example: response = await self._route_to_agent(self.prompt, self.agent)
+            await asyncio.sleep(0.1)  # Simulate processing
+
+            # Simulate a response
+            response = {
+                "agent": self.agent or "default",
+                "prompt": self.prompt,
+                "response": f"Processed: {self.prompt[:50]}...",
+                "context_used": bool(self.context)
+            }
+
+            self._mark_completed(result=response)
+            return self.to_result()
+
+        except Exception as e:
+            logger.error(f"Base thread execution failed: {e}")
+            self._mark_completed(error=str(e))
+            return self.to_result()
+
+    async def validate(self) -> bool:
+        """
+        Validate preconditions for Base thread execution.
+
+        Checks that both context and prompt are present and non-empty.
+
+        Returns:
+            True if validation passes, False otherwise
+
+        Examples:
+            >>> is_valid = await thread.validate()
+        """
+        if not self.context:
+            logger.warning(f"Base thread {self.thread_id} has empty context")
+            return False
+
+        if not self.prompt:
+            logger.warning(f"Base thread {self.thread_id} has empty prompt")
+            return False
+
+        return True
 
 
 class ParallelThread(BaseThread):
@@ -554,6 +774,7 @@ class ThreadFactory:
             ValueError: If thread_type is unknown
         """
         thread_classes = {
+            ThreadType.BASE: BaseSimpleThread,
             ThreadType.PARALLEL: ParallelThread,
             ThreadType.CHAINED: ChainedThread,
             ThreadType.FUSION: FusionThread,
@@ -569,6 +790,46 @@ class ThreadFactory:
 
 
 # Convenience functions for common thread patterns
+
+async def run_base(
+    prompt: str,
+    context: Dict[str, Any],
+    thread_id: str = None,
+    agent: Optional[str] = None
+) -> ThreadResult:
+    """
+    Run a simple base thread with a single prompt-response interaction.
+
+    Convenience function for creating and executing a BaseSimpleThread.
+
+    Args:
+        prompt: The prompt or task to execute
+        context: Execution context containing task data and parameters
+        thread_id: Optional thread identifier (auto-generated if not provided)
+        agent: Optional specific agent to use for execution
+
+    Returns:
+        ThreadResult with the execution outcome and response data
+
+    Examples:
+        >>> result = await run_base(
+        ...     prompt="What's the weather?",
+        ...     context={"location": "San Francisco"}
+        ... )
+        >>> print(result.status.value)
+        'completed'
+    """
+    if thread_id is None:
+        thread_id = f"base-{int(asyncio.get_event_loop().time() * 1000)}"
+
+    thread = BaseSimpleThread(
+        thread_id=thread_id,
+        context=context,
+        prompt=prompt,
+        agent=agent
+    )
+    return await thread.execute()
+
 
 async def run_parallel(
     tasks: List[Dict[str, Any]],

@@ -14,7 +14,8 @@ __author__ = "PMOVES.AI"
 
 from .gateway import Gateway
 from .threads import (
-    BaseThread,
+    BaseThread,  # Abstract base class
+    BaseSimpleThread,  # Concrete BASE thread implementation
     ParallelThread,
     ChainedThread,
     FusionThread,
@@ -29,6 +30,7 @@ from .threads import (
 __all__ = [
     "Gateway",
     "BaseThread",
+    "BaseSimpleThread",
     "ParallelThread",
     "ChainedThread",
     "FusionThread",
