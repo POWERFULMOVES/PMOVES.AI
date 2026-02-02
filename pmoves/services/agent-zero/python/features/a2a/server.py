@@ -2,16 +2,18 @@
 A2A Server Implementation for Agent Zero
 
 Implements the Agent2Agent protocol for agent interoperability.
-Based on PMOVES-BoTZ A2A integration and Google's A2A specification.
+Based on Google's A2A specification (https://a2aproject.github.io/A2A/)
+Normative source: specification/grpc/a2a.proto
 
-Uses lifespan context manager for startup/shutdown events (FastAPI 0.100+ pattern).
+A2A Protocol v1.0 - Release Candidate
 """
 
 import asyncio
 import logging
 import uuid
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Dict, List, Optional
+from datetime import datetime
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -26,7 +28,11 @@ from .types import (
     TaskCreateRequest,
     TaskCreateResponse,
     TaskErrorResponse,
-    TaskStatus,
+    TaskState,
+    TaskStatusMessage,
+    Message,
+    SendMessageRequest,
+    SendMessageResponse,
     JSONRPCError,
     AGENT_ZERO_CARD,
 )
@@ -142,49 +148,82 @@ def _register_endpoints(app: FastAPI) -> None:
             "version": app.state.agent_card.version
         }
 
-    @app.post("/a2a/v1/tasks", response_model=TaskCreateResponse, tags=["Tasks"])
-    async def create_task(request: TaskCreateRequest) -> TaskCreateResponse:
+    @app.post("/a2a/v1/tasks", response_model=SendMessageResponse, tags=["Tasks"])
+    async def create_task(request: Dict[str, Any]) -> SendMessageResponse:
         """
-        Create a new task on Agent Zero.
+        Create a new task on Agent Zero (A2A message/send endpoint).
 
-        Accepts an A2A task request and maps it to Agent Zero's context.
+        Accepts an A2A message and creates a task for processing.
         The task is stored and can be queried via GET /a2a/v1/tasks/{task_id}.
 
+        Supports both A2A-compliant format and backward compatible format.
+
         Args:
-            request: Task creation request with instruction
+            request: Dictionary containing either:
+                - A2A format: {"message": {...}, "metadata": {...}}
+                - Legacy format: {"id": "...", "instruction": "..."}
 
         Returns:
-            TaskCreateResponse: JSON-RPC 2.0 response with created task
+            SendMessageResponse: Response with created task or direct message
 
         Raises:
             HTTPException: If task creation fails
         """
         try:
-            # Create new task
+            # Support backward compatibility with old TaskCreateRequest format
+            if "id" in request and "instruction" in request and "message" not in request:
+                # Old format - convert to new Message format
+                message = Message(
+                    message_id=request["id"],
+                    context_id=str(uuid.uuid4()),
+                    role="user",
+                    content=request["instruction"]
+                )
+                metadata = request.get("metadata", {})
+            else:
+                # New A2A format
+                message_dict = request.get("message", {})
+                message = Message(**message_dict)
+                metadata = request.get("metadata", {})
+
+            # Generate context_id if not provided
+            context_id = message.context_id or str(uuid.uuid4())
+
+            # Generate task ID
+            task_id = str(uuid.uuid4())
+
+            # Create new task with A2A-compliant structure
             task = Task(
-                id=request.id,
-                status=TaskStatus.SUBMITTED,
-                instruction=request.instruction,
-                metadata=request.metadata or {}
+                id=task_id,
+                context_id=context_id,
+                status=TaskStatusMessage(
+                    state=TaskState.SUBMITTED,
+                    timestamp=datetime.now()
+                ),
+                artifacts=[],
+                metadata=metadata
             )
+
+            # Add instruction as PMOVES extension if message content is text
+            if isinstance(message.content, str):
+                task.instruction = message.content
 
             # Store task
             async with _tasks_lock:
                 _tasks[task.id] = task
 
-            logger.info(f"Task created: {task.id} - {task.instruction[:50]}...")
+            logger.info(f"Task created: {task.id} - context: {context_id}")
 
             # In production, would trigger Agent Zero processing here
             # For now, transition to working state
-            task.status = TaskStatus.WORKING
+            task.status = TaskStatusMessage(
+                state=TaskState.WORKING,
+                timestamp=datetime.now()
+            )
             async with _tasks_lock:
                 _tasks[task.id] = task
 
-            return TaskCreateResponse(
-                jsonrpc="2.0",
-                id=request.id,
-                result=task
-            )
+            return SendMessageResponse(task=task)
 
         except Exception as e:
             logger.error(f"Failed to create task: {e}")
@@ -250,14 +289,17 @@ def _register_endpoints(app: FastAPI) -> None:
             )
 
         # Can only cancel submitted or working tasks
-        if task.status not in (TaskStatus.SUBMITTED, TaskStatus.WORKING):
+        if task.status.state not in (TaskState.SUBMITTED, TaskState.WORKING):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot cancel task with status: {task.status}"
+                detail=f"Cannot cancel task with status: {task.status.state}"
             )
 
         # Update task status
-        task.status = TaskStatus.CANCELLED
+        task.status = TaskStatusMessage(
+            state=TaskState.CANCELLED,
+            timestamp=datetime.now()
+        )
         async with _tasks_lock:
             _tasks[task_id] = task
 
@@ -268,8 +310,7 @@ def _register_endpoints(app: FastAPI) -> None:
     @app.post("/a2a/v1/tasks/{task_id}/artifacts", tags=["Tasks"])
     async def add_artifact(
         task_id: str,
-        artifact_type: ArtifactType,
-        data: str
+        artifact: Dict[str, Any]
     ) -> Task:
         """
         Add an artifact to a task.
@@ -278,8 +319,7 @@ def _register_endpoints(app: FastAPI) -> None:
 
         Args:
             task_id: Unique task identifier
-            artifact_type: MIME type of the artifact
-            data: Artifact content
+            artifact: Dictionary containing artifact data with 'type' and 'data' fields
 
         Returns:
             Task: Updated task with new artifact
@@ -296,21 +336,24 @@ def _register_endpoints(app: FastAPI) -> None:
                 detail="Task not found"
             )
 
-        # Create and add artifact
-        artifact = Artifact(type=artifact_type, data=data)
-        task.artifacts.append(artifact)
+        # Create and add artifact from request body
+        new_artifact = Artifact(
+            type=artifact.get("type", "text/plain"),
+            data=artifact.get("data", "")
+        )
+        task.artifacts.append(new_artifact)
 
         # Update task
         async with _tasks_lock:
             _tasks[task_id] = task
 
-        logger.info(f"Artifact added to task {task_id}: {artifact_type}")
+        logger.info(f"Artifact added to task {task_id}: {new_artifact.type}")
 
         return task
 
     @app.get("/a2a/v1/tasks", tags=["Tasks"])
     async def list_tasks(
-        status_filter: Optional[TaskStatus] = None,
+        status_filter: Optional[TaskState] = None,
         limit: int = 100
     ) -> List[Task]:
         """
@@ -327,7 +370,7 @@ def _register_endpoints(app: FastAPI) -> None:
             tasks = list(_tasks.values())
 
         if status_filter:
-            tasks = [t for t in tasks if t.status == status_filter]
+            tasks = [t for t in tasks if t.status.state == status_filter]
 
         return tasks[:limit]
 
