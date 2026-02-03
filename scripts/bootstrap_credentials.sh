@@ -1,26 +1,33 @@
 #!/usr/bin/env bash
 # =============================================================================
-# PMOVES.AI Universal Credential Bootstrap (v4)
+# PMOVES.AI Universal Credential Bootstrap (v5)
 # =============================================================================
 # Run this script in ANY PMOVES.AI submodule to load credentials.
 #
-# Full Documentation: pmoves/docs/SECRETS.md
+# Full Documentation: pmoves/docs/SECRETS_MANAGEMENT.md
 #
 # MODES:
 #   DOCKED MODE:   ONLY loads from parent PMOVES.AI (detected via env vars)
-#   STANDALONE:    Loads from GitHub Secrets -> CHIT -> git-crypt -> Docker Secrets -> Parent
+#   STANDALONE:    Loads from Active Fetcher -> GitHub Secrets -> CHIT -> git-crypt -> Docker Secrets -> Parent
 #
 # Usage: source scripts/bootstrap_credentials.sh
 #        OR ./scripts/bootstrap_credentials.sh && source .env.bootstrap
+#        OR GITHUB_OWNER=owner GITHUB_REPO=repo ./scripts/bootstrap_credentials.sh --active
 #
 # Platforms: Linux, macOS, WSL2, Git Bash (Windows), GitHub Actions, Codespaces
 #
 # Credential Sources (tried in order):
-#   1. GitHub Secrets - Environment variables in GitHub Actions/Codespaces
-#   2. CHIT Geometry Packet (env.cgp.json) - Encoded secrets in git
-#   3. git-crypt (.env.enc) - GPG-encrypted files in git
-#   4. Docker Secrets (/run/secrets/) - Container-standard secrets
-#   5. Parent PMOVES.AI - Fallback to parent env.shared
+#   1. Active Fetcher - Python module that calls GitHub/Docker APIs (new in v5)
+#   2. GitHub Secrets - Environment variables in GitHub Actions/Codespaces
+#   3. CHIT Geometry Packet (env.cgp.json) - Encoded secrets in git
+#   4. git-crypt (.env.enc) - GPG-encrypted files in git
+#   5. Docker Secrets (/run/secrets/) - Container-standard secrets
+#   6. Parent PMOVES.AI - Fallback to parent env.shared
+#
+# Active Fetcher Configuration:
+#   GITHUB_OWNER - GitHub repository owner for API calls
+#   GITHUB_REPO  - GitHub repository name for API calls
+#   GITHUB_PAT   - GitHub Personal Access Token (or ~/.github-pat file)
 #
 # Empty Value Filtering:
 #   - Keys ending in _KEY, _TOKEN, _SECRET, _PASSWORD must have values
@@ -369,6 +376,65 @@ load_from_github_secrets() {
 }
 
 # =============================================================================
+# Load Credentials from Active GitHub/Docker API Fetcher
+# =============================================================================
+
+load_from_active_fetcher() {
+    local output_file="${1:-.env.bootstrap}"
+
+    log_info "Attempting active credential fetching..."
+
+    # Check if Python is available
+    if ! command -v python3 &> /dev/null; then
+        log_info "  Python 3 not available for active fetching"
+        return 1
+    fi
+
+    # Check if credential_fetcher module exists
+    local fetcher_module="$(dirname "${BASH_SOURCE[0]}")/../pmoves/tools/credential_fetcher.py"
+    if [ ! -f "$fetcher_module" ]; then
+        # Try relative to repo root
+        fetcher_module="pmoves/tools/credential_fetcher.py"
+    fi
+
+    if [ ! -f "$fetcher_module" ]; then
+        log_info "  Credential fetcher module not found"
+        return 1
+    fi
+
+    # Run the active fetcher
+    local temp_output="${output_file}.active"
+
+    # Check for GitHub credentials
+    local github_owner="${GITHUB_OWNER:-}"
+    local github_repo="${GITHUB_REPO:-}"
+    if [ -n "$github_owner" ] && [ -n "$github_repo" ]; then
+        log_info "  Fetching from GitHub: ${github_owner}/${github_repo}"
+    fi
+
+    # Execute the Python fetcher
+    if python3 "$fetcher_module" fetch \
+        --output "$temp_output" \
+        ${github_owner:+--github-owner "$github_owner"} \
+        ${github_repo:+--github-repo "$github_repo"} \
+        2>/dev/null; then
+
+        # Merge with existing output
+        if [ -f "$temp_output" ]; then
+            cat "$temp_output" >> "$output_file"
+            rm -f "$temp_output"
+            local var_count=$(grep -c '^[A-Z_]=' "$temp_output" 2>/dev/null || echo "0")
+            log_success "  Fetched $var_count credentials via active fetcher"
+            return 0
+        fi
+    fi
+
+    log_info "  Active fetcher completed but no credentials found"
+    rm -f "$temp_output"
+    return 1
+}
+
+# =============================================================================
 # Load Credentials from Docker Secrets
 # =============================================================================
 
@@ -471,13 +537,23 @@ main() {
             return 1
         fi
     else
-        log_mode "STANDALONE MODE detected - trying GitHub Secrets, CHIT, git-crypt, Docker secrets"
+        log_mode "STANDALONE MODE detected - trying Active Fetcher, GitHub Secrets, CHIT, git-crypt, Docker secrets"
         echo ""
 
         # STANDALONE MODE: Try multiple sources
         local sources_tried=()
 
-        # 1. Try GitHub Secrets FIRST (highest priority in GitHub Actions/Codespaces)
+        # 1. Try Active Fetcher FIRST (new in v5 - calls GitHub/Docker APIs)
+        if [ "${USE_ACTIVE_FETCHER:-true}" = "true" ]; then
+            if load_from_active_fetcher "$output_file"; then
+                source_used="Active Fetcher"
+                sources_tried+=("Active Fetcher: success")
+            else
+                sources_tried+=("Active Fetcher: failed (not configured or no credentials found)")
+            fi
+        fi
+
+        # 2. Try GitHub Secrets (highest priority in GitHub Actions/Codespaces)
         if load_from_github_secrets "$output_file"; then
             source_used="GitHub Secrets"
             sources_tried+=("GitHub Secrets: success")

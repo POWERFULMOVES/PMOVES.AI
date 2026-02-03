@@ -81,6 +81,7 @@ GLANCER_BUNDLE_FILES: Dict[Path, Path] = {
 
 app = typer.Typer(help="PMOVES mini CLI (alpha)")
 secrets_app = typer.Typer(help="CHIT secret operations")
+credentials_app = typer.Typer(help="Active credential fetching from GitHub/Docker APIs")
 profile_app = typer.Typer(help="Hardware profile management")
 mcp_app = typer.Typer(help="Manage MCP toolkits")
 automations_app = typer.Typer(help="n8n automations")
@@ -90,6 +91,7 @@ deps_app = typer.Typer(help="Host tooling dependency helpers")
 tailscale_app = typer.Typer(help="Tailscale helpers")
 env_app = typer.Typer(help="Environment management (tier layout)")
 app.add_typer(secrets_app, name="secrets")
+app.add_typer(credentials_app, name="credentials")
 app.add_typer(profile_app, name="profile")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(automations_app, name="automations")
@@ -898,6 +900,163 @@ def secrets_decode(
     args = ["--cgp", str(cgp), "--out", str(out)]
     exit_code = _run_module("pmoves.tools.chit_decode_secrets", args)
     raise typer.Exit(exit_code)
+
+
+# =============================================================================
+# Credentials Commands (Active Fetching)
+# =============================================================================
+
+@credentials_app.command("fetch", help="Fetch credentials from GitHub/Docker APIs.")
+def credentials_fetch(
+    github_owner: str = typer.Option(
+        None,
+        "--github-owner",
+        "-o",
+        help="GitHub repository owner.",
+    ),
+    github_repo: str = typer.Option(
+        None,
+        "--github-repo",
+        "-r",
+        help="GitHub repository name.",
+    ),
+    output: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output env file (default: pmoves/env.shared).",
+    ),
+    include_docker: bool = typer.Option(
+        True,
+        "--include-docker/--no-docker",
+        help="Include Docker credentials.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Verbose output.",
+    ),
+) -> None:
+    """Fetch credentials from active sources (GitHub Secrets API, Docker config)."""
+    import pmoves.tools.credential_fetcher as cf
+
+    if output is None:
+        output = ENV_SHARED
+
+    typer.echo(f"Fetching credentials to {output}...")
+
+    if verbose:
+        if github_owner and github_repo:
+            typer.echo(f"  GitHub: {github_owner}/{github_repo}")
+        if include_docker:
+            typer.echo(f"  Docker: enabled")
+
+    try:
+        credentials = cf.fetch_credentials_to_env_shared(
+            output_path=output,
+            github_owner=github_owner,
+            github_repo=github_repo,
+            include_docker=include_docker,
+        )
+        typer.echo(f"✓ Fetched {len(credentials)} credentials")
+    except Exception as e:
+        typer.echo(f"✗ Failed: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@credentials_app.command("list-github", help="List GitHub Secrets (metadata only).")
+def credentials_list_github(
+    owner: str = typer.Option(..., "--owner", "-o", help="Repository owner."),
+    repo: str = typer.Option(..., "--repo", "-r", help="Repository name."),
+) -> None:
+    """List GitHub Actions Secrets for a repository."""
+    import asyncio
+    import pmoves.tools.credential_fetcher as cf
+
+    async def list_secrets():
+        fetcher = cf.GitHubSecretsFetcher()
+        try:
+            secrets = await fetcher.list_repository_secrets(owner, repo)
+            await fetcher.close()
+            return secrets
+        except Exception as e:
+            typer.echo(f"Error: {e}", err=True)
+            return []
+
+    secrets = asyncio.run(list_secrets())
+    if secrets:
+        typer.echo(f"Found {len(secrets)} secrets:")
+        for secret in secrets:
+            typer.echo(f"  - {secret}")
+    else:
+        typer.echo("No secrets found or error occurred.")
+        raise typer.Exit(1)
+
+
+@credentials_app.command("list-docker", help="List Docker registry credentials.")
+def credentials_list_docker() -> None:
+    """List Docker registry credentials from ~/.docker/config.json."""
+    import pmoves.tools.credential_fetcher as cf
+
+    fetcher = cf.DockerCredentialsFetcher()
+    result = fetcher.fetch()
+
+    if result.success:
+        typer.echo(f"Docker registries: {result.metadata.get('registries', 0)}")
+        typer.echo(f"Creds store: {result.metadata.get('creds_store', 'none')}")
+        for key, value in sorted(result.credentials.items()):
+            if "PASSWORD" in key or "AUTH" in key:
+                value = "***"
+            typer.echo(f"  {key}={value}")
+    else:
+        typer.echo(f"Error: {result.error}")
+        raise typer.Exit(1)
+
+
+@credentials_app.command("to-env-shared", help="Fetch and write to env.shared.")
+def credentials_to_env_shared(
+    output: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output path (default: pmoves/env.shared).",
+    ),
+    github_owner: str = typer.Option(
+        None,
+        "--github-owner",
+        help="GitHub repository owner.",
+    ),
+    github_repo: str = typer.Option(
+        None,
+        "--github-repo",
+        help="GitHub repository name.",
+    ),
+    include_docker: bool = typer.Option(
+        True,
+        "--include-docker/--no-docker",
+        help="Include Docker credentials.",
+    ),
+) -> None:
+    """Fetch credentials from all sources and write to env.shared."""
+    import pmoves.tools.credential_fetcher as cf
+
+    if output is None:
+        output = ENV_SHARED
+
+    typer.echo(f"Fetching credentials to {output}...")
+
+    try:
+        credentials = cf.fetch_credentials_to_env_shared(
+            output_path=output,
+            github_owner=github_owner,
+            github_repo=github_repo,
+            include_docker=include_docker,
+        )
+        typer.echo(f"✓ Wrote {len(credentials)} credentials to {output}")
+    except Exception as e:
+        typer.echo(f"✗ Failed: {e}", err=True)
+        raise typer.Exit(1)
 
 
 @profile_app.command("list", help="List available hardware profiles.")
