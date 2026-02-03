@@ -1,3 +1,42 @@
+# Core
+.env
+.env.*
+.env *
+.env.local
+.env.supa.remote
+env.shared
+env.shared.*
+supa.md
+# But keep templates checked in
+!.env.*.example
+!.env.local.example
+!env.shared.example
+*.log
+.last_logs.txt
+
+# Backup files (may contain credentials)
+*.backup*
+*-backup-*
+*.bak
+
+# WSL artifacts
+.wsl/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# Tier environment files (generated from env.shared)
 env.tier-*
 
 # Generated environment files
@@ -5,34 +44,40 @@ env.tier-*
 env.cgp.json
 env.shared.generated
 
+# CHIT/Geometry data
+data/chit/
+
+# Jellyfin integration data
+data/jellyfin/
+
 # Archon MCP logs
 *_archon_mcp_*.json
 
 # VSCode/user-specific files
-launch.json
-extensions.json
+.vscode/launch.json
+.vscode/extensions.json
 
-# Data directories (generated)
-data/chit/
-data/jellyfin/
-data/open-notebook/
-notebook_data/
-surreal_data/
-
-# Vendor
-vendor/python/
-vendor/node_modules/
-
-# Temporary files
-*.gif
-*.tmp
+# Docker
 *.log
 
-# Tier environment files (actual secrets - use .example for tracked templates)
-env.tier-api
-env.tier-agent
-env.tier-data
-env.tier-llm
-env.tier-media
-env.tier-ui
-env.tier-worker
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+.DS_Store
+
+# Credentials (NEVER commit these)
+*.key
+*.pem
+secrets/
+credentials/
+
+# PMOVES specific
+pmoves/data/chit/
+pmoves/data/jellyfin/
+pmoves/.env.local

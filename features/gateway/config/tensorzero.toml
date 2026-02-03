@@ -1,0 +1,118 @@
+[gateway]
+bind_address = "0.0.0.0:3000"
+# Enable Clickhouse for "Deep Dive" observability
+clickhouse_url = "${env.TENSORZERO_CLICKHOUSE_URL}"
+
+# --- Tier 1: Local & Free ---
+[providers.ollama]
+type = "ollama"
+# Access local Ollama on host machine via Docker internal gateway
+url = "http://host.docker.internal:11434"
+
+[providers.cloudflare]
+type = "cloudflare"
+url = "https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/ai/v1"
+api_key = "${env.CF_API_TOKEN}"
+
+# --- Tier 2: Specific Plans ---
+[providers.openrouter]
+type = "openai"
+url = "https://openrouter.ai/api/v1"
+api_key = "${env.OPENROUTER_API_KEY}"
+
+[providers.glm]
+type = "openai"
+url = "https://open.bigmodel.cn/api/paas/v4/"
+api_key = "${env.GLM_API_KEY}"
+
+# --- Tier 3: Cloud Fallback ---
+# Priority 1: Google Gemini
+[providers.google_gemini]
+type = "google"
+api_key = "${env.GOOGLE_API_KEY}"
+
+# Priority 2: Anthropic
+[providers.anthropic]
+type = "anthropic"
+api_key = "${env.ANTHROPIC_API_KEY}"
+
+# Priority 3: OpenAI (Emergency)
+[providers.openai]
+type = "openai"
+api_key = "${env.OPENAI_API_KEY}"
+
+
+# --- Model Definitions ---
+
+# Local Models
+[models.qwen-local]
+provider = "ollama"
+model = "qwen2.5:32b"
+
+[models.qwen-embedding-local]
+provider = "ollama"
+model = "qwen3-embedding:4b"
+
+# Free/Cheap Models
+[models.llama-cf]
+provider = "cloudflare"
+model = "@cf/meta/llama-3-8b-instruct"
+
+# Cloud Models
+[models.gemini-pro]
+provider = "google_gemini"
+model = "gemini-1.5-pro"
+
+[models.claude-sonnet]
+provider = "anthropic"
+model = "claude-3-5-sonnet-20240620"
+
+[models.gpt-4o]
+provider = "openai"
+model = "gpt-4o"
+
+[models.claude-via-or]
+provider = "openrouter"
+model = "anthropic/claude-3.5-sonnet"
+
+[models.glm-code]
+provider = "glm"
+model = "glm-4-flash"
+
+
+# --- Function Routing (The Hierarchy) ---
+
+# General Chat: Local -> Free -> Cloud Fallback Chain
+[functions.chat]
+type = "chat"
+variants = ["local", "free_tier", "cloud_gemini", "cloud_anthropic", "cloud_openai"]
+
+[functions.chat.variants.local]
+model = "models.qwen-local"
+weight = 1.0
+
+[functions.chat.variants.free_tier]
+model = "models.llama-cf"
+weight = 0.5
+
+# Cloud Fallback Chain
+[functions.chat.variants.cloud_gemini]
+model = "models.gemini-pro"
+weight = 0.4
+
+[functions.chat.variants.cloud_anthropic]
+model = "models.claude-sonnet"
+weight = 0.3
+
+[functions.chat.variants.cloud_openai]
+model = "models.gpt-4o"
+weight = 0.1
+
+
+# Embedding: Local First
+[functions.embed]
+type = "embedding"
+variants = ["local_embed"]
+
+[functions.embed.variants.local_embed]
+model = "models.qwen-embedding-local"

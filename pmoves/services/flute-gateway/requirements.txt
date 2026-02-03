@@ -1,0 +1,4 @@
+-r requirements.lock
+
+# Note: Pipecat deps are installed separately via requirements-pipecat.txt
+# to avoid hash verification conflicts

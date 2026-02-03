@@ -97,13 +97,9 @@ If a detail here disagrees with those files, prefer the compose + env pins and u
 
 **Botz Gateway** – *PMOVES-BoTZ MCP tools gateway.* Provides MCP-compatible tools interface for CHIT encoding, secrets management, and hardware profiles. **Path:** Submodule **PMOVES-BoTZ**. **Image:** ghcr.io/powerfulmoves/pmoves-botz:pmoves-latest. **Ports:** **8054** for HTTP API. **Env:** CHIT configuration for encoding/decoding. **Usage:** Accessed via `/botz:*` Claude Code commands.
 
-## Network Architecture (Dual-Tiered Defense in Depth)
+## Network Architecture (5-Tier Defense in Depth)
 
-PMOVES implements **defense-in-depth through dual-layer isolation**:
-
-### 1. Network Layer (5-Tier Docker Segmentation)
-
-Physical network isolation via Docker bridge networks:
+PMOVES implements a **5-tier network architecture** for defense in depth, isolating services by function and limiting blast radius of potential compromises:
 
 | Tier | Network | CIDR | Internal | Services |
 |------|---------|------|----------|----------|
@@ -119,96 +115,20 @@ Physical network isolation via Docker bridge networks:
 - TensorZero Gateway is on API tier but can reach Data tier for ClickHouse metrics
 - Monitoring tier spans all others for metrics scraping (read-only access)
 
-### 2. Environment Layer (6-Tier Secret Segmentation)
+## Docker Hardening & Tier-Based Secrets
 
-Logical secret isolation via specialized environment files:
+PMOVES follows **tier-based secrets isolation** via specialized environment files:
 
-| Tier File | Services | Secrets Scope | Blast Radius |
-|-----------|----------|---------------|--------------|
-| `env.tier-data` | postgres, qdrant, neo4j, minio | Infrastructure only, NO API keys | Databases compromised |
-| `env.tier-api` | postgrest, hi-rag-v2, presign | Data tier + internal TensorZero (NO external keys) | RQ services exposed |
-| `env.tier-worker` | extract-worker, langextract | Processing credentials | Workers compromised |
-| `env.tier-agent` | agent-zero, archon, nats | Agent coordination | Agents hijacked |
-| `env.tier-media` | pmoves-yt, whisper, media-* | Media processing | Media pipeline |
-| `env.tier-llm` | **tensorzero-gateway ONLY** | **External LLM API keys** | **HIGHEST RISK** |
+| Tier File | Services | Secrets Scope |
+|-----------|----------|---------------|
+| `env.tier-data` | postgres, qdrant, neo4j, minio | Infrastructure only, NO API keys |
+| `env.tier-api` | postgrest, hi-rag-v2, presign | Data tier + internal TensorZero (NO external keys) |
+| `env.tier-worker` | extract-worker, langextract | Processing credentials |
+| `env.tier-agent` | agent-zero, archon, nats | Agent coordination |
+| `env.tier-media` | pmoves-yt, whisper, media-* | Media processing |
+| `env.tier-llm` | **tensorzero-gateway ONLY** | **External LLM API keys** |
 
 **Critical:** Only `env.tier-llm` contains external provider keys (Anthropic, OpenAI, Gemini, etc.). All other tiers access LLMs via TensorZero's internal endpoint.
-
-**Dual-Tiered Security Principle:** A compromised service faces TWO barriers:
-1. **Network isolation** - Cannot reach services in other network tiers
-2. **Secret isolation** - Only has access to secrets in its assigned environment tier
-
-For example, a compromised `extract-worker` (app_tier + env.tier-worker):
-- ❌ Cannot reach `postgres` directly (data_tier isolation)
-- ❌ Cannot access external LLM API keys (only env.tier-llm has those)
-
-## Docker Hardening & Production Deployment
-
-### USER Directives (Non-Root Execution)
-
-All PMOVES custom services **MUST run as non-root users**:
-
-```dockerfile
-# Standard non-root pattern (100% adoption across 35 custom services)
-FROM python:3.11-slim
-
-# Create non-root user early in build
-RUN groupadd -r pmoves -g 65532 && \
-    useradd -r -u 65532 -g pmoves -s /sbin/nologin pmoves && \
-    mkdir -p /app /home/pmoves/.cache && \
-    chown -R pmoves:pmoves /app /home/pmoves
-
-# Install dependencies as root
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-# Copy application files and set ownership
-COPY --chown=pmoves:pmoves . /app/
-WORKDIR /app
-
-# Drop to non-root user
-USER pmoves:pmoves
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/healthz || exit 1
-```
-
-### GHCR Namespace Publishing
-
-GHCR requires lowercase namespaces. Normalize in CI/CD:
-
-```yaml
-# .github/workflows/docker-build.yml
-- name: Build and push
-  run: |
-    # Normalize org name to lowercase
-    ORG=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-
-    # Tag with normalized namespace
-    docker tag app:${GITHUB_SHA} ghcr.io/${ORG}/app:${GITHUB_SHA}
-    docker push ghcr.io/${ORG}/app:${GITHUB_SHA}
-
-    # Example: POWERFULMOVES → powerfulmoves
-```
-
-### Tailscale VPN for Production Access
-
-Production deployment via Tailscale mesh VPN:
-
-```bash
-# Install Tailscale on all nodes
-curl -fsSL https://tailscale.com/install.sh | sh
-
-# Authenticate
-tailscale up --authkey=${TS_AUTH_KEY}
-
-# Advertise as exit node for remote access
-tailscale up --advertise-exit-node
-
-# Enable subnet router (if needed)
-tailscale up --advertise-routes=172.30.0.0/16
-```
 
 ## Core Data & Infrastructure Components
 

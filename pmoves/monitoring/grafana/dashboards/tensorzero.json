@@ -1,0 +1,113 @@
+{
+  "title": "TensorZero Gateway",
+  "description": "LLM Gateway metrics - request routing, inference counts, and process health",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "tensorzero-gateway",
+  "tags": ["llm", "gateway", "tensorzero", "api"],
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "row",
+      "title": "Gateway Overview",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Gateway Status",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{ "expr": "up{job=\"tensorzero-gateway\"}", "legendFormat": "Status" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Inferences",
+      "gridPos": { "x": 4, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(tensorzero_inferences_total)", "legendFormat": "Inferences" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Total Requests",
+      "gridPos": { "x": 9, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(tensorzero_requests_total)", "legendFormat": "Requests" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Requests/sec",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(rate(tensorzero_requests_total[5m]))", "legendFormat": "Rate" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } }
+    },
+    {
+      "type": "stat",
+      "title": "CPU Usage",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "targets": [{ "expr": "rate(process_cpu_seconds_total{job=\"tensorzero-gateway\"}[5m]) * 100", "legendFormat": "CPU" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 80 }] } } }
+    },
+    {
+      "type": "row",
+      "title": "Inference Metrics",
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Inferences by Function",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "tensorzero_inferences_total", "legendFormat": "{{function_name}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 20 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate by Function",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [{ "expr": "rate(tensorzero_requests_total[5m])", "legendFormat": "{{function_name}}" }],
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 20 } } }
+    },
+    {
+      "type": "row",
+      "title": "Process Health",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory Usage",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "process_resident_memory_bytes{job=\"tensorzero-gateway\"}", "legendFormat": "Resident" },
+        { "expr": "process_virtual_memory_bytes{job=\"tensorzero-gateway\"}", "legendFormat": "Virtual" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Open File Descriptors",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "process_open_fds{job=\"tensorzero-gateway\"}", "legendFormat": "Open FDs" },
+        { "expr": "process_max_fds{job=\"tensorzero-gateway\"}", "legendFormat": "Max FDs" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 20 } } }
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" }
+}

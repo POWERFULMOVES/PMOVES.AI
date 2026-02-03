@@ -1,0 +1,6 @@
+# Pipecat multimodal voice agent framework
+# Optional - enable with PIPECAT_ENABLED=true
+# Installed separately from locked deps (no hash verification)
+pipecat-ai[silero]==0.0.98
+aiortc==1.12.0
+av==14.4.0

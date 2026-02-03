@@ -1,20 +1,12 @@
 # Network Tier Segmentation Architecture
 
-**Status:** ✅ Implemented in Phase 2 Security Hardening (PR #276)
-**Date:** 2025-12-07 (Updated: 2026-01-29)
+**Status:** Implemented in Phase 2 Security Hardening (PR #276)
+**Date:** 2025-12-07
 **Commit:** a15c045, 8bf936a
-**Security Score:** 95/100 (Phase 1-2 Complete)
 
 ## Overview
 
-PMOVES.AI implements a **dual-tiered security architecture** for defense-in-depth:
-
-1. **5-Tier Network Segmentation** (this document): Physical network isolation via Docker bridge networks
-2. **6-Tier Environment Architecture** (`env.tier-*` files): Logical secret isolation at the environment level
-
-**See:** [PMOVES.AI-Edition-Hardened-Full.md](../PMOVES.AI-Edition-Hardened-Full.md) for complete dual-tiered security documentation.
-
-This document covers the **5-tier network segmentation architecture**, which isolates services by function, preventing lateral movement in the event of a security breach and enforcing the principle of least privilege at the network layer.
+PMOVES.AI implements a **5-tier network segmentation architecture** to enforce defense-in-depth security principles. This architecture isolates services by function, preventing lateral movement in the event of a security breach and enforcing the principle of least privilege at the network layer.
 
 ### Purpose
 
@@ -25,23 +17,6 @@ Network tier segmentation provides:
 - **Defense in Depth**: Network layer security complements application-level security controls
 - **Attack Surface Reduction**: Internal services are not exposed unnecessarily
 - **Compliance Alignment**: Meets network segmentation requirements (PCI DSS 1.3, NIST 800-190, CIS Kubernetes 5.3.2)
-
-### Dual-Tiered Security Architecture
-
-PMOVES.AI implements **defense-in-depth through dual-layer isolation**:
-
-| Layer | Type | Implementation | Purpose |
-|-------|------|----------------|---------|
-| **Network Layer** | Physical isolation | 5 Docker bridge networks | Container-to-container communication control |
-| **Environment Layer** | Logical isolation | 6 `env.tier-*` files | Secret access segmentation |
-
-**Key Principle:** A compromised service faces TWO barriers:
-1. **Network isolation** - Cannot reach services in other network tiers
-2. **Secret isolation** - Only has access to secrets in its assigned environment tier
-
-For example, a compromised `extract-worker` (app_tier + env.tier-worker):
-- ❌ Cannot reach `postgres` directly (data_tier isolation)
-- ❌ Cannot access external LLM API keys (only env.tier-llm has those)
 
 ## Network Tiers
 
@@ -423,18 +398,10 @@ Network tier segmentation helps PMOVES.AI achieve compliance with:
 
 ## Related Documentation
 
-**Dual-Tiered Security:**
-- [PMOVES.AI-Edition-Hardened-Full.md](../PMOVES.AI-Edition-Hardened-Full.md) - Complete dual-tiered security documentation
-- [DOCUMENTATION-UPDATE-PLAN.md](../DOCUMENTATION-UPDATE-PLAN.md) - Documentation update roadmap
-- [Security-Hardening-Roadmap.md](../Security-Hardening-Roadmap.md) - Phase 3 initiatives
-
-**Network Architecture:**
-- [Phase 2 Network Policies Design](../phase2-network-policies-design.md) - Detailed design document
+- [Phase 2 Network Policies Design](/home/pmoves/PMOVES.AI/docs/phase2-network-policies-design.md) - Detailed design document
 - [Services Catalog](/.claude/context/services-catalog.md) - Complete service listing
 - [NATS Subjects](/.claude/context/nats-subjects.md) - Event bus subject catalog
-
-**Implementation References:**
-- [PR #276](https://github.com/POWERFULMOVES/PMOVES.AI/pull/276) - Phase 2 Security Hardening implementation
+- [PR #276](https://github.com/PMOVES/PMOVES.AI/pull/276) - Phase 2 Security Hardening implementation
 - Commit a15c045 - Remove shared network bypassing tier isolation
 - Commit 8bf936a - Phase 2 Security Hardening complete implementation
 

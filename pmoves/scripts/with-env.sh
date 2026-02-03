@@ -41,6 +41,7 @@ load_env_file "$ROOT_DIR/pmoves/env.tier-llm"
 load_env_file "$ROOT_DIR/pmoves/env.tier-media"
 load_env_file "$ROOT_DIR/pmoves/env.tier-agent"
 load_env_file "$ROOT_DIR/pmoves/env.tier-worker"
+load_env_file "$ROOT_DIR/pmoves/env.tier-ui"
 
 # Legacy env files (loaded after tiers for backward compatibility)
 load_env_file "$ROOT_DIR/env.shared.generated"

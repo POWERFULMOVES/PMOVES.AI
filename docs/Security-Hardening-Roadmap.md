@@ -1,50 +1,32 @@
 # Security Hardening Roadmap for PMOVES.AI
 
 **Generated:** 2025-12-06
-**Updated:** 2026-01-29
 **Current Status:** PMOVES.AI-Edition-Hardened Branch
-**Current Security Score:** 95/100 (Phase 1-2 Complete)
-**Target Security Score:** 98/100 (Phase 3 - Q1 2026)
+**Audit Baseline:** 3/42 services (7%) with non-root users, 0/42 with distroless images
 
 ---
 
 ## Executive Summary
 
-This roadmap addresses critical security vulnerabilities identified in the PMOVES.AI production platform. **Phases 1-2 are now complete**, achieving a security score of 95/100. Phase 3 initiatives are planned for Q1 2026 to reach the target 98/100.
+This roadmap addresses critical security vulnerabilities identified in the PMOVES.AI production platform. The audit revealed significant exposure across container security, network isolation, secret management, and CI/CD pipeline hardening.
 
-**Phase 1-2 Achievements (Completed):**
-- ✅ **Container Security:** 100% of custom services run as non-root (35/35 with USER directive)
-- ✅ **Network Security:** 5-tier Docker network segmentation implemented (api/app/bus/data/monitoring)
-- ✅ **Environment Architecture:** 6-tier environment secret segmentation (env.tier-* files)
-- ✅ **TensorZero as Secrets Fence:** Only one service has external LLM API keys
-- ✅ **CI/CD Security:** Harden-Runner deployed to all 14 GitHub Actions workflows
-- ✅ **GHCR Namespace Publishing:** Lowercase normalization implemented
-- ✅ **Tailscale VPN:** Production remote access configuration documented
-- ✅ **Docker Hardening:** Read-only root filesystems, all capabilities dropped
+**Key Findings:**
+- **Container Security:** Only 7% of services run as non-root; no distroless base images
+- **Network Security:** No Kubernetes NetworkPolicies; all services can communicate freely
+- **Secret Management:** No rotation mechanism; credentials exposed in example files (now patched)
+- **Transport Security:** No TLS/mTLS configured for inter-service communication
+- **CI/CD Security:** Missing Harden-Runner EDR, no SLSA provenance attestation
+- **Kubernetes Security:** No SecurityContext, Pod Security Standards, or RBAC policies
 
-**Phase 3 Initiatives (Q1 2026):**
-- 🔲 Secret Rotation Mechanism (External Secrets Operator + HashiCorp Vault)
-- 🔲 TLS/mTLS for P0 Services (cert-manager + internal CA)
-- 🔲 Security Scanning (Trivy, Gitleaks, kube-bench)
-- 🔲 SLSA Provenance + Pod Security (Kyverno admission control)
-- 🔲 Runtime Monitoring (Falco + Loki integration)
-
-**Risk Level:** MEDIUM - Phase 1-2 controls in place, Phase 3 will address remaining gaps
-**Estimated Timeline for Phase 3:** 12 weeks (Q1 2026)
+**Risk Level:** HIGH - Production system with multiple attack vectors
+**Estimated Timeline:** 3 months for full implementation
+**Priority:** Critical security issues addressed in Phases 1-2 (6 weeks)
 
 ---
 
-## Phase 1: Immediate Actions (Week 1-2) - ✅ COMPLETE
+## Phase 1: Immediate Actions (Week 1-2)
 
-**Status:** ✅ Complete (2025-11-15)
-**Security Score Achieved:** 80/100
 **Goal:** Eliminate highest-risk vulnerabilities and establish baseline security controls.
-
-**Completion Summary:**
-- ✅ GitHub Actions hardening with secure workflow patterns
-- ✅ Non-root baseline established across all services
-- ✅ SecurityContext templates for pod security standards
-- ✅ Initial container security posture
 
 ### 1.1 Container User Security (Week 1)
 
@@ -441,25 +423,9 @@ git add k8s/base/sealed-secrets/
 
 ---
 
-## Phase 2: Short-Term Hardening (Week 3-6) - ✅ COMPLETE
+## Phase 2: Short-Term Hardening (Week 3-6)
 
-**Status:** ✅ Complete (2025-12-07, PR #276, commit 8bf936a)
-**Security Score Achieved:** 95/100 (+18.75% improvement from Phase 1)
 **Goal:** Implement network isolation, distroless migration, and automated secret rotation.
-
-**Completion Summary:**
-- ✅ **BuildKit Secrets Migration:** Removed HIGH-RISK secrets from Archon Dockerfile
-- ✅ **5-Tier Network Segmentation:** Implemented across all 48 services
-  - API Tier (172.30.1.0/24): 16 services
-  - Application Tier (172.30.2.0/24): 19 services
-  - Bus Tier (172.30.3.0/24): 1 service
-  - Data Tier (172.30.4.0/24): 7 services
-  - Monitoring Tier (172.30.5.0/24): 5 services
-- ✅ **6-Tier Environment Architecture:** env.tier-* files for secret segmentation
-- ✅ **Branch Protection:** Main branch protected with required PR reviews, status checks, signed commits
-- ✅ **CODEOWNERS:** Automated review assignments for critical paths
-- ✅ **100% Non-Root User Execution:** 35/35 custom services with USER directive
-- ✅ **GHCR Namespace Publishing:** Lowercase normalization implemented
 
 ### 2.1 Kubernetes NetworkPolicies (Week 3)
 
@@ -1057,61 +1023,9 @@ kubectl patch deployment tensorzero-gateway -n pmoves-prod \
 
 ---
 
-## Phase 3: Advanced Security (Q1 2026) - PLANNED
+## Phase 3: Long-Term Hardening (Month 2-3)
 
-**Target Completion:** Q1 2026 (Weeks 1-12)
-**Target Security Score:** 98/100 (from current 95/100)
-**Goal:** Implement TLS/mTLS, SLSA provenance, Pod Security Standards, runtime monitoring, and complete secret rotation.
-
-**Success Criteria:**
-- Security score: 98%+ (from current 95%)
-- Zero CRITICAL vulnerabilities in production
-- <5 HIGH vulnerabilities in production
-- All P0 services use mTLS
-- SLSA provenance on all production images
-- Pod Security Standards enforced
-- All secrets rotated automatically
-
-### Phase 3 Detailed Initiatives (by week)
-
-**Week 1-2: Complete Phase 2 Gaps**
-- BuildKit secrets migration (Archon Dockerfile - lines 49-79)
-- Branch protection rules (user implementation via GitHub UI)
-- Kubernetes NetworkPolicy manifests
-
-**Week 3-4: Secret Rotation Mechanism**
-- Deploy External Secrets Operator
-- Configure HashiCorp Vault backend
-- Create SecretStore manifests
-- Create rotation CronJobs (90-day max age)
-- Test secret rotation with dual-key overlap
-
-**Week 5-6: TLS/mTLS for P0 Services**
-- Deploy cert-manager for Kubernetes
-- Create internal CA (pmoves-internal-ca)
-- Issue service certificates (90-day validity)
-- Configure mTLS for TensorZero, NATS
-- Auto-renew certificates 15 days before expiry
-
-**Week 7-8: Security Scanning**
-- Deploy Trivy in CI/CD
-- Configure Gitleaks secret scanning
-- kube-bench CIS benchmark
-- SARIF upload to GitHub Security
-- Automated remediation pipeline
-
-**Week 9-10: SLSA + Pod Security**
-- SLSA provenance generation
-- cosign signature verification
-- Kyverno admission controller
-- Pod Security Standards enforcement
-- seccomp profiles
-
-**Week 11-12: Runtime Monitoring**
-- Deploy Falco for runtime monitoring
-- Configure alert rules
-- Integration with Loki for log aggregation
-- Create incident response playbooks
+**Goal:** Implement TLS/mTLS, SLSA provenance, Pod Security Standards, and complete distroless migration.
 
 ### 3.1 TLS/mTLS for Inter-Service Communication (Week 7-8)
 
@@ -1773,52 +1687,42 @@ deploy/monitoring/prometheus/rules/security-alerts.yaml
 
 ## Conclusion
 
-**Phases 1-2 Complete (95/100 Security Score)**
+This roadmap provides a comprehensive, phased approach to hardening PMOVES.AI from a security baseline of 7% to enterprise-grade production security over 3 months.
 
-This roadmap has successfully guided PMOVES.AI from a security baseline of 7% to 95/100 through Phases 1-2 completion. Phase 3 is planned for Q1 2026 to reach the target 98/100 security score.
+**Key Achievements Upon Completion:**
+- 100% non-root container execution
+- 100% distroless base images (or documented exceptions)
+- Zero-trust network architecture with NetworkPolicies
+- Automated secret rotation with 90-day max age
+- mTLS encryption for all inter-service communication
+- SLSA provenance attestation on all images
+- Pod Security Standards enforced across all namespaces
+- Continuous security scanning and monitoring
 
-**Key Achievements (Phases 1-2):**
-- ✅ 100% non-root container execution (35/35 custom services)
-- ✅ 5-tier network segmentation (Docker bridge networks)
-- ✅ 6-tier environment architecture (env.tier-* secret files)
-- ✅ TensorZero as secrets fence (only one service with external LLM keys)
-- ✅ Harden-Runner deployed to all 14 GitHub Actions workflows
-- ✅ GHCR namespace publishing (lowercase normalization)
-- ✅ Tailscale VPN integration documented
-- ✅ Docker hardening (read-only root filesystems, capabilities dropped)
-
-**Remaining Phase 3 Goals:**
-- 🔲 Automated secret rotation with 90-day max age
-- 🔲 mTLS encryption for all P0 services
-- 🔲 SLSA provenance attestation on all images
-- 🔲 Pod Security Standards enforced across all namespaces
-- 🔲 Runtime security monitoring with Falco
-- 🔲 Continuous security scanning (Trivy, Gitleaks, kube-bench)
+**Risk Mitigation:**
+- Each phase includes comprehensive testing procedures
+- Rollback plans documented for every change
+- Incremental deployment (dev -> staging -> prod)
+- Metrics-driven validation at each phase gate
 
 **Next Steps:**
-1. **Phase 3 Planning:** Assign owners to each Phase 3 work stream
-2. **Weekly Security Reviews:** Schedule security review meetings during Phase 3
-3. **Incident Response:** Complete incident response procedures
-4. **Compliance Mapping:** Update SOC 2, PCI DSS, NIST documentation
-5. **Documentation:** Maintain security runbook and procedures
+1. Review and approve roadmap with stakeholders
+2. Create JIRA/GitHub issues for each phase
+3. Assign owners to each work stream
+4. Begin Phase 1 implementation immediately
+5. Schedule weekly security review meetings
+6. Establish incident response procedures
 
 **Maintenance:**
 - Quarterly security audits
 - Monthly dependency vulnerability scans
-- Weekly security review meetings during Phase 3
+- Weekly automated secret rotation
 - Daily CI/CD security scans
-- Real-time security metrics monitoring (Grafana dashboards)
-
-**Compliance Alignment:**
-- ✅ **CIS Docker Benchmark 1.0.0:** USER directives, multi-stage builds
-- ✅ **NIST Container Security Guidelines:** Network segmentation, secrets isolation
-- ✅ **OWASP Docker Top 10:** Container hardening practices
-- 🔲 **Kubernetes Pod Security Standards:** Phase 3 enforcement planned
-- 🔲 **SOC 2 CC6.6:** Logical access controls - Phase 3 completion
+- Real-time security metrics monitoring
 
 ---
 
-**Document Version:** 2.0
-**Last Updated:** 2026-01-29
+**Document Version:** 1.0
+**Last Updated:** 2025-12-06
 **Owner:** PMOVES.AI Security Team
-**Review Cycle:** Monthly during Phase 3 implementation, quarterly post-completion
+**Review Cycle:** Monthly during implementation, quarterly post-completion

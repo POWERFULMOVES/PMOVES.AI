@@ -32,8 +32,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Temperature: 0.3 (focused, deterministic)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -52,7 +52,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Developer',
     '1.0',
     'Software engineering specialist for PR reviews, debugging, and architecture design. Optimized for code analysis, refactoring, and technical documentation with step-by-step reasoning.',
@@ -167,8 +167,8 @@ You are precise, systematic, and leverage the PMOVES.AI ecosystem effectively.$$
 -- Temperature: 0.7 (balanced exploration/focus)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -187,7 +187,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Researcher',
     '1.0',
     'Multi-source research specialist optimized for SupaSerch coordination, DeepResearch planning, and knowledge synthesis across vectors, graphs, and full-text search.',
@@ -311,8 +311,8 @@ You are thorough, systematic, and leverage the full PMOVES.AI research stack.$$,
 -- Temperature: 0.8 (creative, varied output)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -331,7 +331,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Creator',
     '1.0',
     'Content generation specialist for technical documentation, synthesis, and creative output. Optimized for clear communication with high temperature for diverse perspectives.',
@@ -455,8 +455,8 @@ You are clear, creative, and make complex PMOVES.AI concepts accessible.$$,
 -- Temperature: 0.4 (focused analytical thinking)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -475,7 +475,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Analyst',
     '1.0',
     'Data analysis specialist for metrics, diagnostics, and performance optimization. Synthesizes telemetry from Prometheus, TensorZero ClickHouse, and service logs.',
@@ -640,8 +640,8 @@ You are analytical, data-driven, and use PMOVES.AI observability tools effective
 -- Temperature: 0.2 (deterministic, consistent)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -660,7 +660,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Archivist',
     '1.0',
     'Knowledge management specialist for indexing, organization, and retrieval. Fast and cost-efficient using Haiku for high-volume knowledge operations.',
@@ -795,8 +795,8 @@ You are organized, meticulous, and ensure PMOVES.AI knowledge is accessible and 
 -- Temperature: 0.5 (balanced planning/flexibility)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -815,7 +815,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Coordinator',
     '1.0',
     'Multi-agent orchestration specialist for complex task planning and delegation. Uses extended context to coordinate Agent Zero, Archon, and external agents via MCP and NATS.',
@@ -874,14 +874,14 @@ You coordinate these orchestration systems:
   "goal": "User objective",
   "subtasks": [
     {
-      "id": "subtask-1",
+      "persona_id": "subtask-1",
       "persona": "Developer",
       "action": "Review PR #123",
       "dependencies": [],
       "output_format": "structured_review"
     },
     {
-      "id": "subtask-2",
+      "persona_id": "subtask-2",
       "persona": "Researcher",
       "action": "Find similar patterns in codebase",
       "dependencies": ["subtask-1"],
@@ -1001,8 +1001,8 @@ You are strategic, organized, and leverage the full PMOVES.AI agent ecosystem fo
 -- Temperature: 0.3 (focused, deterministic validation)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -1021,7 +1021,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Tester',
     '1.0',
     'Quality assurance specialist for test execution, validation, and smoke testing. Optimized for parallel test execution with comprehensive validation of PMOVES.AI services.',
@@ -1220,8 +1220,8 @@ You are thorough, methodical, and ensure PMOVES.AI quality standards are met.$$,
 -- Temperature: 0.2 (highly focused, conservative)
 -- =============================================================================
 
-INSERT INTO pmoves_core.agent_personas (
-    id,
+INSERT INTO pmoves_core.personas (
+    persona_id,
     name,
     version,
     description,
@@ -1240,7 +1240,7 @@ INSERT INTO pmoves_core.agent_personas (
     created_at,
     updated_at
 ) VALUES (
-    uuid_generate_v4(),
+    gen_random_uuid(),
     'Security',
     '1.0',
     'Security specialist for audits, vulnerability analysis, and compliance validation. Systematic threat modeling with focus on secrets, authentication, and attack surface reduction.',
@@ -1446,29 +1446,29 @@ You are vigilant, systematic, and ensure PMOVES.AI security posture is strong.$$
 
 -- Index for persona lookup by name and version
 CREATE INDEX IF NOT EXISTS idx_agent_personas_name_version
-    ON pmoves_core.agent_personas(name, version);
+    ON pmoves_core.personas(name, version);
 
 -- Index for active personas
 CREATE INDEX IF NOT EXISTS idx_agent_personas_active
-    ON pmoves_core.agent_personas(is_active)
+    ON pmoves_core.personas(is_active)
     WHERE is_active = true;
 
 -- Index for thread type lookups
 CREATE INDEX IF NOT EXISTS idx_agent_personas_thread_type
-    ON pmoves_core.agent_personas(thread_type)
+    ON pmoves_core.personas(thread_type)
     WHERE is_active = true;
 
 -- Index for model preference lookups
 CREATE INDEX IF NOT EXISTS idx_agent_personas_model
-    ON pmoves_core.agent_personas(model_preference)
+    ON pmoves_core.personas(model_preference)
     WHERE is_active = true;
 
 -- GIN index for JSONB fields (tools_access, behavior_weights)
 CREATE INDEX IF NOT EXISTS idx_agent_personas_tools_access
-    ON pmoves_core.agent_personas USING GIN (tools_access);
+    ON pmoves_core.personas USING GIN (tools_access);
 
 CREATE INDEX IF NOT EXISTS idx_agent_personas_behavior_weights
-    ON pmoves_core.agent_personas USING GIN (behavior_weights);
+    ON pmoves_core.personas USING GIN (behavior_weights);
 
 -- =============================================================================
 -- VERIFICATION QUERY
@@ -1483,7 +1483,7 @@ SELECT
     temperature,
     is_active,
     created_at
-FROM pmoves_core.agent_personas
+FROM pmoves_core.personas
 WHERE version = '1.0'
 ORDER BY name;
 
@@ -1494,19 +1494,19 @@ ORDER BY name;
 -- =============================================================================
 
 -- Get Developer persona with full configuration
--- SELECT * FROM pmoves_core.agent_personas WHERE name = 'Developer' AND version = '1.0';
+-- SELECT * FROM pmoves_core.personas WHERE name = 'Developer' AND version = '1.0';
 
 -- Get all personas suitable for parallel execution
--- SELECT name, description, model_preference FROM pmoves_core.agent_personas
+-- SELECT name, description, model_preference FROM pmoves_core.personas
 -- WHERE thread_type = 'parallel' AND is_active = true;
 
 -- Get personas with specific tool access
--- SELECT name, model_preference FROM pmoves_core.agent_personas
+-- SELECT name, model_preference FROM pmoves_core.personas
 -- WHERE tools_access->>'hirag_query' = 'true' AND is_active = true;
 
 -- Get personas sorted by generate behavior weight (highest first)
 -- SELECT name, thread_type, behavior_weights->>'generate' as generate_weight
--- FROM pmoves_core.agent_personas
+-- FROM pmoves_core.personas
 -- WHERE is_active = true
 -- ORDER BY (behavior_weights->>'generate')::numeric DESC;
 

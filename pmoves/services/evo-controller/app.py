@@ -21,8 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 import httpx
-from fastapi import FastAPI, Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 logger = logging.getLogger("evo-controller")
@@ -277,18 +276,6 @@ class EvoSwarmController:
                 r.raise_for_status()
         except Exception:  # pragma: no cover
             logger.warning("failed to publish geometry.swarm.meta.v1 (agent-zero not reachable?)")
-
-
-@app.get("/healthz")
-async def healthz() -> Dict[str, Any]:
-    """Health check endpoint for Kubernetes probes."""
-    return {"status": "ok"}
-
-
-@app.get("/metrics")
-async def metrics() -> Response:
-    """Prometheus metrics endpoint for observability."""
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")

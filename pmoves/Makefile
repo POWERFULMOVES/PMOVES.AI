@@ -60,7 +60,7 @@ SERVICE_URL = python3 tools/service_health_check.py $(1) --port $(2)
 
 # env.shared is dotenv-style and may contain values that are not safe to `source` directly (multi-line, etc).
 # Use the repo's sanitizer/loader so scripts get stable, safe environment variables.
-LOAD_ENV_SHARED := . ./scripts/with-env.sh;
+LOAD_ENV_SHARED := . ./scripts/with-env.sh
 export LOAD_ENV_SHARED
 
 .PHONY: ensure-env-shared
@@ -119,7 +119,7 @@ up-bots: ## Start bot services (BotZ + messaging gateway)
 .PHONY: up-obs
 up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
 	@echo "📊 Starting observability stack (monitoring FIRST)..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
 	@echo "⏳ Waiting for observability to be ready..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || echo "⚠️ Prometheus not ready (may still be starting)"
 	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || echo "⚠️ Grafana not ready (may still be starting)"
@@ -128,12 +128,279 @@ up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail,
 	@echo "   Prometheus:   http://localhost:9090"
 	@echo "   Loki:         http://localhost:3100"
 
+.PHONY: check-tools
+check-tools: ## Check required tools and versions
+	@echo "🔍 Checking required tools..."
+	@missing=""; \
+	if ! command -v docker >/dev/null 2>&1; then missing="$$missing docker"; fi; \
+	if ! command -v docker compose >/dev/null 2>&1; then missing="$$missing docker-compose"; fi; \
+	if ! command -v supabase >/dev/null 2>&1; then missing="$$missing supabase"; fi; \
+	if ! command -v python3 >/dev/null 2>&1; then missing="$$missing python3"; fi; \
+	if [ -n "$$missing" ]; then \
+		echo "❌ Missing required tools:$$missing"; \
+		echo "   Install with:"; \
+		case "$$missing" in *docker*) echo "   - Docker: https://docs.docker.com/get-docker/";; esac; \
+		case "$$missing" in *supabase*) echo "   - Supabase CLI: npm install -g supabase";; esac; \
+		exit 1; \
+	fi
+	@echo "✅ All required tools found"
+	@supa_version=$$(supabase --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1); \
+	latest=$$(curl -s https://pypi.org/pypi/supabase/json | python3 -c "import sys, json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || echo "unknown"); \
+	if [ "$$supa_version" != "$$latest" ] && [ "$$latest" != "unknown" ]; then \
+		echo "⚠️  Supabase CLI update available: $$supa_version → $$latest"; \
+		echo "   Update with: npm update -g supabase"; \
+	else \
+		echo "✅ Supabase CLI version: $$supa_version"; \
+	fi
+
 .PHONY: up-supabase
 up-supabase: ## Start Supabase (Postgres + Kong + Studio)
 	@echo "🗄️ Starting Supabase..."
-	@cd .. && supabase start --network-id pmoves-net
+	@if ! docker ps --format '{{.Names}}' | grep -q '^supabase'; then \
+		if ! docker ps -a --format '{{.Names}}' | grep -q '^supabase'; then \
+			cd .. && supabase start --network-id pmoves-net || { \
+				echo "❌ Failed to start Supabase"; \
+				echo ""; \
+				echo "Troubleshooting:"; \
+				echo "1. Check for port conflicts: lsof -i :54322 | grep LISTEN"; \
+				echo "2. Stop other Supabase instances: cd .. && supabase stop --project-id <project-id>"; \
+				echo "3. Remove stale containers: docker rm -f $$(docker ps -a -q --filter 'name=supabase')"; \
+				echo "4. Try again: make supa-start"; \
+				exit 1; \
+			}; \
+		else \
+			cd .. && supabase start --network-id pmoves-net || { \
+				echo "❌ Failed to restart Supabase"; \
+				echo "Attempting cleanup..."; \
+				cd .. && supabase stop 2>/dev/null || true; \
+				supabase start --network-id pmoves-net; \
+			}; \
+		fi; \
+	fi
 	@echo "✅ Supabase ready"
 	@echo "   Studio:       http://localhost:65433"
+	@echo "   REST API:     http://localhost:65421"
+	@echo "   PostgREST:    http://localhost:65421/rest/v1"
+
+.PHONY: supa-start supa-stop supa-status
+supa-start: check-tools ## Alias for up-supabase (start Supabase CLI)
+	@$(MAKE) --no-print-directory up-supabase
+
+supa-stop: ## Stop Supabase CLI
+	@echo "🗄️ Stopping Supabase..."
+	@cd .. && supabase stop 2>/dev/null || { \
+		docker ps -a --format '{{.Names}}' | grep -q '^supabase' && \
+			docker stop $$(docker ps -a -q --filter 'name=supabase') 2>/dev/null || true; \
+	}
+	@echo "✅ Supabase stopped"
+
+supa-status: ## Check Supabase CLI status
+	@echo "🔍 Supabase status:"
+	@cd .. && supabase status 2>/dev/null || { \
+		echo "   Supabase CLI not running"; \
+		echo "   Start with: make supa-start"; \
+	}
+
+.PHONY: supabase-bootstrap
+supabase-bootstrap: ## Apply Supabase migrations + v5.12 seeds (expects CLI running)
+	@echo "🗄️ Applying Supabase schema + seeds..."
+	@if ! docker ps --format '{{.Names}}' | grep -q 'supabase_db'; then \
+		echo "⚠️  Supabase not running. Starting..."; \
+		$(MAKE) --no-print-directory supa-start; \
+	fi
+	@echo "   Running migrations..."
+	@PGSSLMODE=disable cd .. && supabase db reset --yes --db-url "postgresql://postgres:postgres@localhost:54322/postgres" || { \
+		echo "❌ Migration failed. Check logs above."; \
+		echo "   To retry: make supabase-bootstrap"; \
+		echo "   To view logs: cd .. && supabase logs"; \
+		exit 1; \
+	}
+	@echo "✅ Supabase bootstrap complete"
+
+.PHONY: neo4j-bootstrap
+neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
+	@echo "📊 Applying Neo4j seeds..."
+	@if ! docker ps --format '{{.Names}}' | grep -q 'neo4j\|pmoves-neo4j'; then \
+		echo "⚠️  Neo4j not running. Skipping seeds."; \
+		echo "   Start with: make up-data-tier"; \
+	else \
+		bash scripts/neo4j_bootstrap.sh; \
+	fi
+	@echo "✅ Neo4j bootstrap complete"
+
+.PHONY: seed-data
+seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
+	@echo "📚 Seeding Qdrant/Meili demo corpus..."
+	@if ! docker ps --format '{{.Names}}' | grep -q 'qdrant'; then \
+		echo "⚠️  Qdrant not running. Starting data tier..."; \
+		$(MAKE) --no-print-directory up-data-tier; \
+	fi
+	@$(DC) up -d --no-deps --build --recreate hi-rag-gateway-v2
+	@sleep 5
+	@$(DC) exec -T hi-rag-gateway-v2 python /app/scripts/seed_local.py 2>/dev/null || \
+		$(DC) exec -T hi-rag-gateway-v2 python3 /app/scripts/seed_local.py 2>/dev/null || \
+		echo "⚠️  Seed script not available or failed"
+	@echo "✅ Demo data seeded"
+
+.PHONY: bootstrap-data
+bootstrap-data: ## Umbrella: Supabase SQL + Neo4j seeds + Qdrant/Meili demo data
+	@echo "🚀 Full data bootstrap (Supabase + Neo4j + Qdrant/Meili)..."
+	@echo "   This will:"
+	@echo "   1. Apply Supabase migrations and seeds"
+	@echo "   2. Seed Neo4j with persona aliases and CHIT geometry"
+	@echo "   3. Load demo data into Qdrant and Meilisearch"
+	@echo ""
+	@$(MAKE) --no-print-directory supabase-bootstrap
+	@$(MAKE) --no-print-directory neo4j-bootstrap
+	@$(MAKE) --no-print-directory seed-data
+	@echo ""
+	@echo "✅ All data bootstrap complete"
+	@echo "   💡 Run 'make smoke' to verify installation"
+
+.PHONY: first-run
+first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo data
+	@echo "🚀 PMOVES First-Run Bootstrap"
+	@echo "================================"
+	@echo ""
+	@echo "This will:"
+	@echo "  ✓ Check required tools"
+	@echo "  ✓ Setup environment files"
+	@echo "  ✓ Start Supabase (database + API)"
+	@echo "  ✓ Apply migrations and seed data"
+	@echo "  ✓ Start core services (data tier, workers)"
+	@echo "  ✓ Start agents (Agent Zero, Archon)"
+	@echo "  ✓ Seed Agent Zero MCP servers"
+	@echo ""
+	@$(MAKE) --no-print-directory check-tools
+	@$(MAKE) --no-print-directory ensure-env-shared
+	@$(MAKE) --no-print-directory supa-start
+	@$(MAKE) --no-print-directory bootstrap-data
+	@$(MAKE) --no-print-directory up
+	@$(MAKE) --no-print-directory up-agents-ui
+	@$(MAKE) --no-print-directory a0-mcp-seed
+	@echo ""
+	@echo "✅ First-run complete!"
+	@echo ""
+	@echo "📊 Services:"
+	@echo "   Agent Zero UI:    http://localhost:8081"
+	@echo "   Archon UI:        http://localhost:3737"
+	@echo "   Supabase Studio:  http://localhost:65433"
+	@echo ""
+	@echo "💡 Next steps:"
+	@echo "   • Check health: make status-all"
+	@echo "   • Run tests: make smoke"
+	@echo "   • View logs: docker compose logs -f [service-name]"
+
+# ============================================================================
+# Multi-Host Service Discovery
+# ============================================================================
+
+.PHONY: mesh-setup mesh-status mesh-disconnect nats-tls-setup
+.PHONY: registry-start registry-status registry-sync
+.PHONY: ports-auto-detect ports-validate ports-reset ports-show
+
+mesh-setup: ## Setup Tailscale mesh network for multi-host service discovery
+	@echo "🔗 Setting up PMOVES mesh network..."
+	@chmod +x scripts/tailscale_setup.sh
+	@bash scripts/tailscale_setup.sh
+	@echo "✅ Mesh network setup complete"
+
+mesh-status: ## Show mesh network status and discovered nodes
+	@echo "🔍 PMOVES mesh network status:"
+	@bash scripts/tailscale_setup.sh status
+
+mesh-disconnect: ## Disconnect from Tailscale mesh network
+	@echo "🔌 Disconnecting from Tailscale..."
+	@command -v tailscale >/dev/null 2>&1 && { \
+		tailscale down; \
+		echo "✅ Disconnected from Tailscale"; \
+	} || echo "⚠️  Tailscale not installed or already disconnected"
+
+nats-tls-setup: ## Generate NATS TLS certificates for external access
+	@echo "🔐 Generating NATS TLS certificates..."
+	@chmod +x scripts/nats_tls_setup.sh
+	@FORCE=$(FORCE) bash scripts/nats_tls_setup.sh
+	@echo "✅ NATS TLS certificates generated"
+	@echo "   Certificates: pmoves/nats/tls/"
+	@echo "   Update env.shared with:"
+	@echo "   NATS_TLS_CERT=pmoves/nats/tls/server.crt"
+	@echo "   NATS_TLS_KEY=pmoves/nats/tls/server.key"
+	@echo "   NATS_TLS_CA=pmoves/nats/tls/ca.crt"
+
+registry-start: ## Start service registry for multi-host discovery
+	@echo "📡 Starting Service Registry..."
+	@$(DC) up -d --build service-registry
+	@sleep 3
+	@curl -sf http://localhost:8100/healthz && echo "✅ Service Registry started" || echo "⚠️  Service Registry not responding"
+
+registry-status: ## Show all discovered services in the mesh
+	@echo "📡 Service Registry Status:"
+	@echo ""
+	@curl -sf http://localhost:8100/api/status 2>/dev/null | python3 -m json.tool 2>/dev/null || \
+		curl -sf http://localhost:8100/api/status 2>/dev/null || \
+		echo "⚠️  Service Registry not available"
+
+registry-sync: ## Force sync service registry across mesh
+	@echo "🔄 Syncing service registry..."
+	@curl -sf -X POST http://localhost:8100/api/sync 2>/dev/null || echo "⚠️  Sync request sent"
+
+# ============================================================================
+# Dynamic Port Management
+# ============================================================================
+
+ports-auto-detect: ## Auto-detect port conflicts and assign ports
+	@echo "🔍 Detecting port conflicts..."
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh detect
+	@echo "✅ Port allocation complete"
+
+ports-validate: ## Check for port conflicts
+	@echo "🔍 Validating port assignments..."
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh validate || echo "⚠️  Port conflicts detected"
+
+ports-reset: ## Reset all port assignments
+	@echo "🔄 Resetting port assignments..."
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh reset
+	@echo "✅ Port assignments reset"
+
+ports-show: ## Show current port assignments
+	@echo "📋 Current port assignments:"
+	@chmod +x scripts/first_run_port_setup.sh
+	@bash scripts/first_run_port_setup.sh show
+
+.PHONY: first-run-multi-host
+first-run-multi-host: ## Guided first-run with multi-host mesh setup
+	@echo "🚀 PMOVES Multi-Host First-Run"
+	@echo "==================================="
+	@echo ""
+	@echo "This will set up:"
+	@echo "  ✓ Tool validation"
+	@echo "  ✓ Environment files"
+	@echo "  ✓ Port allocation (conflict detection)"
+	@echo "  ✓ Tailscale mesh network"
+	@echo "  ✓ NATS TLS certificates"
+	@echo "  ✓ Service registry"
+	@echo "  ✓ Supabase + data bootstrap"
+	@echo "  ✓ All services"
+	@echo ""
+	@$(MAKE) --no-print-directory check-tools
+	@$(MAKE) --no-print-directory ensure-env-shared
+	@$(MAKE) --no-print-directory ports-auto-detect
+	@$(MAKE) --no-print-directory mesh-setup
+	@$(MAKE) --no-print-directory nats-tls-setup
+	@$(MAKE) --no-print-directory registry-start
+	@$(MAKE) --no-print-directory supa-start
+	@$(MAKE) --no-print-directory bootstrap-data
+	@$(MAKE) --no-print-directory up
+	@$(MAKE) --no-print-directory up-agents-ui
+	@$(MAKE) --no-print-directory a0-mcp-seed
+	@$(MAKE) --no-print-directory registry-sync
+	@echo ""
+	@echo "✅ Multi-host setup complete!"
+	@echo ""
+	@$(MAKE) --no-print-directory registry-status
 
 .PHONY: up-data-tier
 up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
@@ -273,7 +540,7 @@ down-data: ## Stop data tier
 .PHONY: down-obs
 down-obs: ## Stop observability stack
 	@echo "📊 Stopping observability..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring down
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring down
 
 .PHONY: down-ui
 down-ui: ## Stop PMOVES UI
@@ -735,7 +1002,7 @@ clean:
 	@$(DC) down -v --remove-orphans
 
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
-	@$(LOAD_ENV_SHARED) \
+	@$(LOAD_ENV_SHARED); \
 	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ] && [ -z "$$CLOUDFLARE_TUNNEL_NAME" ]; then \
 	  echo "↷ Set CLOUDFLARE_TUNNEL_TOKEN (Zero Trust token) or CLOUDFLARE_TUNNEL_NAME + credentials in $(ENV_SHARED_FILE) before running make up-cloudflare."; \
 	  exit 1; \
@@ -911,10 +1178,10 @@ brand-defaults: ensure-env-shared ## Apply branded defaults and create required 
 .PHONY: neo4j-reset neo4j-status
 neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
 	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) stop neo4j || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) rm -f neo4j || true
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) stop neo4j || true
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) rm -f neo4j || true
 	@docker volume rm $(PROJECT)_neo4j-data || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d neo4j
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) up -d neo4j
 	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
 	@$(LOAD_ENV_SHARED) bash -c ' \
 		user=$${NEO4J_AUTH%%/*}; \
@@ -1472,3 +1739,29 @@ ps:
 	@$(DC) ps
 
 # -------- External stacks (forks / published images) ----------
+
+.PHONY: up-external
+up-external: ensure-env-shared ## Start external integration services (Wger, Firefly, Open Notebook, Jellyfin)
+	@echo "→ Starting external stacks (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@$(DC) -f docker-compose.external.yml up -d
+	@echo "✔ External stacks up"
+
+.PHONY: down-external
+down-external: ## Stop external integration services
+	@$(DC) -f docker-compose.external.yml down
+	@echo "✔ External stacks down"
+
+.PHONY: up-jellyfin-ai
+up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
+	@echo "→ Starting Jellyfin AI overlay..."
+	@if [ ! -f "env.jellyfin-ai" ]; then \
+	  echo "  Creating env.jellyfin-ai from example..."; \
+	  cp env.jellyfin-ai.example env.jellyfin-ai; \
+	fi
+	@$(DC) --profile jellyfin-ai up -d jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-audio-processor jellyfin-redis jellyfin-api-gateway jellyfin-dashboard
+	@echo "✔ Jellyfin AI overlay up (Jellyfin: http://localhost:8096, API: http://localhost:8300, Dashboard: http://localhost:8400)"
+
+.PHONY: down-jellyfin-ai
+down-jellyfin-ai: ## Stop Jellyfin AI overlay
+	@$(DC) --profile jellyfin-ai down
+	@echo "✔ Jellyfin AI overlay down"

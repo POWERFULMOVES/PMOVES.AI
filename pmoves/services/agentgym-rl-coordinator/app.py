@@ -127,12 +127,6 @@ app = FastAPI(
 # Health & Status Endpoints
 # ============================================================================
 
-@app.get("/healthz")
-async def healthz():
-    """Health check endpoint for Kubernetes probes."""
-    return {"status": "ok"}
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""

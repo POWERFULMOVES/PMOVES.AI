@@ -1,132 +1,289 @@
-[submodule "PMOVES-ToKenism-Multi"]
-	path = PMOVES-ToKenism-Multi
-	url = https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git
-	branch = PMOVES.AI-Edition-Hardened
-[submodule "PMOVES-Creator"]
-	path = PMOVES-Creator
-	url = https://github.com/POWERFULMOVES/PMOVES-Creator.git
+# PMOVES.AI Submodules Configuration
+# All submodules are CORE COMPONENTS - NONE are optional
+# All services must be initialized and running for full PMOVES.AI functionality
+
+# =============================================================================
+# Core Agent & Orchestration Services
+# =============================================================================
+
 [submodule "PMOVES-Agent-Zero"]
 	path = PMOVES-Agent-Zero
 	url = https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 	branch = PMOVES.AI-Edition-Hardened
+
 [submodule "PMOVES-Archon"]
 	path = PMOVES-Archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
-[submodule "PMOVES-Deep-Serch"]
-	path = PMOVES-Deep-Serch
-	url = https://github.com/POWERFULMOVES/PMOVES-Deep-Serch.git
-[submodule "PMOVES-HiRAG"]
-	path = PMOVES-HiRAG
-	url = https://github.com/POWERFULMOVES/PMOVES-HiRAG.git
-[submodule "PMOVES.YT"]
-	path = PMOVES.YT
-	url = https://github.com/POWERFULMOVES/PMOVES.YT.git
-[submodule "PMOVES-Jellyfin"]
-	path = PMOVES-Jellyfin
-	url = https://github.com/POWERFULMOVES/PMOVES-Jellyfin.git
-[submodule "Pmoves-Jellyfin-AI-Media-Stack"]
-	path = Pmoves-Jellyfin-AI-Media-Stack
-	url = https://github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack.git
-[submodule "PMOVES-Open-Notebook"]
-	path = PMOVES-Open-Notebook
-	url = https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
-[submodule "Pmoves-Health-wger"]
-	path = Pmoves-Health-wger
-	url = https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
-[submodule "PMOVES-Wealth"]
-	path = PMOVES-Wealth
-	url = https://github.com/POWERFULMOVES/PMOVES-Wealth.git
+	branch = PMOVES.AI-Edition-Hardened
+
 [submodule "PMOVES-BoTZ"]
 	path = PMOVES-BoTZ
 	url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "PMOVES-DoX"]
-	path = PMOVES-DoX
-	url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
-[submodule "PMOVES-Remote-View"]
-	path = PMOVES-Remote-View
-	url = https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
-[submodule "PMOVES-Tailscale"]
-	path = PMOVES-Tailscale
-	url = https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
-[submodule "pmoves/integrations/archon"]
-	path = pmoves/integrations/archon
-	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
-[submodule "PMOVES-n8n"]
-	path = PMOVES-n8n
-	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
-[submodule "Pmoves-AgentGym-RL"]
-	path = Pmoves-AgentGym-RL
-	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
-	ignore = all
-[submodule "PMOVES-crush"]
-	path = PMOVES-crush
-	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
-	branch = PMOVES.AI-Edition-Hardened
-[submodule "PMOVES-Pipecat"]
-	path = PMOVES-Pipecat
-	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
-[submodule "PMOVES-Ultimate-TTS-Studio"]
-	path = PMOVES-Ultimate-TTS-Studio
-	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
-[submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
-	path = PMOVES-Pinokio-Ultimate-TTS-Studio
-	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
-[submodule "PMOVES-tensorzero"]
-	path = PMOVES-tensorzero
-	url = https://github.com/POWERFULMOVES/PMOVES-tensorzero.git
-[submodule "Pmoves-hyperdimensions"]
-	path = Pmoves-hyperdimensions
-	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
-[submodule "pmoves/pmoves/vendor/e2b"]
-	path = pmoves/pmoves/vendor/e2b
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-[submodule "research/A2UI"]
-	path = research/A2UI
-	url = https://github.com/google/A2UI.git
-[submodule "PMOVES-A2UI"]
-	path = PMOVES-A2UI
-	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
-[submodule "PMOVES-MAI-UI"]
-	path = PMOVES-MAI-UI
-	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
+
 [submodule "PMOVES-BotZ-gateway"]
 	path = PMOVES-BotZ-gateway
 	url = https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "PMOVES-Danger-infra"]
-	path = PMOVES-Danger-infra
-	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
-[submodule "PMOVES-E2B-Danger-Room"]
-	path = PMOVES-E2B-Danger-Room
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-[submodule "PMOVES-E2B-Danger-Room-Desktop"]
-	path = PMOVES-E2B-Danger-Room-Desktop
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
-[submodule "PMOVES-E2B-Danger-Room-Deskdesktop"]
-	path = PMOVES-E2B-Danger-Room-Deskdesktop
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Deskdesktop.git
+
+# =============================================================================
+# Knowledge & Research Services
+# =============================================================================
+
+[submodule "PMOVES-A2UI"]
+	path = PMOVES-A2UI
+	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "PMOVES-E2b-Spells"]
-	path = PMOVES-E2b-Spells
-	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+
+[submodule "PMOVES-Deep-Serch"]
+	path = PMOVES-Deep-Serch
+	url = https://github.com/POWERFULMOVES/PMOVES-Deep-Serch.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-HiRAG"]
+	path = PMOVES-HiRAG
+	url = https://github.com/POWERFULMOVES/PMOVES-HiRAG.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "Pmoves-hyperdimensions"]
+	path = Pmoves-hyperdimensions
+	url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Agent Training & Research Platforms
+# =============================================================================
+
 [submodule "PMOVES-AgentGym"]
 	path = PMOVES-AgentGym
 	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
-[submodule "PMOVES-surf"]
-	path = PMOVES-surf
-	url = https://github.com/POWERFULMOVES/pmoves-surf.git
-[submodule "PMOVES-transcribe-and-fetch"]
-	path = PMOVES-transcribe-and-fetch
-	url = https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git
-[submodule "pmoves/vendor/agentgym-rl"]
-	path = pmoves/vendor/agentgym-rl
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "Pmoves-AgentGym-RL"]
+	path = Pmoves-AgentGym-RL
 	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "pmoves/vendor/agentgym"]
-	path = pmoves/vendor/agentgym
-	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
+
+[submodule "PMOVES-llama-throughput-lab"]
+	path = PMOVES-llama-throughput-lab
+	url = https://github.com/POWERFULMOVES/PMOVES-llama-throughput-lab.git
 	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-surf"]
+	path = PMOVES-surf
+	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# E2B Danger Room - Sandboxed Code Execution
+# =============================================================================
+
+[submodule "PMOVES-E2B-Danger-Room"]
+	path = PMOVES-E2B-Danger-Room
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-E2B-Danger-Room-Desktop"]
+	path = PMOVES-E2B-Danger-Room-Desktop
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
+	branch = PMOVES.AI-Edition-Hardened
+
 [submodule "pmoves-e2b-mcp-server"]
 	path = pmoves-e2b-mcp-server
 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-Danger-infra"]
+	path = PMOVES-Danger-infra
+	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-E2b-Spells"]
+	path = PMOVES-E2b-Spells
+	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b"]
+	path = pmoves/pmoves/vendor/e2b
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-desktop"]
+	path = pmoves/vendor/e2b-desktop
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-infra"]
+	path = pmoves/vendor/e2b-infra
+	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-mcp-server"]
+	path = pmoves/vendor/e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-spells"]
+	path = pmoves/vendor/e2b-spells
+	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-surf"]
+	path = pmoves/vendor/e2b-surf
+	url = https://github.com/POWERFULMOVES/pmoves-surf.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Voice & Speech Services
+# =============================================================================
+
+[submodule "PMOVES-Pipecat"]
+	path = PMOVES-Pipecat
+	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
+	path = PMOVES-Pinokio-Ultimate-TTS-Studio
+	url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-Ultimate-TTS-Studio"]
+	path = PMOVES-Ultimate-TTS-Studio
+	url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-transcribe-and-fetch"]
+	path = PMOVES-transcribe-and-fetch
+	url = https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Media & Content Services
+# =============================================================================
+
+[submodule "PMOVES.YT"]
+	path = PMOVES.YT
+	url = https://github.com/POWERFULMOVES/PMOVES.YT.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-Jellyfin"]
+	path = PMOVES-Jellyfin
+	url = https://github.com/POWERFULMOVES/PMOVES-Jellyfin.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "Pmoves-Jellyfin-AI-Media-Stack"]
+	path = Pmoves-Jellyfin-AI-Media-Stack
+	url = https://github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Knowledge Base & Notes
+# =============================================================================
+
+[submodule "PMOVES-Open-Notebook"]
+	path = PMOVES-Open-Notebook
+	url = https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "Pmoves-open-notebook"]
+	path = Pmoves-open-notebook
+	url = https://github.com/POWERFULMOVES/Pmoves-open-notebook.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Document Processing
+# =============================================================================
+
+[submodule "PMOVES-DoX"]
+	path = PMOVES-DoX
+	url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-Creator"]
+	path = PMOVES-Creator
+	url = https://github.com/POWERFULMOVES/PMOVES-Creator.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Workflow & Automation
+# =============================================================================
+
+[submodule "PMOVES-n8n"]
+	path = PMOVES-n8n
+	url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-crush"]
+	path = PMOVES-crush
+	url = https://github.com/POWERFULMOVES/PMOVES-crush.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# LLM Gateway & Model Services
+# =============================================================================
+
+[submodule "PMOVES-tensorzero"]
+	path = PMOVES-tensorzero
+	url = https://github.com/POWERFULMOVES/PMOVES-tensorzero.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Financial Management
+# =============================================================================
+
+[submodule "PMOVES-Wealth"]
+	path = PMOVES-Wealth
+	url = https://github.com/POWERFULMOVES/PMOVES-Wealth.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-Firefly-iii"]
+	path = PMOVES-Firefly-iii
+	url = https://github.com/POWERFULMOVES/PMOVES-Firefly-iii.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "Pmoves-Health-wger"]
+	path = Pmoves-Health-wger
+	url = https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# UI & Frontend Services
+# =============================================================================
+
+[submodule "PMOVES-MAI-UI"]
+	path = PMOVES-MAI-UI
+	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Networking & Infrastructure
+# =============================================================================
+
+[submodule "PMOVES-Tailscale"]
+	path = PMOVES-Tailscale
+	url = https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "PMOVES-Remote-View"]
+	path = PMOVES-Remote-View
+	url = https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Tokenism & Geometry
+# =============================================================================
+
+[submodule "PMOVES-ToKenism-Multi"]
+	path = PMOVES-ToKenism-Multi
+	url = https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git
+	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Integration Links
+# =============================================================================
+
+[submodule "pmoves/integrations/archon"]
+	path = pmoves/integrations/archon
+	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
+	branch = PMOVES.AI-Edition-Hardened
+

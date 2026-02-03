@@ -5,7 +5,7 @@ param(
   [switch]$Force,
   [switch]$NonInteractive,
   [switch]$Defaults,
-  [ValidateSet('none','doppler','infisical','1password','sops','github','docker','chit')]
+  [ValidateSet('none','doppler','infisical','1password','sops')]
   [string]$From = 'none',
   [string]$EnvPath = '.env',
   [string]$LocalPath = '.env.local'
@@ -100,118 +100,6 @@ function Pull-FromProvider {
         & sops -d .env.sops > $OutPath
         Write-Host "Decrypted secrets with SOPS -> $OutPath" -ForegroundColor Green
       } catch { Write-Warning "SOPS not found or .env.sops missing. Skipping import." }
-    }
-    'github' {
-      # PMOVES.AI: Load credentials from GitHub Secrets (environment variables)
-      # This works in GitHub Actions, Codespaces, or locally if secrets are exported
-      $secretVars = @(
-        'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY',
-        'OPENROUTER_API_KEY', 'VENICE_API_KEY', 'HUGGINGFACE_HUB_TOKEN', 'VOYAGE_API_KEY',
-        'COHERE_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_BOT_NAME', 'DISCORD_BOT_TOKEN',
-        'SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SUPABASE_ANON_KEY', 'RESEND_API_KEY',
-        'TENSORZERO_API_KEY', 'OPEN_NOTEBOOK_API_KEY', 'E2B_API_KEY', 'JINA_API_KEY',
-        'FIREWORKS_API_KEY', 'REPLICATE_API_TOKEN', 'LANGCHAIN_API_KEY', 'TAVILY_API_KEY',
-        'SERPER_API_KEY', 'BRIGHTDATA_API_KEY'
-      )
-      $found = 0
-      $pairs = @()
-      foreach ($var in $secretVars) {
-        $value = [Environment]::GetEnvironmentVariable($var, 'Process')
-        if ($value) {
-          $pairs += "$var=$value"
-          Write-Host "  Loaded $var from environment" -ForegroundColor Cyan
-          $found++
-        }
-      }
-      if ($found -gt 0) {
-        $pairs -join "`n" | Set-Content -Encoding UTF8 -Path $OutPath
-        Write-Host "Imported $found secrets from GitHub Secrets (environment) -> $OutPath" -ForegroundColor Green
-      } else {
-        Write-Warning "No GitHub Secrets found in environment. Make sure secrets are exported or running in GitHub Actions/Codespaces."
-      }
-    }
-    'docker' {
-      # PMOVES.AI: Load credentials from Docker Secrets (/run/secrets/)
-      $secretsDir = '/run/secrets'
-      if (Test-Path $secretsDir) {
-        $found = 0
-        $pairs = @()
-        Get-ChildItem -Path $secretsDir -Filter 'pmoves_*' -ErrorAction SilentlyContinue | ForEach-Object {
-          $name = $_.Name
-          # Convert pmoves_openai_api_key -> OPENAI_API_KEY
-          $envName = $name -replace '^pmoves_', '' -replace '_', ' ' | ForEach-Object { (Get-Culture).TextInfo.ToTitleCase($_) } -replace ' ', '_'
-          $value = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
-          if ($value) {
-            $pairs += "$envName=$value"
-            $found++
-          }
-        }
-        if ($found -gt 0) {
-          $pairs -join "`n" | Set-Content -Encoding UTF8 -Path $OutPath
-          Write-Host "Imported $found secrets from Docker Secrets -> $OutPath" -ForegroundColor Green
-        } else {
-          Write-Warning "No PMOVES Docker secrets found in $secretsDir"
-        }
-      } else {
-        Write-Warning "Docker secrets directory not found: $secretsDir"
-      }
-    }
-    'chit' {
-      # PMOVES.AI: Load credentials from CHIT Geometry Packet
-      $cgpPaths = @(
-        'data/chit/env.cgp.json',
-        'pmoves/data/chit/env.cgp.json',
-        '../pmoves/data/chit/env.cgp.json',
-        '../../pmoves/data/chit/env.cgp.json'
-      )
-      $cgpFile = $null
-      foreach ($path in $cgpPaths) {
-        if (Test-Path $path) {
-          $cgpFile = $path
-          break
-        }
-      }
-      if ($cgpFile) {
-        try {
-          # Try Python CHIT decode
-          $decoded = python3 -c @"
-import sys, json
-from pathlib import Path
-repo_root = Path('$pwd').resolve().parent
-for parent in [repo_root] + list(repo_root.parents):
-    chit_path = parent / 'pmoves' / 'chit'
-    if chit_path.exists():
-        sys.path.insert(0, str(parent))
-        break
-try:
-    from pmoves.chit import load_cgp, decode_secret_map
-    cgp = load_cgp('$cgpFile')
-    secrets = decode_secret_map(cgp)
-    for k, v in sorted(secrets.items()):
-        print(f'{k}={v}')
-except ImportError:
-    with open('$cgpFile') as f:
-        cgp = json.load(f)
-    for point in cgp.get('points', []):
-        label = point['label']
-        value = point.get('value', '')
-        encoding = point.get('encoding', 'cleartext')
-        if encoding == 'cleartext':
-            print(f'{label}={value}')
-"@ 2>&1
-          if ($decoded) {
-            $decoded | Set-Content -Encoding UTF8 -Path $OutPath
-            $count = ($decoded -split "`n").Where({ $_ -match '^[A-Z_]+=' }).Count
-            Write-Host "Decoded $count secrets from CHIT Geometry Packet -> $OutPath" -ForegroundColor Green
-          } else {
-            Write-Warning "CHIT decode failed. Make sure pmoves.chit module is available."
-          }
-        } catch {
-          Write-Warning "CHIT decode error: $_"
-        }
-      } else {
-        Write-Warning "No CHIT Geometry Packet found (searched: data/chit/env.cgp.json, pmoves/data/chit/)"
-      }
     }
     default {}
   }

@@ -2,26 +2,20 @@
 
 ## Executive Summary
 
-**PMOVES.AI demands enterprise-grade security combined with developer velocity across 50+ specialized AI agent and infrastructure services.** This comprehensive guide delivers production-ready configurations for GitHub Actions with ephemeral JIT runners achieving 99% contamination risk reduction, multi-stage Docker builds reducing image size by 90%, TensorZero LLM gateway providing unified model orchestration, and **dual-tiered security architecture** for defense-in-depth: **5-tier network segmentation** (Docker network isolation) plus **6-tier environment architecture** (env.tier-* secret segmentation). The architecture orchestrates agents (Agent-Zero, Archon, Mesh Agent), knowledge services (Hi-RAG v2, DeepResearch, SupaSerch), media pipeline (PMOVES.YT, FFmpeg-Whisper, YOLO analysis), and comprehensive observability (Prometheus, Grafana, Loki) through event-driven NATS JetStream messaging, achieving 24-hour continuous workflows while maintaining **95/100 security posture**. **Deploy with confidence using these battle-tested patterns validated at production scale.**
+**PMOVES.AI demands enterprise-grade security combined with developer velocity across 50+ specialized AI agent and infrastructure services.** This comprehensive guide delivers production-ready configurations for GitHub Actions with ephemeral JIT runners achieving 99% contamination risk reduction, multi-stage Docker builds reducing image size by 90%, TensorZero LLM gateway providing unified model orchestration, and 5-tier network segmentation for defense-in-depth security. The architecture orchestrates agents (Agent-Zero, Archon, Mesh Agent), knowledge services (Hi-RAG v2, DeepResearch, SupaSerch), media pipeline (PMOVES.YT, FFmpeg-Whisper, YOLO analysis), and comprehensive observability (Prometheus, Grafana, Loki) through event-driven NATS JetStream messaging, achieving 24-hour continuous workflows while maintaining 95/100 security posture. **Deploy with confidence using these battle-tested patterns validated at production scale.**
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
-### Status (2026-01-29)
-- **Security Score:** 95/100 achieved (Phase 1-2 complete)
-- **Dual-Tiered Security Architecture:** 5-tier network segmentation + 6-tier environment architecture fully documented
-- **New Submodules Added:** PMOVES-A2UI (fork of google/A2UI), PMOVES-E2B-Danger-Room, PMOVES-AgentGym, PMOVES-surf
-- **Container Hardening:** 100% non-root user execution (35/35 custom services with USER directive)
-- **GHCR Namespace Publishing:** Lowercase normalization implemented (`POWERFULMOVES` → `powerfulmoves`)
-- **Tailscale Integration:** Production VPN configuration documented for remote access
+### Status (2025-12-18)
 - Hardened self-hosted multi-arch builds + Trivy gating shipped (`.github/workflows/self-hosted-builds-hardened.yml`); pmoves-yt yt-dlp bump workflow live; env pins warn on `:pmoves-latest`.
 - Arm/Jetson path covered via `pmoves/docker-compose.arm64.override.yml`; GPU smoke still red when NVIDIA runtime is missing—rerun `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` once GPU is exposed.
 - Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
-- Remaining gaps tracked in `docs/Security-Hardening-Roadmap.md` (Phase 3 initiatives: mTLS, SLSA provenance, Falco runtime monitoring)
+- Remaining gaps tracked in `docs/hardening/PMOVES-hardening-tracker.md` (Loki `/ready`, code-scanning triage loop, secret rotation SOP enforcement).
 - Docker Desktop/WSL environments may write `credsStore=desktop.exe` into `~/.docker/config.json`, which breaks pulls/builds on Linux/headless hosts. Prefer the repo-scoped `.docker-nocreds/` config (set `DOCKER_CONFIG=.../.docker-nocreds`)—`pmoves/Makefile` will auto-use it when present.
 - For local GHCR pushes/pulls, also run Docker auth using the same repo-scoped config to avoid the credential-helper crash:
   - `DOCKER_CONFIG=./.docker-nocreds gh auth token | DOCKER_CONFIG=./.docker-nocreds docker login ghcr.io -u <USER> --password-stdin`
 - n8n flows are repo-tracked as sanitized, importable exports under `pmoves/n8n/flows/` (Voice Agents + pollers). Import/activate with `make -C pmoves n8n-import-flows` + `make -C pmoves n8n-activate-flows`.
-- n8n "production DB": for VPS/prod, run n8n on Postgres (instead of SQLite) with `N8N_DB=postgres` and `N8N_DB_*` vars (see `pmoves/docker-compose.n8n.postgres.yml` and `pmoves/docs/PMOVES.AI PLANS/N8N_SETUP.md`).
+- n8n “production DB”: for VPS/prod, run n8n on Postgres (instead of SQLite) with `N8N_DB=postgres` and `N8N_DB_*` vars (see `pmoves/docker-compose.n8n.postgres.yml` and `pmoves/docs/PMOVES.AI PLANS/N8N_SETUP.md`).
 - Voice Agents now default to a **local** TensorZero/Ollama model when available (`VOICE_AGENT_MODEL=tensorzero::model_name::qwen2_5_14b`). The Voice Agent router publishes `voice.agent.response.v1` on NATS.
 - n8n HTTP Request nodes interpret `options.timeout` as **milliseconds**; repo-tracked flows have been corrected to use sane ms timeouts (LLM/Supabase/NATS).
 - FFmpeg-Whisper now supports `POST /transcribe_file` (multipart) for ad-hoc STT (used by Flute Gateway); `python-multipart` is included in the service lockfile to support form parsing.
@@ -117,214 +111,7 @@ jobs:
 
 ---
 
-## 2. Dual-Tiered Security Architecture
-
-PMOVES.AI implements **defense-in-depth through dual-tiered security**:
-
-### 2.1 Network Tier Segmentation (5 Docker Networks)
-
-Physical network isolation via Docker bridge networks:
-
-| Tier | Network | Subnet | Services | Purpose |
-|------|---------|--------|----------|---------|
-| API | `pmoves_api` | 172.30.1.0/24 | 16 services | Public ingress |
-| Application | `pmoves_app` | 172.30.2.0/24 | 19 services | Business logic |
-| Bus | `pmoves_bus` | 172.30.3.0/24 | 1 service | NATS messaging |
-| Data | `pmoves_data` | 172.30.4.0/24 | 7 services | Databases/storage |
-| Monitoring | `pmoves_monitoring` | 172.30.5.0/24 | 5 services | Observability |
-
-**Security Benefits:**
-- Lateral movement prevention: compromised API service cannot directly access data tier
-- Blast radius containment: internal services (app/bus/data tiers) isolated from internet
-- Monitoring isolation: observability stack on separate subnet with controlled access
-
-### 2.2 Environment Tier Architecture (6 Secret Segments)
-
-Logical secret isolation via specialized environment files:
-
-| Tier | File | Secrets Scope | Blast Radius |
-|------|------|---------------|--------------|
-| Data | `env.tier-data` | Infrastructure only | Databases compromised |
-| API | `env.tier-api` | Internal TensorZero | RQ services exposed |
-| Worker | `env.tier-worker` | Processing credentials | Workers compromised |
-| Agent | `env.tier-agent` | Agent coordination | Agents hijacked |
-| Media | `env.tier-media` | Media processing | Media pipeline |
-| LLM | `env.tier-llm` | **External API keys** | **HIGHEST RISK** |
-
-**Key Principle:** Only `env.tier-llm` contains external API keys. All other services call internal TensorZero.
-
-**Implementation in docker-compose.yml:**
-```yaml
-x-env-tier-data: &env-tier-data
-  env_file: [ env.tier-data, .env.local ]
-
-x-env-tier-api: &env-tier-api
-  env_file: [ env.tier-api, .env.local ]
-
-x-env-tier-worker: &env-tier-worker
-  env_file: [ env.tier-worker, .env.local ]
-
-x-env-tier-agent: &env-tier-agent
-  env_file: [ env.tier-agent, .env.local ]
-
-x-env-tier-media: &env-tier-media
-  env_file: [ env.tier-media, .env.local ]
-
-x-env-tier-llm: &env-tier-llm
-  env_file: [ env.tier-llm, .env.local ]
-
-services:
-  tensorzero-gateway:
-    <<: *env-tier-llm  # ONLY service with external LLM keys
-
-  hi-rag-gateway-v2:
-    <<: *env-tier-api  # Calls internal TensorZero
-
-  extract-worker:
-    <<: *env-tier-worker  # No LLM access
-```
-
-**Security Benefits:**
-1. **Blast Radius Reduction:** Compromised worker cannot access LLM API keys
-2. **Audit Simplicity:** Only one file (`env.tier-llm`) needs external key rotation
-3. **TensorZero as Secrets Fence:** All services call internal `http://tensorzero:3000`, not external providers
-
-### 2.3 GHCR Namespace Publishing (Lowercase Normalization)
-
-GHCR requires lowercase namespaces. Normalize in CI/CD:
-
-```yaml
-# .github/workflows/docker-build.yml
-- name: Build and push
-  run: |
-    # Normalize org name to lowercase
-    ORG=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-
-    # Tag with normalized namespace
-    docker tag app:${GITHUB_SHA} ghcr.io/${ORG}/app:${GITHUB_SHA}
-    docker push ghcr.io/${ORG}/app:${GITHUB_SHA}
-
-    # Example: POWERFULMOVES → powerfulmoves
-```
-
-### 2.4 Tailscale VPN for Production Access
-
-Production deployment via Tailscale mesh VPN:
-
-```bash
-# Install Tailscale on all nodes
-curl -fsSL https://tailscale.com/install.sh | sh
-
-# Authenticate
-tailscale up --authkey=${TS_AUTH_KEY}
-
-# Advertise as exit node for remote access
-tailscale up --advertise-exit-node
-
-# Enable subnet router (if needed)
-tailscale up --advertise-routes=172.30.0.0/16
-```
-
-**Docker Compose integration:**
-```yaml
-services:
-  ts-sidecar:
-    image: tailscale/tailscale:latest
-    hostname: pmoves-service
-    environment:
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_EXTRA_ARGS=--advertise-tags=tag:pmoves-service
-      - TS_STATE_DIR=/var/lib/tailscale
-    volumes:
-      - ts-data:/var/lib/tailscale
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
-    restart: unless-stopped
-
-  pmoves-service:
-    network_mode: service:ts-sidecar
-    depends_on:
-      - ts-sidecar
-```
-
-**ACL Configuration:**
-```json
-{
-  "tagOwners": {
-    "tag:pmoves-service": ["autogroup:admin"],
-    "tag:developer": ["autogroup:admin"]
-  },
-  "acls": [
-    {"action": "accept", "src": ["tag:developer"], "dst": ["tag:pmoves-service:*"]},
-    {"action": "accept", "src": ["tag:pmoves-service"], "dst": ["tag:pmoves-service:*"]}
-  ],
-  "ssh": [
-    {"action": "accept", "src": ["tag:developer"], "dst": ["tag:pmoves-service"], "users": ["autogroup:nonroot"]}
-  ]
-}
-```
-
----
-
-## 3. Docker Security Hardening
-
-### USER Directives for Non-Root Execution (P0 Security)
-
-All PMOVES services **MUST run as non-root users** to prevent privilege escalation:
-
-```dockerfile
-# Standard non-root pattern (100% adoption across 35 custom services)
-FROM python:3.11-slim
-
-# Create non-root user early in build
-RUN groupadd -r pmoves -g 65532 && \
-    useradd -r -u 65532 -g pmoves -s /sbin/nologin -c "PMOVES Application User" pmoves && \
-    mkdir -p /app /home/pmoves/.cache && \
-    chown -R pmoves:pmoves /app /home/pmoves
-
-# Install dependencies as root
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-# Copy application files and set ownership
-COPY --chown=pmoves:pmoves . /app/
-WORKDIR /app
-
-# Drop to non-root user
-USER pmoves:pmoves
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/healthz || exit 1
-
-# Use exec form for better signal handling
-ENTRYPOINT ["python", "-u", "main.py"]
-```
-
-**Docker Compose security overlay:**
-```yaml
-# docker-compose.hardened.yml
-services:
-  example-service:
-    # Security hardening
-    user: "65532:65532"
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M
-      - /home/pmoves/.cache:size=1G
-```
-
-**Compliance mapping:**
-- CIS Docker Benchmark 5.2: ✅ Verify container user (100%)
-- Kubernetes Pod Security Standards: ✅ runAsNonRoot (100%)
-- NIST SP 800-190: ✅ Image and registry security (100%)
+## 2. Docker Security Hardening
 
 ### Multi-Stage Builds Reduce Attack Surface 90%
 
@@ -2042,61 +1829,26 @@ docker compose -f monitoring/docker-compose.monitoring.yml down
 
 | Security Practice | Documented | Implemented | Gap Status |
 |-------------------|------------|-------------|------------|
-| 5-Tier Network Isolation | ✅ Lines 124-139 | ✅ Fully | **MATCH** |
-| 6-Tier Environment Architecture | ✅ Lines 141-191 | ✅ 6 tiers | **MATCH** |
+| 5-Tier Network Isolation | ✅ Lines 390-450 | ✅ Fully | **MATCH** |
 | TensorZero Secrets Fence | ✅ Lines 1067-1179 | ✅ Fully | **MATCH** |
-| Tier-Based Secrets (env.tier-*) | ✅ Lines 141-191 | ✅ 6 tiers | **MATCH** |
+| Tier-Based Secrets (env.tier-*) | ✅ Lines 1181-1231 | ✅ 6 tiers | **MATCH** |
 | BuildKit Secret Mounts | ✅ Lines 160-190 | ✅ In Dockerfiles | **MATCH** |
 | Health Checks | ✅ Lines 486-490 | ✅ 30+ services | **MATCH** |
-| Non-root User (UID 65532) | ✅ Lines 274-328 | ✅ 35/35 services | **COMPLETE** |
-| GHCR Namespace Publishing | ✅ Lines 192-208 | ✅ Lowercase norm | **MATCH** |
-| Tailscale VPN | ✅ Lines 210-268 | ✅ Configured | **MATCH** |
-| cap_drop: ALL | ✅ Lines 313-317 | ✅ docker-compose.hardened.yml | **MATCH** |
-| read_only: true + tmpfs | ✅ Lines 313-322 | ✅ docker-compose.hardened.yml | **MATCH** |
+| Non-root User (UID 65532) | ✅ Line 1857 | ⚠️ 1/50 services | **Phase 2.5** |
+| cap_drop: ALL | ✅ Lines 1865-1866 | ⚠️ 0 services | **Phase 2.5** |
+| read_only: true + tmpfs | ✅ Lines 1859-1862 | ⚠️ 0 services | **Phase 2.5** |
 
-**Phase 1-2 Status: ✅ COMPLETE (95/100 security score)**
-- ✅ 100% non-root user execution (35/35 custom services)
-- ✅ 5-tier network segmentation fully implemented
-- ✅ 6-tier environment architecture fully implemented
-- ✅ Harden-Runner deployed to all 14 GitHub Actions workflows
-- ✅ Read-only root filesystems configured
-- ✅ All capabilities dropped
+**Phase 2.5 Roadmap (Container Hardening):**
+The following container security practices are documented but not yet implemented across all services. They are planned for incremental rollout:
+- `user: "65532:65532"` - Non-root user (distroless UID)
+- `cap_drop: [ALL]` - Drop all Linux capabilities
+- `read_only: true` with `tmpfs: [/tmp]` - Immutable root filesystem
 
-**Phase 3: Zero-Trust Architecture (98/100 target) - Q1 2026**
-
-**Week 1-2: Complete Phase 2 Gaps**
-- BuildKit secrets migration (Archon Dockerfile)
-- Branch protection rules (user implementation)
-- Kubernetes NetworkPolicy manifests
-
-**Week 3-4: Secret Rotation Mechanism**
-- Deploy External Secrets Operator
-- Configure HashiCorp Vault
-- Create rotation CronJobs (90-day max age)
-
-**Week 5-6: TLS/mTLS for P0 Services**
-- Deploy cert-manager
-- Create internal CA (pmoves-internal-ca)
-- Issue service certificates (90-day validity)
-- Configure mTLS for TensorZero, NATS
-
-**Week 7-8: Security Scanning**
-- Deploy Trivy in CI/CD
-- Configure Gitleaks
-- kube-bench CIS benchmark
-- SARIF upload to GitHub Security
-
-**Week 9-10: SLSA + Pod Security**
-- SLSA provenance generation
-- Kyverno admission control
-- Pod Security Standards enforcement
-- seccomp profiles
-
-**Week 11-12: Runtime Monitoring**
-- Deploy Falco
-- Configure alert rules
-- Integration with Loki
-- Incident response playbooks
+**Phase 3: Zero-Trust Architecture (98/100) - Planned**
+- 🔲 mTLS for all inter-service communication
+- 🔲 HashiCorp Vault for secrets management
+- 🔲 OPA policy enforcement
+- 🔲 Service mesh with Istio/Linkerd
 
 ### Docker 2025 Security Advisories
 
@@ -2386,21 +2138,15 @@ services:
 
 **Deployment successful. You now have a production-grade, security-hardened platform with:**
 
-- **55+ Services** organized by function (agents, knowledge, media, monitoring, data)
-- **Dual-Tiered Security Architecture:**
-  - **5-Tier Network Segmentation** (Docker network isolation: api/app/bus/data/monitoring)
-  - **6-Tier Environment Architecture** (env.tier-* secret segmentation for least privilege)
+- **55 Services** organized by function (agents, knowledge, media, monitoring, data)
+- **5-Tier Network Segmentation** for defense-in-depth security
 - **TensorZero Gateway** for unified LLM orchestration and observability
 - **NATS JetStream** for reliable event-driven coordination
-- **95/100 Security Posture** with Phase 1-2 hardening complete
-- **100% Non-Root User Execution** (35/35 custom services with USER directive)
+- **95/100 Security Posture** with Phase 2 hardening complete
 - **Comprehensive Observability** via Prometheus, Grafana, Loki, and TensorZero ClickHouse
 - **Multi-Agent Orchestration** via Agent Zero, Archon, and MCP API
 - **Hybrid RAG** with cross-encoder reranking, graph boost, and full-text search
 - **GPU-Accelerated Media Pipeline** for YouTube ingestion, transcription, and analysis
 - **Multi-Arch CI/CD** with automated builds, Trivy scanning, and environment-based deployments
-- **GHCR Namespace Publishing** with lowercase normalization (`POWERFULMOVES` → `powerfulmoves`)
-- **Tailscale VPN Integration** for production remote access
-- **New Submodules:** PMOVES-A2UI (fork of google/A2UI), PMOVES-E2B-Danger-Room, PMOVES-AgentGym, PMOVES-surf
 
 **Ready to deliver POWERFULMOVES to users.**

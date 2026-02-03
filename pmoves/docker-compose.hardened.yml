@@ -9,14 +9,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   extract-worker:
     user: "65532:65532"
@@ -27,14 +19,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   langextract:
     user: "65532:65532"
@@ -45,14 +29,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   presign:
     user: "65532:65532"
@@ -63,14 +39,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
 
   render-webhook:
     user: "65532:65532"
@@ -81,14 +49,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   retrieval-eval:
     user: "65532:65532"
@@ -99,14 +59,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   pdf-ingest:
     user: "65532:65532"
@@ -117,14 +69,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   jellyfin-bridge:
     user: "65532:65532"
@@ -135,14 +79,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
 
   invidious-companion-proxy:
     user: "65532:65532"
@@ -153,14 +89,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   # GPU Services - 2G /tmp, 10G cache, 4G shm
   ffmpeg-whisper:
@@ -177,14 +105,6 @@ services:
       - HF_HOME=/home/pmoves/.cache/huggingface
       - TORCH_HOME=/home/pmoves/.cache/torch
       - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
-    deploy:
-      resources:
-        limits:
-          memory: 8G
-          cpus: '4.0'
-        reservations:
-          memory: 2G
-          cpus: '1.0'
 
   media-video:
     user: "65532:65532"
@@ -200,14 +120,6 @@ services:
       - HF_HOME=/home/pmoves/.cache/huggingface
       - TORCH_HOME=/home/pmoves/.cache/torch
       - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
 
   media-audio:
     user: "65532:65532"
@@ -223,14 +135,6 @@ services:
       - HF_HOME=/home/pmoves/.cache/huggingface
       - TORCH_HOME=/home/pmoves/.cache/torch
       - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
 
   hi-rag-gateway-v2-gpu:
     user: "65532:65532"
@@ -246,14 +150,6 @@ services:
       - HF_HOME=/home/pmoves/.cache/huggingface
       - TORCH_HOME=/home/pmoves/.cache/torch
       - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
 
   hi-rag-gateway-gpu:
     user: "65532:65532"
@@ -269,14 +165,6 @@ services:
       - HF_HOME=/home/pmoves/.cache/huggingface
       - TORCH_HOME=/home/pmoves/.cache/torch
       - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
 
   # Python Workers - 500M /tmp, 100M cache
   deepresearch:
@@ -289,14 +177,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
 
   supaserch:
     user: "65532:65532"
@@ -307,14 +187,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   publisher-discord:
     user: "65532:65532"
@@ -325,14 +197,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   mesh-agent:
     user: "65532:65532"
@@ -343,14 +207,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
 
   nats-echo-req:
     user: "65532:65532"
@@ -361,14 +217,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
 
   nats-echo-res:
     user: "65532:65532"
@@ -379,14 +227,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
 
   publisher:
     user: "65532:65532"
@@ -397,14 +237,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   analysis-echo:
     user: "65532:65532"
@@ -415,14 +247,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   graph-linker:
     user: "65532:65532"
@@ -433,14 +257,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   comfy-watcher:
     user: "65532:65532"
@@ -451,14 +267,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   grayjay-plugin-host:
     user: "65532:65532"
@@ -469,14 +277,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   # Agent Services
   agent-zero:
@@ -489,14 +289,6 @@ services:
     security_opt:
       - no-new-privileges:true
     # Note: Persistent volumes /a0/* are mounted from host, need proper ownership
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2.0'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
 
   archon:
     user: "65532:65532"
@@ -513,14 +305,6 @@ services:
     environment:
       SUPABASE_SERVICE_ROLE_KEY_FILE: /run/secrets/supabase_service_role_key
       SUPABASE_JWT_SECRET_FILE: /run/secrets/supabase_jwt_secret
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
 
   channel-monitor:
     user: "65532:65532"
@@ -531,14 +315,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   # Media Ingestion - 10G /tmp, 500M cache
   pmoves-yt:
@@ -550,14 +326,6 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
 
   # Sync Services - 100M /tmp, 50M cache
   notebook-sync:
@@ -570,226 +338,9 @@ services:
     security_opt:
       - no-new-privileges:true
     # Note: Persistent volume /data is mounted from host, need proper ownership
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
-
-  # Voice Services - 1G /tmp, 500M cache
-  flute-gateway:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=1G,mode=1777
-      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-
-  # Economy/Simulation Services - 500M /tmp, 500M cache
-  tokenism-simulator:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.5'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
-
-  # Agent Services - 1G /tmp, 500M cache
-  botz-gateway:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=1G,mode=1777
-      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-
-  gateway-agent:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=1G,mode=1777
-      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-
-  github-runner-ctl:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    secrets:
-      - github_pat
-    environment:
-      GITHUB_PAT_FILE: /run/secrets/github_pat
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-
-  # Node.js Services - 500M /tmp, 200M cache
-  tokenism-ui:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/node/.cache:size=200M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-        reservations:
-          memory: 128M
-          cpus: '0.25'
-
-  # Distributed Compute Services - P2P orchestration and work allocation
-  node-registry:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-
-  resource-detector:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-
-  vllm-orchestrator:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=1G,mode=1777
-      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-
-  work-marshaling:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-
-  benchmark-runner:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=1G,mode=1777
-      - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2.0'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
 
 secrets:
   supabase_service_role_key:
     file: ${SUPABASE_SERVICE_ROLE_KEY_FILE:-/run/secrets/supabase_service_role_key}
   supabase_jwt_secret:
     file: ${SUPABASE_JWT_SECRET_FILE:-/run/secrets/supabase_jwt_secret}
-  github_pat:
-    file: ${GITHUB_PAT_FILE:-/run/secrets/github_pat}

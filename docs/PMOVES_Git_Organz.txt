@@ -1,0 +1,147 @@
+# NOTE: This file has been organized into comprehensive markdown documentation
+# See the following files for the organized version:
+# - docs/PMOVES_Git_Organization.md - Complete GitHub organization setup and infrastructure guide
+# - docs/PMOVES_Repository_Index.md - Comprehensive index of all PMOVES repositories and their relationships
+
+# Original content below:
+# Create a folder
+$ mkdir actions-runner && cd actions-runner# Download the latest runner package
+$ curl -o actions-runner-linux-x64-2.329.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.329.0/actions-runner-linux-x64-2.329.0.tar.gz# Optional: Validate the hash
+$ echo "194f1e1e4bd02f80b7e9633fc546084d8d4e19f3928a324d512ea53430102e1d  actions-runner-linux-x64-2.329.0.tar.gz" | shasum -a 256 -c# Extract the installer
+$ tar xzf ./actions-runner-linux-x64-2.329.0.tar.gz
+
+Configure
+# Create the runner and start the configuration experience
+$ ./config.sh --url https://github.com/POWERFULMOVES/PMOVES.AI --token BB5OGYEXII5PQTZKUDRZ5J3JCI76E# Last step, run it!
+$ ./run.sh
+
+Using your self-hosted runner
+# Use this YAML in your workflow file for each job
+runs-on: self-hosted
+https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners
+
+
+
+https://docs.github.com/en/actions/concepts/runners/self-hosted-runners
+
+https://docs.github.com/en/actions/concepts/runners/private-networking
+
+https://docs.github.com/en/actions/concepts/runners/runner-groups
+
+https://docs.github.com/en/actions/concepts/runners/actions-runner-controller
+
+https://docs.github.com/en/actions/how-tos/write-workflows/use-workflow-templates
+
+https://docs.github.com/en/actions/how-tos/monitor-workflows
+
+https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects
+
+https://support.claude.com/en/articles/11724452-using-the-connectors-directory-to-extend-claude-s-capabilities
+
+
+https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets
+
+https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/deciding-when-to-build-a-github-app
+
+https://github.com/POWERFULMOVES/PMOVES.AI/new/main?dependabot_template=1&filename=.github%2Fdependabot.yml
+
+
+
+
+
+
+
+
+for ARCHON to run claudecode in spinnable vms 
+
+
+https://www.youtube.com/watch?v=XaYpdKGKKtY
+
+https://www.youtube.com/watch?v=kFpLzCVLA20
+
+https://www.youtube.com/watch?v=OIKTsVjTVJE
+
+https://www.youtube.com/watch?v=p0mrXfwAbCg
+
+
+https://github.com/disler/beyond-mcp.git
+
+
+https://www.youtube.com/@richardaragon8471/playlists
+
+
+
+https://developers.cloudflare.com/workers-ai/configuration/bindings/
+
+
+https://developers.cloudflare.com/pages/configuration/deploy-hooks/
+
+https://github.com/POWERFULMOVES/PMOVES-Creator.git
+
+
+https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
+
+
+https://github.com/POWERFULMOVES/PMOVES-Archon.git
+
+https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
+
+https://github.com/POWERFULMOVES/PMOVES-Deep-Serch.git
+
+https://github.com/POWERFULMOVES/PMOVES-HiRAG.git
+
+https://github.com/POWERFULMOVES/PMOVES.YT.git
+
+https://github.com/POWERFULMOVES/PMOVES-Jellyfin.git
+
+https://github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack.git
+
+https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
+
+https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
+https://github.com/POWERFULMOVES/PMOVES-Wealth.git
+
+https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git
+
+https://github.com/POWERFULMOVES/PMOVES-DoX.git
+
+
+can be used to setup
+users on cloudflare and add to git hub users etc 
+https://github.com/elizabethsiegle/nbafinals-cloudflare-ai-hono-durable-objects.git
+
+https://tailscale.com/kb/1392/auto-exit-nodes 
+
+
+Rustdesk server
+
+https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
+https://rustdesk.com/docs/en/self-host/rustdesk-server-oss/install/
+https://rustdesk.com/docs/en/self-host/rustdesk-server-oss/docker/
+
+https://rustdesk.com/docs/en/self-host/client-configuration/
+
+https://rustdesk.com/docs/en/self-host/client-deployment/
+
+
+https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
+
+https://tailscale.com/kb/1392/auto-exit-nodes
+
+
+
+
+PMOVES.AI-Edition-Hardened
+
+collaborators 
+
+hunnibear
+
+
+Pmovesjordan 
+
+Barathicite
+
+wdrolle
+
+
