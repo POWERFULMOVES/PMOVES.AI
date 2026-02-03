@@ -62,8 +62,49 @@ class GitHubSecret:
     """GitHub Actions Secret representation."""
     name: str
     value: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+def _is_credential_key(key: str) -> bool:
+    """Check if a key looks like a credential (contains sensitive suffixes)."""
+    sensitive_suffixes = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_AUTH", "_API_KEY")
+    return key.endswith(sensitive_suffixes)
+
+
+def _mask_value(value: str, visible: int = 4) -> str:
+    """Mask a credential value for display.
+
+    Args:
+        value: The credential value to mask
+        visible: Number of characters to show at start
+
+    Returns:
+        Masked value (e.g., "skja...xyz")
+    """
+    if len(value) <= visible + 3:
+        return "***"
+    return value[:visible] + "..." + value[-3:]
+
+
+def _mask_credentials_for_display(credentials: Dict[str, str]) -> Dict[str, str]:
+    """Mask credential values for safe display.
+
+    Args:
+        credentials: Dictionary of credential key/value pairs
+
+    Returns:
+        Dictionary with sensitive values masked
+    """
+    masked = {}
+    for key, value in credentials.items():
+        if _is_credential_key(key):
+            masked[key] = _mask_value(value)
+        else:
+            masked[key] = value
+    return masked
 
 
 # =============================================================================
@@ -737,7 +778,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
 
             if args.json:
-                print(json.dumps(credentials, indent=2))
+                # Mask credentials for safe display in JSON
+                masked = _mask_credentials_for_display(credentials)
+                print(json.dumps(masked, indent=2))
             else:
                 print(f"Fetched {len(credentials)} credentials")
 
@@ -751,10 +794,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
 
             if args.json:
-                print(json.dumps(credentials, indent=2))
+                # Mask credentials for safe display in JSON
+                masked = _mask_credentials_for_display(credentials)
+                print(json.dumps(masked, indent=2))
             else:
                 for key, value in sorted(credentials.items()):
-                    if len(value) > 50:
+                    if _is_credential_key(key):
+                        value = "***"
+                    elif len(value) > 50:
                         value = value[:47] + "..."
                     print(f"{key}={value}")
 

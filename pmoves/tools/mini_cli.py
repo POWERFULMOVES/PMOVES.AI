@@ -911,7 +911,7 @@ def credentials_fetch(
     github_owner: str = typer.Option(
         None,
         "--github-owner",
-        "-o",
+        "-g",
         help="GitHub repository owner.",
     ),
     github_repo: str = typer.Option(

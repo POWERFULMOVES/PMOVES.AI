@@ -413,20 +413,35 @@ load_from_active_fetcher() {
     fi
 
     # Execute the Python fetcher
+    local err_file="${output_file}.fetch.err"
     if python3 "$fetcher_module" fetch \
         --output "$temp_output" \
         ${github_owner:+--github-owner "$github_owner"} \
         ${github_repo:+--github-repo "$github_repo"} \
-        2>/dev/null; then
+        2> "$err_file"; then
 
         # Merge with existing output
         if [ -f "$temp_output" ]; then
+            # Get count BEFORE deleting file (fixes race condition)
+            local var_count=$(grep -E '^[A-Z0-9_]+=' "$temp_output" 2>/dev/null | wc -l)
             cat "$temp_output" >> "$output_file"
             rm -f "$temp_output"
-            local var_count=$(grep -c '^[A-Z_]=' "$temp_output" 2>/dev/null || echo "0")
+            rm -f "$err_file"
             log_success "  Fetched $var_count credentials via active fetcher"
             return 0
         fi
+    else
+        # Fetcher failed - show error if available
+        local exit_code=$?
+        if [ -f "$err_file" ] && [ -s "$err_file" ]; then
+            log_error "  Active fetcher failed:"
+            while IFS= read -r line; do
+                log_error "    $line"
+            done < "$err_file"
+        else
+            log_info "  Active fetcher failed with exit code $exit_code"
+        fi
+        rm -f "$err_file"
     fi
 
     log_info "  Active fetcher completed but no credentials found"
