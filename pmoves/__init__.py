@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """
 Lightweight package initializer so project modules can be imported as
 `pmoves.services.*` inside local tooling and CI contexts.
@@ -18,3 +19,12 @@ _services_module = _import_module("pmoves.services")
 
 # Provide legacy alias so imports like `services.common.telemetry` keep working.
 sys.modules.setdefault("services", _services_module)
+=======
+"""PMOVES.AI - Multi-Agent Orchestration Platform.
+
+This package provides the core services and utilities for the PMOVES.AI
+distributed computing platform.
+"""
+
+__version__ = "0.1.0"
+>>>>>>> origin/main

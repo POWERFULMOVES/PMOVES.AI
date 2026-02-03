@@ -45,9 +45,13 @@ tmp/*.mp3
 # Tracked examples like pmoves/.env.example should remain in the repo
 /pmoves/.env
 /pmoves/.env.local
+/pmoves/.env.shared
 /pmoves/.env.testkeys
 # Tier environment files (containing actual keys - gitignored)
 /pmoves/env.tier-*
+# CHIT CGP files (may contain cleartext secrets)
+/pmoves/pmoves/data/chit/*.json
+/pmoves/data/chit/*.cgp
 # But keep example files tracked
 !/pmoves/env.tier-*.example
 /pmoves/.env.precleanup-*
@@ -120,3 +124,4 @@ pmoves/PR_BODY_*.md
 
 # Vendor unpacked packages (install via requirements.txt instead)
 pmoves/vendor/python/
+.github/runners/
