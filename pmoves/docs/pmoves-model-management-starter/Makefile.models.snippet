@@ -1,0 +1,28 @@
+# --- Model flow ---
+HOST_CLASS ?= workstation_5090   # override per box: laptop_4090, desktop_3090ti, jetson_orin, vps_small
+PROFILE    ?= agent-zero         # or: archon | media | creator
+SERVICE    ?= agents             # swap target: agents | hi-rag-gateway-v2 | media-video | media-audio | comfyui
+NAME       ?=                    # optional explicit model identifier override
+
+MODELS_DIR := pmoves/models
+SCRIPTS_DIR:= pmoves/scripts
+
+.PHONY: models-sync
+models-sync:
+	@echo "==> Sync models for $(PROFILE) on $(HOST_CLASS)"
+	@python3 $(SCRIPTS_DIR)/models_sync.py sync 	  --profile $(PROFILE) --host $(HOST_CLASS) 	  --tensorzero-base http://tensorzero:3000
+
+.PHONY: model-swap
+model-swap:
+	@echo "==> Swap model for $(SERVICE) (profile=$(PROFILE) host=$(HOST_CLASS) name=$(NAME))"
+	@python3 $(SCRIPTS_DIR)/models_sync.py swap 	  --profile $(PROFILE) --host $(HOST_CLASS) --service $(SERVICE) --name "$(NAME)"
+	@echo "==> Restart $(SERVICE)"
+	docker compose -p pmoves up -d $(SERVICE)
+
+.PHONY: models-dryrun
+models-dryrun:
+	@python3 $(SCRIPTS_DIR)/models_sync.py sync --profile $(PROFILE) --host $(HOST_CLASS) --dry-run
+
+.PHONY: up-full
+up-full:
+	@$(MAKE) up && $(MAKE) up-agents && $(MAKE) up-n8n
