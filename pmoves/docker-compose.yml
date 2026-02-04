@@ -2,17 +2,16 @@
 # PMOVES.AI - Hardened Architecture Docker Compose Configuration
 # =============================================================================
 #
-# Network Architecture (5-Tier Isolation Model):
+# Network Architecture (6-Tier Isolation Model):
 # -----------------------------------------------
 # 1. pmoves_data  - Data tier (vector DBs, graph DBs, search indexes)
 # 2. pmoves_api   - API tier (REST/GraphQL endpoints, gateways)
 # 3. pmoves_app   - Application tier (business logic services)
 # 4. pmoves_bus   - Message bus tier (NATS event streaming)
 # 5. pmoves_monitoring - Observability tier (Prometheus, Grafana, Loki)
-#
-# Additional Networks:
-# - pmoves        - Legacy compatibility bridge (Supabase connectivity)
-# - supabase_net  - Supabase CLI local stack (external dependency)
+# 6. pmoves_external - External access tier (services needing internet)
+#    - NOT marked internal: true to allow outbound internet connectivity
+#    - Used by: TensorZero Gateway, DeepResearch, external API callers
 #
 # Service Tier Assignment:
 # ------------------------
@@ -1815,7 +1814,7 @@ services:
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
-    networks: [ pmoves_app, pmoves_api, supabase_net ]
+    networks: [ pmoves_app, pmoves_api ]
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
@@ -2193,11 +2192,6 @@ networks:
       config:
       - subnet: 172.30.6.0/24
         gateway: 172.30.6.1
-  # NOTE: supabase_net no longer needed - Supabase services now use internal pmoves_data/pmoves_api networks
-  # pmoves and cataclysm kept for external service compatibility
-  pmoves:
-    external: true
-    name: pmoves-net
-  cataclysm:
-    external: true
-    name: cataclysm-net
+  # NOTE: Legacy external networks removed - all services now use internal hardened networks
+  # pmoves-net and cataclysm-net were deprecated in Phase 2.5 container hardening
+  # All services now use pmoves_data/pmoves_api/pmoves_app/pmoves_bus/pmoves_monitoring/pmoves_external
