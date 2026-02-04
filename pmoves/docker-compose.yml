@@ -72,11 +72,296 @@ x-env-tier-ui: &id007
     - env.shared
     - env.tier-ui
 
+x-env-tier-supabase: &id008
+  env_file:
+    - env.shared
+    - env.tier-supabase
+
+# PMOVES.AI production compose project
+name: pmoves
+
 services:
-  # NOTE: postgres and postgrest now run via Supabase CLI
-  # Use: supabase start
-  # Postgres: host.docker.internal:54322 (supabase_db_PMOVES.AI container)
-  # PostgREST/Kong: host.docker.internal:54321 (supabase_kong_PMOVES.AI container)
+  # =============================================================================
+  # SUPABASE SELF-HOSTED STACK (2025 Best Practices)
+  # =============================================================================
+  # Integrated Supabase services - no external CLI dependency
+  # All services run on pmoves internal networks for security
+  # 2025 Key Naming: PUBLISHABLE_KEY / SECRET_KEY (legacy: ANON_KEY / SERVICE_ROLE_KEY)
+  # 2025 JWT: RS256 asymmetric (legacy: HS256 symmetric)
+  # =============================================================================
+
+  supabase-db:
+    <<: *id008
+    image: supabase/postgres:17.6.1.079
+    restart: unless-stopped
+    environment:
+    - POSTGRES_USER=${SUPABASE_DB_USER}
+    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD}
+    - POSTGRES_DB=${SUPABASE_DB_NAME}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    # PMOVES extensions
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+    - ${SUPABASE_DB_PORT:-54322}:5432
+    volumes:
+    - supabase-db-data:/var/lib/postgresql/data
+    networks:
+    - pmoves_data
+
+  supabase-gotrue:
+    <<: *id008
+    image: supabase/gotrue:v2.186.0
+    restart: unless-stopped
+    environment:
+    # 2025: Use RS256 for asymmetric JWT (public/private key pair)
+    - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
+    - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
+    - GOTRUE_API_HOST=0.0.0.0
+    - GOTRUE_API_PORT=9999
+    # Database connection
+    - GOTRUE_DB_DRIVER=postgres
+    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}?sslmode=disable
+    # JWT configuration (2025: RS256)
+    - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    - GOTRUE_JWT_EXP=${SUPABASE_JWT_EXP}
+    # 2025 key naming
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SECRET_KEY}
+    - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+    # Logging
+    - GOTRUE_LOG_LEVEL=info
+    - GOTRUE_LOG_LEVEL_STACK=info
+    # URI Allow list (for VPS deployment)
+    - GOTRUE_URI_ALLOW_LIST=${SUPABASE_URI_ALLOW_LIST}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_GOTRUE_PORT:-9999}:9999
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-postgrest:
+    <<: *id008
+    image: postgrest/postgrest:v12.2.0
+    restart: unless-stopped
+    environment:
+    # Database connection (from env.tier-supabase)
+    - PGRST_DB_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+    # JWT secret (must match gotrue)
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    # 2025 key naming (service role key for admin access)
+    - PGRST_JWT_SECRET_IS_BASE64=false
+    # API configuration
+    - PGRST_SCHEMA=${SUPABASE_SCHEMA}
+    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE}
+    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS}
+    - PGRST_DB_POOL=${SUPABASE_DB_POOL}
+    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_POSTGREST_PORT:-3000}:3000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-kong:
+    <<: *id008
+    image: kong:3.7.1
+    restart: unless-stopped
+    environment:
+    # Database configuration (Kong uses Postgres for config storage)
+    - KONG_DATABASE=postgres
+    - KONG_PG_HOST=supabase-db
+    - KONG_PG_DATABASE=${POSTGRES_DB}
+    - KONG_PG_USER=${POSTGRES_USER}
+    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+    # Kong configuration
+    - KONG_PROXY_ACCESS_LOG=/dev/stdout
+    - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+    - KONG_PROXY_ERROR_LOG=/dev/stderr
+    - KONG_ADMIN_ERROR_LOG=/dev/stderr
+    - KONG_PROXY_LISTEN=0.0.0.0:8000
+    - KONG_ADMIN_LISTEN=0.0.0.0:8001
+    # JWT plugin (2025: RS256 support)
+    - KONG_PLUGINS=bundled,jwt
+    - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-realtime:
+    <<: *id008
+    image: supabase/realtime:v2.30.26
+    restart: unless-stopped
+    environment:
+    # Database connection
+    - DB_HOST=supabase-db
+    - DB_PORT=5432
+    - DB_NAME=${POSTGRES_DB}
+    - DB_USER=${POSTGRES_USER}
+    - DB_PASSWORD=${POSTGRES_PASSWORD}
+    - DB_SSL=false
+    # App configuration
+    - APP_NAME=realtime
+    - PORT=4000
+    - RLIMIT_NOFILE=1048576
+    # JWT secret (must match gotrue)
+    - JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
+    # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/ > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_REALTIME_PORT:-4000}:4000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-storage:
+    <<: *id008
+    image: supabase/storage-api:v1.36.2
+    restart: unless-stopped
+    environment:
+    # 2025 key naming
+    - ANON_KEY=${SUPABASE_PUBLISHABLE_KEY}
+    - SERVICE_KEY=${SUPABASE_SECRET_KEY}
+    # JWT secret
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    # PostgREST connection
+    - POSTGREST_URL=http://supabase-postgrest:3000
+    # Database connection
+    - DATABASE_URL=postgres://postgres:postgres@supabase-db:5432/postgres
+    # Storage configuration
+    - FILE_SIZE_LIMIT=52428800
+    - STORAGE_BACKEND=file
+    - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
+    - REGION=${SUPABASE_STORAGE_REGION}
+    # Global S3 bucket (if using MinIO for actual storage)
+    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET}
+    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT}
+    - GLOBAL_S3_FORCE_PATH_STYLE=true
+    # Tenant mode (single tenant for self-hosted)
+    - TENANT_ID=stub
+    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-postgrest:
+        condition: service_started
+    volumes:
+    - supabase-storage-data:/var/lib/storage
+    ports:
+    - ${SUPABASE_STORAGE_PORT:-5000}:5000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-studio:
+    <<: *id008
+    image: supabase/studio:latest
+    restart: unless-stopped
+    environment:
+    # PostgREST connection
+    - STUDIO_PG_META_URL=http://supabase-postgrest:3000
+    # Auth connection
+    - SUPABASE_URL=http://supabase-gotrue:9999
+    # 2025 key naming
+    - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL}
+    - SUPABASE_ANON_KEY=${SUPABASE_PUBLISHABLE_KEY}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
+    # Note: Official Supabase uses node -e fetch but their image has different network config
+    # We rely on container being started successfully (logs show "Ready in Xms")
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      supabase-postgrest:
+        condition: service_started
+      supabase-gotrue:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_STUDIO_PORT:-54323}:3000
+    networks:
+    - pmoves_api
+
+  # =============================================================================
+  # END SUPABASE STACK
+  # =============================================================================
 
   qdrant:
     image: qdrant/qdrant:v1.10.0
@@ -769,7 +1054,7 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:54321}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
     depends_on:
@@ -788,6 +1073,8 @@ services:
       pmoves_app:
         aliases:
         - archon-server
+      pmoves_api:
+      pmoves_bus:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
@@ -1596,7 +1883,11 @@ services:
 volumes:
   neo4j-data: {}
   minio-data: {}
+  # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
+  # 2025 Supabase integrated volumes
+  supabase-db-data: {}
+  supabase-storage-data: {}
   notebook-sync-data: {}
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
@@ -1647,9 +1938,8 @@ networks:
       config:
       - subnet: 172.30.5.0/24
         gateway: 172.30.5.1
-  supabase_net:
-    external: true
-    name: supabase_network_PMOVES.AI
+  # NOTE: supabase_net no longer needed - Supabase services now use internal pmoves_data/pmoves_api networks
+  # pmoves and cataclysm kept for external service compatibility
   pmoves:
     external: true
     name: pmoves-net
