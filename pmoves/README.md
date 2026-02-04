@@ -1,5 +1,23 @@
 # PMOVES.AI — Orchestration Mesh (Starter)
 
+## Documentation
+
+**📖 [Documentation Index](docs/INDEX.md)** - Complete documentation catalog with quick navigation
+
+### Quick Links
+- **[Production Deployment Guide](docs/PRODUCTION_GETTING_STARTED.md)** - Production deployment with Hardened branch security
+- **[Production Hardened](docs/PRODUCTION_HARDENED.md)** - Security hardening (92/100 score)
+- **[Incremental Build Plan](docs/INCREMENTAL_BUILD_PLAN.md)** - Build services in waves to avoid resource exhaustion
+- **[First Run Guide](docs/FIRST_RUN.md)** - Development setup and onboarding
+
+### Security Status
+| Metric | Score |
+|--------|-------|
+| **Overall Security** | 92/100 (Phase 2.5) |
+| **Container Hardening** | 20/20 (63/63 services) |
+| **Network Isolation** | 20/20 (6-tier model) |
+| **Image Pinning** | 13/15 (11 specific versions) |
+
 ## Quickstart
 
 ### One command, full stack
