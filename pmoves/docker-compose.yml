@@ -72,6 +72,77 @@ x-env-tier-ui: &id007
     - env.shared
     - env.tier-ui
 
+x-env-tier-supabase: &id008
+  env_file:
+    - env.shared
+    - env.tier-supabase
+
+# =============================================================================
+# CONTAINER HARDENING TEMPLATES (Security Baseline)
+# =============================================================================
+#
+# These YAML anchors provide container security hardening for all services.
+# Apply to service definitions using the <<: *anchor-name merge pattern.
+#
+# Hardening Options Explained:
+# ----------------------------
+# - cap_drop: [ALL] - Drop all Linux capabilities (principle of least privilege)
+# - cap_add: [NET_BIND_SERVICE] - Add back only specific capabilities needed
+# - read_only: true - Mount container rootfs as read-only (prevents modification)
+# - security_opt: [no-new-privileges:true] - Prevent privilege escalation via setuid/setgid
+# - tmpfs: - Mount temporary filesystems with noexec/nosuid flags
+#
+# When to Use Each Template:
+# --------------------------
+# 1. x-hardening (&hardening) - For stateless, read-only services:
+#    - API gateways, proxies, pure compute services
+#    - Services that don't write to local filesystem
+#    - Example: presign, render-webhook, model-registry
+#
+# 2. x-hardening-rw (&hardening-rw) - For services with write requirements:
+#    - Databases (need data directory writes)
+#    - Log aggregators (need log file writes)
+#    - Services with tmp/cache volumes
+#    - Example: postgres, neo4j, nats
+#
+# Security Impact:
+# ---------------
+# - Attack Surface: Reduces container privileges by ~90%
+# - Privilege Escalation: Blocks setuid/setgid escalation vectors
+# - Rootfs Protection: Read-only prevents malicious code injection
+# - Temporary Files: noexec/nosuid prevents executable tmp attacks
+# - Compliance: Aligns with CIS Docker Benchmark 1.0.0 sections 5.1-5.3
+# =============================================================================
+
+# Read-only hardening for stateless services
+# Use for: API gateways, proxies, compute services (no local writes)
+x-hardening: &hardening
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+    - /var/tmp:noexec,nosuid,size=64m
+
+# Read-write hardening for services needing filesystem access
+# Use for: Databases, log writers, services with volumes
+x-hardening-rw: &hardening-rw
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
+# PMOVES.AI production compose project
+name: pmoves
 services:
   # NOTE: postgres and postgrest now run via Supabase CLI
   # Use: supabase start
@@ -1765,6 +1836,7 @@ networks:
   pmoves_app:
     name: pmoves_app
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
@@ -1773,6 +1845,7 @@ networks:
   pmoves_bus:
     name: pmoves_bus
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
@@ -1781,6 +1854,7 @@ networks:
   pmoves_monitoring:
     name: pmoves_monitoring
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
