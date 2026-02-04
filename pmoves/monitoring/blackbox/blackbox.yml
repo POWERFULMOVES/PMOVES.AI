@@ -60,3 +60,14 @@ modules:
         Accept: application/json
       follow_redirects: true
       preferred_ip_protocol: ip4
+
+  # HTTP probe accepting 200 or 401 (for auth-required endpoints like PostgREST)
+  http_2xx_or_401:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 204, 401]
+      method: GET
+      follow_redirects: true
+      preferred_ip_protocol: ip4

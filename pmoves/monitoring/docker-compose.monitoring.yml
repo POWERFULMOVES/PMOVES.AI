@@ -11,7 +11,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
-    networks: [monitoring_tier]
+    networks: [monitoring_tier, pmoves_api, pmoves_data]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -57,7 +57,7 @@ services:
     ports: ["${BLACKBOX_HOST_PORT:-9115}:9115"]
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
-    networks: [monitoring_tier]
+    networks: [monitoring_tier, pmoves_api, pmoves_data]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -97,6 +97,12 @@ networks:
   monitoring_tier:
     external: true
     name: pmoves_monitoring
+  pmoves_api:
+    external: true
+    name: pmoves_api
+  pmoves_data:
+    external: true
+    name: pmoves_data
 
 volumes:
   prometheus-data: {}
