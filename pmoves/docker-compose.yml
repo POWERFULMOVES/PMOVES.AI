@@ -551,6 +551,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -564,6 +565,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   channel-monitor:
     <<: *id005
     build: ./services/channel-monitor
@@ -1674,6 +1676,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   invidious:
     image: quay.io/invidious/invidious:2024.12.09
     restart: unless-stopped
@@ -1709,6 +1712,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
@@ -1786,6 +1790,7 @@ services:
     - cloudflare
     networks:
     - pmoves_app
+    - pmoves_external
   invidious-companion-proxy:
     build: ./services/invidious-companion-proxy
     restart: unless-stopped
@@ -1860,6 +1865,14 @@ networks:
       config:
       - subnet: 172.30.5.0/24
         gateway: 172.30.5.1
+  pmoves_external:
+    name: pmoves_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.6.0/24
+        gateway: 172.30.6.1
   supabase_net:
     external: true
     name: supabase_network_PMOVES.AI
