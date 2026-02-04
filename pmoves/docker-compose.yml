@@ -879,6 +879,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -892,6 +893,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   channel-monitor:
     <<: *id005
     build: ./services/channel-monitor
@@ -2033,6 +2035,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   invidious:
     image: quay.io/invidious/invidious:latest
     restart: unless-stopped
@@ -2068,6 +2071,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
@@ -2145,6 +2149,7 @@ services:
     - cloudflare
     networks:
     - pmoves_app
+    - pmoves_external
   invidious-companion-proxy:
     build: ./services/invidious-companion-proxy
     restart: unless-stopped
@@ -2225,6 +2230,14 @@ networks:
         gateway: 172.30.5.1
   # NOTE: supabase_net no longer needed - Supabase services now use internal pmoves_data/pmoves_api networks
   # pmoves and cataclysm kept for external service compatibility
+  pmoves_external:
+    name: pmoves_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.6.0/24
+        gateway: 172.30.6.1
   pmoves:
     external: true
     name: pmoves-net
