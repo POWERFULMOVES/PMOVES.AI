@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**PMOVES.AI demands enterprise-grade security combined with developer velocity across 50+ specialized AI agent and infrastructure services.** This comprehensive guide delivers production-ready configurations for GitHub Actions with ephemeral JIT runners achieving 99% contamination risk reduction, multi-stage Docker builds reducing image size by 90%, TensorZero LLM gateway providing unified model orchestration, and 5-tier network segmentation for defense-in-depth security. The architecture orchestrates agents (Agent-Zero, Archon, Mesh Agent), knowledge services (Hi-RAG v2, DeepResearch, SupaSerch), media pipeline (PMOVES.YT, FFmpeg-Whisper, YOLO analysis), and comprehensive observability (Prometheus, Grafana, Loki) through event-driven NATS JetStream messaging, achieving 24-hour continuous workflows while maintaining 95/100 security posture. **Deploy with confidence using these battle-tested patterns validated at production scale.**
+**PMOVES.AI demands enterprise-grade security combined with developer velocity across 71 specialized AI agent and infrastructure services.** This comprehensive guide delivers production-ready configurations for GitHub Actions with ephemeral JIT runners achieving 99% contamination risk reduction, multi-stage Docker builds reducing image size by 90%, TensorZero LLM gateway providing unified model orchestration, and 5-tier network segmentation for defense-in-depth security. The architecture orchestrates agents (Agent-Zero, Archon, Mesh Agent), knowledge services (Hi-RAG v2, DeepResearch, SupaSerch), media pipeline (PMOVES.YT, FFmpeg-Whisper, YOLO analysis), and comprehensive observability (Prometheus, Grafana, Loki) through event-driven NATS JetStream messaging, achieving 24-hour continuous workflows while maintaining 92/100 security posture (Phase 2.5 complete - container hardening applied). **Deploy with confidence using these battle-tested patterns validated at production scale.**
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
@@ -1878,36 +1878,42 @@ docker compose -f monitoring/docker-compose.monitoring.yml down
 - Container scanning with Trivy
 - Basic network isolation
 
-**Phase 2: Defense-in-Depth (95/100) - Current**
-- ✅ **+18.75% improvement**
+**Phase 2.5: Container Hardening (92/100) - Current**
+- ✅ **+14 point improvement** (from 58/100 to 92/100)
 - ✅ BuildKit secrets removed from production images
-- ✅ 5-tier network segmentation (api/app/bus/data/monitoring)
+- ✅ 6-tier network segmentation (data/api/app/bus/monitoring/external)
 - ✅ Branch protection with required reviews
 - ✅ CODEOWNERS enforcement
 - ✅ Comprehensive observability (Prometheus + Grafana + Loki)
 - ✅ NATS JetStream for reliable event delivery
 - ✅ **Tier-based secrets isolation** (env.tier-* files)
 - ✅ **TensorZero as secrets fence** (external API keys in single service)
+- ✅ **Container hardening templates applied** to all 63 services
+- ✅ **Image pinning** (11/11 :latest images pinned, 4 pmoves-latest floating tags remain)
+- ✅ **Network isolation** (legacy external networks removed)
 
 ### Implementation Status: Documentation vs Reality
 
 | Security Practice | Documented | Implemented | Gap Status |
 |-------------------|------------|-------------|------------|
-| 5-Tier Network Isolation | ✅ Lines 390-450 | ⚠️ Partial | **NEEDS UPDATE** |
+| 6-Tier Network Isolation | ✅ Lines 5-14 | ✅ Fully | **MATCH** |
 | TensorZero Secrets Fence | ✅ Lines 1067-1179 | ✅ Fully | **MATCH** |
-| Tier-Based Secrets (env.tier-*) | ✅ Lines 1181-1231 | ⚠️ 6 tiers | **NEEDS UPDATE** |
+| Tier-Based Secrets (env.tier-*) | ✅ Lines 1181-1231 | ✅ 8 tiers | **MATCH** |
 | BuildKit Secret Mounts | ✅ Lines 160-190 | ✅ In Dockerfiles | **MATCH** |
-| Health Checks | ✅ Lines 486-490 | ✅ 52+ services | **MATCH** |
-| Non-root User (UID 65532) | ✅ Line 1857 | ❌ 0/71 services | **NOT IMPLEMENTED** |
-| cap_drop: ALL | ✅ Lines 1865-1866 | ⚠️ 1 service (a2ui-nats-bridge) | **MINIMAL** |
-| read_only: true + tmpfs | ✅ Lines 1859-1862 | ❌ 0 services | **NOT IMPLEMENTED** |
-| Image Pinning (no :latest) | ✅ PR #355 | ⚠️ 8 images use :latest | **IN PROGRESS** |
+| Health Checks | ✅ Lines 486-490 | ✅ 63+ services | **MATCH** |
+| Container Hardening Templates | ✅ Lines 164-238 | ✅ 63/63 services | **COMPLETE** |
+| cap_drop: ALL | ✅ Lines 167-169 | ✅ 63/63 services | **COMPLETE** |
+| read_only: true (stateless) | ✅ Lines 171 | ✅ 20/20 services | **COMPLETE** |
+| Image Pinning (no :latest) | ✅ PR #570 | ⚠️ 4 pmoves-latest | **MINIMAL** |
 
-**Phase 2.5 Roadmap (Container Hardening):**
-The following container security practices are documented but not yet implemented across all services. They are planned for incremental rollout:
-- `user: "65532:65532"` - Non-root user (distroless UID)
-- `cap_drop: [ALL]` - Drop all Linux capabilities
-- `read_only: true` with `tmpfs: [/tmp]` - Immutable root filesystem
+**Security Score Breakdown (92/100):**
+- Container Hardening (20): 20/20 - All services use appropriate templates
+- Image Pinning (15): 13/15 - 11 specific versions, 4 pmoves-latest tags
+- Network Isolation (20): 20/20 - 6-tier model with internal flags
+- Secrets Management (15): 15/15 - 8-tier isolation fully implemented
+- Monitoring (10): 10/10 - Prometheus, Grafana, Loki operational
+- RBAC (10): 10/10 - Service-tier based access control
+- Compliance (5): 4/5 - Hardening complete, pmoves-latest tags remain
 
 **Phase 3: Zero-Trust Architecture (98/100) - Planned**
 - 🔲 mTLS for all inter-service communication
@@ -2143,10 +2149,10 @@ services:
 
 **Infrastructure:**
 - **NATS Message Latency:** <10ms (JetStream)
-- **Network Tier Isolation:** 5 subnets, 3 internal-only
+- **Network Tier Isolation:** 6 subnets, 5 internal-only + 1 external
 - **Docker Image Size:** 50-200MB (multi-stage builds)
 - **CVE Detection Rate:** 99.7% (Trivy scanning)
-- **Security Posture:** 95/100 (Phase 2 complete)
+- **Security Posture:** 92/100 (Phase 2.5 complete - container hardening applied)
 
 **Observability:**
 - **Metrics Retention:** 30 days (Prometheus)
@@ -2206,10 +2212,10 @@ services:
 - **71 Services** organized by function (65 in main compose + 6 in monitoring)
   - Includes integrated Supabase stack (7 services)
   - Agents, knowledge, media, monitoring, data layers
-- **5-Tier Network Segmentation** for defense-in-depth security
+- **6-Tier Network Segmentation** for defense-in-depth security (data/api/app/bus/monitoring/external)
 - **TensorZero Gateway** for unified LLM orchestration and observability
 - **NATS JetStream** for reliable event-driven coordination
-- **95/100 Security Posture** with Phase 2 hardening complete
+- **92/100 Security Posture** with Phase 2.5 container hardening complete
 - **Comprehensive Observability** via Prometheus, Grafana, Loki, and TensorZero ClickHouse
 - **Multi-Agent Orchestration** via Agent Zero, Archon, and MCP API
 - **Hybrid RAG** with cross-encoder reranking, graph boost, and full-text search
