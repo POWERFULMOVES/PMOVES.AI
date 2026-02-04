@@ -1499,7 +1499,8 @@ services:
     build:
       context: ./services/gpu-orchestrator
       dockerfile: Dockerfile
-    image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:latest}
+    # Pinned 2025-02-04: Use pmoves-stable or date-based version for custom builds
+    image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:pmoves-2025.02.04}
     restart: unless-stopped
     environment:
     - NVIDIA_VISIBLE_DEVICES=all
@@ -1539,7 +1540,8 @@ services:
     build:
       context: ./services/evo-controller
       dockerfile: Dockerfile
-    image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
+    # Pinned 2025-02-04: Use pmoves-stable or date-based version for custom builds
+    image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:pmoves-2025.02.04}
     restart: unless-stopped
     environment:
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
@@ -1596,7 +1598,8 @@ services:
     build:
       context: ./services/flute-gateway
       dockerfile: Dockerfile
-    image: ${FLUTE_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-flute-gateway:latest}
+    # Pinned 2025-02-04: Use pmoves-stable or date-based version for custom builds
+    image: ${FLUTE_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-flute-gateway:pmoves-2025.02.04}
     restart: unless-stopped
     environment:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
@@ -1722,7 +1725,8 @@ services:
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
     <<: *id003
-    image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:latest}
+    # Pinned 2025-02-04: Use pmoves-stable or date-based version for custom builds
+    image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:pmoves-2025.02.04}
     restart: unless-stopped
     environment:
     - PORT=8100
@@ -1937,6 +1941,8 @@ services:
     - pmoves_app
     - pmoves_bus
   grayjay-server:
+    # Pinned 2025-02-04: Grayjay GitLab registry requires authentication, cannot auto-determine version
+    # TODO: Update to specific version when registry access is available
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
     restart: unless-stopped
     env_file:
