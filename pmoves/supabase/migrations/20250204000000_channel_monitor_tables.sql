@@ -102,7 +102,7 @@ CREATE POLICY "Users can update their own tokens"
 
 CREATE POLICY "Service role can manage all tokens"
     ON pmoves.user_tokens FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    USING (auth.role() = 'service_role');
 
 -- RLS Policies for user_sources
 CREATE POLICY "Users can view their own sources"
@@ -123,12 +123,12 @@ CREATE POLICY "Users can delete their own sources"
 
 CREATE POLICY "Service role can manage all sources"
     ON pmoves.user_sources FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    USING (auth.role() = 'service_role');
 
 -- RLS Policies for channel_monitoring
 CREATE POLICY "Service role full access to monitoring"
     ON pmoves.channel_monitoring FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    USING (auth.role() = 'service_role');
 
 -- ==============================================================================
 -- FUNCTIONS AND TRIGGERS

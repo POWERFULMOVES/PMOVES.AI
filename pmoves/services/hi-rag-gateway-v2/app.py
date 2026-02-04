@@ -2,7 +2,7 @@ import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, thre
 import importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
@@ -1382,6 +1382,52 @@ def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
     # no explicit cache; warm dictionary reload covers
     refresh_warm_dictionary()
     return {"ok": True}
+
+
+@app.get("/healthz")
+def healthz():
+    """Health check endpoint for Kubernetes probes and smoke tests."""
+    # Check Qdrant connection
+    qdrant_connected = False
+    try:
+        if qdrant is not None:
+            qdrant.get_collections()
+            qdrant_connected = True
+    except Exception:
+        pass
+
+    # Check Neo4j connection
+    neo4j_connected = False
+    try:
+        if driver is not None:
+            driver.verify_connectivity()
+            neo4j_connected = True
+    except Exception:
+        pass
+
+    # Check Meilisearch connection
+    meilisearch_connected = False
+    try:
+        import requests as _req
+        resp = _req.get(f"{MEILI_URL}/health", timeout=2)
+        meilisearch_connected = resp.status_code == 200
+    except Exception:
+        pass
+
+    return {
+        "status": "healthy" if all([qdrant_connected, neo4j_connected, meilisearch_connected]) else "degraded",
+        "qdrant_connected": qdrant_connected,
+        "neo4j_connected": neo4j_connected,
+        "meilisearch_connected": meilisearch_connected,
+    }
+
+
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint for observability."""
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 @app.get("/")
 def index(_=Depends(require_tailscale)):
