@@ -188,6 +188,54 @@ x-hardening-rw: &hardening-rw
   security_opt:
     - no-new-privileges:true
 
+# Database-specific hardening with extended capabilities
+# Use for: PostgreSQL, Neo4j, Qdrant, Meilisearch, ClickHouse
+# Databases need DAC_OVERRIDE and FOWNER for data file operations
+x-hardening-database: &hardening-database
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+    - DAC_OVERRIDE  # Required for database file operations
+    - FOWNER        # Required for file descriptor operations
+  security_opt:
+    - no-new-privileges:true
+
+# External API hardening for services needing internet access
+# Use for: Services that call external APIs (TensorZero, DeepResearch, etc.)
+# These services need pmoves_external network for outbound connectivity
+x-hardening-external: &hardening-external
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+    - /var/tmp:noexec,nosuid,size=64m
+
+# Media processing hardening with larger tmpfs
+# Use for: FFmpeg-Whisper, media analyzers
+# Media processors need more tmpfs space for temporary files
+x-hardening-media: &hardening-media
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=512m
+    - /var/tmp:noexec,nosuid,size=512m
+
 # PMOVES.AI production compose project
 name: pmoves
 
@@ -203,6 +251,7 @@ services:
 
   supabase-db:
     <<: *id008
+    <<: *hardening-database
     image: supabase/postgres:17.6.1.079
     restart: unless-stopped
     environment:
@@ -229,6 +278,7 @@ services:
 
   supabase-gotrue:
     <<: *id008
+    <<: *hardening-rw
     image: supabase/gotrue:v2.186.0
     restart: unless-stopped
     environment:
@@ -273,6 +323,7 @@ services:
 
   supabase-postgrest:
     <<: *id008
+    <<: *hardening
     image: postgrest/postgrest:v12.2.0
     restart: unless-stopped
     environment:
@@ -305,6 +356,7 @@ services:
 
   supabase-kong:
     <<: *id008
+    <<: *hardening-rw
     image: kong:3.7.1
     restart: unless-stopped
     environment:
@@ -346,6 +398,7 @@ services:
 
   supabase-realtime:
     <<: *id008
+    <<: *hardening-rw
     image: supabase/realtime:v2.30.26
     restart: unless-stopped
     environment:
@@ -386,6 +439,7 @@ services:
 
   supabase-storage:
     <<: *id008
+    <<: *hardening-rw
     image: supabase/storage-api:v1.36.2
     restart: unless-stopped
     environment:
@@ -437,6 +491,7 @@ services:
 
   supabase-studio:
     <<: *id008
+    <<: *hardening-rw
     # Pinned 2025-02-04: Latest stable from Supabase
     image: supabase/studio:2026.02.04-sha-fba1944
     restart: unless-stopped
@@ -476,6 +531,7 @@ services:
   # =============================================================================
 
   qdrant:
+    <<: *hardening-database
     image: qdrant/qdrant:v1.10.0
     restart: unless-stopped
     ports:
@@ -488,6 +544,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
   meilisearch:
     <<: *id001
+    <<: *hardening-database
     image: getmeili/meilisearch:v1.8
     restart: unless-stopped
     environment:
@@ -500,6 +557,7 @@ services:
     networks:
     - pmoves_data
   neo4j:
+    <<: *hardening-database
     image: neo4j:5.22
     env_file:
       - env.tier-data
@@ -528,6 +586,7 @@ services:
       start_period: 20s
   minio:
     <<: *id001
+    <<: *hardening-database
     # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: server /data --console-address ":9001"
@@ -546,6 +605,7 @@ services:
     - pmoves_bus
   hi-rag-gateway:
     <<: *id002
+    <<: *hardening-rw
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
@@ -585,6 +645,7 @@ services:
     - pmoves_bus
   retrieval-eval:
     <<: *id003
+    <<: *hardening-rw
     build: ./services/retrieval-eval
     restart: unless-stopped
     environment:
@@ -606,6 +667,7 @@ services:
     - host.docker.internal:host-gateway
   presign:
     <<: *id002
+    <<: *hardening
     build: ./services/presign
     restart: unless-stopped
     environment:
@@ -623,6 +685,7 @@ services:
     - pmoves_bus
   render-webhook:
     <<: *id002
+    <<: *hardening
     build: ./services/render-webhook
     restart: unless-stopped
     environment:
@@ -641,6 +704,7 @@ services:
     - host.docker.internal:host-gateway
   model-registry:
     <<: *id002
+    <<: *hardening
     build:
       context: ./services/model-registry
       dockerfile: Dockerfile
@@ -671,6 +735,7 @@ services:
     - host.docker.internal:host-gateway
   extract-worker:
     <<: *id003
+    <<: *hardening-rw
     build: ./services/extract-worker
     restart: unless-stopped
     environment:
@@ -692,6 +757,7 @@ services:
     - host.docker.internal:host-gateway
   pdf-ingest:
     <<: *id003
+    <<: *hardening
     build:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
@@ -720,6 +786,7 @@ services:
     - pmoves_bus
   langextract:
     <<: *id003
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: services/langextract/Dockerfile
@@ -733,6 +800,7 @@ services:
     - pmoves_app
   notebook-sync:
     <<: *id003
+    <<: *hardening-rw
     build: ./services/notebook-sync
     restart: unless-stopped
     environment:
@@ -759,6 +827,7 @@ services:
     - pmoves_bus
   ffmpeg-whisper:
     <<: *id004
+    <<: *hardening-media
     build:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
@@ -791,6 +860,7 @@ services:
     - pmoves_bus
   media-video:
     <<: *id004
+    <<: *hardening-media
     build: ./services/media-video
     restart: unless-stopped
     environment:
@@ -817,6 +887,7 @@ services:
     - pmoves_bus
   media-audio:
     <<: *id004
+    <<: *hardening-media
     build: ./services/media-audio
     restart: unless-stopped
     environment:
@@ -841,6 +912,7 @@ services:
     - pmoves_bus
   pmoves-yt:
     <<: *id004
+    <<: *hardening-rw
     image: ${PMOVES_YT_IMAGE:-}
     build:
       context: ./services/pmoves-yt
@@ -882,6 +954,7 @@ services:
     - pmoves_app
     - pmoves_bus
   bgutil-pot-provider:
+    <<: *hardening
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
     environment:
@@ -896,6 +969,7 @@ services:
     - pmoves_bus
   channel-monitor:
     <<: *id005
+    <<: *hardening-external
     build: ./services/channel-monitor
     restart: unless-stopped
     environment:
@@ -919,8 +993,10 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data
+    - pmoves_external
   hi-rag-gateway-v2:
     <<: *id002
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
@@ -972,6 +1048,7 @@ services:
     - pmoves_bus
   hi-rag-gateway-gpu:
     <<: *id002
+    <<: *hardening-rw
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
@@ -1025,6 +1102,7 @@ services:
     - pmoves_bus
   hi-rag-gateway-v2-gpu:
     <<: *id002
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
@@ -1103,6 +1181,7 @@ services:
     - host.docker.internal:host-gateway
   nats:
     <<: *id001
+    <<: *hardening-rw
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
     command:
@@ -1125,6 +1204,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
   agent-zero:
     <<: *id005
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
@@ -1158,6 +1238,7 @@ services:
     - pmoves_bus
   archon:
     <<: *id005
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: ./services/archon/Dockerfile
@@ -1208,6 +1289,7 @@ services:
       start_period: 15s
   mesh-agent:
     <<: *id005
+    <<: *hardening
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
@@ -1220,9 +1302,9 @@ services:
 
   # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
   botz-gateway:
-    build: ./services/botz-gateway
-    restart: unless-stopped
     <<: *id005
+    <<: *hardening-rw
+    build: ./services/botz-gateway
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
@@ -1246,6 +1328,7 @@ services:
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
   a2ui-nats-bridge:
     <<: *id005
+    <<: *hardening
     build: ./services/a2ui-nats-bridge
     image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
     container_name: pmoves-a2ui-nats-bridge
@@ -1283,6 +1366,7 @@ services:
     - no-new-privileges:true
   deepresearch:
     <<: *id005
+    <<: *hardening-external
     build:
       context: ./services
       dockerfile: deepresearch/Dockerfile
@@ -1313,8 +1397,10 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external
   supaserch:
     <<: *id005
+    <<: *hardening-rw
     build:
       context: ./services
       dockerfile: supaserch/Dockerfile
@@ -1335,6 +1421,7 @@ services:
     - pmoves_bus
   nats-echo-req:
     <<: *id005
+    <<: *hardening
     build:
       context: ./services
       dockerfile: nats-echo/Dockerfile
@@ -1352,6 +1439,7 @@ services:
     - pmoves_bus
   nats-echo-res:
     <<: *id005
+    <<: *hardening
     build:
       context: ./services
       dockerfile: nats-echo/Dockerfile
@@ -1369,6 +1457,7 @@ services:
     - pmoves_bus
   publisher-discord:
     <<: *id005
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
@@ -1389,6 +1478,7 @@ services:
     - pmoves_bus
   jellyfin-bridge:
     <<: *id005
+    <<: *hardening
     build: ./services/jellyfin-bridge
     restart: unless-stopped
     environment:
@@ -1403,6 +1493,7 @@ services:
     - pmoves_bus
   pmoves-ollama:
     <<: *id006
+    <<: *hardening-rw
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6}
     restart: unless-stopped
     environment:
@@ -1417,6 +1508,7 @@ services:
     - pmoves_api
   tensorzero-clickhouse:
     <<: *id006
+    <<: *hardening-database
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped
     environment:
@@ -1442,6 +1534,7 @@ services:
     - pmoves_data
   tensorzero-gateway:
     <<: *id006
+    <<: *hardening-external
     # Pinned 2025-02-04: Latest stable from TensorZero
     image: tensorzero/gateway:2026.1.8
     restart: unless-stopped
@@ -1464,10 +1557,12 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_data
+    - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
   tensorzero-ui:
     <<: *id006
+    <<: *hardening-rw
     # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
     image: tensorzero/ui:2026.1.8
     restart: unless-stopped
@@ -1492,6 +1587,7 @@ services:
     - pmoves_app
     - pmoves_data
   gpu-orchestrator:
+    <<: *hardening-rw
     env_file:
     - env.shared
     - env.tier-llm
@@ -1537,6 +1633,7 @@ services:
         required: false
   evo-controller:
     <<: *id005
+    <<: *hardening-rw
     build:
       context: ./services/evo-controller
       dockerfile: Dockerfile
@@ -1557,6 +1654,7 @@ services:
 
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
   ultimate-tts-studio:
+    <<: *hardening-media
     build:
       context: ./docker/ultimate-tts-studio
       dockerfile: Dockerfile
@@ -1595,6 +1693,7 @@ services:
   # Flute Gateway - Multimodal voice communication layer (TTS/STT)
   flute-gateway:
     <<: *id004
+    <<: *hardening-rw
     build:
       context: ./services/flute-gateway
       dockerfile: Dockerfile
@@ -1614,6 +1713,7 @@ services:
 
   # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
   tokenism-simulator:
+    <<: *hardening-rw
     build:
       context: ./services/tokenism-simulator
       dockerfile: Dockerfile
@@ -1651,6 +1751,7 @@ services:
 
   # PMOVES Tokenism UI - Interactive dashboard for token economy simulation
   tokenism-ui:
+    <<: *hardening-rw
     build:
       context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
       dockerfile: Dockerfile
@@ -1667,6 +1768,7 @@ services:
 
   # PMOVES Central UI - Main dashboard (port 4482)
   pmoves-ui:
+    <<: *hardening-rw
     build:
       context: ./ui
       dockerfile: Dockerfile
@@ -1725,6 +1827,7 @@ services:
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
     <<: *id003
+    <<: *hardening-rw
     # Pinned 2025-02-04: Use pmoves-stable or date-based version for custom builds
     image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:pmoves-2025.02.04}
     restart: unless-stopped
@@ -1746,6 +1849,7 @@ services:
 
   # Comfy Watcher - ComfyUI output watcher for NATS integration
   comfy-watcher:
+    <<: *hardening
     build:
       context: .
       dockerfile: services/comfy-watcher/Dockerfile
@@ -1778,6 +1882,7 @@ services:
 
   # Gateway Agent - Orchestrates 100+ MCP tools via Agent Zero MCP API
   gateway-agent:
+    <<: *hardening
     build: ./services/gateway-agent
     restart: unless-stopped
     env_file:
@@ -1804,9 +1909,9 @@ services:
 
   # GitHub Runner Control - Manages self-hosted GitHub runners
   github-runner-ctl:
-    build: ./services/github-runner-ctl
-    restart: unless-stopped
     <<: *id005
+    <<: *hardening
+    build: ./services/github-runner-ctl
     environment:
       - PORT=8104
       - NATS_URL=${NATS_URL:-nats://nats:4222}
@@ -1831,6 +1936,7 @@ services:
       start_period: 30s
 
   invidious-db:
+    <<: *hardening-database
     image: postgres:14
     restart: unless-stopped
     environment:
@@ -1854,6 +1960,7 @@ services:
     - pmoves_data
     - pmoves_app
   invidious-companion:
+    <<: *hardening-rw
     # Pinned 2025-02-04: Latest stable from Invidious GitHub releases (v2.20250913.0)
     image: quay.io/invidious/invidious-companion:2025.09.13-0065a3e
     restart: unless-stopped
@@ -1878,6 +1985,7 @@ services:
     - pmoves_app
     - pmoves_bus
   invidious:
+    <<: *hardening-rw
     # Pinned 2025-02-04: Latest stable from Invidious GitHub releases (v2.20250913.0)
     image: quay.io/invidious/invidious:2025.09.13-c8b4325
     restart: unless-stopped
@@ -1914,6 +2022,7 @@ services:
     - pmoves_app
     - pmoves_bus
   grayjay-plugin-host:
+    <<: *hardening
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
     env_file:
@@ -1941,6 +2050,7 @@ services:
     - pmoves_app
     - pmoves_bus
   grayjay-server:
+    <<: *hardening-rw
     # Pinned 2025-02-04: Grayjay GitLab registry requires authentication, cannot auto-determine version
     # TODO: Update to specific version when registry access is available
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
@@ -1968,6 +2078,7 @@ services:
     - pmoves_app
     - pmoves_bus
   cloudflared:
+    <<: *hardening
     image: cloudflare/cloudflared:2024.8.0
     restart: unless-stopped
     command:
@@ -1993,6 +2104,7 @@ services:
     networks:
     - pmoves_app
   invidious-companion-proxy:
+    <<: *hardening
     build: ./services/invidious-companion-proxy
     restart: unless-stopped
     depends_on:
@@ -2070,6 +2182,17 @@ networks:
       config:
       - subnet: 172.30.5.0/24
         gateway: 172.30.5.1
+  # External network for services that need internet access
+  # Use for: TensorZero Gateway, DeepResearch, external API callers
+  # NOT marked internal: true to allow outbound internet connectivity
+  pmoves_external:
+    name: pmoves_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.6.0/24
+        gateway: 172.30.6.1
   # NOTE: supabase_net no longer needed - Supabase services now use internal pmoves_data/pmoves_api networks
   # pmoves and cataclysm kept for external service compatibility
   pmoves:
