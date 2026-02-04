@@ -447,6 +447,9 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -786,11 +789,9 @@ services:
     - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
     - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+    # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
+    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://postgres:postgres@supabase-db:5432/postgres}
     - NATS_URL=${NATS_URL:-nats://nats:4222}
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-    - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
-    - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
-    - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
@@ -825,6 +826,8 @@ services:
     - USE_MEILI=true
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
@@ -873,6 +876,9 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -1735,7 +1741,7 @@ services:
     environment:
     - PORT=8282
     - HOST=0.0.0.0
-    - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}
+    - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}
     - CACHE_DIRECTORY=/var/tmp/youtubei.js
     - SERVER_BASE_URL=${INVIDIOUS_COMPANION_PUBLIC_URL:-}
     - YOUTUBE_API_KEY=${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
@@ -1760,10 +1766,9 @@ services:
       \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
       \ 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port:\
       \ ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\n\
-      hmac_key: \"${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}\"\ninvidious_companion:\n\
+      hmac_key: \"${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}\"\ninvidious_companion:\n\
       \  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\
-      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY\
-      \ not set}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
+      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
       \ ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector:\
       \ ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\
       \n"
