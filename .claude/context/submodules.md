@@ -1,6 +1,8 @@
 # PMOVES.AI Submodules Reference
 
-Comprehensive documentation of all 20 git submodules in the PMOVES.AI repository.
+Comprehensive documentation of git submodules in the PMOVES.AI repository.
+
+> **Full List:** See [docs/SUBMODULE_LIST.md](../../docs/SUBMODULE_LIST.md) for complete submodule inventory.
 
 ## Overview
 
@@ -302,6 +304,29 @@ PMOVES.AI uses git submodules to integrate external projects and specialized ser
   - `hbbr` - RustDesk relay server
   - `rustdesk-utils` - CLI utilities
 - **README:** [PMOVES-Remote-View/README.md](../../../PMOVES-Remote-View/README.md)
+
+### PMOVES-Headscale
+- **Path:** `PMOVES-Headscale/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-headscale.git
+- **Branch:** `main`
+- **Purpose:** Self-hosted Tailscale control server (Headscale fork)
+- **Features:**
+  - Self-hosted alternative to Tailscale's commercial control server
+  - WireGuard-based VPN mesh networking
+  - Full API compatibility with Tailscale clients
+  - ACL-based access control policies
+- **Components:**
+  - `headscale` - Control server (port 8096, metrics 9090)
+  - `headscale-agent` - VPN client for node enrollment
+  - Configuration: ACL policies, DERP relay configuration
+- **Integration Points:**
+  - Provides self-hosted VPN mesh for PMOVES services
+  - Used with PMOVES-Remote-View (RustDesk) for remote desktop
+  - MCP integration via BoTZ VPN MCP server
+- **Example Files:**
+  - `config/config.yaml.example` - Headscale server configuration
+  - `config/acl.yaml.example` - ACL policy examples
+- **README:** [PMOVES-Headscale/README.md](../../../PMOVES-Headscale/README.md)
 
 ---
 
