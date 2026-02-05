@@ -1,0 +1,2 @@
+# Local requirements for PMOVES DeepResearch worker
+# Dependencies from upstream DeepResearch are installed via /opt/DeepResearch/requirements.txt
