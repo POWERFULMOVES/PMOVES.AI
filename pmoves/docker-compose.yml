@@ -2077,3 +2077,12 @@ networks:
   cataclysm:
     external: true
     name: cataclysm-net
+  # External network for services requiring internet access (YouTube API, LLM providers, etc.)
+  pmoves_external:
+    name: pmoves_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.6.0/24
+        gateway: 172.30.6.1
