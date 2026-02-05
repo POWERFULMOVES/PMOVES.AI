@@ -69,8 +69,10 @@ jobs:
         include:
         - language: actions
           build-mode: none
-        - language: c-cpp
-          build-mode: autobuild
+        # PMOVES.AI has no C/C++ code in main repo (only in submodules)
+        # Skip C/CPP analysis to avoid auto-build failures
+        # - language: c-cpp
+        #   build-mode: autobuild
         - language: javascript-typescript
           build-mode: none
         - language: python
