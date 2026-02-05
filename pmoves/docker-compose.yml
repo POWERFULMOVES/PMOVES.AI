@@ -486,6 +486,8 @@ services:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    volumes:
+    - qdrant-data:/qdrant/storage
   meilisearch:
     <<: *id001
     image: getmeili/meilisearch:v1.8
@@ -499,6 +501,8 @@ services:
     - ${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
+    volumes:
+    - meilisearch-data:/meili_data
   neo4j:
     image: neo4j:5.22
     env_file:
@@ -2010,6 +2014,8 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
 volumes:
   neo4j-data: {}
+  qdrant-data: {}
+  meilisearch-data: {}
   minio-data: {}
   # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
