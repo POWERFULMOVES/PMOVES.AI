@@ -57,7 +57,7 @@ services:
     profiles:
       - remote
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8096/metrics"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/metrics"]
       interval: 15s
       timeout: 5s
       retries: 3

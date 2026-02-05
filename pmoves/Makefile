@@ -1195,10 +1195,10 @@ create-vpn-user: ## Create a Headscale VPN user (USER=user@example.com)
 	@docker exec pmoves-headscale headscale users create $(USER)
 	@echo "✅ VPN user created: $(USER)"
 
-create-vpn-key: ## Create a reusable VPN auth key (USER=user@example.com)
+create-vpn-key: ## Create a reusable VPN device auth key (USER=user@example.com)
 	@if [ -z "$(USER)" ]; then echo "Usage: make create-vpn-key USER=user@example.com"; exit 1; fi
-	@docker exec pmoves-headscale headscale apikeys create --reusable $(USER)
-	@echo "✅ VPN auth key created for user: $(USER)"
+	@docker exec pmoves-headscale headscale preauthkeys create --reusable $(USER)
+	@echo "✅ VPN device auth key created for user: $(USER)"
 
 list-vpn-nodes: ## List all VPN nodes
 	@docker exec pmoves-headscale headscale machines list
