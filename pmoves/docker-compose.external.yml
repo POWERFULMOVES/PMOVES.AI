@@ -60,6 +60,10 @@ services:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: pmoves-open-notebook-surrealdb
     restart: unless-stopped
+    # NOTE: SurrealDB requires root for RocksDB data directory access
+    # This is a known limitation of the upstream image; consider
+    # pre-creating the data directory with correct ownership if
+    # running as non-root is required for your security policy.
     user: "0:0"
     networks:
       pmoves_app:

@@ -919,6 +919,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_data
+    - pmoves_external  # Required for YouTube API access
   hi-rag-gateway-v2:
     <<: *id002
     build:
