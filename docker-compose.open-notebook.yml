@@ -1,0 +1,43 @@
+# YAML anchors for tier-based env file loading
+x-env-tier-worker: &env-tier-worker
+  env_file:
+    - path: env.tier-worker
+      required: false
+
+services:
+  open-notebook:
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
+    # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
+    container_name: pmoves-open-notebook
+    restart: unless-stopped
+    <<: *env-tier-worker
+    environment:
+      # UI talks to API on localhost inside container.
+      API_URL: http://localhost:5055
+    ports:
+      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
+      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"
+    volumes:
+      - ./data/open-notebook/notebook_data:/app/data
+    networks:
+      pmoves_app:
+        aliases:
+          - pmoves-open-notebook
+          - open-notebook
+      pmoves_external:
+        aliases:
+          - pmoves-open-notebook
+          - open-notebook
+
+networks:
+  pmoves_app:
+    external: true
+    name: pmoves_app
+  pmoves_external:
+    external: true
+    name: pmoves_external
+  # Open Notebook uses TensorZero + Ollama for embeddings/LLM routing. Those services live on the tiered
+  # Compose networks (pmoves_api / pmoves_app), not the legacy pmoves-net bridge.
+  pmoves_api:
+    external: true
+    name: pmoves_api

@@ -8,7 +8,6 @@ RUN git clone https://github.com/Alibaba-NLP/DeepResearch.git /opt/DeepResearch 
     && cd /opt/DeepResearch \
     && git checkout 3f2845ffea03f198a84716a580e2cbb4145b0465
 COPY services/deepresearch/requirements.txt /tmp/requirements.txt
-COPY services/deepresearch/requirements.lock /tmp/requirements.lock
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
     && pip install --no-cache-dir -r /opt/DeepResearch/requirements.txt
