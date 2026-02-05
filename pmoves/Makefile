@@ -1151,6 +1151,58 @@ ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts 
 up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
 
+# =============================================================================
+# REMOTE DESKTOP & VPN SERVICES
+# =============================================================================
+
+.PHONY: up-remote down-remote remote-health remote-logs remote-setup
+
+up-remote: ## Start remote desktop & VPN services (Headscale + RustDesk)
+	@echo "🔧 Starting remote desktop & VPN services..."
+	@$(DC) -f docker-compose.remote.yml --profile remote up -d
+	@echo "⏳ Waiting for Headscale to be ready..."
+	@timeout 30 bash -c 'until curl -sf http://localhost:8096/metrics; do sleep 1; done' || echo "⚠️  Headscale may still be starting"
+	@echo "⏳ Waiting for RustDesk services..."
+	@timeout 30 bash -c 'until nc -z localhost 21115 2>/dev/null; do sleep 1; done' || echo "⚠️  RustDesk hbbs may still be starting"
+	@timeout 30 bash -c 'until nc -z localhost 21117 2>/dev/null; do sleep 1; done' || echo "⚠️  RustDesk hbbr may still be starting"
+	@echo "✅ Remote desktop & VPN services started"
+	@echo "   Headscale API:  http://localhost:8096"
+	@echo "   Headscale Metrics: http://localhost:9091"
+	@echo "   RustDesk hbbs:  ports 21115, 21116, 21118"
+	@echo "   RustDesk hbbr:  ports 21117, 21119"
+
+down-remote: ## Stop remote desktop & VPN services
+	@echo "🔧 Stopping remote desktop & VPN services..."
+	@$(DC) -f docker-compose.remote.yml --profile remote down
+	@echo "✅ Remote desktop & VPN services stopped"
+
+remote-health: ## Check health status of remote desktop services
+	@echo "🏥 Remote Desktop & VPN Health Check"
+	@echo "===================================="
+	@bash scripts/verify-remote-desktop.sh
+
+remote-logs: ## Show logs from remote desktop services
+	@$(DC) -f docker-compose.remote.yml logs -f headscale rustdesk-hbbs rustdesk-hbbr
+
+remote-setup: ## Run remote desktop setup script
+	@bash scripts/setup-remote-desktop.sh
+
+# VPN user management helpers
+.PHONY: create-vpn-user create-vpn-key list-vpn-nodes
+
+create-vpn-user: ## Create a Headscale VPN user (USER=user@example.com)
+	@if [ -z "$(USER)" ]; then echo "Usage: make create-vpn-user USER=user@example.com"; exit 1; fi
+	@docker exec pmoves-headscale headscale users create $(USER)
+	@echo "✅ VPN user created: $(USER)"
+
+create-vpn-key: ## Create a reusable VPN auth key (USER=user@example.com)
+	@if [ -z "$(USER)" ]; then echo "Usage: make create-vpn-key USER=user@example.com"; exit 1; fi
+	@docker exec pmoves-headscale headscale apikeys create --reusable $(USER)
+	@echo "✅ VPN auth key created for user: $(USER)"
+
+list-vpn-nodes: ## List all VPN nodes
+	@docker exec pmoves-headscale headscale machines list
+
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
 .PHONY: up-agents up-agents-stack
 up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build

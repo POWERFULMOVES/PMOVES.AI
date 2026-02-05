@@ -35,4 +35,5 @@ env.tier-data
 env.tier-llm
 env.tier-media
 env.tier-ui
+env.tier-vpn
 env.tier-worker
