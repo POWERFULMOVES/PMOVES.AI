@@ -1,2 +1,7 @@
 # Local requirements for PMOVES DeepResearch worker
 # Dependencies from upstream DeepResearch are installed via /opt/DeepResearch/requirements.txt
+
+# PMOVES-specific dependencies
+nats-py==2.8.0
+prometheus-client==0.20.0
+python-dotenv==1.2.1
