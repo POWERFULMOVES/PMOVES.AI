@@ -480,6 +480,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for YouTube API access
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -493,6 +494,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for YouTube processing
   channel-monitor:
     <<: *id005
     build: ./services/channel-monitor
@@ -566,6 +568,7 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external  # Required for reranker API calls
   hi-rag-gateway-gpu:
     <<: *id002
     build:
@@ -748,6 +751,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for LLM provider APIs
   archon:
     <<: *id005
     build:
@@ -1627,3 +1631,12 @@ networks:
   pmoves:
     external: true
     name: pmoves-net
+  # External network for services requiring internet access (YouTube API, LLM providers, etc.)
+  pmoves_external:
+    name: pmoves_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.6.0/24
+        gateway: 172.30.6.1
