@@ -17,7 +17,61 @@ PMOVES.AI uses a **6-tier environment layout** to organize configuration variabl
 
 ## Quick Start
 
+### 0. Cross-Platform Support
+
+PMOVES.AI provides scripts for both Unix-like systems (Linux, macOS) and Windows:
+
+| Platform | Environment Loader | Tier Seeder |
+|----------|-------------------|-------------|
+| Linux/macOS | `scripts/with-env.sh` | `scripts/seed-tier-envs.sh` |
+| Windows (PowerShell 7+) | `scripts/with-env.ps1` | `scripts/seed-tier-envs.ps1` |
+
+**Note:** Windows users should run Docker commands via WSL or Git Bash, as the Makefile requires Unix shell.
+
 ### 1. Initial Setup
+
+#### Option A: Using the Makefile (Recommended)
+
+```bash
+cd /home/pmoves/PMOVES.AI/pmoves
+
+# Auto-create tier env files from examples
+make ensure-tier-envs
+
+# Or start services (auto-creates tier files)
+make up
+```
+
+#### Option B: Using the Seeder Script
+
+```bash
+cd /home/pmoves/PMOVES.AI/pmoves
+
+# Interactive mode (prompts for each file)
+bash scripts/seed-tier-envs.sh
+
+# Non-interactive mode (create all from examples)
+bash scripts/seed-tier-envs.sh -y
+
+# Force overwrite existing files
+bash scripts/seed-tier-envs.sh --force
+```
+
+**Windows (PowerShell):**
+```powershell
+cd pmoves
+
+# Interactive mode
+pwsh -File scripts\seed-tier-envs.ps1
+
+# Non-interactive mode
+pwsh -File scripts\seed-tier-envs.ps1 -Yes
+
+# Force overwrite
+pwsh -File scripts\seed-tier-envs.ps1 -Force
+```
+
+#### Option C: Using PMOVES CLI
 
 ```bash
 cd /home/pmoves/PMOVES.AI
@@ -55,14 +109,48 @@ pmoves env validate
 
 ### 4. Start Services
 
+#### Loading Environment Variables
+
+The `with-env` scripts load all tier environment files into your shell session:
+
+**Linux/macOS:**
 ```bash
 cd pmoves
 
-# Start all services
+# Source the environment loader
+source scripts/with-env.sh
+
+# Verify a variable is loaded
+echo $NATS_URL
+```
+
+**Windows (PowerShell):**
+```powershell
+cd pmoves
+
+# Load environment variables
+.\scripts\with-env.ps1
+
+# Verify a variable is loaded
+$env:NATS_URL
+```
+
+**Note:** The Makefile automatically sources `with-env.sh` before running Docker Compose commands, so you don't need to manually load variables when using `make` targets.
+
+#### Starting Services
+
+```bash
+cd pmoves
+
+# Start all services (auto-loads tier envs)
+make up
+
+# Or use Docker Compose directly (requires manual env loading)
+source scripts/with-env.sh
 docker compose up -d
 
 # Or start specific profiles
-docker compose --profile agents --profile workers up -d
+make up --profile agents --profile workers
 ```
 
 ## Tier Architecture Details

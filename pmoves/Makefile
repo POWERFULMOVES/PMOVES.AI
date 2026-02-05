@@ -75,6 +75,27 @@ ensure-env-shared:
 		fi; \
 	fi
 
+.PHONY: ensure-tier-envs
+ensure-tier-envs:
+	@echo "Checking tier environment files..."
+	@missing=""; \
+	for tier in data api llm media agent worker ui; do \
+		if [ ! -f "env.tier-$$tier" ]; then \
+			if [ -f "env.tier-$$tier.example" ]; then \
+				echo "→ Seeding env.tier-$$tier from example"; \
+				cp "env.tier-$$tier.example" "env.tier-$$tier"; \
+			else \
+				echo "⚠️  WARNING: env.tier-$$tier.example not found"; \
+				missing="$$missing env.tier-$$tier"; \
+			fi; \
+		fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo ""; \
+		echo "Some tier env files could not be seeded (no example found)."; \
+		echo "These will need to be created manually: $$missing"; \
+	fi
+
 # -------- Standard Makefile targets ----------
 .PHONY: all
 all: help ## Default target - show help
@@ -90,7 +111,7 @@ update-service-docs: ## Regenerate service update notes from git metadata
 
 # -------- Updates ----------
 .PHONY: update
-update: ensure-env-shared  ## Pull repo + images, recreate stack
+update: ensure-tier-envs ensure-env-shared  ## Pull repo + images, recreate stack
 	@git pull --rebase
 	@bash -lc '$(DC) pull --quiet'
 	@bash -lc '$(DC) up -d --pull $(PULL)'
@@ -586,7 +607,7 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 
 # -------- GPU profile ----------
 .PHONY: up up-gpu up-both-gateways
-up: check-tier-envs ensure-env-shared ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
+up: ensure-tier-envs check-tier-envs ensure-env-shared ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
 	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
