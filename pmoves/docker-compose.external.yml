@@ -51,7 +51,6 @@ services:
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
-    ports:
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
@@ -79,12 +78,10 @@ services:
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
-      pmoves_app:
-        aliases:
+      - pmoves_app
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
-    ports:
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
