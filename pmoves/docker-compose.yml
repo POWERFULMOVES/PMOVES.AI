@@ -881,6 +881,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for YouTube API access
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -894,6 +895,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for YouTube processing
   channel-monitor:
     <<: *id005
     build: ./services/channel-monitor
@@ -971,6 +973,7 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external  # Required for reranker API calls
   hi-rag-gateway-gpu:
     <<: *id002
     build:
@@ -1157,6 +1160,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for LLM provider APIs
   archon:
     <<: *id005
     build:
