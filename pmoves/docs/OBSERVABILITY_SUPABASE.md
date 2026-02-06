@@ -575,7 +575,7 @@ All PMOVES submodules are aligned to `PMOVES.AI-Edition-Hardened`:
 | PMOVES-DoX | PMOVES.AI-Edition-Hardened | Was on feat/v5-secrets-bootstrap |
 | PMOVES-ToKenism-Multi | PMOVES.AI-Edition-Hardened | Reset to origin |
 | PMOVES-supabase | PMOVES.AI-Edition-Hardened | Re-registered as gitlink |
-| PMOVES-Headscale | main | Hardened branch not yet created |
+| PMOVES-Headscale | PMOVES.AI-Edition-Hardened | Branch created 2026-02-06 |
 
 ## Related Documentation
 
