@@ -104,19 +104,30 @@ spec:
     - protocol: TCP
       port: 7700  # Meilisearch
   # Allow external API calls (LLM providers, etc.)
-  # NOTE: Uses ipBlock for actual external IPs (0.0.0.0/0) with private network exclusions
+  # HYBRID APPROACH: Explicit allow-list for external APIs
+  # Intra-cluster communication handled separately via namespaceSelector below
   - to:
     - ipBlock:
-        cidr: 0.0.0.0/0
-        except:
-          - 10.0.0.0/8     # RFC1918 - Private Class A
-          - 172.16.0.0/12  # RFC1918 - Private Class B
-          - 192.168.0.0/16 # RFC1918 - Private Class C
+        cidr: api.openai.com/32
     ports:
     - protocol: TCP
-      port: 443   # HTTPS
+      port: 443   # HTTPS only
+  - to:
+    - ipBlock:
+        cidr: api.anthropic.com/32
+    ports:
     - protocol: TCP
-      port: 80    # HTTP
+      port: 443
+  - to:
+    - ipBlock:
+        cidr: api.venice.ai/32
+    ports:
+    - protocol: TCP
+      port: 443
+  # Add more external APIs here as needed:
+  # - ipBlock: api.cohere.com/32
+  # - ipBlock: api.googleapis.com/32
+  # - ipBlock: github.com/32
   # Allow intra-cluster communication (for services within same namespace)
   - to:
     - namespaceSelector: {}
