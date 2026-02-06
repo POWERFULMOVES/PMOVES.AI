@@ -232,6 +232,9 @@ services:
     - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
     ports:
     - ${PRESIGN_PORT:-8088}:8080
+    depends_on:
+      minio:
+        condition: service_healthy
     profiles:
     - data
     - orchestration
@@ -326,7 +329,7 @@ services:
       extract-worker:
         condition: service_started
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
     - ${PDF_INGEST_PORT:-8092}:8092
     profiles:
@@ -397,6 +400,9 @@ services:
             - compute
             - utility
             count: ${GPU_COUNT:-all}
+    depends_on:
+      minio:
+        condition: service_healthy
     ports:
     - ${FFMPEG_WHISPER_PORT:-8078}:8078
     profiles:
@@ -424,6 +430,9 @@ services:
           - capabilities:
             - gpu
             count: ${GPU_COUNT:-all}
+    depends_on:
+      minio:
+        condition: service_healthy
     ports:
     - ${MEDIA_VIDEO_PORT:-8079}:8079
     profiles:
@@ -448,6 +457,9 @@ services:
           - capabilities:
             - gpu
             count: ${GPU_COUNT:-all}
+    depends_on:
+      minio:
+        condition: service_healthy
     ports:
     - ${MEDIA_AUDIO_PORT:-8082}:8082
     profiles:
@@ -492,7 +504,7 @@ services:
     - ./config:/app/config
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
     - ${PMOVES_YT_PORT:-8077}:8077
     networks:
@@ -504,7 +516,8 @@ services:
     environment:
     - PORT=4416
     depends_on:
-    - minio
+      minio:
+        condition: service_healthy
     profiles:
     - orchestration
     - yt
@@ -528,6 +541,8 @@ services:
     depends_on:
       pmoves-yt:
         condition: service_started
+      minio:
+        condition: service_healthy
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
     networks:
@@ -1041,8 +1056,8 @@ services:
       - CMD-SHELL
       - wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping
       start_period: 30s
-      interval: 5s
-      timeout: 2s
+      interval: 10s
+      timeout: 5s
       retries: 5
     networks:
     - pmoves_data
@@ -1092,6 +1107,14 @@ services:
     - ${TENSORZERO_UI_PORT:-4000}:4000
     profiles:
     - tensorzero
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --spider --tries 1 --timeout 5 http://localhost:4000/ || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
     - pmoves_app
     - pmoves_data
@@ -1352,7 +1375,7 @@ services:
       nats:
         condition: service_started
       minio:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - comfy-watcher-output:/data
       - comfy-watcher-state:/state

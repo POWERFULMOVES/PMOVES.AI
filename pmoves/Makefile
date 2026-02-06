@@ -602,7 +602,7 @@ up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 up-integrations: ## Start external integrations (n8n, TTS)
 	@echo "🔗 Starting external integrations..."
 	@if ! $(MAKE) up-n8n; then \
-		echo "❌ Failed to start n8n integration"; \
+		echo "⚠️ Failed to start n8n integration"; \
 		echo "   Check logs: make logs-n8n"; \
 		exit 1; \
 	fi
@@ -672,7 +672,7 @@ down-all: ## Stop ALL services in graceful reverse order
 .PHONY: down-integrations
 down-integrations: ## Stop external integrations
 	@echo "🔗 Stopping integrations..."
-	@-$(MAKE) down-n8n 2>/dev/null || true
+	@$(MAKE) down-n8n 2>/dev/null || echo "⚠️ n8n was not running or failed to stop"
 
 .PHONY: down-tensorzero
 down-tensorzero: ## Stop TensorZero gateway
@@ -692,8 +692,8 @@ down-workers: ## Stop worker services
 .PHONY: down-bus
 down-bus: ## Stop message bus
 	@echo "📨 Stopping NATS..."
-	@$(DC) stop nats || true
-	@$(DC) rm -f nats || true
+	@$(DC) stop nats || echo "⚠️ Failed to stop NATS"
+	@$(DC) rm -f nats || echo "⚠️ Failed to remove NATS container"
 
 .PHONY: down-data
 down-data: ## Stop data tier
@@ -745,7 +745,7 @@ status-all: ## Show health status of ALL services
 .PHONY: health-summary
 health-summary: ## Run quick health check on all services
 	@echo "🏥 Health Summary:"
-	@python3 tools/flight_check_retro.py
+	@python3 tools/flight_check_retro.py || { echo "❌ Health checks failed"; exit 1; }
 	@echo ""
 	@echo "📁 Full results saved to .validation/"
 
@@ -757,12 +757,12 @@ health-summary: ## Run quick health check on all services
 wait-obs: ## Wait for observability to be ready
 	@echo "⏳ Waiting for observability..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || { \
-		echo "❌ Prometheus not ready after 60s"; \
+		echo "❌ Prometheus not ready within 60s"; \
 		echo "   Check with: docker logs pmoves-prometheus"; \
 		exit 1; \
 	}
 	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || { \
-		echo "❌ Grafana not ready after 60s"; \
+		echo "❌ Grafana not ready within 60s"; \
 		echo "   Check with: docker logs pmoves-grafana"; \
 		exit 1; \
 	}
@@ -772,16 +772,16 @@ wait-obs: ## Wait for observability to be ready
 wait-data: ## Wait for data tier to be ready
 	@echo "⏳ Waiting for data tier..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:6333/ready; do sleep 2; done' || { \
-		echo "❌ Qdrant not ready after 60s"; exit 1; \
+		echo "❌ Qdrant not ready within 60s"; exit 1; \
 	}
 	@timeout 60 bash -c 'until curl -sf http://localhost:7474; do sleep 2; done' || { \
-		echo "❌ Neo4j not ready after 60s"; exit 1; \
+		echo "❌ Neo4j not ready within 60s"; exit 1; \
 	}
 	@timeout 60 bash -c 'until curl -sf http://localhost:7700/health; do sleep 2; done' || { \
-		echo "❌ Meilisearch not ready after 60s"; exit 1; \
+		echo "❌ Meilisearch not ready within 60s"; exit 1; \
 	}
 	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || { \
-		echo "❌ MinIO not ready after 60s"; exit 1; \
+		echo "❌ MinIO not ready within 60s"; exit 1; \
 	}
 	@echo "✅ Data tier ready"
 
@@ -789,10 +789,10 @@ wait-data: ## Wait for data tier to be ready
 wait-workers: ## Wait for workers to be ready
 	@echo "⏳ Waiting for workers..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:8083/healthz; do sleep 2; done' || { \
-		echo "❌ Extract worker not ready after 60s"; exit 1; \
+		echo "❌ Extract Worker not ready within 60s"; exit 1; \
 	}
 	@timeout 60 bash -c 'until curl -sf http://localhost:8084/healthz; do sleep 2; done' || { \
-		echo "❌ LangExtract not ready after 60s"; exit 1; \
+		echo "❌ LangExtract not ready within 60s"; exit 1; \
 	}
 	@echo "✅ Workers ready"
 
@@ -800,13 +800,13 @@ wait-workers: ## Wait for workers to be ready
 wait-agents: ## Wait for agents to be ready
 	@echo "⏳ Waiting for agents..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:8080/healthz; do sleep 2; done' || { \
-		echo "❌ Agent Zero not ready after 60s"; exit 1; \
+		echo "❌ Agent Zero not ready within 60s"; exit 1; \
 	}
 	@timeout 60 bash -c 'until curl -sf http://localhost:8091/healthz; do sleep 2; done' || { \
-		echo "❌ Archon not ready after 60s"; exit 1; \
+		echo "❌ Archon not ready within 60s"; exit 1; \
 	}
 	@timeout 60 bash -c 'until curl -sf http://localhost:8098/healthz; do sleep 2; done' || { \
-		echo "❌ DeepResearch not ready after 60s"; exit 1; \
+		echo "❌ DeepResearch not ready within 60s"; exit 1; \
 	}
 	@echo "✅ Agents ready"
 
@@ -849,8 +849,11 @@ gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmov
 	@mkdir -p pmoves/docs/logs
 	@STAMP=$$(date +%Y-%m-%d_%H-%M-%S); \
 	  echo "→ Strict GPU rerank smoke (this will fail if rerank not enabled/model missing)"; \
-	  (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1 || true; \
-	  echo "Wrote pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt"
+	  if (GPU_SMOKE_STRICT=true $(MAKE) smoke-gpu) > pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt 2>&1; then \
+	    echo "✅ GPU rerank smoke passed"; \
+	  else \
+	    echo "⚠️ GPU rerank smoke failed (see pmoves/docs/logs/$${STAMP}_gpu_rerank_smoke.txt)"; \
+	  fi
 
 .PHONY: evidence-auto
 evidence-auto: ## Capture basic evidence (yt-dlp, Loki, hi-rag v2 CPU/GPU, presign) into pmoves/PR_EVIDENCE
@@ -858,7 +861,7 @@ evidence-auto: ## Capture basic evidence (yt-dlp, Loki, hi-rag v2 CPU/GPU, presi
 
 .PHONY: preflight-retro
 preflight-retro: ## Retro-styled parallel readiness check (Rich UI)
-	@python3 tools/flight_check_retro.py || true
+	@python3 tools/flight_check_retro.py || { echo "❌ Preflight checks failed"; exit 1; }
 
 .PHONY: bringup-with-ui
 bringup-with-ui: ## One-shot: supabase, core, agents, externals, monitoring, UI (dev), then auto-capture evidence
@@ -867,39 +870,41 @@ bringup-with-ui: ## One-shot: supabase, core, agents, externals, monitoring, UI 
 .PHONY: verify-all
 verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + monitoring report + core/gpu smokes
 	@echo "→ Full verify starting (parallel readiness)"; \
-	  PARALLEL=1 WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) bringup-with-ui; \
-	  echo "→ Retro preflight"; \
-	  $(MAKE) preflight-retro; \
 	  failed=""; \
+	  PARALLEL=1 WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) bringup-with-ui || failed="$$failed bringup-with-ui"; \
+	  echo "→ Retro preflight"; \
+	  $(MAKE) preflight-retro || failed="$$failed preflight-retro"; \
 	  echo "→ Monitoring report"; \
 	  $(MAKE) monitoring-report || failed="$$failed monitoring-report"; \
 	  echo "→ TensorZero observability"; \
-	  $(MAKE) smoke-tensorzero-observability || failed="$$failed tensorzero-obs"; \
+	  $(MAKE) smoke-tensorzero-observability || failed="$$failed smoke-tensorzero-observability"; \
 	  echo "→ Creator pipeline"; \
-	  $(MAKE) smoke-creator-pipeline || failed="$$failed creator-pipeline"; \
+	  $(MAKE) smoke-creator-pipeline || failed="$$failed smoke-creator-pipeline"; \
 	  echo "→ yt-dlp catalog smoke"; \
-	  $(MAKE) yt-docs-catalog-smoke || failed="$$failed yt-docs-catalog"; \
+	  $(MAKE) yt-docs-catalog-smoke || failed="$$failed yt-docs-catalog-smoke"; \
 	  echo "→ Archon smoke"; \
 	  $(MAKE) archon-smoke || failed="$$failed archon-smoke"; \
 	  echo "→ Archon REST policy probe"; \
-	  $(MAKE) archon-rest-policy-smoke || failed="$$failed archon-rest-policy"; \
+	  $(MAKE) archon-rest-policy-smoke || failed="$$failed archon-rest-policy-smoke"; \
 	  echo "→ Core smoke"; \
-	  $(MAKE) smoke || failed="$$failed core-smoke"; \
+	  $(MAKE) smoke || failed="$$failed smoke"; \
 	  echo "→ GPU smoke (relaxed)"; \
-	  $(MAKE) smoke-gpu || failed="$$failed gpu-smoke"; \
+	  $(MAKE) smoke-gpu || failed="$$failed smoke-gpu"; \
 	  echo "→ Channel monitor smoke"; \
-	  $(MAKE) channel-monitor-smoke || failed="$$failed channel-monitor"; \
+	  $(MAKE) channel-monitor-smoke || failed="$$failed channel-monitor-smoke"; \
 	  echo "→ Agents headless smoke"; \
-	  $(MAKE) agents-headless-smoke || failed="$$failed agents-headless"; \
+	  $(MAKE) agents-headless-smoke || failed="$$failed agents-headless-smoke"; \
 	  echo "→ Archon MCP evidence"; \
-	  $(MAKE) archon-mcp-evidence || failed="$$failed archon-mcp"; \
+	  $(MAKE) archon-mcp-evidence || failed="$$failed archon-mcp-evidence"; \
 	  echo "→ Discord smoke"; \
 	  $(MAKE) discord-smoke || failed="$$failed discord-smoke"; \
 	  if [ -n "$$failed" ]; then \
-	    echo "❌ FAILED CHECKS:$$failed"; \
+	    echo "❌ Verify-all completed with failures:$$failed"; \
+	    echo "Review console + Grafana for details"; \
 	    exit 1; \
-	  fi; \
-	  echo "✔ Verify-all sequence executed successfully."
+	  else \
+	    echo "✔ Verify-all sequence executed successfully. Review console + Grafana."; \
+	  fi
 
 .PHONY: archon-mcp-evidence
 archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence under pmoves/docs/logs/
@@ -1047,7 +1052,7 @@ up: ensure-tier-envs check-tier-envs ensure-env-shared ## Start core data + work
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
 	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
-	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || echo "⚠️ GPU gateway not available (no GPU detected or CUDA missing)"
 	@echo "✔ Stack started (v2 on :$(HIRAG_CPU_PORT), v2-gpu on :$(HIRAG_GPU_PORT) when available)."
 
 up-gpu: ## Start with optional GPU accelerations where supported
@@ -1057,9 +1062,9 @@ up-gpu: ## Start with optional GPU accelerations where supported
 .PHONY: up-gpu-gateways
 up-gpu-gateways: ## Bring up GPU gateways (v2 @ :$(HIRAG_GPU_PORT), v1 @ :8090)
 	@echo "[data] Bringing up qdrant + neo4j (soft deps for v2)..."
-	@$(DC) --profile data up -d qdrant neo4j >/dev/null 2>&1 || true
-	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || true
-	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || true
+	@$(DC) --profile data up -d qdrant neo4j >/dev/null 2>&1 || echo "⚠️ Data tier services may already be running"
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || { echo "❌ Failed to start Hi-RAG v2 GPU gateway"; exit 1; }
+	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || echo "⚠️ Hi-RAG v1 GPU gateway not available (legacy)"
 	@echo "✔ GPU gateways requested (v2-gpu :$(HIRAG_GPU_PORT), v1-gpu :8090)."
 
 .PHONY: recreate-v2-gpu
@@ -1092,14 +1097,14 @@ down-open-notebook: ## Stop Open Notebook
 	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
-	@$(DC) --profile workers up -d hi-rag-gateway-v2 >/dev/null 2>&1 || true
-	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu >/dev/null 2>&1 || true
+	@$(DC) --profile workers up -d hi-rag-gateway-v2 || { echo "❌ Failed to start Hi-RAG v2 CPU gateway"; exit 1; }
+	@$(DC) --profile gpu up -d hi-rag-gateway-v2-gpu || echo "⚠️ GPU gateway not available (no GPU)"
 	@echo "✔ hi-rag-gateway-v2(:$(HIRAG_CPU_PORT)) and hi-rag-gateway-v2-gpu(:$(HIRAG_GPU_PORT)) ready."
 
 .PHONY: up-legacy-both
 up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
-	@$(DC) --profile legacy up -d hi-rag-gateway >/dev/null 2>&1 || true
-	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu >/dev/null 2>&1 || true
+	@$(DC) --profile legacy up -d hi-rag-gateway || echo "⚠️ Hi-RAG v1 CPU gateway may already be running"
+	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu || echo "⚠️ Hi-RAG v1 GPU gateway not available (no GPU)"
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
@@ -1195,10 +1200,10 @@ up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profi
 	  exit 1; \
 	fi; \
 	$(DC) --profile cloudflare up -d cloudflared
-	@$(MAKE) --no-print-directory cloudflare-url || true
+	@$(MAKE) --no-print-directory cloudflare-url || echo "⚠️ Could not retrieve Cloudflare URL"
 
 down-cloudflare: ## Stop the Cloudflare tunnel connector
-	@$(DC) --profile cloudflare stop cloudflared >/dev/null 2>&1 || true
+	@$(DC) --profile cloudflare stop cloudflared >/dev/null 2>&1 || echo "⚠️ Cloudflare tunnel was not running"
 	@echo "✔ Cloudflare tunnel stopped."
 
 restart-cloudflare: ## Restart the Cloudflare tunnel connector
@@ -1212,8 +1217,8 @@ cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector lo
 	@$(DC) logs --since 30m cloudflared 2>/dev/null | python3 -c 'import re, sys; urls=[m.group(0).rstrip("\"] ,;") for line in sys.stdin for m in re.finditer(r"https://[^\s\"]+", line)]; print(f"🌐 Tunnel URL: {urls[-1]}") if urls else print("↷ No tunnel URL detected in recent cloudflared logs (run make logs-cloudflare to inspect startup.)")'
 
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
-	docker network create cataclysm-net >/dev/null 2>&1 || true
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
+	docker network create cataclysm-net >/dev/null 2>&1 || echo "⚠️ Network cataclysm-net already exists"
+	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook || { echo "❌ Failed to start Open Notebook"; exit 1; }
 
 notebook-down: ## Stop the Open Notebook container and remove its resources
 	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) down
@@ -1269,7 +1274,7 @@ up-tensorzero-full:
 	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
 
 down-tensorzero-full:
-	@$(DC) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || true
+	@$(DC) --profile tensorzero stop tensorzero-clickhouse tensorzero-gateway tensorzero-ui >/dev/null 2>&1 || echo "⚠️ TensorZero stack was not running"
 	@echo "✔ TensorZero stack stopped."
 
 # -------- Monitoring stack (Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor) --------
@@ -1346,16 +1351,16 @@ brand-defaults: ensure-env-shared ## Apply branded defaults and create required 
 	@echo "→ Applying branded defaults to pmoves/env.shared"
 	@python3 tools/brand_defaults.py
 	@echo "→ Creating MinIO buckets (assets, outputs) if missing"
-	@docker compose -p $(PROJECT) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || true
+	@docker compose -p $(PROJECT) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || echo "⚠️ MinIO alias already set"; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || { echo "❌ Failed to create MinIO buckets"; exit 1; }
 	@echo "✔ Brand defaults applied"
 
 # ------- Neo4j helpers -------
 .PHONY: neo4j-reset neo4j-status
 neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
 	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
-	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) stop neo4j || true
-	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) rm -f neo4j || true
-	@docker volume rm $(PROJECT)_neo4j-data || true
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) stop neo4j || echo "⚠️ Neo4j was not running"
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) rm -f neo4j || echo "⚠️ Neo4j container already removed"
+	@docker volume rm $(PROJECT)_neo4j-data || { echo "❌ Failed to remove neo4j-data volume"; exit 1; }
 	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) up -d neo4j
 	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
 	@$(LOAD_ENV_SHARED) bash -c ' \
@@ -1364,11 +1369,11 @@ neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUT
 		echo "Testing auth ($$user/***) from env.tier-data..."; \
 		docker compose -p $(PROJECT) exec -T neo4j bash -lc \
 		  "/var/lib/neo4j/bin/cypher-shell -u \"$$user\" -p \"$$pass\" \"RETURN 1\""; \
-	'
+	' || { echo "❌ Neo4j authentication test failed"; exit 1; }
 
 neo4j-status: ## Show Neo4j logs and health line
-	@docker compose -p $(PROJECT) ps neo4j || true
-	@docker compose -p $(PROJECT) logs --tail 60 neo4j || true
+	@docker compose -p $(PROJECT) ps neo4j || echo "⚠️ Neo4j container not found"
+	@docker compose -p $(PROJECT) logs --tail 60 neo4j || echo "⚠️ No Neo4j logs available"
 
 brand-verify: ## Verify key branded endpoints respond
 	@echo "Presign:" && curl -fsS http://localhost:8088/healthz && echo
@@ -1394,10 +1399,12 @@ model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.loca
 	@python3 tools/models/models_sync.py swap --profile "$(PROFILE)" --host "$(HOST)" --service "$(SERVICE)" --name "$(NAME)"
 
 models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL examples)
-	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
-	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen3-embedding:4b"}' >/dev/null 2>&1 || true
-	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"embeddinggemma:300m"}' >/dev/null 2>&1 || true
-	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen2.5:14b-instruct-q4_K_M"}' >/dev/null 2>&1 || true
+	@echo "→ Starting Ollama sidecar..."
+	@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || { echo "⚠️ Ollama sidecar not available"; exit 0; }
+	@echo "→ Pulling models (this may take a while)..."
+	@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen3-embedding:4b"}' >/dev/null 2>&1 || echo "⚠️ Failed to pull qwen3-embedding:4b"
+	@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"embeddinggemma:300m"}' >/dev/null 2>&1 || echo "⚠️ Failed to pull embeddinggemma:300m"
+	@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen2.5:14b-instruct-q4_K_M"}' >/dev/null 2>&1 || echo "⚠️ Failed to pull qwen2.5:14b-instruct-q4_K_M"
 	@echo "✔ Seeded baseline Ollama models (if sidecar available)."
 
 # -------- Console (UI) dev helpers --------
@@ -1408,10 +1415,10 @@ ui-dev-start: ## Start the PMOVES console dev server on :3001 with env layering
 	  if [ ! -d node_modules ]; then echo "→ Installing UI dependencies (npm ci)"; npm ci; fi && \
 	  (logfile=.pmoves_ui_dev.log; nohup node scripts/with-env.mjs npm run dev:3001 > "$$logfile" 2>&1 & echo $$! > .pmoves_ui_dev.pid; \
 	  echo "✔ Console dev server starting (http://localhost:3001). PID: $$(cat .pmoves_ui_dev.pid)"; \
-	  sleep 1; tail -n 5 "$$logfile" || true)
+	  sleep 1; tail -n 5 "$$logfile" || echo "  (log file not yet available)")
 
 ui-dev-stop: ## Stop the console dev server started by ui-dev-start
-	@cd ui && bash -c 'kill "$$(cat .pmoves_ui_dev.pid 2>/dev/null)" >/dev/null 2>&1 || true; rm -f .pmoves_ui_dev.pid; echo "✔ Console dev server stopped."'
+	@cd ui && bash -c 'if [ -f .pmoves_ui_dev.pid ]; then kill "$$(cat .pmoves_ui_dev.pid)" >/dev/null 2>&1 || echo "⚠️ Process already terminated"; rm -f .pmoves_ui_dev.pid; echo "✔ Console dev server stopped."; else echo "⚠️ No PID file found"; fi'
 
 ui-dev-logs: ## Tail the console dev server logs
 	@cd ui && [ -f .pmoves_ui_dev.log ] && tail -f .pmoves_ui_dev.log || echo "No UI dev log found. Run 'make -C pmoves ui-dev-start' first."
@@ -1432,13 +1439,17 @@ voice-speaker-start: ## Start local voice speaker API (plays audio on this machi
 	  if curl -fsS "http://127.0.0.1:$${VOICE_SPEAKER_PORT:-8120}/healthz" >/dev/null 2>&1; then break; fi; \
 	  sleep 0.2; \
 	done; \
-	tail -n 10 "$$logfile" || true
+	tail -n 10 "$$logfile" || echo "  (log file not yet available)"
 
 voice-speaker-stop: ## Stop local voice speaker API started by voice-speaker-start
 	@pidfile=.pmoves_voice_speaker.pid; \
-	kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || true; \
-	rm -f "$$pidfile"; \
-	echo "✔ voice-speaker stopped."
+	if [ -f "$$pidfile" ]; then \
+	  kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || echo "⚠️ Process already terminated"; \
+	  rm -f "$$pidfile"; \
+	  echo "✔ voice-speaker stopped."; \
+	else \
+	  echo "⚠️ No PID file found"; \
+	fi
 
 voice-speaker-logs: ## Tail voice speaker logs
 	@[ -f .pmoves_voice_speaker.log ] && tail -f .pmoves_voice_speaker.log || echo "No voice-speaker log found. Run 'make -C pmoves voice-speaker-start' first."
@@ -1464,13 +1475,17 @@ voice-follow-start: ## Start host-run daemon: speak NATS agent/voice responses v
 	fi; \
 	nohup bash -lc '. ./scripts/with-env.sh; export VOICE_FOLLOW_NATS_URL=$${VOICE_FOLLOW_NATS_URL:-nats://127.0.0.1:4222}; exec python3 tools/voice_follow_agent.py' > "$$logfile" 2>&1 & echo $$! > "$$pidfile"; \
 	echo "✔ voice-follow starting (PID $$(cat "$$pidfile")). Requires voice-speaker running."; \
-	sleep 0.3; tail -n 8 "$$logfile" || true
+	sleep 0.3; tail -n 8 "$$logfile" || echo "  (log file not yet available)"
 
 voice-follow-stop: ## Stop voice-follow daemon
 	@pidfile=.pmoves_voice_follow.pid; \
-	kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || true; \
-	rm -f "$$pidfile"; \
-	echo "✔ voice-follow stopped."
+	if [ -f "$$pidfile" ]; then \
+	  kill "$$(cat "$$pidfile" 2>/dev/null)" >/dev/null 2>&1 || echo "⚠️ Process already terminated"; \
+	  rm -f "$$pidfile"; \
+	  echo "✔ voice-follow stopped."; \
+	else \
+	  echo "⚠️ No PID file found"; \
+	fi
 
 voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
@@ -1549,8 +1564,8 @@ ui-single-user: ## Toggle SINGLE_USER_MODE for the console (MODE=1|0) and restar
 	upd env.shared SINGLE_USER_MODE $$MODE; \
 	upd env.shared NEXT_PUBLIC_SINGLE_USER_MODE $$MODE; \
 	echo "✔ SINGLE_USER_MODE=$$MODE written to pmoves/env.shared"; \
-	$(MAKE) ui-dev-stop >/dev/null 2>&1 || true; \
-	$(MAKE) ui-dev-start
+	$(MAKE) ui-dev-stop >/dev/null 2>&1 || echo "⚠️ UI dev server was not running"; \
+	$(MAKE) ui-dev-start || { echo "❌ Failed to restart UI dev server"; exit 1; }
 
 ui-single-user-on:
 	@$(MAKE) ui-single-user MODE=1
@@ -1565,7 +1580,7 @@ ui-ingest-smoke: ## Exercise boot-jwt status and ingest smoke via API health end
 	BASE=$${NEXT_PUBLIC_BASE_URL:-http://localhost:3001}; \
 	SECRET=$${SMOKE_SHARED_SECRET:-$${PMOVES_SMOKE_SHARED_SECRET}}; \
 	echo "→ Boot JWT health:"; \
-	curl -fsS "$$BASE/api/health/boot-jwt" | jq . || true; \
+	curl -fsS "$$BASE/api/health/boot-jwt" | jq . || { echo "❌ Boot JWT health check failed"; exit 1; }; \
 	echo "→ Ingest smoke:"; \
 	AUTH=""; if [ -n "$$SECRET" ]; then AUTH="-H 'Authorization: Bearer $$SECRET'"; fi; \
 	bash -c "curl -fsS $$AUTH -X POST '$$BASE/api/health/ingest-smoke' -H 'content-type: application/json'" | jq . || true
@@ -1582,12 +1597,12 @@ ui-videos-realtime-clean: ## Delete smoke rows inserted by ui-videos-realtime-sm
 
 .PHONY: ui-playwright-setup
 ui-playwright-setup: ## Install Playwright browsers/deps for E2E tests
-	@cd ui && npx --yes playwright install --with-deps || true
+	@cd ui && npx --yes playwright install --with-deps || { echo "❌ Failed to install Playwright browsers"; exit 1; }
 
 .PHONY: ui-videos-realtime-e2e
 ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts UI shows it
-	@$(MAKE) ui-dev-start >/dev/null 2>&1 || true
-	@cd ui && node scripts/with-env.mjs npm run test:e2e -- -g "Videos Realtime"
+	@$(MAKE) ui-dev-start >/dev/null 2>&1 || echo "⚠️ UI dev server may already be running"
+	@cd ui && node scripts/with-env.mjs npm run test:e2e -- -g "Videos Realtime" || { echo "❌ E2E tests failed"; exit 1; }
 
 # Jellyfin bridge only
 up-jellyfin:
@@ -1803,8 +1818,8 @@ agents-integrations-clone: ## Clone your forks into $(INTEGRATIONS_WORKSPACE)
 		else echo "↷ PMOVES-Archon already exists"; fi
 
 agents-integrations-pull: ## Pull latest from your forks
-	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Agent-Zero" && git fetch --all && git pull --rebase || true
-	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || true
+	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Agent-Zero" && git fetch --all && git pull --rebase || { echo "⚠️ Failed to pull PMOVES-Agent-Zero"; exit 1; }
+	@cd "$(INTEGRATIONS_WORKSPACE)/PMOVES-Archon" && git fetch --all && git pull --rebase || { echo "⚠️ Failed to pull PMOVES-Archon"; exit 1; }
 
 build-agents-integrations: ## Build agent images from your forks
 	@$(DC) -f docker-compose.agents.integrations.yml --profile agents build agent-zero archon archon-ui
@@ -1894,7 +1909,7 @@ up-vibevoice: ## Start VibeVoice realtime (binds host :3000; pulls model weights
 
 .PHONY: stop-vibevoice
 stop-vibevoice: ## Stop VibeVoice realtime container (keeps model volume)
-	@$(DC) stop vibevoice >/dev/null 2>&1 || true
+	@$(DC) stop vibevoice >/dev/null 2>&1 || echo "⚠️ VibeVoice was not running"
 	@echo "✔ VibeVoice stopped"
 
 .PHONY: vibevoice-smoke
