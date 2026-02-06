@@ -26,7 +26,7 @@ on:
         default: false
         type: boolean
   push:
-    branches: [main]
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       # Rebuild images when submodules are updated
       - 'PMOVES-Open-Notebook'
@@ -191,7 +191,7 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout (stub)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Clone integration repo
         run: |
@@ -287,7 +287,7 @@ jobs:
 
       - name: Install Syft (SBOM)
         if: ${{ matrix.generate_sbom }}
-        uses: anchore/sbom-action/download-syft@v0.21.0
+        uses: anchore/sbom-action/download-syft@v0.21.1
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom

@@ -11,6 +11,7 @@ supa.md
 !.env.*.example
 !.env.local.example
 !env.shared.example
+!env.shared.defaults
 *.log
 .last_logs.txt
 

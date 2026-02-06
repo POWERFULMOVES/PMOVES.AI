@@ -2,7 +2,7 @@ name: Python Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/__init__.py'
       - 'pmoves/services/**/*.py'
@@ -12,7 +12,7 @@ on:
       - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   pull_request:
-    branches: [main]
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/__init__.py'
       - 'pmoves/services/**/*.py'
@@ -47,7 +47,7 @@ jobs:
             pypi.org:443
             files.pythonhosted.org:443
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
         with:
@@ -59,7 +59,7 @@ jobs:
           docker-images: false
           swap-storage: false
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'

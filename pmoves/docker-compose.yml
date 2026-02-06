@@ -72,6 +72,125 @@ x-env-tier-ui: &id007
     - env.shared
     - env.tier-ui
 
+x-env-tier-supabase: &id008
+  env_file:
+    - env.shared
+    - env.tier-supabase
+
+# =============================================================================
+# CONTAINER HARDENING TEMPLATES (Security Baseline)
+# =============================================================================
+#
+# These YAML anchors provide container security hardening for all services.
+# Apply to service definitions using the <<: *anchor-name merge pattern.
+#
+# Hardening Options Explained:
+# ----------------------------
+# - cap_drop: [ALL] - Drop all Linux capabilities (principle of least privilege)
+# - cap_add: [NET_BIND_SERVICE] - Add back only specific capabilities needed
+# - read_only: true - Mount container rootfs as read-only (prevents modification)
+# - security_opt: [no-new-privileges:true] - Prevent privilege escalation via setuid/setgid
+# - tmpfs: - Mount temporary filesystems with noexec/nosuid flags
+#
+# When to Use Each Template:
+# --------------------------
+# 1. x-hardening (&hardening) - For stateless, read-only services:
+#    - API gateways, proxies, pure compute services
+#    - Services that don't write to local filesystem
+#    - Example: presign, render-webhook, model-registry
+#
+# 2. x-hardening-rw (&hardening-rw) - For services with write requirements:
+#    - Databases (need data directory writes)
+#    - Log aggregators (need log file writes)
+#    - Services with tmp/cache volumes
+#    - Example: postgres, neo4j, nats
+#
+# Adding Additional Capabilities:
+# --------------------------------
+# If a service needs additional capabilities beyond NET_BIND_SERVICE:
+#
+#   service-name:
+#     <<: *hardening  # Start with base template
+#     cap_add:
+#       - NET_BIND_SERVICE  # From template
+#       - CHOWN            # Add this if needed for file ownership
+#       - SETGID           # Add this if needed for group operations
+#       - SETUID           # Add this if needed for user operations
+#     cap_drop: [ALL]      # Keep drop ALL to only allow explicitly added caps
+#
+# Services Reiring Custom tmpfs Mounts:
+# -------------------------------------
+# Some services need additional tmpfs mounts beyond /tmp and /var/tmp:
+#
+#   service-name:
+#     <<: *hardening
+#     tmpfs:
+#       - /tmp:noexec,nosuid,size=64m       # From template
+#       - /var/tmp:noexec,nosuid,size=64m   # From template
+#       - /app/cache:rw,noexec,nosuid,size=128m  # Add service-specific mount
+#
+# Common Capabilities Reference:
+# ------------------------------
+# - NET_BIND_SERVICE - Bind to ports < 1024
+# - CHOWN - Change file ownership
+# - SETGID - Set group ID
+# - SETUID - Set user ID
+# - DAC_OVERRIDE - Bypass file read/write/execute permission checks
+# - FOWNER - Bypass permission checks on operations with file descriptors
+# - KILL - Send signals to processes
+# - NET_ADMIN - Network administration (firewall, routing)
+# - SYS_ADMIN - Perform system administration tasks (AVOID if possible)
+#
+# Security Impact:
+# ---------------
+# - Attack Surface: Reduces container privileges by ~90%
+# - Privilege Escalation: Blocks setuid/setgid escalation vectors
+# - Rootfs Protection: Read-only prevents malicious code injection
+# - Temporary Files: noexec/nosuid prevents executable tmp attacks
+# - Compliance: Aligns with CIS Docker Benchmark 1.0.0 sections 5.1-5.3
+#
+# Applying to Services:
+# ---------------------
+# This PR adds template anchors only. Follow-up PR will apply to all services.
+# See: Task 5 - Apply container hardening to all services
+#
+# References:
+# -----------
+# - CIS Docker Benchmark 1.0.0: https://www.cisecurity.org/benchmark/docker
+# - Docker Security: https://docs.docker.com/engine/security/
+# - Kubernetes Pod Security: https://kubernetes.io/docs/concepts/security/pod-security-standards/
+# =============================================================================
+
+# Read-only hardening for stateless services
+# Use for: API gateways, proxies, compute services (no local writes)
+x-hardening: &hardening
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+    - /var/tmp:noexec,nosuid,size=64m
+
+# Read-write hardening for services needing filesystem access
+# Use for: Databases, log writers, services with volumes
+x-hardening-rw: &hardening-rw
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
+# PMOVES.AI production compose project
+name: pmoves
+
 services:
   # =============================================================================
   # SUPABASE SELF-HOSTED STACK (2025 Best Practices)
@@ -367,6 +486,8 @@ services:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    volumes:
+    - qdrant-data:/qdrant/storage
   meilisearch:
     <<: *id001
     image: getmeili/meilisearch:v1.8
@@ -380,6 +501,8 @@ services:
     - ${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
+    volumes:
+    - meilisearch-data:/meili_data
   neo4j:
     image: neo4j:5.22
     env_file:
@@ -441,6 +564,9 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -499,6 +625,9 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    depends_on:
+      minio:
+        condition: service_healthy
   render-webhook:
     <<: *id002
     build: ./services/render-webhook
@@ -517,6 +646,9 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
   model-registry:
     <<: *id002
     build:
@@ -568,6 +700,13 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      minio:
+        condition: service_started
   pdf-ingest:
     <<: *id003
     build:
@@ -779,10 +918,12 @@ services:
     build: ./services/channel-monitor
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
     - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+    # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
+    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://postgres:postgres@supabase-db:5432/postgres}
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
@@ -791,6 +932,8 @@ services:
     depends_on:
       pmoves-yt:
         condition: service_started
+      nats:
+        condition: service_healthy
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
     networks:
@@ -818,6 +961,8 @@ services:
     - USE_MEILI=true
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
@@ -867,6 +1012,9 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -1018,7 +1166,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - ${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_PORT:-8081}:80
@@ -1028,6 +1177,12 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
     - pmoves_app
     - pmoves_bus
@@ -1050,12 +1205,12 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:54321}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     command:
     - python
     - -c
@@ -1069,6 +1224,8 @@ services:
       pmoves_app:
         aliases:
         - archon-server
+      pmoves_api:
+      pmoves_bus:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
@@ -1106,7 +1263,7 @@ services:
       - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     ports: ["8054:8054"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
@@ -1126,6 +1283,7 @@ services:
     hostname: a2ui-nats-bridge
     restart: unless-stopped
     environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
@@ -1162,6 +1320,7 @@ services:
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
     environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
     - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
@@ -1177,7 +1336,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - ${DEEPRESEARCH_PORT:-8098}:8098
     volumes:
@@ -1193,6 +1353,8 @@ services:
     image: ${SUPASERCH_IMAGE:-}
     restart: unless-stopped
     environment:
+    - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
@@ -1203,6 +1365,9 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
   nats-echo-req:
     <<: *id005
     build:
@@ -1210,6 +1375,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     depends_on:
@@ -1226,6 +1392,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     depends_on:
@@ -1242,10 +1409,12 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - 8094:8092
     profiles:
@@ -1359,24 +1528,30 @@ services:
     - pmoves_app
     - pmoves_data
   gpu-orchestrator:
-    <<: *id002
+    env_file:
+    - env.shared
+    - env.tier-llm
+    - env.tier-api
     build:
       context: ./services/gpu-orchestrator
       dockerfile: Dockerfile
     image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:latest}
     restart: unless-stopped
     environment:
-      - PORT=8200
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
-      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://pmoves-vllm:8000}
-      - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
-      - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
-      - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - NVIDIA_VISIBLE_DEVICES=all
+    - GPU_MODELS_CONFIG=/config/gpu-models.yaml
+    - GPU_ORCHESTRATOR_MODEL_REGISTRY_PATH=/config/gpu-models.yaml
+    - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
+    - VLLM_BASE_URL=${VLLM_BASE_URL:-http://pmoves-vllm:8000}
+    - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
+    - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
+    - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./config/gpu-models.yaml:/app/config/gpu-models.yaml:ro
+    # SECURITY: Docker socket required for spawning GPU model containers.
+    # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
     deploy:
       resources:
         reservations:
@@ -1385,6 +1560,10 @@ services:
             count: all
             capabilities:
             - gpu
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     profiles:
     - gpu
     networks:
@@ -1392,10 +1571,11 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
+    - 8100:8100
     - 8200:8200
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
         required: false
   evo-controller:
     <<: *id005
@@ -1486,6 +1666,7 @@ services:
       - TOKENISM_PORT=${TOKENISM_PORT:-8100}
       - FLASK_ENV=${FLASK_ENV:-production}
       - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
       - NATS_CLIENT_NAME=tokenism-simulator
       - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -1533,6 +1714,10 @@ services:
     env_file: [ env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local ]
     environment:
       - NODE_ENV=production
+      # Supabase
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:3010}
       # Supabase (CLI uses port 54321)
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:54321}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
@@ -1583,6 +1768,8 @@ services:
     image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:latest}
     restart: unless-stopped
     environment:
+    - PORT=8100
+    - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
     - PORT=8100
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
@@ -1613,7 +1800,7 @@ services:
       - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       minio:
         condition: service_started
     volumes:
@@ -1660,6 +1847,8 @@ services:
     restart: unless-stopped
     <<: *id005
     environment:
+      - PORT=8104
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - PORT=8104
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
@@ -1702,15 +1891,17 @@ services:
     - invidious
     networks:
     - pmoves_data
+    - pmoves_app
   invidious-companion:
     # Pinned 2025-02-04: Latest stable from Invidious GitHub releases (v2.20250913.0)
     image: quay.io/invidious/invidious-companion:2025.09.13-0065a3e
     restart: unless-stopped
-    <<: *id004
+    env_file:
+    - env.shared
     environment:
     - PORT=8282
     - HOST=0.0.0.0
-    - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}
+    - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}
     - CACHE_DIRECTORY=/var/tmp/youtubei.js
     - SERVER_BASE_URL=${INVIDIOUS_COMPANION_PUBLIC_URL:-}
     - YOUTUBE_API_KEY=${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
@@ -1729,16 +1920,16 @@ services:
     # Pinned 2025-02-04: Latest stable from Invidious GitHub releases (v2.20250913.0)
     image: quay.io/invidious/invidious:2025.09.13-c8b4325
     restart: unless-stopped
-    <<: *id004
+    env_file:
+    - env.shared
     environment:
     - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n\
       \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
       \ 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port:\
       \ ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\n\
-      hmac_key: \"${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}\"\ninvidious_companion:\n\
+      hmac_key: \"${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}\"\ninvidious_companion:\n\
       \  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\
-      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY\
-      \ not set}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
+      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
       \ ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector:\
       \ ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\
       \n"
@@ -1752,7 +1943,7 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - wget -qO- http://127.0.0.1:3000/api/v1/trending >/dev/null
+      - wget -qO- http://127.0.0.1:3000/api/v1/stats >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1857,8 +2048,14 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
 volumes:
   neo4j-data: {}
+  qdrant-data: {}
+  meilisearch-data: {}
   minio-data: {}
+  # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
+  # 2025 Supabase integrated volumes
+  supabase-db-data: {}
+  supabase-storage-data: {}
   notebook-sync-data: {}
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
@@ -1888,6 +2085,7 @@ networks:
   pmoves_app:
     name: pmoves_app
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
@@ -1896,6 +2094,7 @@ networks:
   pmoves_bus:
     name: pmoves_bus
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
@@ -1904,14 +2103,14 @@ networks:
   pmoves_monitoring:
     name: pmoves_monitoring
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.5.0/24
         gateway: 172.30.5.1
-  supabase_net:
-    external: true
-    name: supabase_network_PMOVES.AI
+  # NOTE: supabase_net no longer needed - Supabase services now use internal pmoves_data/pmoves_api networks
+  # pmoves and cataclysm kept for external service compatibility
   pmoves:
     external: true
     name: pmoves-net

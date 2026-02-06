@@ -2,7 +2,7 @@ name: Self-Hosted Builds
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, PMOVES.AI-Edition-Hardened]
     paths:
       - 'services/**'
       - 'pmoves/**'

@@ -12,9 +12,14 @@
 #   ./sync-upstream-forks.sh --dry-run               # Show what would be done
 #
 # Known Forks:
+#   - PMOVES-A2UI (upstream: google/A2UI)
+#   - PMOVES-n8n (upstream: n8n-io/n8n)
+#   - Pmoves-Health-wger (upstream: wger-project/wger)
 #   - PMOVES-Wealth (upstream: firefly-iii/firefly-iii)
 #   - PMOVES-AgentGym (upstream: WooooDyy/AgentGym)
 #   - PMOVES-Open-Notebook (upstream: lfnovo/open-notebook)
+#   - PMOVES-Pipecat (upstream: pipecat-ai/pipecat)
+#   - PMOVES-tensorzero (upstream: tensorzero/tensorzero)
 
 set -euo pipefail
 
@@ -33,9 +38,14 @@ NC='\033[0m' # No Color
 
 # Known forks configuration
 declare -A FORKS=(
+    ["PMOVES-A2UI"]="google/A2UI"
+    ["PMOVES-n8n"]="n8n-io/n8n"
+    ["Pmoves-Health-wger"]="wger-project/wger"
     ["PMOVES-Wealth"]="firefly-iii/firefly-iii"
     ["PMOVES-AgentGym"]="WooooDyy/AgentGym"
     ["PMOVES-Open-Notebook"]="lfnovo/open-notebook"
+    ["PMOVES-Pipecat"]="pipecat-ai/pipecat"
+    ["PMOVES-tensorzero"]="tensorzero/tensorzero"
 )
 
 # Logging functions

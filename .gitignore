@@ -1,4 +1,9 @@
 # Root ignores
+# === DAMAGE CONTROL ===
+# CRITICAL: CATACLYSM_STUDIOS_INC contains vital business documents
+# NEVER add this folder to .gitignore - it must always be tracked
+# If this folder is accidentally deleted, restore from: git checkout origin/PMOVES.AI-Edition-Hardened -- CATACLYSM_STUDIOS_INC/
+# === END DAMAGE CONTROL ===
 # Python virtual environments
 .venv/
 venv/
@@ -45,13 +50,9 @@ tmp/*.mp3
 # Tracked examples like pmoves/.env.example should remain in the repo
 /pmoves/.env
 /pmoves/.env.local
-/pmoves/.env.shared
 /pmoves/.env.testkeys
 # Tier environment files (containing actual keys - gitignored)
 /pmoves/env.tier-*
-# CHIT CGP files (may contain cleartext secrets)
-/pmoves/pmoves/data/chit/*.json
-/pmoves/data/chit/*.cgp
 # But keep example files tracked
 !/pmoves/env.tier-*.example
 /pmoves/.env.precleanup-*
@@ -124,4 +125,3 @@ pmoves/PR_BODY_*.md
 
 # Vendor unpacked packages (install via requirements.txt instead)
 pmoves/vendor/python/
-.github/runners/

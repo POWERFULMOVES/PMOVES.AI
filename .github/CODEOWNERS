@@ -2,26 +2,47 @@
 #
 # These owners will be requested for review when someone opens a pull request
 # affecting these paths.
+#
+# === CRITICAL BUSINESS ASSETS ===
+# CATACLYSM_STUDIOS_INC contains vital business documents
+# Any changes require admin approval
+/CATACLYSM_STUDIOS_INC/ @powerfulmoves
 
-# Security-critical paths require approval from @powerfulmoves
+# === SECURITY-CRITICAL PATHS ===
+# Infrastructure changes affect deployment and security
 /pmoves/services/*/Dockerfile @powerfulmoves
 /pmoves/docker-compose*.yml @powerfulmoves
 /pmoves/env.shared @powerfulmoves
 /deploy/k8s/ @powerfulmoves
+
+# CI/CD workflows - affects all PRs and deployments
 /.github/workflows/ @powerfulmoves
 
-# TensorZero configuration (LLM gateway and observability)
+# LLM gateway and observability (TensorZero)
 /pmoves/tensorzero/config/ @powerfulmoves
 
 # Monitoring and observability configuration
 /pmoves/monitoring/ @powerfulmoves
 
-# Documentation
-/docs/ @powerfulmoves @claudedev
+# === SECURITY POLICIES ===
+# Security documentation and authentication modules
+**/SECURITY.md @powerfulmoves
+**/jwt.py @powerfulmoves
+**/auth/** @powerfulmoves
 
-# Git configuration files
+# === GIT CONFIGURATION ===
+# Core git configuration affects repository behavior
 .gitignore @powerfulmoves
 .gitmodules @powerfulmoves
 
-# GitHub configuration
+# === YAML CONFIGURATION ===
+# All infrastructure-as-code files
+*.yml @powerfulmoves
+*.yaml @powerfulmoves
+
+# === DOCUMENTATION ===
+/docs/ @powerfulmoves @claudedev
+
+# === GITHUB CONFIGURATION ===
+# GitHub settings, including this file
 /.github/ @powerfulmoves

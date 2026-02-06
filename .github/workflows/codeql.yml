@@ -13,30 +13,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "main", "feat/**", "fix/**" ]
-    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
-      - '**/data/**'
-      - 'pmoves/data/**'
+    branches: [main, PMOVES.AI-Edition-Hardened]
   pull_request:
-    branches: [ "main" ]
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
-      - '**/data/**'
-      - 'pmoves/data/**'
+    branches: [main, PMOVES.AI-Edition-Hardened]
   schedule:
     - cron: '16 20 * * 5'
 
@@ -52,6 +31,15 @@ jobs:
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
     continue-on-error: ${{ matrix.language == 'c-cpp' }}
+    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
+    paths-ignore:
+      - 'integrations-workspace/**'
+      - '**/.venv/**'
+      - '**/venv/**'
+      - '**/vendor/**'
+      - '**/node_modules/**'
+      - '**/site-packages/**'
+      - '**/.eggs/**'
     permissions:
       # required for all workflows
       security-events: write
@@ -69,10 +57,8 @@ jobs:
         include:
         - language: actions
           build-mode: none
-        # PMOVES.AI has no C/C++ code in main repo (only in submodules)
-        # Skip C/CPP analysis to avoid auto-build failures
-        # - language: c-cpp
-        #   build-mode: autobuild
+        - language: c-cpp
+          build-mode: autobuild
         - language: javascript-typescript
           build-mode: none
         - language: python
