@@ -104,9 +104,23 @@ spec:
     - protocol: TCP
       port: 7700  # Meilisearch
   # Allow external API calls (LLM providers, etc.)
+  # NOTE: Uses ipBlock for actual external IPs (0.0.0.0/0) with private network exclusions
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          - 10.0.0.0/8     # RFC1918 - Private Class A
+          - 172.16.0.0/12  # RFC1918 - Private Class B
+          - 192.168.0.0/16 # RFC1918 - Private Class C
+    ports:
+    - protocol: TCP
+      port: 443   # HTTPS
+    - protocol: TCP
+      port: 80    # HTTP
+  # Allow intra-cluster communication (for services within same namespace)
   - to:
     - namespaceSelector: {}
-    podSelector: {}
+      podSelector: {}
     ports:
     - protocol: TCP
       port: 443   # HTTPS
