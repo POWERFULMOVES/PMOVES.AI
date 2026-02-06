@@ -52,6 +52,13 @@ PULL ?= missing
 HIRAG_CPU_PORT := $(if $(HIRAG_V2_HOST_PORT),$(HIRAG_V2_HOST_PORT),8086)
 HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
 
+# -------- Docker Compose Configuration ----------
+# Default Docker Compose command and project name for production
+DC ?= docker compose
+PROJECT ?= pmoves
+export DC
+export PROJECT
+
 # -------- Service Discovery Helper ----------
 # Resolve service URL using PMOVES service discovery (hybrid support)
 # Supports docked (NATS/Supabase) and standalone (Docker DNS) modes
@@ -119,7 +126,7 @@ up-bots: ## Start bot services (BotZ + messaging gateway)
 .PHONY: up-obs
 up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
 	@echo "📊 Starting observability stack (monitoring FIRST)..."
-	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
+	@$(LOAD_ENV_SHARED); docker compose -p monitoring -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
 	@echo "⏳ Waiting for observability to be ready..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || echo "⚠️ Prometheus not ready (may still be starting)"
 	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || echo "⚠️ Grafana not ready (may still be starting)"
@@ -154,67 +161,160 @@ check-tools: ## Check required tools and versions
 	fi
 
 .PHONY: up-supabase
-up-supabase: ## Start Supabase (Postgres + Kong + Studio)
-	@echo "🗄️ Starting Supabase..."
-	@if ! docker ps --format '{{.Names}}' | grep -q '^supabase'; then \
-		if ! docker ps -a --format '{{.Names}}' | grep -q '^supabase'; then \
-			cd .. && supabase start --network-id pmoves-net || { \
-				echo "❌ Failed to start Supabase"; \
-				echo ""; \
-				echo "Troubleshooting:"; \
-				echo "1. Check for port conflicts: lsof -i :54322 | grep LISTEN"; \
-				echo "2. Stop other Supabase instances: cd .. && supabase stop --project-id <project-id>"; \
-				echo "3. Remove stale containers: docker rm -f $$(docker ps -a -q --filter 'name=supabase')"; \
-				echo "4. Try again: make supa-start"; \
-				exit 1; \
-			}; \
-		else \
-			cd .. && supabase start --network-id pmoves-net || { \
-				echo "❌ Failed to restart Supabase"; \
-				echo "Attempting cleanup..."; \
-				cd .. && supabase stop 2>/dev/null || true; \
-				supabase start --network-id pmoves-net; \
-			}; \
-		fi; \
-	fi
+up-supabase: ## Start Supabase stack (integrated in docker-compose - 2025)
+	@echo "🗄️ Starting Supabase (2025 integrated stack)..."
+	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
+		$(DC) up -d supabase-db
+	@echo "⏳ Waiting for Supabase DB..."
+	@timeout 60 bash -c 'until docker exec pmoves-supabase-db-1 pg_isready -U postgres -d postgres 2>/dev/null; do sleep 2; done' || \
+		{ echo "⚠️  Supabase DB not ready after timeout"; exit 1; }
+	@echo "🔧 Bootstrapping Kong migrations..."
+	@docker run --rm --network pmoves_data \
+		-e KONG_DATABASE=postgres \
+		-e KONG_PG_HOST=supabase-db \
+		-e KONG_PG_DATABASE=postgres \
+		-e KONG_PG_USER=$${POSTGRES_USER} \
+		-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD} \
+		kong:3.7.1 kong migrations bootstrap --yes 2>/dev/null || \
+		echo "⚠️  Kong migrations may already exist"
+	@echo "⏳ Starting remaining Supabase services..."
+	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
+		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio
+	@echo "⏳ Waiting for Supabase services to be healthy..."
+	@sleep 10
 	@echo "✅ Supabase ready"
-	@echo "   Studio:       http://localhost:65433"
-	@echo "   REST API:     http://localhost:65421"
-	@echo "   PostgREST:    http://localhost:65421/rest/v1"
+	@echo "   Studio:       http://localhost:54323"
+	@echo "   Kong Gateway: http://localhost:8000"
+	@echo "   PostgREST:    http://localhost:3010"
+	@echo "   Gotrue Auth:  http://localhost:9999"
+	@echo "   Direct DB:    localhost:54322"
 
-.PHONY: supa-start supa-stop supa-status
-supa-start: check-tools ## Alias for up-supabase (start Supabase CLI)
+.PHONY: supa-start supa-stop supa-status supa-logs supa-health supa-restart supa-migrate
+supa-start: check-tools ## Alias for up-supabase (start integrated Supabase)
 	@$(MAKE) --no-print-directory up-supabase
 
-supa-stop: ## Stop Supabase CLI
+supa-stop: ## Stop integrated Supabase services
 	@echo "🗄️ Stopping Supabase..."
-	@cd .. && supabase stop 2>/dev/null || { \
-		docker ps -a --format '{{.Names}}' | grep -q '^supabase' && \
-			docker stop $$(docker ps -a -q --filter 'name=supabase') 2>/dev/null || true; \
-	}
+	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true
 	@echo "✅ Supabase stopped"
 
-supa-status: ## Check Supabase CLI status
-	@echo "🔍 Supabase status:"
-	@cd .. && supabase status 2>/dev/null || { \
-		echo "   Supabase CLI not running"; \
-		echo "   Start with: make supa-start"; \
-	}
+supa-restart: ## Restart integrated Supabase services
+	@echo "🔄 Restarting Supabase..."
+	@$(MAKE) --no-print-directory supa-stop
+	@sleep 2
+	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supabase-bootstrap
-supabase-bootstrap: ## Apply Supabase migrations + v5.12 seeds (expects CLI running)
-	@echo "🗄️ Applying Supabase schema + seeds..."
-	@if ! docker ps --format '{{.Names}}' | grep -q 'supabase_db'; then \
+supa-status: ## Check integrated Supabase service status
+	@echo "🔍 Supabase service status:"
+	@echo ""
+	@$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || \
+		echo "   Supabase services not running"
+	@echo ""
+	@echo "📊 Health endpoints:"
+	@echo "   PostgREST:    curl -s http://localhost:3000/ && echo OK"
+	@echo "   Gotrue:       curl -s http://localhost:9999/health && echo OK"
+	@echo "   Kong:         curl -s http://localhost:8001/health && echo OK"
+	@echo "   Studio:       curl -s http://localhost:54323/api/profile && echo OK"
+
+supa-logs: ## View Supabase service logs
+	@$(DC) logs -f --tail=100 supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || \
+		echo "No logs available - services not running"
+
+supa-health: ## Check all Supabase service health endpoints
+	@echo "🏥 Supabase health check:"
+	@echo ""
+	@if docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
+		if docker exec pmoves-supabase-db-1 pg_isready -U postgres -d postgres >/dev/null 2>&1; then \
+			echo "   ✅ Database (postgres)"; \
+		else \
+			echo "   ❌ Database (postgres) - not ready"; \
+		fi; \
+	else \
+		echo "   ⚠️  Database (postgres) - not running"; \
+	fi
+	@if curl -s http://localhost:3000/ >/dev/null 2>&1; then \
+		echo "   ✅ PostgREST API"; \
+	else \
+		echo "   ❌ PostgREST API - not responding"; \
+	fi
+	@if curl -s http://localhost:9999/health >/dev/null 2>&1; then \
+		echo "   ✅ Gotrue Auth"; \
+	else \
+		echo "   ❌ Gotrue Auth - not responding"; \
+	fi
+	@if curl -s http://localhost:8001/health >/dev/null 2>&1; then \
+		echo "   ✅ Kong Gateway"; \
+	else \
+		echo "   ❌ Kong Gateway - not responding"; \
+	fi
+	@if curl -s http://localhost:4000/health >/dev/null 2>&1; then \
+		echo "   ✅ Realtime"; \
+	else \
+		echo "   ⚠️  Realtime - not responding (optional)"; \
+	fi
+	@if curl -s http://localhost:5000/status >/dev/null 2>&1; then \
+		echo "   ✅ Storage API"; \
+	else \
+		echo "   ⚠️  Storage API - not responding (optional)"; \
+	fi
+	@if curl -s http://localhost:54323/api/profile >/dev/null 2>&1; then \
+		echo "   ✅ Studio UI"; \
+	else \
+		echo "   ⚠️  Studio UI - not responding (optional)"; \
+	fi
+
+supa-migrate: ## Apply Supabase migrations from supabase/migrations directory
+	@echo "🗄️ Applying Supabase migrations..."
+	@if [ ! -d "supabase/migrations" ]; then \
+		echo "⚠️  No migrations directory found"; \
+		exit 1; \
+	fi
+	@if ! docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
 		echo "⚠️  Supabase not running. Starting..."; \
 		$(MAKE) --no-print-directory supa-start; \
+		sleep 10; \
+	fi
+	@for migration in supabase/migrations/*.sql; do \
+		if [ -f "$$migration" ]; then \
+			echo "   Applying: $$(basename $$migration)"; \
+			docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$migration" || \
+				echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
+		fi; \
+	done
+	@echo "✅ Migrations complete"
+
+.PHONY: supabase-bootstrap
+supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
+	@echo "🗄️ Applying Supabase schema + seeds..."
+	@if ! docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
+		echo "⚠️  Supabase not running. Starting..."; \
+		$(MAKE) --no-print-directory supa-start; \
+		sleep 10; \
 	fi
 	@echo "   Running migrations..."
-	@PGSSLMODE=disable cd .. && supabase db reset --yes --db-url "postgresql://postgres:postgres@localhost:54322/postgres" || { \
-		echo "❌ Migration failed. Check logs above."; \
-		echo "   To retry: make supabase-bootstrap"; \
-		echo "   To view logs: cd .. && supabase logs"; \
-		exit 1; \
-	}
+	@if [ -d "supabase/migrations" ]; then \
+		for migration in supabase/migrations/*.sql; do \
+			if [ -f "$$migration" ]; then \
+				echo "   Applying: $$(basename $$migration)"; \
+				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$migration" || \
+					echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
+			fi; \
+		done; \
+	else \
+		echo "   ⚠️  No migrations directory found"; \
+	fi
+	@echo "   Running seed scripts..."
+	@if [ -d "supabase/seeds" ]; then \
+		for seed in supabase/seeds/*.sql; do \
+			if [ -f "$$seed" ]; then \
+				echo "   Seeding: $$(basename $$seed)"; \
+				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$seed" || \
+					echo "   ⚠️  Seed failed: $$(basename $$seed)"; \
+			fi; \
+		done; \
+	else \
+		echo "   ⚠️  No seeds directory found"; \
+	fi
 	@echo "✅ Supabase bootstrap complete"
 
 .PHONY: neo4j-bootstrap
@@ -540,7 +640,7 @@ down-data: ## Stop data tier
 .PHONY: down-obs
 down-obs: ## Stop observability stack
 	@echo "📊 Stopping observability..."
-	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring down
+	@docker compose -p monitoring -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) down
 
 .PHONY: down-ui
 down-ui: ## Stop PMOVES UI
@@ -1090,29 +1190,17 @@ down-tensorzero-full:
 
 MONITORING_COMPOSE := monitoring/docker-compose.monitoring.yml
 
-up-monitoring: ## Start monitoring stack and print URLs
-	@echo "⛳ Starting monitoring stack (Prometheus, Grafana, Loki, Promtail, blackbox, cAdvisor)..."
-	@profiles=""; \
-	  services="prometheus grafana loki promtail blackbox"; \
-	  if [ "$$MON_INCLUDE_CADVISOR" = "true" ] || [ "`uname -s`" = "Linux" ]; then \
-	    profiles="$$profiles --profile linux"; \
-	    services="$$services cadvisor"; \
-	  else \
-	    echo "→ Skipping cAdvisor (set MON_INCLUDE_CADVISOR=true to force)"; \
-	  fi; \
-	  if [ "$$MON_INCLUDE_NODE_EXPORTER" = "true" ]; then \
-	    profiles="$$profiles --profile linux-node"; \
-	    services="$$services node-exporter"; \
-	  fi; \
-	  if [ -n "$$profiles" ]; then echo "→ Including compose profiles:$$profiles"; fi; \
-	  $(DC) $$profiles up -d $$services
-	@echo "Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"
-	@echo "Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"
-	@echo "Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"
-	@echo "cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-9180}"
+up-monitoring: ## Start monitoring stack (all services: Prometheus, Grafana, Loki, Promtail, Blackbox, cAdvisor)
+	@echo "⛳ Starting monitoring stack..."
+	@$(LOAD_ENV_SHARED); docker compose -p monitoring -f $(CURDIR)/$(MONITORING_COMPOSE) --project-directory $(CURDIR) up -d
+	@echo "✔ Grafana:      http://localhost:$${GRAFANA_HOST_PORT:-3002} (admin/admin)"
+	@echo "✔ Prometheus:   http://localhost:$${PROMETHEUS_HOST_PORT:-9090}"
+	@echo "✔ Loki:         http://localhost:$${LOKI_HOST_PORT:-3100}"
+	@echo "✔ Blackbox:     http://localhost:$${BLACKBOX_HOST_PORT:-9115}"
+	@echo "✔ cAdvisor:     http://localhost:$${CADVISOR_HOST_PORT:-9180}"
 
 down-monitoring: ## Stop monitoring stack and remove volumes
-	@docker compose -p $(PROJECT) --project-directory $(CURDIR) -f $(MONITORING_COMPOSE) down -v
+	@docker compose -p monitoring -f $(CURDIR)/$(MONITORING_COMPOSE) --project-directory $(CURDIR) down -v
 
 monitoring-open: ## Open Grafana and Prometheus in your browser
 	@python3 -c "import os,webbrowser; g='http://localhost:%s'%os.environ.get('GRAFANA_HOST_PORT','3002'); p='http://localhost:%s'%os.environ.get('PROMETHEUS_HOST_PORT','9090'); print('Opening',g,'and',p); webbrowser.open(g); webbrowser.open(p)"

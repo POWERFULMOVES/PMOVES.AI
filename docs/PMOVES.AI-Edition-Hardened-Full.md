@@ -6,7 +6,7 @@
 
 The deployment model synthesizes Microsoft Azure's agent orchestration research, Docker CIS benchmarks, GitHub security hardening guides, and real-world E2B implementations processing hundreds of millions of sandboxes. For the four-member team (hunnibear, Pmovesjordan, Barathicite, wdrolle), this translates to **GitHub Flow workflows, automated Dependabot updates, and CODEOWNERS-based review assignment**—enabling rapid AI model iteration without compromising security posture. Key metrics: **40-60% infrastructure cost reduction via autoscaling, sub-200ms agent response times, 24-hour maximum session lengths, and automated security scanning catching 99.7% of CVEs.**
 
-### Status (2025-12-18)
+### Status (2026-02-04)
 - Hardened self-hosted multi-arch builds + Trivy gating shipped (`.github/workflows/self-hosted-builds-hardened.yml`); pmoves-yt yt-dlp bump workflow live; env pins warn on `:pmoves-latest`.
 - Arm/Jetson path covered via `pmoves/docker-compose.arm64.override.yml`; GPU smoke still red when NVIDIA runtime is missing—rerun `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` once GPU is exposed.
 - Lockfiles present for most services; `agent-zero` and `media-video` need recompile on Python 3.11 with CUDA wheels to finalize hashes.
@@ -193,9 +193,16 @@ docker history app:latest | grep -i secret  # Should return nothing
 
 ## 3. PMOVES.AI Production Architecture
 
-### Service Catalog: 55 Services Organized by Function
+### Service Catalog: 71 Services Organized by Function
 
-PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ services organized into functional tiers:
+PMOVES.AI is a **production-grade multi-agent orchestration platform** with 71+ services organized into functional tiers:
+
+**Breakdown:**
+- Main compose (`docker-compose.yml`): 65 services
+- Monitoring compose (`docker-compose.monitoring.yml`): 6 services
+- **Total: 71 services**
+
+**Note:** The Supabase stack is now integrated into the main compose file (7 services: supabase-db, supabase-gotrue, supabase-postgrest, supabase-kong, supabase-realtime, supabase-storage, supabase-studio).
 
 ### Core Infrastructure (4 services)
 - `tensorzero-gateway` - Centralized LLM gateway (port 3030)
@@ -246,13 +253,23 @@ PMOVES.AI is a **production-grade multi-agent orchestration platform** with 55+ 
 - `blackbox` - Endpoint health monitoring (port 9115)
 - `node-exporter` - Host metrics
 
-### Data Storage (7 services)
-- `postgres` - PostgreSQL with pgvector (port 5432)
-- `postgrest` - REST API for Postgres (port 3010)
+### Data Storage (Supabase-Integrated Stack)
+PMOVES.AI uses a **self-hosted Supabase stack** for PostgreSQL, authentication, REST API, realtime subscriptions, and object storage. This provides a complete backend-as-a-service solution with JWT-based authentication and RS256 asymmetric keys.
+
+**Supabase Services:**
+- `supabase-db` - PostgreSQL 17.6.1.079 with pgvector (port 54322)
+- `supabase-gotrue` - Authentication service v2.186.0 (port 9999)
+- `supabase-postgrest` - REST API for Postgres v12.2.0 (port 3000)
+- `supabase-kong` - API Gateway 3.7.1 (ports 8000, 8001)
+- `supabase-realtime` - Realtime subscriptions v2.30.26 (port 4000)
+- `supabase-storage` - S3-compatible object storage v1.36.2 (port 5000)
+- `supabase-studio` - Admin console (port 54323)
+
+**Additional Data Services:**
 - `qdrant` - Vector database (port 6333)
 - `neo4j` - Graph database (ports 7474 HTTP, 7687 Bolt)
 - `meilisearch` - Full-text search (port 7700)
-- `minio` - S3-compatible object storage (ports 9000 API, 9001 Console)
+- `minio` - Legacy MinIO (ports 9000 API, 9001 Console)
 - `pmoves-ollama` - Local LLM server (port 11434)
 
 ### Additional Services (13 services)
@@ -316,14 +333,25 @@ Complete inventory of all service ports with security classification and binding
 | 9115 | blackbox | mon | 0.0.0.0 | 127.0.0.1 | Health probes |
 
 **Supabase Integration Notes:**
-- PostgreSQL, MinIO storage migrate to Supabase-managed services in production
+- PMOVES.AI uses a self-hosted Supabase stack with 7 services (supabase-db, supabase-gotrue, supabase-postgrest, supabase-kong, supabase-realtime, supabase-storage, supabase-studio)
+- All Supabase services run on internal `pmoves_data` and `pmoves_api` networks for security
+- Services connect via standardized URL pattern within Docker network:
+  ```python
+  SUPABASE_URL = "http://supabase-postgrest:3000"
+  SUPABASE_REST_URL = "http://supabase-postgrest:3000"
+  SUPABASE_REALTIME_URL = "ws://supabase-realtime:4000"
+  ```
+- Authentication uses RS256 asymmetric JWT (public/private key pair) for enhanced security
+- 2025 key naming: PUBLISHABLE_KEY / SECRET_KEY (legacy: ANON_KEY / SERVICE_ROLE_KEY)
 - Local instances remain for development and self-hosted deployments
-- PostgREST replaced by Supabase REST API (`host.docker.internal:65421`)
+- Legacy MinIO and PostgreSQL services kept for backward compatibility during migration
 
 **Production Binding Strategy:**
 - **Public (0.0.0.0):** 8 services - API gateways and user-facing endpoints
 - **Localhost (127.0.0.1):** 25+ services - Internal workers, admin consoles, databases
-- **Supabase-Managed:** PostgreSQL, storage - Cloud-native data layer
+- **Supabase-Managed:** PostgreSQL, storage, authentication, realtime - Cloud-native data layer
+
+**Security Note:** Only `pmoves_data` and `pmoves_api` networks have `internal: true` flag. The `pmoves_app`, `pmoves_bus`, and `pmoves_monitoring` networks allow external access for development flexibility, which reduces isolation compared to full internal-only design documented below.
 
 ---
 
@@ -387,24 +415,60 @@ headers = {"apikey": SUPABASE_ANON_KEY}
 
 ---
 
-### 5-Tier Network Segmentation (Defense-in-Depth)
+### 5-Tier Network Segmentation (Current Implementation)
 
-**Phase 2 Security Enhancement:** Legacy flat `pmoves` network replaced with 5-tier isolation:
+**Security Note:** Only `pmoves_data` and `pmoves_api` networks have `internal: true` flag. The `pmoves_app`, `pmoves_bus`, and `pmoves_monitoring` networks allow external access for development flexibility, which reduces isolation compared to full internal-only design.
 
 ```yaml
 networks:
-  api_tier:        # External-facing services (172.30.1.0/24)
-  app_tier:        # Application logic - INTERNAL (172.30.2.0/24)
-  bus_tier:        # NATS message bus - INTERNAL (172.30.3.0/24)
-  data_tier:       # Databases & storage - INTERNAL (172.30.4.0/24)
-  monitoring_tier: # Observability stack (172.30.5.0/24)
+  pmoves_data:       # Databases & storage - INTERNAL (172.30.4.0/24)
+    driver: bridge
+    internal: true  # ✅ Isolated from host
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.4.0/24
+        gateway: 172.30.4.1
+  pmoves_api:        # API gateways - INTERNAL (172.30.1.0/24)
+    driver: bridge
+    internal: true  # ✅ Isolated from host
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.1.0/24
+        gateway: 172.30.1.1
+  pmoves_app:        # Application logic (172.30.2.0/24)
+    driver: bridge
+    # ⚠️ No internal flag - allows host access for dev
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.2.0/24
+        gateway: 172.30.2.1
+  pmoves_bus:        # NATS message bus (172.30.3.0/24)
+    driver: bridge
+    # ⚠️ No internal flag - allows host access for dev
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.3.0/24
+        gateway: 172.30.3.1
+  pmoves_monitoring: # Observability stack (172.30.5.0/24)
+    driver: bridge
+    # ⚠️ No internal flag - allows host access for dev
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.5.0/24
+        gateway: 172.30.5.1
 ```
 
 **Security Benefits:**
 - Lateral movement prevention: compromised API service cannot directly access data tier
-- Blast radius containment: internal services (`app_tier`, `bus_tier`, `data_tier`) isolated from internet
-- Monitoring isolation: observability stack on separate subnet with controlled access
+- Blast radius containment: internal services (`pmoves_data`, `pmoves_api`) isolated from host
+- Monitoring isolation: observability stack on separate subnet
 - Defense-in-depth: multiple network boundaries to traverse for attacker escalation
+- **Trade-off:** Development flexibility vs. strict isolation - `pmoves_app`, `pmoves_bus`, `pmoves_monitoring` allow host access for debugging
 
 ### Complete Docker Compose Stack
 
@@ -1829,14 +1893,15 @@ docker compose -f monitoring/docker-compose.monitoring.yml down
 
 | Security Practice | Documented | Implemented | Gap Status |
 |-------------------|------------|-------------|------------|
-| 5-Tier Network Isolation | ✅ Lines 390-450 | ✅ Fully | **MATCH** |
+| 5-Tier Network Isolation | ✅ Lines 390-450 | ⚠️ Partial | **NEEDS UPDATE** |
 | TensorZero Secrets Fence | ✅ Lines 1067-1179 | ✅ Fully | **MATCH** |
-| Tier-Based Secrets (env.tier-*) | ✅ Lines 1181-1231 | ✅ 6 tiers | **MATCH** |
+| Tier-Based Secrets (env.tier-*) | ✅ Lines 1181-1231 | ⚠️ 6 tiers | **NEEDS UPDATE** |
 | BuildKit Secret Mounts | ✅ Lines 160-190 | ✅ In Dockerfiles | **MATCH** |
-| Health Checks | ✅ Lines 486-490 | ✅ 30+ services | **MATCH** |
-| Non-root User (UID 65532) | ✅ Line 1857 | ⚠️ 1/50 services | **Phase 2.5** |
-| cap_drop: ALL | ✅ Lines 1865-1866 | ⚠️ 0 services | **Phase 2.5** |
-| read_only: true + tmpfs | ✅ Lines 1859-1862 | ⚠️ 0 services | **Phase 2.5** |
+| Health Checks | ✅ Lines 486-490 | ✅ 52+ services | **MATCH** |
+| Non-root User (UID 65532) | ✅ Line 1857 | ❌ 0/71 services | **NOT IMPLEMENTED** |
+| cap_drop: ALL | ✅ Lines 1865-1866 | ⚠️ 1 service (a2ui-nats-bridge) | **MINIMAL** |
+| read_only: true + tmpfs | ✅ Lines 1859-1862 | ❌ 0 services | **NOT IMPLEMENTED** |
+| Image Pinning (no :latest) | ✅ PR #355 | ⚠️ 8 images use :latest | **IN PROGRESS** |
 
 **Phase 2.5 Roadmap (Container Hardening):**
 The following container security practices are documented but not yet implemented across all services. They are planned for incremental rollout:
@@ -2138,7 +2203,9 @@ services:
 
 **Deployment successful. You now have a production-grade, security-hardened platform with:**
 
-- **55 Services** organized by function (agents, knowledge, media, monitoring, data)
+- **71 Services** organized by function (65 in main compose + 6 in monitoring)
+  - Includes integrated Supabase stack (7 services)
+  - Agents, knowledge, media, monitoring, data layers
 - **5-Tier Network Segmentation** for defense-in-depth security
 - **TensorZero Gateway** for unified LLM orchestration and observability
 - **NATS JetStream** for reliable event-driven coordination

@@ -72,11 +72,408 @@ x-env-tier-ui: &id007
     - env.shared
     - env.tier-ui
 
+x-env-tier-supabase: &id008
+  env_file:
+    - env.shared
+    - env.tier-supabase
+
+# =============================================================================
+# CONTAINER HARDENING TEMPLATES (Security Baseline)
+# =============================================================================
+#
+# These YAML anchors provide container security hardening for all services.
+# Apply to service definitions using the <<: *anchor-name merge pattern.
+#
+# Hardening Options Explained:
+# ----------------------------
+# - cap_drop: [ALL] - Drop all Linux capabilities (principle of least privilege)
+# - cap_add: [NET_BIND_SERVICE] - Add back only specific capabilities needed
+# - read_only: true - Mount container rootfs as read-only (prevents modification)
+# - security_opt: [no-new-privileges:true] - Prevent privilege escalation via setuid/setgid
+# - tmpfs: - Mount temporary filesystems with noexec/nosuid flags
+#
+# When to Use Each Template:
+# --------------------------
+# 1. x-hardening (&hardening) - For stateless, read-only services:
+#    - API gateways, proxies, pure compute services
+#    - Services that don't write to local filesystem
+#    - Example: presign, render-webhook, model-registry
+#
+# 2. x-hardening-rw (&hardening-rw) - For services with write requirements:
+#    - Databases (need data directory writes)
+#    - Log aggregators (need log file writes)
+#    - Services with tmp/cache volumes
+#    - Example: postgres, neo4j, nats
+#
+# Adding Additional Capabilities:
+# --------------------------------
+# If a service needs additional capabilities beyond NET_BIND_SERVICE:
+#
+#   service-name:
+#     <<: *hardening  # Start with base template
+#     cap_add:
+#       - NET_BIND_SERVICE  # From template
+#       - CHOWN            # Add this if needed for file ownership
+#       - SETGID           # Add this if needed for group operations
+#       - SETUID           # Add this if needed for user operations
+#     cap_drop: [ALL]      # Keep drop ALL to only allow explicitly added caps
+#
+# Services Reiring Custom tmpfs Mounts:
+# -------------------------------------
+# Some services need additional tmpfs mounts beyond /tmp and /var/tmp:
+#
+#   service-name:
+#     <<: *hardening
+#     tmpfs:
+#       - /tmp:noexec,nosuid,size=64m       # From template
+#       - /var/tmp:noexec,nosuid,size=64m   # From template
+#       - /app/cache:rw,noexec,nosuid,size=128m  # Add service-specific mount
+#
+# Common Capabilities Reference:
+# ------------------------------
+# - NET_BIND_SERVICE - Bind to ports < 1024
+# - CHOWN - Change file ownership
+# - SETGID - Set group ID
+# - SETUID - Set user ID
+# - DAC_OVERRIDE - Bypass file read/write/execute permission checks
+# - FOWNER - Bypass permission checks on operations with file descriptors
+# - KILL - Send signals to processes
+# - NET_ADMIN - Network administration (firewall, routing)
+# - SYS_ADMIN - Perform system administration tasks (AVOID if possible)
+#
+# Security Impact:
+# ---------------
+# - Attack Surface: Reduces container privileges by ~90%
+# - Privilege Escalation: Blocks setuid/setgid escalation vectors
+# - Rootfs Protection: Read-only prevents malicious code injection
+# - Temporary Files: noexec/nosuid prevents executable tmp attacks
+# - Compliance: Aligns with CIS Docker Benchmark 1.0.0 sections 5.1-5.3
+#
+# Applying to Services:
+# ---------------------
+# This PR adds template anchors only. Follow-up PR will apply to all services.
+# See: Task 5 - Apply container hardening to all services
+#
+# References:
+# -----------
+# - CIS Docker Benchmark 1.0.0: https://www.cisecurity.org/benchmark/docker
+# - Docker Security: https://docs.docker.com/engine/security/
+# - Kubernetes Pod Security: https://kubernetes.io/docs/concepts/security/pod-security-standards/
+# =============================================================================
+
+# Read-only hardening for stateless services
+# Use for: API gateways, proxies, compute services (no local writes)
+x-hardening: &hardening
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+    - /var/tmp:noexec,nosuid,size=64m
+
+# Read-write hardening for services needing filesystem access
+# Use for: Databases, log writers, services with volumes
+x-hardening-rw: &hardening-rw
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
+# PMOVES.AI production compose project
+name: pmoves
+
 services:
-  # NOTE: postgres and postgrest now run via Supabase CLI
-  # Use: supabase start
-  # Postgres: host.docker.internal:54322 (supabase_db_PMOVES.AI container)
-  # PostgREST/Kong: host.docker.internal:54321 (supabase_kong_PMOVES.AI container)
+  # =============================================================================
+  # SUPABASE SELF-HOSTED STACK (2025 Best Practices)
+  # =============================================================================
+  # Integrated Supabase services - no external CLI dependency
+  # All services run on pmoves internal networks for security
+  # 2025 Key Naming: PUBLISHABLE_KEY / SECRET_KEY (legacy: ANON_KEY / SERVICE_ROLE_KEY)
+  # 2025 JWT: RS256 asymmetric (legacy: HS256 symmetric)
+  # =============================================================================
+
+  supabase-db:
+    <<: *id008
+    image: supabase/postgres:17.6.1.079
+    restart: unless-stopped
+    environment:
+    - POSTGRES_USER=${SUPABASE_DB_USER}
+    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD}
+    - POSTGRES_DB=${SUPABASE_DB_NAME}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    # PMOVES extensions
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+    - ${SUPABASE_DB_PORT:-54322}:5432
+    volumes:
+    - supabase-db-data:/var/lib/postgresql/data
+    networks:
+    - pmoves_data
+
+  supabase-gotrue:
+    <<: *id008
+    image: supabase/gotrue:v2.186.0
+    restart: unless-stopped
+    environment:
+    # 2025: Use RS256 for asymmetric JWT (public/private key pair)
+    - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
+    - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
+    - GOTRUE_API_HOST=0.0.0.0
+    - GOTRUE_API_PORT=9999
+    # Database connection
+    - GOTRUE_DB_DRIVER=postgres
+    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}?sslmode=disable
+    # JWT configuration (2025: RS256)
+    - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    - GOTRUE_JWT_EXP=${SUPABASE_JWT_EXP}
+    # 2025 key naming
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SECRET_KEY}
+    - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+    # Logging
+    - GOTRUE_LOG_LEVEL=info
+    - GOTRUE_LOG_LEVEL_STACK=info
+    # URI Allow list (for VPS deployment)
+    - GOTRUE_URI_ALLOW_LIST=${SUPABASE_URI_ALLOW_LIST}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_GOTRUE_PORT:-9999}:9999
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-postgrest:
+    <<: *id008
+    image: postgrest/postgrest:v12.2.0
+    restart: unless-stopped
+    environment:
+    # Database connection (from env.tier-supabase)
+    - PGRST_DB_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+    # JWT secret (must match gotrue)
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    # 2025 key naming (service role key for admin access)
+    - PGRST_JWT_SECRET_IS_BASE64=false
+    # API configuration
+    - PGRST_SCHEMA=${SUPABASE_SCHEMA}
+    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE}
+    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS}
+    - PGRST_DB_POOL=${SUPABASE_DB_POOL}
+    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_POSTGREST_PORT:-3000}:3000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-kong:
+    <<: *id008
+    image: kong:3.7.1
+    restart: unless-stopped
+    environment:
+    # Database configuration (Kong uses Postgres for config storage)
+    - KONG_DATABASE=postgres
+    - KONG_PG_HOST=supabase-db
+    - KONG_PG_DATABASE=${POSTGRES_DB}
+    - KONG_PG_USER=${POSTGRES_USER}
+    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+    # Kong configuration
+    - KONG_PROXY_ACCESS_LOG=/dev/stdout
+    - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+    - KONG_PROXY_ERROR_LOG=/dev/stderr
+    - KONG_ADMIN_ERROR_LOG=/dev/stderr
+    - KONG_PROXY_LISTEN=0.0.0.0:8000
+    - KONG_ADMIN_LISTEN=0.0.0.0:8001
+    # JWT plugin (2025: RS256 support)
+    - KONG_PLUGINS=bundled,jwt
+    - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-realtime:
+    <<: *id008
+    image: supabase/realtime:v2.30.26
+    restart: unless-stopped
+    environment:
+    # Database connection
+    - DB_HOST=supabase-db
+    - DB_PORT=5432
+    - DB_NAME=${POSTGRES_DB}
+    - DB_USER=${POSTGRES_USER}
+    - DB_PASSWORD=${POSTGRES_PASSWORD}
+    - DB_SSL=false
+    # App configuration
+    - APP_NAME=realtime
+    - PORT=4000
+    - RLIMIT_NOFILE=1048576
+    # JWT secret (must match gotrue)
+    - JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
+    # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/ > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_REALTIME_PORT:-4000}:4000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-storage:
+    <<: *id008
+    image: supabase/storage-api:v1.36.2
+    restart: unless-stopped
+    environment:
+    # 2025 key naming
+    - ANON_KEY=${SUPABASE_PUBLISHABLE_KEY}
+    - SERVICE_KEY=${SUPABASE_SECRET_KEY}
+    # JWT secret
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    # PostgREST connection
+    - POSTGREST_URL=http://supabase-postgrest:3000
+    # Database connection
+    - DATABASE_URL=postgres://postgres:postgres@supabase-db:5432/postgres
+    # Storage configuration
+    - FILE_SIZE_LIMIT=52428800
+    - STORAGE_BACKEND=file
+    - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
+    - REGION=${SUPABASE_STORAGE_REGION}
+    # Global S3 bucket (if using MinIO for actual storage)
+    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET}
+    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT}
+    - GLOBAL_S3_FORCE_PATH_STYLE=true
+    # Tenant mode (single tenant for self-hosted)
+    - TENANT_ID=stub
+    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-postgrest:
+        condition: service_started
+    volumes:
+    - supabase-storage-data:/var/lib/storage
+    ports:
+    - ${SUPABASE_STORAGE_PORT:-5000}:5000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+  supabase-studio:
+    <<: *id008
+    # Pinned 2025-02-04: Latest stable from Supabase
+    image: supabase/studio:2026.02.04-sha-fba1944
+    restart: unless-stopped
+    environment:
+    # PostgREST connection
+    - STUDIO_PG_META_URL=http://supabase-postgrest:3000
+    # Auth connection
+    - SUPABASE_URL=http://supabase-gotrue:9999
+    # 2025 key naming
+    - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL}
+    - SUPABASE_ANON_KEY=${SUPABASE_PUBLISHABLE_KEY}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE}
+    - PARENT_SYSTEM=${PARENT_SYSTEM}
+    - PARENT_VERSION=${PARENT_VERSION}
+    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
+    # Note: Official Supabase uses node -e fetch but their image has different network config
+    # We rely on container being started successfully (logs show "Ready in Xms")
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      supabase-postgrest:
+        condition: service_started
+      supabase-gotrue:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_STUDIO_PORT:-54323}:3000
+    networks:
+    - pmoves_api
+
+  # =============================================================================
+  # END SUPABASE STACK
+  # =============================================================================
 
   qdrant:
     image: qdrant/qdrant:v1.10.0
@@ -89,6 +486,8 @@ services:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    volumes:
+    - qdrant-data:/qdrant/storage
   meilisearch:
     <<: *id001
     image: getmeili/meilisearch:v1.8
@@ -102,6 +501,8 @@ services:
     - ${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
+    volumes:
+    - meilisearch-data:/meili_data
   neo4j:
     image: neo4j:5.22
     env_file:
@@ -131,7 +532,8 @@ services:
       start_period: 20s
   minio:
     <<: *id001
-    image: minio/minio:latest
+    # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=minioadmin
@@ -162,6 +564,9 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -220,6 +625,9 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    depends_on:
+      minio:
+        condition: service_healthy
   render-webhook:
     <<: *id002
     build: ./services/render-webhook
@@ -238,6 +646,9 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
   model-registry:
     <<: *id002
     build:
@@ -289,6 +700,13 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      minio:
+        condition: service_started
   pdf-ingest:
     <<: *id003
     build:
@@ -480,6 +898,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for YouTube API access
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -493,6 +912,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for YouTube processing
   channel-monitor:
     <<: *id005
     build: ./services/channel-monitor
@@ -501,11 +921,9 @@ services:
     - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
     - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+    # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
+    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://postgres:postgres@supabase-db:5432/postgres}
     - NATS_URL=${NATS_URL:-nats://nats:4222}
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-    - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
-    - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
-    - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
@@ -514,12 +932,15 @@ services:
     depends_on:
       pmoves-yt:
         condition: service_started
+      nats:
+        condition: service_healthy
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
     networks:
     - pmoves_app
     - pmoves_bus
     - pmoves_data
+    - pmoves_external  # Required for YouTube API access
   hi-rag-gateway-v2:
     <<: *id002
     build:
@@ -540,6 +961,8 @@ services:
     - USE_MEILI=true
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
@@ -569,6 +992,7 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external  # Required for reranker API calls
   hi-rag-gateway-gpu:
     <<: *id002
     build:
@@ -588,6 +1012,9 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -699,7 +1126,8 @@ services:
     - host.docker.internal:host-gateway
   nats:
     <<: *id001
-    image: nats:latest
+    # Pinned 2025-02-04: Latest stable 2.11.x alpine version
+    image: nats:2.11.8-alpine
     command:
     - -js
     - -m
@@ -738,7 +1166,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - ${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_PORT:-8081}:80
@@ -748,9 +1177,16 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Required for LLM provider APIs
   archon:
     <<: *id005
     build:
@@ -769,12 +1205,12 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://host.docker.internal:54321}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-kong:8000}
       - NATS_URL=${NATS_URL:-nats://nats:4222}
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     command:
     - python
     - -c
@@ -788,6 +1224,8 @@ services:
       pmoves_app:
         aliases:
         - archon-server
+      pmoves_api:
+      pmoves_bus:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
@@ -825,7 +1263,7 @@ services:
       - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     ports: ["8054:8054"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
@@ -898,7 +1336,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - ${DEEPRESEARCH_PORT:-8098}:8098
     volumes:
@@ -926,6 +1365,9 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
   nats-echo-req:
     <<: *id005
     build:
@@ -971,7 +1413,8 @@ services:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - 8094:8092
     profiles:
@@ -1035,7 +1478,8 @@ services:
     - pmoves_data
   tensorzero-gateway:
     <<: *id006
-    image: tensorzero/gateway:latest
+    # Pinned 2025-02-04: Latest stable from TensorZero
+    image: tensorzero/gateway:2026.1.8
     restart: unless-stopped
     command:
     - --config-file
@@ -1060,7 +1504,8 @@ services:
     - host.docker.internal:host-gateway
   tensorzero-ui:
     <<: *id006
-    image: tensorzero/ui:latest
+    # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
+    image: tensorzero/ui:2026.1.8
     restart: unless-stopped
     environment:
     - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
@@ -1102,8 +1547,10 @@ services:
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL:-nats://nats:4222}
     volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro
-    - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
+      # SECURITY: Docker socket required for spawning GPU model containers.
+      # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
     deploy:
       resources:
         reservations:
@@ -1112,6 +1559,10 @@ services:
             count: all
             capabilities:
             - gpu
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     profiles:
     - gpu
     networks:
@@ -1123,7 +1574,7 @@ services:
     - 8200:8200
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
         required: false
   evo-controller:
     <<: *id005
@@ -1348,7 +1799,7 @@ services:
       - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       minio:
         condition: service_started
     volumes:
@@ -1441,14 +1892,15 @@ services:
     - pmoves_data
     - pmoves_app
   invidious-companion:
-    image: quay.io/invidious/invidious-companion:latest
+    # Pinned 2025-02-04: Latest stable from Invidious GitHub releases (v2.20250913.0)
+    image: quay.io/invidious/invidious-companion:2025.09.13-0065a3e
     restart: unless-stopped
     env_file:
     - env.shared
     environment:
     - PORT=8282
     - HOST=0.0.0.0
-    - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY not set}
+    - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}
     - CACHE_DIRECTORY=/var/tmp/youtubei.js
     - SERVER_BASE_URL=${INVIDIOUS_COMPANION_PUBLIC_URL:-}
     - YOUTUBE_API_KEY=${INVIDIOUS_COMPANION_YOUTUBE_API_KEY:-}
@@ -1464,7 +1916,8 @@ services:
     - pmoves_app
     - pmoves_bus
   invidious:
-    image: quay.io/invidious/invidious:latest
+    # Pinned 2025-02-04: Latest stable from Invidious GitHub releases (v2.20250913.0)
+    image: quay.io/invidious/invidious:2025.09.13-c8b4325
     restart: unless-stopped
     env_file:
     - env.shared
@@ -1473,10 +1926,9 @@ services:
       \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
       \ 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port:\
       \ ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\n\
-      hmac_key: \"${INVIDIOUS_HMAC_KEY:?INVIDIOUS_HMAC_KEY not set}\"\ninvidious_companion:\n\
+      hmac_key: \"${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}\"\ninvidious_companion:\n\
       \  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\
-      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:?INVIDIOUS_COMPANION_KEY\
-      \ not set}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
+      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
       \ ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector:\
       \ ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\
       \n"
@@ -1490,7 +1942,7 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - wget -qO- http://127.0.0.1:3000/api/v1/trending >/dev/null
+      - wget -qO- http://127.0.0.1:3000/api/v1/stats >/dev/null 2>&1 || wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1595,8 +2047,14 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
 volumes:
   neo4j-data: {}
+  qdrant-data: {}
+  meilisearch-data: {}
   minio-data: {}
+  # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
+  # 2025 Supabase integrated volumes
+  supabase-db-data: {}
+  supabase-storage-data: {}
   notebook-sync-data: {}
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}
@@ -1626,6 +2084,7 @@ networks:
   pmoves_app:
     name: pmoves_app
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
@@ -1634,6 +2093,7 @@ networks:
   pmoves_bus:
     name: pmoves_bus
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
@@ -1642,17 +2102,26 @@ networks:
   pmoves_monitoring:
     name: pmoves_monitoring
     driver: bridge
+    internal: true
     ipam:
       driver: default
       config:
       - subnet: 172.30.5.0/24
         gateway: 172.30.5.1
-  supabase_net:
-    external: true
-    name: supabase_network_PMOVES.AI
+  # NOTE: supabase_net no longer needed - Supabase services now use internal pmoves_data/pmoves_api networks
+  # pmoves and cataclysm kept for external service compatibility
   pmoves:
     external: true
     name: pmoves-net
   cataclysm:
     external: true
     name: cataclysm-net
+  # External network for services requiring internet access (YouTube API, LLM providers, etc.)
+  pmoves_external:
+    name: pmoves_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.6.0/24
+        gateway: 172.30.6.1

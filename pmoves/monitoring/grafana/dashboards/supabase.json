@@ -1,0 +1,398 @@
+{
+  "title": "Supabase Stack Monitoring",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "supabase-stack",
+  "description": "Monitoring dashboard for self-hosted Supabase services",
+  "tags": ["supabase", "infrastructure", "pmoves"],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "GoTrue /health",
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "targets": [
+        {
+          "expr": "probe_success{job=\"supabase_health\", service=\"gotrue\"}",
+          "legendFormat": "GoTrue Auth"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]
+          },
+          "unit": "bool"
+        }
+      },
+      "alert": {
+        "name": "GoTrue Auth Down",
+        "conditions": [
+          {
+            "evaluator": {"params": [0.5], "type": "lt"},
+            "operator": {"type": "and"},
+            "query": {"params": ["A"]},
+            "reducer": {"type": "last"},
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "for": "2m",
+        "frequency": "30s",
+        "noDataState": "no_data"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "PostgREST /",
+      "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "targets": [
+        {
+          "expr": "probe_success{job=\"supabase_health\", service=\"postgrest\"}",
+          "legendFormat": "PostgREST API"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]
+          },
+          "unit": "bool"
+        }
+      },
+      "alert": {
+        "name": "PostgREST Down",
+        "conditions": [
+          {
+            "evaluator": {"params": [0.5], "type": "lt"},
+            "operator": {"type": "and"},
+            "query": {"params": ["A"]},
+            "reducer": {"type": "last"},
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "for": "2m",
+        "frequency": "30s",
+        "noDataState": "no_data"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Realtime /health",
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "targets": [
+        {
+          "expr": "probe_success{job=\"supabase_health\", service=\"realtime\"}",
+          "legendFormat": "Realtime WebSocket"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]
+          },
+          "unit": "bool"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Storage /status",
+      "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "targets": [
+        {
+          "expr": "probe_success{job=\"supabase_health\", service=\"storage\"}",
+          "legendFormat": "Storage API"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]
+          },
+          "unit": "bool"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Studio API",
+      "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "targets": [
+        {
+          "expr": "probe_success{job=\"supabase_health\", service=\"studio\"}",
+          "legendFormat": "Studio UI"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]
+          },
+          "unit": "bool"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "PostgreSQL (cAdvisor)",
+      "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+      "targets": [
+        {
+          "expr": "container_last_seen{name=~\".*postgres.*\"}",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "thresholds",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "semi-dark-red", "value": 0}, {"color": "semi-dark-green", "value": 1}]
+          },
+          "unit": "bool",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {"text": "DOWN", "color": "red"},
+                "1": {"text": "UP", "color": "green"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "graph",
+      "title": "Supabase Service Response Times",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "probe_duration_seconds{job=\"supabase_health\"}",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "options": {
+        "legend": {"showLegend": true, "placement": "bottom"}
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "s"}
+      }
+    },
+    {
+      "type": "graph",
+      "title": "Supabase Container CPU Usage",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\".*supabase.*|.*postgres.*|.*gotrue.*|.*postgrest.*|.*realtime.*|.*storage.*|.*studio.*\", image!=\"\"}[1m]))",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "options": {
+        "legend": {"showLegend": true, "placement": "bottom"}
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "cpu"}
+      }
+    },
+    {
+      "type": "graph",
+      "title": "Supabase Container Memory Usage",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum by (name) (container_memory_working_set_bytes{name=~\".*supabase.*|.*postgres.*|.*gotrue.*|.*postgrest.*|.*realtime.*|.*storage.*|.*studio.*\", image!=\"\"})",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "options": {
+        "legend": {"showLegend": true, "placement": "bottom"}
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "bytes"}
+      }
+    },
+    {
+      "type": "graph",
+      "title": "Supabase Network I/O",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum by (name) (rate(container_network_receive_bytes_total{name=~\".*supabase.*|.*postgres.*|.*gotrue.*|.*postgrest.*|.*realtime.*|.*storage.*|.*studio.*\"}[1m]))",
+          "legendFormat": "{{name}} RX"
+        },
+        {
+          "expr": "-1 * sum by (name) (rate(container_network_transmit_bytes_total{name=~\".*supabase.*|.*postgres.*|.*gotrue.*|.*postgrest.*|.*realtime.*|.*storage.*|.*studio.*\"}[1m]))",
+          "legendFormat": "{{name}} TX"
+        }
+      ],
+      "options": {
+        "legend": {"showLegend": true, "placement": "bottom"}
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "Bps"}
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Supabase Service Logs (Loki)",
+      "gridPos": {"x": 0, "y": 20, "w": 24, "h": 10},
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "expr": "{compose_service=~\".*supabase.*|.*postgres.*|.*gotrue.*|.*postgrest.*|.*realtime.*|.*storage.*|.*studio.*\"}"
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Supabase Services Up",
+      "gridPos": {"x": 0, "y": 30, "w": 6, "h": 4},
+      "targets": [
+        {
+          "expr": "count(probe_success{job=\"supabase_health\"} == 1)",
+          "legendFormat": "Services UP"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"]},
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 5, "to": 6, "result": {"text": "5/6", "color": "green"}
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 4, "to": 5, "result": {"text": "4/6", "color": "yellow"}
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 0, "to": 4, "result": {"text": "<4", "color": "red"}
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 4},
+              {"color": "green", "value": 5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Service Status Summary",
+      "gridPos": {"x": 6, "y": 30, "w": 18, "h": 4},
+      "targets": [
+        {
+          "expr": "probe_success{job=\"supabase_health\"}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "frameIndex": 0
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "__name__": true, "job": true},
+            "indexByName": {"service": 0, "Value": 1},
+            "renameByName": {"service": "Service", "Value": "Status"}
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "fields": {},
+            "conversions": [
+              {
+                "targetField": "Status",
+                "type": "boolean",
+                "config": {"trueValue": "UP", "falseValue": "DOWN"}
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "10s"
+}

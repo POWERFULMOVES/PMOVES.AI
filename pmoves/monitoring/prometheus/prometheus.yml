@@ -130,6 +130,44 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox:9115
 
+  # === Supabase Stack Monitoring (Added 2026-02-04) ===
+
+  # Realtime exposes /metrics endpoint
+  - job_name: supabase-realtime
+    static_configs:
+      - targets: ["supabase-realtime:4000"]
+    metrics_path: /metrics
+
+  # Blackbox HTTP probes for Supabase services (health checks)
+  # Blackbox exporter is on pmoves_net network, can reach services by name
+  # Note: PostgREST returns 401 (auth required) - we use http_2xx_or_401 module
+  - job_name: supabase_health
+    metrics_path: /probe
+    params:
+      module: [http_2xx_or_401]
+    static_configs:
+      - targets:
+          - http://supabase-gotrue:9999/health       # GoTrue health
+          - http://supabase-postgrest:3000/          # PostgREST root (401 = OK)
+          - http://supabase-realtime:4000/           # Realtime root (500 = unhealthy)
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+      - source_labels: [__param_target]
+        target_label: service
+        regex: 'http://supabase-([^:]+):.*'
+        replacement: '${1}'
+
+  # PostgreSQL metrics via exporter (if enabled)
+  - job_name: supabase-postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+    # Only scrape if exporter is running (optional)
+
   # DISABLED: channel-monitor doesn't expose /metrics endpoint
   # - job_name: channel_monitor
   #   static_configs:

@@ -83,13 +83,46 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 8104 | GitHub Runner Controller | CI/CD runner orchestration |
 | 8181 | Archon | Alternative Archon port |
 
+### Supabase Stack (Self-Hosted)
+
+| Port | Service | Description | Network |
+|------|---------|-------------|---------|
+| 5432 | Supabase DB | PostgreSQL 17 (internal only) | pmoves_data |
+| 3010 | PostgREST | Supabase REST API | pmoves_api, pmoves_data |
+| 9999 | GoTrue | JWT authentication service | pmoves_api, pmoves_data |
+| 4000 | Realtime | WebSocket for real-time subscriptions | pmoves_api, pmoves_data |
+| 5000 | Storage | S3-compatible file storage | pmoves_api, pmoves_data |
+| 8000 | Kong Gateway | API Gateway (proxy/routing) | pmoves_api |
+| 8001 | Kong Admin | Kong administration interface | pmoves_api |
+| 54323 | Studio | Admin UI dashboard | pmoves_api |
+| 65421 | Kong (external) | External API access (VPS) | pmoves_api |
+
+**Notes:**
+- **PostgreSQL (5432):** Internal-only, accessible via pmoves_data network
+- **PostgREST (3010):** NOT 3000 (avoids Grafana conflict on port 3000)
+- **Kong (8000):** Primary external access point for all Supabase APIs
+- **Services on pmoves_api + pmoves_data:** Need database access for queries
+
+**Environment Variables:**
+```bash
+# env.tier-supabase
+SUPABASE_POSTGREST_PORT=3010    # NOT 3000 (Grafana conflict)
+SUPABASE_GOTRUE_PORT=9999
+SUPABASE_REALTIME_PORT=4000     # Conflicts with TensorZero UI (use profile separation)
+SUPABASE_STORAGE_PORT=5000
+SUPABASE_KONG_PROXY_PORT=8000
+SUPABASE_KONG_ADMIN_PORT=8001
+SUPABASE_STUDIO_PORT=54323
+SUPABASE_DB_PORT=54322           # External access (if needed)
+```
+
+**See Also:** [PRODUCTION_SUPABASE.md](PRODUCTION_SUPABASE.md) for complete Supabase documentation.
+
 ### External Integrations
 
 | Port | Service | Description |
 |------|---------|-------------|
-| 8000 | Supabase Kong | Supabase API gateway |
-| 3010 | PostgREST | Supabase REST API |
-| 65421 | Supabase Kong (external) | Supabase API (external access) |
+| *See Supabase Stack section above* | Supabase services | Full self-hosted Supabase |
 
 ## Port Assignment Guidelines
 
@@ -100,6 +133,13 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 5. **Update healthchecks** - Health check URLs must match the assigned port
 
 ## Conflict Resolution
+
+### Port 4000 Conflict (Identified 2026-02-04)
+
+- **TensorZero UI:** Uses 4000 (always runs)
+- **Supabase Realtime:** Uses 4000 (optional, profile: `supabase`)
+
+**Resolution:** Realtime should be configured to use a different port or run in a separate profile when TensorZero UI is active.
 
 ### Port 8100 Conflict (Resolved 2025-12-30)
 

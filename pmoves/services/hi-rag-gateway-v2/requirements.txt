@@ -12,6 +12,8 @@ qdrant-client>=1.9.0
 # Embeddings and reranking
 sentence-transformers>=3.0.0
 FlagEmbedding>=1.2.0
+# Pin transformers for FlagEmbedding compatibility
+transformers>=4.40.0,<4.50.0
 
 # Graph database
 neo4j>=5.0.0

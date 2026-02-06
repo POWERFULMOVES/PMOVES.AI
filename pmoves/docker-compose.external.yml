@@ -51,7 +51,6 @@ services:
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
-    ports:
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
@@ -60,6 +59,10 @@ services:
     image: ${OPEN_NOTEBOOK_SURREAL_IMAGE:-surrealdb/surrealdb:v2}
     container_name: pmoves-open-notebook-surrealdb
     restart: unless-stopped
+    # NOTE: SurrealDB requires root for RocksDB data directory access
+    # This is a known limitation of the upstream image; consider
+    # pre-creating the data directory with correct ownership if
+    # running as non-root is required for your security policy.
     user: "0:0"
     networks:
       pmoves_app:
@@ -75,12 +78,10 @@ services:
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
-      pmoves_app:
-        aliases:
+      - pmoves_app
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
-    ports:
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
