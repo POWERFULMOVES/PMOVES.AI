@@ -173,7 +173,7 @@ check-tools: ## Check required tools and versions
 	fi
 	@echo "✅ All required tools found"
 	@supa_version=$$(supabase --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1); \
-	latest=$$(curl -s https://pypi.org/pypi/supabase/json | python3 -c "import sys, json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || echo "unknown"); \
+	latest=$$(curl -s https://registry.npmjs.org/supabase/latest 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('version', 'unknown'))" 2>/dev/null || echo "unknown"); \
 	if [ "$$supa_version" != "$$latest" ] && [ "$$latest" != "unknown" ]; then \
 		echo "⚠️  Supabase CLI update available: $$supa_version → $$latest"; \
 		echo "   Update with: npm update -g supabase"; \
@@ -182,107 +182,133 @@ check-tools: ## Check required tools and versions
 	fi
 
 .PHONY: up-supabase
-up-supabase: ## Start Supabase stack (integrated in docker-compose - 2025)
-	@echo "🗄️ Starting Supabase (2025 integrated stack)..."
-	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
-		$(DC) up -d supabase-db
-	@echo "⏳ Waiting for Supabase DB..."
-	@timeout 60 bash -c 'until docker exec pmoves-supabase-db-1 pg_isready -U postgres -d postgres 2>/dev/null; do sleep 2; done' || \
-		{ echo "⚠️  Supabase DB not ready after timeout"; exit 1; }
-	@echo "🔧 Bootstrapping Kong migrations..."
-	@docker run --rm --network pmoves_data \
-		-e KONG_DATABASE=postgres \
-		-e KONG_PG_HOST=supabase-db \
-		-e KONG_PG_DATABASE=postgres \
-		-e KONG_PG_USER=$${POSTGRES_USER} \
-		-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD} \
-		kong:3.7.1 kong migrations bootstrap --yes 2>/dev/null || \
-		echo "⚠️  Kong migrations may already exist"
-	@echo "⏳ Starting remaining Supabase services..."
-	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
-		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio
-	@echo "⏳ Waiting for Supabase services to be healthy..."
-	@sleep 10
-	@echo "✅ Supabase ready"
-	@echo "   Studio:       http://localhost:54323"
+up-supabase: ensure-network ensure-env-shared ## Start official Supabase stack (13 services)
+	@echo "🗄️ Starting Supabase (official self-hosted stack)..."
+	@echo "⚠️  Note: Studio dashboard requires Kong gateway to be ready first"
+	@echo "📋 Using docker-compose.supabase.yml"
+	@echo "⏳ Pulling latest Supabase images..."
+	@$(DC) -f docker-compose.supabase.yml pull --quiet
+	@echo "🚀 Starting Supabase services..."
+	@$(LOAD_ENV_SHARED) && \
+		$(DC) -f docker-compose.supabase.yml --project-name pmoves-supabase up -d
+	@echo "⏳ Waiting for Supabase DB to be ready..."
+	@timeout 120 bash -c 'until docker exec supabase-db pg_isready -U postgres -h localhost; do sleep 3; done' || { \
+		echo "❌ Supabase DB not ready after 120s"; \
+		echo "   Checking container status..."; \
+		docker ps --filter "name=supabase-db" --format "  {{.Names}}: {{.Status}}" 2>/dev/null || echo "   Container not found"; \
+		echo "   Recent logs:"; \
+		docker logs --tail 20 supabase-db 2>&1 | tail -10 2>/dev/null || true; \
+		exit 1; \
+	}
+	@echo "⏳ Waiting for Kong gateway..."
+	@timeout 60 bash -c 'until curl -sSf http://localhost:8000 > /dev/null 2>&1; do sleep 2; done' || \
+		echo "⚠️  Kong gateway may still be starting"
+	@echo "✅ Supabase ready!"
+	@echo ""
+	@echo "🌐 Access Points:"
+	@echo "   Studio:       http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"
 	@echo "   Kong Gateway: http://localhost:8000"
-	@echo "   PostgREST:    http://localhost:3010"
-	@echo "   Gotrue Auth:  http://localhost:9999"
-	@echo "   Direct DB:    localhost:54322"
+	@echo "   API Docs:     http://localhost:8000/rest/v1/"
+	@echo ""
+	@echo "📊 Status:     make supa-status"
+	@echo "📋 Logs:       make supa-logs"
+	@echo "🛑 Stop:       make down-supabase"
 
-.PHONY: supa-start supa-stop supa-status supa-logs supa-health supa-restart supa-migrate
-supa-start: check-tools ## Alias for up-supabase (start integrated Supabase)
-	@$(MAKE) --no-print-directory up-supabase
-
-supa-stop: ## Stop integrated Supabase services
+.PHONY: down-supabase
+down-supabase: ## Stop official Supabase stack
 	@echo "🗄️ Stopping Supabase..."
-	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true
+	@$(DC) -f docker-compose.supabase.yml --project-name pmoves-supabase down
 	@echo "✅ Supabase stopped"
 
-supa-restart: ## Restart integrated Supabase services
+.PHONY: restart-supabase
+restart-supabase: ## Restart official Supabase stack
 	@echo "🔄 Restarting Supabase..."
-	@$(MAKE) --no-print-directory supa-stop
+	@$(MAKE) --no-print-directory down-supabase
 	@sleep 2
-	@$(MAKE) --no-print-directory supa-start
+	@$(MAKE) --no-print-directory up-supabase
 
-supa-status: ## Check integrated Supabase service status
+.PHONY: supa-start supa-stop supa-restart
+supa-start: check-tools ## Alias for up-supabase
+	@$(MAKE) --no-print-directory up-supabase
+
+supa-stop: ## Alias for down-supabase
+	@$(MAKE) --no-print-directory down-supabase
+
+supa-restart: ## Alias for restart-supabase
+	@$(MAKE) --no-print-directory restart-supabase
+
+supa-status: ## Check Supabase service status
 	@echo "🔍 Supabase service status:"
 	@echo ""
-	@$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || \
-		echo "   Supabase services not running"
-	@echo ""
-	@echo "📊 Health endpoints:"
-	@echo "   PostgREST:    curl -s http://localhost:3000/ && echo OK"
-	@echo "   Gotrue:       curl -s http://localhost:9999/health && echo OK"
-	@echo "   Kong:         curl -s http://localhost:8001/health && echo OK"
-	@echo "   Studio:       curl -s http://localhost:54323/api/profile && echo OK"
+	@$(DC) -f docker-compose.supabase.yml --project-name pmoves-supabase ps
 
-supa-logs: ## View Supabase service logs
-	@$(DC) logs -f --tail=100 supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || \
-		echo "No logs available - services not running"
+supa-logs: ## Show Supabase service logs
+	@$(DC) -f docker-compose.supabase.yml --project-name pmoves-supabase logs -f
 
-supa-health: ## Check all Supabase service health endpoints
-	@echo "🏥 Supabase health check:"
+supa-health: ## Check Supabase service health
+	@echo "🏥 Supabase Health Check"
+	@echo "======================="
 	@echo ""
-	@if docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
-		if docker exec pmoves-supabase-db-1 pg_isready -U postgres -d postgres >/dev/null 2>&1; then \
-			echo "   ✅ Database (postgres)"; \
-		else \
-			echo "   ❌ Database (postgres) - not ready"; \
+	@echo "Kong Gateway:"
+	@curl -sSf http://localhost:8000 >/dev/null 2>&1 && echo "  ✅ Healthy" || echo "  ❌ Unhealthy"
+	@echo ""
+	@echo "Studio:"
+	@curl -sSf http://localhost:$${SUPABASE_STUDIO_PORT:-54323} >/dev/null 2>&1 && echo "  ✅ Healthy" || echo "  ❌ Unhealthy"
+	@echo ""
+	@echo "Auth (GoTrue):"
+	@# Note: Auth service is accessed internally via Kong gateway, not directly on port 9999
+	@# This check is expected to fail externally - use Kong gateway instead
+	@curl -sSf http://localhost:8000/auth/v1/health >/dev/null 2>&1 && echo "  ✅ Healthy (via Kong)" || echo "  ❌ Unhealthy (check Kong: http://localhost:8000)"
+	@echo ""
+	@$(DC) -f docker-compose.supabase.yml --project-name pmoves-supabase ps --format "table {{.Name}}\t{{.Status}}" | grep supabase || true
+
+# =============================================================================
+# NETWORK MANAGEMENT
+# =============================================================================
+
+.PHONY: ensure-network
+ensure-network: ## Ensure PMOVES network exists
+	@docker network inspect pmoves-net >/dev/null 2>&1 || \
+		{ echo "🌐 Creating PMOVES network (pmoves-net)..."; \
+		docker network create pmoves-net >/dev/null 2>&1 || true; }
+
+.PHONY: clean-networks
+clean-networks: ## Remove stale Docker networks with incorrect labels
+	@echo "🧹 Cleaning up stale networks..."
+	@for net in $$(docker network ls -q --filter 'name=pmoves' 2>/dev/null); do \
+		name=$$(docker network inspect $$net -f '{{.Name}}' 2>/dev/null); \
+		label=$$(docker network inspect $$net -f '{{.Labels}}' 2>/dev/null); \
+		if [ "$$label" == "map[]" ]; then \
+			echo "  Removing $$name (empty labels)"; \
+			docker network rm $$name 2>/dev/null || true; \
+		fi; \
+	done
+	@echo "✅ Network cleanup complete"
+
+# =============================================================================
+# SUPABASE VOLUMES SETUP
+# =============================================================================
+
+.PHONY: setup-supabase-volumes
+setup-supabase-volumes: ## Create Supabase volume directories from submodule
+	@echo "📁 Setting up Supabase volumes..."
+	@mkdir -p volumes/supabase/db/data volumes/supabase/storage volumes/supabase/snippets
+	@mkdir -p volumes/supabase/functions volumes/supabase/api volumes/supabase/logs
+	@mkdir -p volumes/supabase/pooler
+	@if [ -d "../PMOVES-supabase/docker/volumes" ]; then \
+		echo "📋 Copying volume configs from PMOVES-supabase submodule..."; \
+		if ! cp -r ../PMOVES-supabase/docker/volumes/* volumes/supabase/ 2>/dev/null; then \
+			echo "⚠️  Warning: Failed to copy some volume configs"; \
 		fi; \
 	else \
-		echo "   ⚠️  Database (postgres) - not running"; \
+		echo "⚠️  PMOVES-supabase submodule not found at ../PMOVES-supabase"; \
+		echo "   Initialize with: git submodule update --init --recursive"; \
 	fi
-	@if curl -s http://localhost:3000/ >/dev/null 2>&1; then \
-		echo "   ✅ PostgREST API"; \
-	else \
-		echo "   ❌ PostgREST API - not responding"; \
-	fi
-	@if curl -s http://localhost:9999/health >/dev/null 2>&1; then \
-		echo "   ✅ Gotrue Auth"; \
-	else \
-		echo "   ❌ Gotrue Auth - not responding"; \
-	fi
-	@if curl -s http://localhost:8001/health >/dev/null 2>&1; then \
-		echo "   ✅ Kong Gateway"; \
-	else \
-		echo "   ❌ Kong Gateway - not responding"; \
-	fi
-	@if curl -s http://localhost:4000/health >/dev/null 2>&1; then \
-		echo "   ✅ Realtime"; \
-	else \
-		echo "   ⚠️  Realtime - not responding (optional)"; \
-	fi
-	@if curl -s http://localhost:5000/status >/dev/null 2>&1; then \
-		echo "   ✅ Storage API"; \
-	else \
-		echo "   ⚠️  Storage API - not responding (optional)"; \
-	fi
-	@if curl -s http://localhost:54323/api/profile >/dev/null 2>&1; then \
-		echo "   ✅ Studio UI"; \
-	else \
-		echo "   ⚠️  Studio UI - not responding (optional)"; \
-	fi
+	@echo "✅ Volumes ready"
+
+# =============================================================================
+# SUPABASE MIGRATIONS
+# =============================================================================
 
 supa-migrate: ## Apply Supabase migrations from supabase/migrations directory
 	@echo "🗄️ Applying Supabase migrations..."
@@ -291,50 +317,62 @@ supa-migrate: ## Apply Supabase migrations from supabase/migrations directory
 		exit 1; \
 	fi
 	@if ! docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
-		echo "⚠️  Supabase not running. Starting..."; \
-		$(MAKE) --no-print-directory supa-start; \
-		sleep 10; \
+		echo "⚠️  Supabase DB not running - start with 'make up-supabase'"; \
+		exit 1; \
 	fi
-	@for migration in supabase/migrations/*.sql; do \
+	@failed_migrations=""; \
+	for migration in supabase/migrations/*.sql; do \
 		if [ -f "$$migration" ]; then \
-			echo "   Applying: $$(basename $$migration)"; \
-			docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$migration" || \
-				echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
+			echo "  Applying $$(basename $$migration)..."; \
+			if ! docker exec -i supabase-db psql -U postgres -d postgres < "$$migration"; then \
+				failed_migrations="$$failed_migrations $$(basename $$migration)"; \
+			fi; \
 		fi; \
-	done
-	@echo "✅ Migrations complete"
+	done; \
+	if [ -n "$$failed_migrations" ]; then \
+		echo "❌ FAILED MIGRATIONS:$$failed_migrations"; \
+		exit 1; \
+	fi
+	@echo "✅ Migrations applied"
 
 .PHONY: supabase-bootstrap
-supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
+supabase-bootstrap: ## Apply Supabase migrations + seeds
 	@echo "🗄️ Applying Supabase schema + seeds..."
 	@if ! docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
 		echo "⚠️  Supabase not running. Starting..."; \
-		$(MAKE) --no-print-directory supa-start; \
-		sleep 10; \
+		$(MAKE) --no-print-directory up-supabase; \
+		sleep 15; \
 	fi
-	@echo "   Running migrations..."
-	@if [ -d "supabase/migrations" ]; then \
+	@failed=""; \
+	echo "   Running migrations..."; \
+	if [ -d "supabase/migrations" ]; then \
 		for migration in supabase/migrations/*.sql; do \
 			if [ -f "$$migration" ]; then \
 				echo "   Applying: $$(basename $$migration)"; \
-				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$migration" || \
-					echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
+				if ! docker exec -i supabase-db psql -U postgres -d postgres < "$$migration"; then \
+					failed="$$failed migration:$$(basename $$migration)"; \
+				fi; \
 			fi; \
 		done; \
 	else \
 		echo "   ⚠️  No migrations directory found"; \
-	fi
-	@echo "   Running seed scripts..."
-	@if [ -d "supabase/seeds" ]; then \
+	fi; \
+	echo "   Running seed scripts..."; \
+	if [ -d "supabase/seeds" ]; then \
 		for seed in supabase/seeds/*.sql; do \
 			if [ -f "$$seed" ]; then \
 				echo "   Seeding: $$(basename $$seed)"; \
-				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$seed" || \
-					echo "   ⚠️  Seed failed: $$(basename $$seed)"; \
+				if ! docker exec -i supabase-db psql -U postgres -d postgres < "$$seed"; then \
+					failed="$$failed seed:$$(basename $$seed)"; \
+				fi; \
 			fi; \
 		done; \
 	else \
 		echo "   ⚠️  No seeds directory found"; \
+	fi; \
+	if [ -n "$$failed" ]; then \
+		echo "❌ FAILED:$$failed"; \
+		exit 1; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
 
@@ -405,7 +443,7 @@ first-run: ## Guided first-run: env setup, Supabase, core services, agents, demo
 	@echo "📊 Services:"
 	@echo "   Agent Zero UI:    http://localhost:8081"
 	@echo "   Archon UI:        http://localhost:3737"
-	@echo "   Supabase Studio:  http://localhost:65433"
+	@echo "   Supabase Studio:  http://localhost:54323"
 	@echo ""
 	@echo "💡 Next steps:"
 	@echo "   • Check health: make status-all"
@@ -563,7 +601,11 @@ up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 .PHONY: up-integrations
 up-integrations: ## Start external integrations (n8n, TTS)
 	@echo "🔗 Starting external integrations..."
-	@$(MAKE) up-n8n || true
+	@if ! $(MAKE) up-n8n; then \
+		echo "❌ Failed to start n8n integration"; \
+		echo "   Check logs: make logs-n8n"; \
+		exit 1; \
+	fi
 	@echo "✅ Integrations started"
 
 .PHONY: up-ui
@@ -668,11 +710,6 @@ down-ui: ## Stop PMOVES UI
 	@echo "🖥️ Stopping PMOVES UI..."
 	@$(DC) --profile ui down pmoves-ui
 
-.PHONY: down-supabase
-down-supabase: ## Stop Supabase
-	@echo "🗄️ Stopping Supabase..."
-	@cd .. && supabase stop
-
 # =============================================================================
 # STATUS & HEALTH TARGETS
 # =============================================================================
@@ -708,7 +745,7 @@ status-all: ## Show health status of ALL services
 .PHONY: health-summary
 health-summary: ## Run quick health check on all services
 	@echo "🏥 Health Summary:"
-	@python3 tools/flight_check_retro.py || true
+	@python3 tools/flight_check_retro.py
 	@echo ""
 	@echo "📁 Full results saved to .validation/"
 
@@ -719,32 +756,58 @@ health-summary: ## Run quick health check on all services
 .PHONY: wait-obs
 wait-obs: ## Wait for observability to be ready
 	@echo "⏳ Waiting for observability..."
-	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || { \
+		echo "❌ Prometheus not ready after 60s"; \
+		echo "   Check with: docker logs pmoves-prometheus"; \
+		exit 1; \
+	}
+	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || { \
+		echo "❌ Grafana not ready after 60s"; \
+		echo "   Check with: docker logs pmoves-grafana"; \
+		exit 1; \
+	}
 	@echo "✅ Observability ready"
 
 .PHONY: wait-data
 wait-data: ## Wait for data tier to be ready
 	@echo "⏳ Waiting for data tier..."
-	@timeout 60 bash -c 'until curl -sf http://localhost:6333/ready; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:7474; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:7700/health; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:6333/ready; do sleep 2; done' || { \
+		echo "❌ Qdrant not ready after 60s"; exit 1; \
+	}
+	@timeout 60 bash -c 'until curl -sf http://localhost:7474; do sleep 2; done' || { \
+		echo "❌ Neo4j not ready after 60s"; exit 1; \
+	}
+	@timeout 60 bash -c 'until curl -sf http://localhost:7700/health; do sleep 2; done' || { \
+		echo "❌ Meilisearch not ready after 60s"; exit 1; \
+	}
+	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || { \
+		echo "❌ MinIO not ready after 60s"; exit 1; \
+	}
 	@echo "✅ Data tier ready"
 
 .PHONY: wait-workers
 wait-workers: ## Wait for workers to be ready
 	@echo "⏳ Waiting for workers..."
-	@timeout 60 bash -c 'until curl -sf http://localhost:8083/healthz; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:8084/healthz; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:8083/healthz; do sleep 2; done' || { \
+		echo "❌ Extract worker not ready after 60s"; exit 1; \
+	}
+	@timeout 60 bash -c 'until curl -sf http://localhost:8084/healthz; do sleep 2; done' || { \
+		echo "❌ LangExtract not ready after 60s"; exit 1; \
+	}
 	@echo "✅ Workers ready"
 
 .PHONY: wait-agents
 wait-agents: ## Wait for agents to be ready
 	@echo "⏳ Waiting for agents..."
-	@timeout 60 bash -c 'until curl -sf http://localhost:8080/healthz; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:8091/healthz; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:8098/healthz; do sleep 2; done' || true
+	@timeout 60 bash -c 'until curl -sf http://localhost:8080/healthz; do sleep 2; done' || { \
+		echo "❌ Agent Zero not ready after 60s"; exit 1; \
+	}
+	@timeout 60 bash -c 'until curl -sf http://localhost:8091/healthz; do sleep 2; done' || { \
+		echo "❌ Archon not ready after 60s"; exit 1; \
+	}
+	@timeout 60 bash -c 'until curl -sf http://localhost:8098/healthz; do sleep 2; done' || { \
+		echo "❌ DeepResearch not ready after 60s"; exit 1; \
+	}
 	@echo "✅ Agents ready"
 
 # =============================================================================
@@ -763,6 +826,7 @@ inventory: ## List all running PMOVES services by tier
 validate-tier: ## Validate tier network compliance (backend services should NOT be on pmoves-net)
 	@echo "🔍 Validating tier network compliance..."
 	@echo "Backend services should NOT be on pmoves-net (except UIs)"
+	@# Exclusions: supabase (uses isolated pmoves-supabase-network), archon/agent-zero (orchestrators need external API access)
 	@docker ps --format "table {{.Names}}\t{{.Networks}}" 2>/dev/null | grep pmoves-net | grep -v "supabase\|archon\|agent-zero" || echo "✅ No unexpected services on pmoves-net"
 
 # -------- PMOVES.YT docs helpers ----------
@@ -806,31 +870,36 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	  PARALLEL=1 WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) bringup-with-ui; \
 	  echo "→ Retro preflight"; \
 	  $(MAKE) preflight-retro; \
+	  failed=""; \
 	  echo "→ Monitoring report"; \
-	  $(MAKE) monitoring-report || true; \
+	  $(MAKE) monitoring-report || failed="$$failed monitoring-report"; \
 	  echo "→ TensorZero observability"; \
-	  $(MAKE) smoke-tensorzero-observability || true; \
+	  $(MAKE) smoke-tensorzero-observability || failed="$$failed tensorzero-obs"; \
 	  echo "→ Creator pipeline"; \
-	  $(MAKE) smoke-creator-pipeline || true; \
+	  $(MAKE) smoke-creator-pipeline || failed="$$failed creator-pipeline"; \
 	  echo "→ yt-dlp catalog smoke"; \
-	  $(MAKE) yt-docs-catalog-smoke || true; \
+	  $(MAKE) yt-docs-catalog-smoke || failed="$$failed yt-docs-catalog"; \
 	  echo "→ Archon smoke"; \
-	  $(MAKE) archon-smoke || true; \
+	  $(MAKE) archon-smoke || failed="$$failed archon-smoke"; \
 	  echo "→ Archon REST policy probe"; \
-	  $(MAKE) archon-rest-policy-smoke || true; \
+	  $(MAKE) archon-rest-policy-smoke || failed="$$failed archon-rest-policy"; \
 	  echo "→ Core smoke"; \
-	  $(MAKE) smoke || true; \
+	  $(MAKE) smoke || failed="$$failed core-smoke"; \
 	  echo "→ GPU smoke (relaxed)"; \
-	  $(MAKE) smoke-gpu || true; \
+	  $(MAKE) smoke-gpu || failed="$$failed gpu-smoke"; \
 	  echo "→ Channel monitor smoke"; \
-	  $(MAKE) channel-monitor-smoke || true; \
+	  $(MAKE) channel-monitor-smoke || failed="$$failed channel-monitor"; \
 	  echo "→ Agents headless smoke"; \
-	  $(MAKE) agents-headless-smoke || true; \
+	  $(MAKE) agents-headless-smoke || failed="$$failed agents-headless"; \
 	  echo "→ Archon MCP evidence"; \
-	  $(MAKE) archon-mcp-evidence || true; \
+	  $(MAKE) archon-mcp-evidence || failed="$$failed archon-mcp"; \
 	  echo "→ Discord smoke"; \
-	  $(MAKE) discord-smoke || true; \
-	  echo "✔ Verify-all sequence executed. Review console + Grafana."
+	  $(MAKE) discord-smoke || failed="$$failed discord-smoke"; \
+	  if [ -n "$$failed" ]; then \
+	    echo "❌ FAILED CHECKS:$$failed"; \
+	    exit 1; \
+	  fi; \
+	  echo "✔ Verify-all sequence executed successfully."
 
 .PHONY: archon-mcp-evidence
 archon-mcp-evidence: ## Capture Archon MCP describe/commands/execute evidence under pmoves/docs/logs/
@@ -1086,9 +1155,6 @@ NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
 
 JELLYFIN_AI_BASE ?= jellyfin-ai
 export JELLYFIN_AI_BASE
-# Supabase provider: 'cli' for Supabase CLI stack, 'compose' for docker-compose stack
-# Back-compat alias for older scripts. Use SUPABASE_RUNTIME going forward.
-SUPA_PROVIDER ?= $(SUPABASE_RUNTIME)
 
 # Data services differ by provider: with CLI we don't run Postgres/PostgREST here
 DATA_SERVICES := minio presign
