@@ -625,6 +625,9 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    depends_on:
+      minio:
+        condition: service_healthy
   render-webhook:
     <<: *id002
     build: ./services/render-webhook
@@ -643,6 +646,9 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
   model-registry:
     <<: *id002
     build:
@@ -694,6 +700,13 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      minio:
+        condition: service_started
   pdf-ingest:
     <<: *id003
     build:
@@ -919,6 +932,8 @@ services:
     depends_on:
       pmoves-yt:
         condition: service_started
+      nats:
+        condition: service_healthy
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
     networks:
@@ -1151,7 +1166,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - ${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_PORT:-8081}:80
@@ -1188,7 +1204,7 @@ services:
       - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     command:
     - python
     - -c
@@ -1241,7 +1257,7 @@ services:
       - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     ports: ["8054:8054"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
@@ -1314,7 +1330,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - ${DEEPRESEARCH_PORT:-8098}:8098
     volumes:
@@ -1342,6 +1359,9 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
   nats-echo-req:
     <<: *id005
     build:
@@ -1387,7 +1407,8 @@ services:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
     ports:
     - 8094:8092
     profiles:
@@ -1541,7 +1562,7 @@ services:
     - 8200:8200
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
         required: false
   evo-controller:
     <<: *id005
@@ -1766,7 +1787,7 @@ services:
       - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       minio:
         condition: service_started
     volumes:
