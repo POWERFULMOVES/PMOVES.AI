@@ -1547,8 +1547,10 @@ services:
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL:-nats://nats:4222}
     volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro
-    - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
+      # SECURITY: Docker socket required for spawning GPU model containers.
+      # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
     deploy:
       resources:
         reservations:
@@ -1557,6 +1559,10 @@ services:
             count: all
             capabilities:
             - gpu
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     profiles:
     - gpu
     networks:
