@@ -487,6 +487,96 @@ id UUID PRIMARY KEY DEFAULT uuid_generate_v4()
 id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 ```
 
+## CI/CD Update Strategy (2026-02-06)
+
+### Supabase Submodule Alignment
+
+The PMOVES-supabase submodule tracks the official Supabase self-hosted stack
+and must stay synchronized with upstream releases.
+
+**Current Configuration:**
+- Submodule: `PMOVES-supabase`
+- Branch: `PMOVES.AI-Edition-Hardened`
+- Remote: `https://github.com/POWERFULMOVES/PMOVES-supabase.git`
+- Status: Proper gitlink (fixed 2026-02-06)
+
+### Update Procedure
+
+To update Supabase to a new version:
+
+```bash
+# 1. Fetch latest from upstream
+cd PMOVES-supabase
+git fetch origin
+
+# 2. Checkout the target version tag or commit
+git checkout <version_tag>  # e.g., v1.50.0
+
+# 3. Update the main repo's submodule reference
+cd ..
+git add PMOVES-supabase
+git commit -m "chore(supabase): Update to v<version_tag>"
+```
+
+### Environment Loading Fix (Critical)
+
+**Issue**: Docker Compose variable expansion (`${VAR}`) requires variables
+to be in the shell environment at compose-time. The `env_file` directive
+only sets variables inside containers, not for compose expansion.
+
+**Solution**: Always use `scripts/with-env.sh` to load environment files
+before running Docker Compose commands.
+
+```bash
+# CORRECT - Sources environment files first
+source pmoves/scripts/with-env.sh
+docker compose -p pmoves -f pmoves/docker-compose.yml up -d
+
+# INCORRECT - Variables won't be expanded
+docker compose -p pmoves -f pmoves/docker-compose.yml up -d
+```
+
+**Makefile Integration**: All make targets properly source the environment:
+```bash
+make up-supabase      # Sources with-env.sh automatically
+make up-data-tier     # Sources with-env.sh automatically
+```
+
+### Realtime Service Requirements
+
+Supabase Realtime has specific environment requirements:
+
+1. **SECRET_KEY_BASE**: Must be at least 64 bytes
+   ```bash
+   # Generate with:
+   openssl rand -base64 64
+   ```
+
+2. **Database Credentials**: Must use TCP connection (`-h localhost`)
+   - Peer authentication fails for Docker exec connections
+
+3. **Required Variables**:
+   - `DB_HOST=supabase-db`
+   - `DB_PORT=5432`
+   - `DB_NAME=pmoves`
+   - `DB_USER=pmoves`
+   - `DB_PASSWORD=<from env.tier-supabase>`
+   - `SECRET_KEY_BASE=<64 bytes>`
+   - `JWT_SECRET=<from SUPABASE_JWT_SECRET>`
+
+### All Submodules Branch Alignment (2026-02-06)
+
+All PMOVES submodules are aligned to `PMOVES.AI-Edition-Hardened`:
+
+| Submodule | Branch | Notes |
+|-----------|--------|-------|
+| PMOVES-Archon | PMOVES.AI-Edition-Hardened | Fixed from feat/personas-clean-rebase |
+| PMOVES-BoTZ | PMOVES.AI-Edition-Hardened | Nested in DoX uses -DoX variant |
+| PMOVES-DoX | PMOVES.AI-Edition-Hardened | Was on feat/v5-secrets-bootstrap |
+| PMOVES-ToKenism-Multi | PMOVES.AI-Edition-Hardened | Reset to origin |
+| PMOVES-supabase | PMOVES.AI-Edition-Hardened | Re-registered as gitlink |
+| PMOVES-Headscale | main | Hardened branch not yet created |
+
 ## Related Documentation
 
 - [PRODUCTION_SUPABASE.md](PRODUCTION_SUPABASE.md) - Supabase setup and architecture
