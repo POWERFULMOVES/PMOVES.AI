@@ -295,3 +295,4 @@
 [submodule "PMOVES-supabase"]
 	path = PMOVES-supabase
 	url = https://github.com/POWERFULMOVES/PMOVES-supabase.git
+	branch = PMOVES.AI-Edition-Hardened
