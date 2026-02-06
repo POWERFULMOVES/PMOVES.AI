@@ -294,7 +294,7 @@ supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
 		for migration in supabase/migrations/*.sql; do \
 			if [ -f "$$migration" ]; then \
 				echo "   Applying: $$(basename $$migration)"; \
-				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$migration" || \
+				docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves < "$$migration" || \
 					echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
 			fi; \
 		done; \
@@ -302,16 +302,16 @@ supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
 		echo "   ⚠️  No migrations directory found"; \
 	fi
 	@echo "   Running seed scripts..."
-	@if [ -d "supabase/seeds" ]; then \
-		for seed in supabase/seeds/*.sql; do \
+	@if [ -d "supabase/initdb" ]; then \
+		for seed in supabase/initdb/*.sql; do \
 			if [ -f "$$seed" ]; then \
 				echo "   Seeding: $$(basename $$seed)"; \
-				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$seed" || \
+				docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves < "$$seed" || \
 					echo "   ⚠️  Seed failed: $$(basename $$seed)"; \
 			fi; \
 		done; \
 	else \
-		echo "   ⚠️  No seeds directory found"; \
+		echo "   ⚠️  No initdb directory found"; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
 
