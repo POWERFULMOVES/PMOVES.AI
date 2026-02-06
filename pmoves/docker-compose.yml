@@ -510,6 +510,7 @@ services:
     restart: unless-stopped
     environment:
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    - NEO4J_server_config_strict__validation_enabled=false
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
