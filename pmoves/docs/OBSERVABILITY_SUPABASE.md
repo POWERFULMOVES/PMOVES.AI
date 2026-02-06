@@ -355,6 +355,138 @@ start_http_server(8081)  # Metrics on :8081/metrics
     - targets: ["my-service:8081"]
 ```
 
+## Bring-Up Troubleshooting (2026-02-06)
+
+### Common Issues and Fixes
+
+#### 1. PostgreSQL Peer Authentication Errors
+
+**Error:** `FATAL: peer authentication failed for user "pmoves"`
+
+**Cause:** Docker exec without `-h localhost` uses Unix socket peer auth instead of password auth.
+
+**Fix:** Makefile migration commands updated to use `-h localhost`:
+```bash
+docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves
+```
+
+#### 2. Missing Schemas and Roles
+
+**Error:** `ERROR: schema "auth" does not exist` or `role "postgres" does not exist`
+
+**Cause:** Fresh database volume doesn't have Supabase-specific schemas.
+
+**Fix:** Run schema creation before first bring-up:
+```bash
+docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves <<'SQL'
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE SCHEMA IF NOT EXISTS graphql_public;
+CREATE SCHEMA IF NOT EXISTS pmoves_core;
+CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';
+ALTER ROLE postgres WITH PASSWORD 'postgres';
+SQL
+```
+
+#### 3. Kong Migration Bootstrap
+
+**Error:** Kong fails with database errors.
+
+**Fix:** Bootstrap Kong migrations before starting Kong:
+```bash
+docker run --rm --network pmoves_data \
+  -e KONG_DATABASE=postgres \
+  -e KONG_PG_HOST=supabase-db \
+  -e KONG_PG_DATABASE=pmoves \
+  -e KONG_PG_USER=pmoves \
+  -e KONG_PG_PASSWORD=<your_password> \
+  kong:3.7.1 kong migrations bootstrap --yes
+```
+
+#### 4. Neo4j 5.x Config Validation
+
+**Error:** `Failed to read config: Unrecognized setting. No declared setting with name: PASSWORD`
+
+**Cause:** Neo4j 5.x has stricter config validation.
+
+**Fix:** Add to docker-compose.yml environment:
+```yaml
+environment:
+- NEO4J_server_config_strict__validation_enabled=false
+```
+
+#### 5. Storage Service Region
+
+**Error:** `Error: Region is missing`
+
+**Fix:** Set in `env.tier-supabase`:
+```bash
+SUPABASE_STORAGE_REGION=us-east-1
+```
+
+### Complete Bring-Up Sequence
+
+For fresh Supabase bring-up on PMOVES.AI-Edition-Hardened:
+
+```bash
+# 1. Start Supabase DB only
+make up-supabase  # Starts DB first
+
+# 2. Create schemas and roles (manual first-time setup)
+docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves <<'SQL'
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE SCHEMA IF NOT EXISTS graphql_public;
+CREATE SCHEMA IF NOT EXISTS pmoves_core;
+CREATE SCHEMA IF NOT EXISTS pmoves;
+CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';
+ALTER ROLE postgres WITH PASSWORD 'postgres';
+GRANT ALL ON SCHEMA auth, storage, extensions, graphql_public, pmoves_core, pmoves TO postgres;
+GRANT ALL ON SCHEMA pmoves_core, pmoves TO pmoves;
+GRANT USAGE ON SCHEMA pmoves_core, pmoves TO anon, authenticated, service_role;
+SQL
+
+# 3. Bootstrap Kong migrations
+docker run --rm --network pmoves_data \
+  -e KONG_DATABASE=postgres \
+  -e KONG_PG_HOST=supabase-db \
+  -e KONG_PG_DATABASE=pmoves \
+  -e KONG_PG_USER=pmoves \
+  -e KONG_PG_PASSWORD=${POSTGRES_PASSWORD} \
+  kong:3.7.1 kong migrations bootstrap --yes
+
+# 4. Run Supabase migrations and seeds
+make supabase-bootstrap
+
+# 5. Start remaining data tier
+make up-data-tier
+
+# 6. Seed Neo4j
+make neo4j-bootstrap
+
+# 7. Seed Qdrant/Meili
+make seed-data
+```
+
+### Migration File Notes
+
+Some migration files in `pmoves/supabase/migrations/` use deprecated `uuid_generate_v4()` which requires `uuid-ossp` extension. For PostgreSQL 17+, these should be updated to use `gen_random_uuid()`.
+
+**Files affected (as of 2026-02-06):**
+- `20250204000000_channel_monitor_tables.sql`
+- `20251230000000_tokenism_simulator.sql`
+
+**Migration fix pattern:**
+```sql
+-- OLD (requires uuid-ossp extension)
+id UUID PRIMARY KEY DEFAULT uuid_generate_v4()
+
+-- NEW (PostgreSQL 13+ built-in)
+id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+```
+
 ## Related Documentation
 
 - [PRODUCTION_SUPABASE.md](PRODUCTION_SUPABASE.md) - Supabase setup and architecture
