@@ -36,6 +36,7 @@ load_env_file() {
 
 # Hardened 6-tier architecture: load tier env files first
 load_env_file "$ROOT_DIR/pmoves/env.tier-data"
+load_env_file "$ROOT_DIR/pmoves/env.tier-supabase"
 load_env_file "$ROOT_DIR/pmoves/env.tier-api"
 load_env_file "$ROOT_DIR/pmoves/env.tier-llm"
 load_env_file "$ROOT_DIR/pmoves/env.tier-media"
