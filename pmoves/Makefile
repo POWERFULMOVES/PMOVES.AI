@@ -163,23 +163,21 @@ check-tools: ## Check required tools and versions
 .PHONY: up-supabase
 up-supabase: ## Start Supabase stack (integrated in docker-compose - 2025)
 	@echo "🗄️ Starting Supabase (2025 integrated stack)..."
-	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
-		$(DC) up -d supabase-db
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) $(STACK_FILES) up -d supabase-db
 	@echo "⏳ Waiting for Supabase DB..."
-	@timeout 60 bash -c 'until docker exec pmoves-supabase-db-1 pg_isready -U postgres -d postgres 2>/dev/null; do sleep 2; done' || \
+	@timeout 60 bash -c 'until docker exec pmoves-supabase-db-1 pg_isready -U $${POSTGRES_USER:-pmoves} -d $${POSTGRES_DB:-pmoves} 2>/dev/null; do sleep 2; done' || \
 		{ echo "⚠️  Supabase DB not ready after timeout"; exit 1; }
 	@echo "🔧 Bootstrapping Kong migrations..."
-	@docker run --rm --network pmoves_data \
+	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 		-e KONG_DATABASE=postgres \
 		-e KONG_PG_HOST=supabase-db \
 		-e KONG_PG_DATABASE=postgres \
-		-e KONG_PG_USER=$${POSTGRES_USER} \
-		-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD} \
+		-e KONG_PG_USER=$${SUPABASE_DB_USER:-pmoves} \
+		-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-pmoves} \
 		kong:3.7.1 kong migrations bootstrap --yes 2>/dev/null || \
 		echo "⚠️  Kong migrations may already exist"
 	@echo "⏳ Starting remaining Supabase services..."
-	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
-		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio
+	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) $(STACK_FILES) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio
 	@echo "⏳ Waiting for Supabase services to be healthy..."
 	@sleep 10
 	@echo "✅ Supabase ready"
@@ -940,7 +938,10 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
 		sed -i "s|^SUPABASE_ANON_KEY=.*|SUPABASE_ANON_KEY=$${SUPABASE_ANON_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
 		sed -i "s|^SUPABASE_SERVICE_ROLE_KEY=.*|SUPABASE_SERVICE_ROLE_KEY=$${SUPABASE_SERVICE_ROLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_PUBLISHABLE_KEY=.*|SUPABASE_PUBLISHABLE_KEY=$${SUPABASE_PUBLISHABLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_SECRET_KEY=.*|SUPABASE_SECRET_KEY=$${SUPABASE_SECRET_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
 		sed -i "s|^SUPABASE_REALTIME_SECRET=.*|SUPABASE_REALTIME_SECRET=$${SUPABASE_REALTIME_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_DB_PASSWORD=.*|SUPABASE_DB_PASSWORD=$${SUPABASE_DB_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
 		echo "✓ Populated env.tier-supabase"; \
 	fi; \
