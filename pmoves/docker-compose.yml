@@ -1540,6 +1540,7 @@ services:
     environment:
     - NVIDIA_VISIBLE_DEVICES=all
     - GPU_MODELS_CONFIG=/config/gpu-models.yaml
+    - GPU_ORCHESTRATOR_MODEL_REGISTRY_PATH=/config/gpu-models.yaml
     - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://pmoves-ollama:11434}
     - VLLM_BASE_URL=${VLLM_BASE_URL:-http://pmoves-vllm:8000}
     - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
