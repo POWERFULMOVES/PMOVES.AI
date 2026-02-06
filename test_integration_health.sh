@@ -15,6 +15,40 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Check if jq is installed
+if ! command -v jq &> /dev/null; then
+    echo -e "${YELLOW}Note: jq not found. Using basic JSON parsing.${NC}"
+    echo "  For better output, install: apt-get install jq / brew install jq"
+    echo ""
+    JQ_AVAILABLE=false
+else
+    JQ_AVAILABLE=true
+fi
+
+# Helper: extract JSON field value (with or without jq)
+json_extract() {
+    local json=$1
+    local field=$2
+    if [ "$JQ_AVAILABLE" = true ]; then
+        echo "$json" | jq -r ".$field"
+    else
+        # Fallback: grep for "field":"value" pattern
+        echo "$json" | grep -o "\"$field\":\"[^\"]*\"" | cut -d'"' -f4
+    fi
+}
+
+# Helper: check if JSON field exists (with or without jq)
+json_has_field() {
+    local json=$1
+    local field=$2
+    if [ "$JQ_AVAILABLE" = true ]; then
+        echo "$json" | jq -e ".$field" > /dev/null 2>&1
+    else
+        # Fallback: check if field exists in JSON
+        echo "$json" | grep -q "\"$field\""
+    fi
+}
+
 # Test function
 test_health_endpoint() {
     local name=$1
@@ -27,16 +61,20 @@ test_health_endpoint() {
         response=$(curl -s "$url")
 
         # Check if status field exists
-        if echo "$response" | jq -e '.status' > /dev/null 2>&1; then
-            status=$(echo "$response" | jq -r '.status')
+        if json_has_field "$response" "status"; then
+            status=$(json_extract "$response" "status")
 
             # Check if integrations field exists
-            if echo "$response" | jq -e '.integrations' > /dev/null 2>&1; then
+            if json_has_field "$response" "integrations"; then
                 echo -e "${GREEN}✓ PASS${NC}"
                 echo "  Status: $status"
 
-                # Print integration status
-                echo "$response" | jq -r '.integrations | to_entries[] | "  \(.key): \(.value.healthy)"' 2>/dev/null || true
+                # Print integration status (only if jq available)
+                if [ "$JQ_AVAILABLE" = true ]; then
+                    echo "$response" | jq -r '.integrations | to_entries[] | "  \(.key): \(.value.healthy)"' 2>/dev/null || true
+                else
+                    echo "  (Install jq for detailed integration status)"
+                fi
                 echo ""
                 return 0
             else
@@ -55,14 +93,6 @@ test_health_endpoint() {
         return 1
     fi
 }
-
-# Check if jq is installed
-if ! command -v jq &> /dev/null; then
-    echo -e "${YELLOW}Warning: jq not found. Install for formatted output.${NC}"
-    echo "  Ubuntu/Debian: sudo apt-get install jq"
-    echo "  Mac: brew install jq"
-    echo ""
-fi
 
 # Test Results
 passed=0
