@@ -38,6 +38,8 @@ out/
 
 # Tier environment files (generated from env.shared)
 env.tier-*
+# But keep example templates
+!env.tier-*.example
 
 # Generated environment files
 .env.generated
