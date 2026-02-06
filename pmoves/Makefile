@@ -887,7 +887,7 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 check-tier-envs: ## Validate all tier environment files exist
 	@echo "Checking tier environment files..."
 	@missing=""; \
-	for tier in data api llm worker media agent ui; do \
+	for tier in data supabase api llm worker media agent ui; do \
 		if [ ! -f "env.tier-$$tier" ]; then \
 			if [ -f "env.tier-$$tier.example" ]; then \
 				echo "⚠️  WARNING: env.tier-$$tier missing (example exists)"; \
@@ -910,7 +910,7 @@ check-tier-envs: ## Validate all tier environment files exist
 bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
 	@echo "Bootstrapping tier environment files from examples..."
 	@created=""; \
-	for tier in data api llm worker media agent ui; do \
+	for tier in data supabase api llm worker media agent ui; do \
 		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \
 			echo "→ Creating env.tier-$$tier from example..."; \
 			cp "env.tier-$$tier.example" "env.tier-$$tier"; \
@@ -935,6 +935,14 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^MEILI_MASTER_KEY=.*|MEILI_MASTER_KEY=$${MEILI_MASTER_KEY:-$(shell openssl rand -hex 32)}|" env.tier-data; \
 		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		echo "✓ Populated env.tier-data"; \
+	fi; \
+	if [ -f "env.tier-supabase" ]; then \
+		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_ANON_KEY=.*|SUPABASE_ANON_KEY=$${SUPABASE_ANON_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_SERVICE_ROLE_KEY=.*|SUPABASE_SERVICE_ROLE_KEY=$${SUPABASE_SERVICE_ROLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_REALTIME_SECRET=.*|SUPABASE_REALTIME_SECRET=$${SUPABASE_REALTIME_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
+		echo "✓ Populated env.tier-supabase"; \
 	fi; \
 	if [ -f "env.tier-api" ]; then \
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-api; \
