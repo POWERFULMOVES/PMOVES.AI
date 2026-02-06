@@ -1,0 +1,128 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-tier-policy
+  namespace: pmoves
+  labels:
+    tier: api
+    app.kubernetes.io/part-of: pmoves
+spec:
+  podSelector:
+    matchLabels:
+      tier: api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow external traffic from ingress controller / load balancer
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx  # Adjust for your ingress
+    ports:
+    - protocol: TCP
+      port: 8080  # Agent Zero
+    - protocol: TCP
+      port: 8091  # Archon
+    - protocol: TCP
+      port: 8077  # PMOVES.YT
+    - protocol: TCP
+      port: 8099  # SupaSerch
+    - protocol: TCP
+      port: 3030  # TensorZero Gateway
+    - protocol: TCP
+      port: 8092  # PMOVES-DoX
+  # Allow from monitoring tier
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: pmoves
+      podSelector:
+        matchLabels:
+          tier: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8091
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow connections to app-tier services
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: pmoves
+      podSelector:
+        matchLabels:
+          tier: app
+    ports:
+    - protocol: TCP
+      port: 8086  # Hi-RAG Gateway v2
+    - protocol: TCP
+      port: 8083  # Extract Worker
+    - protocol: TCP
+      port: 8084  # LangExtract
+  # Allow connections to bus-tier (NATS)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: pmoves
+      podSelector:
+        matchLabels:
+          tier: bus
+    ports:
+    - protocol: TCP
+      port: 4222  # NATS
+  # Allow connections to data-tier services
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: pmoves
+      podSelector:
+        matchLabels:
+          tier: data
+    ports:
+    - protocol: TCP
+      port: 6333  # Qdrant
+    - protocol: TCP
+      port: 7474  # Neo4j HTTP
+    - protocol: TCP
+      port: 7687  # Neo4j Bolt
+    - protocol: TCP
+      port: 7700  # Meilisearch
+  # Allow external API calls (LLM providers, etc.)
+  # NOTE: Uses ipBlock for actual external IPs (0.0.0.0/0) with private network exclusions
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          - 10.0.0.0/8     # RFC1918 - Private Class A
+          - 172.16.0.0/12  # RFC1918 - Private Class B
+          - 192.168.0.0/16 # RFC1918 - Private Class C
+    ports:
+    - protocol: TCP
+      port: 443   # HTTPS
+    - protocol: TCP
+      port: 80    # HTTP
+  # Allow intra-cluster communication (for services within same namespace)
+  - to:
+    - namespaceSelector: {}
+      podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443   # HTTPS
+    - protocol: TCP
+      port: 80    # HTTP
