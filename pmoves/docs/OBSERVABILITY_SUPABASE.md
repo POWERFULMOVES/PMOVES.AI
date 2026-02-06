@@ -512,10 +512,13 @@ git fetch origin
 # 2. Checkout the target version tag or commit
 git checkout <version_tag>  # e.g., v1.50.0
 
+# OR update to latest commit on Hardened branch:
+git checkout origin/PMOVES.AI-Edition-Hardened
+
 # 3. Update the main repo's submodule reference
 cd ..
 git add PMOVES-supabase
-git commit -m "chore(supabase): Update to v<version_tag>"
+git commit -m "chore(supabase): Update to latest Hardened"
 ```
 
 ### Environment Loading Fix (Critical)
@@ -528,12 +531,17 @@ only sets variables inside containers, not for compose expansion.
 before running Docker Compose commands.
 
 ```bash
+# From repo root (/home/pmoves/PMOVES.AI):
 # CORRECT - Sources environment files first
 source pmoves/scripts/with-env.sh
 docker compose -p pmoves -f pmoves/docker-compose.yml up -d
 
 # INCORRECT - Variables won't be expanded
 docker compose -p pmoves -f pmoves/docker-compose.yml up -d
+
+# From pmoves/ directory:
+source scripts/with-env.sh
+docker compose -p pmoves -f docker-compose.yml up -d
 ```
 
 **Makefile Integration**: All make targets properly source the environment:
@@ -548,34 +556,49 @@ Supabase Realtime has specific environment requirements:
 
 1. **SECRET_KEY_BASE**: Must be at least 64 bytes
    ```bash
-   # Generate with:
-   openssl rand -base64 64
+   # SUPABASE_REALTIME_SECRET maps to SECRET_KEY_BASE in Realtime
+   # Must be at least 64 bytes
+   SUPABASE_REALTIME_SECRET=$(openssl rand -base64 64)
    ```
 
 2. **Database Credentials**: Must use TCP connection (`-h localhost`)
    - Peer authentication fails for Docker exec connections
 
-3. **Required Variables**:
-   - `DB_HOST=supabase-db`
-   - `DB_PORT=5432`
-   - `DB_NAME=pmoves`
-   - `DB_USER=pmoves`
-   - `DB_PASSWORD=<from env.tier-supabase>`
-   - `SECRET_KEY_BASE=<64 bytes>`
-   - `JWT_SECRET=<from SUPABASE_JWT_SECRET>`
+3. **Environment File**: Create from example if needed
+   ```bash
+   cp pmoves/env.tier-supabase.example pmoves/env.tier-supabase
+   # Then edit pmoves/env.tier-supabase with real values
+   ```
 
-### All Submodules Branch Alignment (2026-02-06)
+4. **Required Variables** (in `pmoves/env.tier-supabase`):
+   - `POSTGRES_USER=pmoves`
+   - `POSTGRES_PASSWORD=<set strong password>`
+   - `POSTGRES_DB=pmoves`
+   - `SUPABASE_JWT_SECRET=<generate with openssl rand -base64 32>`
+   - `SUPABASE_REALTIME_SECRET=<generate with openssl rand -base64 64>`
 
-All PMOVES submodules are aligned to `PMOVES.AI-Edition-Hardened`:
+### Key Submodules Branch Alignment (2026-02-06)
+
+Most PMOVES submodules are aligned to `PMOVES.AI-Edition-Hardened`. See `.gitmodules`
+for complete list (60+ submodules).
 
 | Submodule | Branch | Notes |
 |-----------|--------|-------|
 | PMOVES-Archon | PMOVES.AI-Edition-Hardened | Fixed from feat/personas-clean-rebase |
-| PMOVES-BoTZ | PMOVES.AI-Edition-Hardened | Nested in DoX uses -DoX variant |
-| PMOVES-DoX | PMOVES.AI-Edition-Hardened | Was on feat/v5-secrets-bootstrap |
+| PMOVES-BoTZ | PMOVES.AI-Edition-Hardened | Standalone submodule |
+| PMOVES-DoX | PMOVES.AI-Edition-Hardened | External submodule (switched 2026-02-06) |
 | PMOVES-ToKenism-Multi | PMOVES.AI-Edition-Hardened | Reset to origin |
 | PMOVES-supabase | PMOVES.AI-Edition-Hardened | Re-registered as gitlink |
 | PMOVES-Headscale | PMOVES.AI-Edition-Hardened | Branch created 2026-02-06 |
+
+**Verify alignment:**
+```bash
+# Check submodule status (no prefix = clean, + = modified, - = uninitialized)
+git submodule status
+
+# Verify all submodules match recorded branch
+git submodule status | grep -v "^ "
+```
 
 ## Related Documentation
 
