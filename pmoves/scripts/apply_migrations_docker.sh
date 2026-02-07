@@ -5,6 +5,8 @@ set -euo pipefail
 # Requires: docker compose, postgres service with psql available, POSTGRES_USER/POSTGRES_DB envs in container.
 
 DIR=$(cd "$(dirname "$0")/.." && pwd)
+. "$DIR/scripts/with-env.sh"
+
 MIGS_DIR="$DIR/supabase/migrations"
 
 if [ ! -d "$MIGS_DIR" ]; then
