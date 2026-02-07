@@ -257,6 +257,101 @@ Example: `ingest.transcript.ready.v1`
 - **Frequency:** Every 15 seconds (configurable)
 - **Subscribers:** Orchestration services, load balancers
 
+## Remote Desktop & VPN Subjects
+
+### Remote Sessions
+
+**`remote.session.started.v1`**
+- **Direction:** Published by VPN MCP / Remote Desktop Gateway
+- **Purpose:** Notify that a remote desktop session has started
+- **Payload:**
+  ```json
+  {
+    "session_id": "unique-session-id",
+    "user_id": "user-uuid",
+    "target_device": "device-name",
+    "connection_type": "rustdesk|vpn|direct",
+    "timestamp": "2025-12-06T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher, Monitoring, Supabase
+
+**`remote.session.ended.v1`**
+- **Direction:** Published by VPN MCP / Remote Desktop Gateway
+- **Purpose:** Notify that a remote desktop session has ended
+- **Payload:**
+  ```json
+  {
+    "session_id": "matching-session-id",
+    "duration_seconds": 3600,
+    "terminated_by": "user|admin|timeout",
+    "timestamp": "2025-12-06T13:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Monitoring, Supabase
+
+### VPN Node Events
+
+**`vpn.node.connected.v1`**
+- **Direction:** Published by Headscale integration
+- **Purpose:** Notify that a device has connected to VPN
+- **Payload:**
+  ```json
+  {
+    "node_id": "tailscale-node-id",
+    "hostname": "device-hostname",
+    "tags": ["tag:pmoves", "tag:admin"],
+    "ip_addresses": ["100.64.0.5"],
+    "timestamp": "2025-12-06T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Monitoring, Supabase (for node registry)
+
+**`vpn.node.disconnected.v1`**
+- **Direction:** Published by Headscale integration
+- **Purpose:** Notify that a device has disconnected from VPN
+- **Payload:**
+  ```json
+  {
+    "node_id": "tailscale-node-id",
+    "hostname": "device-hostname",
+    "last_seen": "2025-12-06T13:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Monitoring
+
+### VPN Authentication
+
+**`vpn.auth_key.created.v1`**
+- **Direction:** Published by VPN MCP when auth key created
+- **Purpose:** Audit log for VPN key creation
+- **Payload:**
+  ```json
+  {
+    "key_id": "key-identifier",
+    "user": "username",
+    "tags": ["tag:pmoves"],
+    "ephemeral": false,
+    "created_by": "agent-zero-or-user-id",
+    "timestamp": "2025-12-06T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Audit logging, Supabase
+
+**`vpn.route.advertised.v1`**
+- **Direction:** Published by VPN MCP when route is advertised
+- **Purpose:** Track VPN route advertisements
+- **Payload:**
+  ```json
+  {
+    "node_id": "advertising-node-id",
+    "route": "172.30.0.0/24",
+    "enabled": true,
+    "timestamp": "2025-12-06T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Monitoring
+
 ## Testing & Development Subjects
 
 **`test.smoke.v1`**
