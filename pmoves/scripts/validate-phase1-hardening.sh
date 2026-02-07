@@ -64,9 +64,8 @@ fi
 # 3. Check if services are running
 echo ""
 echo "3. Checking running containers..."
-cd "$PMOVES_ROOT"
-if docker compose ps >/dev/null 2>&1; then
-    RUNNING_COUNT=$(docker compose ps -q 2>/dev/null | wc -l || echo "0")
+if docker compose -p pmoves --project-directory "$PMOVES_ROOT" ps >/dev/null 2>&1; then
+    RUNNING_COUNT=$(docker compose -p pmoves --project-directory "$PMOVES_ROOT" ps -q 2>/dev/null | wc -l || echo "0")
     if [ "$RUNNING_COUNT" -gt 0 ]; then
         print_pass "$RUNNING_COUNT containers are running"
     else
@@ -79,7 +78,7 @@ fi
 # 4. Validate running containers are using UID 65532
 echo ""
 echo "4. Validating container UIDs..."
-CONTAINERS=$(docker compose ps -q 2>/dev/null || true)
+CONTAINERS=$(docker compose -p pmoves --project-directory "$PMOVES_ROOT" ps -q 2>/dev/null || true)
 if [ -n "$CONTAINERS" ]; then
     NON_PMOVES_USERS=$(docker inspect --format '{{.Config.User}}' $CONTAINERS 2>/dev/null | grep -v "65532:65532" | grep -v "^$" | wc -l || true)
     TOTAL_CONTAINERS=$(echo "$CONTAINERS" | wc -w)

@@ -273,7 +273,7 @@ down-data: ## Stop data tier
 .PHONY: down-obs
 down-obs: ## Stop observability stack
 	@echo "📊 Stopping observability..."
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) -f docker-compose.yml --profile monitoring down
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --project-directory $(CURDIR) -f docker-compose.yml --profile monitoring down
 
 .PHONY: down-ui
 down-ui: ## Stop PMOVES UI
@@ -500,11 +500,11 @@ BACKUP_DIR ?= backups/$$(date +%Y%m%d_%H%M%S)
 backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO bucket, Meili dump (best-effort)
 	@mkdir -p "$(BACKUP_DIR)"
 	@echo "→ Backing up Postgres…"
-	-@docker compose exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
+	-@$(DC) exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
 	@echo "→ Snapshotting Qdrant…"
 	-@curl -fsS "http://localhost:6333/collections/$$QDRANT_COLLECTION/snapshots" -X POST -H 'content-type: application/json' -d '{}' > "$(BACKUP_DIR)/qdrant_snapshot.json"
 	@echo "→ Mirroring MinIO bucket '$(MINIO_BUCKET)' (requires mc alias 'local')…"
-	-@docker compose exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
+	-@$(DC) exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
 	@echo "→ Dumping Meilisearch…"
 	-@curl -fsS "http://localhost:7700/dumps" -X POST -H "X-Meili-API-Key: $$MEILI_MASTER_KEY" -d '{}' > "$(BACKUP_DIR)/meili_dump.json"
 	@echo "✔ Backup written to: $(BACKUP_DIR)"
@@ -618,7 +618,7 @@ recreate-v2: ## Force-recreate v2 CPU container (no deps)
 .PHONY: up-open-notebook
 up-open-notebook: ensure-env-shared ## Bring up Open Notebook on cataclysm-net (defaults UI :8503, API :5055)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) -f docker-compose.open-notebook.yml up -d open-notebook
 	@echo "✔ Open Notebook up (http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})"
 
 .PHONY: notebook-set-password
@@ -631,7 +631,7 @@ notebook-set-password: ## Update Open Notebook password/token (and optionally no
 
 .PHONY: down-open-notebook
 down-open-notebook: ## Stop Open Notebook
-	@docker compose -f docker-compose.open-notebook.yml down
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) -f docker-compose.open-notebook.yml down
 	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
@@ -684,7 +684,11 @@ STACK_FILES ?= \
 	-f docker-compose.archon-ui.submodule.yml \
 	-f monitoring/docker-compose.monitoring.yml
 
-DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) $(STACK_FILES)
+# WSL2 Docker Desktop requires explicit --project-directory for path resolution
+# See: pmoves/docs/CROSS_PLATFORM_TASKS.md - Issue C2
+PROJECT_DIR := --project-directory $(CURDIR)
+
+DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) $(PROJECT_DIR) $(STACK_FILES)
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
@@ -759,13 +763,13 @@ cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector lo
 
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
 	docker network create cataclysm-net >/dev/null 2>&1 || true
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
+	docker compose -p $(NOTEBOOK_PROJECT) --project-directory $(CURDIR) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
 
 notebook-down: ## Stop the Open Notebook container and remove its resources
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) down
+	docker compose -p $(NOTEBOOK_PROJECT) --project-directory $(CURDIR) -f $(NOTEBOOK_COMPOSE) down
 
 notebook-logs: ## Follow logs for the Open Notebook service
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) logs -f open-notebook
+	docker compose -p $(NOTEBOOK_PROJECT) --project-directory $(CURDIR) -f $(NOTEBOOK_COMPOSE) logs -f open-notebook
 
 notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
 	@echo "Seeding Open Notebook providers..."
@@ -807,7 +811,7 @@ up-media:
 .PHONY: up-invidious
 up-invidious:
 	@# Ensure INVIDIOUS_BIND is present for compose-time interpolation (use bash for the env loader)
-	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --profile invidious up -d invidious invidious-db invidious-companion'
+	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --project-directory $(CURDIR) --profile invidious up -d invidious invidious-db invidious-companion'
 
 # TensorZero model gateway stack
 .PHONY: up-tensorzero up-tensorzero-full down-tensorzero-full
@@ -904,29 +908,29 @@ brand-defaults: ensure-env-shared ## Apply branded defaults and create required 
 	@echo "→ Applying branded defaults to pmoves/env.shared"
 	@python3 tools/brand_defaults.py
 	@echo "→ Creating MinIO buckets (assets, outputs) if missing"
-	@docker compose -p $(PROJECT) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || true
+	@$(DC) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || true
 	@echo "✔ Brand defaults applied"
 
 # ------- Neo4j helpers -------
 .PHONY: neo4j-reset neo4j-status
 neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
 	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) stop neo4j || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) rm -f neo4j || true
+	@$(DC) stop neo4j || true
+	@$(DC) rm -f neo4j || true
 	@docker volume rm $(PROJECT)_neo4j-data || true
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) up -d neo4j
+	@$(DC) up -d neo4j
 	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
 	@$(LOAD_ENV_SHARED) bash -c ' \
 		user=$${NEO4J_AUTH%%/*}; \
 		pass=$${NEO4J_AUTH#*/}; \
 		echo "Testing auth ($$user/***) from env.tier-data..."; \
-		docker compose -p $(PROJECT) exec -T neo4j bash -lc \
+		docker compose -p $(PROJECT) --project-directory $(CURDIR) exec -T neo4j bash -lc \
 		  "/var/lib/neo4j/bin/cypher-shell -u \"$$user\" -p \"$$pass\" \"RETURN 1\""; \
 	'
 
 neo4j-status: ## Show Neo4j logs and health line
-	@docker compose -p $(PROJECT) ps neo4j || true
-	@docker compose -p $(PROJECT) logs --tail 60 neo4j || true
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) ps neo4j || true
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) logs --tail 60 neo4j || true
 
 brand-verify: ## Verify key branded endpoints respond
 	@echo "Presign:" && curl -fsS http://localhost:8088/healthz && echo
@@ -952,7 +956,7 @@ model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.loca
 	@python3 tools/models/models_sync.py swap --profile "$(PROFILE)" --host "$(HOST)" --service "$(SERVICE)" --name "$(NAME)"
 
 models-seed-ollama: ## Pre-pull recommended Ollama models (embedding + Qwen VL examples)
-	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
+	-@docker compose -p $(PROJECT) --project-directory $(CURDIR) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
 	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen3-embedding:4b"}' >/dev/null 2>&1 || true
 	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"embeddinggemma:300m"}' >/dev/null 2>&1 || true
 	-@curl -fsS -X POST http://localhost:11434/api/pull -d '{"model":"qwen2.5:14b-instruct-q4_K_M"}' >/dev/null 2>&1 || true
@@ -1360,11 +1364,11 @@ deepresearch-health: ## Check DeepResearch health endpoint (200 expected)
 
 .PHONY: up-nats-echo nats-echo-logs deepresearch-diag
 up-nats-echo: ## Start NATS echo subscribers for request/result subjects
-	@docker compose -p $(PROJECT) up -d nats-echo-req nats-echo-res
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) up -d nats-echo-req nats-echo-res
 	@echo "✔ nats-echo subscribers started"
 
 nats-echo-logs: ## Tail logs from NATS echo subscribers
-	@docker compose -p $(PROJECT) logs -n 40 nats-echo-req nats-echo-res
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) logs -n 40 nats-echo-req nats-echo-res
 
 deepresearch-diag: ## Publish a diagnostic DeepResearch request via worker and show echo logs
 	@curl -s -X POST http://localhost:8098/diag/publish -H 'content-type: application/json' -d '{"query":"diag smoke","mode":"local","correlation_id":"diag-echo"}' | jq .

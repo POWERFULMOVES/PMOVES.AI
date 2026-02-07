@@ -277,7 +277,7 @@ check_running_services() {
         return 1
     fi
 
-    running_services=$(docker compose ps --format json 2>/dev/null | jq -r '.Service' 2>/dev/null | sort | uniq)
+    running_services=$(docker compose -p pmoves --project-directory "$PMOVES_ROOT" ps --format json 2>/dev/null | jq -r '.Service' 2>/dev/null | sort | uniq)
 
     if [ -z "$running_services" ]; then
         print_warn "No Docker Compose services are running"
@@ -378,9 +378,9 @@ main() {
     print_section "Integration Tests"
 
     # Check if Hi-RAG can reach its dependencies
-    if docker compose ps hi-rag-gateway-v2 2>/dev/null | grep -q "Up"; then
+    if docker compose -p pmoves --project-directory "$PMOVES_ROOT" ps hi-rag-gateway-v2 2>/dev/null | grep -q "Up"; then
         print_info "Testing Hi-RAG v2 → Qdrant connectivity"
-        test_result=$(docker compose exec -T hi-rag-gateway-v2 curl -sf --max-time 3 http://qdrant:6333/healthz 2>/dev/null && echo "ok" || echo "fail")
+        test_result=$(docker compose -p pmoves --project-directory "$PMOVES_ROOT" exec -T hi-rag-gateway-v2 curl -sf --max-time 3 http://qdrant:6333/healthz 2>/dev/null && echo "ok" || echo "fail")
         if [ "$test_result" = "ok" ]; then
             print_pass "Hi-RAG v2 → Qdrant connectivity"
         else
