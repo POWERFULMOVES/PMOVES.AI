@@ -1,0 +1,85 @@
+# =============================================================================
+# PMOVES.AI Headscale ACL Policy
+# =============================================================================
+# Access Control Lists for VPN mesh networking
+# Defines who can access what via the VPN
+# =============================================================================
+
+# =============================================================================
+# Groups - Define user/device categories
+# =============================================================================
+groups:
+  admin: ["tag:admin"]
+  support: ["tag:support"]
+  infrastructure: ["tag:infra", "tag:server"]
+  users: ["tag:user"]
+
+# =============================================================================
+# Owners - Define who can manage tags
+# =============================================================================
+owners:
+  admin: ["tag:infra", "tag:server"]
+  support: ["tag:support"]
+
+# =============================================================================
+# ACLs - Define access rules
+# =============================================================================
+acls:
+  # Admin can access everything
+  - action: accept
+    src:
+      - group:admin
+    dst:
+      - group:*
+
+  # Support can access user devices and infrastructure
+  - action: accept
+    src:
+      - group:support
+    dst:
+      - group:users
+      - group:infrastructure
+
+  # Infrastructure can talk to each other
+  - action: accept
+    src:
+      - group:infrastructure
+    dst:
+      - group:infrastructure
+
+  # Users can access PMOVES services (specific ports)
+  - action: accept
+    src:
+      - group:users
+    dst:
+      - group:infrastructure
+    ports: [8080, 8081, 8091, 3737, 4000, 8086, 8087, 8099, 8097, 54321]
+
+  # Users can talk to each other (P2P file sharing, collaboration)
+  - action: accept
+    src:
+      - group:users
+    dst:
+      - group:users
+
+# =============================================================================
+# Tag Owners - Define who can assign which tags
+# =============================================================================
+tagowners:
+  tag:admin: [group:admin]
+  tag:support: [group:admin, group:support]
+  tag:infra: [group:admin]
+  tag:server: [group:admin]
+  tag:user: [group:admin, group:support]
+
+# =============================================================================
+# SSH Rule (optional - for SSH access via VPN)
+# =============================================================================
+# Uncomment to enable SSH access rules
+# ssh:
+#   - action: accept
+#     src:
+#       - group:admin
+#       - group:support
+#     dst:
+#       - group:*

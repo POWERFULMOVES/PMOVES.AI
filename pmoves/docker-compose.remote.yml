@@ -1,0 +1,174 @@
+# =============================================================================
+# PMOVES.AI - Remote Desktop & VPN Services
+# =============================================================================
+#
+# Profile: remote
+#
+# Services:
+# - headscale: Self-hosted Tailscale control server (WireGuard VPN mesh)
+# - rustdesk-hbbs: RustDesk rendezvous/ID server
+# - rustdesk-hbbr: RustDesk relay server
+# - headscale-agent: VPN client for PMOVES server
+#
+# Integration:
+# - BoTZ VPN MCP server (external to this compose, in PMOVES-BoTZ)
+# - Agent Zero orchestrator (delegates via MCP to VPN tools)
+# - NATS event bus for VPN coordination
+# - Supabase for session logging and auth
+#
+# YAML anchors for tier-based env file loading (from main docker-compose.yml)
+# =============================================================================
+x-env-tier-agent: &env-tier-agent
+  env_file:
+    - env.shared
+    - env.tier-agent
+
+x-vpn-tier: &vpn-tier
+  env_file:
+    - env.shared
+    - env.tier-vpn
+
+services:
+  # =============================================================================
+  # Headscale - Self-hosted Tailscale control server
+  # =============================================================================
+  headscale:
+    <<: *vpn-tier
+    image: ghcr.io/juanfont/headscale:latest
+    container_name: pmoves-headscale
+    restart: unless-stopped
+    command: serve
+    environment:
+      - HEADSCALE_SERVER_URL=${HEADSCALE_SERVER_URL:-https://headscale.pmoves.local}
+      - HEADSCALE_LISTEN_ADDR=0.0.0.0:8096
+      - HEADSCALE_METRICS_LISTEN_ADDR=0.0.0.0:9090
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+      - "${HEADSCALE_PORT:-8096}:8096"
+      - "9091:9090"  # Metrics (avoid conflict with Prometheus at 9090)
+    volumes:
+      - ./config/headscale:/etc/headscale
+      - headscale-data:/var/lib/headscale
+    networks:
+      - pmoves_api
+      - pmoves_monitoring
+    profiles:
+      - remote
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8096/metrics"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # =============================================================================
+  # RustDesk hbbs - Rendezvous/ID server
+  # =============================================================================
+  rustdesk-hbbs:
+    <<: *env-tier-agent
+    image: ${RUSTDESK_IMAGE:-rustdesk/rustdesk-server:latest}
+    container_name: pmoves-rustdesk-hbbs
+    restart: unless-stopped
+    command: hbbs -k _
+    environment:
+      - RELAY=${RUSTDESK_RELAY:-pmoves-rustdesk-hbbr:21117}
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+      - "21115:21115"  # hbbs (TCP)
+      - "21116:21116"  # hbbs (QUIC)
+      - "21116:21116/udp"
+      - "21118:21118"  # hbbs (WebRTC)
+    volumes:
+      - rustdesk-data:/root
+    networks:
+      - pmoves_app
+    depends_on:
+      rustdesk-hbbr:
+        condition: service_started
+    profiles:
+      - remote
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "21115"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # =============================================================================
+  # RustDesk hbbr - Relay server
+  # =============================================================================
+  rustdesk-hbbr:
+    <<: *env-tier-agent
+    image: ${RUSTDESK_IMAGE:-rustdesk/rustdesk-server:latest}
+    container_name: pmoves-rustdesk-hbbr
+    restart: unless-stopped
+    command: hbbr -k _
+    environment:
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+      - "21117:21117"  # hbbr (TCP)
+      - "21119:21119"  # hbbr (QUIC)
+    volumes:
+      - rustdesk-data:/root
+    networks:
+      - pmoves_app
+    profiles:
+      - remote
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "21117"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # =============================================================================
+  # Headscale VPN Agent - Connects PMOVES to its own VPN mesh
+  # =============================================================================
+  headscale-agent:
+    <<: *vpn-tier
+    image: ghcr.io/juanfont/headscale:latest
+    container_name: pmoves-headscale-agent
+    restart: unless-stopped
+    command: up
+    privileged: true
+    network_mode: host
+    environment:
+      - HEADSCALE_ADDR=${HEADSCALE_ADDR:-headscale:8096}
+      - HEADSCALE_AUTH_KEY=${HEADSCALE_AGENT_AUTH_KEY}
+      - HEADSCALE_HOSTNAME=pmoves-server
+      - HEADSCALE_ACCEPT_ROUTES=true
+      - HEADSCALE_SSH=true
+      - HEADSCALE_TAGS=${HEADSCALE_TAGS:-tag:pmoves-server,tag:infra}
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - headscale-agent-state:/var/lib/headscale
+    profiles:
+      - remote
+
+networks:
+  pmoves_api:
+    external: true
+    name: pmoves_api
+  pmoves_app:
+    external: true
+    name: pmoves_app
+  pmoves_monitoring:
+    external: true
+    name: pmoves_monitoring
+
+volumes:
+  headscale-data:
+    driver: local
+  headscale-agent-state:
+    driver: local
+  rustdesk-data:
+    driver: local
