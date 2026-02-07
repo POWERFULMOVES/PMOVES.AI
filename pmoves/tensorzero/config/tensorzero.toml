@@ -9,6 +9,13 @@
 enabled = true
 async_writes = true
 
+[gateway.observability.output]
+type = "clickhouse"
+url = "${env::TENSORZERO_CLICKHOUSE_URL}"
+user = "${env::TENSORZERO_CLICKHOUSE_USER}"
+password = "${env::TENSORZERO_CLICKHOUSE_PASSWORD}"
+database = "${env::TENSORZERO_CLICKHOUSE_DB}"
+
 [gateway.export.otlp.traces]
 enabled = true
 format = "opentelemetry"
