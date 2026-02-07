@@ -61,16 +61,20 @@ PMOVES.AI uses git submodules to integrate external projects and specialized ser
   - `7071` - E2B Sandbox Runner
   - `7072` - Vision-Language Sentinel
   - `8081` - Cipher Memory (STDIO/HTTP)
+  - `8110` - VPN MCP (Headscale + RustDesk management)
 - **Features:**
   - Document processing (Docling)
   - Memory management (Cipher)
   - API testing and sandbox execution (E2B)
   - Vision-language processing (VL Sentinel)
+  - VPN & Remote Desktop management (NEW)
   - MCP server catalog and gateway
 - **Integration Points:**
   - MCP-compatible tools for agent consumption
   - Connects to Ollama for local model inference
   - NATS event publishing
+  - Headscale API for VPN management
+  - Supabase for session logging
 - **README:** [PMOVES-BoTZ/README.md](../../../PMOVES-BoTZ/README.md)
 
 ---
@@ -427,7 +431,7 @@ git submodule foreach 'echo $name: $(git rev-parse HEAD)'
 |-----------|----------------|---------|---------|
 | PMOVES-Agent-Zero | 8080, 8081 | Agent orchestrator | agents |
 | PMOVES-Archon | 8091, 3737 | Agent service + UI | agents |
-| PMOVES-BoTZ | 2091, 3020, 7071, 7072 | MCP tools ecosystem | varies |
+| PMOVES-BoTZ | 2091, 3020, 7071, 7072, 8110 | MCP tools ecosystem + VPN | varies |
 | PMOVES-Creator | varies | ComfyUI image generation | orchestration |
 | PMOVES-Deep-Serch | 8098, 8099 | Research orchestration | orchestration |
 | PMOVES-DoX | 8092 | Document processing | workers |
