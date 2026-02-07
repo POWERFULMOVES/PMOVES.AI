@@ -277,7 +277,7 @@ check_running_services() {
         return 1
     fi
 
-    running_services=$(docker compose ps --format json 2>/dev/null | jq -r '.Service' 2>/dev/null | sort | uniq)
+    running_services=$(docker compose -p pmoves --project-directory "$PMOVES_ROOT" ps --format json 2>/dev/null | jq -r '.Service' 2>/dev/null | sort | uniq)
 
     if [ -z "$running_services" ]; then
         print_warn "No Docker Compose services are running"
