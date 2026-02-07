@@ -584,9 +584,25 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 	fi; \
 	echo "✓ Tier env files populated with defaults."
 
+# -------- Network cleanup ----------
+.PHONY: clean-networks
+clean-networks: ## Remove stale Docker Compose networks (fixes WSL2 "incorrect label" issues)
+	@echo "Checking for stale Docker Compose networks..."
+	@for net in pmoves_data pmoves_api pmoves_app pmoves_bus pmoves_monitoring; do \
+		if docker network inspect "$$net" >/dev/null 2>&1; then \
+			if ! docker network inspect "$$net" --format '{{len .Labels}}' | grep -q '[1-9]'; then \
+				echo "  Removing stale network: $$net (no labels)"; \
+				docker network rm "$$net" 2>/dev/null || true; \
+			else \
+				echo "  ✓ $$net (properly labeled)"; \
+			fi; \
+		fi; \
+	done; \
+	echo "✔ Network cleanup complete."
+
 # -------- GPU profile ----------
 .PHONY: up up-gpu up-both-gateways
-up: check-tier-envs ensure-env-shared ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
+up: check-tier-envs ensure-env-shared clean-networks ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
 	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
