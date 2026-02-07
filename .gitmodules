@@ -77,6 +77,13 @@
 # =============================================================================
 # E2B Danger Room - Sandboxed Code Execution
 # =============================================================================
+# MIGRATION NOTES (2026-02-07):
+# The e2b components were previously vendored under pmoves/vendor/e2b/*
+# They have been migrated to proper forked submodules (see below).
+# The vendor entries are commented out to prevent git errors while
+# preserving history for reference during branch transitions.
+# Investigation confirmed: No code was lost during migration - vendor
+# directories were empty with no local git history.
 
 [submodule "PMOVES-E2B-Danger-Room"]
 	path = PMOVES-E2B-Danger-Room
@@ -103,35 +110,38 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
 	branch = PMOVES.AI-Edition-Hardened
 
-[submodule "pmoves/vendor/e2b"]
-	path = pmoves/pmoves/vendor/e2b
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "pmoves/vendor/e2b-desktop"]
-	path = pmoves/vendor/e2b-desktop
-	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
-	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "pmoves/vendor/e2b-infra"]
-	path = pmoves/vendor/e2b-infra
-	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
-	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "pmoves/vendor/e2b-mcp-server"]
-	path = pmoves/vendor/e2b-mcp-server
-	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "pmoves/vendor/e2b-spells"]
-	path = pmoves/vendor/e2b-spells
-	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
-	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "pmoves/vendor/e2b-surf"]
-	path = pmoves/vendor/e2b-surf
-	url = https://github.com/POWERFULMOVES/pmoves-surf.git
-	branch = PMOVES.AI-Edition-Hardened
+# DEPRECATED: Vendor e2b entries below - replaced by forked submodules above
+# Uncomment only if working with pre-migration branches (before 2026-02-07)
+# All code confirmed preserved in forked repositories - no local commits lost
+# [submodule "pmoves/vendor/e2b"]
+# 	path = pmoves/pmoves/vendor/e2b
+# 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+# 	branch = PMOVES.AI-Edition-Hardened
+#
+# [submodule "pmoves/vendor/e2b-desktop"]
+# 	path = pmoves/vendor/e2b-desktop
+# 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
+# 	branch = PMOVES.AI-Edition-Hardened
+#
+# [submodule "pmoves/vendor/e2b-infra"]
+# 	path = pmoves/vendor/e2b-infra
+# 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+# 	branch = PMOVES.AI-Edition-Hardened
+#
+# [submodule "pmoves/vendor/e2b-mcp-server"]
+# 	path = pmoves/vendor/e2b-mcp-server
+# 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+# 	branch = PMOVES.AI-Edition-Hardened
+#
+# [submodule "pmoves/vendor/e2b-spells"]
+# 	path = pmoves/vendor/e2b-spells
+# 	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+# 	branch = PMOVES.AI-Edition-Hardened
+#
+# [submodule "pmoves/vendor/e2b-surf"]
+# 	path = pmoves/vendor/e2b-surf
+# 	url = https://github.com/POWERFULMOVES/pmoves-surf.git
+# 	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # Voice & Speech Services
