@@ -23,9 +23,13 @@
 
 | Repo | PR # | Title | Branch | Status |
 |------|------|-------|--------|--------|
-| PMOVES-DoX | 96 | PostgreSQL 17 compatibility and CodeRabbit review | feat/v5-secrets-bootstrap | Open |
-| PMOVES-BoTZ | 51 | TensorZero 2026 migration and integration updates | feat/tensorzero-2026-migration | Open |
-| PMOVES-Agent-Zero | 3 | PMOVES.AI integration patterns | feat/pmoves-ai-integration | Open |
+| PMOVES-DoX | 96 | PostgreSQL 17 compatibility and CodeRabbit review | feat/v5-secrets-bootstrap | ✅ **MERGED** |
+| PMOVES-BoTZ | 51 | TensorZero 2026 migration and integration updates | feat/tensorzero-2026-migration | ✅ **MERGED** |
+| PMOVES-Agent-Zero | 3 | PMOVES.AI integration patterns | feat/pmoves-ai-integration | ✅ **MERGED** |
+
+**Note:** Feature branches were restored after merge for later review:
+- `feat/v5-secrets-bootstrap` (PMOVES-DoX)
+- `feat/pmoves-ai-integration` (PMOVES-Agent-Zero)
 
 ---
 
@@ -135,6 +139,8 @@ Nested submodules configured for `PMOVES.AI-Edition-Hardened-DoX`:
 15. ✅ **Merged PMOVES-DoX #96 to hardened** (commit 6ea52f4)
 16. ✅ **Merged PMOVES-Agent-Zero #3 to hardened** (commit 0ff6097)
 17. ✅ **Restored feature branches** (feat/v5-secrets-bootstrap, feat/pmoves-ai-integration)
+18. ✅ **Resolved merge conflicts in PMOVES-BoTZ #51 and merged** (commit 1c97c42)
+19. ✅ **Created PR #51 resolution merge commit** (4e4392f)
 
 ---
 
