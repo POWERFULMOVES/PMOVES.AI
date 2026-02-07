@@ -6,7 +6,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 | Range | Purpose | Examples |
 |-------|---------|----------|
-| 3000-3999 | Web UIs | Grafana 3000 |
+| 3000-3999 | Web UIs | Grafana 3002 |
 | 4000-4999 | Debug/Admin | TensorZero UI 4000 |
 | 5000-5999 | Databases | Postgres 5432* |
 | 6000-6999 | Vector/Search | Qdrant 6333, Meilisearch 7700† |

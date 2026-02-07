@@ -24,7 +24,7 @@ procs:
       MPLCROCS_SERVER: "127.0.0.1:4050"
       AGENT_ROLE: "gateway"
       # TensorZero for LLM routing in docked mode
-      TENSORZERO_BASE_URL: "${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3030}"
+      TENSORZERO_BASE_URL: "${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}"
       # NATS for cross-service coordination
       NATS_URL: "${NATS_URL:-nats://nats:4222}"
       # HiRAG for knowledge retrieval
