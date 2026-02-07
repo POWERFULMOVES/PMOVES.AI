@@ -1,0 +1,95 @@
+# =============================================================================
+# PMOVES.AI Headscale Configuration
+# =============================================================================
+# Self-hosted Tailscale control server for VPN mesh networking
+# =============================================================================
+
+# Server URL - externally accessible address for clients
+server_url: https://headscale.pmoves.local
+
+# Listen address for the API server
+listen_addr: 0.0.0.0:8096
+
+# Metrics listen address for Prometheus scraping
+metrics_listen_addr: 0.0.0.0:9090
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+db_type: sqlite3
+db_path: /var/lib/headscale/db.sqlite
+
+# =============================================================================
+# ACL Policy
+# =============================================================================
+acl_policy_path: /etc/headscale/acl.yaml
+
+# =============================================================================
+# DERP Relay Configuration
+# =============================================================================
+# Use Tailscale's public DERPs for relay (no self-hosted DERP needed initially)
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  # Optional: Override paths for specific DERP regions
+  paths:
+    - /etc/headscale/derp.yaml
+
+# =============================================================================
+# IP Allocation
+# =============================================================================
+# CGNAT range for Tailscale
+ip_prefixes:
+  - fd7a:115c:a1e0::/48  # IPv6
+  - 100.64.0.0/10        # IPv4
+
+# =============================================================================
+# DNS Configuration
+# =============================================================================
+dns_config:
+  # Global nameservers
+  nameservers:
+    - 1.1.1.1
+    - 1.0.0.1
+
+  # Split DNS resolutions for specific domains
+  domains:
+    - pmoves.local
+    - pmoves-internal.local
+
+  # Magic DNS (enables <hostname>.<namespace>.headscale resolution)
+  magic_dns: true
+
+  # Search domains for DNS resolution
+  search_domains:
+    - pmoves.local
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+log:
+  format: text  # text or json
+  level: info   # debug, info, warn, error
+
+# =============================================================================
+# Client Configuration
+# =============================================================================
+# Randomize client port for NAT traversal
+randomize_client_port: true
+
+# Disable updates check
+disable_updates_check: false
+
+# =============================================================================
+# Security
+# =============================================================================
+# Enable/disable legacy CLI features
+ephemeral_node_inactivity_timeout: 30m
+
+# =============================================================================
+# Experimental Features
+# =============================================================================
+# Enable WireGuard requested port (for better NAT traversal)
+# wireguard_port: 0
