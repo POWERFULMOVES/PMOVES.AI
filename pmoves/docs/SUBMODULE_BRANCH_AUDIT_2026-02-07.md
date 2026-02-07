@@ -131,6 +131,10 @@ Nested submodules configured for `PMOVES.AI-Edition-Hardened-DoX`:
 11. ✅ Pushed audit updates to main (commit 6eef951d)
 12. ✅ **Cleaned up vendor e2b submodule entries** (commit e844d29c)
 13. ✅ **Investigated vendor e2b history - confirmed no code lost**
+14. ✅ **Created PMOVES.AI-Edition-Hardened branch for transcribe-and-fetch**
+15. ✅ **Merged PMOVES-DoX #96 to hardened** (commit 6ea52f4)
+16. ✅ **Merged PMOVES-Agent-Zero #3 to hardened** (commit 0ff6097)
+17. ✅ **Restored feature branches** (feat/v5-secrets-bootstrap, feat/pmoves-ai-integration)
 
 ---
 
