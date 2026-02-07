@@ -146,6 +146,88 @@ PY
 fi
 
 echo
+echo "Provider API Keys:"
+if [[ -f env.shared ]]; then
+  python3 <<'PY'
+from __future__ import annotations
+
+import pathlib
+
+# Provider API keys - at least one recommended for LLM features
+provider_keys = [
+    ("OPENAI_API_KEY", "OpenAI"),
+    ("ANTHROPIC_API_KEY", "Anthropic"),
+    ("GROQ_API_KEY", "Groq"),
+    ("GEMINI_API_KEY", "Google Gemini"),
+    ("OLLAMA_BASE_URL", "Ollama (local)"),
+]
+
+# Optional keys for specific features
+optional_keys = [
+    ("ELEVENLABS_API_KEY", "ElevenLabs TTS"),
+    ("VOYAGE_API_KEY", "Voyage AI Embeddings"),
+    ("COHERE_API_KEY", "Cohere"),
+    ("CLOUDFLARE_API_TOKEN", "Cloudflare Workers AI"),
+    ("CLOUDFLARE_ACCOUNT_ID", "Cloudflare Account ID"),
+]
+
+root = pathlib.Path(".")
+shared = root / "env.shared"
+
+def load_env(path: pathlib.Path) -> dict[str, str]:
+    data: dict[str, str] = {}
+    if not path.exists():
+        return data
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if not raw or raw.lstrip().startswith("#") or "=" not in raw:
+            continue
+        k, v = raw.split("=", 1)
+        data[k] = v
+    return data
+
+shared_map = load_env(shared)
+
+print("  Core LLM Providers (at least one recommended):")
+provider_count = 0
+for key, name in provider_keys:
+    value = shared_map.get(key)
+    if value and value != "" and not value.startswith("your_"):
+        provider_count += 1
+        print(f"    ✓ {name:<20} configured")
+    elif key == "OLLAMA_BASE_URL" and (value == "" or value is None):
+        # Ollama with default URL is OK
+        print(f"    • {name:<20} (will use http://localhost:11434)")
+    else:
+        print(f"    ✗ {name:<20} missing")
+
+if provider_count == 0:
+    print("  ⚠ No LLM providers configured - add at least one for LLM features")
+    print("    Tip: Set OPENAI_API_KEY, GROQ_API_KEY, or use Ollama for local models")
+
+print("\n  Optional API Keys:")
+for key, name in optional_keys:
+    value = shared_map.get(key)
+    if value and value != "" and not value.startswith("your_"):
+        print(f"    ✓ {name:<30} configured")
+    else:
+        print(f"    • {name:<30} not set (optional)")
+
+# Check for empty but set keys (common mistake)
+print("\n  Checking for empty values:")
+empty_count = 0
+for key, value in shared_map.items():
+    if "API_KEY" in key or "TOKEN" in key:
+        if value == "" or value.startswith("your_"):
+            print(f"    ⚠ {key} is set but empty/placeholder")
+            empty_count += 1
+if empty_count == 0:
+    print("    ✓ All API keys have values")
+PY
+else
+  echo "  env.shared not found - run 'make bootstrap' to create it"
+fi
+
+echo
 echo "Mappers:"
 if [[ -f tools/events_to_cgp.py ]]; then echo "events_to_cgp.py:   present"; else echo "events_to_cgp.py:   missing"; fi
 
