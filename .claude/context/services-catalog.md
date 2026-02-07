@@ -278,6 +278,51 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Features:** Syncs Jellyfin events to Supabase
 - **Compose Profile:** `health` (optional)
 
+## Remote Access Services
+
+### Headscale (Self-hosted Tailscale Control Server)
+- **Ports:** 8096 (API), 9091 (metrics)
+- **Purpose:** Self-hosted Tailscale control server for VPN mesh networking
+- **Features:**
+  - VPN node management
+  - Authentication key creation
+  - Route advertisement
+  - ACL policy enforcement
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `GET /metrics` - Prometheus metrics
+  - `POST /api/v1/apikey` - Create auth keys
+  - `GET /api/v1/machines` - List connected nodes
+- **Configuration:** `pmoves/config/headscale/config.yaml`, `acl.yaml`
+- **Compose Profile:** `remote`
+
+### RustDesk Relay (Self-hosted Remote Desktop)
+- **Ports:** 21115-21119 (various protocols)
+- **Purpose:** Self-hosted remote desktop relay server
+- **Components:**
+  - `hbbs` (ports 21115, 21116, 21118) - ID/Rendezvous server
+  - `hbbr` (ports 21117, 21119) - Relay server
+- **Features:** P2P direct connections, relay fallback, WebRTC support
+- **Compose Profile:** `remote`
+
+### BoTZ VPN MCP Server
+- **Port:** 8110
+- **Purpose:** MCP server exposing VPN and remote desktop tools
+- **Transport:** SSE
+- **MCP Tools:**
+  - `vpn_list_nodes` - List connected VPN nodes
+  - `vpn_create_auth_key` - Create VPN authentication keys
+  - `vpn_advertise_route` - Advertise VPN routes
+  - `remote_start_session` - Start remote desktop session
+  - `remote_end_session` - End remote desktop session
+  - `remote_list_sessions` - List active sessions
+- **Integration:**
+  - Headscale API for VPN management
+  - Supabase for session logging
+  - NATS for event coordination
+- **Compose Profile:** `vpn`, `remote` (in PMOVES-BoTZ)
+- **Health:** `GET http://localhost:8110/health`
+
 ## Monitoring Stack
 
 ### Prometheus

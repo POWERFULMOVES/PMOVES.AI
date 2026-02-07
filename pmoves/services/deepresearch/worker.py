@@ -657,7 +657,7 @@ class DeepResearchRunner:
         self.tensorzero_base = (
             os.getenv("DEEPRESEARCH_TENSORZERO_BASE_URL")
             or os.getenv("TENSORZERO_BASE_URL")
-            or "http://tensorzero-gateway:3030"
+            or "http://tensorzero-gateway:3000"
         ).rstrip("/")
         self.tensorzero_model = os.getenv("DEEPRESEARCH_TENSORZERO_MODEL", "nemotron-3-nano:30b")
         self.tensorzero_fallback_model = os.getenv("DEEPRESEARCH_TENSORZERO_FALLBACK_MODEL", "qwen3-vl:8b")

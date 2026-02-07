@@ -355,6 +355,251 @@ start_http_server(8081)  # Metrics on :8081/metrics
     - targets: ["my-service:8081"]
 ```
 
+## Bring-Up Troubleshooting (2026-02-06)
+
+### Common Issues and Fixes
+
+#### 1. PostgreSQL Peer Authentication Errors
+
+**Error:** `FATAL: peer authentication failed for user "pmoves"`
+
+**Cause:** Docker exec without `-h localhost` uses Unix socket peer auth instead of password auth.
+
+**Fix:** Makefile migration commands updated to use `-h localhost`:
+```bash
+docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves
+```
+
+#### 2. Missing Schemas and Roles
+
+**Error:** `ERROR: schema "auth" does not exist` or `role "postgres" does not exist`
+
+**Cause:** Fresh database volume doesn't have Supabase-specific schemas.
+
+**Fix:** Run schema creation before first bring-up:
+```bash
+docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves <<'SQL'
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE SCHEMA IF NOT EXISTS graphql_public;
+CREATE SCHEMA IF NOT EXISTS pmoves_core;
+CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';
+ALTER ROLE postgres WITH PASSWORD 'postgres';
+SQL
+```
+
+#### 3. Kong Migration Bootstrap
+
+**Error:** Kong fails with database errors.
+
+**Fix:** Bootstrap Kong migrations before starting Kong:
+```bash
+docker run --rm --network pmoves_data \
+  -e KONG_DATABASE=postgres \
+  -e KONG_PG_HOST=supabase-db \
+  -e KONG_PG_DATABASE=pmoves \
+  -e KONG_PG_USER=pmoves \
+  -e KONG_PG_PASSWORD=<your_password> \
+  kong:3.7.1 kong migrations bootstrap --yes
+```
+
+#### 4. Neo4j 5.x Config Validation
+
+**Error:** `Failed to read config: Unrecognized setting. No declared setting with name: PASSWORD`
+
+**Cause:** Neo4j 5.x has stricter config validation.
+
+**Fix:** Add to docker-compose.yml environment:
+```yaml
+environment:
+- NEO4J_server_config_strict__validation_enabled=false
+```
+
+#### 5. Storage Service Region
+
+**Error:** `Error: Region is missing`
+
+**Fix:** Set in `env.tier-supabase`:
+```bash
+SUPABASE_STORAGE_REGION=us-east-1
+```
+
+### Complete Bring-Up Sequence
+
+For fresh Supabase bring-up on PMOVES.AI-Edition-Hardened:
+
+```bash
+# 1. Start Supabase DB only
+make up-supabase  # Starts DB first
+
+# 2. Create schemas and roles (manual first-time setup)
+docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves <<'SQL'
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE SCHEMA IF NOT EXISTS graphql_public;
+CREATE SCHEMA IF NOT EXISTS pmoves_core;
+CREATE SCHEMA IF NOT EXISTS pmoves;
+CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';
+ALTER ROLE postgres WITH PASSWORD 'postgres';
+GRANT ALL ON SCHEMA auth, storage, extensions, graphql_public, pmoves_core, pmoves TO postgres;
+GRANT ALL ON SCHEMA pmoves_core, pmoves TO pmoves;
+GRANT USAGE ON SCHEMA pmoves_core, pmoves TO anon, authenticated, service_role;
+SQL
+
+# 3. Bootstrap Kong migrations
+docker run --rm --network pmoves_data \
+  -e KONG_DATABASE=postgres \
+  -e KONG_PG_HOST=supabase-db \
+  -e KONG_PG_DATABASE=pmoves \
+  -e KONG_PG_USER=pmoves \
+  -e KONG_PG_PASSWORD=${POSTGRES_PASSWORD} \
+  kong:3.7.1 kong migrations bootstrap --yes
+
+# 4. Run Supabase migrations and seeds
+make supabase-bootstrap
+
+# 5. Start remaining data tier
+make up-data-tier
+
+# 6. Seed Neo4j
+make neo4j-bootstrap
+
+# 7. Seed Qdrant/Meili
+make seed-data
+```
+
+### Migration File Notes
+
+Some migration files in `pmoves/supabase/migrations/` use deprecated `uuid_generate_v4()` which requires `uuid-ossp` extension. For PostgreSQL 17+, these should be updated to use `gen_random_uuid()`.
+
+**Files affected (as of 2026-02-06):**
+- `20250204000000_channel_monitor_tables.sql`
+- `20251230000000_tokenism_simulator.sql`
+
+**Migration fix pattern:**
+```sql
+-- OLD (requires uuid-ossp extension)
+id UUID PRIMARY KEY DEFAULT uuid_generate_v4()
+
+-- NEW (PostgreSQL 13+ built-in)
+id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+```
+
+## CI/CD Update Strategy (2026-02-06)
+
+### Supabase Submodule Alignment
+
+The PMOVES-supabase submodule tracks the official Supabase self-hosted stack
+and must stay synchronized with upstream releases.
+
+**Current Configuration:**
+- Submodule: `PMOVES-supabase`
+- Branch: `PMOVES.AI-Edition-Hardened`
+- Remote: `https://github.com/POWERFULMOVES/PMOVES-supabase.git`
+- Status: Proper gitlink (fixed 2026-02-06)
+
+### Update Procedure
+
+To update Supabase to a new version:
+
+```bash
+# 1. Fetch latest from upstream
+cd PMOVES-supabase
+git fetch origin
+
+# 2. Checkout the target version tag or commit
+git checkout <version_tag>  # e.g., v1.50.0
+
+# OR update to latest commit on Hardened branch:
+git checkout origin/PMOVES.AI-Edition-Hardened
+
+# 3. Update the main repo's submodule reference
+cd ..
+git add PMOVES-supabase
+git commit -m "chore(supabase): Update to latest Hardened"
+```
+
+### Environment Loading Fix (Critical)
+
+**Issue**: Docker Compose variable expansion (`${VAR}`) requires variables
+to be in the shell environment at compose-time. The `env_file` directive
+only sets variables inside containers, not for compose expansion.
+
+**Solution**: Always use `scripts/with-env.sh` to load environment files
+before running Docker Compose commands.
+
+```bash
+# From repo root (/home/pmoves/PMOVES.AI):
+# CORRECT - Sources environment files first
+source pmoves/scripts/with-env.sh
+docker compose -p pmoves -f pmoves/docker-compose.yml up -d
+
+# INCORRECT - Variables won't be expanded
+docker compose -p pmoves -f pmoves/docker-compose.yml up -d
+
+# From pmoves/ directory:
+source scripts/with-env.sh
+docker compose -p pmoves -f docker-compose.yml up -d
+```
+
+**Makefile Integration**: All make targets properly source the environment:
+```bash
+make up-supabase      # Sources with-env.sh automatically
+make up-data-tier     # Sources with-env.sh automatically
+```
+
+### Realtime Service Requirements
+
+Supabase Realtime has specific environment requirements:
+
+1. **SECRET_KEY_BASE**: Must be at least 64 bytes
+   ```bash
+   # SUPABASE_REALTIME_SECRET maps to SECRET_KEY_BASE in Realtime
+   # Must be at least 64 bytes
+   SUPABASE_REALTIME_SECRET=$(openssl rand -base64 64)
+   ```
+
+2. **Database Credentials**: Must use TCP connection (`-h localhost`)
+   - Peer authentication fails for Docker exec connections
+
+3. **Environment File**: Create from example if needed
+   ```bash
+   cp pmoves/env.tier-supabase.example pmoves/env.tier-supabase
+   # Then edit pmoves/env.tier-supabase with real values
+   ```
+
+4. **Required Variables** (in `pmoves/env.tier-supabase`):
+   - `POSTGRES_USER=pmoves`
+   - `POSTGRES_PASSWORD=<set strong password>`
+   - `POSTGRES_DB=pmoves`
+   - `SUPABASE_JWT_SECRET=<generate with openssl rand -base64 32>`
+   - `SUPABASE_REALTIME_SECRET=<generate with openssl rand -base64 64>`
+
+### Key Submodules Branch Alignment (2026-02-06)
+
+Most PMOVES submodules are aligned to `PMOVES.AI-Edition-Hardened`. See `.gitmodules`
+for complete list (60+ submodules).
+
+| Submodule | Branch | Notes |
+|-----------|--------|-------|
+| PMOVES-Archon | PMOVES.AI-Edition-Hardened | Fixed from feat/personas-clean-rebase |
+| PMOVES-BoTZ | PMOVES.AI-Edition-Hardened | Standalone submodule |
+| PMOVES-DoX | PMOVES.AI-Edition-Hardened | External submodule (switched 2026-02-06) |
+| PMOVES-ToKenism-Multi | PMOVES.AI-Edition-Hardened | Reset to origin |
+| PMOVES-supabase | PMOVES.AI-Edition-Hardened | Re-registered as gitlink |
+| PMOVES-Headscale | PMOVES.AI-Edition-Hardened | Branch created 2026-02-06 |
+
+**Verify alignment:**
+```bash
+# Check submodule status (no prefix = clean, + = modified, - = uninitialized)
+git submodule status
+
+# Verify all submodules match recorded branch
+git submodule status | grep -v "^ "
+```
+
 ## Related Documentation
 
 - [PRODUCTION_SUPABASE.md](PRODUCTION_SUPABASE.md) - Supabase setup and architecture

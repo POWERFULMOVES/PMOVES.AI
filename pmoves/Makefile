@@ -163,23 +163,21 @@ check-tools: ## Check required tools and versions
 .PHONY: up-supabase
 up-supabase: ## Start Supabase stack (integrated in docker-compose - 2025)
 	@echo "🗄️ Starting Supabase (2025 integrated stack)..."
-	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
-		$(DC) up -d supabase-db
+	@$(DC) up -d supabase-db
 	@echo "⏳ Waiting for Supabase DB..."
-	@timeout 60 bash -c 'until docker exec pmoves-supabase-db-1 pg_isready -U postgres -d postgres 2>/dev/null; do sleep 2; done' || \
+	@timeout 60 bash -c 'until docker exec pmoves-supabase-db-1 pg_isready -U $${POSTGRES_USER:-pmoves} -d $${POSTGRES_DB:-pmoves} 2>/dev/null; do sleep 2; done' || \
 		{ echo "⚠️  Supabase DB not ready after timeout"; exit 1; }
 	@echo "🔧 Bootstrapping Kong migrations..."
-	@docker run --rm --network pmoves_data \
+	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
 		-e KONG_DATABASE=postgres \
 		-e KONG_PG_HOST=supabase-db \
 		-e KONG_PG_DATABASE=postgres \
-		-e KONG_PG_USER=$${POSTGRES_USER} \
-		-e KONG_PG_PASSWORD=$${POSTGRES_PASSWORD} \
+		-e KONG_PG_USER=$${SUPABASE_DB_USER:-pmoves} \
+		-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-pmoves} \
 		kong:3.7.1 kong migrations bootstrap --yes 2>/dev/null || \
 		echo "⚠️  Kong migrations may already exist"
 	@echo "⏳ Starting remaining Supabase services..."
-	@set -a && . ./env.shared && . ./env.tier-supabase && set +a && \
-		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio
+	@$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio
 	@echo "⏳ Waiting for Supabase services to be healthy..."
 	@sleep 10
 	@echo "✅ Supabase ready"
@@ -296,7 +294,7 @@ supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
 		for migration in supabase/migrations/*.sql; do \
 			if [ -f "$$migration" ]; then \
 				echo "   Applying: $$(basename $$migration)"; \
-				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$migration" || \
+				docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves < "$$migration" || \
 					echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
 			fi; \
 		done; \
@@ -304,16 +302,16 @@ supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
 		echo "   ⚠️  No migrations directory found"; \
 	fi
 	@echo "   Running seed scripts..."
-	@if [ -d "supabase/seeds" ]; then \
-		for seed in supabase/seeds/*.sql; do \
+	@if [ -d "supabase/initdb" ]; then \
+		for seed in supabase/initdb/*.sql; do \
 			if [ -f "$$seed" ]; then \
 				echo "   Seeding: $$(basename $$seed)"; \
-				docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$seed" || \
+				docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves < "$$seed" || \
 					echo "   ⚠️  Seed failed: $$(basename $$seed)"; \
 			fi; \
 		done; \
 	else \
-		echo "   ⚠️  No seeds directory found"; \
+		echo "   ⚠️  No initdb directory found"; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
 
@@ -867,11 +865,11 @@ BACKUP_DIR ?= backups/$$(date +%Y%m%d_%H%M%S)
 backup: ## Dump Postgres, snapshot Qdrant, mirror MinIO bucket, Meili dump (best-effort)
 	@mkdir -p "$(BACKUP_DIR)"
 	@echo "→ Backing up Postgres…"
-	-@docker compose exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
+	-@$(DC) exec -T postgres pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > "$(BACKUP_DIR)/postgres.sql"
 	@echo "→ Snapshotting Qdrant…"
 	-@curl -fsS "http://localhost:6333/collections/$$QDRANT_COLLECTION/snapshots" -X POST -H 'content-type: application/json' -d '{}' > "$(BACKUP_DIR)/qdrant_snapshot.json"
 	@echo "→ Mirroring MinIO bucket '$(MINIO_BUCKET)' (requires mc alias 'local')…"
-	-@docker compose exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
+	-@$(DC) exec -T minio mc mirror --overwrite local/$$MINIO_BUCKET "$(BACKUP_DIR)/minio_$$MINIO_BUCKET"
 	@echo "→ Dumping Meilisearch…"
 	-@curl -fsS "http://localhost:7700/dumps" -X POST -H "X-Meili-API-Key: $$MEILI_MASTER_KEY" -d '{}' > "$(BACKUP_DIR)/meili_dump.json"
 	@echo "✔ Backup written to: $(BACKUP_DIR)"
@@ -887,7 +885,7 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 check-tier-envs: ## Validate all tier environment files exist
 	@echo "Checking tier environment files..."
 	@missing=""; \
-	for tier in data api llm worker media agent ui; do \
+	for tier in data supabase api llm worker media agent ui; do \
 		if [ ! -f "env.tier-$$tier" ]; then \
 			if [ -f "env.tier-$$tier.example" ]; then \
 				echo "⚠️  WARNING: env.tier-$$tier missing (example exists)"; \
@@ -910,7 +908,7 @@ check-tier-envs: ## Validate all tier environment files exist
 bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
 	@echo "Bootstrapping tier environment files from examples..."
 	@created=""; \
-	for tier in data api llm worker media agent ui; do \
+	for tier in data supabase api llm worker media agent ui; do \
 		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \
 			echo "→ Creating env.tier-$$tier from example..."; \
 			cp "env.tier-$$tier.example" "env.tier-$$tier"; \
@@ -936,6 +934,17 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		sed -i "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$${MINIO_ROOT_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		echo "✓ Populated env.tier-data"; \
 	fi; \
+	if [ -f "env.tier-supabase" ]; then \
+		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_ANON_KEY=.*|SUPABASE_ANON_KEY=$${SUPABASE_ANON_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_SERVICE_ROLE_KEY=.*|SUPABASE_SERVICE_ROLE_KEY=$${SUPABASE_SERVICE_ROLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_PUBLISHABLE_KEY=.*|SUPABASE_PUBLISHABLE_KEY=$${SUPABASE_PUBLISHABLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_SECRET_KEY=.*|SUPABASE_SECRET_KEY=$${SUPABASE_SECRET_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_REALTIME_SECRET=.*|SUPABASE_REALTIME_SECRET=$${SUPABASE_REALTIME_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
+		sed -i "s|^SUPABASE_DB_PASSWORD=.*|SUPABASE_DB_PASSWORD=$${SUPABASE_DB_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
+		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
+		echo "✓ Populated env.tier-supabase"; \
+	fi; \
 	if [ -f "env.tier-api" ]; then \
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-api; \
 		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-api; \
@@ -951,9 +960,33 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 	fi; \
 	echo "✓ Tier env files populated with defaults."
 
+# -------- Network cleanup (WSL2 Docker Desktop fix) ----------
+.PHONY: clean-networks
+clean-networks: ## Remove stale Docker Compose networks (fixes WSL2 "incorrect label" issues)
+	@echo "Checking for stale Docker Compose networks..."
+	@failed=0; \
+	for net in pmoves_data pmoves_api pmoves_app pmoves_bus pmoves_monitoring; do \
+		if docker network inspect "$$net" >/dev/null 2>&1; then \
+			if ! docker network inspect "$$net" --format '{{len .Labels}}' | grep -q '[1-9]'; then \
+				echo "  Removing stale network: $$net (no labels)"; \
+				if ! docker network rm "$$net" 2>&1; then \
+					echo "  ⚠ WARNING: Failed to remove $$net - it may be in use"; \
+					failed=1; \
+				fi; \
+			else \
+				echo "  ✓ $$net (properly labeled)"; \
+			fi; \
+		fi; \
+	done; \
+	if [ $$failed -eq 1 ]; then \
+		echo "⚠ Network cleanup completed with warnings - run 'make down' first to remove containers"; \
+	else \
+		echo "✔ Network cleanup complete."; \
+	fi
+
 # -------- GPU profile ----------
 .PHONY: up up-gpu up-both-gateways
-up: check-tier-envs ensure-env-shared ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
+up: check-tier-envs ensure-env-shared clean-networks ## Start core data + workers and both Hi-RAG gateways (validates tier envs first)
 	@echo "Starting core data + workers (Supabase via CLI if running)..."
 	@$(DC) --profile data --profile workers up -d qdrant neo4j minio meilisearch presign render-webhook langextract extract-worker hi-rag-gateway-v2 retrieval-eval
 	@echo "Starting GPU gateway variant (if GPU available)..."
@@ -1051,7 +1084,7 @@ STACK_FILES ?= \
 	-f docker-compose.archon-ui.submodule.yml \
 	-f monitoring/docker-compose.monitoring.yml
 
-DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) $(STACK_FILES)
+DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --project-directory $(CURDIR) $(STACK_FILES)
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
@@ -1259,29 +1292,29 @@ brand-defaults: ensure-env-shared ## Apply branded defaults and create required 
 	@echo "→ Applying branded defaults to pmoves/env.shared"
 	@python3 tools/brand_defaults.py
 	@echo "→ Creating MinIO buckets (assets, outputs) if missing"
-	@docker compose -p $(PROJECT) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || true
+	@$(DC) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || true
 	@echo "✔ Brand defaults applied"
 
 # ------- Neo4j helpers -------
 .PHONY: neo4j-reset neo4j-status
 neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUTH
 	@echo "⚠️  This will delete the neo4j-data volume. Press Ctrl+C to abort." && sleep 2
-	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) stop neo4j || true
-	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) rm -f neo4j || true
+	@$(DC) stop neo4j || true
+	@$(DC) rm -f neo4j || true
 	@docker volume rm $(PROJECT)_neo4j-data || true
-	@$(LOAD_ENV_SHARED); docker compose -p $(PROJECT) up -d neo4j
+	@$(DC) up -d neo4j
 	@echo "⏳ Waiting 8s for Neo4j to come up..." && sleep 8
 	@$(LOAD_ENV_SHARED) bash -c ' \
 		user=$${NEO4J_AUTH%%/*}; \
 		pass=$${NEO4J_AUTH#*/}; \
 		echo "Testing auth ($$user/***) from env.tier-data..."; \
-		docker compose -p $(PROJECT) exec -T neo4j bash -lc \
+		$(DC) exec -T neo4j bash -lc \
 		  "/var/lib/neo4j/bin/cypher-shell -u \"$$user\" -p \"$$pass\" \"RETURN 1\""; \
 	'
 
 neo4j-status: ## Show Neo4j logs and health line
-	@docker compose -p $(PROJECT) ps neo4j || true
-	@docker compose -p $(PROJECT) logs --tail 60 neo4j || true
+	@$(DC) ps neo4j || true
+	@$(DC) logs --tail 60 neo4j || true
 
 brand-verify: ## Verify key branded endpoints respond
 	@echo "Presign:" && curl -fsS http://localhost:8088/healthz && echo

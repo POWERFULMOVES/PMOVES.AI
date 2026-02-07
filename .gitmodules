@@ -269,8 +269,13 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
 	branch = PMOVES.AI-Edition-Hardened
 
+[submodule "PMOVES-Headscale"]
+	path = PMOVES-Headscale
+	url = https://github.com/POWERFULMOVES/PMOVES-headscale.git
+	branch = PMOVES.AI-Edition-Hardened
+
 # =============================================================================
-# Tokenism & Geometry
+# Data Storage & Database
 # =============================================================================
 
 [submodule "PMOVES-ToKenism-Multi"]
@@ -287,3 +292,7 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
 	branch = PMOVES.AI-Edition-Hardened
 
+[submodule "PMOVES-supabase"]
+	path = PMOVES-supabase
+	url = https://github.com/POWERFULMOVES/PMOVES-supabase.git
+	branch = PMOVES.AI-Edition-Hardened

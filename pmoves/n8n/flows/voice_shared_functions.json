@@ -175,7 +175,7 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "http://tensorzero-gateway:3030/v1/audio/speech",
+          "url": "http://tensorzero-gateway:3000/v1/audio/speech",
           "sendBody": true,
           "specifyBody": "json",
           "jsonBody": "={\n  \"model\": \"{{ $json.model || 'tts-1' }}\",\n  \"input\": \"{{ $json.text }}\",\n  \"voice\": \"{{ $json.voice || 'alloy' }}\"\n}",

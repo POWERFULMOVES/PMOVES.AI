@@ -53,7 +53,7 @@ class GatewayConfig:
     # TensorZero for LLM routing (docked mode)
     TENSORZERO_BASE_URL: str = os.environ.get(
         "TENSORZERO_BASE_URL",
-        "http://tensorzero-gateway:3030"
+        "http://tensorzero-gateway:3000"
     )
 
     # NATS for event coordination

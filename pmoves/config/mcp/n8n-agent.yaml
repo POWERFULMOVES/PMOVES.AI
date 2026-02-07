@@ -6,7 +6,7 @@ required_commands:
 environment:
   - N8N_API_URL=${N8N_API_URL:-http://n8n:5678/api/v1}
   - N8N_API_KEY=${N8N_API_KEY}
-  - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3030}
+  - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
   - TENSORZERO_MODEL=${TENSORZERO_MODEL:-qwen2_5_14b}
 setup_instructions:
   - Start n8n-agent container (docker compose -f base.yml up -d n8n-agent)

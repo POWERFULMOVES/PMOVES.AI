@@ -150,7 +150,7 @@ User-facing applications.
 |---------|---------|------|---------|
 | Archon UI | `cd pmoves-archon-ui && npm run dev` | 3737 | - |
 | TensorZero UI | Included in tensorzero service | 4000 | - |
-| Grafana | `docker compose up -d grafana` | 3000 | monitoring |
+| Grafana | `docker compose up -d grafana` | 3002 | monitoring |
 | PMOVES.Archon UI | `cd services && docker compose up -d` | 3737 | - |
 
 ```bash
@@ -231,7 +231,7 @@ echo "TensorZero: http://localhost:3030"
 echo "TensorZero UI: http://localhost:4000"
 echo "Agent Zero: http://localhost:8080"
 echo "Archon: http://localhost:8091"
-echo "Grafana: http://localhost:3000"
+echo "Grafana: http://localhost:3002"
 ```
 
 ## Service Dependencies

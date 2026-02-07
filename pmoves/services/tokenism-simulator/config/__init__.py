@@ -48,7 +48,7 @@ class NATSConfig:
 @dataclass(frozen=True)
 class TensorZeroConfig:
     """TensorZero LLM gateway configuration."""
-    url: str = os.getenv('TENSORZERO_URL', 'http://tensorzero-gateway:3030')
+    url: str = os.getenv('TENSORZERO_URL', 'http://tensorzero-gateway:3000')
     model: str = os.getenv('TENSORZERO_MODEL', 'claude-sonnet-4-5')
     timeout: int = int(os.getenv('TENSORZERO_TIMEOUT', '30'))
 

@@ -3,7 +3,12 @@
 # Loads, in order: tier env files → env.shared.generated → env.shared → .env.generated → .env.local
 # Existing exported vars are preserved unless files set them explicitly.
 set -euo pipefail
-ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# Get to the repo root from pmoves/scripts/with-env.sh
+# Handle both sourced and executed cases
+SCRIPT_FILE="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_FILE")" && pwd)"
+# From pmoves/scripts/ -> repo root
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 load_env_file() {
   local f="$1"
@@ -11,7 +16,7 @@ load_env_file() {
   # shellcheck disable=SC2046
   set +H 2>/dev/null || true  # disable history expansion to tolerate '!'
   tmpfile=$(mktemp)
-  # Build a sanitized assignment file: trim spaces around '=', always single-quote value, escape single quotes
+  # Build a sanitized assignment file
   while IFS= read -r line; do
     # ignore comments/blank
     [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
@@ -21,9 +26,15 @@ load_env_file() {
       key=$(echo "$key" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
       # trim leading spaces on value
       val=$(echo "$val" | sed -E 's/^[[:space:]]+//')
-      # escape single quotes in value for POSIX sh style
-      esc=${val//"'"/"'\\''"}
-      printf "%s='%s'\n" "$key" "$esc" >> "$tmpfile"
+      # If value contains ${ for variable expansion, output line directly for shell evaluation
+      # Otherwise wrap in single quotes to handle spaces and special characters
+      if [[ "$val" =~ \$\{ ]]; then
+        echo "$line" >> "$tmpfile"
+      else
+        # Escape single quotes by replacing ' with '\''
+        esc=$(echo "$val" | sed "s/'/'\\\\''/g")
+        printf "%s='%s'\n" "$key" "$esc" >> "$tmpfile"
+      fi
     fi
   done < "$f"
   set -a
@@ -35,13 +46,14 @@ load_env_file() {
 }
 
 # Hardened 6-tier architecture: load tier env files first
-load_env_file "$ROOT_DIR/pmoves/env.tier-data"
-load_env_file "$ROOT_DIR/pmoves/env.tier-api"
-load_env_file "$ROOT_DIR/pmoves/env.tier-llm"
-load_env_file "$ROOT_DIR/pmoves/env.tier-media"
-load_env_file "$ROOT_DIR/pmoves/env.tier-agent"
-load_env_file "$ROOT_DIR/pmoves/env.tier-worker"
-load_env_file "$ROOT_DIR/pmoves/env.tier-ui"
+load_env_file "$ROOT_DIR/env.tier-data"
+load_env_file "$ROOT_DIR/env.tier-supabase"
+load_env_file "$ROOT_DIR/env.tier-api"
+load_env_file "$ROOT_DIR/env.tier-llm"
+load_env_file "$ROOT_DIR/env.tier-media"
+load_env_file "$ROOT_DIR/env.tier-agent"
+load_env_file "$ROOT_DIR/env.tier-worker"
+load_env_file "$ROOT_DIR/env.tier-ui"
 
 # Legacy env files (loaded after tiers for backward compatibility)
 load_env_file "$ROOT_DIR/env.shared.generated"
