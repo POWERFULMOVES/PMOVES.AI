@@ -23,19 +23,19 @@
 
 ## HIGH PRIORITY
 
-### Task #38: PMOVES-DoX Security Fix 🔴
+### Task #38: PMOVES-DoX Security Review ✅ COMPLETED
 
 **Commit:** `bdd1f82c`
 **Message:** security: Hardened authentication and input validation (fixes #86)
-**Type:** Security fix
-**Recommendation:** Merge immediately to hardened
+**Type:** ~~Security fix~~ **DO NOT MERGE - Removes authentication**
 
-**Steps:**
-1. Clone/verify the commit
-2. Confirm security fix details
-3. Create PR: main → PMOVES.AI-Edition-Hardened
-4. Merge after CI passes
-5. Update parent submodule reference
+**Analysis Complete:**
+- Despite "security" in title, this commit **REMOVES** JWT authentication
+- Removes `get_current_user` from protected endpoints
+- Deletes security documentation from SECURITY.md
+- Hardened branch already has proper security
+
+**Recommendation:** **DO NOT MERGE** - This is a security regression, not a fix.
 
 ---
 
