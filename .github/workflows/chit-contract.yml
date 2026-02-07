@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - PMOVES.AI-Edition-Hardened
     paths:
       - 'pmoves/supabase/**/*.sql'
       - 'pmoves/supabase/initdb/**'
@@ -25,7 +26,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, ai-lab]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
