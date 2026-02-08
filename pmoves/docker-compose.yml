@@ -294,6 +294,20 @@ x-tier-data-hardened: &tier-data-hardened
   security_opt:
     - no-new-privileges:true
 
+x-tier-media-hardened: &tier-media-hardened
+  env_file:
+    - env.shared
+    - env.tier-media
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
 # PMOVES.AI production compose project
 name: pmoves
 
@@ -728,7 +742,7 @@ services:
     - pmoves_api
     - pmoves_bus
   retrieval-eval:
-    <<: *id003
+    <<: *tier-worker-hardened
     build: ./services/retrieval-eval
     restart: unless-stopped
     environment:
@@ -820,7 +834,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   extract-worker:
-    <<: *id003
+    <<: *tier-worker-hardened
     build: ./services/extract-worker
     restart: unless-stopped
     environment:
@@ -848,7 +862,7 @@ services:
       minio:
         condition: service_started
   pdf-ingest:
-    <<: *id003
+    <<: *tier-worker-hardened
     build:
       context: .
       dockerfile: services/pdf-ingest/Dockerfile
@@ -876,7 +890,7 @@ services:
     - pmoves_app
     - pmoves_bus
   langextract:
-    <<: *id003
+    <<: *tier-worker-hardened
     build:
       context: .
       dockerfile: services/langextract/Dockerfile
@@ -889,7 +903,7 @@ services:
     networks:
     - pmoves_app
   notebook-sync:
-    <<: *id003
+    <<: *tier-worker-hardened
     build: ./services/notebook-sync
     restart: unless-stopped
     environment:
@@ -915,7 +929,7 @@ services:
     - pmoves_app
     - pmoves_bus
   ffmpeg-whisper:
-    <<: *id004
+    <<: *tier-media-hardened
     build:
       context: ..
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
@@ -947,7 +961,7 @@ services:
     - pmoves_app
     - pmoves_bus
   media-video:
-    <<: *id004
+    <<: *tier-media-hardened
     build: ./services/media-video
     restart: unless-stopped
     environment:
@@ -973,7 +987,7 @@ services:
     - pmoves_app
     - pmoves_bus
   media-audio:
-    <<: *id004
+    <<: *tier-media-hardened
     build: ./services/media-audio
     restart: unless-stopped
     environment:
@@ -997,7 +1011,7 @@ services:
     - pmoves_app
     - pmoves_bus
   pmoves-yt:
-    <<: *id004
+    <<: *tier-media-hardened
     image: ${PMOVES_YT_IMAGE:-}
     build:
       context: ./services/pmoves-yt
@@ -1781,7 +1795,7 @@ services:
 
   # Flute Gateway - Multimodal voice communication layer (TTS/STT)
   flute-gateway:
-    <<: *id004
+    <<: *tier-media-hardened
     build:
       context: ./services/flute-gateway
       dockerfile: Dockerfile
