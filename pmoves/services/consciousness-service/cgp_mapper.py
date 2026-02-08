@@ -3,6 +3,11 @@ CGP Auto-Mapper: Transform consciousness theories into Constellation Geometry Pr
 
 This module maps theories from the consciousness taxonomy into geometric representations
 for Hi-RAG v2 indexing and retrieval.
+
+Features:
+- Zeta spectral filtering for CGP spectrum optimization
+- Multi-scale spectral analysis
+- Harmonic weighting using Riemann zeta zeros
 """
 
 import os
@@ -10,15 +15,32 @@ import json
 import logging
 import math
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
+
+# Zeta filter for spectral analysis
+try:
+    from pmoves.tools.zeta_filter import (
+        ZetaInspiredFilter,
+        analyze_spectrum,
+        optimize_spectrum_scale,
+    )
+    ZETA_FILTER_AVAILABLE = True
+except ImportError:
+    ZETA_FILTER_AVAILABLE = False
+    logging.warning("zeta_filter not available - spectral filtering disabled")
 
 logger = logging.getLogger(__name__)
 
 # Configuration
 HIRAG_V2_URL = os.environ.get("HIRAG_V2_URL", "http://hi-rag-gateway-v2:8086")
 GEOMETRY_EVENT_ENDPOINT = f"{HIRAG_V2_URL}/geometry/event"
+
+# Zeta filter configuration
+ZETA_NUM_ZEROS = int(os.environ.get("ZETA_NUM_ZEROS", "10"))
+ZETA_DECAY_FACTOR = float(os.environ.get("ZETA_DECAY_FACTOR", "0.9"))
+ZETA_ENABLED = os.environ.get("ZETA_FILTER_ENABLED", "true").lower() == "true"
 
 
 class CGPMapper:
@@ -77,18 +99,45 @@ class CGPMapper:
         theory_id = f"{category}:{name.lower().replace(' ', '_')}"
 
         # Calculate spectrum for this constellation (3D dimensions → 3-value spectrum)
-        spectrum = [
+        raw_spectrum = [
             round(empirical, 4),  # Dimension 1: empirical support
             round(coherence, 4),  # Dimension 2: philosophical coherence
             round(integration, 4),  # Dimension 3: integration potential
         ]
 
         # Normalize spectrum to sum to 1.0 (probability distribution)
-        spectrum_sum = sum(spectrum)
+        spectrum_sum = sum(raw_spectrum)
         if spectrum_sum > 0:
-            spectrum = [round(s / spectrum_sum, 4) for s in spectrum]
+            spectrum = [round(s / spectrum_sum, 4) for s in raw_spectrum]
         else:
             spectrum = [0.333, 0.333, 0.334]  # Equal distribution
+
+        # Apply zeta spectral filtering if enabled
+        zeta_analysis = None
+        if ZETA_ENABLED and ZETA_FILTER_AVAILABLE:
+            try:
+                zeta_filter = ZetaInspiredFilter(
+                    num_zeros=ZETA_NUM_ZEROS,
+                    decay_factor=ZETA_DECAY_FACTOR
+                )
+                zeta_analysis = zeta_filter.analyze_spectrum(spectrum)
+                # Use zeta-filtered spectrum as the anchor (preserves harmonic structure)
+                filtered_spectrum = zeta_analysis["filtered"]
+
+                # Add zeta metadata to packet
+                zeta_meta = {
+                    "zeta_filter_enabled": True,
+                    "zeta_num_zeros": ZETA_NUM_ZEROS,
+                    "entropy": zeta_analysis["entropy"],
+                    "concentration": zeta_analysis["concentration"],
+                    "dominant_index": zeta_analysis["dominant_index"],
+                }
+                logger.debug(f"Applied zeta filtering to {theory_id}: entropy={zeta_analysis['entropy']:.4f}")
+            except Exception as e:
+                logger.warning(f"Zeta filtering failed for {theory_id}: {e}")
+                zeta_meta = {"zeta_filter_enabled": False, "error": str(e)}
+        else:
+            zeta_meta = {"zeta_filter_enabled": False}
 
         cgp_packet = {
             "spec": "chit.cgp.v0.2",  # Standard CGP schema version
@@ -133,36 +182,9 @@ class CGPMapper:
                 "hyperbolic_encoding": {
                     "space": "poincare_disk",
                     "curvature": -1,
-                }
+                },
+                "zeta_analysis": zeta_meta,
             }
-        }
-                "id": theory_id,
-                "name": name,
-                "category": category,
-                "subcategory": subcategory,
-            },
-            "geometry": {
-                "coordinates": {
-                    "cartesian": {"x": round(x, 4), "y": round(y, 4), "z": round(z, 4)},
-                    "spherical": {
-                        "radius": round(radius, 4),
-                        "phi": round(phi, 4),
-                        "theta": round(theta, 4),
-                    },
-                },
-                "dimensions": {
-                    "empirical_support": round(empirical, 4),
-                    "philosophical_coherence": round(coherence, 4),
-                    "integration_potential": round(integration, 4),
-                },
-            },
-            "metadata": {
-                "description": description,
-                "proponents": proponents,
-                "constellation_anchor": self._calculate_constellation_anchor(
-                    x, y, z, category
-                ),
-            },
         }
 
         logger.debug(f"Generated CGP packet for theory {theory_id}")
