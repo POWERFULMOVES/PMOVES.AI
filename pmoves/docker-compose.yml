@@ -229,6 +229,7 @@ services:
 
   supabase-gotrue:
     <<: *id008
+    <<: *hardening-rw
     image: supabase/gotrue:v2.186.0
     restart: unless-stopped
     environment:
@@ -274,6 +275,7 @@ services:
 
   supabase-postgrest:
     <<: *id008
+    <<: *hardening
     image: postgrest/postgrest:v12.2.0
     restart: unless-stopped
     environment:
@@ -306,6 +308,7 @@ services:
 
   supabase-kong:
     <<: *id008
+    <<: *hardening-rw
     image: kong:3.7.1
     restart: unless-stopped
     environment:
@@ -347,6 +350,7 @@ services:
 
   supabase-realtime:
     <<: *id008
+    <<: *hardening-rw
     image: supabase/realtime:v2.30.26
     restart: unless-stopped
     environment:
@@ -387,6 +391,7 @@ services:
 
   supabase-storage:
     <<: *id008
+    <<: *hardening-rw
     image: supabase/storage-api:v1.36.2
     restart: unless-stopped
     environment:
@@ -438,6 +443,7 @@ services:
 
   supabase-studio:
     <<: *id008
+    <<: *hardening-rw
     # Pinned 2025-02-04: Latest stable from Supabase
     image: supabase/studio:2026.02.04-sha-fba1944
     restart: unless-stopped
@@ -1158,6 +1164,7 @@ services:
       start_period: 10s
   agent-zero:
     <<: *id005
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
@@ -1199,6 +1206,7 @@ services:
     - pmoves_external  # Required for LLM provider APIs
   archon:
     <<: *id005
+    <<: *hardening-rw
     build:
       context: .
       dockerfile: ./services/archon/Dockerfile
@@ -1487,6 +1495,7 @@ services:
     - pmoves_data
   tensorzero-gateway:
     <<: *id006
+    <<: *hardening-rw
     # Pinned 2025-02-04: Latest stable from TensorZero
     image: tensorzero/gateway:2026.1.8
     restart: unless-stopped
