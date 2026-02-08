@@ -64,6 +64,8 @@ tmp/*.mp3
 /.env
 /.env.local
 /.env.testkeys
+/.env.bootstrap
+/.env.bootstrap.*
 # Tooling binaries
 /actionlint
 
