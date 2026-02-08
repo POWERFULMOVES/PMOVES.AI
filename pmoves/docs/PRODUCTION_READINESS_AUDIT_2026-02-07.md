@@ -135,10 +135,10 @@ This audit validates that the PMOVES.AI-Edition-Hardened branch is ready for pro
 **Finding:** Production CI must use self-hosted runners only. See `CI_INFRASTRUCTURE_AUDIT_2026-02-08.md` for migration plan.
 
 **Action Items:**
-- [ ] Migrate `codeql.yml` to `runs-on: [self-hosted, vps]`
-- [ ] Migrate `python-tests.yml` to `runs-on: [self-hosted, vps]`
-- [ ] Verify all remaining workflows use self-hosted runners
-- [ ] Update CI/CD documentation with self-hosted requirement
+- [x] Migrate `codeql.yml` to `runs-on: [self-hosted, vps]` ✅ Completed 2026-02-08
+- [x] Migrate `python-tests.yml` to `runs-on: [self-hosted, vps]` ✅ Completed 2026-02-08
+- [x] Verify all remaining workflows use self-hosted runners ✅ Completed 2026-02-08
+- [x] Update CI/CD documentation with self-hosted requirement ✅ Completed 2026-02-08
 
 ### 7. Documentation
 
