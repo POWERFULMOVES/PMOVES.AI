@@ -253,6 +253,20 @@ x-tier-agent-hardened-ro: &tier-agent-hardened-ro
     - /tmp:noexec,nosuid,size=64m
     - /var/tmp:noexec,nosuid,size=64m
 
+x-tier-agent-hardened-rw: &tier-agent-hardened-rw
+  env_file:
+    - env.shared
+    - env.tier-agent
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
 x-tier-llm-hardened: &tier-llm-hardened
   env_file:
     - env.shared
@@ -323,6 +337,35 @@ x-tier-media-hardened: &tier-media-hardened
   security_opt:
     - no-new-privileges:true
 
+x-tier-ui-hardened: &tier-ui-hardened
+  env_file:
+    - env.shared
+    - env.tier-ui
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+    - /var/tmp:noexec,nosuid,size=64m
+
+x-tier-api-hardened-gpu: &tier-api-hardened-gpu
+  env_file:
+    - env.shared
+    - env.tier-api
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
 # PMOVES.AI production compose project
 name: pmoves
 
@@ -337,7 +380,7 @@ services:
   # =============================================================================
 
   supabase-db:
-    <<: *id008
+    <<: *tier-supabase-hardened
     image: supabase/postgres:17.6.1.079
     restart: unless-stopped
     environment:
@@ -633,15 +676,8 @@ services:
     volumes:
     - qdrant-data:/qdrant/storage
   meilisearch:
-    <<: *id001
+    <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.8
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-      - CHOWN
-    security_opt:
-      - no-new-privileges:true
     restart: unless-stopped
     environment:
     - MEILI_ENV=production
@@ -691,18 +727,9 @@ services:
       retries: 12
       start_period: 20s
   minio:
-    <<: *id001
+    <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-      - CHOWN
-      - SETGID
-      - SETUID
-    security_opt:
-      - no-new-privileges:true
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=minioadmin
@@ -1216,7 +1243,7 @@ services:
     - pmoves_api
     - pmoves_bus
   hi-rag-gateway-v2-gpu:
-    <<: *id002
+    <<: *tier-api-hardened-gpu
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
@@ -1452,7 +1479,7 @@ services:
 
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
   a2ui-nats-bridge:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build: ./services/a2ui-nats-bridge
     image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
     container_name: pmoves-a2ui-nats-bridge
@@ -1484,12 +1511,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
-    cap_drop:
-    - ALL
-    security_opt:
-    - no-new-privileges:true
   deepresearch:
-    <<: *id005
+    <<: *tier-agent-hardened-rw
     build:
       context: ./services
       dockerfile: deepresearch/Dockerfile
@@ -1545,7 +1568,7 @@ services:
       nats:
         condition: service_healthy
   nats-echo-req:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build:
       context: ./services
       dockerfile: nats-echo/Dockerfile
@@ -1562,7 +1585,7 @@ services:
     networks:
     - pmoves_bus
   nats-echo-res:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build:
       context: ./services
       dockerfile: nats-echo/Dockerfile
@@ -1579,7 +1602,7 @@ services:
     networks:
     - pmoves_bus
   publisher-discord:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build:
       context: .
       dockerfile: ./services/publisher-discord/Dockerfile
@@ -1600,7 +1623,7 @@ services:
     - pmoves_app
     - pmoves_bus
   jellyfin-bridge:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build: ./services/jellyfin-bridge
     restart: unless-stopped
     environment:
@@ -1614,8 +1637,8 @@ services:
     - pmoves_app
     - pmoves_bus
   pmoves-ollama:
-    <<: *id006
-    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6}
+    <<: *tier-llm-hardened
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6@sha256:ea37dcbf693248c80796654500fccf1e12f55da20ec7c78c30870a9a227c4cdd}
     restart: unless-stopped
     environment:
     - OLLAMA_HOST=0.0.0.0:11434
@@ -1628,7 +1651,7 @@ services:
     networks:
     - pmoves_api
   tensorzero-clickhouse:
-    <<: *id006
+    <<: *tier-llm-hardened
     image: clickhouse/clickhouse-server:24.12-alpine
     restart: unless-stopped
     environment:
@@ -1679,7 +1702,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   tensorzero-ui:
-    <<: *id006
+    <<: *tier-llm-hardened
     # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
     image: tensorzero/ui:2026.1.8
     restart: unless-stopped
@@ -1753,7 +1776,7 @@ services:
         condition: service_healthy
         required: false
   evo-controller:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build:
       context: ./services/evo-controller
       dockerfile: Dockerfile
@@ -1778,7 +1801,7 @@ services:
       dockerfile: Dockerfile
     image: ${ULTIMATE_TTS_IMAGE:-ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio:pmoves-latest}
     restart: unless-stopped
-    <<: *id004
+    <<: *tier-media-hardened
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
       - GRADIO_SERVER_PORT=7861
@@ -1834,7 +1857,7 @@ services:
       dockerfile: Dockerfile
     image: ${TOKENISM_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest}
     restart: unless-stopped
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     environment:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
@@ -1871,7 +1894,7 @@ services:
       dockerfile: Dockerfile
     image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
     restart: unless-stopped
-    <<: *id007
+    <<: *tier-ui-hardened
     environment:
       - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
       - NODE_ENV=production
@@ -2020,7 +2043,7 @@ services:
   github-runner-ctl:
     build: ./services/github-runner-ctl
     restart: unless-stopped
-    <<: *id005
+    <<: *tier-agent-hardened-rw
     environment:
       - PORT=8104
       # NATS_URL is set in env.tier-agent with credentials: nats://nats:pmoves@nats:4222
