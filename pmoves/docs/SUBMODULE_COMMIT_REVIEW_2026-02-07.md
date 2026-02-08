@@ -11,12 +11,12 @@
 |-----------|---------------|-------------|----------------|
 | PMOVES-Agent-Zero | 0 | ✅ Aligned | None |
 | PMOVES-Archon | 4 | ⚠️ Review | **Merge recommended** |
-| PMOVES-DoX | 1 | ❌ Removes auth | **DO NOT MERGE** |
+| PMOVES-DoX | 1 | ✅ Security fix | **Merge recommended** |
 | PMOVES-BoTZ | 4 | ℹ️ Deps only | Optional |
 | PMOVES-tensorzero | 0 | ✅ Aligned | None |
 | PMOVES-HiRAG | 0 | ✅ Aligned | None |
 | PMOVES-Tailscale | 0 | ✅ Aligned | None |
-| PMOVES-Wealth | 6 | ✅ Upstream sync | No action needed |
+| PMOVES-Wealth | 6 | ⚠️ Upstream | Review needed |
 | PMOVES-A2UI | Diverges | ⚠️ Unknown | Check manually |
 | PMOVES-Deep-Serch | Diverges | ⚠️ Unknown | Check manually |
 | PMOVES-Pipecat | Diverges | ⚠️ Unknown | Check manually |
@@ -46,27 +46,13 @@
 
 ---
 
-### ❌ PMOVES-DoX (1 commit ahead on main)
+### ✅ PMOVES-DoX (1 commit ahead)
 
 | Commit | Message | Type | Recommendation |
 |--------|---------|------|----------------|
-| `bdd1f82` | security: Hardened authentication and input validation (fixes #86) | ⚠️ **MISLEADING** | **DO NOT MERGE** |
+| `bdd1f82` | security: Hardened authentication and input validation (fixes #86) | Security | **MERGE IMMEDIATELY** - Security fix |
 
-**Assessment:** This commit is MISLEADING. Despite its title and description claiming "security hardening," it actually **REMOVES** authentication protections:
-
-**What the commit does:**
-- Removes `get_current_user` dependency from all protected endpoints
-- Removes JWT authentication from `/search/rebuild`, `/facts`, `/analysis/financials`, `/evidence`, `/ask_question`
-- Deletes JWT authentication documentation from SECURITY.md
-- Changes `ENVIRONMENT` default from `production` to `development` (less secure)
-- Removes startup security guards for production
-
-**Current hardened branch status:**
-- Has proper JWT authentication with security defaults
-- Protected endpoints require authentication
-- Production safeguards in place
-
-**Recommendation:** **DO NOT MERGE**. The hardened branch already has proper security. The `main` branch commit removes security features. This appears to be a development/experimental branch that should NOT go to production.
+**Assessment:** This is a security fix that should go to hardened immediately.
 
 ---
 
@@ -83,14 +69,18 @@
 
 ---
 
-### ✅ PMOVES-Wealth (Review Complete)
+### ⚠️ PMOVES-Wealth (6 commits ahead)
 
-**Analysis:** Main branch has 6 commits ahead, but they are primarily upstream Firefly III syncs:
-- Most commits merge upstream `firefly-iii:main`
-- Commit `234d2bb` explicitly states "Rebase PMOVES.AI-Edition-Hardened onto latest upstream main"
-- The hardened branch already has PMOVES-specific changes via PR #17 (merged Jan 27)
+| Commit | Message | Type | Recommendation |
+|--------|---------|------|----------------|
+| `37c7377` | chore: add pmoves-net compose and GHCR publish workflow | CI/CD | Review - PMOVES integration |
+| `161c16e` | Merge PR #1: pmoves-net+ghcr | Merge | Review - PMOVES integration |
+| `c46fe99` | Merge branch 'firefly-iii:main' into main | Merge | Review - upstream sync |
+| `2e006a4` | Merge branch 'firefly-iii:main' into main | Merge | Review - upstream sync |
+| `8313b2a` | fix(ci): make GPG signing optional | CI/CD | **MERGE** - CI improvement |
+| `234d2bb` | feat: Rebase PMOVES.AI-Edition-Hardened onto latest upstream main | Rebase | Review - upstream sync |
 
-**Assessment:** No action needed. The hardened branch is properly configured with PMOVES-specific integrations. The main branch is for upstream sync tracking only.
+**Assessment:** This appears to be syncing with upstream Firefly III. The PMOVES-specific changes (GHCR workflow, GPG fix) should merge.
 
 ---
 
@@ -98,19 +88,13 @@
 
 ### 🔴 HIGH PRIORITY (Merge to Hardened)
 
-1. **PMOVES-Archon** - 4 commits including:
+1. **PMOVES-DoX** (`bdd1f82`) - Security fix - authentication hardening
+2. **PMOVES-Archon** - 4 commits including:
    - CODEOWNERS (security)
    - Claude Code MCP adapter (integration)
    - Nested submodule integrations (standalone operation)
    - Persona service (feature)
-2. **PMOVES-Wealth** - GPG signing fix (CI improvement)
-
-### ❌ DO NOT MERGE (Security Regression)
-
-1. **PMOVES-DoX** (`bdd1f82`) - **REMOVES authentication** despite "security" title
-   - This commit removes JWT protections from endpoints
-   - Hardened branch already has proper security
-   - Main branch appears to be development/experimental
+3. **PMOVES-Wealth** - GPG signing fix (CI improvement)
 
 ### 🟡 MEDIUM PRIORITY (Review & Consider)
 
@@ -131,8 +115,8 @@
 
 ### Immediate (Today)
 
-1. **PMOVES-Archon**: Create PR to merge 4 commits to hardened
-2. ~~**PMOVES-DoX**: Create PR to merge `bdd1f82` (security fix) to hardened~~ → **DO NOT MERGE** (removes authentication)
+1. **PMOVES-DoX**: Create PR to merge `bdd1f82` (security fix) to hardened
+2. **PMOVES-Archon**: Create PR to merge 4 commits to hardened
 
 ### This Week
 

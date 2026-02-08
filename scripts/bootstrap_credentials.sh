@@ -583,8 +583,8 @@ filter_empty_values() {
         > "$temp_file" || true
 
     # Check if any entries were removed
-    local original_count=$(grep -c '^[A-Z_]+=' "$output_file" 2>/dev/null || echo "0")
-    local filtered_count=$(grep -c '^[A-Z_]+=' "$temp_file" 2>/dev/null || echo "0")
+    local original_count=$(grep -c '^[A-Z_][A-Z0-9_]*=' "$output_file" 2>/dev/null || echo "0")
+    local filtered_count=$(grep -c '^[A-Z_][A-Z0-9_]*=' "$temp_file" 2>/dev/null || echo "0")
 
     if [ "$original_count" -gt "$filtered_count" ]; then
         local removed=$((original_count - filtered_count))
@@ -697,7 +697,7 @@ main() {
 
     # Final check and output
     if [ -f "$output_file" ] && [ -s "$output_file" ]; then
-        local var_count=$(grep -c '^[A-Z_]=' "$output_file" 2>/dev/null || echo "0")
+        local var_count=$(grep -c '^[A-Z_][A-Z0-9_]*=' "$output_file" 2>/dev/null || echo "0")
         log_success "Bootstrapped $var_count variables from: $source_used"
         echo ""
         log_info "To use these credentials:"
