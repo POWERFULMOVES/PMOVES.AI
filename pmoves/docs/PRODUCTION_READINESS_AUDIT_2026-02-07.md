@@ -1,8 +1,8 @@
 # PMOVES.AI Production Readiness Audit
 
-**Audit Date:** February 7, 2026
+**Audit Date:** February 7-8, 2026
 **Branch:** PMOVES.AI-Edition-Hardened
-**Commit:** 62a15e5a (after PR merges)
+**Commit:** Latest (after PR merges)
 **Purpose:** Validate hardened branch is production-ready before merging to main
 
 ---
@@ -11,7 +11,12 @@
 
 This audit validates that the PMOVES.AI-Edition-Hardened branch is ready for production deployment. All critical services, configurations, and security hardening have been verified.
 
-**Status:** 🔍 IN PROGRESS
+**Status:** ⚠️ **IN PROGRESS - CI Migration Required**
+
+**Latest Updates (2026-02-08):**
+- ✅ PMOVES.YT PR #1 merged (PMOVES.AI integration)
+- ⚠️ CI infrastructure audit revealed 2+ workflows still using GitHub-hosted runners
+- 📝 Created CI migration plan for self-hosted runner transition
 
 ---
 
@@ -81,9 +86,23 @@ This audit validates that the PMOVES.AI-Edition-Hardened branch is ready for pro
 | PMOVES-Pipecat | PMOVES.AI-Edition-Hardened | ✅ | |
 | PMOVES-Remote-View | PMOVES.AI-Edition-Hardened | ✅ | |
 | PMOVES-Tailscale | PMOVES.AI-Edition-Hardened | ✅ | |
-| PMOVES.YT | PMOVES.AI-Edition-Hardened | ✅ | |
+| PMOVES.YT | PMOVES.AI-Edition-Hardened | ✅ | **PR #1 Merged (2026-02-08)** |
 | PMOVES-Wealth | PMOVES.AI-Edition-Hardened | ✅ | |
 | All other submodules | PMOVES.AI-Edition-Hardened | ✅ | |
+
+### PMOVES.YT PR #1 Integration Complete (2026-02-08)
+
+**PR:** POWERFULMOVES/PMOVES-YT#1
+**Branch:** `feat/pmoves-ai-integration` → `PMOVES.AI-Edition-Hardened`
+**Status:** ✅ MERGED
+
+**Changes:**
+- Full PMOVES.AI integration with tier-based credential architecture
+- Added `pmoves_announcer/`, `pmoves_health/`, `pmoves_registry/` modules
+- Created `docker-compose.pmoves.yml` with YAML anchors
+- Fixed CodeRabbit review comments (TYPE_CHECKING, logging, TIER defaults)
+
+**CI Results:** 880/881 tests passed (1 unrelated flaky test)
 
 ### PMOVES-DoX Follow-up Required
 
@@ -103,7 +122,25 @@ This audit validates that the PMOVES.AI-Edition-Hardened branch is ready for pro
 | Container hardening | ⏳ | Non-root users |
 | Secret scanning | ⏳ | Dependabot enabled |
 
-### 6. Documentation
+### 6. CI/CD Infrastructure (NEW - 2026-02-08)
+
+| Workflow | Runner Type | Status | Action Required |
+|----------|-------------|--------|-----------------|
+| `hardening-validation.yml` | Self-hosted `[vps]` | ✅ | None |
+| `self-hosted-builds-hardened.yml` | Self-hosted `[ai-lab, gpu]` | ✅ | None |
+| `codeql.yml` | GitHub-hosted `ubuntu-latest` | ❌ | **Migrate to self-hosted** |
+| `python-tests.yml` | GitHub-hosted `ubuntu-latest` | ❌ | **Migrate to self-hosted** |
+| Other workflows (7+) | Unknown | ⏳ | Verify runner type |
+
+**Finding:** Production CI must use self-hosted runners only. See `CI_INFRASTRUCTURE_AUDIT_2026-02-08.md` for migration plan.
+
+**Action Items:**
+- [ ] Migrate `codeql.yml` to `runs-on: [self-hosted, vps]`
+- [ ] Migrate `python-tests.yml` to `runs-on: [self-hosted, vps]`
+- [ ] Verify all remaining workflows use self-hosted runners
+- [ ] Update CI/CD documentation with self-hosted requirement
+
+### 7. Documentation
 
 | Document | Status | Location |
 |----------|--------|----------|
@@ -204,9 +241,34 @@ curl http://localhost:7700/health
 - **Changes:** WSL2 documentation
 - **Validation:** Documentation complete
 
+### PMOVES.YT #1: feat(integration) - PMOVES.AI Integration
+- **Status:** ✅ Merged (2026-02-08)
+- **Changes:** Full PMOVES.AI integration, tier-based credentials
+- **Validation:** 880/881 tests passed (1 unrelated flaky test)
+
 ---
 
 ## Issues Found
+
+### CI Infrastructure Issues (NEW - 2026-02-08)
+- [ ] **codeql.yml** uses GitHub-hosted `ubuntu-latest` runner
+  - **Impact**: Security analysis runs on external infrastructure
+  - **Action**: Migrate to `runs-on: [self-hosted, vps]`
+  - **Priority**: HIGH - Security requirement
+
+- [ ] **python-tests.yml** uses GitHub-hosted `ubuntu-latest` runner
+  - **Impact**: Tests run on external infrastructure
+  - **Action**: Migrate to `runs-on: [self-hosted, vps]`
+  - **Priority**: HIGH - Production requirement
+
+- [ ] **7+ workflows** need runner type verification
+  - **Impact**: Unknown if using external runners
+  - **Action**: Audit and document all workflow runner types
+  - **Priority**: MEDIUM
+
+**See Also:** `CI_INFRASTRUCTURE_AUDIT_2026-02-08.md` for full analysis and migration plan
+
+---
 
 ### Critical Issues (RESOLVED)
 - [x] **PMOVES-Agent-Zero** - Switched to `PMOVES.AI-Edition-Hardened` branch ✅
@@ -248,4 +310,4 @@ curl http://localhost:7700/health
 
 ---
 
-**Last Updated:** 2026-02-07 16:55 UTC
+**Last Updated:** 2026-02-08 17:30 UTC

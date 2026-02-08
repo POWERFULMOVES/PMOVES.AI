@@ -1,6 +1,6 @@
 # PMOVES.AI Production Merge Tracker
 
-**Last Updated**: 2026-02-06 14:30 UTC
+**Last Updated**: 2026-02-08 17:30 UTC
 **Production Branch**: `main`
 **Hardened Branch**: `PMOVES.AI-Edition-Hardened`
 
@@ -14,10 +14,11 @@ This document tracks the progress of hardening and bug fixes from feature branch
 
 | Category | Open PRs | Mergeable | Blocked | Ready to Merge |
 |----------|----------|-----------|---------|----------------|
-| **Just Merged** | 3 | ✅ | 0 | - |
+| **Just Merged** | 4 | ✅ | 0 | - |
 | **Conflicting** | 5 | 0 ❌ | 5 | 0 |
 | **Closed** | 1 | ✅ | 0 | - |
 | **Total Active** | 5 | 0 | 5 | 0 |
+| **CI Migration Needed** | 3 workflows | ⏳ | 0 | - |
 
 ---
 
@@ -70,6 +71,32 @@ This document tracks the progress of hardening and bug fixes from feature branch
 - Enhanced `verify-all` with cumulative failure tracking
 
 **Note:** Required rebase after #583/#585 merge due to Makefile conflicts
+
+---
+
+### PR #1: feat(integration) - PMOVES.AI Integration for PMOVES.YT
+| Field | Value |
+|-------|-------|
+| **Repo** | POWERFULMOVES/PMOVES-YT (submodule) |
+| **Branch** | `feat/pmoves-ai-integration` |
+| **Status** | ✅ MERGED |
+| **Merge Date** | 2026-02-08 17:10 UTC |
+| **Changes** | Full PMOVES.AI integration with tier-based credentials |
+
+**Changes:**
+- Added `pmoves_announcer/`, `pmoves_health/`, `pmoves_registry/` modules
+- Created `docker-compose.pmoves.yml` with YAML anchors
+- Added `env.shared`, `env.tier-{llm,data,api}.sh` templates
+- Fixed CodeRabbit review comments (TYPE_CHECKING, logging, TIER defaults)
+- Updated `PMOVES.AI_INTEGRATION.md` with CHIT bootstrap documentation
+
+**CI Results:**
+- 880/881 tests passed (1 unrelated flaky test: test_lazy_extractors)
+- All PMOVES.AI integration tests passed
+
+**Follow-up:**
+- Sync integration pattern to remaining 26 submodules
+- Update universal integration guide with CHIT search path corrections
 
 ---
 
@@ -307,8 +334,13 @@ main (production)
 - [x] Merged PR #583 (Supabase integration)
 - [x] Rebased and merged PR #584 (audit findings)
 - [x] Closed superseded PR #582
+- [x] Merged PMOVES.YT PR #1 (PMOVES.AI integration)
+- [x] Completed CI infrastructure audit
 
 ### Next Steps
+- [ ] Migrate `codeql.yml` to self-hosted runners
+- [ ] Migrate `python-tests.yml` to self-hosted runners
+- [ ] Verify all workflows use self-hosted runners
 - [ ] Rebase PRs #577-581 onto latest hardened
 - [ ] Resolve remaining conflicting PRs
 
@@ -331,6 +363,72 @@ main (production)
 - `pmoves/docs/SERVICE_DEPENDENCIES.md` - Service dependency graph
 - `pmoves/docs/PORT_REGISTRY.md` - Complete port mappings
 - `pmoves/docs/SUPABASE_INTEGRATION_SUMMARY.md` - Supabase integration docs
+- `pmoves/docs/CI_INFRASTRUCTURE_AUDIT_2026-02-08.md` - CI runner strategy
+
+---
+
+## 🚨 CI Infrastructure Audit (2026-02-08)
+
+### Current Runner Strategy Analysis
+
+**Finding:** PMOVES.AI uses a **mixed runner strategy** - some workflows on self-hosted runners, others on GitHub-hosted.
+
+| Workflow | Runner Type | Status | Action Needed |
+|----------|-------------|--------|---------------|
+| `hardening-validation.yml` | ✅ Self-hosted `[self-hosted, vps]` | Correct | None |
+| `self-hosted-builds-hardened.yml` | ✅ Self-hosted `[self-hosted, ai-lab, gpu]` | Correct | None |
+| `codeql.yml` | ❌ GitHub-hosted `ubuntu-latest` | **Needs migration** | Migrate to self-hosted |
+| `python-tests.yml` | ❌ GitHub-hosted `ubuntu-latest` | **Needs migration** | Migrate to self-hosted |
+| `chit-contract.yml` | ⏳ Unknown | **Needs verification** | Verify runner type |
+| `integrations-ghcr.yml` | ⏳ Unknown | **Needs verification** | Verify runner type |
+| `sql-policy-lint.yml` | ⏳ Unknown | **Needs verification** | Verify runner type |
+| `env-preflight.yml` | ⏳ Unknown | **Needs verification** | Verify runner type |
+
+### Self-Hosted Runner Labels (Already Configured)
+
+| Label | Purpose | Example Usage |
+|-------|---------|---------------|
+| `self-hosted` | Base self-hosted runner | All workflows |
+| `vps` | VPS runners (CPU) | Docker builds, validation |
+| `ai-lab` | AI Lab with GPU | GPU builds, testing |
+| `gpu` | GPU-capable runners | CUDA image builds |
+| `cloudstartup` | Staging deployment | Deploy staging |
+| `kvm4` | Production server | Deploy production |
+| `staging` | Staging environment | Staging-specific jobs |
+| `production` | Production environment | Production-specific jobs |
+
+### Migration Requirements
+
+**User Requirement:** "ci should be for production we are not in development and should run locally or selfhosted runners"
+
+**Action Plan:**
+1. Update `codeql.yml`: Change `runs-on: ubuntu-latest` → `runs-on: [self-hosted, vps]`
+2. Update `python-tests.yml`: Change `runs-on: ubuntu-latest` → `runs-on: [self-hosted, vps]`
+3. Verify all remaining workflows use self-hosted runners
+4. Update workflow documentation to reflect self-hosted requirement
+
+### CI Workflow Migration Template
+
+```yaml
+# BEFORE (GitHub-hosted)
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+# AFTER (Self-hosted)
+jobs:
+  analyze:
+    runs-on: [self-hosted, vps]
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            pypi.org:443
+```
 
 ---
 
