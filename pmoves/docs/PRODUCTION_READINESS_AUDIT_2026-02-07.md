@@ -397,11 +397,13 @@ Comprehensive cross-reference audit completed by 4 specialized agents covering:
    - File: `pmoves/services/gateway-agent/nats_integration.py`
    - Features: Work item subscription, credential sharing, heartbeat
 
-3. ⏳ **Enable Zeta filtering in CGP pipeline** (PENDING)
-   - Integrate zeta-filter.ts into consciousness service CGP mapper
+3. ✅ **Enable Zeta filtering in CGP pipeline** (COMPLETED 2026-02-08)
+   - File: `pmoves/tools/zeta_filter.py`
+   - Features: Riemann zeta zero-based spectral filtering, multi-scale analysis
 
-4. ⏳ **Wire MACA consensus through TensorZero** (PENDING)
-   - Enable multi-agent consensus for geometry validation
+4. ✅ **Wire MACA consensus through TensorZero** (COMPLETED 2026-02-08)
+   - File: `pmoves/tools/maca_tensorzero.py`
+   - Features: LLM-backed consensus voting, structured output parsing, multi-round consensus
 
 ### Priority 3 - Long-term Actions
 
