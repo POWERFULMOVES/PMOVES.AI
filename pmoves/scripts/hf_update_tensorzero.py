@@ -79,8 +79,8 @@ def generate_tensorzero_config(catalog: Dict) -> str:
         Embedding models are placed in separate 'embedding_models' section.
     """
     lines = [
-        "# =============================================================================
-        # PMOVES.AI Local Model Stack - TensorZero Configuration",
+        "# =============================================================================",
+        "# PMOVES.AI Local Model Stack - TensorZero Configuration",
         "# Auto-generated from Hugging Face model catalog",
         "# =============================================================================",
         "",
@@ -187,7 +187,7 @@ def generate_function_variants(catalog: Dict) -> str:
         for intelligent routing.
     """
     lines = [
-        "# =============================================================================
+        "# =============================================================================",
         "# PMOVES-BoTZ Function Variants - Local Models",
         "# Auto-generated from Hugging Face model catalog",
         "# =============================================================================",

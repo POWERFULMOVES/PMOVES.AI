@@ -403,6 +403,36 @@ if hub_cache.exists():
         ...
 ```
 
+### 5.4 String Literals in Lists - Visual Deception
+
+**Anti-Pattern:**
+```python
+# BAD - Unterminated string literals that LOOK correct visually
+lines = [
+    "# =============================================================================
+    "# PMOVES.AI Local Model Stack - TensorZero Configuration",
+    "# Auto-generated from Hugging Face model catalog",
+    "# =============================================================================",
+    "",
+]
+```
+
+**Problem:** The comment separator lines (lines 1, 4) are missing closing quotes. This creates "unterminated string literal" errors even though the file looks correct visually. The issue is that multi-line visual comment blocks are being treated as single Python strings without proper line breaks.
+
+**Correct:**
+```python
+# GOOD - Each list element is a complete, terminated string
+lines = [
+    "# =============================================================================",
+    "# PMOVES.AI Local Model Stack - TensorZero Configuration",
+    "# Auto-generated from Hugging Face model catalog",
+    "# =============================================================================",
+    "",
+]
+```
+
+**Detection:** Always run `python -m py_compile` on files with large string lists to catch these syntax errors that editors may not highlight.
+
 ---
 
 ## 6. Testing Considerations
