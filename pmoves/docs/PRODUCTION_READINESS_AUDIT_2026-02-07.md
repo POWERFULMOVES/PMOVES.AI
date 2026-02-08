@@ -375,29 +375,42 @@ Comprehensive cross-reference audit completed by 4 specialized agents covering:
 
 ### Priority 1 - Immediate Actions Required
 
-1. **Fix Consciousness Service CGP Schema**
+1. ✅ **Fix Consciousness Service CGP Schema** (COMPLETED 2026-02-08)
    - File: `pmoves/services/consciousness-service/cgp_mapper.py`
-   - Change: `"version": "cgp.v1"` → `"spec": "chit.cgp.v0.2"`
+   - Changed: `"version": "cgp.v1"` → `"spec": "chit.cgp.v0.2"`
 
-2. **Create NATS JetStream Streams**
-   ```bash
-   nats stream add GEOMETRY_CGP --subjects "geometry.>" --storage file --max-age 720h
-   nats stream add TOKENISM_ATTRIBUTION --subjects "tokenism.>" --storage file --max-age 2160h
-   ```
+2. ✅ **Create NATS JetStream Streams** (COMPLETED 2026-02-08)
+   - File: `pmoves/scripts/nats/setup_geometry_streams.sh`
+   - Streams: GEOMETRY_CGP, TOKENISM_ATTRIBUTION, BOTZ_COORDINATION
 
-3. **Implement Long Thread (Z) Persistence**
+3. ⏳ **Implement Long Thread (Z) Persistence** (PENDING)
    - Add state checkpointing to `pmoves/services/agent_zero/controller.py`
    - Store task state in Supabase `agent_tasks` table
 
 ### Priority 2 - Short-term Actions
 
-1. Add security hooks to Agent Zero runtime
-2. Integrate Gateway Agent with NATS
-3. Enable Zeta filtering in CGP pipeline
-4. Wire MACA consensus through TensorZero
+1. ✅ **Add security hooks to Agent Zero runtime** (COMPLETED 2026-02-08)
+   - Files: `pmoves/services/agent-zero/security/validator.py`, `security/hooks/pre_command.py`
+   - Validations: 40+ blocked commands, path protection, audit logging
+
+2. ✅ **Integrate Gateway Agent with NATS** (COMPLETED 2026-02-08)
+   - File: `pmoves/services/gateway-agent/nats_integration.py`
+   - Features: Work item subscription, credential sharing, heartbeat
+
+3. ⏳ **Enable Zeta filtering in CGP pipeline** (PENDING)
+   - Integrate zeta-filter.ts into consciousness service CGP mapper
+
+4. ⏳ **Wire MACA consensus through TensorZero** (PENDING)
+   - Enable multi-agent consensus for geometry validation
 
 ### Priority 3 - Long-term Actions
 
-1. Implement Multi-Modal Decoder
-2. Add `chit_security.py` layer
-3. Develop CGP v1.0 specification
+1. ⏳ **Implement Multi-Modal Decoder** (PENDING)
+   - Decode geometric constellations back to text/images
+
+2. ✅ **Add `chit_security.py` layer** (COMPLETED 2026-02-08)
+   - File: `pmoves/tools/chit_security_validator.py`
+   - Features: Schema validation, signature verification, access control, audit logging
+
+3. ⏳ **Develop CGP v1.0 specification** (PENDING)
+   - Formalize CHIT Geometry Packet protocol for v1.0
