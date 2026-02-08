@@ -1,0 +1,550 @@
+# =============================================================================
+# PMOVES-BoTZ TensorZero Gateway Configuration - Local Model Stack
+# Schema: TensorZero 2026.1.1+
+#
+# This configuration integrates with the Hugging Face model catalog,
+# supporting local models via Ollama and vLLM backends.
+#
+# Hardware Tiers:
+#   - small: 3B-8B parameters, CPU/Edge
+#   - medium: 7B-14B parameters, Single GPU
+#   - large: 30B-70B parameters, Multi-GPU (TP)
+# =============================================================================
+
+[gateway]
+bind_address = "0.0.0.0:3000"
+
+# =============================================================================
+# Ollama Provider (Local GGUF models)
+# =============================================================================
+
+[providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# For docked mode (when running inside same Docker network as parent PMOVES.AI)
+[providers.ollama_docked]
+type = "openai"
+api_base = "http://ollama:11434/v1"
+api_key_location = "none"
+
+# For standalone mode (when running separately)
+[providers.ollama_standalone]
+type = "openai"
+api_base = "http://host.docker.internal:11434/v1"
+api_key_location = "none"
+
+# =============================================================================
+# vLLM Providers (Full precision models with TP)
+# =============================================================================
+
+# vLLM for Qwen 2.5 7B
+[providers.vllm_qwen_7b]
+type = "openai"
+api_base = "http://vllm-qwen-7b:8000/v1"
+api_key_location = "none"
+
+# vLLM for Qwen 2.5 14B
+[providers.vllm_qwen_14b]
+type = "openai"
+api_base = "http://vllm-qwen-14b:8000/v1"
+api_key_location = "none"
+
+# vLLM for Qwen 2.5 32B (TP=2)
+[providers.vllm_qwen_32b]
+type = "openai"
+api_base = "http://vllm-qwen-32b:8000/v1"
+api_key_location = "none"
+
+# vLLM for Qwen 2.5 Coder 7B
+[providers.vllm_coder_7b]
+type = "openai"
+api_base = "http://vllm-coder-7b:8000/v1"
+api_key_location = "none"
+
+# vLLM for Qwen 3 VL 8B
+[providers.vllm_vl_8b]
+type = "openai"
+api_base = "http://vllm-vl-8b:8000/v1"
+api_key_location = "none"
+
+# =============================================================================
+# Models - Small Tier (3B-8B, CPU/Edge)
+# =============================================================================
+
+# Phi 3 Mini - Fast, efficient, 128K context
+[models.phi3_mini_local]
+routing = ["ollama_local"]
+
+[models.phi3_mini_local.providers.ollama_local]
+type = "openai"
+model_name = "phi3:3.8b-mini-128k-instruct"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Gemma 2 2B - Google's efficient small model
+[models.gemma_2_2b_local]
+routing = ["ollama_local"]
+
+[models.gemma_2_2b_local.providers.ollama_local]
+type = "openai"
+model_name = "gemma-2:2b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Qwen 2.5 3B - Efficient multilingual model
+[models.qwen2_5_3b_local]
+routing = ["ollama_local"]
+
+[models.qwen2_5_3b_local.providers.ollama_local]
+type = "openai"
+model_name = "qwen2.5:3b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# =============================================================================
+# Models - Medium Tier (7B-14B, Single GPU)
+# =============================================================================
+
+# Qwen 2.5 7B - Flagship general-purpose model
+[models.qwen2_5_7b_ollama]
+routing = ["ollama_local"]
+
+[models.qwen2_5_7b_ollama.providers.ollama_local]
+type = "openai"
+model_name = "qwen2.5:7b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+[models.qwen2_5_7b_vllm]
+routing = ["vllm_qwen_7b"]
+
+[models.qwen2_5_7b_vllm.providers.vllm_qwen_7b]
+type = "openai"
+model_name = "Qwen/Qwen2.5-7B-Instruct"
+api_key_location = "none"
+
+# Qwen 2.5 14B - Higher quality reasoning
+[models.qwen2_5_14b_ollama]
+routing = ["ollama_local"]
+
+[models.qwen2_5_14b_ollama.providers.ollama_local]
+type = "openai"
+model_name = "qwen2.5:14b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+[models.qwen2_5_14b_vllm]
+routing = ["vllm_qwen_14b"]
+
+[models.qwen2_5_14b_vllm.providers.vllm_qwen_14b]
+type = "openai"
+model_name = "Qwen/Qwen2.5-14B-Instruct"
+api_key_location = "none"
+
+# Llama 3.1 8B - Meta's flagship with 128K context
+[models.llama3_1_8b_local]
+routing = ["ollama_local"]
+
+[models.llama3_1_8b_local.providers.ollama_local]
+type = "openai"
+model_name = "llama3.1:8b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Gemma 2 9B - Google's balanced model
+[models.gemma_2_9b_local]
+routing = ["ollama_local"]
+
+[models.gemma_2_9b_local.providers.ollama_local]
+type = "openai"
+model_name = "gemma-2:9b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Qwen 3 8B - Next generation Qwen
+[models.qwen3_8b_local]
+routing = ["ollama_local"]
+
+[models.qwen3_8b_local.providers.ollama_local]
+type = "openai"
+model_name = "qwen3:8b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# =============================================================================
+# Models - Coding (Specialized)
+# =============================================================================
+
+# Qwen 2.5 Coder 7B - Specialized coding model
+[models.qwen2_5_coder_7b_ollama]
+routing = ["ollama_local"]
+
+[models.qwen2_5_coder_7b_ollama.providers.ollama_local]
+type = "openai"
+model_name = "qwen2.5-coder:7b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+[models.qwen2_5_coder_7b_vllm]
+routing = ["vllm_coder_7b"]
+
+[models.qwen2_5_coder_7b_vllm.providers.vllm_coder_7b]
+type = "openai"
+model_name = "Qwen/Qwen2.5-Coder-7B-Instruct"
+api_key_location = "none"
+
+# DeepSeek Coder 6.7B - Specialized coding
+[models.deepseek_coder_6_7b_local]
+routing = ["ollama_local"]
+
+[models.deepseek_coder_6_7b_local.providers.ollama_local]
+type = "openai"
+model_name = "deepseek-coder:6.7b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# =============================================================================
+# Models - Large Tier (30B-70B, Multi-GPU)
+# =============================================================================
+
+# Qwen 2.5 32B - High quality reasoning (TP=2)
+[models.qwen2_5_32b_vllm]
+routing = ["vllm_qwen_32b"]
+
+[models.qwen2_5_32b_vllm.providers.vllm_qwen_32b]
+type = "openai"
+model_name = "Qwen/Qwen2.5-32B-Instruct"
+api_key_location = "none"
+
+# Qwen 2.5 72B - Flagship large model (TP=4)
+# Note: Requires 4x GPUs to run
+[models.qwen2_5_72b_local]
+routing = ["ollama_local"]
+
+[models.qwen2_5_72b_local.providers.ollama_local]
+type = "openai"
+model_name = "qwen2.5:72b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# =============================================================================
+# Models - Vision-Language
+# =============================================================================
+
+# Qwen 2 VL 7B - Vision-language model
+[models.qwen2_vl_7b_local]
+routing = ["ollama_local"]
+
+[models.qwen2_vl_7b_local.providers.ollama_local]
+type = "openai"
+model_name = "qwen2-vl:7b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Qwen 3 VL 8B - Next generation VL
+[models.qwen3_vl_8b_vllm]
+routing = ["vllm_vl_8b"]
+
+[models.qwen3_vl_8b_vllm.providers.vllm_vl_8b]
+type = "openai"
+model_name = "Qwen/Qwen3-VL-8B-Instruct"
+api_key_location = "none"
+
+# =============================================================================
+# Models - Embeddings
+# =============================================================================
+
+# Qwen 3 Embedding 8B - 4096 dimensions
+[models.qwen3_embedding_8b_local]
+routing = ["ollama_local"]
+
+[models.qwen3_embedding_8b_local.providers.ollama_local]
+type = "openai"
+model_name = "qwen3-embedding:8b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Qwen 3 Embedding 4B - 3072 dimensions
+[models.qwen3_embedding_4b_local]
+routing = ["ollama_local"]
+
+[models.qwen3_embedding_4b_local.providers.ollama_local]
+type = "openai"
+model_name = "qwen3-embedding:4b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# BGE Large EN v1.5 - 1024 dimensions
+[models.bge_large_local]
+routing = ["ollama_local"]
+
+[models.bge_large_local.providers.ollama_local]
+type = "openai"
+model_name = "bge-large"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Nomic Embed Text - 768 dimensions
+[models.nomic_embed_local]
+routing = ["ollama_local"]
+
+[models.nomic_embed_local.providers.ollama_local]
+type = "openai"
+model_name = "nomic-embed-text"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# Gemma Embedding 300M - 1024 dimensions
+[models.gemma_embed_300m_local]
+routing = ["ollama_local"]
+
+[models.gemma_embed_300m_local.providers.ollama_local]
+type = "openai"
+model_name = "embeddinggemma:300m"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# =============================================================================
+# Embedding Models Section
+# =============================================================================
+
+[embedding_models.qwen3_8b]
+routing = ["ollama_local"]
+
+[embedding_models.qwen3_8b.providers.ollama_local]
+type = "openai"
+model_name = "qwen3-embedding:8b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+[embedding_models.qwen3_4b]
+routing = ["ollama_local"]
+
+[embedding_models.qwen3_4b.providers.ollama_local]
+type = "openai"
+model_name = "qwen3-embedding:4b"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+[embedding_models.gemma_300m]
+routing = ["ollama_local"]
+
+[embedding_models.gemma_300m.providers.ollama_local]
+type = "openai"
+model_name = "embeddinggemma:300m"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+[embedding_models.bge_large]
+routing = ["ollama_local"]
+
+[embedding_models.bge_large.providers.ollama_local]
+type = "openai"
+model_name = "bge-large"
+api_base = "http://pmoves-ollama:11434/v1"
+api_key_location = "none"
+
+# =============================================================================
+# Functions - Orchestrator (Complex reasoning tasks)
+# =============================================================================
+
+[functions.orchestrator]
+type = "chat"
+
+# Primary: Qwen 2.5 14B (medium tier, high quality)
+[functions.orchestrator.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_14b_vllm"
+weight = 1.0
+
+# Medium: Qwen 2.5 7B (balanced)
+[functions.orchestrator.variants.medium]
+type = "chat_completion"
+model = "qwen2_5_7b_vllm"
+weight = 0.7
+
+# Tiny: Phi 3 Mini (fast, low resource)
+[functions.orchestrator.variants.tiny]
+type = "chat_completion"
+model = "phi3_mini_local"
+weight = 0.3
+
+# Large: Qwen 2.5 32B (high quality)
+[functions.orchestrator.variants.large]
+type = "chat_completion"
+model = "qwen2_5_32b_vllm"
+weight = 0.5
+
+# =============================================================================
+# Functions - Builder (Sonnet execution - balanced speed/quality)
+# =============================================================================
+
+[functions.builder]
+type = "chat"
+
+[functions.builder.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_7b_vllm"
+weight = 1.0
+
+[functions.builder.variants.tiny]
+type = "chat_completion"
+model = "qwen2_5_3b_local"
+weight = 0.3
+
+[functions.builder.variants.large]
+type = "chat_completion"
+model = "qwen2_5_14b_vllm"
+weight = 0.5
+
+# =============================================================================
+# Functions - Auditor (Haiku review - fast, cost-effective)
+# =============================================================================
+
+[functions.auditor]
+type = "chat"
+
+[functions.auditor.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_3b_local"
+weight = 1.0
+
+[functions.auditor.variants.tiny]
+type = "chat_completion"
+model = "gemma_2_2b_local"
+weight = 0.5
+
+# =============================================================================
+# Functions - Coding (Specialized code generation)
+# =============================================================================
+
+[functions.coding]
+type = "chat"
+
+[functions.coding.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_coder_7b_vllm"
+weight = 1.0
+
+[functions.coding.variants.alternative]
+type = "chat_completion"
+model = "deepseek_coder_6_7b_local"
+weight = 0.5
+
+[functions.coding.variants.general]
+type = "chat_completion"
+model = "qwen2_5_7b_vllm"
+weight = 0.3
+
+# =============================================================================
+# Functions - Utility (Fast simple tasks)
+# =============================================================================
+
+[functions.utility]
+type = "chat"
+
+[functions.utility.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_3b_local"
+weight = 1.0
+
+[functions.utility.variants.tiny]
+type = "chat_completion"
+model = "gemma_2_2b_local"
+weight = 0.5
+
+[functions.utility.variants.medium]
+type = "chat_completion"
+model = "qwen2_5_7b_ollama"
+weight = 0.3
+
+# =============================================================================
+# Functions - VL Sentinel (Vision-language processing)
+# =============================================================================
+
+[functions.vl_sentinel]
+type = "chat"
+
+[functions.vl_sentinel.variants.primary]
+type = "chat_completion"
+model = "qwen2_vl_7b_local"
+weight = 1.0
+
+[functions.vl_sentinel.variants.high_quality]
+type = "chat_completion"
+model = "qwen3_vl_8b_vllm"
+weight = 0.5
+
+# =============================================================================
+# Functions - Research (Deep research tasks)
+# =============================================================================
+
+[functions.research]
+type = "chat"
+
+[functions.research.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_32b_vllm"
+weight = 1.0
+
+[functions.research.variants.large]
+type = "chat_completion"
+model = "qwen2_5_72b_local"
+weight = 0.5
+
+[functions.research.variants.medium]
+type = "chat_completion"
+model = "qwen2_5_14b_vllm"
+weight = 0.3
+
+# =============================================================================
+# Functions - Cipher Memory (Persistent memory with reasoning)
+# =============================================================================
+
+[functions.cipher_memory]
+type = "chat"
+
+[functions.cipher_memory.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_14b_vllm"
+weight = 1.0
+
+[functions.cipher_memory.variants.medium]
+type = "chat_completion"
+model = "qwen2_5_7b_vllm"
+weight = 0.5
+
+[functions.cipher_memory.variants.tiny]
+type = "chat_completion"
+model = "phi3_mini_local"
+weight = 0.3
+
+# =============================================================================
+# Functions - Docling (Document understanding)
+# =============================================================================
+
+[functions.docling]
+type = "chat"
+
+[functions.docling.variants.primary]
+type = "chat_completion"
+model = "qwen2_5_7b_vllm"
+weight = 1.0
+
+[functions.docling.variants.high_quality]
+type = "chat_completion"
+model = "qwen2_5_14b_vllm"
+weight = 0.5
+
+# =============================================================================
+# Metrics Configuration
+# =============================================================================
+
+[metrics]
+# ClickHouse for metrics storage
+clickhouse_url = "http://tensorzero-clickhouse:8123/tensorzero"
+clickhouse_user = "tensorzero"
+clickhouse_password = "tensorzero"
+clickhouse_database = "tensorzero"
