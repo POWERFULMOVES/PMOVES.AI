@@ -238,6 +238,21 @@ x-tier-agent-hardened: &tier-agent-hardened
   security_opt:
     - no-new-privileges:true
 
+x-tier-agent-hardened-ro: &tier-agent-hardened-ro
+  env_file:
+    - env.shared
+    - env.tier-agent
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+    - /var/tmp:noexec,nosuid,size=64m
+
 x-tier-llm-hardened: &tier-llm-hardened
   env_file:
     - env.shared
@@ -1068,7 +1083,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for YouTube processing
   channel-monitor:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build: ./services/channel-monitor
     restart: unless-stopped
     environment:
@@ -1399,7 +1414,7 @@ services:
       retries: 12
       start_period: 15s
   mesh-agent:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
@@ -1412,9 +1427,9 @@ services:
 
   # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
   botz-gateway:
+    <<: *tier-agent-hardened-ro
     build: ./services/botz-gateway
     restart: unless-stopped
-    <<: *id005
     environment:
       # NATS_URL is set in env.tier-agent with credentials: nats://nats:pmoves@nats:4222
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
@@ -1507,7 +1522,7 @@ services:
     - pmoves_app
     - pmoves_bus
   supaserch:
-    <<: *id005
+    <<: *tier-agent-hardened-ro
     build:
       context: ./services
       dockerfile: supaserch/Dockerfile
