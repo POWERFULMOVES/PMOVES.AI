@@ -379,18 +379,9 @@ Comprehensive cross-reference audit completed by 4 specialized agents covering:
    - Streams: GEOMETRY_CGP, TOKENISM_ATTRIBUTION, BOTZ_COORDINATION
 
 3. ✅ **Implement Long Thread (Z) Persistence** (COMPLETED 2026-02-08)
-   - Files: `pmoves/services/agent-zero/python/checkpointing.py`, `threads_persistent.py`
+   - Files: `pmoves/services/agent-zero/python/checkpointing.py`, `gateway/threads_persistent.py`
+   - Database: `pmoves/supabase/initdb/16_agent_threads.sql`
    - Features: Task checkpointing, recovery, progress tracking, Supabase persistence
-   - File: `pmoves/services/consciousness-service/cgp_mapper.py`
-   - Changed: `"version": "cgp.v1"` → `"spec": "chit.cgp.v0.2"`
-
-2. ✅ **Create NATS JetStream Streams** (COMPLETED 2026-02-08)
-   - File: `pmoves/scripts/nats/setup_geometry_streams.sh`
-   - Streams: GEOMETRY_CGP, TOKENISM_ATTRIBUTION, BOTZ_COORDINATION
-
-3. ⏳ **Implement Long Thread (Z) Persistence** (PENDING)
-   - Add state checkpointing to `pmoves/services/agent_zero/controller.py`
-   - Store task state in Supabase `agent_tasks` table
 
 ### Priority 2 - Short-term Actions
 
@@ -419,7 +410,8 @@ Comprehensive cross-reference audit completed by 4 specialized agents covering:
    - File: `pmoves/tools/chit_security_validator.py`
    - Features: Schema validation, signature verification, access control, audit logging
 
-3. ✅ **Develop CGP v1.0 specification** (READY TO START - Dependencies Complete)
-   - Prerequisites: Tasks #38, #39, #40 all completed
+3. ✅ **Develop CGP v1.0 specification** (READY - All Dependencies Complete)
+   - Prerequisites: Tasks #38, #39, #40 all completed ✅
    - Next Step: Formalize CHIT Geometry Packet protocol for v1.0
+   - Components: Zeta filtering, MACA consensus, persistence all integrated
    - Context: Zeta filtering, MACA consensus, and persistence all integrated
