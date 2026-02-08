@@ -252,6 +252,34 @@ x-tier-llm-hardened: &tier-llm-hardened
   security_opt:
     - no-new-privileges:true
 
+x-tier-worker-hardened: &tier-worker-hardened
+  env_file:
+    - env.shared
+    - env.tier-worker
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
+x-tier-api-hardened: &tier-api-hardened
+  env_file:
+    - env.shared
+    - env.tier-api
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
 # PMOVES.AI production compose project
 name: pmoves
 
@@ -306,11 +334,11 @@ services:
     - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}?sslmode=disable
     # JWT configuration (2025: RS256)
     # Standard variable names from PMOVES-supabase fork with fallbacks
-    - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-Mk1YWigx/sFJcP/cN1yTreuIa0maXMekfZ46M5Ewq+s=}
+    - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
     - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
-    - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}
+    - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
     # 2025 key naming (service_role_key from PMOVES-supabase standard)
-    - GOTRUE_JWT_ADMIN_SECRET=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY}
+    - GOTRUE_JWT_ADMIN_SECRET=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
     - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
     # Logging
     - GOTRUE_LOG_LEVEL=info
@@ -455,8 +483,8 @@ services:
     restart: unless-stopped
     environment:
     # 2025 key naming - standard Supabase variable names with fallbacks
-    - ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY}
-    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY}
+    - ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
+    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
     # JWT secret - standard variable name
     - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
@@ -511,8 +539,8 @@ services:
     # Auth connection
     - SUPABASE_URL=http://supabase-gotrue:9999
     # 2025 key naming - standard variable names with fallbacks
-    - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL}
-    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY}
+    - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
+    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE}
     - PARENT_SYSTEM=${PARENT_SYSTEM}
@@ -543,6 +571,14 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.10.0
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
     ports:
     - ${QDRANT_PORT:-6333}:6333
     networks:
@@ -675,7 +711,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   presign:
-    <<: *id002
+    <<: *tier-api-hardened
     build: ./services/presign
     restart: unless-stopped
     environment:
@@ -1836,7 +1872,7 @@ services:
 
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
-    <<: *id003
+    <<: *tier-worker-hardened
     image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:latest}
     restart: unless-stopped
     environment:
@@ -1861,7 +1897,7 @@ services:
       context: .
       dockerfile: services/comfy-watcher/Dockerfile
     restart: unless-stopped
-    <<: *id003
+    <<: *tier-worker-hardened
     environment:
       # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
