@@ -18,6 +18,15 @@ on:
     branches: [ "main" ]
   schedule:
     - cron: '16 20 * * 5'
+  # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
+  paths-ignore:
+    - 'integrations-workspace/**'
+    - '**/.venv/**'
+    - '**/venv/**'
+    - '**/vendor/**'
+    - '**/node_modules/**'
+    - '**/site-packages/**'
+    - '**/.eggs/**'
 
 jobs:
   analyze:
@@ -31,8 +40,6 @@ jobs:
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
     continue-on-error: ${{ matrix.language == 'c-cpp' }}
-    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
-    paths-ignore:
       - 'integrations-workspace/**'
       - '**/.venv/**'
       - '**/venv/**'
