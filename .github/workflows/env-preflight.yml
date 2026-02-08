@@ -14,6 +14,8 @@ on:
 jobs:
   preflight:
     name: Preflight (windows-latest)
+    # NOTE: Uses windows-latest for Windows-specific environment validation
+    # This is intentional as we need to validate Windows PowerShell scripts
     runs-on: windows-latest
     steps:
       - name: Harden Runner
