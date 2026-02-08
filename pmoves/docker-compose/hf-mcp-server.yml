@@ -1,0 +1,80 @@
+# =============================================================================
+# PMOVES.AI Local Model Stack - Hugging Face MCP Server (Hardened)
+# =============================================================================
+# Docker Compose file for Hugging Face MCP Server.
+# Includes container hardening following PMOVES.AI security standards.
+#
+# Provides:
+#   - Model discovery from Hugging Face Hub
+#   - Model download and caching to shared volume
+#   - Model metadata extraction (size, requirements, quantization)
+#   - GGUF conversion support for Ollama
+#   - vLLM compatibility checking
+#   - TensorZero configuration generation
+#
+# Usage:
+#   docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d
+# =============================================================================
+
+services:
+  hf-mcp-server:
+    build:
+      context: ../../pmoves/services/hf-mcp-server
+      dockerfile: Dockerfile
+    image: pmoves/hf-mcp-server:latest
+    container_name: pmoves-hf-mcp-server
+    ports:
+      - "8096:8096"
+    # Container Hardening (Python API service pattern)
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=500M,mode=1777
+      - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # Hugging Face Configuration
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - HF_HUB_CACHE=/home/pmoves/.cache/huggingface/hub
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN:-}
+      # NATS for event publishing
+      - NATS_URL=nats://nats:4222
+      # Server Configuration
+      - PORT=8096
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Single read-write mount for model downloads and caching
+      # Service needs write access for downloaded models
+      - hf_models:/home/pmoves/.cache/huggingface:rw
+    networks:
+      - pmoves-local-models
+    healthcheck:
+      # PMOVES.AI standard: use /healthz endpoint
+      test: ["CMD", "curl", "-f", "http://localhost:8096/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  hf_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HF_MODEL_PATH:-/mnt/models/hf}
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  pmoves-local-models:
+    name: pmoves-local-models
+    external: true
