@@ -13,9 +13,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
   schedule:
     - cron: '16 20 * * 5'
   # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
