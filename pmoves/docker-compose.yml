@@ -280,6 +280,20 @@ x-tier-api-hardened: &tier-api-hardened
   security_opt:
     - no-new-privileges:true
 
+x-tier-data-hardened: &tier-data-hardened
+  env_file:
+    - env.shared
+    - env.tier-data
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
 # PMOVES.AI production compose project
 name: pmoves
 
@@ -592,6 +606,13 @@ services:
   meilisearch:
     <<: *id001
     image: getmeili/meilisearch:v1.8
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     environment:
     - MEILI_ENV=production
@@ -608,6 +629,14 @@ services:
     image: neo4j:5.22
     env_file:
       - env.tier-data
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
     environment:
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
@@ -636,6 +665,15 @@ services:
     <<: *id001
     # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=minioadmin
@@ -1227,7 +1265,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
   nats:
-    <<: *id001
+    <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
     command:
@@ -1644,7 +1682,7 @@ services:
     build:
       context: ./services/gpu-orchestrator
       dockerfile: Dockerfile
-    image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:latest}
+    image: ${GPU_ORCHESTRATOR_IMAGE:-ghcr.io/powerfulmoves/pmoves-gpu-orchestrator:latest@sha256:cbfbcbfa779ad83b720c1fa1527e0258d192f5d01c6d26d62aa247d501f8693a}
     restart: unless-stopped
     environment:
     - NVIDIA_VISIBLE_DEVICES=all
