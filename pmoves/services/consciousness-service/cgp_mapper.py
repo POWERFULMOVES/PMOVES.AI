@@ -51,7 +51,7 @@ class CGPMapper:
                 - subcategory: Taxonomy subcategory
 
         Returns:
-            CGP v1 format packet with geometric coordinates and metadata
+            CGP v0.2 format packet (chit.cgp.v0.2) with geometric coordinates and metadata
         """
         name = theory.get("name", "Unknown Theory")
         proponents = theory.get("proponents", [])
@@ -76,10 +76,66 @@ class CGPMapper:
 
         theory_id = f"{category}:{name.lower().replace(' ', '_')}"
 
+        # Calculate spectrum for this constellation (3D dimensions → 3-value spectrum)
+        spectrum = [
+            round(empirical, 4),  # Dimension 1: empirical support
+            round(coherence, 4),  # Dimension 2: philosophical coherence
+            round(integration, 4),  # Dimension 3: integration potential
+        ]
+
+        # Normalize spectrum to sum to 1.0 (probability distribution)
+        spectrum_sum = sum(spectrum)
+        if spectrum_sum > 0:
+            spectrum = [round(s / spectrum_sum, 4) for s in spectrum]
+        else:
+            spectrum = [0.333, 0.333, 0.334]  # Equal distribution
+
         cgp_packet = {
-            "version": "cgp.v1",
-            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
-            "theory": {
+            "spec": "chit.cgp.v0.2",  # Standard CGP schema version
+            "summary": f"Consciousness Theory: {name} ({category})",
+            "created_at": datetime.now(timezone.utc).isoformat() + "Z",
+            "super_nodes": [
+                {
+                    "id": f"consciousness_{category}",
+                    "label": "Consciousness Theory",
+                    "summary": f"Theory cluster for {category} consciousness theories",
+                    "x": round(x, 4),
+                    "y": round(y, 4),
+                    "r": round(radius, 4),
+                    "constellations": [
+                        {
+                            "id": theory_id,
+                            "summary": description[:200] if description else f"{name} theory",
+                            "anchor": spectrum,  # 3D spectrum as anchor
+                            "spectrum": spectrum,
+                            "points": [
+                                {
+                                    "id": f"{theory_id}_proponents",
+                                    "modality": "text",
+                                    "proj": round(min(len(proponents) * 0.1, 1.0), 4),
+                                    "conf": 0.9,
+                                    "summary": f"Proponents: {', '.join(proponents[:3])}" + ("..." if len(proponents) > 3 else ""),
+                                }
+                            ],
+                            "meta": {
+                                "namespace": "consciousness",
+                                "category": category,
+                                "subcategory": subcategory,
+                                "theory_name": name,
+                            }
+                        }
+                    ]
+                }
+            ],
+            "meta": {
+                "source": "consciousness-service.theory.v1",
+                "tags": ["consciousness", "theory", category],
+                "hyperbolic_encoding": {
+                    "space": "poincare_disk",
+                    "curvature": -1,
+                }
+            }
+        }
                 "id": theory_id,
                 "name": name,
                 "category": category,
@@ -186,7 +242,7 @@ class CGPMapper:
         Publish CGP packet to Hi-RAG v2 geometry event endpoint.
 
         Args:
-            packet: CGP v1 format packet
+            packet: CGP v0.2 format packet (chit.cgp.v0.2)
 
         Returns:
             Response from Hi-RAG v2 API
@@ -200,7 +256,7 @@ class CGPMapper:
             response.raise_for_status()
             result = response.json()
             logger.info(
-                f"Published CGP packet for theory {packet['theory']['id']} to Hi-RAG v2"
+                f"Published CGP packet for theory {packet['super_nodes'][0]['constellations'][0]['id']} to Hi-RAG v2"
             )
             return result
         except httpx.HTTPError as e:
@@ -218,7 +274,7 @@ class CGPMapper:
                 result = await self.publish_to_hirag(packet)
                 results.append(
                     {
-                        "theory_id": packet["theory"]["id"],
+                        "theory_id": packet["super_nodes"][0]["constellations"][0]["id"],
                         "status": "success",
                         "result": result,
                     }

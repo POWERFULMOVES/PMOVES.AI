@@ -310,4 +310,94 @@ curl http://localhost:7700/health
 
 ---
 
-**Last Updated:** 2026-02-08 17:30 UTC
+**Last Updated:** 2026-02-08 21:00 UTC
+
+---
+
+## AGENTS & GEOMETRIC INTELLIGENCE AUDIT (NEW - 2026-02-08)
+
+### Executive Summary - Agent Analysis
+
+Comprehensive cross-reference audit completed by 4 specialized agents covering:
+1. **Thread-Based Engineering (TBE)** - Documentation vs Implementation
+2. **CHIT/GEOMETRY BUS** - Mathematical pillars and CGP schema compliance
+3. **Submodule Integration** - Geometric intelligence across 27+ submodules
+4. **BoTZ/Gateway Agent** - Service integration analysis
+
+**Overall Status:** 75% Complete for CHIT/GEOMETRY BUS, TBE patterns substantially implemented
+
+### Thread-Based Engineering Status
+
+| Thread Type | Status | Implementation | Gap Severity |
+|-------------|--------|----------------|--------------|
+| **Base (B)** | ✅ Complete | `pmoves/services/agent-zero/main.py` | None |
+| **Parallel (P)** | ⚠️ Partial | `.mprocs.yaml` configured, dynamic spawning needs testing | Medium |
+| **Chained (C)** | ⚠️ Partial | NATS event coordination exists | Medium |
+| **Fusion (F)** | ✅ Complete | `PMOVES-BoTZ/features/agent_sdk/slices/geometry/maca.py` | Low |
+| **Big (B)** | ✅ Complete | Agent Zero orchestrator | None |
+| **Long (Z)** | ❌ Not Implemented | No persistence for long-running tasks | **High** |
+
+### CHIT/GEOMETRY BUS Implementation: 75% Complete
+
+**Five Mathematical Pillars - ALL IMPLEMENTED:**
+- ✅ Dirichlet Distributions (`dirichlet-weights.ts` - 338 lines)
+- ✅ Hyperbolic Geometry (`hyperbolic-encoder.ts` - 395 lines)
+- ✅ Merkle Proofs (`shape-attribution.ts` - 621 lines)
+- ✅ Zeta Spectral Filtering (`zeta-filter.ts` - 387 lines)
+- ✅ Swarm Optimization (`swarm-attribution.ts` - 550 lines)
+
+### Critical Issues Found
+
+| Issue | Severity | Component | Action Required |
+|-------|----------|-----------|-----------------|
+| **CGP Schema Inconsistency** | HIGH | Consciousness Service | Uses `"version": "cgp.v1"` instead of `chit.cgp.v0.2` |
+| **No JetStream Streams** | HIGH | NATS | No durable stream configuration for GEOMETRY_BUS |
+| **Missing NATS Publisher** | MEDIUM | Consciousness Service | Uses HTTP instead of NATS |
+| **Long Thread Persistence** | HIGH | Agent Zero | No task checkpointing for recovery |
+| **Security Hooks** | HIGH | Agent Zero Runtime | No pre-execution validation |
+| **Gateway Agent NATS** | MEDIUM | Gateway Agent | HTTP-only, needs NATS integration |
+
+### Submodule Geometric Integration
+
+**24/27 submodules** have CHIT integration:
+- **CGP Producers (6):** PMOVES-DoX, ToKenism-Multi, Agent Zero, Evo-Controller, Flute-Gateway, Tokenism-Simulator
+- **CGP Consumers (3):** PMOVES-DoX, Publisher-Discord, DeepResearch
+- **Integration Gaps:** 7 submodules lack CHIT integration
+
+### Generated Analysis Reports
+
+| Report | Location | Focus |
+|--------|----------|-------|
+| TBE Cross-Reference | `pmoves/docs/AGENTS/TBE_IMPLEMENTATION_CROSS_REFERENCE.md` | Thread patterns vs implementation |
+| CHIT Implementation Audit | `pmoves/docs/PMOVESCHIT/CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md` | Mathematical pillars, CGP schema |
+| Submodule Integration Survey | `pmoves/docs/SUBMODULE_GEOMETRIC_INTEGRATION_SURVEY.md` | 27+ submodule geometric capabilities |
+| BoTZ/Gateway Integration | `pmoves/docs/AGENTS/BOTZ_GATEWAY_AGENT_INTEGRATION.md` | Service coordination architecture |
+
+### Priority 1 - Immediate Actions Required
+
+1. **Fix Consciousness Service CGP Schema**
+   - File: `pmoves/services/consciousness-service/cgp_mapper.py`
+   - Change: `"version": "cgp.v1"` → `"spec": "chit.cgp.v0.2"`
+
+2. **Create NATS JetStream Streams**
+   ```bash
+   nats stream add GEOMETRY_CGP --subjects "geometry.>" --storage file --max-age 720h
+   nats stream add TOKENISM_ATTRIBUTION --subjects "tokenism.>" --storage file --max-age 2160h
+   ```
+
+3. **Implement Long Thread (Z) Persistence**
+   - Add state checkpointing to `pmoves/services/agent_zero/controller.py`
+   - Store task state in Supabase `agent_tasks` table
+
+### Priority 2 - Short-term Actions
+
+1. Add security hooks to Agent Zero runtime
+2. Integrate Gateway Agent with NATS
+3. Enable Zeta filtering in CGP pipeline
+4. Wire MACA consensus through TensorZero
+
+### Priority 3 - Long-term Actions
+
+1. Implement Multi-Modal Decoder
+2. Add `chit_security.py` layer
+3. Develop CGP v1.0 specification
