@@ -490,8 +490,8 @@ services:
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
-    # Database connection
-    - DATABASE_URL=postgres://postgres:postgres@supabase-db:5432/postgres
+    # Database connection (use env variables, not hardcoded credentials)
+    - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
     # Storage configuration
     - FILE_SIZE_LIMIT=52428800
     - STORAGE_BACKEND=file
