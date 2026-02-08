@@ -1,6 +1,6 @@
 # PMOVESCHIT Implementation Status
 
-**Last Updated:** December 2025
+**Last Updated:** February 8, 2026
 **Related PR:** #343 (GEOMETRY BUS Integration)
 
 ---
@@ -25,8 +25,9 @@ This document tracks the implementation status of PMOVESCHIT (Cymatic-Holographi
 | **Module Index** | TypeScript | ✅ Complete | `PMOVES-ToKenism-Multi/integrations/contracts/chit/index.ts` | Unified exports |
 | **Sample CGP Export** | TypeScript | ✅ Complete | `PMOVES-ToKenism-Multi/integrations/contracts/chit/export-sample-cgp.ts` | Demo/testing |
 | **CGP Mapper** | Python | ⚠️ Partial | `pmoves/services/consciousness-service/cgp_mapper.py` | Service-level mapping |
-| **Decoder v0.1** | Python | ⏳ Spec Only | See `PMOVESCHIT_DECODERv0.1.md` | Reference specification |
-| **Multi-Decoder v0.1** | Python | ❌ Not Implemented | See `PMOVESCHIT_DECODER_MULTIv0.1.md` | Multi-modal decoder (future) |
+| **Decoder v0.1** | Python | ✅ Complete | `pmoves/tools/chit/chit_decoder.py` | Basic text decoder |
+| **Security Layer** | Python | ✅ Complete | `pmoves/tools/chit_security.py` | HMAC + AES-GCM |
+| **Multi-Decoder v0.1** | Python | ✅ Complete | `pmoves/tools/chit/chit_decoder_mm.py` | CLIP/CLAP decoder |
 | **Shape Store** | - | ❓ TBD | Supabase + Qdrant | Location under discussion |
 
 ---
@@ -180,12 +181,13 @@ Available via Claude Code CLI:
 
 ## Known Gaps
 
-### Missing Implementations
+### Missing Implementations (Updated 2026-02-08)
 
-1. **Python Decoder v0.2**: Referenced in docs but not implemented as standalone
-2. **`chit_security.py`**: Security layer referenced but not found
-3. **`chit_decoder_mm.py`**: Multi-modal decoder not implemented
+1. ~~**Python Decoder v0.1****:~~ ✅ **Implemented** - `pmoves/tools/chit/chit_decoder.py`
+2. ~~**`chit_security.py`**:~~ ✅ **Implemented** - `pmoves/tools/chit_security.py`
+3. ~~**`chit_decoder_mm.py`**:~~ ✅ **Implemented** - `pmoves/tools/chit/chit_decoder_mm.py`
 4. **Shape Store**: Persistent geometry storage location undefined
+5. **T5 Generator (v0.2)**: Learning-based decoder with fine-tuning (future enhancement)
 
 ### Documentation Gaps
 
@@ -204,6 +206,12 @@ ls -la PMOVES-ToKenism-Multi/integrations/contracts/chit/
 # Check Python CGP mapper
 ls -la pmoves/services/consciousness-service/cgp_mapper.py
 
+# Check CHIT decoders
+ls -la pmoves/tools/chit/
+
+# Test decoder CLI
+python -m pmoves.tools.chit.chit_decoder --help
+
 # Check NATS subjects
 nats stream ls | grep geometry
 
@@ -218,14 +226,16 @@ curl -X POST http://localhost:8086/geometry/event \
 ## Roadmap
 
 ### Q1 2026
-- [ ] Implement Python decoder v0.2
+- [x] ~~Implement Python decoder v0.1~~ ✅ **Complete** (2026-02-08)
+- [x] ~~Multi-modal decoder (DECODER_MULTI)~~ ✅ **Complete** (2026-02-08)
+- [x] ~~Security layer (`chit_security.py`)~~ ✅ **Complete** (pre-existing)
 - [ ] Define Shape Store location (Supabase + Qdrant)
 - [ ] Complete Hyperdimensions visualizer integration
 
 ### Q2 2026
-- [ ] Multi-modal decoder (DECODER_MULTI)
-- [ ] Security layer (`chit_security.py`)
+- [ ] T5 Generator (v0.2): Learning-based decoder with fine-tuning
 - [ ] CGP v1.0 specification
+- [ ] Audio decode via CLAP (full implementation)
 
 ---
 
