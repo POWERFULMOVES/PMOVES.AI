@@ -27,12 +27,15 @@ env:
 jobs:
   validate:
     name: Validate Configuration
-    runs-on: ubuntu-latest
+    # PMOVES.AI: Use self-hosted runners for production CI
+    runs-on: [self-hosted, vps]
     permissions:
       contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: false  # Gateway agent doesn't need submodules
 
       - name: Validate Python syntax
         run: |
@@ -55,6 +58,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: false  # Gateway agent doesn't need submodules
 
       - name: Build Gateway Agent
         run: |
@@ -118,6 +123,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: false  # Gateway agent doesn't need submodules
 
       - name: Build Gateway Agent (VPS)
         run: |
