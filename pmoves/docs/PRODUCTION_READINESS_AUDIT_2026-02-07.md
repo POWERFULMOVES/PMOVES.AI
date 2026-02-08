@@ -11,12 +11,12 @@
 
 This audit validates that the PMOVES.AI-Edition-Hardened branch is ready for production deployment. All critical services, configurations, and security hardening have been verified.
 
-**Status:** ⚠️ **IN PROGRESS - CI Migration Required**
+**Status:** ⚠️ **IN PROGRESS - Validation Phase**
 
 **Latest Updates (2026-02-08):**
+- ✅ CI Migration Complete - All workflows on self-hosted runners (PR #601, #602 merged)
 - ✅ PMOVES.YT PR #1 merged (PMOVES.AI integration)
-- ⚠️ CI infrastructure audit revealed 2+ workflows still using GitHub-hosted runners
-- 📝 Created CI migration plan for self-hosted runner transition
+- ⏳ Service health checks and database migrations pending
 
 ---
 
@@ -124,21 +124,27 @@ This audit validates that the PMOVES.AI-Edition-Hardened branch is ready for pro
 
 ### 6. CI/CD Infrastructure (NEW - 2026-02-08)
 
+**Status:** ✅ **COMPLETE - All workflows migrated to self-hosted runners**
+
+**Merged PRs:**
+- PR #601: Migrate all workflows to self-hosted runners ✅ Merged 2026-02-08 21:53 UTC
+- PR #602: Sync PMOVES-n8n and PMOVES-Pipecat to hardened ✅ Merged 2026-02-08 22:37 UTC
+
 | Workflow | Runner Type | Status | Action Required |
 |----------|-------------|--------|-----------------|
 | `hardening-validation.yml` | Self-hosted `[vps]` | ✅ | None |
 | `self-hosted-builds-hardened.yml` | Self-hosted `[ai-lab, gpu]` | ✅ | None |
-| `codeql.yml` | GitHub-hosted `ubuntu-latest` | ❌ | **Migrate to self-hosted** |
-| `python-tests.yml` | GitHub-hosted `ubuntu-latest` | ❌ | **Migrate to self-hosted** |
-| Other workflows (7+) | Unknown | ⏳ | Verify runner type |
-
-**Finding:** Production CI must use self-hosted runners only. See `CI_INFRASTRUCTURE_AUDIT_2026-02-08.md` for migration plan.
+| `codeql.yml` | Self-hosted `[vps]` | ✅ | None |
+| `python-tests.yml` | Self-hosted `[vps]` | ✅ | None |
+| `chit-contract.yml` | Self-hosted `[vps]` | ✅ | None |
+| `docker-build.yml` | Self-hosted `[gpu]` | ✅ | None |
+| All other workflows (11+) | Self-hosted `[vps, ai-lab, gpu]` | ✅ | None |
 
 **Action Items:**
-- [x] Migrate `codeql.yml` to `runs-on: [self-hosted, vps]` ✅ Completed 2026-02-08
-- [x] Migrate `python-tests.yml` to `runs-on: [self-hosted, vps]` ✅ Completed 2026-02-08
-- [x] Verify all remaining workflows use self-hosted runners ✅ Completed 2026-02-08
-- [x] Update CI/CD documentation with self-hosted requirement ✅ Completed 2026-02-08
+- [x] Migrate `codeql.yml` to `runs-on: [self-hosted, vps]` ✅ Completed via PR #601
+- [x] Migrate `python-tests.yml` to `runs-on: [self-hosted, vps]` ✅ Completed via PR #601
+- [x] Verify all remaining workflows use self-hosted runners ✅ Completed via PR #601
+- [x] Update CI/CD documentation with self-hosted requirement ✅ Completed
 
 ### 7. Documentation
 
@@ -250,23 +256,12 @@ curl http://localhost:7700/health
 
 ## Issues Found
 
-### CI Infrastructure Issues (NEW - 2026-02-08)
-- [ ] **codeql.yml** uses GitHub-hosted `ubuntu-latest` runner
-  - **Impact**: Security analysis runs on external infrastructure
-  - **Action**: Migrate to `runs-on: [self-hosted, vps]`
-  - **Priority**: HIGH - Security requirement
+### CI Infrastructure Issues (RESOLVED - 2026-02-08)
+- [x] **codeql.yml** migrated to self-hosted `[vps]` runner ✅
+- [x] **python-tests.yml** migrated to self-hosted `[vps]` runner ✅
+- [x] **All 11+ workflows** verified using self-hosted runners ✅
 
-- [ ] **python-tests.yml** uses GitHub-hosted `ubuntu-latest` runner
-  - **Impact**: Tests run on external infrastructure
-  - **Action**: Migrate to `runs-on: [self-hosted, vps]`
-  - **Priority**: HIGH - Production requirement
-
-- [ ] **7+ workflows** need runner type verification
-  - **Impact**: Unknown if using external runners
-  - **Action**: Audit and document all workflow runner types
-  - **Priority**: MEDIUM
-
-**See Also:** `CI_INFRASTRUCTURE_AUDIT_2026-02-08.md` for full analysis and migration plan
+**Resolution:** Merged via PR #601 (2026-02-08 21:53 UTC)
 
 ---
 
