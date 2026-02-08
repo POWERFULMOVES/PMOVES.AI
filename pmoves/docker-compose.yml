@@ -703,7 +703,7 @@ services:
     - pmoves_data
     - pmoves_bus
   hi-rag-gateway:
-    <<: *id002
+    <<: *tier-api-hardened
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
@@ -783,7 +783,7 @@ services:
       minio:
         condition: service_healthy
   render-webhook:
-    <<: *id002
+    <<: *tier-api-hardened
     build: ./services/render-webhook
     restart: unless-stopped
     environment:
@@ -804,7 +804,7 @@ services:
       nats:
         condition: service_healthy
   model-registry:
-    <<: *id002
+    <<: *tier-api-hardened
     build:
       context: ./services/model-registry
       dockerfile: Dockerfile
@@ -1096,7 +1096,7 @@ services:
     - pmoves_data
     - pmoves_external  # Required for YouTube API access
   hi-rag-gateway-v2:
-    <<: *id002
+    <<: *tier-api-hardened
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
@@ -1148,7 +1148,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for reranker API calls
   hi-rag-gateway-gpu:
-    <<: *id002
+    <<: *tier-api-hardened
     build:
       context: ./services
       dockerfile: hi-rag-gateway/Dockerfile
