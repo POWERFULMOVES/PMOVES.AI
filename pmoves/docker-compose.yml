@@ -188,6 +188,70 @@ x-hardening-rw: &hardening-rw
   security_opt:
     - no-new-privileges:true
 
+# =============================================================================
+# COMBINED TIER + HARDENING ANCHORS
+# =============================================================================
+# Docker Compose doesn't support multiple <<: merge keys on same mapping level.
+# These combined anchors provide both tier env_file and hardening in one reference.
+# =============================================================================
+
+x-tier-supabase-hardened: &tier-supabase-hardened
+  env_file:
+    - env.shared
+    - env.tier-supabase
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
+x-tier-supabase-hardened-ro: &tier-supabase-hardened-ro
+  env_file:
+    - env.shared
+    - env.tier-supabase
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:noexec,nosuid,size=64m
+    - /var/tmp:noexec,nosuid,size=64m
+
+x-tier-agent-hardened: &tier-agent-hardened
+  env_file:
+    - env.shared
+    - env.tier-agent
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
+x-tier-llm-hardened: &tier-llm-hardened
+  env_file:
+    - env.shared
+    - env.tier-llm
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+
 # PMOVES.AI production compose project
 name: pmoves
 
@@ -228,8 +292,7 @@ services:
     - pmoves_data
 
   supabase-gotrue:
-    <<: *id008
-    <<: *hardening-rw
+    <<: *tier-supabase-hardened
     image: supabase/gotrue:v2.186.0
     restart: unless-stopped
     environment:
@@ -274,15 +337,14 @@ services:
     - pmoves_data
 
   supabase-postgrest:
-    <<: *id008
-    <<: *hardening
+    <<: *tier-supabase-hardened-ro
     image: postgrest/postgrest:v12.2.0
     restart: unless-stopped
     environment:
     # Database connection (from env.tier-supabase)
     - PGRST_DB_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
     # JWT secret (must match gotrue) - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}
+    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
     # 2025 key naming (service role key for admin access)
     - PGRST_JWT_SECRET_IS_BASE64=false
@@ -307,8 +369,7 @@ services:
     - pmoves_data
 
   supabase-kong:
-    <<: *id008
-    <<: *hardening-rw
+    <<: *tier-supabase-hardened
     image: kong:3.7.1
     restart: unless-stopped
     environment:
@@ -349,8 +410,7 @@ services:
     - pmoves_data
 
   supabase-realtime:
-    <<: *id008
-    <<: *hardening-rw
+    <<: *tier-supabase-hardened
     image: supabase/realtime:v2.30.26
     restart: unless-stopped
     environment:
@@ -366,7 +426,7 @@ services:
     - PORT=4000
     - RLIMIT_NOFILE=1048576
     # JWT secret (must match gotrue) - standard variable name
-    - JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}
+    - JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE}
@@ -390,8 +450,7 @@ services:
     - pmoves_data
 
   supabase-storage:
-    <<: *id008
-    <<: *hardening-rw
+    <<: *tier-supabase-hardened
     image: supabase/storage-api:v1.36.2
     restart: unless-stopped
     environment:
@@ -399,7 +458,7 @@ services:
     - ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY}
     - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY}
     # JWT secret - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}
+    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
@@ -442,8 +501,7 @@ services:
     - pmoves_data
 
   supabase-studio:
-    <<: *id008
-    <<: *hardening-rw
+    <<: *tier-supabase-hardened
     # Pinned 2025-02-04: Latest stable from Supabase
     image: supabase/studio:2026.02.04-sha-fba1944
     restart: unless-stopped
@@ -1163,8 +1221,7 @@ services:
       retries: 5
       start_period: 10s
   agent-zero:
-    <<: *id005
-    <<: *hardening-rw
+    <<: *tier-agent-hardened
     build:
       context: .
       dockerfile: ./services/agent-zero/Dockerfile
@@ -1205,8 +1262,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for LLM provider APIs
   archon:
-    <<: *id005
-    <<: *hardening-rw
+    <<: *tier-agent-hardened
     build:
       context: .
       dockerfile: ./services/archon/Dockerfile
@@ -1494,8 +1550,7 @@ services:
     networks:
     - pmoves_data
   tensorzero-gateway:
-    <<: *id006
-    <<: *hardening-rw
+    <<: *tier-llm-hardened
     # Pinned 2025-02-04: Latest stable from TensorZero
     image: tensorzero/gateway:2026.1.8
     restart: unless-stopped
