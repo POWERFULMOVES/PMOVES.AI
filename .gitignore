@@ -46,6 +46,7 @@ tmp/*.mp3
 /pmoves/.env
 /pmoves/.env.local
 /pmoves/.env.shared
+pmoves/env.shared
 /pmoves/.env.testkeys
 # Tier environment files (containing actual keys - gitignored)
 /pmoves/env.tier-*
