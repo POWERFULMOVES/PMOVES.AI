@@ -4,6 +4,11 @@
 # Docker Compose file for vLLM-based model hosting with tensor parallelism.
 # Includes container hardening following PMOVES.AI security standards.
 #
+# Metrics Exposure:
+#   All services expose Prometheus metrics on secondary port (8001 internally)
+#   Access via host ports: 8101, 8111, 8121, etc.
+#   Endpoint: GET http://localhost:<host_port>/metrics
+#
 # Profiles:
 #   - medium: Single GPU models (7B-14B)
 #   - large: Multi-GPU models (32B-72B) with TP
@@ -65,7 +70,9 @@ services:
               device_ids: ["0"]
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # Note: vLLM uses /health (not /healthz) by default - this is a vLLM convention
+      # PMOVES.AI accepts this exception for third-party services
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health && curl -f http://localhost:8001/metrics"]
       interval: 30s
       timeout: 10s
       retries: 3

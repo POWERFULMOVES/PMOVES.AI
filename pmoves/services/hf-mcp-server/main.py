@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import shutil
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -51,8 +52,9 @@ HF_HUB_CACHE = os.environ.get("HF_HUB_CACHE", "/models/hub")
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 SERVER_PORT = int(os.environ.get("PORT", "8096"))
 
-# Metrics counter
+# Metrics counter with thread safety
 _download_count = 0
+_download_lock = threading.Lock()
 
 
 class ModelTier(Enum):
@@ -496,9 +498,10 @@ async def hf_model_download(
         hf_id = model_id
         model_data = {}
 
+    cache_dir = Path(HF_HUB_CACHE) / "models" / hf_id.replace("/", "--")
+
     try:
-        # Create cache directory
-        cache_dir = Path(HF_HUB_CACHE) / "models" / hf_id.replace("/", "--")
+        # Create cache directory (must be inside try block for error handling)
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Download model snapshot
@@ -514,9 +517,10 @@ async def hf_model_download(
         # Publish NATS event
         await _publish_download_event(hf_id, str(cache_dir))
 
-        # Increment download counter
+        # Increment download counter (thread-safe)
         global _download_count
-        _download_count += 1
+        with _download_lock:
+            _download_count += 1
 
         return {
             "ok": True,
@@ -527,6 +531,13 @@ async def hf_model_download(
             "message": f"Model {hf_id} downloaded successfully",
         }
 
+    except OSError as e:
+        # File system errors (disk full, permission denied)
+        logger.error(f"Filesystem error downloading model {hf_id}: {e}")
+        raise HTTPException(
+            status_code=507,
+            detail=f"Insufficient storage or permission denied: {e}"
+        )
     except Exception as e:
         logger.error(f"Error downloading model {hf_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -741,10 +752,11 @@ async def metrics():
     Note:
         Follows Prometheus text-based exposition format.
     """
-    # Count cached models
+    # Count cached models (ensure HF_HUB_CACHE is Path object)
+    hub_cache = Path(HF_HUB_CACHE)
     cached_count = 0
-    if HF_HUB_CACHE.exists():
-        for model_dir in HF_HUB_CACHE.iterdir():
+    if hub_cache.exists():
+        for model_dir in hub_cache.iterdir():
             if model_dir.is_dir() and (model_dir / "snapshots").exists():
                 cached_count += 1
 

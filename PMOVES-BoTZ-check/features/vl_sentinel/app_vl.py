@@ -18,12 +18,16 @@ Environment Variables:
 
 import os
 import re
+import logging
 from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 import requests
 import base64
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Constants
@@ -124,7 +128,8 @@ class ImageInput(BaseModel):
     url: Optional[str] = None
     b64: Optional[str] = None
 
-    @validator("url")
+    @field_validator("url")
+    @classmethod
     def validate_url_length(cls, v: Optional[str]) -> Optional[str]:
         """Validate URL length to prevent DoS attacks."""
         if v and len(v) > MAX_URL_LENGTH:
@@ -221,6 +226,7 @@ def fetch_b64(img: ImageInput) -> Optional[str]:
             # Check content length before downloading
             content_length = int(r.headers.get("content-length", 0))
             if content_length > MAX_IMAGE_SIZE:
+                logger.warning(f"Image from {img.url} exceeds size limit: {content_length} bytes")
                 raise HTTPException(
                     status_code=413,
                     detail=f"Image size ({content_length} bytes) exceeds maximum ({MAX_IMAGE_SIZE})"
@@ -229,13 +235,24 @@ def fetch_b64(img: ImageInput) -> Optional[str]:
             # Download with size limit
             content = r.content
             if len(content) > MAX_IMAGE_SIZE:
+                logger.warning(f"Image from {img.url} exceeds size limit after download: {len(content)} bytes")
                 raise HTTPException(
                     status_code=413,
                     detail=f"Image size exceeds maximum of {MAX_IMAGE_SIZE} bytes"
                 )
 
             return base64.b64encode(content).decode("utf-8")
+        except requests.Timeout as e:
+            logger.error(f"Timeout fetching image from {img.url}: {e}")
+            raise HTTPException(status_code=408, detail=f"Image fetch timeout: {e}")
+        except requests.ConnectionError as e:
+            logger.error(f"Connection error fetching image from {img.url}: {e}")
+            raise HTTPException(status_code=503, detail=f"Failed to connect to image server: {e}")
+        except requests.HTTPError as e:
+            logger.error(f"HTTP error fetching image from {img.url}: {e}")
+            raise HTTPException(status_code=e.response.status_code, detail=f"Image server returned error: {e}")
         except requests.RequestException as e:
+            logger.error(f"Failed to fetch image from {img.url}: {e}")
             raise HTTPException(status_code=400, detail=f"Failed to fetch image: {e}")
     return None
 
@@ -425,7 +442,12 @@ def vl_guide(body: GuideRequest):
     Returns:
         Guidance response with analysis and recommendations
     """
-    img_b64s = [fetch_b64(i) for i in (body.images or []) if fetch_b64(i)]
+    # Fetch images without calling fetch_b64 twice
+    img_b64s = []
+    for i in (body.images or []):
+        b64 = fetch_b64(i)
+        if b64:
+            img_b64s.append(b64)
 
     sys_prompt = (
         "You are a vision-language monitoring agent. "

@@ -13,6 +13,7 @@ Output:
     - config/tensorzero/botz_function_variants.toml: Function variant mappings
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -27,6 +28,10 @@ except ImportError:
     print("Error: PyYAML is required. Install with: pip install pyyaml")
     sys.exit(1)
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
 
 def load_catalog() -> Dict:
     """Load model catalog from YAML configuration file.
@@ -37,6 +42,8 @@ def load_catalog() -> Dict:
     Raises:
         FileNotFoundError: If catalog file does not exist
         yaml.YAMLError: If catalog file is malformed
+        PermissionError: If catalog file cannot be read
+        IOError: For other I/O errors
     """
     catalog_path = (
         Path(__file__).parent.parent / "config" / "models.yaml"
@@ -45,8 +52,15 @@ def load_catalog() -> Dict:
     if not catalog_path.exists():
         raise FileNotFoundError(f"Model catalog not found at {catalog_path}")
 
-    with open(catalog_path) as f:
-        return yaml.safe_load(f)
+    try:
+        with open(catalog_path) as f:
+            return yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        logger.error(f"Failed to parse model catalog YAML: {e}")
+        raise
+    except (PermissionError, IOError) as e:
+        logger.error(f"Failed to read model catalog from {catalog_path}: {e}")
+        raise
 
 
 def generate_tensorzero_config(catalog: Dict) -> str:
@@ -237,11 +251,14 @@ def main():
         - Creates config/tensorzero/ directory if needed
         - Writes local_models.toml and botz_function_variants.toml
         - Prints progress and usage instructions to stdout
+
+    Raises:
+        SystemExit: On catalog load or file write failures
     """
     print("Loading model catalog...")
     try:
         catalog = load_catalog()
-    except (FileNotFoundError, yaml.YAMLError) as e:
+    except (FileNotFoundError, yaml.YAMLError, PermissionError, IOError) as e:
         print(f"Error: Failed to load model catalog - {e}")
         sys.exit(1)
 
@@ -253,21 +270,33 @@ def main():
 
     # Generate output
     output_dir = Path(__file__).parent.parent / "config" / "tensorzero"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, IOError) as e:
+        print(f"Error: Failed to create output directory {output_dir}: {e}")
+        sys.exit(1)
 
     # Full config
     config = generate_tensorzero_config(catalog)
     config_path = output_dir / "local_models.toml"
-    with open(config_path, "w") as f:
-        f.write(config)
+    try:
+        with open(config_path, "w") as f:
+            f.write(config)
+    except (PermissionError, IOError) as e:
+        print(f"Error: Failed to write config to {config_path}: {e}")
+        sys.exit(1)
 
     print(f"✓ Generated {config_path}")
 
     # Function variants
     variants = generate_function_variants(catalog)
     variants_path = output_dir / "botz_function_variants.toml"
-    with open(variants_path, "w") as f:
-        f.write(variants)
+    try:
+        with open(variants_path, "w") as f:
+            f.write(variants)
+    except (PermissionError, IOError) as e:
+        print(f"Error: Failed to write variants to {variants_path}: {e}")
+        sys.exit(1)
 
     print(f"✓ Generated {variants_path}")
 

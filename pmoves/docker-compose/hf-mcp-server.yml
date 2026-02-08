@@ -46,12 +46,14 @@ services:
       - PORT=8096
       - PYTHONUNBUFFERED=1
     volumes:
-      - hf_models:/home/pmoves/.cache/huggingface:ro
-      - hf_models_write:/home/pmoves/.cache/huggingface/write
+      # Single read-write mount for model downloads and caching
+      # Service needs write access for downloaded models
+      - hf_models:/home/pmoves/.cache/huggingface:rw
     networks:
       - pmoves-local-models
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      # PMOVES.AI standard: use /healthz endpoint
+      test: ["CMD", "curl", "-f", "http://localhost:8096/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -63,13 +65,6 @@ services:
 # =============================================================================
 volumes:
   hf_models:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${HF_MODEL_PATH:-/mnt/models/hf}
-
-  hf_models_write:
     driver: local
     driver_opts:
       type: none

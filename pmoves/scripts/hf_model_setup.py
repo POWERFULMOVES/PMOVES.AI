@@ -12,6 +12,7 @@ Guides users through:
 
 import asyncio
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -20,6 +21,13 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import yaml
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -71,8 +79,12 @@ def detect_gpu() -> Dict[str, Any]:
 
             gpu_info["count"] = len(gpu_info["devices"])
 
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        logger.warning(f"GPU detection failed: {e}")
+    except subprocess.SubprocessError as e:
+        logger.warning(f"GPU detection subprocess error: {e}")
+    except (ValueError, IndexError) as e:
+        logger.warning(f"Failed to parse nvidia-smi output: {e}")
 
     return gpu_info
 
@@ -123,7 +135,10 @@ def load_model_catalog() -> Dict[str, Any]:
 
     Returns:
         Dictionary containing model recommendations organized by hardware profile.
-        Returns empty dict if catalog file not found.
+        Returns empty dict if catalog file not found or cannot be parsed.
+
+    Raises:
+        No exceptions raised - all errors are logged and empty dict returned.
 
     Note:
         Reads from models_by_tier.yaml which contains hardware-specific
@@ -132,11 +147,18 @@ def load_model_catalog() -> Dict[str, Any]:
     catalog_path = Path(__file__).parent.parent / "config" / "models_by_tier.yaml"
 
     if not catalog_path.exists():
-        print(f"Warning: Model catalog not found at {catalog_path}")
+        logger.warning(f"Model catalog not found at {catalog_path}")
         return {}
 
-    with open(catalog_path) as f:
-        return yaml.safe_load(f)
+    try:
+        with open(catalog_path) as f:
+            return yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        logger.error(f"Failed to parse model catalog YAML from {catalog_path}: {e}")
+        return {}
+    except (IOError, PermissionError) as e:
+        logger.error(f"Failed to read model catalog from {catalog_path}: {e}")
+        return {}
 
 
 def recommend_models(profile: str, catalog: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -189,8 +211,11 @@ async def hf_model_search(
         List of model dictionaries matching search criteria.
         Returns empty list on HTTP errors.
 
+    Raises:
+        No exceptions raised - all errors are logged and empty list returned.
+
     Note:
-        Requires HF MCP server running at http://localhost:8096
+        Requires HF MCP server running at http://localhost:8096/healthz
     """
     try:
         response = await session.post(
@@ -201,7 +226,17 @@ async def hf_model_search(
         response.raise_for_status()
         data = response.json()
         return data.get("models", [])
-    except httpx.HTTPError:
+    except httpx.ConnectTimeout as e:
+        logger.error(f"HF MCP server connection timeout: {e}")
+        return []
+    except httpx.ConnectError as e:
+        logger.error(f"HF MCP server connection failed: {e}")
+        return []
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HF MCP server returned error status {e.response.status_code}: {e}")
+        return []
+    except httpx.HTTPError as e:
+        logger.error(f"HF MCP search request failed: {e}")
         return []
 
 
@@ -219,9 +254,12 @@ async def hf_model_download(
         Dictionary with download result containing 'ok' status and
         optional 'error' key on failure.
 
+    Raises:
+        No exceptions raised - all errors are logged and error dict returned.
+
     Note:
         10-minute timeout for large model downloads.
-        Requires HF MCP server running at http://localhost:8096
+        Requires HF MCP server running at http://localhost:8096/healthz
     """
     try:
         response = await session.post(
@@ -231,7 +269,17 @@ async def hf_model_download(
         )
         response.raise_for_status()
         return response.json()
+    except httpx.ConnectTimeout as e:
+        logger.error(f"Model download connection timeout for {model_id}: {e}")
+        return {"ok": False, "error": f"Connection timeout: {e}"}
+    except httpx.ConnectError as e:
+        logger.error(f"Model download connection failed for {model_id}: {e}")
+        return {"ok": False, "error": f"Connection failed: {e}"}
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Model download HTTP error {e.response.status_code} for {model_id}: {e}")
+        return {"ok": False, "error": f"HTTP {e.response.status_code}: {e}"}
     except httpx.HTTPError as e:
+        logger.error(f"Model download failed for {model_id}: {e}")
         return {"ok": False, "error": str(e)}
 
 
@@ -245,8 +293,11 @@ async def hf_list_models(session: httpx.AsyncClient) -> List[Dict[str, Any]]:
         List of cached model dictionaries with metadata.
         Returns empty list on HTTP errors.
 
+    Raises:
+        No exceptions raised - all errors are logged and empty list returned.
+
     Note:
-        Requires HF MCP server running at http://localhost:8096
+        Requires HF MCP server running at http://localhost:8096/healthz
     """
     try:
         response = await session.get(
@@ -256,7 +307,17 @@ async def hf_list_models(session: httpx.AsyncClient) -> List[Dict[str, Any]]:
         response.raise_for_status()
         data = response.json()
         return data.get("models", [])
-    except httpx.HTTPError:
+    except httpx.ConnectTimeout as e:
+        logger.error(f"HF MCP list models connection timeout: {e}")
+        return []
+    except httpx.ConnectError as e:
+        logger.error(f"HF MCP list models connection failed: {e}")
+        return []
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HF MCP list models HTTP error {e.response.status_code}: {e}")
+        return []
+    except httpx.HTTPError as e:
+        logger.error(f"HF MCP list models request failed: {e}")
         return []
 
 
@@ -436,16 +497,27 @@ async def interactive_setup():
     print("  Available use cases: orchestrator, builder, coding, utility")
 
     async with httpx.AsyncClient() as session:
-        # Check HF MCP server
+        # Check HF MCP server health
         try:
-            response = await session.get("http://localhost:8096/health", timeout=5.0)
+            response = await session.get("http://localhost:8096/healthz", timeout=5.0)
             if response.status_code == 200:
                 print_success("HF MCP server is running")
             else:
                 print_info("HF MCP server not responding - starting it...")
                 print_info("Run: docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d")
                 return
-        except httpx.HTTPError:
+        except httpx.ConnectTimeout as e:
+            logger.warning(f"HF MCP server connection timeout: {e}")
+            print_info("HF MCP server not available - starting it...")
+            print_info("Run: docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d")
+            return
+        except httpx.ConnectError as e:
+            logger.warning(f"HF MCP server connection failed: {e}")
+            print_info("HF MCP server not available - starting it...")
+            print_info("Run: docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d")
+            return
+        except httpx.HTTPError as e:
+            logger.warning(f"HF MCP server health check failed: {e}")
             print_info("HF MCP server not available - starting it...")
             print_info("Run: docker compose -f pmoves/docker-compose/hf-mcp-server.yml up -d")
             return
@@ -481,10 +553,14 @@ async def interactive_setup():
     config = generate_tensorzero_config(to_download)
 
     config_path = Path.cwd() / "tensorzero_local_models.toml"
-    with open(config_path, "w") as f:
-        f.write(config)
-
-    print_success(f"Config saved to {config_path}")
+    try:
+        with open(config_path, "w") as f:
+            f.write(config)
+        print_success(f"Config saved to {config_path}")
+    except (IOError, PermissionError) as e:
+        print_error(f"Failed to write config to {config_path}: {e}")
+        logger.error(f"Config file write failed: {e}")
+        return
 
     # 7. Next Steps
     print_header("Setup Complete!")
