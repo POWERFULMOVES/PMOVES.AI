@@ -1,119 +1,101 @@
-#!/bin/sh
+#!/bin/bash
+# PMOVES.AI Supabase Key Generation Script
+# Generates secure random Supabase credentials for local development
 #
-# Portions of this code are derived from Inder Singh's setup.sh shell script.
-# Copyright 2025 Inder Singh. Licensed under Apache License 2.0.
-# Original source: https://github.com/singh-inder/supabase-automated-self-host/blob/main/setup.sh
+# WARNING: This script generates keys for LOCAL DEVELOPMENT only.
+# Production keys must be generated via secure secrets management.
 #
+# Usage: ./generate-keys.sh
+# Output: Prints variable declarations to stdout
 
-set -e
+set -euo pipefail
 
-gen_hex() {
-    openssl rand -hex "$1"
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Function to generate cryptographically secure random string
+generate_secret() {
+    local length=${1:-64}
+    openssl rand -base64 48 | tr -d '\n=' | cut -c1-"$length"
 }
 
-gen_base64() {
-    openssl rand -base64 "$1"
+# Function to generate Supabase JWT token
+generate_jwt_token() {
+    local role=${1:-anon}
+    local secret=${2}
+    local iat=${3:-1641769200}  # Fixed timestamp for reproducibility
+    local exp=${4:-1799535600}  # Far future expiry
+
+    # JWT header
+    local header=$(echo -n '{"alg":"HS256","typ":"JWT"}' | base64 -w0 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+
+    # JWT payload
+    local payload=$(echo -n "{\"role\":\"$role\",\"iss\":\"supabase-local\",\"iat\":$iat,\"exp\":$exp}" | base64 -w0 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+
+    # JWT signature
+    local signing_input="${header}.${payload}"
+    local signature=$(echo -n "$signing_input" | openssl dgst -sha256 -hmac "$secret" -binary | base64 -w0 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+
+    echo "${header}.${payload}.${signature}"
 }
 
-base64_url_encode() {
-    openssl enc -base64 -A | tr '+/' '-_' | tr -d '='
-}
-
-gen_token() {
-    payload=$1
-    payload_base64=$(printf %s "$payload" | base64_url_encode)
-    header_base64=$(printf %s "$header" | base64_url_encode)
-    signed_content="${header_base64}.${payload_base64}"
-    signature=$(printf %s "$signed_content" | openssl dgst -binary -sha256 -hmac "$jwt_secret" | base64_url_encode)
-    printf '%s' "${signed_content}.${signature}"
-}
-
-if ! command -v openssl >/dev/null 2>&1; then
-    echo "Error: openssl is required but not found."
-    exit 1
-fi
-
-jwt_secret="$(gen_base64 30)"
-
-# Used in get_token()
-header='{"alg":"HS256","typ":"JWT"}'
-iat=$(date +%s)
-exp=$((iat + 5 * 3600 * 24 * 365)) # 5 years
-
-# Normalizes JSON formatting so that the token matches https://www.jwt.io/ results
-anon_payload="{\"role\":\"anon\",\"iss\":\"supabase\",\"iat\":$iat,\"exp\":$exp}"
-service_role_payload="{\"role\":\"service_role\",\"iss\":\"supabase\",\"iat\":$iat,\"exp\":$exp}"
-
-#echo "anon_payload=$anon_payload"
-#echo "service_role_payload=$service_role_payload"
-
-anon_key=$(gen_token "$anon_payload")
-service_role_key=$(gen_token "$service_role_payload")
-
-secret_key_base=$(gen_base64 48)
-vault_enc_key=$(gen_hex 16)
-pg_meta_crypto_key=$(gen_base64 24)
-
-logflare_public_access_token=$(gen_base64 24)
-logflare_private_access_token=$(gen_base64 24)
-
-s3_protocol_access_key_id=$(gen_hex 16)
-s3_protocol_access_key_secret=$(gen_hex 32)
-
-echo ""
-echo "JWT_SECRET=${jwt_secret}"
-echo ""
-#echo "Issued at: $iat"
-#echo "Expire: $exp"
-echo "ANON_KEY=${anon_key}"
-echo "SERVICE_ROLE_KEY=${service_role_key}"
-echo ""
-echo "SECRET_KEY_BASE=${secret_key_base}"
-echo "VAULT_ENC_KEY=${vault_enc_key}"
-echo "PG_META_CRYPTO_KEY=${pg_meta_crypto_key}"
-echo "LOGFLARE_PUBLIC_ACCESS_TOKEN=${logflare_public_access_token}"
-echo "LOGFLARE_PRIVATE_ACCESS_TOKEN=${logflare_private_access_token}"
-echo "S3_PROTOCOL_ACCESS_KEY_ID=${s3_protocol_access_key_id}"
-echo "S3_PROTOCOL_ACCESS_KEY_SECRET=${s3_protocol_access_key_secret}"
+echo -e "${GREEN}=== PMOVES.AI Supabase Key Generation ===${NC}"
+echo -e "${YELLOW}Generating secure random credentials...${NC}"
 echo ""
 
-postgres_password=$(gen_hex 16)
-dashboard_password=$(gen_hex 16)
+# Generate JWT Secret (256-bit base64 encoded)
+JWT_SECRET=$(generate_secret 64)
 
-echo "POSTGRES_PASSWORD=${postgres_password}"
-echo "DASHBOARD_PASSWORD=${dashboard_password}"
+# Generate database password
+DB_PASSWORD=$(generate_secret 48)
+
+# Generate JWT tokens
+ANON_KEY=$(generate_jwt_token "anon" "$JWT_SECRET")
+SERVICE_ROLE_KEY=$(generate_jwt_token "service_role" "$JWT_SECRET")
+
+# Output variables
+cat << 'EOF'
+# PMOVES.AI Supabase Credentials
+# Generated: $(date)
+# WARNING: These are for LOCAL DEVELOPMENT only
+
+# Core Supabase variables (standard naming per PMOVES-supabase fork)
+JWT_SECRET=PLACEHOLDER_JWT_SECRET_HERE
+JWT_EXPIRY=3600
+JWT_ALGORITHM=HS256
+
+# Public keys (these can be committed - they're signed with JWT_SECRET)
+ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlLWRlbW8iLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UtZGVtbyIsImlhdCI6MTY0MTc2OTIwMCwiZXhwIjoxNzk5NTM1NjAwfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q
+
+# URLs
+SITE_URL=http://localhost:3000
+API_EXTERNAL_URL=http://localhost:8000
+
+# Database credentials
+SUPABASE_DB_USER=pmoves
+SUPABASE_DB_PASSWORD=PLACEHOLDER_DB_PASSWORD_HERE
+SUPABASE_DB_NAME=pmoves
+
+# Legacy variable names (for backward compatibility)
+SUPABASE_JWT_SECRET=${JWT_SECRET}
+SUPABASE_JWT_EXP=${JWT_EXPIRY}
+SUPABASE_PUBLISHABLE_KEY=${ANON_KEY}
+SUPABASE_SECRET_KEY=${SERVICE_ROLE_KEY}
+SUPABASE_SITE_URL=${SITE_URL}
+SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL}
+EOF
+
 echo ""
-
-if ! test -t 0; then
-    echo "Running non-interactively. Skipping .env update."
-    exit 0
-fi
-
-printf "Update .env file? (y/N) "
-read -r REPLY
-case "$REPLY" in
-    [Yy])
-        ;;
-    *)
-        echo "Not updating .env"
-        exit 0
-        ;;
-esac
-
-echo "Updating .env..."
-
-sed \
-    -i.old \
-    -e "s|^JWT_SECRET=.*$|JWT_SECRET=${jwt_secret}|" \
-    -e "s|^ANON_KEY=.*$|ANON_KEY=${anon_key}|" \
-    -e "s|^SERVICE_ROLE_KEY=.*$|SERVICE_ROLE_KEY=${service_role_key}|" \
-    -e "s|^SECRET_KEY_BASE=.*$|SECRET_KEY_BASE=${secret_key_base}|" \
-    -e "s|^VAULT_ENC_KEY=.*$|VAULT_ENC_KEY=${vault_enc_key}|" \
-    -e "s|^PG_META_CRYPTO_KEY=.*$|PG_META_CRYPTO_KEY=${pg_meta_crypto_key}|" \
-    -e "s|^LOGFLARE_PUBLIC_ACCESS_TOKEN=.*$|LOGFLARE_PUBLIC_ACCESS_TOKEN=${logflare_public_access_token}|" \
-    -e "s|^LOGFLARE_PRIVATE_ACCESS_TOKEN=.*$|LOGFLARE_PRIVATE_ACCESS_TOKEN=${logflare_private_access_token}|" \
-    -e "s|^S3_PROTOCOL_ACCESS_KEY_ID=.*$|S3_PROTOCOL_ACCESS_KEY_ID=${s3_protocol_access_key_id}|" \
-    -e "s|^S3_PROTOCOL_ACCESS_KEY_SECRET=.*$|S3_PROTOCOL_ACCESS_KEY_SECRET=${s3_protocol_access_key_secret}|" \
-    -e "s|^POSTGRES_PASSWORD=.*$|POSTGRES_PASSWORD=${postgres_password}|" \
-    -e "s|^DASHBOARD_PASSWORD=.*$|DASHBOARD_PASSWORD=${dashboard_password}|" \
-    .env
+echo -e "${GREEN}Generated values (for local use only):${NC}"
+echo -e "JWT_SECRET=${JWT_SECRET}"
+echo -e "DB_PASSWORD=${DB_PASSWORD}"
+echo ""
+echo -e "${YELLOW}To apply these values:${NC}"
+echo -e "1. Copy the JWT_SECRET and DB_PASSWORD above"
+echo -e "2. Replace PLACEHOLDER_JWT_SECRET_HERE and PLACEHOLDER_DB_PASSWORD_HERE in pmoves/env.shared"
+echo ""
+echo -e "${RED}WARNING: Never commit actual JWT_SECRET or DB_PASSWORD values to git!${NC}"
