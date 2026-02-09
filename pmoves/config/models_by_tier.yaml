@@ -1,0 +1,364 @@
+# =============================================================================
+# PMOVES.AI Local Models by Hardware Tier
+# =============================================================================
+# Hardware-specific model recommendations for different deployment scenarios.
+# =============================================================================
+
+# CPU-Only / Edge (Jetson Nano, Raspberry Pi, low-end laptops)
+# -------------------------------------------------------------------------
+cpu_only_edge:
+  tier: small
+  max_vram: 0  # CPU inference
+  max_params: 3B
+  recommended:
+    primary:
+      name: phi3-mini
+      variant: q4_0
+      reason: "Fastest 3.8B model with 128K context"
+    fallback:
+      name: gemma-2-2b
+      variant: q4_0
+      reason: "Google's efficient 2B model"
+  use_cases:
+    orchestrator: phi3-mini:q4_0
+    coding: phi3-mini:q4_0
+    utility: phi3-mini:q4_0
+    embeddings: gemma-embedding-300m:f16
+    vl_sentinel: null  # Not recommended for CPU
+
+# Single Consumer GPU (8-12GB VRAM)
+# -------------------------------------------------------------------------
+consumer_gpu_8gb:
+  tier: small
+  max_vram: 12GB
+  max_params: 7B
+  recommended:
+    primary:
+      name: qwen2.5-7b
+      variant: q4_k_m
+      reason: "Best 7B model with great quality"
+    fallback:
+      name: qwen3-8b
+      variant: q4_k_m
+      reason: "Next generation Qwen"
+  use_cases:
+    orchestrator: qwen2.5-7b:q4_k_m
+    coding: qwen2.5-coder-7b:q4_k_m
+    utility: qwen2.5-3b:q4_0
+    embeddings: qwen3-embedding-4b:f16
+    vl_sentinel: qwen2-vl-7b:q4_k_m
+
+# Single Mid-Range GPU (16-24GB VRAM - RTX 3060-4090)
+# -------------------------------------------------------------------------
+midrange_gpu_16gb:
+  tier: medium
+  max_vram: 16GB
+  max_params: 14B
+  recommended:
+    primary:
+      name: qwen2.5-14b
+      variant: q4_k_m
+      reason: "Best 14B model, excellent quality"
+    fallback:
+      name: llama3.1-8b
+      variant: q5_k_m
+      reason: "Meta's flagship with 128K context"
+  use_cases:
+    orchestrator: qwen2.5-14b:q4_k_m
+    builder: qwen2.5-7b:q5_k_m
+    auditor: qwen2.5-3b:q4_0
+    coding: qwen2.5-coder-7b:q5_k_m
+    utility: qwen2.5-3b:q4_0
+    embeddings: qwen3-embedding-8b:f16
+    vl_sentinel: qwen2-vl-7b:q4_k_m
+    hirag_rerank: qwen3-reranker-4b:f16
+
+midrange_gpu_24gb:
+  tier: medium
+  max_vram: 24GB
+  max_params: 14B
+  recommended:
+    primary:
+      name: qwen2.5-14b
+      variant: q8_0
+      reason: "Higher precision for better quality"
+    fallback:
+      name: qwen2.5-14b
+      variant: q4_k_m
+      reason: "Quantized for faster inference"
+  use_cases:
+    orchestrator: qwen2.5-14b:q8_0
+    builder: qwen2.5-14b:q4_k_m
+    auditor: qwen2.5-7b:q5_k_m
+    coding: qwen2.5-coder-7b:q5_k_m
+    utility: qwen2.5-3b:q4_0
+    embeddings: qwen3-embedding-8b:f16
+    vl_sentinel: qwen2-vl-7b:q4_k_m
+    hirag_rerank: qwen3-reranker-4b:f16
+
+# AI Workstation (32-48GB VRAM - RTX 5090, A6000)
+# -------------------------------------------------------------------------
+ai_workstation_32gb:
+  tier: large
+  max_vram: 32GB
+  max_params: 32B
+  recommended:
+    primary:
+      name: qwen2.5-32b
+      variant: q4_0
+      reason: "High quality 32B model with TP=2"
+    fallback:
+      name: qwen2.5-14b
+      variant: f16
+      reason: "Full precision 14B for speed"
+  use_cases:
+    orchestrator: qwen2.5-32b:q4_0
+    builder: qwen2.5-14b:f16
+    auditor: qwen2.5-7b:q5_k_m
+    coding: qwen2.5-coder-7b:f16
+    utility: qwen2.5-7b:q4_k_m
+    embeddings: qwen3-embedding-8b:f16
+    vl_sentinel: qwen3-vl-8b:q4_k_m
+    hirag_rerank: qwen3-reranker-4b:f16
+
+ai_workstation_48gb:
+  tier: large
+  max_vram: 48GB
+  max_params: 32B
+  recommended:
+    primary:
+      name: qwen2.5-32b
+      variant: q8_0
+      reason: "High precision 32B model"
+    fallback:
+      name: qwen2.5-32b
+      variant: q4_0
+      reason: "Quantized for faster inference"
+  use_cases:
+    orchestrator: qwen2.5-32b:q8_0
+    builder: qwen2.5-14b:f16
+    auditor: qwen2.5-7b:q5_k_m
+    coding: qwen2.5-coder-7b:f16
+    utility: qwen2.5-7b:q4_k_m
+    embeddings: qwen3-embedding-8b:f16
+    vl_sentinel: qwen3-vl-8b:q4_k_m
+    hirag_rerank: qwen3-reranker-4b:f16
+
+# Multi-GPU Server (2-4x A100/H100 40-80GB each)
+# -------------------------------------------------------------------------
+multi_gpu_2x40gb:
+  tier: large
+  min_gpus: 2
+  vram_per_gpu: 40GB
+  total_vram: 80GB
+  max_params: 72B
+  recommended:
+    primary:
+      name: qwen2.5-72b
+      variant: q4_0
+      tp_size: 4
+      reason: "Flagship 72B model"
+    fallback:
+      name: qwen2.5-32b
+      variant: f16
+      tp_size: 2
+      reason: "Full precision 32B"
+  use_cases:
+    orchestrator: qwen2.5-72b:q4_0
+    builder: qwen2.5-32b:f16
+    auditor: qwen2.5-14b:q8_0
+    coding: qwen2.5-coder-7b:f16
+    utility: qwen2.5-7b:q5_k_m
+    embeddings: qwen3-embedding-8b:f16
+    vl_sentinel: qwen3-vl-8b:q8_0
+    hirag_rerank: qwen3-reranker-4b:f16
+
+multi_gpu_4x80gb:
+  tier: xlarge
+  min_gpus: 4
+  vram_per_gpu: 80GB
+  total_vram: 320GB
+  max_params: 141B
+  recommended:
+    primary:
+      name: mixtral-8x22b
+      variant: q4_0
+      tp_size: 4
+      reason: "Large MoE model for complex tasks"
+    fallback:
+      name: qwen2.5-72b
+      variant: f16
+      tp_size: 4
+      reason: "Full precision 72B"
+  use_cases:
+    orchestrator: mixtral-8x22b:q4_0
+    builder: qwen2.5-72b:f16
+    auditor: qwen2.5-32b:q8_0
+    coding: qwen2.5-coder-7b:f16
+    utility: qwen2.5-14b:q5_k_m
+    embeddings: qwen3-embedding-8b:f16
+    vl_sentinel: qwen3-vl-8b:q8_0
+    hirag_rerank: qwen3-reranker-4b:f16
+
+# =============================================================================
+# BoTZ Framework Component Model Mapping
+# =============================================================================
+# Recommended models for each BoTZ component by hardware tier
+# =============================================================================
+
+botz_components:
+  # Architect (Opus planning - complex reasoning)
+  architect:
+    cpu_only: phi3-mini:q4_0
+    consumer_8gb: qwen2.5-7b:q4_k_m
+    midrange_16gb: qwen2.5-14b:q4_k_m
+    ai_workstation_32gb: qwen2.5-32b:q4_0
+    multi_gpu_2x40gb: qwen2.5-72b:q4_0
+
+  # Builder (Sonnet execution - balanced speed/quality)
+  builder:
+    cpu_only: phi3-mini:q4_0
+    consumer_8gb: qwen2.5-7b:q4_k_m
+    midrange_16gb: qwen2.5-7b:q5_k_m
+    ai_workstation_32gb: qwen2.5-14b:f16
+    multi_gpu_2x40gb: qwen2.5-32b:f16
+
+  # Auditor (Haiku review - fast, cost-effective)
+  auditor:
+    cpu_only: gemma-2-2b:q4_0
+    consumer_8gb: qwen2.5-3b:q4_0
+    midrange_16gb: qwen2.5-3b:q4_0
+    ai_workstation_32gb: qwen2.5-7b:q4_k_m
+    multi_gpu_2x40gb: qwen2.5-14b:q4_k_m
+
+  # Coding (specialized code generation)
+  coding:
+    cpu_only: phi3-mini:q4_0
+    consumer_8gb: qwen2.5-coder-7b:q4_k_m
+    midrange_16gb: qwen2.5-coder-7b:q5_k_m
+    ai_workstation_32gb: deepseek-coder-6.7b:f16
+    multi_gpu_2x40gb: qwen2.5-coder-7b:f16
+
+  # VL Sentinel (vision-language processing)
+  vl_sentinel:
+    cpu_only: null  # Not recommended
+    consumer_8gb: qwen2-vl-7b:q4_k_m
+    midrange_16gb: qwen2-vl-7b:q4_k_m
+    ai_workstation_32gb: qwen3-vl-8b:q4_k_m
+    multi_gpu_2x40gb: qwen3-vl-8b:q8_0
+
+  # Cipher Memory (persistent memory with reasoning)
+  cipher_memory:
+    cpu_only: phi3-mini:q4_0
+    consumer_8gb: qwen2.5-7b:q4_k_m
+    midrange_16gb: qwen2.5-14b:q4_k_m
+    ai_workstation_32gb: qwen2.5-32b:q4_0
+    multi_gpu_2x40gb: qwen2.5-72b:q4_0
+
+  # Docling (document understanding)
+  docling:
+    cpu_only: phi3-mini:q4_0
+    consumer_8gb: qwen2.5-7b:q4_k_m
+    midrange_16gb: qwen2.5-7b:q5_k_m
+    ai_workstation_32gb: qwen2.5-14b:f16
+    multi_gpu_2x40gb: qwen2.5-32b:f16
+
+  # Hi-RAG Reranker (cross-encoder reranking)
+  hirag_rerank:
+    cpu_only: qwen3-reranker-4b:q8_0
+    consumer_8gb: qwen3-reranker-4b:f16
+    midrange_16gb: qwen3-reranker-4b:f16
+    ai_workstation_32gb: qwen3-reranker-4b:f16
+    multi_gpu_2x40gb: qwen3-reranker-4b:f16
+
+  # Embeddings (text embeddings for RAG)
+  embeddings:
+    cpu_only: gemma-embedding-300m:f16
+    consumer_8gb: qwen3-embedding-4b:f16
+    midrange_16gb: qwen3-embedding-8b:f16
+    ai_workstation_32gb: qwen3-embedding-8b:f16
+    multi_gpu_2x40gb: qwen3-embedding-8b:f16
+
+# =============================================================================
+# NVIDIA-Specific Optimizations
+# =============================================================================
+# Models optimized for NVIDIA GPUs with TensorRT, CUDA graphs, etc.
+# =============================================================================
+
+nvidia_optimized:
+  # TensorRT-LLM optimized models
+  tensorrt_llm:
+    - name: qwen2.5-7b-trt
+      base_model: qwen2.5-7b
+      engine: tensorrt-llm
+      quantization: awq
+      tp_size: 1
+      performance_boost: "2-3x faster than vLLM"
+
+    - name: qwen2.5-14b-trt
+      base_model: qwen2.5-14b
+      engine: tensorrt-llm
+      quantization: awq
+      tp_size: 1
+      performance_boost: "2-3x faster than vLLM"
+
+    - name: qwen2.5-32b-trt
+      base_model: qwen2.5-32b
+      engine: tensorrt-llm
+      quantization: awq
+      tp_size: 2
+      performance_boost: "3-4x faster than vLLM"
+
+  # FP8 quantized for Ada/Hopper GPUs
+  fp8_optimized:
+    - name: qwen2.5-7b-fp8
+      base_model: qwen2.5-7b
+      quantization: fp8
+      min_arch: Ada  # RTX 4090, L40
+      vram_savings: "50% vs f16"
+
+    - name: qwen2.5-14b-fp8
+      base_model: qwen2.5-14b
+      quantization: fp8
+      min_arch: Ada
+      vram_savings: "50% vs f16"
+
+    - name: qwen2.5-32b-fp8
+      base_model: qwen2.5-32b
+      quantization: fp8
+      min_arch: Hopper  # H100
+      vram_savings: "50% vs f16"
+
+# =============================================================================
+# Ollama Model Names (GGUF)
+# =============================================================================
+# Direct mappings to Ollama model names for quick reference
+# =============================================================================
+
+ollama_models:
+  small:
+    - phi3:3.8b-mini-128k-instruct
+    - gemma-2:2b
+    - qwen2.5:3b
+
+  medium:
+    - qwen2.5:7b
+    - qwen2.5:14b
+    - llama3.1:8b
+    - gemma-2:9b
+    - qwen2.5-coder:7b
+    - deepseek-coder:6.7b
+    - qwen3:8b
+
+  large:
+    - qwen2.5:32b
+    - qwen2.5:72b
+
+  specialized:
+    - qwen2-vl:7b
+    - qwen3-vl:8b
+    - qwen3-embedding:4b
+    - qwen3-embedding:8b
+    - nomic-embed-text
+    - embeddinggemma:300m
+    - qwen3-reranker:4b
