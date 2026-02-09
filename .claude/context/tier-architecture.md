@@ -9,7 +9,7 @@
 
 PMOVES.AI implements **defense-in-depth** through two complementary tier architectures:
 
-1. **Environment Tiers (6)** - Secrets/privilege segmentation via `env.tier-*` files
+1. **Environment Tiers (7)** - Secrets/privilege segmentation via `env.tier-*` files
 2. **Network Tiers (5)** - Container communication segmentation via Docker networks
 
 These serve different purposes:
@@ -18,7 +18,7 @@ These serve different purposes:
 
 ---
 
-## 6-Tier Environment Architecture
+## 7-Tier Environment Architecture
 
 The environment tier model implements **principle of least privilege** - each tier only receives the secrets it needs.
 
@@ -26,19 +26,64 @@ The environment tier model implements **principle of least privilege** - each ti
 
 | Tier File | Purpose | Services | Secrets Included |
 |-----------|---------|----------|------------------|
-| **env.tier-data** | Infrastructure | Postgres, Qdrant, Neo4j, Meilisearch, MinIO, NATS | Database passwords, master keys, root credentials |
-| **env.tier-api** | Data Access APIs | PostgREST, Presign, Hi-RAG Gateway, GPU Orchestrator | Neo4j, Meilisearch, Qdrant credentials (NO external API keys) |
+| **env.tier-data** | Infrastructure | Supabase DB, Qdrant, Neo4j, Meilisearch, MinIO, NATS | Database passwords, master keys, root credentials |
+| **env.tier-supabase** | Supabase Stack | GoTrue, PostgREST, Realtime, Storage, Studio, Kong | JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY, database credentials |
+| **env.tier-api** | Data Access APIs | Presign, Hi-RAG Gateway, GPU Orchestrator | Neo4j, Meilisearch, Qdrant credentials (NO external API keys) |
 | **env.tier-worker** | Background Workers | Extract Worker, LangExtract, PDF-ingest, Notebook-sync | TensorZero, Qdrant, Meilisearch, MinIO, Supabase URLs |
 | **env.tier-media** | Media Processing | PMOVES.YT, FFmpeg-Whisper, Media-Video/Audio, Channel Monitor | DATABASE_URL, MinIO, NATS URLs |
 | **env.tier-agent** | Agent Orchestration | Agent Zero, Archon, SupaSerch, DeepResearch | Supabase, Hi-RAG, TensorZero URLs (NO external API keys) |
 | **env.tier-llm** | LLM Gateway | TensorZero Gateway, TensorZero UI | **ALL** external LLM provider API keys (OpenAI, Anthropic, etc.) |
+
+### Tier 7: env.tier-supabase (Supabase Stack)
+
+**Purpose**: Dedicated tier for self-hosted Supabase services
+
+**Services**: GoTrue (auth), PostgREST (API), Realtime (websockets), Storage (S3), Studio (UI), Kong (gateway)
+
+**Variables**:
+- `JWT_SECRET` / `JWT_EXPIRY` - JWT signing configuration (standard naming from PMOVES-supabase fork)
+- `ANON_KEY` / `SERVICE_ROLE_KEY` - Public API keys (standard naming)
+- `SUPABASE_DB_USER` / `SUPABASE_DB_PASSWORD` - Database credentials
+- Legacy fallbacks: `SUPABASE_JWT_SECRET`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`
+
+**Security Rules**:
+1. JWT_SECRET must be cryptographically random (32+ bytes base64)
+2. ANON_KEY and SERVICE_ROLE_KEY are signed JWT tokens, not random strings
+3. Database credentials must match between GoTrue and PostgREST
+4. Realtime has its own secret for signed channel subscriptions
 
 ### Critical Security Rules
 
 1. **Only tier-llm has external LLM API keys** - No other service calls OpenAI/Anthropic/etc. directly
 2. **All LLM calls go through TensorZero Gateway** - Services use `TENSORZERO_URL=http://tensorzero-gateway:3000`
 3. **Data tier credentials isolated** - Only api/worker tiers get direct data store access
-4. **External URLs standardized** - Supabase via `supabase_kong_PMOVES.AI:8000`
+4. **External URLs standardized** - Supabase via internal service names (e.g., `supabase-postgrest:3000`)
+5. **Never commit actual credentials** - Use placeholder values in committed files
+
+### Supabase Variable Name Standardization
+
+The following table shows the standard variable names from PMOVES-supabase fork and legacy fallbacks:
+
+| Standard Name (New) | Legacy Name (Old) | Purpose |
+|---------------------|-------------------|---------|
+| `JWT_SECRET` | `SUPABASE_JWT_SECRET` | JWT signing key (HS256) |
+| `JWT_EXPIRY` | `SUPABASE_JWT_EXP` | Token expiration in seconds |
+| `JWT_ALGORITHM` | `SUPABASE_JWT_ALGORITHM` | Signing algorithm (HS256) |
+| `ANON_KEY` | `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_ANON_KEY` | Public JWT token for anonymous access |
+| `SERVICE_ROLE_KEY` | `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Admin JWT token for service operations |
+| `SITE_URL` | `SUPABASE_SITE_URL` | Supabase site URL |
+| `API_EXTERNAL_URL` | `SUPABASE_PUBLIC_URL` | External API URL |
+| `SUPABASE_DB_USER` | `POSTGRES_USER` | Database username |
+| `SUPABASE_DB_PASSWORD` | `POSTGRES_PASSWORD` | Database password |
+| `SUPABASE_DB_NAME` | `POSTGRES_DB` | Database name |
+
+**Migration Pattern**: Use fallback syntax in docker-compose.yml:
+```yaml
+environment:
+  - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
+  - ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY}}
+  - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY}}
+```
 
 ### Env File Structure
 
@@ -48,12 +93,17 @@ The environment tier model implements **principle of least privilege** - each ti
 
 env.shared                    # All env vars (for reference, not used directly)
 ├── env.tier-data            # Infrastructure credentials
+├── env.tier-supabase        # Supabase stack credentials (JWT, API keys, DB)
 ├── env.tier-api             # Data access APIs
 ├── env.tier-worker          # Background workers
 ├── env.tier-media           # Media processing
 ├── env.tier-agent           # Agent orchestration
-└── env.tier-llm             # LLM gateway (ALL external API keys)
+├── env.tier-llm             # LLM gateway (ALL external API keys)
+├── env.tier-ui              # UI services
+└── env.tier-vpn             # Tailscale VPN (optional)
 ```
+
+**Important**: `pmoves/env.shared` is in `.gitignore`. Never commit actual credential values.
 
 ### Usage in docker-compose.yml
 
@@ -64,14 +114,28 @@ x-env-tier-data: &env-tier-data
     - path: env.tier-data
       required: false
 
+x-env-tier-supabase: &env-tier-supabase
+  env_file:
+    - path: env.tier-supabase
+      required: false
+
 x-env-tier-api: &env-tier-api
   env_file:
     - path: env.tier-api
       required: false
 
+x-env-tier-llm: &env-tier-llm
+  env_file:
+    - path: env.tier-llm
+      required: false
+
 # Services reference by anchor
-postgres:
+supabase-db:
   <<: *env-tier-data
+  # ...
+
+supabase-gotrue:
+  <<: *env-tier-supabase
   # ...
 
 postgrest:
@@ -267,3 +331,4 @@ make down            # Stop and remove all containers
 | Date | Change | Author |
 |------|--------|--------|
 | 2025-12-29 | Initial documentation of 6-tier env + 5-tier network architecture | Claude Code |
+| 2026-02-07 | Added env.tier-supabase (7th tier), documented Supabase variable standardization, added security rules | Claude Code |
