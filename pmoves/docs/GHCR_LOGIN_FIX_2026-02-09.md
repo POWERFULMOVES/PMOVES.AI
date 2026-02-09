@@ -1,0 +1,155 @@
+# GHCR Login Failure - Root Cause & Fix
+
+**Date:** 2026-02-09 03:20 UTC
+**Status:** 🔴 **BLOCKING** - GHCR login failing
+**Workflow Run:** #21811059081
+
+---
+
+## Problem
+
+The GHCR workflow is failing at the "Log in to GHCR" step.
+
+**Root Cause:** The `GH_PAT_PUBLISH` secret is either:
+1. Not set in the repository
+2. Set but lacks `write:packages` scope
+3. Has expired or invalid token
+
+---
+
+## How GitHub Actions Login Works
+
+The workflow uses this configuration:
+
+```yaml
+env:
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
+  GHCR_PASSWORD: ${{ secrets.GH_PAT_PUBLISH || github.token }}
+
+steps:
+  - name: Log in to GHCR
+    uses: docker/login-action@v3
+    with:
+      registry: ghcr.io
+      username: ${{ env.GHCR_USERNAME }}
+      password: ${{ env.GHCR_PASSWORD }}
+```
+
+**Default behavior if secrets not set:**
+- `GHCR_USERNAME` → `github.actor` (the user triggering the workflow)
+- `GHCR_PASSWORD` → `github.token` (the automatic GITHUB_TOKEN)
+
+**Issue:** `github.token` may not have `write:packages` scope for GHCR.
+
+---
+
+## Required Fix
+
+### Option A: Create/Set GH_PAT_PUBLISH Secret (Recommended)
+
+1. **Generate a Personal Access Token:**
+   - Go to: https://github.com/settings/tokens
+   - Click "Generate new token (classic)"
+   - Note: Use "Fine-grained token" if available for better security
+
+2. **Set scopes:**
+   ```
+   repo (full control of private repositories)
+   write:packages (write packages)
+   read:org (read org and team data, if org-level GHCR)
+   ```
+
+3. **Add Secret to Repository:**
+   - Go to: https://github.com/POWERFULMOVES/PMOVES.AI/settings/secrets/actions
+   - Click "New repository secret"
+   - Name: `GH_PAT_PUBLISH`
+   - Value: [paste the generated token]
+   - Add repository: `POWERFULMOVES/PMOVES.AI`
+
+4. **Verify:**
+   ```bash
+   # Test from local machine with the token
+   echo "YOUR_TOKEN" | docker login ghcr.io -u YOUR_USERNAME --password-stdin
+   ```
+
+### Option B: Use Fine-Grained Token (More Secure)
+
+1. Go to: https://github.com/settings/tokens?type=beta
+
+2. Create a new fine-grained token with:
+   - **Repository access:** POWERFULES/PMOVES.AI
+   - **Permissions:**
+     - Contents: Read and Write
+     - Actions: Read and Write
+     - Packages: Read and Write
+     - Administration: Read self-hosted runners
+
+3. Add as `GH_PAT_PUBLISH` secret
+
+### Option C: Enable GitHub Actions Default Token (If Available)
+
+In some organizations, `GITHUB_TOKEN` may have `write:packages` scope. To use it:
+
+```yaml
+env:
+  GHCR_PASSWORD: ${{ secrets.GITHUB_TOKEN }}  # Use GITHUB_TOKEN directly
+```
+
+**Note:** This only works if the token has the required scope.
+
+---
+
+## Verification Steps
+
+After setting the secret:
+
+1. **Re-run the workflow:**
+   ```bash
+   gh workflow run integrations-ghcr.yml -f integration=agent-zero
+   ```
+
+2. **Monitor the workflow:**
+   - Go to: https://github.com/POWERFULMOVES/PMOVES.AI/actions
+   - Click on the latest "Build and publish integration images to GHCR" run
+   - Check if "Log in to GHCR" step succeeds
+
+3. **Check for successful login in logs:**
+   - Look for: "Login Succeeded"
+   - No "denied" or "unauthorized" errors
+
+---
+
+## Alternative: Docker Hub Fallback
+
+If GHCR continues to have issues, we can use Docker Hub as a fallback:
+
+```yaml
+env:
+  REGISTRY: docker.io  # Change from ghcr.io
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+```
+
+**Note:** This requires Docker Hub credentials to be set as secrets.
+
+---
+
+## Security Note
+
+⚠️ **Never commit PATs to the repository!**
+
+The `GH_PAT_PUBLISH` secret must be set via GitHub UI, not in code.
+
+---
+
+## Related Documentation
+
+- GitHub Docs: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+- GHCR Docs: https://docs.github.com/en/packages/working-with-a-github-packages-container-registry-getting-started
+- Docker Login Action: https://github.com/docker/login-action
+
+---
+
+**Created:** 2026-02-09 03:20 UTC
+**Priority:** CRITICAL - Blocks production deployment
+**Owner:** Infrastructure Team
