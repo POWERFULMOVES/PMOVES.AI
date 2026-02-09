@@ -246,6 +246,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+          USE_GHCR: ${{ env.GHCR_PASSWORD != '' && env.GHCR_PASSWORD != github.token }}
         run: |
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
@@ -257,10 +258,19 @@ jobs:
           # Docker tag validation requires the repository namespace be lowercase.
           GHCR_NS="${GHCR_NS_RAW,,}"
           echo "ghcr_ns=${GHCR_NS}" >> $GITHUB_OUTPUT
-          TAGS="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest\n${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+          # Only add GHCR tags if USE_GHCR is true
+          if [ "$USE_GHCR" = "true" ]; then
+            TAGS="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest\n${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+          else
+            TAGS=""
+          fi
           if [ "$INCLUDE_DOCKERHUB" = "true" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
             DH_NS=${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}
-            TAGS="$TAGS\ndocker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS\ndocker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            else
+              TAGS="docker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            fi
           fi
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo -e "$TAGS" >> $GITHUB_OUTPUT
