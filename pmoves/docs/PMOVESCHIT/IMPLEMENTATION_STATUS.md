@@ -100,7 +100,7 @@ The CHIT system is built on five mathematical foundations:
 |---------|--------|-----------------|
 | CGP v0.1 | ✅ Stable | `PMOVESCHIT.md` Section 2 |
 | CGP v0.2 | ✅ Stable | Extended with NATS fields |
-| CGP v1.0 | ⏳ Draft | Future multi-modal support |
+| CGP v1.0 | ✅ Production Ready | `CGP_v1.0_SPECIFICATION.md` |
 
 ### Packet Structure (v0.2)
 
@@ -155,8 +155,9 @@ The CHIT system is built on five mathematical foundations:
 | Document | Purpose | Implementation Status |
 |----------|---------|----------------------|
 | `PMOVESCHIT.md` | Core specification + CGP v0.1 | ✅ Reference |
-| `PMOVESCHIT_DECODERv0.1.md` | Decoder specification | ⏳ Spec only |
-| `PMOVESCHIT_DECODER_MULTIv0.1.md` | Multi-modal decoder | ❌ Not implemented |
+| `PMOVESCHIT_DECODERv0.1.md` | Decoder specification | ✅ Implemented (chit_decoder.py) |
+| `PMOVESCHIT_DECODER_MULTIv0.1.md` | Multi-modal decoder | ✅ Implemented (chit_decoder_mm.py) |
+| `CGP_v1.0_SPECIFICATION.md` | Production CGP v1.0 spec | ✅ Complete |
 | `PMOVESSHIFTEST.md` | Shape Harmonic Intelligence Framework | ⚠️ Conceptual |
 | `GEOMETRY_BUS_INTEGRATION.md` | NATS integration guide | ✅ Active |
 | `geometry-nats-subjects.md` | NATS subject catalog | ✅ Active |
@@ -229,12 +230,12 @@ curl -X POST http://localhost:8086/geometry/event \
 - [x] ~~Implement Python decoder v0.1~~ ✅ **Complete** (2026-02-08)
 - [x] ~~Multi-modal decoder (DECODER_MULTI)~~ ✅ **Complete** (2026-02-08)
 - [x] ~~Security layer (`chit_security.py`)~~ ✅ **Complete** (pre-existing)
+- [x] ~~CGP v1.0 specification~~ ✅ **Complete** (2026-02-08)
 - [ ] Define Shape Store location (Supabase + Qdrant)
 - [ ] Complete Hyperdimensions visualizer integration
 
 ### Q2 2026
 - [ ] T5 Generator (v0.2): Learning-based decoder with fine-tuning
-- [ ] CGP v1.0 specification
 - [ ] Audio decode via CLAP (full implementation)
 
 ---

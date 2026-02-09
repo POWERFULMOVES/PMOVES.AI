@@ -8,7 +8,7 @@ This package provides decoder utilities for CHIT Geometry Packets (CGP):
 
 Usage:
     from pmoves.tools.chit import decode_cgp, decode_images
-    results = decode_cgp("path/to/cgp.json", corpus="path/to/corpus.jsonl")
+    results = decode_cgp("path/to/cgp.json", corpus_path="path/to/corpus.jsonl")
 
 Reference: pmoves/docs/PMOVESCHIT/PMOVESCHIT_DECODERv0.1.md
 """
@@ -39,7 +39,7 @@ def decode_cgp(
         List of decoded records with text/content
 
     Example:
-        >>> results = decode_cgp("cgp.json", corpus="corpus.jsonl")
+        >>> results = decode_cgp("cgp.json", corpus_path="corpus.jsonl")
         >>> for r in results[:5]:
         ...     print(f"{r['constellation_id']}: {r['text'][:100]}")
     """

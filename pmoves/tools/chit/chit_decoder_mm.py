@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from typing import Tuple, List
 from typing import Any, Dict, List
 
 import numpy as np
@@ -92,7 +93,9 @@ def soft_select(
     return chosen
 
 
-def encode_images(img_paths: List[str], model: SentenceTransformer) -> np.ndarray:
+def encode_images(
+    img_paths: List[str], model: SentenceTransformer
+) -> Tuple[np.ndarray, List[str]]:
     """
     Encode images using CLIP model.
 
@@ -101,7 +104,7 @@ def encode_images(img_paths: List[str], model: SentenceTransformer) -> np.ndarra
         model: SentenceTransformer with CLIP model
 
     Returns:
-        Normalized image embeddings
+        Tuple of (normalized image embeddings, valid paths)
     """
     imgs = []
     valid_paths = []

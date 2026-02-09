@@ -263,6 +263,7 @@ def geometry_only_decode(
                 decoded.append({
                     "super_id": s.get("id", ""),
                     "constellation_id": const.get("id", ""),
+                    "corpus_idx": int(i),  # Include for metric computation
                     "text": corpus_texts[i],
                     "proj_est": float(proj[i]),
                 })
@@ -360,13 +361,16 @@ def compute_metrics(
 
             delta = (rmax - rmin) / max(1, bins - 1)
 
+            # Get per_constellation target from CGP metadata (default 50)
+            per_const_target = float(cgp.get("meta", {}).get("per_constellation", 50))
+
             out_rows.append({
                 "constellation_id": cid,
                 "n": len(idxs),
                 "KL": kl_divergence(spectrum_t, spectrum_e),
                 "JS": js_divergence(spectrum_t, spectrum_e),
                 "W1": wasserstein_1d(spectrum_t, spectrum_e, delta=delta),
-                "coverage": float(len(idxs)) / max(1.0, float(per_const_target := 50)),
+                "coverage": float(len(idxs)) / max(1.0, per_const_target),
             })
 
     # Compute means
