@@ -127,3 +127,8 @@ pmoves/PR_BODY_*.md
 # Vendor unpacked packages (install via requirements.txt instead)
 pmoves/vendor/python/
 .github/runners/
+
+# Temporary check directories (moved to /tmp/pmoves-check-backup-*)
+PMOVES-BoTZ-check/
+PMOVES-DoX-check/
+PMOVES-HiRAG-check/
