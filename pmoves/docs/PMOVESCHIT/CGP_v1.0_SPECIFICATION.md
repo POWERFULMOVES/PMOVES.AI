@@ -462,7 +462,7 @@ Reconstructs content by matching geometric constellations to a shared corpus:
 ```python
 results = decode_cgp(
     "cgp.json",
-    corpus="corpus.jsonl",
+    corpus_path="corpus.jsonl",
     mode="geometry",
     per_constellation=50
 )
@@ -570,7 +570,7 @@ cgp_decrypted = decrypt_anchors(
 }
 ```
 
-**Key derivation:** PBKDF2-HMAC-SHA256 with 100,000 iterations
+**Key derivation:** PBKDF2-HMAC-SHA256 with 600,000 iterations (OWASP 2024 recommendation)
 
 ---
 
