@@ -56,8 +56,9 @@ env:
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
-    # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, vps]
+    # TEMPORARY: Using GitHub-hosted runners to test GHCR credentials
+    # TODO: Switch back to [self-hosted, vps] after credentials verified
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
