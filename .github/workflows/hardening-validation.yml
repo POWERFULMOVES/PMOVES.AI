@@ -57,7 +57,7 @@ jobs:
 
       - name: Upload hardening report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hardening-report
           path: hardening-report.md
@@ -278,7 +278,7 @@ jobs:
           cat summary.md
 
       - name: Upload summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: validation-summary
           path: summary.md
