@@ -26,7 +26,9 @@ on:
         default: false
         type: boolean
   push:
-    branches: [main]
+    branches: [main, PMOVES.AI-Edition-Hardened]
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       # Rebuild images when submodules are updated
       - 'PMOVES-Open-Notebook'
@@ -72,7 +74,7 @@ jobs:
             image_name: pmoves-agent-zero
             build_args: |
               BRANCH=local
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/agent-zero.trivyignore
           - name: archon
@@ -82,7 +84,7 @@ jobs:
             dockerfile: pmoves/services/archon/Dockerfile
             image_name: pmoves-archon
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: archon-ui
@@ -92,7 +94,7 @@ jobs:
             dockerfile: archon-ui-main/Dockerfile
             image_name: pmoves-archon-ui
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/archon-ui.trivyignore
           - name: open-notebook
@@ -102,7 +104,7 @@ jobs:
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/open-notebook.trivyignore
           - name: wger
@@ -112,7 +114,7 @@ jobs:
             dockerfile: extras/docker/production/Dockerfile
             image_name: pmoves-health-wger
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: firefly-iii
@@ -122,7 +124,7 @@ jobs:
             dockerfile: pmoves/images/firefly-iii/Dockerfile
             image_name: pmoves-firefly-iii
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: jellyfin
@@ -132,7 +134,7 @@ jobs:
             dockerfile: pmoves/images/jellyfin/Dockerfile
             image_name: pmoves-jellyfin
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/jellyfin.trivyignore
           - name: pmoves-yt
@@ -142,7 +144,7 @@ jobs:
             dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: deepresearch
@@ -152,7 +154,7 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: supaserch
@@ -162,7 +164,7 @@ jobs:
             dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           # To add other integrations, duplicate one of the entries above.
