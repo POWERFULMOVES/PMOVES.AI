@@ -69,22 +69,6 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-llama-throughput-lab.git
 	branch = PMOVES.AI-Edition-Hardened
 
-[submodule "PMOVES-surf"]
-	path = PMOVES-surf
-	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
-	branch = PMOVES.AI-Edition-Hardened
-
-# =============================================================================
-# E2B Danger Room - Sandboxed Code Execution
-# =============================================================================
-# MIGRATION NOTES (2026-02-07):
-# The e2b components were previously vendored under pmoves/vendor/e2b/*
-# They have been migrated to proper forked submodules (see below).
-# The vendor entries are commented out to prevent git errors while
-# preserving history for reference during branch transitions.
-# Investigation confirmed: No code was lost during migration - vendor
-# directories were empty with no local git history.
-
 [submodule "PMOVES-E2B-Danger-Room"]
 	path = PMOVES-E2B-Danger-Room
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
@@ -306,3 +290,10 @@
 	path = PMOVES-supabase
 	url = https://github.com/POWERFULMOVES/PMOVES-supabase.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves-surf"]
+	path = pmoves-surf
+	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-surf"]
+	path = PMOVES-surf
+	url = https://github.com/POWERFULMOVES/PMOVES-surf.git

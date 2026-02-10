@@ -380,7 +380,9 @@ services:
   # =============================================================================
 
   supabase-db:
-    <<: *tier-supabase-hardened
+    env_file:
+      - env.shared
+      - env.tier-supabase
     image: supabase/postgres:17.6.1.079
     restart: unless-stopped
     environment:
@@ -415,16 +417,16 @@ services:
     - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
     - GOTRUE_API_HOST=0.0.0.0
     - GOTRUE_API_PORT=9999
-    # Database connection
+    # Database connection (compose var substitution happens at parse time from shell env)
     - GOTRUE_DB_DRIVER=postgres
-    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}?sslmode=disable
-    # JWT configuration (2025: RS256)
+    - GOTRUE_DB_DATABASE_URL=postgres://${SUPABASE_DB_USER}:${SUPABASE_DB_PASSWORD}@supabase-db:5432/${SUPABASE_DB_NAME}?sslmode=disable
+    # JWT configuration (2025: RS256 with fallback to HS256)
     # Standard variable names from PMOVES-supabase fork with fallbacks
-    - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
-    - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
-    - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
+    - GOTRUE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    - GOTRUE_JWT_EXP=${SUPABASE_JWT_EXP:-3600}
     # 2025 key naming (service_role_key from PMOVES-supabase standard)
-    - GOTRUE_JWT_ADMIN_SECRET=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SERVICE_ROLE_KEY}
     - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
     # Logging
     - GOTRUE_LOG_LEVEL=info
@@ -455,32 +457,36 @@ services:
     image: postgrest/postgrest:v12.2.0
     restart: unless-stopped
     environment:
-    # Database connection (from env.tier-supabase)
-    - PGRST_DB_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+    # Database connection (compose var substitution happens at parse time from shell env)
+    - PGRST_DB_URI=postgres://${SUPABASE_DB_USER}:${SUPABASE_DB_PASSWORD}@supabase-db:5432/${SUPABASE_DB_NAME}
     # JWT secret (must match gotrue) - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
     # 2025 key naming (service role key for admin access)
     - PGRST_JWT_SECRET_IS_BASE64=false
-    # API configuration
-    - PGRST_SCHEMA=${SUPABASE_SCHEMA}
-    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE}
-    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS}
-    - PGRST_DB_POOL=${SUPABASE_DB_POOL}
-    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT}
+    # API configuration (explicit values)
+    - PGRST_SCHEMA=public
+    - PGRST_ANON_ROLE=anon
+    - PGRST_DB_MAX_ROWS=1000
+    - PGRST_DB_POOL=15
+    - PGRST_DB_POOL_TIMEOUT=5
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - DOCKED_MODE=true
+    - PARENT_SYSTEM=PMOVES.AI
+    - PARENT_VERSION=1.0.0-hardened
     # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
     depends_on:
       supabase-db:
         condition: service_healthy
     ports:
-    - ${SUPABASE_POSTGREST_PORT:-3000}:3000
+    - ${SUPABASE_POSTGREST_PORT:-3010}:3000
     networks:
-    - pmoves_api
-    - pmoves_data
+      pmoves_api:
+        aliases:
+          - supabase-postgrest
+          - postgrest
+          - rest
+      pmoves_data:
 
   supabase-kong:
     <<: *tier-supabase-hardened
@@ -488,11 +494,13 @@ services:
     restart: unless-stopped
     environment:
     # Database configuration (Kong uses Postgres for config storage)
+    # Note: Kong requires postgres superuser for migrations
     - KONG_DATABASE=postgres
     - KONG_PG_HOST=supabase-db
-    - KONG_PG_DATABASE=${POSTGRES_DB}
-    - KONG_PG_USER=${POSTGRES_USER}
-    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+    - KONG_PG_DATABASE=${SUPABASE_DB_NAME}
+    - KONG_PG_USER=postgres
+    - KONG_PG_PASSWORD=${SUPABASE_DB_PASSWORD}
+    - KONG_PG_SCHEMA=kong
     # Kong configuration
     - KONG_PROXY_ACCESS_LOG=/dev/stdout
     - KONG_ADMIN_ACCESS_LOG=/dev/stdout
@@ -503,10 +511,10 @@ services:
     # JWT plugin (2025: RS256 support)
     - KONG_PLUGINS=bundled,jwt
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
-    # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    # PMOVES context (explicit values)
+    - DOCKED_MODE=true
+    - PARENT_SYSTEM=PMOVES.AI
+    - PARENT_VERSION=1.0.0-hardened
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -528,24 +536,36 @@ services:
     image: supabase/realtime:v2.30.26
     restart: unless-stopped
     environment:
-    # Database connection
+    # Database connection (compose var substitution happens at parse time from shell env)
     - DB_HOST=supabase-db
     - DB_PORT=5432
-    - DB_NAME=${POSTGRES_DB}
-    - DB_USER=${POSTGRES_USER}
-    - DB_PASSWORD=${POSTGRES_PASSWORD}
+    - DB_NAME=${SUPABASE_DB_NAME}
+    - DB_USER=${SUPABASE_DB_USER}
+    - DB_PASSWORD=${SUPABASE_DB_PASSWORD}
     - DB_SSL=false
+    # Critical: Set search_path to _realtime schema (Supabase standard)
+    - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
     # App configuration
     - APP_NAME=realtime
     - PORT=4000
     - RLIMIT_NOFILE=1048576
     # JWT secret (must match gotrue) - standard variable name
-    - JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - API_JWT_SECRET=${SUPABASE_JWT_SECRET}
+    - JWT_SECRET=${SUPABASE_JWT_SECRET}
     - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET}
+    # Encryption key for Realtime (16 bytes for AES-128-ECB)
+    - DB_ENC_KEY=3014ca561346c0f9
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE}
     - PARENT_SYSTEM=${PARENT_SYSTEM}
     - PARENT_VERSION=${PARENT_VERSION}
+    # ERL configuration
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - DNS_NODES=
+    # Realtime feature flags
+    - SEED_SELF_HOST=true
+    - RUN_JANITOR=true
+    - DISABLE_HEALTHCHECK_LOGGING=true
     # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
     # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
     healthcheck:
@@ -568,32 +588,32 @@ services:
     image: supabase/storage-api:v1.36.2
     restart: unless-stopped
     environment:
-    # 2025 key naming - standard Supabase variable names with fallbacks
-    - ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
-    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
-    # JWT secret - standard variable name
-    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    # Database connection (compose var substitution happens at parse time from shell env)
+    - DATABASE_URL=postgres://${SUPABASE_DB_USER}:${SUPABASE_DB_PASSWORD}@supabase-db:5432/${SUPABASE_DB_NAME}
+    # JWT secret (explicit value)
+    - PGRST_JWT_SECRET=${SUPABASE_JWT_SECRET}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
-    # Database connection (use env variables, not hardcoded credentials)
-    - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+    # Storage keys (explicit values)
+    - ANON_KEY=${SUPABASE_ANON_KEY}
+    - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     # Storage configuration
     - FILE_SIZE_LIMIT=52428800
     - STORAGE_BACKEND=file
     - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
-    - REGION=${SUPABASE_STORAGE_REGION}
-    # Global S3 bucket (if using MinIO for actual storage)
-    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET}
-    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT}
+    - REGION=local
+    # Global S3 bucket (MinIO for actual storage)
+    - GLOBAL_S3_BUCKET=assets
+    - GLOBAL_S3_ENDPOINT=http://minio:9000
     - GLOBAL_S3_FORCE_PATH_STYLE=true
     # Tenant mode (single tenant for self-hosted)
     - TENANT_ID=stub
-    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION}
-    # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - TENANTSStub_REGION=local
+    # PMOVES context (explicit values)
+    - DOCKED_MODE=true
+    - PARENT_SYSTEM=PMOVES.AI
+    - PARENT_VERSION=1.0.0-hardened
     # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
@@ -624,13 +644,13 @@ services:
     - STUDIO_PG_META_URL=http://supabase-postgrest:3000
     # Auth connection
     - SUPABASE_URL=http://supabase-gotrue:9999
-    # 2025 key naming - standard variable names with fallbacks
-    - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
-    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
-    # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    # Public URL and keys (compose var substitution happens at parse time from shell env)
+    - SUPABASE_PUBLIC_URL=${SUPABASE_PUBLIC_URL:-http://localhost:54323}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    # PMOVES context (explicit values)
+    - DOCKED_MODE=true
+    - PARENT_SYSTEM=PMOVES.AI
+    - PARENT_VERSION=1.0.0-hardened
     # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
     # Note: Official Supabase uses node -e fetch but their image has different network config
     # We rely on container being started successfully (logs show "Ready in Xms")
@@ -669,12 +689,15 @@ services:
     - ${QDRANT_PORT:-6333}:6333
     networks:
     - pmoves_data
+    - pmoves_api
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
     - qdrant-data:/qdrant/storage
+    # Note: qdrant:v1.10.0 minimal image has no curl/wget for healthcheck
+    # Qdrant is considered healthy if container is running
   meilisearch:
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.8
@@ -688,8 +711,15 @@ services:
     - ${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
+    - pmoves_api
     volumes:
     - meilisearch-data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:7700/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   neo4j:
     image: neo4j:5.22
     env_file:
@@ -700,8 +730,10 @@ services:
       - NET_BIND_SERVICE
       - CHOWN
       - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
+    user: "7474:7474"
     restart: unless-stopped
     environment:
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
@@ -717,6 +749,7 @@ services:
     - ./neo4j/cypher:/cypher:ro
     networks:
     - pmoves_data
+    - pmoves_api
     healthcheck:
       test:
       - CMD-SHELL
@@ -898,7 +931,7 @@ services:
     - host.docker.internal:host-gateway
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
       meilisearch:
         condition: service_healthy
       minio:
@@ -1139,6 +1172,10 @@ services:
     - pmoves_external  # Required for YouTube API access
   hi-rag-gateway-v2:
     <<: *tier-api-hardened
+    env_file:
+      - env.shared
+      - env.tier-api
+      - env.tier-data
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
@@ -1244,6 +1281,10 @@ services:
     - pmoves_bus
   hi-rag-gateway-v2-gpu:
     <<: *tier-api-hardened-gpu
+    env_file:
+      - env.shared
+      - env.tier-api
+      - env.tier-data
     build:
       context: .
       dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
@@ -1409,8 +1450,8 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://supabase-postgrest:3000}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-postgrest:3000/rest/v1}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-http://rest:3000}
+      - SUPA_REST_URL=${SUPA_REST_URL:-http://rest:3000/rest/v1}
     depends_on:
       nats:
         condition: service_healthy
@@ -1460,7 +1501,7 @@ services:
     environment:
       # NATS_URL is set in env.tier-agent with credentials: nats://nats:pmoves@nats:4222
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
       - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
@@ -1890,7 +1931,7 @@ services:
   # PMOVES Tokenism UI - Interactive dashboard for token economy simulation
   tokenism-ui:
     build:
-      context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
+      context: ../PMOVES-ToKenism-Multi/pmoves-nextjs
       dockerfile: Dockerfile
     image: ${TOKENISM_UI_IMAGE:-ghcr.io/powerfulmoves/pmoves-tokenism-ui:pmoves-latest}
     restart: unless-stopped
@@ -1908,6 +1949,7 @@ services:
     build:
       context: ./ui
       dockerfile: Dockerfile
+    image: ${PMOVES_UI_IMAGE:-pmoves-ui:latest}
     restart: unless-stopped
     env_file: [ env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local ]
     environment:
@@ -1951,7 +1993,7 @@ services:
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
-    networks: [ pmoves_app, pmoves_api, supabase_net ]
+    networks: [ pmoves_app, pmoves_api ]
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
@@ -2265,7 +2307,7 @@ networks:
   pmoves_data:
     name: pmoves_data
     driver: bridge
-    internal: true
+    internal: false
     ipam:
       driver: default
       config:
@@ -2274,7 +2316,7 @@ networks:
   pmoves_api:
     name: pmoves_api
     driver: bridge
-    internal: true
+    internal: false
     ipam:
       driver: default
       config:
@@ -2283,7 +2325,7 @@ networks:
   pmoves_app:
     name: pmoves_app
     driver: bridge
-    internal: true
+    internal: false
     ipam:
       driver: default
       config:
@@ -2292,7 +2334,7 @@ networks:
   pmoves_bus:
     name: pmoves_bus
     driver: bridge
-    internal: true
+    internal: false
     ipam:
       driver: default
       config:
@@ -2301,7 +2343,7 @@ networks:
   pmoves_monitoring:
     name: pmoves_monitoring
     driver: bridge
-    internal: true
+    internal: false
     ipam:
       driver: default
       config:
