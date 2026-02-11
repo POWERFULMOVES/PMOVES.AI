@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   bump-yt-dlp:
-    runs-on: ubuntu-latest
+    # PMOVES.AI: Use self-hosted runners for production CI
+    runs-on: [self-hosted, vps]
     steps:
       - name: Checkout
         uses: actions/checkout@v6

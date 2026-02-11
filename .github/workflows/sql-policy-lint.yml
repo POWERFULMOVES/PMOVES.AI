@@ -16,7 +16,8 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    # PMOVES.AI: Use self-hosted runners for production CI
+    runs-on: [self-hosted, vps]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
