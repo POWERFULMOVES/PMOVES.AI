@@ -1,0 +1,143 @@
+name: Infrastructure Validation
+
+on:
+  push:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Infrastructure Changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install validation tools
+        run: |
+          pip install yamllint pyyaml
+          pip install pytest httpx websockets
+
+      - name: Run validation script
+        run: |
+          ./pmoves/tests/validate-changes.sh --verbose
+
+      - name: Upload validation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-results
+          path: |
+            /tmp/smoke_test.log
+          retention-days: 7
+
+  security-scan:
+    name: Security Scans
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'pmoves/docker-compose.yml'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Check for common secret patterns
+          if grep -rnE "(password|api_key|secret)=['\"](?!.*\{)[^'\"]{8,}" pmoves/docker-compose*.yml; then
+            echo "::warning::Possible hardcoded secrets found"
+          fi
+
+      - name: Upload Triny results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  compose-validation:
+    name: Docker Compose Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose files
+        run: |
+          # Install docker-compose validation tool
+          pip install docker-compose-inline
+
+          # Validate each compose file
+          for compose_file in pmoves/docker-compose*.yml pmoves/compose/*.yml; do
+            if [[ -f "$compose_file" ]]; then
+              echo "Validating $compose_file..."
+              docker-compose -f "$compose_file" config > /dev/null || {
+                echo "::error::Docker Compose validation failed for $compose_file"
+                exit 1
+              }
+            fi
+          done
+
+      - name: Check for port conflicts
+        run: |
+          # Extract all external ports and check for duplicates
+          grep -rh '"[0-9]*:' pmoves/docker-compose*.yml | \
+            grep -oP '"\K[0-9]+' | \
+            sort | \
+            uniq -d | \
+            while read port; do
+              echo "::warning::Port $port is defined multiple times"
+            done
+
+  env-validation:
+    name: Environment Variable Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check environment files
+        run: |
+          # Validate environment file syntax
+          for env_file in pmoves/env.*; do
+            if [[ -f "$env_file" ]]; then
+              # Check for invalid characters in variable names
+              if grep -E '^[a-zA-Z_][a-zA-Z0-9_]*=' "$env_file" | grep -vE '^[A-Z_][A-Z0-9_]*='; then
+                echo "::warning::Possible lowercase variable name in $env_file"
+              fi
+            fi
+          done
+
+      - name: Check JWT secret consolidation
+        run: |
+          # Ensure JWT secret is only in env.tier-supabase
+          jwt_count=$(grep -c "^SUPABASE_JWT_SECRET=" pmoves/env.shared 2>/dev/null || echo "0")
+          if [[ "$jwt_count" -gt 1 ]]; then
+            echo "::error::Multiple SUPABASE_JWT_SECRET definitions in env.shared"
+            exit 1
+          fi
+
+      - name: Check for CLI references
+        run: |
+          # Ensure no Supabase CLI port references
+          if grep -rn "54321" pmoves/docker-compose*.yml; then
+            echo "::error::Found Supabase CLI port reference (54321)"
+            exit 1
+          fi
