@@ -422,6 +422,93 @@ See `.claude/context/` for detailed documentation:
 - `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
 - `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 
+## Claude Code CLI Context Strategy
+
+### Context Loading Priority (For ALL Agents)
+
+**Tier 1 - Always Load (Critical System Context):**
+- `/home/pmoves/PMOVES.AI/.claude/CLAUDE.md` - Main PMOVES.AI context (this file)
+- `/home/pmoves/PMOVES.AI/.claude/context/` - System architecture docs
+
+**Tier 2 - On-Demand Load (Major Subsystems):**
+- `PMOVES-Archon/.claude/CLAUDE.md` - Agent service architecture
+- `PMOVES-BoTZ/.claude/CLAUDE.md` - Skills marketplace framework
+- `PMOVES-Agent-Zero/.claude/CLAUDE.md` - Orchestration patterns
+- Load only when working directly on that subsystem
+
+**Tier 3 - Conditional Load (Integration Workspaces):**
+- `integrations-workspace/*/CLAUDE.md` - Cross-submodule integration points
+- Load only for integration tasks
+
+**Tier 4 - Explicit Load Only (Nested Contexts):**
+- Submodule nested submodules (e.g., `PMOVES-Archon/external/*/`)
+- Individual skill contexts (e.g., `PMOVES-BoTZ/features/skills/*/CLAUDE.md`)
+- Load only when explicitly requested or working on that specific component
+
+### Git Worktree Workflow
+
+**Why Worktrees?** Isolated development branches without cloning entire repo.
+
+**List all worktrees:**
+```bash
+git worktree list
+# Or use: /worktree:list
+```
+
+**Create new worktree:**
+```bash
+git worktree add ../pmoves-feature-branch feature-branch
+# Or use: /worktree:create
+```
+
+**Switch to worktree:**
+```bash
+cd ../pmoves-feature-branch
+# Or use: /worktree:switch
+```
+
+**Clean up stale worktrees:**
+```bash
+git worktree prune
+# Or use: /worktree:cleanup
+```
+
+**Important:** When working in a worktree, Claude Code CLI loads context from that worktree's location. Be aware of which branch you're on.
+
+### Agent Context Pattern (Universal)
+
+**For Claude Code CLI and ALL PMOVES.AI agents:**
+
+1. **Check current location first** - Always verify which repo/worktree you're in
+2. **Load appropriate context tier** - Don't auto-load all submodule contexts
+3. **Respect context boundaries** - Nested submodule contexts are opt-in, not default
+4. **Use service APIs, don't rebuild** - Leverage existing production services
+5. **Check service health before use** - Verify `/healthz` endpoints
+6. **Publish events to NATS** - Use event-driven coordination patterns
+
+### Context Conflict Resolution
+
+**Precedence Hierarchy:**
+1. Main repo context > submodule contexts
+2. Higher-level contexts > nested contexts
+3. Recent contexts > legacy contexts
+
+**When conflicts occur:**
+- Main PMOVES.AI patterns take precedence
+- Document exceptions in submodule-specific CLAUDE.md
+- Use NATS for cross-module coordination, not duplicated logic
+
+### Avoiding Context Loops
+
+**Problem:** Nested submodules can create circular context loading (Archon → BoTZ → skills → back to Archon patterns)
+
+**Solution:**
+- Each agent loads only its direct tier
+- Use MCP APIs for cross-agent communication, not shared context
+- Reference integration docs (e.g., `pmoves/docs/ARCHON_INTEGRATION.md`) instead of duplicating
+
+**See full audit:** `pmoves/docs/CLAUDE_CONTEXT_AUDIT.md`
+
 ## Meta-Instruction for Claude Code CLI
 
 When developing features for PMOVES.AI:
@@ -431,5 +518,6 @@ When developing features for PMOVES.AI:
 4. **Check health first** - Always verify service status before use
 5. **Consult context docs** - Reference `.claude/context/` for details
 6. **Test before PR** - Run `/test:pr` and document results
+7. **Respect context tiers** - Load only appropriate context level for your task
 
 PMOVES.AI is a sophisticated production system. Your role is to build features that integrate with this ecosystem, not replace it.
