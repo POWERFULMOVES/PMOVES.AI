@@ -79,4 +79,10 @@ if [ -z "${MINIO_ROOT_PASSWORD:-}" ] && [ -n "${MINIO_SECRET_KEY:-}" ]; then
   export MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY"
 fi
 
+# Supabase back-compat: map SUPABASE_SERVICE_ROLE_KEY to SUPABASE_SERVICE_KEY
+# Some services reference the old SUPABASE_SERVICE_KEY variable name
+if [ -z "${SUPABASE_SERVICE_KEY:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+  export SUPABASE_SERVICE_KEY="$SUPABASE_SERVICE_ROLE_KEY"
+fi
+
 export PMOVES_ENV_LOADER=1

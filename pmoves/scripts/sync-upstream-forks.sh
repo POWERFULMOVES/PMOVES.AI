@@ -36,6 +36,9 @@ declare -A FORKS=(
     ["PMOVES-Wealth"]="firefly-iii/firefly-iii"
     ["PMOVES-AgentGym"]="WooooDyy/AgentGym"
     ["PMOVES-Open-Notebook"]="lfnovo/open-notebook"
+    ["PMOVES.YT"]="yt-dlp/yt-dlp"
+    ["PMOVES-Archon"]="coleam00/Archon"
+    ["PMOVES-Agent-Zero"]="agent0ai/agent-zero"
 )
 
 # Logging functions
