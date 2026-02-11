@@ -1,127 +1,102 @@
-# Root ignores
-# Python virtual environments
-.venv/
-venv/
-.venv_*/
-**/.venv_*/
-# legacy local venvs under POWERFULMOVES (windows)
-POWERFULMOVES/.venv_pmoves_yt/
-POWERFULMOVES/.venv_yt/
-# Python cache and compiled files
+# PMOVES.AI gitignore
+
+# =============================================================================
+# Environment & Secrets (NEVER COMMIT)
+# =============================================================================
+.env
+.env.*
+!.env.example
+!.env.shared
+!.env.shared.sh
+!.env.template
+!.env.tier-*
+secrets/
+*.pem
+*.key
+!*.key.example
+
+# =============================================================================
+# CHIT Geometry Packets
+# =============================================================================
+pmoves/data/chit/env.cgp.json
+
+# =============================================================================
+# Temporary check directories (moved to /tmp/pmoves-check-backup-*)
+# =============================================================================
+PMOVES-BoTZ-check/
+PMOVES-DoX-check/
+PMOVES-HiRAG-check/
+
+# =============================================================================
+# Python
+# =============================================================================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 .pytest_cache/
-# OS/editor noise
-.DS_Store
-Thumbs.db
+.coverage
+htmlcov/
+
+# =============================================================================
+# Node.js
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# =============================================================================
+# IDE
+# =============================================================================
 .idea/
 .vscode/
-# Windows alternate stream metadata
-*:[Zz]one.Identifier
-# Logs
+*.swp
+*.swo
+*~
+.DS_Store
+
+# =============================================================================
+# Logs & Databases
+# =============================================================================
 *.log
-/pmoves/data/agent-zero/logs/
-/pmoves/data/consciousness/
-# Local data caches (safety)
+*.db
+*.sqlite
+*.sqlite3
+pmoves/data/agent-zero/memory/
+pmoves/data/open-notebook/surreal_data/
+
+# =============================================================================
+# Docker
+# =============================================================================
+.dockerignore
+.docker/
+
+# =============================================================================
+# Temporary Files
+# =============================================================================
+tmp/
+temp/
 *.tmp
 *.temp
-.docker-nocreds/
-.docker-config/
-integrations-workspace/
-testkeys.md
-.tmp_*
-.pmoves_voice_speaker.log
-.pmoves_voice_speaker.pid
-.pmoves_voice_follow.log
-.pmoves_voice_follow.pid
-.pmoves_voice_follow_smoke.log
-.pmoves_voice_follow_smoke.pid
-tmp/*.wav
-tmp/*.mp3
-/.cache/
-# dotenv: keep local env files out of the repo
-# Tracked examples like pmoves/.env.example should remain in the repo
-/pmoves/.env
-/pmoves/.env.local
-/pmoves/.env.shared
-/pmoves/.env.testkeys
-# Tier environment files (containing actual keys - gitignored)
-/pmoves/env.tier-*
-# CHIT CGP files (may contain cleartext secrets)
-/pmoves/pmoves/data/chit/*.json
-/pmoves/data/chit/*.cgp
-# But keep example files tracked
-!/pmoves/env.tier-*.example
-/pmoves/.env.precleanup-*
-/pmoves/.env.*.bak
-/pmoves/.env copy
-/pmoves/.supabase.env
-/pmoves/env.jellyfin-ai
-/pmoves/jellyfin-ai/
-# Root env files
-/.env
-/.env.local
-/.env.testkeys
-# Tooling binaries
-/actionlint
 
-# Backup files (may contain credentials)
-*.backup*
-*-backup-*
-*.bak
-
-# WSL artifacts
-.wsl/
-# Next.js UI build artifacts
-/pmoves/ui/.next
-/pmoves/ui/node_modules
-/pmoves/ui/out
-# Local exports: keep operator-only dumps out of the repo
-/pmoves/docs/coolify/
-# Large local voice/assets (do not commit model weights)
-/pmoves/docs/ARTSTUFF/lora/
-# Generated repo indexing artifacts
-/pmoves/datasets/repo_docs.jsonl
-.clinerules/byterover-rules.md
-.kilocode/rules/byterover-rules.md
-.roo/rules/byterover-rules.md
-.windsurf/rules/byterover-rules.md
-.cursor/rules/byterover-rules.mdc
-.kiro/steering/byterover-rules.md
-.qoder/rules/byterover-rules.md
-.augment/rules/byterover-rules.md
-# JavaScript workspaces
-node_modules/
-pmoves/ui/.next/
-pmoves/ui/out/
-# Playwright caches & temp artifacts
-playwright-browsers/
-playwright-deps/
-pmoves/ui/test-results/
-*.deb
-temp*.mp4
-/data/
-# PMOVES UI dev artifacts
-pmoves/ui/.pmoves_ui_dev.pid
-pmoves/ui/.pmoves_ui_dev.log
-docs/notes.md
-notes.md
-
-# Claude Code user-specific settings
-.claude/settings.json
-.claude/settings.local.json
-
-# External AI tool configs (full directories)
-.kilocode/
-
-# Temporary PR body templates
-pmoves/PR_BODY_*.md
-
-# Research notes (local only)
-/research/
-
-# Vendor unpacked packages (install via requirements.txt instead)
-pmoves/vendor/python/
-.github/runners/
+# Python bytecode
+**/__pycache__/
+*.pyc
