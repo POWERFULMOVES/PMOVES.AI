@@ -261,6 +261,46 @@ class ChannelMonitor:
                     ON pmoves.channel_monitoring(processing_status);
                 CREATE INDEX IF NOT EXISTS idx_channel_monitoring_channel
                     ON pmoves.channel_monitoring(channel_id, discovered_at DESC);
+
+                -- Dynamic user sources for OAuth-based channel monitoring
+                CREATE TABLE IF NOT EXISTS pmoves.user_sources (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id UUID NOT NULL,
+                    provider TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_identifier TEXT,
+                    source_url TEXT,
+                    namespace TEXT DEFAULT 'pmoves',
+                    tags TEXT[],
+                    status TEXT DEFAULT 'active',
+                    auto_process BOOLEAN DEFAULT true,
+                    check_interval_minutes INTEGER DEFAULT 60,
+                    filters JSONB DEFAULT '{}',
+                    yt_options JSONB DEFAULT '{}',
+                    token_id UUID,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    last_check_at TIMESTAMPTZ,
+                    last_ingest_at TIMESTAMPTZ
+                );
+
+                -- OAuth tokens for user sources
+                CREATE TABLE IF NOT EXISTS pmoves.user_tokens (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id UUID NOT NULL,
+                    provider TEXT NOT NULL,
+                    token TEXT NOT NULL,
+                    refresh_token TEXT,
+                    expires_at TIMESTAMPTZ,
+                    scopes TEXT[],
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_user_sources_status
+                    ON pmoves.user_sources(status);
+                CREATE INDEX IF NOT EXISTS idx_user_sources_provider
+                    ON pmoves.user_sources(provider);
                 """
             )
 
