@@ -1,19 +1,34 @@
 # GHCR Login Failure - Root Cause & Fix
 
-**Date:** 2026-02-09 03:20 UTC
-**Status:** 🔴 **BLOCKING** - GHCR login failing
-**Workflow Run:** #21811059081
+**Date:** 2026-02-09 03:57 UTC
+**Status:** 🔴 **BLOCKING** - GHCR login failing even with GH_PAT_PUBLISH
+**Workflow Run:** #21811783792
+**Latest Test Run:** https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/21811783792
 
 ---
 
 ## Problem
 
-The GHCR workflow is failing at the "Log in to GHCR" step.
+The GHCR workflow is failing at the "Log in to GHCR" step with error:
+```
+Error response from daemon: Get "https://ghcr.io/v2/": denied: denied
+```
 
-**Root Cause:** The `GH_PAT_PUBLISH` secret is either:
-1. Not set in the repository
-2. Set but lacks `write:packages` scope
-3. Has expired or invalid token
+**Test Run Results (2026-02-09 03:57 UTC):**
+- ❌ All 10 integration jobs failed at GHCR login
+- ❌ agent-zero, archon, archon-ui, deepresearch, firefly-iii, jellyfin, open-notebook, pmoves-yt, supaserch, wger
+
+**Root Cause Analysis (Updated 2026-02-09 04:16 UTC):**
+
+The `GH_PAT_PUBLISH` secret is one of the following:
+1. **Token owner mismatch** - The PAT token was created by a different user than `GHCR_USERNAME` secret
+2. **Set but lacks `write:packages` scope** - Token doesn't have package write permissions
+3. **Organization permissions** - Token user doesn't have write access to POWERFULMOVES org packages
+4. **Expired or invalid token**
+
+**CRITICAL**: The token owner MUST match the `GHCR_USERNAME` secret value, OR the token must have explicit organization package write permissions.
+
+**Workflow uses self-hosted runner** (`runs-on: [self-hosted, vps]`), so the GITHUB_TOKEN fallback won't work for GHCR.
 
 ---
 
