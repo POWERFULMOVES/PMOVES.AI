@@ -25,6 +25,7 @@ PMOVES-MAI-UI
 PMOVES-n8n
 PMOVES-Open-Notebook
 PMOVES-Pinokio-Ultimate-TTS-Studio
+PMOVES-Pinokio-Ultimate-TTS-Studio
 PMOVES-Pipecat
 PMOVES-Remote-View
 PMOVES-surf
