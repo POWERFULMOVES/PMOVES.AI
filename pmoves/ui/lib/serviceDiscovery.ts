@@ -137,7 +137,7 @@ function clearCache(slug?: string): void {
  * @param config - Service configuration
  * @returns URL from environment or null
  */
-export function getUrlFromEnv(config: ServiceConfig): string | null {
+function getUrlFromEnv(config: ServiceConfig): string | null {
   if (typeof window === 'undefined') {
     // Server-side: check process.env
     const patterns = [
@@ -149,7 +149,7 @@ export function getUrlFromEnv(config: ServiceConfig): string | null {
 
     for (const pattern of patterns) {
       if (pattern && process.env[pattern]) {
-        return process.env[pattern];
+        return process.env[pattern] ?? null;
       }
     }
   } else {
@@ -165,7 +165,7 @@ export function getUrlFromEnv(config: ServiceConfig): string | null {
       // @ts-expect-error - dynamic env access
       if (pattern && import.meta.env[pattern]) {
         // @ts-expect-error - dynamic env access
-        return import.meta.env[pattern];
+        return import.meta.env[pattern] ?? null;
       }
     }
   }
@@ -207,7 +207,7 @@ async function fetchFromSupabase(
       .select('*')
       .eq('slug', slug)
       .eq('active', true)
-      .maybe_single();
+      .maybeSingle();
 
     if (error || !data) {
       return null;
@@ -269,7 +269,7 @@ async function fetchFromSupabase(
  * });
  * ```
  */
-export async function getServiceUrl(
+async function getServiceUrl(
   config: ServiceConfig,
   options?: ServiceDiscoveryOptions
 ): Promise<string> {
@@ -341,7 +341,7 @@ export async function getServiceUrl(
  * }
  * ```
  */
-export async function getServiceInfo(
+async function getServiceInfo(
   slug: string,
   options?: ServiceDiscoveryOptions
 ): Promise<ServiceInfo | null> {
@@ -368,21 +368,21 @@ export async function getServiceInfo(
  * console.log(`Found ${agentServices.length} agent services`);
  * ```
  */
-export async function getServicesByTier(
+async function getServicesByTier(
   tier: ServiceTier,
   options?: ServiceDiscoveryOptions
 ): Promise<ServiceInfo[]> {
   const supabaseUrl =
     options?.supabaseUrl ||
-    (typeof process !== 'undefined'
+    (typeof process !== 'undefined' && process.env
       ? process.env.NEXT_PUBLIC_SUPABASE_URL
-      : import.meta.env?.NEXT_PUBLIC_SUPABASE_URL);
+      : '');
 
   const supabaseAnonKey =
     options?.supabaseAnonKey ||
-    (typeof process !== 'undefined'
+    (typeof process !== 'undefined' && process.env
       ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      : import.meta.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+      : '');
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return [];
@@ -439,7 +439,7 @@ export async function getServicesByTier(
  * }
  * ```
  */
-export async function checkServiceHealth(
+async function checkServiceHealth(
   config: ServiceConfig,
   options?: ServiceDiscoveryOptions
 ): Promise<boolean> {
@@ -484,7 +484,7 @@ export async function checkServiceHealth(
  * clearServiceCache();
  * ```
  */
-export function clearServiceCache(slug?: string): void {
+function clearServiceCache(slug?: string): void {
   clearCache(slug);
 }
 
@@ -509,7 +509,7 @@ export function clearServiceCache(slug?: string): void {
  * console.log(urls.get('hirag-v2')); // "http://hi-rag-gateway-v2:8086"
  * ```
  */
-export async function resolveMultipleServiceUrls(
+async function resolveMultipleServiceUrls(
   configs: ServiceConfig[],
   options?: ServiceDiscoveryOptions
 ): Promise<Map<string, string>> {
@@ -541,7 +541,7 @@ export async function resolveMultipleServiceUrls(
  * const url = await getHiragUrl();
  * ```
  */
-export function createServiceUrlResolver(
+function createServiceUrlResolver(
   config: ServiceConfig,
   options?: ServiceDiscoveryOptions
 ): () => Promise<string> {
@@ -563,11 +563,5 @@ export {
 
   // Utility functions
   clearServiceCache,
-  getUrlFromEnv,
-
-  // Types
-  type ServiceConfig,
-  type ServiceInfo,
-  type ServiceDiscoveryOptions,
-  type ServiceTier,
+  // getUrlFromEnv is exported directly above
 };
