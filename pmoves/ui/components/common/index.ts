@@ -8,3 +8,7 @@ export type { AlertBannerProps } from "./AlertBanner";
 
 export { ConfirmDialog } from "./ConfirmDialog";
 export type { ConfirmDialogProps } from "./ConfirmDialog";
+
+// Dashboard layout components - exported from DashboardNavigation.tsx
+export { DashboardShell } from "../DashboardNavigation";
+export { DashboardHeader } from "../DashboardNavigation";
