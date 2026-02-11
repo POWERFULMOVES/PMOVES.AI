@@ -28,8 +28,9 @@ services:
       pmoves_app:
         aliases:
           - pmoves-wger-nginx
+    # Port changed from 8000 to 8010 to avoid conflict with TensorZero UI
     ports:
-      - "${WGER_HOST_PORT:-8000}:80"
+      - "${WGER_HOST_PORT:-8010}:80"
     volumes:
       - wger-static:/wger/static:ro
       - wger-media:/wger/media:ro
@@ -64,6 +65,7 @@ services:
     # pre-creating the data directory with correct ownership if
     # running as non-root is required for your security policy.
     user: "0:0"
+    command: ["start", "--log=debug", "--user", "root", "--pass", "root"]
     networks:
       pmoves_app:
         aliases:
