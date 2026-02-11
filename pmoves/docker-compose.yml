@@ -1363,6 +1363,26 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+
+  # ============================================================================
+  # NATS Message Bus
+  # ============================================================================
+  # NATS provides event-driven communication for all PMOVES.AI services.
+  #
+  # Standard Configuration:
+  #   - Client URL: nats://nats:pmoves@nats:4222 (with auth)
+  #   - Monitoring: http://nats:8222/varz
+  #   - WebSocket: ws://nats:9223 (external for UI connections)
+  #
+  # Environment Variable:
+  #   - NATS_URL is defined in env.shared as the default
+  #   - Tier-specific env files may override for specialized use
+  #
+  # Documentation: See pmoves/docs/NATS_CONFIGURATION.md for:
+  #   - Integration patterns (publishers, subscribers, WebSocket)
+  #   - Common subjects (research, ingestion, geometry)
+  #   - Debugging and troubleshooting
+  # ============================================================================
   nats:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
