@@ -54,10 +54,11 @@ HIRAG_GPU_PORT := $(if $(HIRAG_V2_GPU_HOST_PORT),$(HIRAG_V2_GPU_HOST_PORT),8087)
 
 # -------- Docker Compose Configuration ----------
 # Default Docker Compose command and project name for production
-DC ?= docker compose
+# DC includes environment loading via with-env.sh
+DC ?= bash -c '. ./scripts/with-env.sh && exec docker compose -p $(PROJECT) --project-directory $(CURDIR) $(STACK_FILES)'
 PROJECT ?= pmoves
-export DC
 export PROJECT
+# Don't export DC - it's expanded differently in each target
 
 # -------- Service Discovery Helper ----------
 # Resolve service URL using PMOVES service discovery (hybrid support)
@@ -126,7 +127,7 @@ up-bots: ## Start bot services (BotZ + messaging gateway)
 .PHONY: up-obs
 up-obs: ## Start observability stack FIRST (Prometheus, Grafana, Loki, Promtail, cAdvisor)
 	@echo "📊 Starting observability stack (monitoring FIRST)..."
-	@$(LOAD_ENV_SHARED); docker compose -p monitoring -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR) up -d
+	@$(LOAD_ENV_SHARED); docker compose -p monitoring -f $(CURDIR)/monitoring/docker-compose.monitoring.yml --project-directory $(CURDIR)/monitoring up -d
 	@echo "⏳ Waiting for observability to be ready..."
 	@timeout 60 bash -c 'until curl -sf http://localhost:9090/-/ready; do sleep 2; done' || echo "⚠️ Prometheus not ready (may still be starting)"
 	@timeout 60 bash -c 'until curl -sf http://localhost:3002/api/health; do sleep 2; done' || echo "⚠️ Grafana not ready (may still be starting)"
@@ -141,124 +142,127 @@ check-tools: ## Check required tools and versions
 	@missing=""; \
 	if ! command -v docker >/dev/null 2>&1; then missing="$$missing docker"; fi; \
 	if ! command -v docker compose >/dev/null 2>&1; then missing="$$missing docker-compose"; fi; \
-	if ! command -v supabase >/dev/null 2>&1; then missing="$$missing supabase"; fi; \
 	if ! command -v python3 >/dev/null 2>&1; then missing="$$missing python3"; fi; \
 	if [ -n "$$missing" ]; then \
 		echo "❌ Missing required tools:$$missing"; \
 		echo "   Install with:"; \
 		case "$$missing" in *docker*) echo "   - Docker: https://docs.docker.com/get-docker/";; esac; \
-		case "$$missing" in *supabase*) echo "   - Supabase CLI: npm install -g supabase";; esac; \
 		exit 1; \
 	fi
 	@echo "✅ All required tools found"
-	@supa_version=$$(supabase --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1); \
-	latest=$$(curl -s https://pypi.org/pypi/supabase/json | python3 -c "import sys, json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || echo "unknown"); \
-	if [ "$$supa_version" != "$$latest" ] && [ "$$latest" != "unknown" ]; then \
-		echo "⚠️  Supabase CLI update available: $$supa_version → $$latest"; \
-		echo "   Update with: npm update -g supabase"; \
+	@if command -v supabase >/dev/null 2>&1; then \
+		supa_version=$$(supabase --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1); \
+		echo "✅ Supabase CLI version: $$supa_version (optional, not needed for submodule)"; \
 	else \
-		echo "✅ Supabase CLI version: $$supa_version"; \
+		echo "⚠️  Supabase CLI not found (optional for local development, not needed for submodule)"; \
+		echo "   Install with: npm install -g supabase"; \
 	fi
 
+# PMOVES-Supabase submodule path (relative to pmoves directory)
+SUPABASE_SUBMODULE := ../PMOVES-supabase/docker
+SUPABASE_COMPOSE := docker compose
+
 .PHONY: up-supabase
-up-supabase: ## Start Supabase stack (integrated in docker-compose - 2025)
-	@echo "🗄️ Starting Supabase (2025 integrated stack)..."
-	@$(DC) up -d supabase-db
-	@echo "⏳ Waiting for Supabase DB..."
-	@timeout 60 bash -c 'until docker exec pmoves-supabase-db-1 pg_isready -U $${POSTGRES_USER:-pmoves} -d $${POSTGRES_DB:-pmoves} 2>/dev/null; do sleep 2; done' || \
-		{ echo "⚠️  Supabase DB not ready after timeout"; exit 1; }
-	@echo "🔧 Bootstrapping Kong migrations..."
-	@$(LOAD_ENV_SHARED); docker run --rm --network pmoves_data \
-		-e KONG_DATABASE=postgres \
-		-e KONG_PG_HOST=supabase-db \
-		-e KONG_PG_DATABASE=postgres \
-		-e KONG_PG_USER=$${SUPABASE_DB_USER:-pmoves} \
-		-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-pmoves} \
-		kong:3.7.1 kong migrations bootstrap --yes 2>/dev/null || \
-		echo "⚠️  Kong migrations may already exist"
-	@echo "⏳ Starting remaining Supabase services..."
-	@$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio
-	@echo "⏳ Waiting for Supabase services to be healthy..."
-	@sleep 10
-	@echo "✅ Supabase ready"
-	@echo "   Studio:       http://localhost:54323"
-	@echo "   Kong Gateway: http://localhost:8000"
-	@echo "   PostgREST:    http://localhost:3010"
-	@echo "   Gotrue Auth:  http://localhost:9999"
-	@echo "   Direct DB:    localhost:54322"
+up-supabase: ## Start PMOVES-Supabase submodule stack (skip if EXTERNAL_SUPABASE=true)
+	@if [ "$(EXTERNAL_SUPABASE)" = "true" ]; then \
+		echo "⊘ EXTERNAL_SUPABASE=true - skipping PMOVES-Supabase submodule (using main stack services)"; \
+	else \
+		echo "🗄️ Starting PMOVES-Supabase submodule..."; \
+		if [ ! -d "$(SUPABASE_SUBMODULE)" ]; then \
+			echo "❌ PMOVES-Supabase submodule not found at $(SUPABASE_SUBMODULE)"; \
+			echo "   Run: git submodule update --init --recursive PMOVES-supabase"; \
+			exit 1; \
+		fi; \
+		cd $(SUPABASE_SUBMODULE) && \
+		if [ ! -f .env ]; then \
+			echo "📝 Creating .env from example..."; \
+			cp .env.example .env; \
+			echo "⚠️  Review and update .env with production values"; \
+			echo "   See: pmoves/env.supabase for reference"; \
+		fi; \
+		echo "⏳ Starting Supabase services..."; \
+		cd $(SUPABASE_SUBMODULE) && $(SUPABASE_COMPOSE) up -d; \
+		echo "⏳ Waiting for Supabase DB..."; \
+		timeout 60 bash -c 'until docker exec supabase-db pg_isready -U postgres >/dev/null 2>&1; do sleep 2; done' || \
+			{ echo "⚠️  Supabase DB not ready after timeout"; exit 1; }; \
+		echo "⏳ Waiting for Kong Gateway..."; \
+		timeout 30 bash -c 'until curl -sf http://localhost:8000/ >/dev/null 2>&1; do sleep 2; done' || \
+			{ echo "⚠️  Kong Gateway not ready after timeout"; exit 1; }; \
+		echo "✅ PMOVES-Supabase ready"; \
+		echo "   Studio:       http://localhost:3000"; \
+		echo "   Kong Gateway: http://localhost:8000"; \
+		echo "   Auth:         (via Kong: /auth/v1/)"; \
+		echo "   PostgREST:    (via Kong: /rest/v1/)"; \
+		echo "   Direct DB:    localhost:5432"; \
+	fi
 
 .PHONY: supa-start supa-stop supa-status supa-logs supa-health supa-restart supa-migrate
-supa-start: check-tools ## Alias for up-supabase (start integrated Supabase)
+supa-start: check-tools ## Alias for up-supabase (start PMOVES-Supabase submodule)
 	@$(MAKE) --no-print-directory up-supabase
 
-supa-stop: ## Stop integrated Supabase services
-	@echo "🗄️ Stopping Supabase..."
-	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true
-	@echo "✅ Supabase stopped"
+supa-stop: ## Stop PMOVES-Supabase submodule services
+	@echo "🗄️ Stopping PMOVES-Supabase..."
+	@if [ -d "$(SUPABASE_SUBMODULE)" ]; then \
+		cd $(SUPABASE_SUBMODULE) && $(SUPABASE_COMPOSE) down; \
+	else \
+		echo "⚠️  PMOVES-Supabase submodule not found"; \
+	fi
+	@echo "✅ PMOVES-Supabase stopped"
 
-supa-restart: ## Restart integrated Supabase services
-	@echo "🔄 Restarting Supabase..."
+supa-restart: ## Restart PMOVES-Supabase submodule services
+	@echo "🔄 Restarting PMOVES-Supabase..."
 	@$(MAKE) --no-print-directory supa-stop
 	@sleep 2
 	@$(MAKE) --no-print-directory supa-start
 
-supa-status: ## Check integrated Supabase service status
-	@echo "🔍 Supabase service status:"
+supa-status: ## Check PMOVES-Supabase submodule service status
+	@echo "🔍 PMOVES-Supabase service status:"
 	@echo ""
-	@$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || \
-		echo "   Supabase services not running"
+	@if [ -d "$(SUPABASE_SUBMODULE)" ]; then \
+		cd $(SUPABASE_SUBMODULE) && $(SUPABASE_COMPOSE) ps; \
+	else \
+		echo "   PMOVES-Supabase submodule not found"; \
+	fi
 	@echo ""
 	@echo "📊 Health endpoints:"
-	@echo "   PostgREST:    curl -s http://localhost:3000/ && echo OK"
-	@echo "   Gotrue:       curl -s http://localhost:9999/health && echo OK"
-	@echo "   Kong:         curl -s http://localhost:8001/health && echo OK"
-	@echo "   Studio:       curl -s http://localhost:54323/api/profile && echo OK"
+	@echo "   Studio:       curl -s http://localhost:3000/api/platform/profile && echo OK"
+	@echo "   Kong Gateway:  curl -s http://localhost:8000/ && echo OK"
+	@echo "   Auth:         curl -s http://localhost:8000/auth/v1/ && echo OK"
+	@echo "   PostgREST:    curl -s http://localhost:8000/rest/v1/ && echo OK"
 
-supa-logs: ## View Supabase service logs
-	@$(DC) logs -f --tail=100 supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || \
-		echo "No logs available - services not running"
+supa-logs: ## View PMOVES-Supabase submodule service logs
+	@if [ -d "$(SUPABASE_SUBMODULE)" ]; then \
+		cd $(SUPABASE_SUBMODULE) && $(SUPABASE_COMPOSE) logs -f --tail=100; \
+	else \
+		echo "No logs available - submodule not found"; \
+	fi
 
-supa-health: ## Check all Supabase service health endpoints
-	@echo "🏥 Supabase health check:"
+supa-health: ## Check all PMOVES-Supabase service health endpoints
+	@echo "🏥 PMOVES-Supabase health check:"
 	@echo ""
 	@if docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
-		if docker exec pmoves-supabase-db-1 pg_isready -U postgres -d postgres >/dev/null 2>&1; then \
-			echo "   ✅ Database (postgres)"; \
+		if docker exec supabase-db pg_isready -U postgres >/dev/null 2>&1; then \
+			echo "   ✅ Database (supabase-db)"; \
 		else \
-			echo "   ❌ Database (postgres) - not ready"; \
+			echo "   ❌ Database (supabase-db) - not ready"; \
 		fi; \
 	else \
-		echo "   ⚠️  Database (postgres) - not running"; \
+		echo "   ⚠️  Database (supabase-db) - not running"; \
 	fi
-	@if curl -s http://localhost:3000/ >/dev/null 2>&1; then \
-		echo "   ✅ PostgREST API"; \
-	else \
-		echo "   ❌ PostgREST API - not responding"; \
-	fi
-	@if curl -s http://localhost:9999/health >/dev/null 2>&1; then \
-		echo "   ✅ Gotrue Auth"; \
-	else \
-		echo "   ❌ Gotrue Auth - not responding"; \
-	fi
-	@if curl -s http://localhost:8001/health >/dev/null 2>&1; then \
+	@if curl -s http://localhost:8000/ >/dev/null 2>&1; then \
 		echo "   ✅ Kong Gateway"; \
 	else \
 		echo "   ❌ Kong Gateway - not responding"; \
 	fi
-	@if curl -s http://localhost:4000/health >/dev/null 2>&1; then \
-		echo "   ✅ Realtime"; \
-	else \
-		echo "   ⚠️  Realtime - not responding (optional)"; \
-	fi
-	@if curl -s http://localhost:5000/status >/dev/null 2>&1; then \
-		echo "   ✅ Storage API"; \
-	else \
-		echo "   ⚠️  Storage API - not responding (optional)"; \
-	fi
-	@if curl -s http://localhost:54323/api/profile >/dev/null 2>&1; then \
+	@if curl -s http://localhost:3000/api/platform/profile >/dev/null 2>&1; then \
 		echo "   ✅ Studio UI"; \
 	else \
-		echo "   ⚠️  Studio UI - not responding (optional)"; \
+		echo "   ⚠️  Studio UI - not responding"; \
+	fi
+	@if curl -s http://localhost:4000/health >/dev/null 2>&1; then \
+		echo "   ✅ Analytics (Logflare)"; \
+	else \
+		echo "   ⚠️  Analytics - not responding"; \
 	fi
 
 supa-migrate: ## Apply Supabase migrations from supabase/migrations directory
@@ -275,14 +279,14 @@ supa-migrate: ## Apply Supabase migrations from supabase/migrations directory
 	@for migration in supabase/migrations/*.sql; do \
 		if [ -f "$$migration" ]; then \
 			echo "   Applying: $$(basename $$migration)"; \
-			docker exec -i pmoves-supabase-db-1 psql -U postgres -d postgres < "$$migration" || \
+			docker exec -i supabase-db psql -U postgres -d postgres < "$$migration" || \
 				echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
 		fi; \
 	done
 	@echo "✅ Migrations complete"
 
 .PHONY: supabase-bootstrap
-supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
+supabase-bootstrap: ## Apply Supabase migrations + seeds (PMOVES-Supabase submodule)
 	@echo "🗄️ Applying Supabase schema + seeds..."
 	@if ! docker ps --format '{{.Names}}' | grep -q 'supabase-db'; then \
 		echo "⚠️  Supabase not running. Starting..."; \
@@ -294,7 +298,7 @@ supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
 		for migration in supabase/migrations/*.sql; do \
 			if [ -f "$$migration" ]; then \
 				echo "   Applying: $$(basename $$migration)"; \
-				docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves < "$$migration" || \
+				docker exec -i supabase-db psql -U postgres -d postgres < "$$migration" || \
 					echo "   ⚠️  Migration failed: $$(basename $$migration)"; \
 			fi; \
 		done; \
@@ -306,7 +310,7 @@ supabase-bootstrap: ## Apply Supabase migrations + seeds (2025 integrated stack)
 		for seed in supabase/initdb/*.sql; do \
 			if [ -f "$$seed" ]; then \
 				echo "   Seeding: $$(basename $$seed)"; \
-				docker exec -i pmoves-supabase-db-1 psql -h localhost -U pmoves -d pmoves < "$$seed" || \
+				docker exec -i supabase-db psql -U postgres -d postgres < "$$seed" || \
 					echo "   ⚠️  Seed failed: $$(basename $$seed)"; \
 			fi; \
 		done; \
@@ -646,9 +650,13 @@ down-ui: ## Stop PMOVES UI
 	@$(DC) --profile ui down pmoves-ui
 
 .PHONY: down-supabase
-down-supabase: ## Stop Supabase
-	@echo "🗄️ Stopping Supabase..."
-	@cd .. && supabase stop
+down-supabase: ## Stop PMOVES-Supabase submodule
+	@echo "🗄️ Stopping PMOVES-Supabase..."
+	@if [ -d "$(SUPABASE_SUBMODULE)" ]; then \
+		cd $(SUPABASE_SUBMODULE) && $(SUPABASE_COMPOSE) down; \
+	else \
+		echo "⚠️  PMOVES-Supabase submodule not found"; \
+	fi
 
 # =============================================================================
 # STATUS & HEALTH TARGETS
@@ -1084,7 +1092,17 @@ STACK_FILES ?= \
 	-f docker-compose.archon-ui.submodule.yml \
 	-f monitoring/docker-compose.monitoring.yml
 
-DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --project-directory $(CURDIR) $(STACK_FILES)
+# Docker Compose with environment loaded. Use $(DC) in recipes.
+# The environment is sourced via shell function at recipe execution time.
+DOCKER_COMPOSE := docker compose
+DC_BASE := -p $(PROJECT) --project-directory $(CURDIR) $(STACK_FILES)
+
+# Function to run docker compose with environment loaded
+# Usage: $(call run-dc,additional-args)
+run-dc = @bash -c '$(LOAD_ENV_SHARED) && docker compose $(DC_BASE) $(1)'
+
+# Alias for backwards compatibility - set DC to use the wrapper
+DC_CMD = bash -c '$(LOAD_ENV_SHARED) && docker compose $(DC_BASE)'
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
