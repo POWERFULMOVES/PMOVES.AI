@@ -1268,13 +1268,16 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         except Exception:
             pass
         must = [FieldCondition(key="namespace", match=MatchValue(value=req.namespace))]
-        hits = qdrant.search(
+        # Use query_points() API for qdrant-client >= 1.12.0
+        # query_points accepts list[float] directly for vector search
+        result = qdrant.query_points(
             collection_name=COLL,
-            query_vector=vec,
+            query=vec,
             limit=max(req.k, RERANK_TOPN),
             query_filter=Filter(must=must),
             with_payload=True,
         )
+        hits = result.points
         logger.warning("hirag.query hits=%d namespace=%s ip=%s", len(hits), req.namespace, client_ip)
     except Exception as e:
         logger.exception("Qdrant search error")
