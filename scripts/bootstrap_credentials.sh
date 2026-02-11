@@ -99,14 +99,41 @@ find_parent_pmoves() {
         parent_dir="$(cd "$current_dir/.." && pwd)"
     fi
 
-    # Check if parent looks like PMOVES.AI
-    if [ -f "$parent_dir/pmoves/env.shared" ] || [ -f "$parent_dir/pmoves/.env" ]; then
+    # Check if parent looks like PMOVES.AI (multiple patterns)
+    # Pattern 1: Has tier files (env.tier-llm, env.tier-data, etc.) - ROOT PMOVES.AI
+    local has_tier_files=0
+    for tier_file in "$parent_dir"/env.tier-*; do
+        if [ -f "$tier_file" ]; then
+            has_tier_files=1
+            break
+        fi
+    done
+
+    if [ $has_tier_files -eq 1 ]; then
+        echo "$parent_dir"
+        return 0
+    fi
+
+    # Pattern 2: Has pmoves/env.shared (submodule structure)
+    if [ -f "$parent_dir/pmoves/env.shared" ]; then
+        echo "$parent_dir"
+        return 0
+    fi
+
+    # Pattern 3: Has .env file
+    if [ -f "$parent_dir/pmoves/.env" ]; then
         echo "$parent_dir"
         return 0
     fi
 
     # Try going up another level (for nested structures)
     local grandparent="$(dirname "$parent_dir")"
+    for tier_file in "$grandparent"/env.tier-*; do
+        if [ -f "$tier_file" ]; then
+            echo "$grandparent"
+            return 0
+        fi
+    done
     if [ -f "$grandparent/pmoves/env.shared" ] || [ -f "$grandparent/pmoves/.env" ]; then
         echo "$grandparent"
         return 0
@@ -127,7 +154,52 @@ load_from_parent() {
 
     log_info "Loading from parent PMOVES.AI at: $parent_dir"
 
-    # Source env.shared first (has structure)
+    # NEW: Check for tier-based env files first (PMOVES.AI root structure)
+    # Root PMOVES.AI uses env.tier-llm, env.tier-data, env.tier-api, etc.
+    local tier_files=()
+    local requested_tier="${TIER:-}"
+
+    # Find all available tier files
+    for tier_file in "$parent_dir"/env.tier-*; do
+        if [ -f "$tier_file" ]; then
+            tier_files+=("$tier_file")
+        fi
+    done
+
+    # Load from tier files if they exist
+    if [ ${#tier_files[@]} -gt 0 ]; then
+        log_info "Found ${#tier_files[@]} tier file(s) at parent root"
+
+        # If TIER is specified, ONLY load that tier (security: fail explicitly if not found)
+        if [ -n "$requested_tier" ]; then
+            local tier_file="$parent_dir/env.tier-$requested_tier"
+            if [ -f "$tier_file" ]; then
+                log_info "Loading from TIER=$requested_tier ($tier_file)..."
+                grep -E '^[A-Z_]+=' "$tier_file" 2>/dev/null >> "$output_file" || true
+                log_success "Loaded tier-specific credentials from env.tier-$requested_tier"
+            else
+                # Security: Fail explicitly when requested tier is missing
+                log_error "Tier file env.tier-$requested_tier not found"
+                log_error "Available tier files:"
+                for tf in "${tier_files[@]}"; do
+                    log_error "  - $(basename "$tf")"
+                done
+                log_error "Set TIER to one of the available tiers, or unset TIER to load all tiers"
+                return 1
+            fi
+        else
+            # No tier specified, load all available tier files
+            for tf in "${tier_files[@]}"; do
+                grep -E '^[A-Z_]+=' "$tf" 2>/dev/null >> "$output_file" || true
+                log_info "  Loaded from $(basename "$tf")"
+            done
+            log_success "Loaded credentials from all tier files"
+        fi
+    else
+        log_info "No tier files found at parent root"
+    fi
+
+    # FALLBACK: Source env.shared (for submodules with pmoves/env.shared structure)
     if [ -f "$env_shared" ]; then
         log_info "Loading env.shared structure..."
         # Copy env.shared to output, filtering out:
@@ -141,20 +213,18 @@ load_from_parent() {
             grep -vE '^TEMPLATE_' | \
             grep -vE '=super-secret-jwt-token-with-at-least' | \
             grep -vE '=Replace this with actual' \
-            > "$output_file"
+            >> "$output_file" || true
         log_success "Loaded $(grep -c '^' "$output_file") variables from env.shared (placeholders filtered)"
     else
-        log_warning "env.shared not found at $env_shared"
+        log_info "env.shared not found at $env_shared (using tier files only)"
     fi
 
-    # Then source .env (has actual credential values)
+    # FALLBACK: Source .env if it exists (has actual credential values)
     if [ -f "$parent_env" ]; then
         log_info "Loading credential values from parent .env..."
         # Append actual values from parent .env
         grep -E '^[A-Z_]+=' "$parent_env" 2>/dev/null >> "$output_file" || true
         log_success "Merged parent .env credentials"
-    else
-        log_warning "Parent .env not found at $parent_env"
     fi
 
     return 0
@@ -291,7 +361,8 @@ load_from_git_crypt() {
 
     # git-crypt encrypted files start with specific bytes
     # If we can read a normal-looking line, it's decrypted
-    if [[ "$first_line" == *"#"* ]] || [[ "$first_line" == *"[A-Z_"* ]] || [[ "$first_line" == *"PMOVES"* ]]; then
+    # Use proper glob patterns to detect environment variable declarations (e.g., VAR_NAME=)
+    if [[ "$first_line" == *"#"* ]] || [[ "$first_line" =~ ^[A-Z_]+[[:space:]]*= ]] || [[ "$first_line" == *"PMOVES"* ]]; then
         # File is decrypted, load it (filtering placeholders)
         grep -E '^[A-Z_]+=' "$enc_file" 2>/dev/null | \
             grep -vE '-here$|-if-needed$|-when-needed$|-optional$' | \
@@ -533,7 +604,7 @@ main() {
     local parent_dir=""
     local source_used=""
 
-    log_info "PMOVES.AI Credential Bootstrap v4"
+    log_info "PMOVES.AI Credential Bootstrap v5"
     log_info "====================================="
 
     # Detect mode

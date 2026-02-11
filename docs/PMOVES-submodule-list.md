@@ -7,7 +7,6 @@ PMOVES-BoTZ
 PMOVES-BotZ-gateway
 PMOVES-Creator
 PMOVES-crush
-PMOVES-crush
 PMOVES-Danger-infra
 PMOVES-Deep-Serch
 PMOVES-DoX
@@ -25,9 +24,11 @@ PMOVES-MAI-UI
 PMOVES-n8n
 PMOVES-Open-Notebook
 PMOVES-Pinokio-Ultimate-TTS-Studio
+PMOVES-Pinokio-Ultimate-TTS-Studio
 PMOVES-Pipecat
 PMOVES-Remote-View
 PMOVES-surf
+PMOVES-supabase
 PMOVES-Tailscale
 PMOVES-tensorzero
 PMOVES-ToKenism-Multi

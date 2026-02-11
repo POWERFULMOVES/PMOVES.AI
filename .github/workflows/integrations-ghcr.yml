@@ -57,7 +57,8 @@ jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: ubuntu-latest  # TEMPORARY: Testing GHCR credentials
+    # TEMPORARY: ubuntu-latest for GHCR credential testing (see GHCR_LOGIN_FIX_2026-02-09.md)
+    runs-on: ubuntu-latest  # TODO: Switch back to [self-hosted, vps] after GHCR fix
     permissions:
       contents: read
       packages: write
