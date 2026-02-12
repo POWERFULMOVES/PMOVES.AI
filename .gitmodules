@@ -299,3 +299,6 @@
 	path = PMOVES-supabase
 	url = https://github.com/POWERFULMOVES/PMOVES-supabase.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "Pmoves-cipher"]
+	path = Pmoves-cipher
+	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
