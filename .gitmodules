@@ -194,11 +194,8 @@
 	path = PMOVES-Open-Notebook
 	url = https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
 	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "Pmoves-open-notebook"]
-	path = Pmoves-open-notebook
-	url = https://github.com/POWERFULMOVES/Pmoves-open-notebook.git
-	branch = PMOVES.AI-Edition-Hardened
+	# NOTE: This is a fork of lfnovo/open-notebook
+	# All PRs should go to this fork, which stays updated with upstream
 
 # =============================================================================
 # Document Processing
@@ -245,11 +242,7 @@
 	path = PMOVES-Wealth
 	url = https://github.com/POWERFULMOVES/PMOVES-Wealth.git
 	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "PMOVES-Firefly-iii"]
-	path = PMOVES-Firefly-iii
-	url = https://github.com/POWERFULMOVES/PMOVES-Firefly-iii.git
-	branch = PMOVES.AI-Edition-Hardened
+	# NOTE: Previously named PMOVES-Firefly-iii, renamed in 2026
 
 [submodule "Pmoves-Health-wger"]
 	path = Pmoves-Health-wger
