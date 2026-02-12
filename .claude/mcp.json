@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "pmoves-cipher": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/pmoves/PMOVES.AI/pmoves-cipher-mcp",
+        "run",
+        "python",
+        "-m",
+        "cipher_mcp.server"
+      ],
+      "env": {
+        "CIPHER_URL": "http://localhost:8081",
+        "PYTHONPATH": "/home/pmoves/PMOVES.AI/pmoves-cipher-mcp",
+        "NATS_URL": "nats://nats:4222"
+      }
+    }
+  }
+}
