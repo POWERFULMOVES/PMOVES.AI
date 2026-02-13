@@ -102,6 +102,7 @@ global_protection:
       - "*.key"
       - "**/secrets/**"
       - "**/.ssh/**"
+      - "**/security/patterns.yaml"
 
     # Read Only - Agent can read but not modify
     read_only:
