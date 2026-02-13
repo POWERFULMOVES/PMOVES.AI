@@ -320,3 +320,7 @@
 	path = PMOVES-supabase
 	url = https://github.com/POWERFULMOVES/PMOVES-supabase.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves-e2b-mcp-server"]
+	path = pmoves-e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+	branch = PMOVES.AI-Edition-Hardened
