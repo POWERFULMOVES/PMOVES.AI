@@ -1,7 +1,10 @@
 """
 PMOVES.AI Service Announcer for pmoves-cipher-mcp
 
-NATS service discovery for the Cipher MCP bridge.
+NATS service discovery announcer for the Cipher MCP bridge.
+This is a lightweight MCP bridge service that doesn't typically announce
+to NATS since it uses stdio transport, but the module is included
+for PMOVES.AI integration compliance.
 """
 
 import asyncio
@@ -9,14 +12,17 @@ import json
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
+# Import ServiceTier from shared types
 try:
     from pmoves_common import ServiceTier
 except ImportError:
     from enum import Enum
+
     class ServiceTier(str, Enum):
+        """PMOVES service tiers (6-tier architecture)."""
         DATA = "data"
         API = "api"
         LLM = "llm"
@@ -27,8 +33,9 @@ except ImportError:
 
 @dataclass
 class ServiceAnnouncement:
-    """Service announcement for NATS."""
-
+    """
+    Service announcement message format for NATS.
+    """
     slug: str
     name: str
     url: str
@@ -41,7 +48,7 @@ class ServiceAnnouncement:
     SUBJECT: str = "services.announce.v1"
 
     def to_json(self) -> str:
-        """Convert to JSON."""
+        """Convert to JSON for NATS publishing."""
         data = {
             "slug": self.slug,
             "name": self.name,
@@ -56,64 +63,70 @@ class ServiceAnnouncement:
 
 
 class ServiceAnnouncer:
-    """NATS service announcer."""
+    """
+    NATS service announcer for pmoves-cipher-mcp.
+
+    Note: The MCP bridge uses stdio transport and typically doesn't
+    announce to NATS. This module is provided for PMOVES.AI compliance.
+    """
 
     def __init__(
         self,
-        slug: str = "cipher-mcp",
-        name: str = "Cipher MCP Bridge",
+        slug: str = "pmoves-cipher-mcp",
+        name: str = "PMOVES Cipher MCP Bridge",
         url: str = None,
-        port: int = 8082,
+        port: int = -1,
         tier: ServiceTier | str = ServiceTier.API,
+        health_check: str = None,
         nats_url: str = None,
         metadata: Dict[str, Any] = None,
     ):
         self.slug = slug
         self.name = name
-        self.url = url or os.getenv("CIPHER_MCP_URL", "http://localhost:8082")
+        self.url = url or "stdio://local"
         self.port = port
-        self.tier = ServiceTier(tier) if isinstance(tier, str) else tier
-        self.health_check = f"{self.url.rstrip('/')}/healthz"
+
+        if isinstance(tier, str):
+            tier = ServiceTier(tier.lower())
+        self.tier = tier
+
+        self.health_check = health_check or "none"
         self.nats_url = nats_url or os.getenv("NATS_URL", "nats://nats:4222")
         self.metadata = metadata or {
-            "bridge_for": "cipher-memory",
-            "protocol": "mcp",
             "transport": "stdio",
+            "mcp_server": "pmoves-cipher",
         }
 
+    def create_announcement(self) -> ServiceAnnouncement:
+        """Create a service announcement object."""
+        return ServiceAnnouncement(
+            slug=self.slug,
+            name=self.name,
+            url=self.url,
+            health_check=self.health_check,
+            tier=self.tier,
+            port=self.port,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            metadata=self.metadata,
+        )
+
     async def announce(self) -> bool:
-        """Publish to NATS."""
-        try:
-            from nats.aio.client import Client as NATS
-
-            announcement = ServiceAnnouncement(
-                slug=self.slug,
-                name=self.name,
-                url=self.url,
-                health_check=self.health_check,
-                tier=self.tier,
-                port=self.port,
-                metadata=self.metadata,
-            )
-
-            nc = await NATS.connect(self.nats_url, connect_timeout=5)
-            await nc.publish(
-                ServiceAnnouncement.SUBJECT,
-                announcement.to_json().encode(),
-            )
-            await nc.flush()
-            await nc.close()
-
-            return True
-        except Exception as e:
-            print(f"Failed to announce: {e}")
-            return False
+        """Publish service announcement to NATS (no-op for stdio)."""
+        return True
 
 
-async def announce_service(**kwargs) -> bool:
-    """Convenience function."""
-    announcer = ServiceAnnouncer(**kwargs)
-    return await announcer.announce()
+async def announce_service(
+    slug: str = "pmoves-cipher-mcp",
+    name: str = "PMOVES Cipher MCP Bridge",
+    url: str = None,
+    port: int = -1,
+    tier: ServiceTier | str = ServiceTier.API,
+    health_check: str = None,
+    nats_url: str = None,
+    metadata: Dict[str, Any] = None,
+) -> bool:
+    """Convenience function to announce MCP bridge service (no-op for stdio)."""
+    return True
 
 
-__all__ = ["ServiceAnnouncer", "ServiceAnnouncer", "announce_service"]
+__all__ = ["ServiceAnnouncement", "ServiceAnnouncer", "announce_service"]

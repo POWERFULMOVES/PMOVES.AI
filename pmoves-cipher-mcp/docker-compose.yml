@@ -1,0 +1,60 @@
+# PMOVES.AI Cipher MCP Bridge Docker Compose
+# Tier: API (MCP bridge service)
+#
+# This service provides the MCP bridge for Claude Code CLI integration.
+# It uses stdio transport and connects to Cipher Memory backend.
+#
+# Security: No Docker socket mounting (CVE-2025-9074 - CVSS 9.3)
+# Health checks: HTTP-based only (optional)
+
+services:
+  # Optional: HTTP-based health check endpoint for monitoring
+  cipher-mcp-health:
+    build: .
+    image: pmoves-cipher-mcp
+    ports:
+      - "8052:8052"
+    environment:
+      - TIER=${TIER:-api}
+      - SERVICE_NAME=${SERVICE_NAME:-pmoves-cipher-mcp}
+      - SERVICE_SLUG=${SERVICE_SLUG:-pmoves-cipher-mcp}
+      # Cipher Memory backend
+      - CIPHER_URL=${CIPHER_URL:-http://cipher-api:3000}
+      # Service discovery
+      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      # CHIT Vault
+      - CHIT_ENVIRONMENT=${CHIT_ENVIRONMENT:-production}
+      - CHIT_VAULT_ENDPOINT=${CHIT_VAULT_ENDPOINT:-http://chit-vault:8050}
+    # Note: In PMOVES.AI-Edition-Hardened, env.shared is managed by the main repo
+    # For standalone development, copy env.shared.example to env.shared
+    # env_file:
+    #   - env.shared      # PMOVES.AI base configuration (managed by main repo)
+    #   - env.tier-api    # API tier specific configuration (managed by main repo)
+    command:
+      - "python"
+      - "-m"
+      - "cipher_mcp.health_server"
+    restart: unless-stopped
+    # PMOVES.AI hardened security settings
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    # Health check (HTTP only - no Docker socket)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8052/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # PMOVES.AI service labels for discovery
+    labels:
+      - "pmoves.service=true"
+      - "pmoves.tier=api"
+      - "pmoves.service.name=pmoves-cipher-mcp"
+
+# Note: The actual MCP server uses stdio transport and is run
+# directly by Claude Code CLI, not as a Docker container.
+# This health service is optional and only for monitoring.
