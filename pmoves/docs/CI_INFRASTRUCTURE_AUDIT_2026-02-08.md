@@ -242,6 +242,41 @@ git submodule update --init -- pmoves-e2b-mcp-server
 
 ---
 
+## Known Issues & Recommendations (2026-02-08 19:55 UTC)
+
+### CodeQL Workflow: 0s Runtime Failure
+
+**Issue:** CodeQL workflow (`codeql.yml`) fails immediately with 0s runtime on all branches including `PMOVES.AI-Edition-Hardened`.
+
+**Evidence:**
+- Run 21804338962: 0s runtime, failure (pr/ci-self-hosted-migration branch)
+- Run 21792387686: 0s runtime, failure (PMOVES.AI-Edition-Hardened branch)
+- All CodeQL runs show same pattern: triggered but not executing
+
+**Possible Causes:**
+1. Self-hosted runner with `vps` label not available/online
+2. Runner lacks CodeQL requirements (Docker, 14GB+ disk, specific tools)
+3. CodeQL GitHub Action compatibility issue with self-hosted runner setup
+
+**Recommendation:**
+> **Keep CodeQL on GitHub-hosted runners as a security exception**
+>
+> Rationale:
+> - CodeQL requires specific infrastructure that may not be available on self-hosted runners
+> - Security scanning of code is acceptable to run on GitHub's infrastructure (the code is already public)
+> - GitHub-hosted runners for CodeQL maintain access to latest CodeQL databases and queries
+> - This aligns with industry practice: security scanning can use external tools
+
+**Implementation:**
+```yaml
+# codeql.yml - Revert to GitHub-hosted for CodeQL only
+runs-on: ubuntu-latest  # Security exception: CodeQL on GitHub-hosted
+```
+
+**Status:** ⏳ Awaiting decision on CodeQL runner strategy
+
+---
+
 ## Security Considerations
 
 ### Egress Policy

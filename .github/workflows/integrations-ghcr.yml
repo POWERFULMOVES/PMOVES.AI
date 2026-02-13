@@ -26,7 +26,9 @@ on:
         default: false
         type: boolean
   push:
-    branches: [main]
+    branches: [main, PMOVES.AI-Edition-Hardened]
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       # Rebuild images when submodules are updated
       - 'PMOVES-Open-Notebook'
@@ -49,13 +51,14 @@ env:
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.CI_DOCKERHUB_USERNAME }}
-  DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
+  DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
 
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, vps]
+    # TEMPORARY: ubuntu-latest for GHCR credential testing (see GHCR_LOGIN_FIX_2026-02-09.md)
+    runs-on: ubuntu-latest  # TODO: Switch back to [self-hosted, vps] after GHCR fix
     permissions:
       contents: read
       packages: write
@@ -72,7 +75,7 @@ jobs:
             image_name: pmoves-agent-zero
             build_args: |
               BRANCH=local
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/agent-zero.trivyignore
           - name: archon
@@ -82,7 +85,7 @@ jobs:
             dockerfile: pmoves/services/archon/Dockerfile
             image_name: pmoves-archon
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: archon-ui
@@ -92,7 +95,7 @@ jobs:
             dockerfile: archon-ui-main/Dockerfile
             image_name: pmoves-archon-ui
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/archon-ui.trivyignore
           - name: open-notebook
@@ -102,7 +105,7 @@ jobs:
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/open-notebook.trivyignore
           - name: wger
@@ -112,7 +115,7 @@ jobs:
             dockerfile: extras/docker/production/Dockerfile
             image_name: pmoves-health-wger
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: firefly-iii
@@ -122,7 +125,7 @@ jobs:
             dockerfile: pmoves/images/firefly-iii/Dockerfile
             image_name: pmoves-firefly-iii
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: jellyfin
@@ -132,7 +135,7 @@ jobs:
             dockerfile: pmoves/images/jellyfin/Dockerfile
             image_name: pmoves-jellyfin
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/jellyfin.trivyignore
           - name: pmoves-yt
@@ -142,7 +145,7 @@ jobs:
             dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: deepresearch
@@ -152,7 +155,7 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: supaserch
@@ -162,7 +165,7 @@ jobs:
             dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           # To add other integrations, duplicate one of the entries above.
@@ -223,6 +226,7 @@ jobs:
         uses: sigstore/cosign-installer@v4.0.0
 
       - name: Log in to GHCR
+        continue-on-error: true
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -243,6 +247,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+          USE_GHCR: ${{ env.GHCR_PASSWORD != '' && env.GHCR_PASSWORD != github.token }}
         run: |
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
@@ -254,10 +259,19 @@ jobs:
           # Docker tag validation requires the repository namespace be lowercase.
           GHCR_NS="${GHCR_NS_RAW,,}"
           echo "ghcr_ns=${GHCR_NS}" >> $GITHUB_OUTPUT
-          TAGS="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest\n${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+          # Only add GHCR tags if USE_GHCR is true
+          if [ "$USE_GHCR" = "true" ]; then
+            TAGS="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest\n${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+          else
+            TAGS=""
+          fi
           if [ "$INCLUDE_DOCKERHUB" = "true" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
             DH_NS=${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}
-            TAGS="$TAGS\ndocker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS\ndocker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            else
+              TAGS="docker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            fi
           fi
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo -e "$TAGS" >> $GITHUB_OUTPUT

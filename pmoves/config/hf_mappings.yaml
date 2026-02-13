@@ -1,0 +1,492 @@
+# =============================================================================
+# PMOVES.AI Hugging Face Hub Model Mappings
+# =============================================================================
+# Direct mappings from Hugging Face Hub model IDs to local configurations.
+# Used by the HF MCP server for model discovery and download.
+# =============================================================================
+
+# =============================================================================
+# Text Generation Models
+# =============================================================================
+
+text_generation:
+  # Microsoft Models
+  microsoft:
+    - hf_id: microsoft/Phi-3-mini-128k-instruct
+      pmoves_name: phi3-mini
+      tier: small
+      params: 3.8B
+      context: 128000
+      ollama_variant: phi3:3.8b-mini-128k-instruct
+      recommended_for: [utility, edge]
+      release_date: 2024-06
+
+    - hf_id: microsoft/Phi-3-medium-128k-instruct
+      pmoves_name: phi3-medium
+      tier: medium
+      params: 7B
+      context: 128000
+      ollama_variant: phi3:medium
+      recommended_for: [orchestrator, coding]
+      release_date: 2024-06
+
+  # Google Models
+  google:
+    - hf_id: google/gemma-2-2b-it
+      pmoves_name: gemma-2-2b
+      tier: small
+      params: 2B
+      context: 8192
+      ollama_variant: gemma-2:2b
+      recommended_for: [utility]
+
+    - hf_id: google/gemma-2-9b
+      pmoves_name: gemma-2-9b
+      tier: medium
+      params: 9B
+      context: 8192
+      ollama_variant: gemma-2:9b
+      recommended_for: [orchestrator, utility]
+
+    - hf_id: google/gemma-2-27b
+      pmoves_name: gemma-2-27b
+      tier: large
+      params: 27B
+      context: 8192
+      vllm_only: true
+      tp_size: 2
+      recommended_for: [orchestrator, research]
+
+  # Alibaba Qwen Models
+  Qwen:
+    - hf_id: Qwen/Qwen2.5-3B-Instruct
+      pmoves_name: qwen2.5-3b
+      tier: small
+      params: 3B
+      context: 32768
+      ollama_variant: qwen2.5:3b
+      recommended_for: [utility, edge]
+      release_date: 2024-09
+
+    - hf_id: Qwen/Qwen2.5-7B-Instruct
+      pmoves_name: qwen2.5-7b
+      tier: medium
+      params: 7B
+      context: 32768
+      ollama_variant: qwen2.5:7b
+      recommended_for: [orchestrator, coding, utility]
+      release_date: 2024-09
+
+    - hf_id: Qwen/Qwen2.5-14B-Instruct
+      pmoves_name: qwen2.5-14b
+      tier: medium
+      params: 14B
+      context: 32768
+      ollama_variant: qwen2.5:14b
+      recommended_for: [orchestrator, coding]
+      release_date: 2024-09
+
+    - hf_id: Qwen/Qwen2.5-32B-Instruct
+      pmoves_name: qwen2.5-32b
+      tier: large
+      params: 32B
+      context: 32768
+      ollama_variant: qwen2.5:32b
+      vllm_only: true
+      tp_size: 2
+      recommended_for: [orchestrator, research]
+      release_date: 2024-09
+
+    - hf_id: Qwen/Qwen2.5-72B-Instruct
+      pmoves_name: qwen2.5-72b
+      tier: large
+      params: 72B
+      context: 128000
+      ollama_variant: qwen2.5:72b
+      vllm_only: true
+      tp_size: 4
+      recommended_for: [research, coordinator]
+      release_date: 2024-09
+
+    - hf_id: Qwen/Qwen2.5-Coder-7B-Instruct
+      pmoves_name: qwen2.5-coder-7b
+      tier: medium
+      params: 7B
+      context: 32768
+      ollama_variant: qwen2.5-coder:7b
+      recommended_for: [coding]
+      release_date: 2024-09
+
+    - hf_id: Qwen/Qwen3-8B-Instruct
+      pmoves_name: qwen3-8b
+      tier: medium
+      params: 8B
+      context: 32768
+      ollama_variant: qwen3:8b
+      recommended_for: [orchestrator, utility]
+      release_date: 2025-01
+
+    - hf_id: Qwen/Qwen3-14B-Instruct
+      pmoves_name: qwen3-14b
+      tier: large
+      params: 14B
+      context: 32768
+      vllm_only: true
+      recommended_for: [orchestrator, coding]
+      release_date: 2025-01
+
+    - hf_id: Qwen/Qwen2-VL-7B-Instruct
+      pmoves_name: qwen2-vl-7b
+      tier: medium
+      params: 7B
+      context: 32768
+      ollama_variant: qwen2-vl:7b
+      recommended_for: [vl_sentinel]
+      release_date: 2024-08
+
+    - hf_id: Qwen/Qwen3-VL-8B-Instruct
+      pmoves_name: qwen3-vl-8b
+      tier: medium
+      params: 8B
+      context: 32768
+      vllm_only: true
+      recommended_for: [vl_sentinel]
+      release_date: 2025-01
+
+  # Meta Llama Models
+  meta-llama:
+    - hf_id: meta-llama/Llama-3.1-8B-Instruct
+      pmoves_name: llama3.1-8b
+      tier: medium
+      params: 8B
+      context: 128000
+      ollama_variant: llama3.1:8b
+      recommended_for: [orchestrator, utility]
+      release_date: 2024-07
+
+    - hf_id: meta-llama/Llama-3.1-70B-Instruct
+      pmoves_name: llama3.1-70b
+      tier: large
+      params: 70B
+      context: 128000
+      ollama_variant: llama3.1:70b
+      vllm_only: true
+      tp_size: 4
+      recommended_for: [research]
+
+  # Mistral AI Models
+  mistralai:
+    - hf_id: mistralai/Mistral-7B-Instruct-v0.3
+      pmoves_name: mistral-7b
+      tier: medium
+      params: 7B
+      context: 32768
+      ollama_variant: mistral:7b
+      recommended_for: [utility]
+
+    - hf_id: mistralai/Mixtral-8x7B-Instruct-v0.1
+      pmoves_name: mixtral-8x7b
+      tier: large
+      params: 47B  # MoE
+      context: 32768
+      vllm_only: true
+      tp_size: 2
+      recommended_for: [orchestrator, research]
+
+    - hf_id: mistralai/Mixtral-8x22B-Instruct-v0.1
+      pmoves_name: mixtral-8x22b
+      tier: xlarge
+      params: 141B  # MoE
+      context: 65536
+      vllm_only: true
+      tp_size: 4
+      recommended_for: [research, coordinator]
+
+  # DeepSeek Models
+  deepseek-ai:
+    - hf_id: deepseek-ai/deepseek-coder-6.7b-instruct
+      pmoves_name: deepseek-coder-6.7b
+      tier: medium
+      params: 6.7B
+      context: 16384
+      ollama_variant: deepseek-coder:6.7b
+      recommended_for: [coding]
+      release_date: 2024-01
+
+  # NVIDIA Models
+  nvidia:
+    - hf_id: nvidia/Nemotron-Mini-3-8B-Instruct
+      pmoves_name: nemotron-mini-3-8b
+      tier: medium
+      params: 8B
+      context: 4096
+      ollama_variant: nemotron-mini
+      recommended_for: [utility, research]
+      release_date: 2024-09
+
+# =============================================================================
+# Coding Models
+# =============================================================================
+
+coding:
+  Qwen:
+    - hf_id: Qwen/Qwen2.5-Coder-7B-Instruct
+      pmoves_name: qwen2.5-coder-7b
+      tier: medium
+      params: 7B
+      ollama_variant: qwen2.5-coder:7b
+
+  deepseek-ai:
+    - hf_id: deepseek-ai/deepseek-coder-6.7b-instruct
+      pmoves_name: deepseek-coder-6.7b
+      tier: medium
+      params: 6.7B
+      ollama_variant: deepseek-coder:6.7b
+
+# =============================================================================
+# Vision-Language Models
+# =============================================================================
+
+vision_language:
+  Qwen:
+    - hf_id: Qwen/Qwen2-VL-7B-Instruct
+      pmoves_name: qwen2-vl-7b
+      tier: medium
+      params: 7B
+      ollama_variant: qwen2-vl:7b
+
+    - hf_id: Qwen/Qwen3-VL-8B-Instruct
+      pmoves_name: qwen3-vl-8b
+      tier: medium
+      params: 8B
+
+  llava-hf:
+    - hf_id: llava-hf/llava-v1.6-vicuna-7b-hf
+      pmoves_name: llava-v1.6-7b
+      tier: medium
+      params: 7B
+
+# =============================================================================
+# Embedding Models
+# =============================================================================
+
+embeddings:
+  Qwen:
+    - hf_id: Qwen/Qwen3-Embedding-8B
+      pmoves_name: qwen3-embedding-8b
+      tier: medium
+      params: 8B
+      dimensions: 4096
+      ollama_variant: qwen3-embedding:8b
+
+    - hf_id: Qwen/Qwen3-Embedding-4B
+      pmoves_name: qwen3-embedding-4b
+      tier: small
+      params: 4B
+      dimensions: 3072
+      ollama_variant: qwen3-embedding:4b
+
+  BAAI:
+    - hf_id: BAAI/bge-large-en-v1.5
+      pmoves_name: bge-large-en-v1.5
+      tier: small
+      params: 1.34B
+      dimensions: 1024
+      ollama_variant: bge-large
+
+    - hf_id: BAAI/bge-m3
+      pmoves_name: gemma-embedding-300m
+      tier: small
+      params: 300M
+      dimensions: 1024
+      ollama_variant: embeddinggemma:300m
+
+  nomic-ai:
+    - hf_id: nomic-ai/nomic-embed-text-v1.5
+      pmoves_name: nomic-embed-text
+      tier: small
+      params: 137M
+      dimensions: 768
+      ollama_variant: nomic-embed-text
+
+  intfloat:
+    - hf_id: intfloat/e5-large-v2
+      pmoves_name: e5-large-v2
+      tier: small
+      params: 335M
+      dimensions: 1024
+
+# =============================================================================
+# Reranker Models
+# =============================================================================
+
+rerankers:
+  Qwen:
+    - hf_id: Qwen/Qwen3-Reranker-4B
+      pmoves_name: qwen3-reranker-4b
+      tier: small
+      params: 4B
+      ollama_variant: qwen3-reranker:4b
+
+  jinaai:
+    - hf_id: jinaai/jina-reranker-v2-base-multilingual
+      pmoves_name: jina-reranker-v2-base
+      tier: small
+      params: 278M
+
+  BAAI:
+    - hf_id: BAAI/bge-reranker-base
+      pmoves_name: bge-reranker-base
+      tier: small
+      params: 278M
+
+# =============================================================================
+# Gated Models (Require HF Token Access)
+# =============================================================================
+# These models require accepting terms on Hugging Face before use
+# =============================================================================
+
+gated_models:
+  meta-llama:
+    - hf_id: meta-llama/Llama-3.1-8B-Instruct
+      requires_access: true
+      instructions: https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct
+
+    - hf_id: meta-llama/Llama-3.1-70B-Instruct
+      requires_access: true
+      instructions: https://huggingface.co/meta-llama/Llama-3.1-70B-Instruct
+
+  google:
+    - hf_id: google/gemma-2-27b
+      requires_access: true
+      instructions: https://huggingface.co/google/gemma-2-27b
+
+# =============================================================================
+# Quantization Variants
+# =============================================================================
+# GGUF quantization types and their characteristics
+# =============================================================================
+
+quantization_variants:
+  q4_0:
+    bits: 4
+    size_multiplier: 0.25
+    quality: "Lowest"
+    speed: "Fastest"
+    vram_per_7b_gb: 3.5
+    recommended_for: [cpu, edge]
+
+  q4_k_m:
+    bits: 4
+    size_multiplier: 0.28
+    quality: "Good"
+    speed: "Fast"
+    vram_per_7b_gb: 4.0
+    recommended_for: [gpu, balanced]
+    notes: "Recommended default for most use cases"
+
+  q5_0:
+    bits: 5
+    size_multiplier: 0.30
+    quality: "Better"
+    speed: "Medium"
+    vram_per_7b_gb: 4.3
+    recommended_for: [gpu]
+
+  q5_k_m:
+    bits: 5
+    size_multiplier: 0.32
+    quality: "Better"
+    speed: "Medium"
+    vram_per_7b_gb: 4.5
+    recommended_for: [gpu]
+
+  q6_k:
+    bits: 6
+    size_multiplier: 0.38
+    quality: "High"
+    speed: "Slower"
+    vram_per_7b_gb: 5.4
+    recommended_for: [gpu, high_quality]
+
+  q8_0:
+    bits: 8
+    size_multiplier: 0.50
+    quality: "Near-fp16"
+    speed: "Medium"
+    vram_per_7b_gb: 7.0
+    recommended_for: [gpu, vllm]
+
+  f16:
+    bits: 16
+    size_multiplier: 1.0
+    quality: "Full precision"
+    speed: "Varies"
+    vram_per_7b_gb: 14.0
+    recommended_for: [vllm, tensorrt]
+
+# =============================================================================
+# Alternative Quantization Formats
+# =============================================================================
+
+alt_quantization:
+  awq:
+    description: "Activation-aware Weight Quantization"
+    bits: 4
+    supported_backends: [vllm]
+    compatible_hardware: [NVIDIA, AMD]
+    notes: "Faster dequantization, good for vLLM"
+
+  gptq:
+    description: "GPT Quantization"
+    bits: 4
+    supported_backends: [vllm, transformers]
+    compatible_hardware: [NVIDIA]
+    notes: "Older format, AWQ generally preferred"
+
+  gguf:
+    description: "GGUF (GPT-Generated Unified Format)"
+    bits: [4, 5, 6, 8]
+    supported_backends: [ollama, llama_cpp]
+    compatible_hardware: [CPU, GPU, Apple Silicon]
+    notes: "Most versatile, runs on almost any hardware"
+
+  fp8:
+    description: "8-bit Floating Point"
+    bits: 8
+    supported_backends: [vllm, tensorrt]
+    compatible_hardware: [NVIDIA Ada, Hopper]
+    notes: "Requires Ada+ GPU (RTX 4090, L40, H100)"
+
+# =============================================================================
+# Download Priority Queue
+# =============================================================================
+# Recommended download order for different hardware profiles
+# =============================================================================
+
+download_priority:
+  # Start here for any setup
+  starter:
+    1. qwen2.5-3b:q4_k_m
+    2. phi3-mini:q4_k_m
+    3. gemma-embedding-300m:f16
+
+  # Single GPU (12-16GB)
+  single_gpu:
+    1. qwen2.5-7b:q4_k_m
+    2. qwen2.5-coder-7b:q4_k_m
+    3. qwen2-vl-7b:q4_k_m
+    4. qwen3-embedding-8b:f16
+
+  # High-end single GPU (24GB+)
+  highend_single_gpu:
+    1. qwen2.5-14b:q4_k_m
+    2. qwen2.5-coder-7b:q8_0
+    3. qwen3-vl-8b:q4_k_m
+    4. qwen3-reranker-4b:f16
+
+  # Multi-GPU
+  multi_gpu:
+    1. qwen2.5-32b:q4_0
+    2. qwen2.5-72b:q4_0
+    3. mixtral-8x22b:q4_0
