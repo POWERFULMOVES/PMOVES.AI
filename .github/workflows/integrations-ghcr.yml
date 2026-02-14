@@ -247,7 +247,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-          USE_GHCR: ${{ env.GHCR_PASSWORD != '' && env.GHCR_PASSWORD != github.token }}
+          USE_GHCR: ${{ env.GHCR_PASSWORD != '' }}
         run: |
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
