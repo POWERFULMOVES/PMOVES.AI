@@ -111,7 +111,7 @@ jobs:
   # ============================================================================
   build-cpu:
     name: CPU Services
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     strategy:
       matrix:
         service:
@@ -157,7 +157,7 @@ jobs:
   # ============================================================================
   validate-contracts:
     name: Validate NATS Contracts
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
 
@@ -265,7 +265,7 @@ jobs:
   # ============================================================================
   functional-tests:
     name: Functional Tests
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     needs: [deploy-staging]
     if: needs.deploy-staging.result == 'success'
 
@@ -284,3 +284,4 @@ jobs:
       - name: Run NATS pub/sub tests
         run: |
           NATS_URL=nats://staging:4222 ./pmoves/tests/functional/test_nats_pubsub.sh || true
+
