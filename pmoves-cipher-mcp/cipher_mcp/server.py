@@ -20,13 +20,11 @@ Usage:
 """
 
 import asyncio
-import json
-import sys
-from typing import Any
 
 from mcp.server.models import InitializationOptions
 from mcp.server import Server, NotificationOptions
 from mcp.server.stdio import stdio_server
+from mcp.types import TextContent
 
 from cipher_mcp.tools import TOOLS, TOOL_HANDLERS
 
@@ -42,7 +40,7 @@ async def list_tools() -> list:
 
 
 @app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list:
+async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
     """
     Handle tool calls from Claude Code.
 
@@ -55,12 +53,16 @@ async def call_tool(name: str, arguments: dict) -> list:
     """
     handler = TOOL_HANDLERS.get(name)
     if not handler:
-        return [{"type": "text", "text": f"Unknown tool: {name}"}]
+        return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+    args = arguments or {}
 
     try:
-        return await handler(**arguments)
-    except Exception as e:
-        return [{"type": "text", "text": f"Error executing {name}: {e}"}]
+        return await handler(**args)
+    except TypeError as exc:
+        return [TextContent(type="text", text=f"Invalid arguments for {name}: {exc}")]
+    except Exception as exc:
+        return [TextContent(type="text", text=f"Error executing {name}: {exc}")]
 
 
 async def main():
