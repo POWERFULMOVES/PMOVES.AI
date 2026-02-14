@@ -28,7 +28,7 @@ jobs:
   validate:
     name: Validate Configuration
     # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
     steps:
@@ -203,3 +203,4 @@ jobs:
           cd pmoves
           docker compose -f docker-compose.yml -f docker-compose.vps.override.yml down gateway-agent
           echo "✓ Gateway Agent stopped (rolled back)"
+

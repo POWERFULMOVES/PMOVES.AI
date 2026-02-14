@@ -17,7 +17,7 @@ on:
 jobs:
   lint:
     # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -81,3 +81,4 @@ jobs:
             echo "Found unsafe policy patterns. See pmoves/docs/SUPABASE_RLS_CHECKLIST.md"; exit 1
           fi
           echo "No unsafe patterns found."
+
