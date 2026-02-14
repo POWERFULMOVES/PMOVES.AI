@@ -14,19 +14,27 @@ name: "CodeQL Advanced"
 on:
   push:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
+    paths-ignore:
+      - 'integrations-workspace/**'
+      - '**/.venv/**'
+      - '**/venv/**'
+      - '**/vendor/**'
+      - '**/node_modules/**'
+      - '**/site-packages/**'
+      - '**/.eggs/**'
   pull_request:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    paths-ignore:
+      - 'integrations-workspace/**'
+      - '**/.venv/**'
+      - '**/venv/**'
+      - '**/vendor/**'
+      - '**/node_modules/**'
+      - '**/site-packages/**'
+      - '**/.eggs/**'
   schedule:
     - cron: '16 20 * * 5'
-  # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
-  paths-ignore:
-    - 'integrations-workspace/**'
-    - '**/.venv/**'
-    - '**/venv/**'
-    - '**/vendor/**'
-    - '**/node_modules/**'
-    - '**/site-packages/**'
-    - '**/.eggs/**'
 
 jobs:
   analyze:
