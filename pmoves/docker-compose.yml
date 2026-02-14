@@ -300,6 +300,8 @@ x-hardening-rw: &hardening-rw
   cap_add:
     - NET_BIND_SERVICE
     - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
     - SETGID
     - SETUID
   security_opt:
@@ -321,6 +323,8 @@ x-tier-supabase-hardened: &tier-supabase-hardened
   cap_add:
     - NET_BIND_SERVICE
     - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
     - SETGID
     - SETUID
   security_opt:
@@ -435,6 +439,8 @@ x-tier-data-hardened: &tier-data-hardened
   cap_add:
     - NET_BIND_SERVICE
     - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
     - SETGID
     - SETUID
   security_opt:
@@ -548,6 +554,12 @@ services:
     - GOTRUE_LOG_LEVEL_STACK=info
     # URI Allow list (for VPS deployment)
     - GOTRUE_URI_ALLOW_LIST=${SUPABASE_URI_ALLOW_LIST}
+    # Optional Google OAuth (self-hosted Supabase auth)
+    - GOTRUE_EXTERNAL_GOOGLE_ENABLED=${SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED:-false}
+    - GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=${SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID:-}
+    - GOTRUE_EXTERNAL_GOOGLE_SECRET=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET:-}
+    - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=${SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI:-}
+    - GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK:-false}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE}
     - PARENT_SYSTEM=${PARENT_SYSTEM}
@@ -816,7 +828,10 @@ services:
     cap_add:
       - NET_BIND_SERVICE
       - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
       - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -1558,6 +1573,40 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+
+  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+  cipher-api:
+    <<: *tier-agent-hardened
+    build:
+      context: ../Pmoves-cipher
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - CIPHER_API_PREFIX=
+      - NODE_ENV=production
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - DOCKED_MODE=${DOCKED_MODE:-true}
+      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "127.0.0.1", "--agent", "/app/memAgent/cipher.yml"]
+    ports:
+      - "${CIPHER_PORT:-8096}:3000"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_data, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
