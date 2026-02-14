@@ -63,12 +63,21 @@ This prep pass focused on:
   - Result: failed.
   - Reason: `Bash/Service/CreateInstance/E_ACCESSDENIED` while invoking bash-dependent sub-targets.
 
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File pmoves/scripts/smoke.ps1`
+  - Result: partial pass then failed.
+  - Progress: Qdrant, Meilisearch, Neo4j UI, Presign checks passed.
+  - Reason: render-webhook health check (`http://localhost:8085/healthz`) was connection refused.
+
+- `make -C pmoves gpu-rerank-evidence`
+  - Result: failed.
+  - Reason: command syntax error in this shell path before evidence capture completed.
+
 ## Audit Blockers (Current)
 
 1. Makefile/docs mismatch for smoke targets (`smoke`, `smoke-gpu`).
 2. `verify-all` recipe execution behavior needs correction in this shell path.
 3. Bash/WSL permission issue blocks several smoke targets from PowerShell.
-4. Not all required services are up, so end-to-end runtime gates cannot be fully exercised yet.
+4. Not all required services are up (`render-webhook` currently failing health), so end-to-end runtime gates cannot be fully exercised yet.
 
 ## Recommended Next Remediation Before Production Audit
 
