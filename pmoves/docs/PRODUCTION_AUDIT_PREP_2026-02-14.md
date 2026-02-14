@@ -114,3 +114,6 @@ Additional production-audit fixes were applied on branch `pr/hardened-ghcr-stand
 2. If GHCR still reports `denied: denied`, rotate PAT and verify:
    - `GHCR_USERNAME` matches PAT owner.
    - PAT scopes include `read:packages` + `write:packages` (+ `repo` for private clone flows).
+3. Self-hosted runner capacity/availability:
+   - Repository runner inventory currently reports only `pmoves-ai-lab-runner` and `status=offline`.
+   - While offline, PR checks that target self-hosted labels remain `queued` and cannot validate merged fixes.
