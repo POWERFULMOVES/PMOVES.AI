@@ -44,9 +44,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # Prefer GitHub's ephemeral token for GHCR to avoid PAT scope drift.
-  GHCR_USERNAME: ${{ github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || github.token }}
+  # Prefer GitHub's ephemeral token for GHCR; allow PAT override when needed.
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
+  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || github.token }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
