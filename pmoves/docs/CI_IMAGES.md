@@ -6,6 +6,7 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
 
 - File: `.github/workflows/integrations-ghcr.yml`
 - Triggers: manual (workflow_dispatch) and nightly (cron).
+- Runner: self-hosted `[self-hosted, vps]`.
 - Matrix builds (excerpt):
   - `agent-zero` → `ghcr.io/<NAMESPACE>/pmoves-agent-zero:pmoves-latest`
   - `archon` → `ghcr.io/<NAMESPACE>/pmoves-archon:pmoves-latest` (builds from `pmoves/services/archon/Dockerfile`, which vendors the POWERFULMOVES Archon fork)
@@ -20,7 +21,12 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
 ## Namespace and Permissions
 
 - By default, images push under `ghcr.io/<repo_owner>`.
-- To push under a different org (e.g., `cataclysm-studios-inc`), set the repository secret `CI_GHCR_NAMESPACE` (legacy `GHCR_NAMESPACE` is still honored) and ensure the workflow’s `GITHUB_TOKEN` (or a PAT) has `packages:write` scope in that org.
+- To push under a different org (e.g., `cataclysm-studios-inc`), set the repository secret `CI_GHCR_NAMESPACE` (legacy `GHCR_NAMESPACE` is still honored) and ensure the workflow token has `packages:write` scope in that org.
+- GHCR auth defaults to `github.token` (recommended). Optional override secret: `GHCR_TOKEN`.
+  - If using a PAT for `GHCR_TOKEN`, minimum scopes:
+    - `write:packages`
+    - `read:packages`
+    - `repo` (only if publishing/cloning private repos)
 
 ### Optional Docker Hub Push
 
@@ -29,6 +35,12 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
   - `CI_DOCKERHUB_TOKEN` (legacy `DOCKERHUB_TOKEN`)
   - Optional `CI_DOCKERHUB_NAMESPACE` (legacy `DOCKERHUB_NAMESPACE`, defaults to the username value)
 - The workflow will log in and append Docker Hub tags alongside GHCR tags.
+
+### Troubleshooting `denied: denied` on GHCR login
+
+- Confirm workflow permissions include `packages: write` (set in workflow job).
+- Prefer removing/rotating under-scoped PAT secrets and let `github.token` handle GHCR auth.
+- Verify actor/org package publish permissions in repository/org package settings.
 
 ### Secret Sync Helper
 

@@ -19,10 +19,16 @@
 - Use descriptive names, include environment suffix (e.g., `SUPABASE_SERVICE_ROLE_KEY_DEV`).
 - Avoid putting real values in `env.shared.example`; keep placeholders.
 - For local runs, use `.env.local` and never commit it.
+- GHCR publishing:
+  - Prefer `github.token` in workflows.
+  - If a PAT is required, include `write:packages` + `read:packages` (and `repo` for private repos).
 
 ## Rotation cadence
 - Mandatory rotation when alerted.
 - Suggested periodic rotation for high-privilege keys (service-role, cloud provider) every 90 days.
+
+## Required pre-merge audit
+- Run `make -C pmoves secrets-audit` before production-facing merges. It checks CHIT path drift, secret-sync output location/encoding, exported workflow cookie leaks, and placeholder hygiene in tracked env templates.
 
 ## Checklist (per incident or new secret)
 - [ ] Rotate in provider
