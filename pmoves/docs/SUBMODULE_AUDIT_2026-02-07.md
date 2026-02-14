@@ -21,7 +21,7 @@
 - 27/40 submodules are correctly on `PMOVES.AI-Edition-Hardened` branch
 - 12 submodules need branch alignment fixes
 - 1 submodule (`Pmoves-open-notebook`) not initialized
-- 1 submodule (`PMOVES-Firefly-iii`) not initialized
+- 1 submodule (`PMOVES-Wealth`, formerly `PMOVES-Firefly-iii`) not initialized
 - Most submodules are up-to-date with their remotes
 
 ---
@@ -82,7 +82,7 @@
 | Submodule | Issue | Action Required |
 |-----------|-------|-----------------|
 | **Pmoves-open-notebook** | Not initialized | Run `git submodule update --init Pmoves-open-notebook` |
-| **PMOVES-Firefly-iii** | Not initialized | Run `git submodule update --init PMOVES-Firefly-iii` |
+| **PMOVES-Wealth** | Not initialized | Run `git submodule update --init PMOVES-Wealth` |
 
 ---
 
@@ -92,7 +92,7 @@
 
 ```bash
 git submodule update --init Pmoves-open-notebook
-git submodule update --init PMOVES-Firefly-iii
+git submodule update --init PMOVES-Wealth
 ```
 
 ### Phase 2: Align Detached Submodules

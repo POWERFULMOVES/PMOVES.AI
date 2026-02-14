@@ -18,7 +18,7 @@ This note captures how to build or source container images for the first‑class
 
 - Update the version tag as needed. The `pmoves-latest` alias keeps Compose pointing at the most recent release.
 
-## Firefly III (pmoves-firefly-iii)
+## Firefly III / PMOVES-Wealth (pmoves-firefly-iii)
 
 - A thin wrapper Dockerfile lives at the repo root (inherits from the official `fireflyiii/core` image). Build and publish multi-arch tags:
 
@@ -28,7 +28,7 @@ This note captures how to build or source container images for the first‑class
     -t ghcr.io/cataclysm-studios-inc/pmoves-firefly-iii:2025.11.04 \
     -t ghcr.io/cataclysm-studios-inc/pmoves-firefly-iii:pmoves-latest \
     --push \
-    integrations-workspace/PMOVES-Firefly-iii
+    integrations-workspace/PMOVES-Wealth
   ```
 
 - The wrapper only adds PMOVES metadata so the runtime stays identical to upstream while remaining reproducible.

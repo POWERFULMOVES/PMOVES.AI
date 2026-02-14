@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2025-12-14
+Last updated: 2026-02-14
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -52,6 +52,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log the validation timestamp (see operational reminders captured in the implementation plan)
 - integrate Wger + Firefly flows: set secrets, import flows, run smokes, and verify upserts/events
 - CHIT EvoSwarm loop: enable controller, confirm `geometry.swarm.meta.v1` events; ensure pack selection by producers and pack_id persisted in constellation meta (gateway v2)
+- Codex parity for focus submodules is now complete (8/8); continue expanding Codex onboarding across non-focus modules
 - PMOVES.YT SABR handling: prefer Invidious when needed; add Whisper transcript fallback in pipeline; update smokes accordingly.
 - [ ] CI TODO — surface `make lint-packs` as the pack manifest linter prior to publish, blocking `kb.pack.published.v1` unless manifests validate.
 - [ ] CI TODO — retrieval-eval persona gate must succeed (`persona.publish.request.v1` → `persona.published.v1`) with thresholds persisted to `pmoves_core.persona_eval_gates`.
@@ -115,5 +116,6 @@ Planned
 - ✅ Hi‑RAG reranker toggle + evaluation suite update — implemented (parameter sweeps still optional)
 - 🚧 Jellyfin refresh + rich Discord embeds — waiting on publisher metadata polish and Discord wiring
 - ✅ Roadmap/NEXT_STEPS — aligned with repo state (unified REST + single‑env + agent health)
+- ✅ Codex operator parity bootstrap — `make codex-config`, `make codex-audit`, and Codex runbooks now cover CHIT/EvoSwarm/Flute/Gateway flows
 - ✅ TensorZero gateway integration for LangExtract — gateway profile, Crush auto-detection, and observability metadata tags routed through `LANGEXTRACT_PROVIDER=tensorzero`.
 - ✅ LangExtract Workers AI option + docs/env wiring — 2025-10-23
