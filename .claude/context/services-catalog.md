@@ -323,6 +323,26 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Compose Profile:** `vpn`, `remote` (in PMOVES-BoTZ)
 - **Health:** `GET http://localhost:8110/health`
 
+### Cipher Memory API (cipher-api)
+- **Port:** 8096 (remapped from internal 3000 to avoid Grafana conflict)
+- **Purpose:** Knowledge-graph memory service for Claude Code and agents
+- **Backend:** Node.js + Neo4j
+- **API Endpoints:**
+  - `POST /api/memory` - Store memory with embeddings
+  - `GET /api/memory/search?q=...` - Semantic memory search
+  - `GET /api/memory/:id` - Retrieve specific memory
+  - `DELETE /api/memory/:id` - Delete memory
+  - `GET /health` - Health check
+- **MCP Bridge:** `pmoves-cipher-mcp/` (stdio transport via `.claude/mcp.json`)
+- **MCP Tools:**
+  - `pmoves_cipher_store` - Store knowledge with category/tags
+  - `pmoves_cipher_search` - Semantic search over memories
+  - `pmoves_cipher_store_reasoning` - Store reasoning traces
+  - `pmoves_cipher_reasoning_patterns` - Search past reasoning
+- **Dependencies:** Neo4j (shared), NATS
+- **Compose Profile:** `agents`
+- **Health:** `GET http://localhost:8096/health`
+
 ## Monitoring Stack
 
 ### Prometheus
