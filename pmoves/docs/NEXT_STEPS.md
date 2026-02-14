@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-01-02_
+_Last updated: 2026-02-14_
 
 ## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
@@ -28,6 +28,15 @@ _Last updated: 2026-01-02_
 - Voice Agents: `pmoves/n8n/flows/voice_platform_router.json` now defaults to the TensorZero OpenAI-compatible endpoint when `TENSORZERO_BASE_URL` is set and uses a local model by default (`tensorzero::model_name::qwen2_5_14b`), publishing `voice.agent.response.v1` on NATS.
 - n8n flows: fixed HTTP Request `options.timeout` values (n8n expects **milliseconds**, so `20` means 20ms). The repo-tracked flows now use sane ms timeouts for LLM/Supabase/NATS steps.
 - FFmpeg-Whisper: fixed `/transcribe_file` support (multipart) to match Flute’s ad-hoc STT path; added the required dependency (`python-multipart`) for FastAPI form parsing.
+
+### Latest changes (Feb 14, 2026)
+- Codex operator parity docs added for PMOVES under `pmoves/docs/AGENTS/` (`CODEX_OPERATOR_HOME.md`, `CODEX_CLAUDE_PARITY_MAP.md`).
+- New Codex make targets added: `make -C pmoves codex-config`, `make -C pmoves codex-audit`, `make -C pmoves codex-home`, and `make -C pmoves codex-health-quick`.
+- Submodule Codex/Claude parity audit added (`pmoves/scripts/codex_submodule_audit.py`) and report generated at `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`.
+- Applied Codex homes for `PMOVES-Archon` and `PMOVES-ToKenism-Multi`; `PMOVES-Wealth` now replaces the old `PMOVES-Firefly-iii` module naming.
+- Synced `PMOVES-Agent-Zero` to upstream `v0.9.8` and preserved PMOVES overlays (`/healthz`, `/metrics`, persona bridge mount) during merge conflict resolution.
+- Added Codex homes for `PMOVES-Agent-Zero`, `PMOVES-Creator`, `PMOVES-Pipecat`, and `PMOVES-Wealth`; focus-module Codex coverage is now **8/8**.
+- Added production audit prep runbook with command evidence and blockers: `pmoves/docs/PRODUCTION_AUDIT_PREP_2026-02-14.md`.
 
 ## Immediate
 

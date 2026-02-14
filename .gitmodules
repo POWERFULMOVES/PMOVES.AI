@@ -260,11 +260,6 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-Wealth.git
 	branch = PMOVES.AI-Edition-Hardened
 
-[submodule "PMOVES-Firefly-iii"]
-	path = PMOVES-Firefly-iii
-	url = https://github.com/POWERFULMOVES/PMOVES-Firefly-iii.git
-	branch = PMOVES.AI-Edition-Hardened
-
 [submodule "Pmoves-Health-wger"]
 	path = Pmoves-Health-wger
 	url = https://github.com/POWERFULMOVES/Pmoves-Health-wger.git

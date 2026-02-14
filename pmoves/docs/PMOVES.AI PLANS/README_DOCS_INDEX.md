@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-01-02_
+_Last updated: 2026-02-14_
 
 - **Stabilization Checklist** — `STABILIZATION_CHECKLIST.md`
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
@@ -13,6 +13,7 @@ _Last updated: 2026-01-02_
   - Storage policy: Supabase Storage is the default S3-compatible backend for local bring-up; standalone MinIO is off by default. See `ENVIRONMENT_POLICY.md` for single‑env mode expectations and storage endpoints.
 - **Smoke Tests** — `SMOKETESTS.md`
 - **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
+- **Production Audit Prep (latest runbook)** — `../PRODUCTION_AUDIT_PREP_2026-02-14.md`
 - **First-Run Bootstrap** — `FIRST_RUN.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
@@ -66,8 +67,12 @@ Other tracked submodules:
 - Pmoves-hyperdimensions — `PMOVES_HYPERDIMENSIONS_STATUS.md`
 
 ## Codex + MCP
-- Full bundle and profiles: `codex_full_config_bundle/README-Codex-MCP-Full.md`
+- Full bundle and profiles: `../codex_full_config_bundle/README-Codex-MCP-Full.md`
   - Includes `config.toml` with Docker MCP gateway, web search enabled, and multiple profiles for network/sandbox modes.
+- Codex operator runbook: `../AGENTS/CODEX_OPERATOR_HOME.md`
+- Claude -> Codex parity map: `../AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+- Submodule parity audit: `../AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
+- Persona style playbook: `../AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`
 
 ## Evidence
 - Evidence folder (screenshots/logs): `pmoves/docs/evidence/`
