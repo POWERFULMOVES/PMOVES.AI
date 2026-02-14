@@ -1,0 +1,13 @@
+services:
+  # Overlay compose extension point for PMOVES health-wger integration.
+  # Keep service wiring in root compose files; use this file for integration-local deltas.
+  health-wger-overlay:
+    image: alpine:3.20
+    command: ["/bin/sh", "-lc", "echo health-wger overlay placeholder"]
+    profiles: ["pmoves-integration-placeholder"]
+    networks:
+      - pmoves_app
+
+networks:
+  pmoves_app:
+    external: true
