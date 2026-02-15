@@ -40,9 +40,6 @@ jobs:
     name: Analyze (${{ matrix.language }})
     # PMOVES.AI: Prefer self-hosted runners; fall back to GitHub-hosted if unavailable
     runs-on: ubuntu-latest
-    # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
-    # C/CPP files only exist in submodules (external dependencies)
-    continue-on-error: ${{ matrix.language == 'c-cpp' }}
     permissions:
       # required for all workflows
       security-events: write
@@ -60,8 +57,6 @@ jobs:
         include:
         - language: actions
           build-mode: none
-        - language: c-cpp
-          build-mode: autobuild
         - language: javascript-typescript
           build-mode: none
         - language: python
