@@ -85,6 +85,8 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 
 - Codex submodule audit:
   - `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
+- Hyperdimensions control plane taxonomy:
+  - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
 - Claude parity map:
   - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
 - Persona style playbook:
