@@ -50,8 +50,18 @@ scrape_configs:
   # === Tier 2 Services (Added 2025-12-24) ===
 
   - job_name: hi-rag-gateway-v2
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
     static_configs:
-      - targets: ["hi-rag-gateway-v2:8086"]
+      - targets: ["http://hi-rag-gateway-v2:8086/hirag/admin/stats"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
 
   - job_name: extract-worker
     static_configs:
@@ -63,7 +73,7 @@ scrape_configs:
 
   - job_name: agent-zero
     static_configs:
-      - targets: ["agent-zero:80"]
+      - targets: ["agent-zero:8080"]
 
   - job_name: archon
     static_configs:
@@ -89,7 +99,7 @@ scrape_configs:
 
   - job_name: presign
     static_configs:
-      - targets: ["presign:8088"]
+      - targets: ["presign:8080"]
 
   # === Tier 4 Services (Added 2025-12-25) ===
 
@@ -114,11 +124,11 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://host.docker.internal:80/healthz         # agent-zero
-          - http://host.docker.internal:8086/              # hi-rag v2 CPU
+          - http://agent-zero:8080/healthz                 # agent-zero
+          - http://hi-rag-gateway-v2:8086/hirag/admin/stats # hi-rag v2 CPU
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
-          - http://host.docker.internal:8088/healthz        # presign
-          - http://host.docker.internal:8091/healthz        # archon
+          - http://presign:8080/healthz                    # presign
+          - http://archon:8091/healthz                     # archon
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:8055/healthz        # flute-gateway
@@ -134,9 +144,18 @@ scrape_configs:
 
   # Realtime exposes /metrics endpoint
   - job_name: supabase-realtime
+    metrics_path: /probe
+    params:
+      module: [http_2xx_or_401]
     static_configs:
-      - targets: ["supabase-realtime:4000"]
-    metrics_path: /metrics
+      - targets: ["http://realtime:4000/api/ping"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
 
   # Blackbox HTTP probes for Supabase services (health checks)
   # Blackbox exporter is on pmoves_net network, can reach services by name
@@ -147,9 +166,9 @@ scrape_configs:
       module: [http_2xx_or_401]
     static_configs:
       - targets:
-          - http://supabase-gotrue:9999/health       # GoTrue health
-          - http://supabase-postgrest:3000/          # PostgREST root (401 = OK)
-          - http://supabase-realtime:4000/           # Realtime root (500 = unhealthy)
+          - http://auth:9999/health       # GoTrue health (Supabase CLI alias)
+          - http://rest:3000/             # PostgREST root (401 = OK; Supabase CLI alias)
+          - http://realtime:4000/         # Realtime root (500 = unhealthy; Supabase CLI alias)
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
