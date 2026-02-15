@@ -21,8 +21,10 @@ _Last updated: 2026-02-15_
 - **Alias Map (legacy -> canonical names)** — `../ALIASES_AND_CANONICAL_NAMES.md`
 - **Docs Validation (local source-of-truth audit)** — `../DOCS_VALIDATION_LOCAL_2026-02-14.md`
 - **Docs Consolidation + Archival Policy** — `../DOCS_CONSOLIDATION_ARCHIVAL_POLICY.md`
+- **Supabase Migration + Seed Audit (history restore + runtime blockers)** — `../SUPABASE_MIGRATION_SEED_AUDIT_2026-02-15.md`
 - **Model Source Of Truth (Registry + Profiles + Tooling)** — `../MODEL_SOURCE_OF_TRUTH.md`
 - **Submodule Integration Contract (pmoves-integrations layout)** — `../SUBMODULE_INTEGRATION_CONTRACT.md`
+- **Submodule Docs Dossier (local docs entry points + PMOVES integration coverage)** — `../SUBMODULE_DOCS_DOSSIER.md`
 - **First-Run Bootstrap** — `FIRST_RUN.md`
 - **Auth + Boot Order Runbook** — `../AUTH_BOOT_ORDER_RUNBOOK.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
@@ -75,6 +77,7 @@ These pair with UI frameworks in:
 
 Other tracked submodules:
 - Pmoves-hyperdimensions — `PMOVES_HYPERDIMENSIONS_STATUS.md`
+- Full local docs coverage matrix (all declared submodules): `../SUBMODULE_DOCS_DOSSIER.md` (generate/refresh with `make -C pmoves submodule-docs-audit`)
 
 ## Codex + MCP
 - Full bundle and profiles: `../codex_full_config_bundle/README-Codex-MCP-Full.md`
