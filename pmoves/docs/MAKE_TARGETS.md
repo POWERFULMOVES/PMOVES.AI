@@ -146,6 +146,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-runners-check`
   - Queries GitHub Actions runners for the repo and reports whether required self-hosted lanes are online (`self-hosted,vps` and `self-hosted,ai-lab,gpu`).
   - Non-strict mode always exits zero so local developer preflight remains usable.
+  - For full lane discovery across workflows, run: `python pmoves/tools/ci_runner_check.py --discover-workflow-groups`.
 - `make ci-runners-check-strict`
   - Same check in strict mode; exits non-zero if any required lane is offline/missing.
   - Use before dispatching heavy GHCR workflows to avoid queued runs when runners are down.

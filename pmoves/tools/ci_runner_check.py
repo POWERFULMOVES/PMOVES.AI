@@ -10,15 +10,19 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 
 DEFAULT_GROUPS = (
     "self-hosted,vps",
     "self-hosted,ai-lab,gpu",
 )
+RUNS_ON_LIST_RE = re.compile(r"runs-on:\s*\[([^\]]+)\]", re.IGNORECASE)
+RUNS_ON_SINGLE_RE = re.compile(r"runs-on:\s*([A-Za-z0-9_-]+)", re.IGNORECASE)
 
 
 @dataclass
@@ -56,6 +60,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Exit non-zero when required groups are missing or query fails.",
     )
+    parser.add_argument(
+        "--discover-workflow-groups",
+        action="store_true",
+        help=(
+            "Discover self-hosted runner label groups from local workflow files "
+            "(.github/workflows/*.yml) and include them in the check."
+        ),
+    )
+    parser.add_argument(
+        "--workflows-dir",
+        default=".github/workflows",
+        help="Workflow directory for --discover-workflow-groups (default: %(default)s).",
+    )
     return parser.parse_args()
 
 
@@ -64,6 +81,37 @@ def _normalize_group(raw: str) -> tuple[str, ...]:
     if not labels:
         raise ValueError(f"Empty label group: {raw!r}")
     return labels
+
+
+def _extract_groups_from_workflow(path: Path) -> list[tuple[str, ...]]:
+    groups: list[tuple[str, ...]] = []
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return groups
+
+    for match in RUNS_ON_LIST_RE.finditer(text):
+        parts = [part.strip().strip("'\"") for part in match.group(1).split(",")]
+        labels = {part for part in parts if part}
+        if "self-hosted" in labels:
+            groups.append(tuple(sorted(labels)))
+
+    for match in RUNS_ON_SINGLE_RE.finditer(text):
+        label = match.group(1).strip().strip("'\"")
+        if label == "self-hosted":
+            groups.append(("self-hosted",))
+    return groups
+
+
+def discover_groups(workflows_dir: Path) -> list[tuple[str, ...]]:
+    if not workflows_dir.exists():
+        return []
+
+    groups: set[tuple[str, ...]] = set()
+    for path in sorted(workflows_dir.glob("*.yml")):
+        for group in _extract_groups_from_workflow(path):
+            groups.add(group)
+    return sorted(groups)
 
 
 def load_runners(repo: str) -> list[Runner]:
@@ -100,6 +148,17 @@ def main() -> int:
     except ValueError as exc:
         print(f"runner-check: invalid --group value: {exc}")
         return 2
+
+    if args.discover_workflow_groups:
+        discovered = discover_groups(Path(args.workflows_dir))
+        if discovered:
+            merged = {group for group in groups}
+            merged.update(discovered)
+            groups = sorted(merged)
+        print(
+            "runner-check: discovered groups from workflows: "
+            f"{len(discovered)}"
+        )
 
     print(f"runner-check: repo={args.repo}")
     print("runner-check: required groups:")

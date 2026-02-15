@@ -133,6 +133,7 @@ Before dispatching workflow jobs that require self-hosted labels, verify the lan
 cd pmoves
 make ci-runners-check
 make ci-runners-check-strict
+python pmoves/tools/ci_runner_check.py --discover-workflow-groups
 ```
 
 Expected required groups:

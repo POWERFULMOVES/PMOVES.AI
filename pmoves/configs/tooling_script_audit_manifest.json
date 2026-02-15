@@ -134,12 +134,14 @@
   ],
   "duplicate_stem_allowlist": [
     "credential_setup",
-    "notebook_ingest_utils"
+    "notebook_ingest_utils",
+    "monitoring_smoke"
   ],
   "known_non_submodule_dirs": [
     "pmoves",
     "PMOVES-BoTZ-check",
-    "pmoves-cipher-mcp"
+    "pmoves-cipher-mcp",
+    "PMOVES-Pinokio-Ultimate-TTS-Studio.__backup_before_submodule_init"
   ],
   "workflow_routes": {
     "auth": [
