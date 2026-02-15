@@ -51,21 +51,37 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Starts Supabase based on runtime selection:
     - `SUPABASE_RUNTIME=cli` → Supabase CLI stack (`supabase start --network-id pmoves-net`)
     - `SUPABASE_RUNTIME=kong|compose` → Compose-backed Supabase + Kong path
+  - Runtime guard is enforced before startup (prevents mixed CLI+compose state). Set `SUPABASE_RUNTIME_RECONCILE=1` to auto-stop the conflicting runtime.
   - Branch default is `SUPABASE_RUNTIME=compose` (CLI is backup/bootstrap only).
   - Uses the port overrides from `supabase/config.toml` for CLI mode (65421/65432/etc.).
+- `make supa-runtime-guard SUPABASE_RUNTIME=cli|compose`
+  - Verifies only the selected Supabase runtime is active.
+- `make supa-runtime-reconcile SUPABASE_RUNTIME=cli|compose`
+  - Stops the conflicting Supabase runtime so only the selected runtime remains.
 - `make supa-stop`
   - Stops the active Supabase runtime (`cli` or compose-backed services).
+- `make supa-stop-all`
+  - Stops both runtimes to clear mixed-state drift before clean bring-up.
 - `make supa-status`
   - Prints runtime status and snapshots CLI values into `pmoves/.supabase.status.env`.
   - Also generates `pmoves/env.supa.runtime` (service-friendly aliases like `SUPABASE_URL`, `SUPA_REST_URL`, `SUPABASE_SERVICE_ROLE_KEY`) so scripts/services can consume active CLI endpoints without manual copy/paste.
+- `make supa-env-doctor`
+  - Reports layered Supabase env collisions and runtime interpolation drift risks.
+- `make supa-env-doctor-strict`
+  - Same audit in fail-fast mode (recommended for production audit/certification gates).
 - `make supa-runtime-env`
   - Rebuilds `pmoves/env.supa.runtime` directly from the latest `.supabase.status.env`.
 - `make supabase-up`
   - Only relevant when `SUPABASE_RUNTIME=compose`; starts the GoTrue/Realtime/Storage shim defined in `docker-compose.supabase.yml`.
 - `make supabase-bootstrap`
-  - Replays `supabase/initdb/*.sql` + `supabase/migrations/*.sql` into whichever Postgres is active (CLI or compose) and re-seeds geometry/persona fixtures.
+  - Applies only pending files from `supabase/migrations/*.sql` + `supabase/initdb/*.sql`.
+  - Uses `public.pmoves_bootstrap_history` to make reruns idempotent and avoid duplicate-policy/trigger collisions.
+- `make supabase-bootstrap-mark-applied`
+  - Marks all migration/seed filenames as applied in `public.pmoves_bootstrap_history` without executing SQL (use for legacy environments that were already bootstrapped before history tracking existed).
 - `make supabase-boot-user`
   - Provisions (or rotates) the Supabase dashboard operator, waits for the auth endpoint, and updates `env.shared`, `.env.local`, and `pmoves/.env.local` with the latest password and JWT. `make first-run` runs this automatically.
+- `make docker-logs-brief`
+  - Produces a concise runtime snapshot (container status/health + WARN/ERROR tail) and writes `pmoves/docs/evidence/docker_logs_brief_latest.txt`. Automatically includes CHIT event summary when `pmoves/data/chit/env.cgp.json` exists.
 
 ## Console (UI)
 - `make ui-dev-start`
@@ -150,10 +166,30 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-runners-check-strict`
   - Same check in strict mode; exits non-zero if any required lane is offline/missing.
   - Use before dispatching heavy GHCR workflows to avoid queued runs when runners are down.
+- `make ci-runners-map`
+  - Maps discovered workflow lanes to explicit host assignments using `pmoves/integrations/github-runners/compose/lane_hosts.json`.
+  - With `--check-gh`, also reports live online/offline status for each lane.
+- `make ci-runners-map-strict`
+  - Strict host-map gate; fails when a workflow lane is unmapped or has no online runner.
+- `make ci-runners-lockdown`
+  - Enforces phase policy from `pmoves/integrations/github-runners/compose/runner_phase_policy.json`.
+  - Default phase is `local-certification` (local lanes required online, expansion lanes required offline).
+- `make ci-runners-lockdown-strict`
+  - Hard-stop gate for phase policy. Fails when required local lanes are offline or blocked expansion lanes are online.
+  - Override phase with `RUNNER_PHASE=lab-expansion` or `RUNNER_PHASE=production`.
+- `make ci-runners-local-cert-up`
+  - Starts Docker-hosted local-cert runner containers for `ai-lab` and `vps` lanes on the current machine.
+  - Uses `gh` to mint registration tokens unless `RUNNER_TOKEN` (or lane-specific `RUNNER_TOKEN_AI_LAB` / `RUNNER_TOKEN_VPS`) is preset.
+- `make ci-runners-local-cert-down`
+  - Stops/removes the Docker-hosted local-cert runner containers (`gha-runner-ai-lab`, `gha-runner-vps`).
+- `make ci-runners-local-cert-status`
+  - Shows both local container status and GitHub runner registration status for `pmoves-ai-lab-runner` and `pmoves-vps-runner`.
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.
   - Tuning knobs: `SHOWTIME_INTERVAL`, `SHOWTIME_MAX_SECONDS`, `SHOWTIME_WATCH=0`.
+- `make showtime`
+  - Shortcut alias for `make bringup-showtime`.
 - `make smoke-showtime`
   - Runs core smoke + production monitoring smoke with the live watcher active.
   - Set `SHOWTIME_SMOKE_GPU=1` to include strict GPU smoke in the same sequence.
