@@ -4,6 +4,12 @@ _Last updated: 2026-02-14_
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
 
+## Runtime signaling
+
+- Use `mode=focus` for implementation/validation windows.
+- Use `mode=open-chat+scout` for context gathering while staying conversational.
+- See protocol details in `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`.
+
 ## Bootstrap
 
 1. Install pinned Codex config:
@@ -83,6 +89,12 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
   - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
 - Persona style playbook:
   - `pmoves/docs/AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`
+- Runtime protocol (focus + scout):
+  - `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`
+- Unified taxonomy:
+  - `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md`
+- PMOVES skill bundles:
+  - `pmoves/docs/AGENTS/PmovesSKillZ.md`
 - Existing Claude context stack:
   - `.claude/CLAUDE.md`
   - `.claude/context/`
