@@ -97,6 +97,7 @@ CREATE TRIGGER trigger_claude_sessions_updated_at
 ALTER TABLE pmoves_core.claude_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Service role has full access
+DROP POLICY IF EXISTS claude_sessions_service_all ON pmoves_core.claude_sessions;
 CREATE POLICY claude_sessions_service_all ON pmoves_core.claude_sessions
     FOR ALL
     TO service_role
@@ -104,6 +105,7 @@ CREATE POLICY claude_sessions_service_all ON pmoves_core.claude_sessions
     WITH CHECK (true);
 
 -- Authenticated users can read their sessions (by repository access)
+DROP POLICY IF EXISTS claude_sessions_authenticated_select ON pmoves_core.claude_sessions;
 CREATE POLICY claude_sessions_authenticated_select ON pmoves_core.claude_sessions
     FOR SELECT
     TO authenticated
@@ -114,7 +116,18 @@ CREATE POLICY claude_sessions_authenticated_select ON pmoves_core.claude_session
 -- ============================================================================
 
 -- Enable realtime for the table
-ALTER PUBLICATION supabase_realtime ADD TABLE pmoves_core.claude_sessions;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'pmoves_core'
+          AND tablename = 'claude_sessions'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE pmoves_core.claude_sessions;
+    END IF;
+END $$;
 
 -- ============================================================================
 -- VIEW: Latest session context per session_id

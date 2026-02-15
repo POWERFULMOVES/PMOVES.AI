@@ -324,22 +324,28 @@ ALTER TABLE integration_work_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE work_item_executions ENABLE ROW LEVEL SECURITY;
 
 -- Service role has full access
+DROP POLICY IF EXISTS botz_service_policy ON botz_instances;
 CREATE POLICY botz_service_policy ON botz_instances
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS work_items_service_policy ON integration_work_items;
 CREATE POLICY work_items_service_policy ON integration_work_items
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS executions_service_policy ON work_item_executions;
 CREATE POLICY executions_service_policy ON work_item_executions
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Authenticated users can read all, but only modify their own BoTZ
+DROP POLICY IF EXISTS botz_read_policy ON botz_instances;
 CREATE POLICY botz_read_policy ON botz_instances
     FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS work_items_read_policy ON integration_work_items;
 CREATE POLICY work_items_read_policy ON integration_work_items
     FOR SELECT TO authenticated USING (true);
 
+DROP POLICY IF EXISTS executions_read_policy ON work_item_executions;
 CREATE POLICY executions_read_policy ON work_item_executions
     FOR SELECT TO authenticated USING (true);
 

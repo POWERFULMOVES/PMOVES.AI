@@ -43,9 +43,8 @@ BEGIN
       FOR SELECT USING (
         auth.role() = 'service_role'
         OR auth.uid() = owner_id
-        OR session_id IN (
-          SELECT session_id FROM public.claude_sessions
-          WHERE user_id = auth.uid()
+        OR session_id::text IN (
+          SELECT session_id FROM pmoves_core.claude_sessions
         )
       );
   END IF;
@@ -76,9 +75,8 @@ BEGIN
         AND cm.owner_id = auth.uid()
       LIMIT 1
     ) AND NOT EXISTS (
-      SELECT 1 FROM public.claude_sessions cs
-      WHERE cs.session_id = p_session_id
-        AND cs.user_id = auth.uid()
+      SELECT 1 FROM pmoves_core.claude_sessions cs
+      WHERE cs.session_id = p_session_id::text
       LIMIT 1
     ) THEN
       RAISE EXCEPTION 'Not authorized to access this session';
