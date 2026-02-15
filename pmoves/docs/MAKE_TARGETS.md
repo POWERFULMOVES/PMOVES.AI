@@ -142,7 +142,13 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make flight-check-retro` (alias: `make preflight-retro`)
   - Full animated diagnostics with theme support (`RETRO_THEME=green|amber|cb|neon|galaxy`).
 - `make preflight`
-  - Combined operator preflight: env check + quick flight check + Codex quick health.
+  - Combined operator preflight: env check + submodule integrity + CI runner lane check + quick flight check + Codex quick health.
+- `make ci-runners-check`
+  - Queries GitHub Actions runners for the repo and reports whether required self-hosted lanes are online (`self-hosted,vps` and `self-hosted,ai-lab,gpu`).
+  - Non-strict mode always exits zero so local developer preflight remains usable.
+- `make ci-runners-check-strict`
+  - Same check in strict mode; exits non-zero if any required lane is offline/missing.
+  - Use before dispatching heavy GHCR workflows to avoid queued runs when runners are down.
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.
@@ -160,11 +166,12 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Generates `pmoves/docs/SUBMODULE_ALIGNMENT_SITREP_2026-02-14.md` with current submodule initialization/drift state, duplicate canonical-vs-alias paths, and production decision guidance.
 - `make submodule-integrity`
   - Non-recursive submodule gate for production baseline checks.
-  - Fails on unmapped gitlinks, drifted (`+`) submodules, conflicts (`U`), and missing required core submodules.
-  - Allows optional/uninitialized modules while migration cleanup is still in progress.
+  - Fails on unmapped gitlinks, drifted (`+`) submodules, conflicts (`U`), and uninitialized (`-`) submodules.
+  - PMOVES hardened policy now treats all declared/tracked submodules as required (no optional/off-by-default modules).
 - `make submodule-integrity-strict`
   - Strict gate that also enforces recursive traversal.
-  - Currently expected to fail until `PMOVES-A2UI` nested `Deskdesktop` metadata is corrected upstream.
+  - Recursive metadata blockers (`PMOVES-A2UI` Deskdesktop and nested `PMOVES-transcribe-and-fetch` mappings) are now fixed in local hardened work.
+  - With all required submodules initialized, this target should pass in production-audit mode.
 - `make integration-contract-check`
   - Validates `pmoves-integrations` overlay contract for a target path (`INTEGRATION_PATH`, default template).
   - Enforces required layout files and required event subjects (`pmoves.announcer.event.v1`, `mesh.gpu.model.*`).
