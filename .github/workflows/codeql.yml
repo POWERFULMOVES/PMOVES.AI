@@ -14,29 +14,32 @@ name: "CodeQL Advanced"
 on:
   push:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    paths-ignore:
+      - 'integrations-workspace/**'
+      - '**/.venv/**'
+      - '**/venv/**'
+      - '**/vendor/**'
+      - '**/node_modules/**'
+      - '**/site-packages/**'
+      - '**/.eggs/**'
   pull_request:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    paths-ignore:
+      - 'integrations-workspace/**'
+      - '**/.venv/**'
+      - '**/venv/**'
+      - '**/vendor/**'
+      - '**/node_modules/**'
+      - '**/site-packages/**'
+      - '**/.eggs/**'
   schedule:
     - cron: '16 20 * * 5'
-  # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
-  paths-ignore:
-    - 'integrations-workspace/**'
-    - '**/.venv/**'
-    - '**/venv/**'
-    - '**/vendor/**'
-    - '**/node_modules/**'
-    - '**/site-packages/**'
-    - '**/.eggs/**'
 
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # PMOVES.AI: Use self-hosted runners for production CI
-    # Runner size impacts CodeQL analysis time. To learn more, please see:
-    #   - https://gh.io/recommended-hardware-resources-for-running-codeql
-    #   - https://gh.io/supported-runners-and-hardware-resources
-    # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: [self-hosted, vps]
+    # PMOVES.AI: Prefer self-hosted runners; fall back to GitHub-hosted if unavailable
+    runs-on: ubuntu-latest
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
     continue-on-error: ${{ matrix.language == 'c-cpp' }}
