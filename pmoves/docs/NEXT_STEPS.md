@@ -89,6 +89,16 @@ _Last updated: 2026-02-15_
 - Added Hyperdimensions control-plane taxonomy for agent architecture expansion:
   - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
   - Defines `Pmoves-hyperdimensions` as L2.5 between Geometry Bus and EvoSwarm, with geometry-to-runtime parameter mapping and Creator visualization contract.
+- Added submodule documentation coverage audit + dossier:
+  - `make -C pmoves submodule-docs-audit` (report generation)
+  - `make -C pmoves submodule-docs-audit-strict` (gate for missing docs/integration dossiers)
+  - Report path: `pmoves/docs/SUBMODULE_DOCS_DOSSIER.md`
+- Added Supabase runtime anti-drift guardrails:
+  - `make -C pmoves supa-runtime-guard` / `supa-runtime-reconcile` / `supa-stop-all`
+  - `supa-start` now blocks mixed CLI+compose runtime unless reconciled
+- Supabase bootstrap now tracks applied SQL files in `public.pmoves_bootstrap_history`:
+  - `make -C pmoves supabase-bootstrap` applies pending files only
+  - `make -C pmoves supabase-bootstrap-mark-applied` stamps legacy environments without replay
 
 ### Completed on 2025-10-19
 - v2 Supabase Realtime DNS fallback (host‑gateway derivation from SUPA_REST_URL/SUPA_REST_INTERNAL_URL)
