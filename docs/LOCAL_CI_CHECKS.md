@@ -125,6 +125,22 @@ For submodule-managed overlays (current blocker: `integrations/archon`), run:
 python pmoves/tools/integration_contract_check.py pmoves/integrations/archon --strict-hooks
 ```
 
+## 7. Self-Hosted Runner Lane Check (production CI)
+
+Before dispatching workflow jobs that require self-hosted labels, verify the lanes are online:
+
+```bash
+cd pmoves
+make ci-runners-check
+make ci-runners-check-strict
+```
+
+Expected required groups:
+- `self-hosted,vps` (core build/test lanes)
+- `self-hosted,ai-lab,gpu` (GPU build lanes)
+
+If strict mode fails, bring the runner(s) online first. Otherwise GHCR and hardened build workflows will queue indefinitely.
+
 ## Checklists
 
 Copy these bullets into PR descriptions (or tick the template boxes) after each local run:
@@ -136,5 +152,6 @@ Copy these bullets into PR descriptions (or tick the template boxes) after each 
 - [ ] Env preflight (`scripts/env_check.ps1 -Quick` or `env_check.sh -q`)
 - [ ] Integration contract check (`make integration-contract-check-strict`; plus `INTEGRATION_PATH=...` when onboarding/updating an opted-in integration)
 - [ ] Discord embed smoke (`make demo-content-published`) when validating multimedia metadata
+- [ ] Self-hosted runner lane check (`make ci-runners-check-strict`) before GHCR/self-hosted dispatches
 
 If any check is intentionally skipped (e.g., doc-only change), note the reason in the PR “Testing” section.
