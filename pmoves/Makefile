@@ -74,18 +74,26 @@ PROJECT ?= pmoves
 export DC
 export PROJECT
 
-# Compose env-file layering (cross-platform, no shell sourcing needed for compose interpolation)
+# Compose env-file layering (cross-platform, no shell sourcing needed for compose interpolation).
+# Prefer runtime files and fall back to .example files for CI/config validation.
 # Order matters: later files override earlier ones.
-COMPOSE_ENV_FILES := \
-	--env-file env.shared \
-	--env-file env.tier-data \
-	--env-file env.tier-supabase \
-	--env-file env.tier-api \
-	--env-file env.tier-llm \
-	--env-file env.tier-worker \
-	--env-file env.tier-media \
-	--env-file env.tier-agent \
-	--env-file env.tier-ui
+PRIMARY_ENV_FILE := $(if $(wildcard env.shared),env.shared,$(if $(wildcard env.shared.example),env.shared.example,))
+TIER_ENV_FILES := \
+	env.tier-data \
+	env.tier-supabase \
+	env.tier-api \
+	env.tier-llm \
+	env.tier-worker \
+	env.tier-media \
+	env.tier-agent \
+	env.tier-ui
+resolve_env_file = $(if $(wildcard $(1)),$(1),$(if $(wildcard $(1).example),$(1).example,))
+
+COMPOSE_ENV_FILES :=
+ifneq ($(strip $(PRIMARY_ENV_FILE)),)
+  COMPOSE_ENV_FILES += --env-file $(PRIMARY_ENV_FILE)
+endif
+COMPOSE_ENV_FILES += $(foreach file,$(TIER_ENV_FILES),$(if $(call resolve_env_file,$(file)),--env-file $(call resolve_env_file,$(file)),))
 ifneq ("$(wildcard .env.local)","")
   COMPOSE_ENV_FILES += --env-file .env.local
 endif
@@ -1201,10 +1209,15 @@ else
   N8N_DB_STACK_FILE :=
 endif
 
-# Core stack files for the default project. Optional stacks (n8n/monitoring/external/agents overlays)
-# are layered by their own targets explicitly.
+# Default stack files for the base project.
+# Keep overlays required by common targets here so service-specific commands
+# don't fail with "no such service" on clean clones/CI.
 STACK_FILES ?= \
-	-f docker-compose.yml
+	-f docker-compose.yml \
+	-f docker-compose.comfyui.yml \
+	-f docker-compose.ultimate-tts-studio.yml \
+	-f docker-compose.archon.submodule.yml \
+	-f docker-compose.archon-ui.submodule.yml
 
 # Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.

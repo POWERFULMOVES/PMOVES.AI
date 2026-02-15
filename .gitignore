@@ -11,6 +11,8 @@
 !.env.template
 !.env.tier-*
 secrets/
+!pmoves/integrations/**/secrets/
+!pmoves/integrations/**/secrets/labels.yaml
 *.pem
 *.key
 !*.key.example
