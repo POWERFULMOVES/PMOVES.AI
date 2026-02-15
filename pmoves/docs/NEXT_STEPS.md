@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-14_
+_Last updated: 2026-02-15_
 
 ## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
@@ -65,6 +65,30 @@ _Last updated: 2026-02-14_
 - `pmoves/integrations/pr-kits` is now explicitly documented as non-runtime packaging assets.
 
 ## Immediate
+
+### Latest changes (Feb 15, 2026)
+- Runner hard-stop policy landed for local-first certification:
+  - Added phase policy file: `pmoves/integrations/github-runners/compose/runner_phase_policy.json`
+  - Added phase enforcement targets: `make -C pmoves ci-runners-lockdown` and `ci-runners-lockdown-strict`
+  - Added runner lane map tooling: `pmoves/tools/runner_lane_map.py` + `make -C pmoves ci-runners-map*`
+- Deploy spread is now explicitly blocked until audit sign-off:
+  - `.github/workflows/self-hosted-builds.yml` staging/production deploy jobs require `vars.PMOVES_AUDIT_CERTIFIED == 'true'`
+  - `.github/workflows/self-hosted-builds-hardened.yml` staging/production deploy jobs require `vars.PMOVES_AUDIT_CERTIFIED == 'true'`
+  - `.github/workflows/deploy-gateway-agent.yml` VPS deploy/rollback require `vars.PMOVES_AUDIT_CERTIFIED == 'true'`
+- n8n integration path expanded with runner health flow:
+  - `pmoves/integrations/github-runners/n8n/flows/runner_lane_health_to_discord.json`
+  - Flow import/watcher now includes the `github-runners` integration path.
+- Added local-cert runner lifecycle can-openers:
+  - `make -C pmoves ci-runners-local-cert-up`
+  - `make -C pmoves ci-runners-local-cert-status`
+  - `make -C pmoves ci-runners-local-cert-down`
+- Added upstream-aligned launch strategy for Pinokio + Docker MCP/DHI + Cloudflare + GitHub runner governance:
+  - `pmoves/docs/PMOVES.AI PLANS/PINOKIO_DOCKER_CLOUDFLARE_GITHUB_STRATEGY.md`
+- Added explicit Dynamic MCP and Docker Model Runner planning to local-first audit flow (including session-level dynamic tool controls and local-model runtime defaults).
+- Added E2B Danger Room integration lane to planning backlog, gated by the same audit and phase-lock controls as other expansion surfaces.
+- Added Hyperdimensions control-plane taxonomy for agent architecture expansion:
+  - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
+  - Defines `Pmoves-hyperdimensions` as L2.5 between Geometry Bus and EvoSwarm, with geometry-to-runtime parameter mapping and Creator visualization contract.
 
 ### Completed on 2025-10-19
 - v2 Supabase Realtime DNS fallback (host‑gateway derivation from SUPA_REST_URL/SUPA_REST_INTERNAL_URL)

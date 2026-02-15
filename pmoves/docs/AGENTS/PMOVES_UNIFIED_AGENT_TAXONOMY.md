@@ -18,6 +18,11 @@ operational model for production bring-up and long-running orchestration.
 - Geometry Bus (`geometry.*` events), CHIT, and gateway routing.
 - Purpose: deterministic context movement and jump/replay across services.
 
+3.5. `L2.5 Hyperdimensions Control Plane`
+- `Pmoves-hyperdimensions` provides geometry-state visualization and operator-safe control knobs.
+- Purpose: map latent geometry signals (`delta`, curvature, spectral entropy) to runtime retrieval/decoding/swarm policy changes.
+- Canonical contract: `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`.
+
 4. `L3 Swarm Intelligence`
 - EvoSwarm and role-based swarm packs.
 - Purpose: protective/supportive specialist swarms per agent persona and task profile.
@@ -64,3 +69,11 @@ operational model for production bring-up and long-running orchestration.
 - `L4`: text/audio/VLM tool execution verification.
 - `L5`: secret hygiene, at-rest policy, and rollback proof.
 
+## Control-plane references
+
+- Hyperdimensions control-plane taxonomy:
+  - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
+- Geometry bus integration:
+  - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md`
+- Model source of truth:
+  - `pmoves/docs/MODEL_SOURCE_OF_TRUTH.md`
