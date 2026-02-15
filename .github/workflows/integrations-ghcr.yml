@@ -44,9 +44,12 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # Prefer GitHub's ephemeral token for GHCR to avoid PAT scope drift.
+  # Always prefer GitHub's ephemeral token for GHCR to avoid PAT scope drift.
   GHCR_USERNAME: ${{ github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || github.token }}
+  GHCR_PASSWORD: ${{ github.token }}
+  # Optional PAT fallback for orgs that explicitly require it.
+  GHCR_USERNAME_FALLBACK: ${{ secrets.GHCR_USERNAME || github.actor }}
+  GHCR_PASSWORD_FALLBACK: ${{ secrets.GHCR_TOKEN || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
@@ -232,6 +235,16 @@ jobs:
           username: ${{ env.GHCR_USERNAME }}
           password: ${{ env.GHCR_PASSWORD }}
 
+      - name: Fallback log in to GHCR (PAT)
+        id: login_ghcr_fallback
+        if: ${{ steps.login_ghcr.outcome != 'success' && env.GHCR_PASSWORD_FALLBACK != '' }}
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.GHCR_USERNAME_FALLBACK }}
+          password: ${{ env.GHCR_PASSWORD_FALLBACK }}
+
       - name: Optional login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
         uses: docker/login-action@v3
@@ -246,7 +259,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-          USE_GHCR: ${{ steps.login_ghcr.outcome == 'success' }}
+          USE_GHCR: ${{ steps.login_ghcr.outcome == 'success' || steps.login_ghcr_fallback.outcome == 'success' }}
         run: |
           set -euo pipefail
           DATE_TAG=$(date +%Y%m%d)
