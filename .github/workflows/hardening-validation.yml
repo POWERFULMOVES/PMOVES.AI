@@ -228,9 +228,9 @@ jobs:
           docker compose -f pmoves/docker-compose.yml config --quiet
           echo "✓ pmoves/docker-compose.yml is valid"
 
-          # Validate hardened compose file
-          docker compose -f pmoves/docker-compose.hardened.yml config --quiet
-          echo "✓ pmoves/docker-compose.hardened.yml is valid"
+          # Validate hardened compose overlay against base compose
+          docker compose -f pmoves/docker-compose.yml -f pmoves/docker-compose.hardened.yml config --quiet
+          echo "✓ pmoves/docker-compose.hardened.yml overlay is valid"
 
           # Validate monitoring compose file
           if [ -f "pmoves/monitoring/docker-compose.monitoring.yml" ]; then
