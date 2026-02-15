@@ -228,7 +228,7 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supa-init supa-start supa-stop supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor
+.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile
 supa-init: check-tools ## Initialize supabase/config.toml (one-time) and enforce PMOVES CLI defaults
 	@if [ ! -f "$(SUPABASE_CONFIG)" ]; then \
 		echo "🗂️ Initializing Supabase project in . ..."; \
@@ -240,8 +240,19 @@ supa-init: check-tools ## Initialize supabase/config.toml (one-time) and enforce
 supa-env-doctor: ## Show layered env conflicts for critical Supabase keys
 	@$(PYTHON) scripts/supabase/env_doctor.py
 
-supa-start: check-tools ## Start Supabase stack for selected runtime (cli or kong/compose)
+supa-env-doctor-strict: ## Fail on Supabase env collisions or host-env bleed/interpolation risks
+	@$(PYTHON) scripts/supabase/env_doctor.py --strict
+
+supa-runtime-guard: ## Fail when conflicting Supabase runtime (CLI vs compose) is running
+	@$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)"
+
+supa-runtime-reconcile: ## Stop conflicting runtime so only SUPABASE_RUNTIME is active
+	@$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)" --reconcile
+
+supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected runtime (cli or kong/compose)
 	@$(MAKE) --no-print-directory supa-env-doctor
+	@flags=""; if [ "$${SUPABASE_RUNTIME_RECONCILE:-0}" = "1" ]; then flags="--reconcile"; fi; \
+		$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)" $$flags
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		$(MAKE) --no-print-directory supa-init; \
 		echo "🗄️ Starting Supabase CLI stack..."; \
@@ -280,6 +291,12 @@ supa-stop: ## Stop Supabase stack for selected runtime
 		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true; \
 	fi
 	@echo "✅ Supabase stopped"
+
+supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-state drift
+	@echo "🛑 Stopping all Supabase runtimes..."
+	@supabase stop --workdir "." >/dev/null 2>&1 || true
+	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true
+	@echo "✅ All Supabase runtimes stopped"
 
 supa-restart: ## Restart Supabase stack for selected runtime
 	@echo "🔄 Restarting Supabase stack..."
@@ -392,38 +409,78 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 		exit 1; \
 	fi
 	@$(MAKE) --no-print-directory supa-start >/dev/null
-	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
-	for migration in supabase/migrations/*.sql; do \
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
+	find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort | while read -r migration; do \
 		[ -f "$$migration" ] || continue; \
 		echo "   Applying: $$(basename "$$migration")"; \
 		docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
 	done
 	@echo "✅ Migrations complete"
 
-.PHONY: supabase-bootstrap
-supabase-bootstrap: ## Apply Supabase migrations + seeds against active Supabase DB container
+.PHONY: supabase-bootstrap supabase-bootstrap-mark-applied
+supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
 	@$(MAKE) --no-print-directory supa-start >/dev/null
-	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
-		for migration in supabase/migrations/*.sql; do \
+		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$migration" ] || continue; \
-			echo "   Applying migration: $$(basename "$$migration")"; \
+			name=$$(basename "$$migration"); \
+			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   Skipping migration (already applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   Applying migration: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No migrations directory found"; \
 	fi; \
 	if [ -d "supabase/initdb" ]; then \
-		for seed in supabase/initdb/*.sql; do \
+		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$seed" ] || continue; \
-			echo "   Applying seed: $$(basename "$$seed")"; \
+			name=$$(basename "$$seed"); \
+			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   Skipping seed (already applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   Applying seed: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$seed"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No initdb directory found"; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
+
+supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in bootstrap history (no SQL execution)
+	@echo "📝 Marking migrations/seeds as applied in public.pmoves_bootstrap_history..."
+	@$(MAKE) --no-print-directory supa-start >/dev/null
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	if [ -d "supabase/migrations" ]; then \
+		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			name=$$(basename "$$migration"); \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+		done; \
+	fi; \
+	if [ -d "supabase/initdb" ]; then \
+		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			name=$$(basename "$$seed"); \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+		done; \
+	fi
+	@echo "✅ Bootstrap history updated"
 
 .PHONY: supabase-boot-user
 SUPABASE_BOOT_USER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),operator@pmoves.local)
@@ -1302,7 +1359,7 @@ manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visi
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
-.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
 submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
@@ -1325,6 +1382,12 @@ submodule-integrity-strict: ## Strict submodule integrity gate (includes recursi
 		--required-initialized PMOVES-ToKenism-Multi \
 		--required-initialized PMOVES-supabase \
 		--required-initialized Pmoves-cipher
+
+submodule-docs-audit: ## Generate submodule docs dossier and coverage matrix
+	@$(PYTHON) tools/submodule_docs_audit.py
+
+submodule-docs-audit-strict: ## Strict docs coverage gate for initialized submodules
+	@$(PYTHON) tools/submodule_docs_audit.py --strict
 
 integration-contract-check: ## Validate pmoves-integrations layout + required announcer/gpu/model hooks
 	@$(PYTHON) tools/integration_contract_check.py $(INTEGRATION_PATH)
@@ -1461,9 +1524,12 @@ monitoring-smoke-prod: up-monitoring ## Production-profile monitoring smoke (req
 observability-audit: ## Generate observability mapping report (Prom jobs -> dashboards -> live target health)
 	@$(PYTHON) tools/observability_audit.py --prom-url "http://localhost:$(PROMETHEUS_HOST_PORT)" --output docs/services/monitoring/OBSERVABILITY_MAP.md
 
-.PHONY: monitoring-report
+.PHONY: monitoring-report docker-logs-brief
 monitoring-report: ## Print a quick Prometheus summary (targets, failures, top CPU containers)
 	@$(PYTHON) tools/monitoring_report.py --prom "http://localhost:$(PROMETHEUS_HOST_PORT)"
+
+docker-logs-brief: ## Summarize recent Docker WARN/ERROR lines + container health for PMOVES/supabase containers
+	@$(PYTHON) tools/docker_logs_brief.py --tail $${DOCKER_LOGS_TAIL:-120} --save docs/evidence/docker_logs_brief_latest.txt
 
 # -------- Tailscale helpers --------
 .PHONY: tailscale-save-key tailscale-join tailscale-rejoin tailscale-status tailscale-logout
