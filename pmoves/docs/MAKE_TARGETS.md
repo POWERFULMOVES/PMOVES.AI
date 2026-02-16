@@ -187,11 +187,22 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.
+  - Emits clickable verification artifacts (`pmoves/docs/SHOWTIME_VERIFY_LINKS.html|.md`) with pages/UI/API links and helper worker container states.
   - Tuning knobs: `SHOWTIME_INTERVAL`, `SHOWTIME_MAX_SECONDS`, `SHOWTIME_WATCH=0`.
 - `make showtime`
   - Shortcut alias for `make bringup-showtime`.
+- `make showtime-links`
+  - Generates clickable verification pages and JSON evidence:
+    - `pmoves/docs/SHOWTIME_VERIFY_LINKS.html`
+    - `pmoves/docs/SHOWTIME_VERIFY_LINKS.md`
+    - `pmoves/docs/evidence/showtime_links.json`
+- `make showtime-links-open`
+  - Same as `showtime-links` and opens the generated HTML file in your default browser.
+- `make showtime-links-strict`
+  - Same artifacts, but fails if required core endpoints are down (`SHOWTIME_REQUIRED_NAMES` override available).
 - `make smoke-showtime`
   - Runs core smoke + production monitoring smoke with the live watcher active.
+  - Includes `showtime-links-strict` so endpoint click-through verification doubles as part of smoke.
   - Set `SHOWTIME_SMOKE_GPU=1` to include strict GPU smoke in the same sequence.
 - `make tooling-audit`
   - Scans `pmoves/scripts` and `pmoves/tools` against submodule tooling for overlap (auth/user/login/bootstrap/token/secret) so PMOVES can prefer overlay can-openers before adding new wrappers.
@@ -215,10 +226,15 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Writes `pmoves/docs/SUBMODULE_LAYER_VALIDATION.md` and `pmoves/docs/evidence/submodule_layer_validation.json`.
 - `make submodule-layer-validate-one SUBMODULE=<name-or-path>`
   - Runs the same deterministic validator for exactly one submodule so operators can certify module-by-module before running full strict gates.
+- `make submodule-layer-validate-all`
+  - Runs deterministic validation one submodule at a time and writes per-module artifacts to `pmoves/docs/evidence/submodule_layer/`.
+  - Summary artifacts: `pmoves/docs/evidence/submodule_layer_runall.json` and `pmoves/docs/SUBMODULE_LAYER_RUNALL.md`.
+- `make submodule-layer-validate-all-strict`
+  - Strict per-module validation lane (warnings fail) for deterministic one-by-one certification.
 - `make submodule-layer-validate-strict`
   - Strict mode for the same validator (warnings fail), intended as the first submodule gate before root-level checks.
 - `make audit-layers-static`
-  - Ordered static certification pipeline: `submodule-layer-validate-strict` -> `submodule-integrity-strict` -> `submodule-docs-audit-strict` -> integration/tooling/secrets/runner/runtime-guard checks.
+  - Ordered static certification pipeline: `submodule-layer-validate-all-strict` -> `submodule-layer-validate-strict` -> `submodule-integrity-strict` -> `submodule-docs-audit-strict` -> integration/tooling/secrets/runner/runtime-guard checks.
 - `make audit-layers-runtime`
   - Extends static certification with runtime checks (`smoke`, `monitoring-smoke-prod`, optional `smoke-gpu` via `AUDIT_RUNTIME_GPU=1`).
 - `make audit-layers`

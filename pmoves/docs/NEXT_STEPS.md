@@ -94,10 +94,14 @@ _Last updated: 2026-02-15_
   - `make -C pmoves submodule-docs-audit-strict` (gate for missing docs/integration dossiers)
   - Report path: `pmoves/docs/SUBMODULE_DOCS_DOSSIER.md`
 - Added deterministic submodule-first validation lane:
-  - `make -C pmoves submodule-layer-validate` / `submodule-layer-validate-one SUBMODULE=<name-or-path>` / `submodule-layer-validate-strict`
+  - `make -C pmoves submodule-layer-validate` / `submodule-layer-validate-one SUBMODULE=<name-or-path>` / `submodule-layer-validate-all[-strict]` / `submodule-layer-validate-strict`
   - Manifest-driven checks live in `pmoves/configs/submodule_layer_validation_manifest.json`
   - Layer orchestration targets: `make -C pmoves audit-layers-static` then `make -C pmoves audit-layers-runtime`
   - Evidence paths: `pmoves/docs/SUBMODULE_LAYER_VALIDATION.md` and `pmoves/docs/evidence/submodule_layer_validation.json`
+- Added Showtime click-through verification artifacts for bring-up/smoke:
+  - `make -C pmoves showtime-links` / `showtime-links-open` / `showtime-links-strict`
+  - Outputs: `pmoves/docs/SHOWTIME_VERIFY_LINKS.html`, `pmoves/docs/SHOWTIME_VERIFY_LINKS.md`, `pmoves/docs/evidence/showtime_links.json`
+  - `bringup-showtime` now emits link pages; `smoke-showtime` enforces strict endpoint verification with the same artifacts.
 - Added Supabase runtime anti-drift guardrails:
   - `make -C pmoves supa-runtime-guard` / `supa-runtime-reconcile` / `supa-stop-all`
   - `supa-start` now blocks mixed CLI+compose runtime unless reconciled
