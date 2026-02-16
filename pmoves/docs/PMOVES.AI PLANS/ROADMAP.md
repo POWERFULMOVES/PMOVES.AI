@@ -1,8 +1,15 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-02-15
+Last updated: 2026-02-16
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
+
+## Audit Snapshot (2026-02-16)
+
+- Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
+- PR queue: 0 open PRs on `POWERFULMOVES/PMOVES.AI` (targeted hardened cleanup merges complete for this pass).
+- Dependency/code scanning backlog: Dependabot open `14` (3 high, 9 medium, 2 low); Code Scanning open (first 100) `3 critical`, `64 high`, `33 medium`.
+- Active remediation focus: SSRF hardening landed for CHIT image decode paths in Hi‑RAG gateways and URL safety guards are being completed in SupaSerch HTTP fallback.
 
 ## Milestones
 

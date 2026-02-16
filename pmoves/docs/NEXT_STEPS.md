@@ -66,6 +66,15 @@ _Last updated: 2026-02-16_
 
 ## Immediate
 
+### Latest changes (Feb 16, 2026)
+- Hardened release queue is currently clear: open PRs on `POWERFULMOVES/PMOVES.AI` = `0`.
+- Current security backlog snapshot (live): Dependabot `14` open (`3 high`, `9 medium`, `2 low`); Code Scanning open in first-page sample (`3 critical`, `64 high`, `33 medium`).
+- Security remediation in progress for production audit:
+  - Hi‑RAG gateway (`services/hi-rag-gateway/gateway.py`) now validates remote image URL scheme/host/credentials, blocks private/internal hosts by default, and disallows redirects for CHIT image decode fetches.
+  - Hi‑RAG v2 (`services/hi-rag-gateway-v2/app.py`) now applies the same URL/redirect controls for image decode and preserves explicit HTTP errors instead of collapsing them into 500s.
+  - SupaSerch fallback (`services/supaserch/app.py`) now enforces encoded query substitution and validates fallback URL host/scheme/credentials before outbound HTTP.
+- Next gate to close: rerun local smoke + hardened security checks with the patched services and capture evidence for the production audit bundle.
+
 ### Latest changes (Feb 15, 2026)
 - Runner hard-stop policy landed for local-first certification:
   - Added phase policy file: `pmoves/integrations/github-runners/compose/runner_phase_policy.json`
