@@ -69,10 +69,7 @@ submodule-layer-validate: ## Deterministic submodule-level validation (manifest-
 	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" $(ARGS)
 
 submodule-layer-validate-one: ## Deterministic validation for exactly one submodule (set SUBMODULE=<name-or-path>)
-	@if [ -z "$(SUBMODULE)" ]; then \
-		echo "Usage: make -C pmoves submodule-layer-validate-one SUBMODULE=<name-or-path>"; \
-		exit 2; \
-	fi
+	$(if $(strip $(SUBMODULE)),,$(error Usage: make -C pmoves submodule-layer-validate-one SUBMODULE=<name-or-path>))
 	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" --only "$(SUBMODULE)" $(ARGS)
 
 submodule-layer-validate-strict: ## Strict submodule-level validation (errors and warnings fail)
