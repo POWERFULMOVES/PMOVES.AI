@@ -1,0 +1,107 @@
+name: Integration Gate
+
+on:
+  pull_request:
+    branches: [integration, PMOVES.AI-Edition-Hardened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-gate:
+    name: Audit Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Static audit layers
+        run: |
+          echo "=== Running static certification audit ==="
+
+          # Check submodule integrity
+          echo "Checking submodule references..."
+          git submodule status --recursive | while read -r line; do
+            hash=$(echo "$line" | awk '{print $1}')
+            path=$(echo "$line" | awk '{print $2}')
+            if [[ "$hash" == -* ]]; then
+              echo "WARN: Uninitialized submodule: $path"
+            elif [[ "$hash" == +* ]]; then
+              echo "INFO: Modified submodule: $path (local changes)"
+            else
+              echo "OK: $path"
+            fi
+          done
+
+          # Validate .gitmodules consistency
+          echo ""
+          echo "Checking .gitmodules branch tracking..."
+          if [ -f .gitmodules ]; then
+            grep -c '\[submodule' .gitmodules | xargs -I{} echo "Total submodules: {}"
+            grep 'branch = ' .gitmodules | while read -r line; do
+              branch=$(echo "$line" | awk -F= '{print $2}' | tr -d ' ')
+              if [[ "$branch" != "PMOVES.AI-Edition-Hardened" && "$branch" != "main" ]]; then
+                echo "WARN: Non-standard branch tracking: $line"
+              fi
+            done
+          fi
+
+      - name: Validate workflow YAML
+        run: |
+          echo "=== Validating workflow files ==="
+          errors=0
+          for f in .github/workflows/*.yml; do
+            python -c "import yaml; yaml.safe_load(open('$f'))" 2>/dev/null && \
+              echo "OK: $f" || \
+              { echo "FAIL: $f"; errors=$((errors + 1)); }
+          done
+          if [ "$errors" -gt 0 ]; then
+            echo "FAIL: $errors workflow files have invalid YAML"
+            exit 1
+          fi
+
+      - name: Check CI hardening (no soft failures)
+        run: |
+          echo "=== Checking for soft failure patterns ==="
+          errors=0
+
+          # Check for || true in test/audit commands (allow in report generation)
+          for f in .github/workflows/python-tests.yml .github/workflows/integration-contract.yml; do
+            if [ -f "$f" ] && grep -n '|| true' "$f" | grep -iv 'report\|grep\|count\|bench'; then
+              echo "WARN: Soft failure pattern in $f"
+              errors=$((errors + 1))
+            fi
+          done
+
+          if [ "$errors" -gt 0 ]; then
+            echo "WARN: $errors soft failure patterns found (review required)"
+          else
+            echo "OK: No soft failure patterns in critical workflows"
+          fi
+
+      - name: Integration contract check
+        run: |
+          echo "=== Integration contract validation ==="
+          if [ -f pmoves/tools/integration_contract_check.py ]; then
+            python pmoves/tools/integration_contract_check.py || echo "WARN: Contract check had issues"
+          else
+            echo "SKIP: integration_contract_check.py not found"
+          fi

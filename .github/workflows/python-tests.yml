@@ -2,7 +2,7 @@ name: Python Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/__init__.py'
       - 'pmoves/services/**/*.py'
@@ -12,7 +12,7 @@ on:
       - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   pull_request:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/__init__.py'
       - 'pmoves/services/**/*.py'
@@ -139,4 +139,4 @@ jobs:
             pmoves/services/jellyfin-bridge/tests \
             --ignore=pmoves/services/media-audio/tests \
             --ignore=pmoves/services/media-video/tests \
-            || true  # Don't fail on test errors initially
+            # Tests must pass for CI gate
