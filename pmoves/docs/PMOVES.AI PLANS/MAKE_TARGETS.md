@@ -25,6 +25,7 @@
 - `make backup` — best-effort dumps (Postgres, Qdrant snapshot, MinIO mirror, Meili dump) into `backups/<timestamp>/`.
 - `make restore` — see **LOCAL_DEV.md** for step-by-step restore instructions.
 - `make up-gpu` — start with `docker-compose.gpu.yml` overrides (GPU/VAAPI). See **LOCAL_DEV.md** for driver/toolkit notes.
+- `make showtime` — alias for `make bringup-showtime` (layered bring-up + live readiness watcher + retro diagnostics).
 
 ### External-mode
 Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local infra services and point the stack at your existing instances.
@@ -72,6 +73,17 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 - `make supa-stop`
 - `make supa-status`
   - Windows-friendly wrappers around the Supabase CLI for the full local Supabase experience (`supabase init/start/stop/status`). The CLI must already be installed.
+  - `supa-start` now enforces runtime guardrails so CLI and compose runtimes do not run at the same time.
+- `make supa-runtime-guard SUPABASE_RUNTIME=cli|compose`
+  - Checks for runtime drift and fails if conflicting Supabase runtime containers are active.
+- `make supa-runtime-reconcile SUPABASE_RUNTIME=cli|compose`
+  - Stops the conflicting runtime automatically so only the selected runtime remains.
+- `make supa-stop-all`
+  - Stops both Supabase runtimes (CLI + compose) to clear mixed-state drift before clean bring-up.
+- `make supa-env-doctor`
+  - Audits layered Supabase env values and flags host-shell interpolation drift risks.
+- `make supa-env-doctor-strict`
+  - Same audit in strict mode (non-zero exit on collisions/drift); use in local production gates.
 
 - `make supa-use-local`
   - Copies `.env.supa.local.example` → `.env.local`. After running `make supa-status`, paste your anon/service keys into `.env.local`.
@@ -83,11 +95,17 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
   - Parses `supa.md` and produces `.env.supa.remote` (ignored by Git) with the endpoints/keys discovered upstream.
 
 - `make supabase-bootstrap`
-  - Idempotently applies all SQL under `supabase/initdb/` (including the CHIT demo fixture in `12_geometry_fixture.sql`), `supabase/migrations/`, and the v5.12 schema/seed files in `db/` against the Supabase CLI database (expects the `supabase_db_pmoves` container to be running). Run directly after you edit migrations or reset the CLI stack, or let `make bootstrap-data` call it for you.
+  - Applies pending SQL under `supabase/initdb/` and `supabase/migrations/`, tracked via `public.pmoves_bootstrap_history`.
+  - Re-runs are safe: already-applied files are skipped instead of replayed.
+- `make supabase-bootstrap-mark-applied`
+  - Stamps all current migration/seed filenames into `public.pmoves_bootstrap_history` without executing SQL.
+  - Use once on legacy environments that were bootstrapped before history tracking was introduced.
 - `make neo4j-bootstrap`
   - Copies `neo4j/datasets/person_aliases_seed.csv` into the running container and executes the curated Cypher set (`neo4j/cypher/001_init.cypher`, `002_load_person_aliases.cypher`, `010_chit_geometry_fixture.cypher`, `011_chit_geometry_smoke.cypher`) via `cypher-shell`. Useful after refreshing the aliases CSV, replaying the CHIT constellation, or wiping the graph.
 - `make bootstrap-data`
   - Convenience umbrella that runs `supabase-bootstrap`, `neo4j-bootstrap`, and `seed-data` so Supabase, Neo4j, and Qdrant/Meili land in a known-good state on a new workstation.
+- `make docker-logs-brief`
+  - Creates a fast operator log digest (health + WARN/ERROR tails) and stores it at `pmoves/docs/evidence/docker_logs_brief_latest.txt`; includes CHIT event summary when a CHIT bundle is present.
 
 ### Notes
 

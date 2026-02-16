@@ -7,12 +7,15 @@ This agent serves as the central orchestrator for all MCP tools in PMOVES.AI:
 - Routes tool execution requests to appropriate upstream servers
 - Stores and retrieves skills from Cipher memory
 - Manages GitHub Secrets for secure credential injection
+- Subscribes to BoTZ Gateway work availability via NATS
+- Publishes tool execution results to NATS
 
 Architecture:
     Gateway Agent (8100)
         ├── Agent Zero MCP API (8080) - Tool discovery
         ├── Cipher Memory (3025) - Skills storage
         ├── TensorZero (3030) - LLM inference
+        ├── NATS (4222) - Event bus for BoTZ integration
         └── 100+ MCP Tools - Upstream servers
 """
 
@@ -31,6 +34,13 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 import uvicorn
+
+# NATS integration
+from nats_integration import (
+    nats_integration,
+    infer_skill_level,
+    GATEWAY_TOOL_EXECUTED,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -104,17 +114,43 @@ async def lifespan(app: FastAPI):
     secrets = SecretManager.get_all_credentials()
     logger.info(f"Loaded {len(secrets)} service credentials from environment")
 
+    # Connect to NATS
+    nats_connected = await nats_integration.connect()
+    if nats_connected:
+        logger.info("NATS integration active")
+
+        # Subscribe to BoTZ work item availability
+        await nats_integration.subscribe_to_workitem_available(
+            callback=workitem_available_callback
+        )
+
+        # Subscribe to credential requests
+        await nats_integration.subscribe_to_credential_requests(
+            secret_manager=SecretManager
+        )
+
+        # Start heartbeat
+        await nats_integration.start_heartbeat(interval_seconds=15)
+
+        # Announce available credentials
+        await nats_integration.publish_credential_available(
+            services=list(SecretManager.SECRETS_MAP.values())
+        )
+    else:
+        logger.info("NATS integration not available - running in HTTP-only mode")
+
     yield
 
     # Shutdown
     logger.info("Gateway Agent shutting down...")
+    await nats_integration.disconnect()
 
 
 # FastAPI app
 app = FastAPI(
     title="PMOVES Gateway Agent",
-    description="Orchestrates 100+ MCP tools with Cipher memory integration",
-    version="1.0.0",
+    description="Orchestrates 100+ MCP tools with Cipher memory and NATS integration",
+    version="1.1.0",
     lifespan=lifespan
 )
 
@@ -336,6 +372,47 @@ tool_registry = ToolRegistry()
 
 
 # ============================================================================
+# NATS Callbacks
+# ============================================================================
+
+async def workitem_available_callback(msg):
+    """
+    Handle BoTZ Gateway work item availability events.
+
+    When a work item is available, this callback checks if Gateway Agent
+    has the appropriate tools and skill level to handle it.
+    """
+    try:
+        data = json.loads(msg.data.decode())
+        workitem_id = data.get("workitem_id")
+        required_skill = data.get("skill_level", "basic")
+        tool_category = data.get("category", "general")
+
+        logger.info(f"Work item available: {workitem_id} (skill: {required_skill})")
+
+        # Check if we have tools in this category
+        tools = await tool_registry.discover_tools()
+        category_tools = [t for t in tools if t.category == tool_category]
+
+        if category_tools:
+            # Claim the work item
+            await nats_integration.publish_workitem_claimed(
+                workitem_id=workitem_id,
+                gateway_agent_id="gateway-agent",
+                skill_level=required_skill
+            )
+            logger.info(f"Claimed work item: {workitem_id}")
+        else:
+            logger.debug(f"No tools available for category: {tool_category}")
+
+        await msg.ack()
+
+    except Exception as e:
+        logger.error(f"Workitem callback error: {e}")
+        await msg.nak()
+
+
+# ============================================================================
 # Secrets Manager
 # ============================================================================
 
@@ -463,6 +540,16 @@ async def execute_tool(request: ToolExecuteRequest):
 
         execution_time = int((datetime.now() - start_time).total_seconds() * 1000)
 
+        # Publish tool execution to NATS
+        skill_level = infer_skill_level(tool.category)
+        await nats_integration.publish_tool_executed(
+            tool_name=tool.name,
+            category=tool.category,
+            skill_level=skill_level,
+            result={"success": True, "data": result},
+            execution_time_ms=execution_time
+        )
+
         return ToolExecuteResponse(
             success=True,
             result=result,
@@ -472,6 +559,18 @@ async def execute_tool(request: ToolExecuteRequest):
     except Exception as e:
         execution_time = int((datetime.now() - start_time).total_seconds() * 1000)
         logger.error(f"Tool execution error: {e}")
+
+        # Publish failed execution to NATS
+        if 'tool' in locals():
+            skill_level = infer_skill_level(tool.category)
+            await nats_integration.publish_tool_executed(
+                tool_name=tool.name,
+                category=tool.category,
+                skill_level=skill_level,
+                result={"success": False, "error": str(e)},
+                execution_time_ms=execution_time
+            )
+
         return ToolExecuteResponse(
             success=False,
             error=str(e),

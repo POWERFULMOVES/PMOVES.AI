@@ -31,7 +31,7 @@ pmoves env validate --tier data
 
 ### 2. Initialize from CHIT (If you have a CGP file)
 
-If you have an existing CHIT CGP file (`pmoves/pmoves/data/chit/env.cgp.json`):
+If you have an existing CHIT CGP file (`pmoves/data/chit/env.cgp.json`):
 
 ```bash
 # Decode CHIT and populate tier files
@@ -95,6 +95,8 @@ Contains internal service URLs and API credentials for service-to-service commun
 - `PRESIGN_SHARED_SECRET` - Presign service shared secret
 - `GH_PAT_PUBLISH` - GitHub PAT for publishing
 - `GHCR_USERNAME` - GitHub Container Registry username
+- `GHCR_TOKEN` - optional explicit GHCR token (falls back to `GH_PAT_PUBLISH`)
+- `GHCR_TOKEN_FILE` - optional path to file containing GHCR token
 - `DOCKERHUB_PAT` - Docker Hub PAT
 - `DOCKERHUB_USERNAME` - Docker Hub username
 

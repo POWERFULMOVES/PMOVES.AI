@@ -1,0 +1,138 @@
+name: Integration Contract
+
+on:
+  push:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - "pmoves/integrations/**"
+      - "pmoves/tools/integration_contract_check.py"
+      - "pmoves/docs/SUBMODULE_INTEGRATION_CONTRACT.md"
+      - "pmoves/Makefile"
+      - ".github/workflows/integration-contract.yml"
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - "pmoves/integrations/**"
+      - "pmoves/tools/integration_contract_check.py"
+      - "pmoves/docs/SUBMODULE_INTEGRATION_CONTRACT.md"
+      - "pmoves/Makefile"
+      - ".github/workflows/integration-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Integration Contract Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Validate template contract (strict)
+        run: |
+          python pmoves/tools/integration_contract_check.py \
+            pmoves/integrations/_template/pmoves-integrations \
+            --strict-hooks
+
+      - name: Validate baseline overlays (strict)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for root in \
+            pmoves/integrations/health-wger \
+            pmoves/integrations/firefly-iii
+          do
+            if [ -d "${root}" ]; then
+              python pmoves/tools/integration_contract_check.py "${root}" --strict-hooks
+            fi
+          done
+
+      - name: Audit archon overlay contract status (non-blocking)
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="pmoves/integrations/archon"
+          if [ ! -d "${root}" ]; then
+            echo "archon overlay path not present in checkout (likely uninitialized submodule)."
+            exit 0
+          fi
+
+          if python pmoves/tools/integration_contract_check.py "${root}" --strict-hooks; then
+            echo "archon overlay contract: PASS"
+          else
+            echo "archon overlay contract: FAIL (tracked blocker; contractization must land in PMOVES-Archon)."
+          fi
+
+      - name: Discover changed opted-in integration overlays
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          else
+            base="$(git rev-parse HEAD~1 2>/dev/null || true)"
+            head="$(git rev-parse HEAD)"
+          fi
+
+          if [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; then
+            base="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
+          fi
+
+          mapfile -t changed < <(git diff --name-only "${base}" "${head}" -- "pmoves/integrations/**" || true)
+          declare -A overlays=()
+          for path in "${changed[@]}"; do
+            if [[ ! "${path}" =~ ^pmoves/integrations/([^/]+)/ ]]; then
+              continue
+            fi
+
+            name="${BASH_REMATCH[1]}"
+            if [ "${name}" = "_template" ] || [ "${name}" = "tools" ]; then
+              continue
+            fi
+
+            root="pmoves/integrations/${name}"
+            if [ -f "${root}/tools/validate-integration.sh" ] || [ -f "${root}/events/subjects.yaml" ] || [ -f "${root}/compose/docker-compose.pmoves-net.yml" ]; then
+              overlays["${root}"]=1
+            fi
+          done
+
+          if [ "${#overlays[@]}" -eq 0 ]; then
+            echo "paths=" >> "${GITHUB_OUTPUT}"
+            echo "No opted-in overlays changed."
+            exit 0
+          fi
+
+          paths="$(printf "%s\n" "${!overlays[@]}" | sort | paste -sd, -)"
+          echo "paths=${paths}" >> "${GITHUB_OUTPUT}"
+          echo "paths=${paths}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Validate changed overlays (strict)
+        if: steps.discover.outputs.paths != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra roots <<< "${{ steps.discover.outputs.paths }}"
+          for root in "${roots[@]}"; do
+            python pmoves/tools/integration_contract_check.py "${root}" --strict-hooks
+          done

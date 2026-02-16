@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-01-02_
+_Last updated: 2026-02-15_
 
 ## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
@@ -29,7 +29,76 @@ _Last updated: 2026-01-02_
 - n8n flows: fixed HTTP Request `options.timeout` values (n8n expects **milliseconds**, so `20` means 20ms). The repo-tracked flows now use sane ms timeouts for LLM/Supabase/NATS steps.
 - FFmpeg-Whisper: fixed `/transcribe_file` support (multipart) to match Flute’s ad-hoc STT path; added the required dependency (`python-multipart`) for FastAPI form parsing.
 
+### Latest changes (Feb 14, 2026)
+- Codex operator parity docs added for PMOVES under `pmoves/docs/AGENTS/` (`CODEX_OPERATOR_HOME.md`, `CODEX_CLAUDE_PARITY_MAP.md`).
+- New Codex make targets added: `make -C pmoves codex-config`, `make -C pmoves codex-audit`, `make -C pmoves codex-home`, and `make -C pmoves codex-health-quick`.
+- Submodule Codex/Claude parity audit added (`pmoves/scripts/codex_submodule_audit.py`) and report generated at `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`.
+- Applied Codex homes for `PMOVES-Archon` and `PMOVES-ToKenism-Multi`; `PMOVES-Wealth` now replaces the old `PMOVES-Firefly-iii` module naming.
+- Synced `PMOVES-Agent-Zero` to upstream `v0.9.8` and preserved PMOVES overlays (`/healthz`, `/metrics`, persona bridge mount) during merge conflict resolution.
+- Added Codex homes for `PMOVES-Agent-Zero`, `PMOVES-Creator`, `PMOVES-Pipecat`, and `PMOVES-Wealth`; focus-module Codex coverage is now **8/8**.
+- Added production audit prep runbook with command evidence and blockers: `pmoves/docs/PRODUCTION_AUDIT_PREP_2026-02-14.md`.
+- Added secrets/credentials hardening audit tooling and runbook: `make -C pmoves secrets-audit` + `pmoves/docs/SECRETS_CREDENTIALS_AUDIT_2026-02-14.md` (CHIT path fixes, user-scoped sync output, Hostinger export cookie redaction).
+- Added CI gate `.github/workflows/secrets-hardening-audit.yml` to run the secrets hardening audit on push/PR against hardened branches.
+- Expanded `*_FILE` secret support across focus services (CHIT/Geometry, Gateway, Flute, EvoSwarm, Agent Zero, Archon) via `services/common/env.py`; secrets audit now fails on direct `os.getenv` reads of critical secret keys in those modules.
+- Makefile Phase 1 stabilization landed: added `help`, `env-setup`, `env-check`, `preflight`, `flight-check`, `flight-check-retro`, and `bringup-showtime` for consistent cross-platform/operator workflows.
+- PMOVES mini CLI now exposes `python3 -m pmoves.tools.mini_cli preflight` (theme-aware retro diagnostics), and Codex quick health now probes BoTZ/Evo/Flute with optional Hyperdimensions endpoint support.
+- Makefile Phase 2 started: moved Codex/preflight target groups into `pmoves/mk/codex.mk` + `pmoves/mk/preflight.mk` and kept compatibility through root `Makefile` includes.
+- `make bringup-showtime` now runs a live readiness watcher (`pmoves/tools/showtime_watch.py`) during bring-up so operators can watch services transition to ready in real time.
+- Added tooling overlay audit pipeline for scripts/tools vs submodules: `make -C pmoves tooling-audit` / `tooling-audit-strict` + report `pmoves/docs/AGENTS/TOOLING_SCRIPT_AUDIT.md` (focus on auth/user/login/bootstrap/token/secret overlap and can-opener routing).
+- Added portable secrets funnel targets: `make -C pmoves chit-export`, `secrets-funnel-sync`, and `secrets-funnel` (CHIT export + manifest fan-out + security/overlay audits).
+- Added programmatic CHIT manifest sync/check targets: `make -C pmoves chit-manifest-sync` and `chit-manifest-check`, with alias-aware label resolution in `secrets-funnel-sync` so v2 naming can map cleanly into canonical v1 labels.
+- Added runtime secrets hydration target: `make -C pmoves secrets-runtime-hydrate` to capture post-start labels (Supabase status + container env) before CHIT export, reducing manual env edits during onboarding.
+- Added auth-aware boot order phase (`make -C pmoves auth-bootstrap` + `auth-check`) and wired it into `first-run`, `first-run-multi-host`, `up-all-new`, and `tools/bringup_with_ui.sh` so secondary setup/auth checks run before UI onboarding.
+- Added `make -C pmoves supabase-boot-user` can-opener to create/rotate the seeded Supabase operator identity and keep UI/bootstrap auth flow first-class.
+- Added lightweight uv-first runtime bootstrap target for constrained systems: `make -C pmoves env-bootstrap-lite` (creates `pmoves/.venv-pmoves`, installs `pmoves/tools/requirements-lite.txt`, checks `make`/`docker`/`uv`).
+- Added CHIT portability runbook: `pmoves/docs/SECRETS_CHIT_PORTABILITY_WORKFLOW.md` (GitHub secrets are treated as distribution endpoints; CHIT + vault remain recovery source of truth).
+- Cross-platform make ergonomics improved: `help` now uses `pmoves/tools/make_help.py` (no awk dependency) and `ensure-env-shared` now uses `pmoves/tools/ensure_env_shared.py` (shell-agnostic).
+- Restored model tooling implementation under `pmoves/tools/models/` (`models_sync.py`, `apply_profile.sh`) so `model-apply`, `models-sync`, `model-swap`, and `models-seed-ollama` are operational instead of pointing at missing scripts.
+- Added model source-of-truth docs and workflow (`pmoves/docs/MODEL_SOURCE_OF_TRUTH.md`) centered on Supabase model registry with local profile fallback.
+- Added submodule integration contract + scaffold (`pmoves/docs/SUBMODULE_INTEGRATION_CONTRACT.md`, `pmoves/integrations/_template/`) to standardize PMOVES SDK onboarding across new repos, including hooks for announcer/tensorzero/gpu-orchestrator.
+- Added integration contract CI gate (`.github/workflows/integration-contract.yml`) and local CI mirror step (`docs/LOCAL_CI_CHECKS.md`) so opted-in integration overlays are validated with strict announcer/model/gpu hook checks.
+- Added subagent scouting/execution matrix for production audit parallelization: `pmoves/docs/AGENTS/PRODUCTION_AUDIT_SUBAGENT_PLAN.md`.
+- Hardened cross-platform preflight/monitoring ops: `mk/preflight.mk` now uses Make-level OS branching (no mixed shell conditionals), `scripts/env_check.ps1` and `tools/flightcheck/retro_flightcheck.py` now honor single-env `env.shared` mode, and monitoring targets no longer rely on `python3`/`jq` assumptions on Windows.
+- Contractized existing integration overlays for `health-wger` and `firefly-iii` with PMOVES hook scaffolding (`compose/models/events/secrets/auth/tools/docs`) so strict integration contract checks can be applied to real overlays, not only templates.
+- Added Lane D baseline gate `make -C pmoves integration-contract-check-baseline` (template + health-wger + firefly-iii) and mirrored the same strict checks in `.github/workflows/integration-contract.yml`.
+- Added nested `pmoves-integrations` root detection to `tools/integration_contract_check.py` so submodule-native overlays validate without root pollution; prepared Archon scaffold under `pmoves/integrations/archon/pmoves-integrations/` for upstream PMOVES-Archon promotion.
+- `pmoves/integrations/pr-kits` is now explicitly documented as non-runtime packaging assets.
+
 ## Immediate
+
+### Latest changes (Feb 15, 2026)
+- Runner hard-stop policy landed for local-first certification:
+  - Added phase policy file: `pmoves/integrations/github-runners/compose/runner_phase_policy.json`
+  - Added phase enforcement targets: `make -C pmoves ci-runners-lockdown` and `ci-runners-lockdown-strict`
+  - Added runner lane map tooling: `pmoves/tools/runner_lane_map.py` + `make -C pmoves ci-runners-map*`
+- Deploy spread is now explicitly blocked until audit sign-off:
+  - `.github/workflows/self-hosted-builds.yml` staging/production deploy jobs require `vars.PMOVES_AUDIT_CERTIFIED == 'true'`
+  - `.github/workflows/self-hosted-builds-hardened.yml` staging/production deploy jobs require `vars.PMOVES_AUDIT_CERTIFIED == 'true'`
+  - `.github/workflows/deploy-gateway-agent.yml` VPS deploy/rollback require `vars.PMOVES_AUDIT_CERTIFIED == 'true'`
+- n8n integration path expanded with runner health flow:
+  - `pmoves/integrations/github-runners/n8n/flows/runner_lane_health_to_discord.json`
+  - Flow import/watcher now includes the `github-runners` integration path.
+- Added local-cert runner lifecycle can-openers:
+  - `make -C pmoves ci-runners-local-cert-up`
+  - `make -C pmoves ci-runners-local-cert-status`
+  - `make -C pmoves ci-runners-local-cert-down`
+- Added upstream-aligned launch strategy for Pinokio + Docker MCP/DHI + Cloudflare + GitHub runner governance:
+  - `pmoves/docs/PMOVES.AI PLANS/PINOKIO_DOCKER_CLOUDFLARE_GITHUB_STRATEGY.md`
+- Added explicit Dynamic MCP and Docker Model Runner planning to local-first audit flow (including session-level dynamic tool controls and local-model runtime defaults).
+- Added E2B Danger Room integration lane to planning backlog, gated by the same audit and phase-lock controls as other expansion surfaces.
+- Added Hyperdimensions control-plane taxonomy for agent architecture expansion:
+  - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
+  - Defines `Pmoves-hyperdimensions` as L2.5 between Geometry Bus and EvoSwarm, with geometry-to-runtime parameter mapping and Creator visualization contract.
+- Added submodule documentation coverage audit + dossier:
+  - `make -C pmoves submodule-docs-audit` (report generation)
+  - `make -C pmoves submodule-docs-audit-strict` (gate for missing docs/integration dossiers)
+  - Report path: `pmoves/docs/SUBMODULE_DOCS_DOSSIER.md`
+- Added Supabase runtime anti-drift guardrails:
+  - `make -C pmoves supa-runtime-guard` / `supa-runtime-reconcile` / `supa-stop-all`
+  - `supa-start` now blocks mixed CLI+compose runtime unless reconciled
+- Supabase bootstrap now tracks applied SQL files in `public.pmoves_bootstrap_history`:
+  - `make -C pmoves supabase-bootstrap` applies pending files only
+  - `make -C pmoves supabase-bootstrap-mark-applied` stamps legacy environments without replay
 
 ### Completed on 2025-10-19
 - v2 Supabase Realtime DNS fallback (host‑gateway derivation from SUPA_REST_URL/SUPA_REST_INTERNAL_URL)
@@ -157,6 +226,7 @@ Next 48 hours
 - [x] Draft Supabase RLS hardening checklist covering non-dev environments and dependency audits (see `pmoves/docs/SUPABASE_RLS_HARDENING_CHECKLIST.md`, 2025-10-14).
 - [x] Plan optional CLIP + Qwen2-Audio integrations, including toggles, GPU/Jetson expectations, and smoke tests (captured in `pmoves/docs/CLIP_QWEN_INTEGRATION_PLAN.md`, 2025-10-14).
 - [ ] Outline the presign notebook walkthrough deliverable once automation stabilizes.
+- [ ] PMOVES-transcribe-and-fetch refactor pass: map legacy function-first flows to model-registry aliases/service mappings, preserve offline fallback path, and capture performance deltas before retiring superseded paths.
 
 ### 6. Realtime & Reranker Operational Notes (new)
 - Realtime fallback is automatic; explicit override lives in `pmoves/.env.local`:
@@ -176,6 +246,7 @@ Next 48 hours
   - ✅ Baseline guardrail: the local smoke tests now ingest a signed CGP, assert the `/shape/point/{id}/jump` locator, and hit `/geometry/calibration/report`; failures will block `make smoke`.
   - Still needed: seed Supabase tables + Neo4j entities so ShapeStore warm-up stops warning about missing labels/keys, and capture the runbook evidence.
 - [ ] Draft a CI-oriented pack manifest linter (selectors, age, size limits) and reference the proposal in `pmoves/docs/ROADMAP.md` once scoped.
+- [ ] PMOVES-A2UI onboarding bridge: mirror CLI/terminal bring-up events (preflight, service readiness, secrets funnel state) into generated onboarding widgets for accessibility-first operator UX.
 
 ## n8n Flow Operations
 - **Importing**

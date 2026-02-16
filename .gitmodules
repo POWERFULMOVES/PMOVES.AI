@@ -1,6 +1,25 @@
 # PMOVES.AI Submodules Configuration
-# All submodules are CORE COMPONENTS - NONE are optional
-# All services must be initialized and running for full PMOVES.AI functionality
+# =============================================================================
+# Agent Coordination & Security Architecture
+# =============================================================================
+#
+# All submodules are CORE COMPONENTS required for PMOVES.AI functionality.
+# Services are organized by tier:
+#   - Orchestrators: Agent Zero (primary), Archon (agent service)
+#   - AI Services: PMOVES-n8n, PMOVES-Deep-Serch, PMOVES-YT, etc.
+#   - Knowledge Base: PMOVES-Open-Notebook, PMOVES-HiRAG
+#   - Security Hardening: Container security baseline enforcement
+#
+# Branch Strategy:
+#   All submodules track PMOVES.AI-Edition-Hardened branch
+#   Exception: PMOVES-DoX tracks PMOVES.AI-Edition-Hardened-DoX
+#   Reason: DoX has a nested instance of Agent Zero as MCP tool for standalone mode
+#
+# GitHub Actions CI/CD:
+#   Push to hardened triggers automated builds via integrations-ghcr.yml
+#   Path triggers on core submodules ensure image updates propagate
+#
+# =============================================================================
 
 # =============================================================================
 # Core Agent & Orchestration Services
@@ -32,6 +51,11 @@
 
 [submodule "PMOVES-A2UI"]
 	path = PMOVES-A2UI
+	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "research/A2UI"]
+	path = research/A2UI
 	url = https://github.com/POWERFULMOVES/PMOVES-A2UI.git
 	branch = PMOVES.AI-Edition-Hardened
 
@@ -74,6 +98,11 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
 	branch = PMOVES.AI-Edition-Hardened
 
+[submodule "pmoves-surf"]
+	path = pmoves-surf
+	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
+	branch = PMOVES.AI-Edition-Hardened
+
 # =============================================================================
 # E2B Danger Room - Sandboxed Code Execution
 # =============================================================================
@@ -95,11 +124,6 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
 	branch = PMOVES.AI-Edition-Hardened
 
-[submodule "pmoves-e2b-mcp-server"]
-	path = pmoves-e2b-mcp-server
-	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-	branch = PMOVES.AI-Edition-Hardened
-
 [submodule "PMOVES-Danger-infra"]
 	path = PMOVES-Danger-infra
 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
@@ -110,38 +134,42 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
 	branch = PMOVES.AI-Edition-Hardened
 
-# DEPRECATED: Vendor e2b entries below - replaced by forked submodules above
-# Uncomment only if working with pre-migration branches (before 2026-02-07)
-# All code confirmed preserved in forked repositories - no local commits lost
-# [submodule "pmoves/vendor/e2b"]
-# 	path = pmoves/pmoves/vendor/e2b
-# 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-# 	branch = PMOVES.AI-Edition-Hardened
-#
-# [submodule "pmoves/vendor/e2b-desktop"]
-# 	path = pmoves/vendor/e2b-desktop
-# 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
-# 	branch = PMOVES.AI-Edition-Hardened
-#
-# [submodule "pmoves/vendor/e2b-infra"]
-# 	path = pmoves/vendor/e2b-infra
-# 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
-# 	branch = PMOVES.AI-Edition-Hardened
-#
-# [submodule "pmoves/vendor/e2b-mcp-server"]
-# 	path = pmoves/vendor/e2b-mcp-server
-# 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-# 	branch = PMOVES.AI-Edition-Hardened
-#
-# [submodule "pmoves/vendor/e2b-spells"]
-# 	path = pmoves/vendor/e2b-spells
-# 	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
-# 	branch = PMOVES.AI-Edition-Hardened
-#
-# [submodule "pmoves/vendor/e2b-surf"]
-# 	path = pmoves/vendor/e2b-surf
-# 	url = https://github.com/POWERFULMOVES/pmoves-surf.git
-# 	branch = PMOVES.AI-Edition-Hardened
+# Compatibility mappings for historical gitlinks that still exist in index.
+# Keep these active until the legacy vendor/research paths are fully removed.
+[submodule "pmoves/vendor/agentgym"]
+	path = pmoves/vendor/agentgym
+	url = https://github.com/POWERFULMOVES/PMOVES-AgentGym.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/agentgym-rl"]
+	path = pmoves/vendor/agentgym-rl
+	url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-desktop"]
+	path = pmoves/vendor/e2b-desktop
+	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-infra"]
+	path = pmoves/vendor/e2b-infra
+	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-mcp-server"]
+	path = pmoves/vendor/e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-spells"]
+	path = pmoves/vendor/e2b-spells
+	url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+	branch = PMOVES.AI-Edition-Hardened
+
+[submodule "pmoves/vendor/e2b-surf"]
+	path = pmoves/vendor/e2b-surf
+	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
+	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # Voice & Speech Services
@@ -195,11 +223,6 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
 	branch = PMOVES.AI-Edition-Hardened
 
-[submodule "Pmoves-open-notebook"]
-	path = Pmoves-open-notebook
-	url = https://github.com/POWERFULMOVES/Pmoves-open-notebook.git
-	branch = PMOVES.AI-Edition-Hardened
-
 # =============================================================================
 # Document Processing
 # =============================================================================
@@ -244,11 +267,6 @@
 [submodule "PMOVES-Wealth"]
 	path = PMOVES-Wealth
 	url = https://github.com/POWERFULMOVES/PMOVES-Wealth.git
-	branch = PMOVES.AI-Edition-Hardened
-
-[submodule "PMOVES-Firefly-iii"]
-	path = PMOVES-Firefly-iii
-	url = https://github.com/POWERFULMOVES/PMOVES-Firefly-iii.git
 	branch = PMOVES.AI-Edition-Hardened
 
 [submodule "Pmoves-Health-wger"]
@@ -306,3 +324,11 @@
 	path = PMOVES-supabase
 	url = https://github.com/POWERFULMOVES/PMOVES-supabase.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves-e2b-mcp-server"]
+	path = pmoves-e2b-mcp-server
+	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "Pmoves-cipher"]
+	path = Pmoves-cipher
+	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
+	branch = main

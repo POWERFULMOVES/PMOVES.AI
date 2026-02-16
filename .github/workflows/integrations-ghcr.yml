@@ -25,36 +25,47 @@ on:
         required: true
         default: false
         type: boolean
-  push:
-    branches: [main]
-    paths:
-      # Rebuild images when submodules are updated
-      - 'PMOVES-Open-Notebook'
-      - 'PMOVES-Agent-Zero'
-      - 'PMOVES-Archon'
-      - 'PMOVES.YT'
-      - 'PMOVES-Jellyfin'
-      - 'PMOVES-Supaserch'
-      # Also rebuild when this workflow changes
-      - '.github/workflows/integrations-ghcr.yml'
-  schedule:
-    - cron: '17 7 * * *'
+  # TEMPORARY: automatic triggers are disabled while self-hosted runners are
+  # intermittently offline, to prevent queued-run buildup.
+  #
+  # Re-enable after runner lanes are stable:
+  # - self-hosted,vps
+  # - self-hosted,ai-lab,gpu
+  #
+  # push:
+  #   branches: [main, PMOVES.AI-Edition-Hardened]
+  # pull_request:
+  #   branches: [main, PMOVES.AI-Edition-Hardened]
+  #   paths:
+  #     # Rebuild images when submodules are updated
+  #     - 'PMOVES-Open-Notebook'
+  #     - 'PMOVES-Agent-Zero'
+  #     - 'PMOVES-Archon'
+  #     - 'PMOVES.YT'
+  #     - 'PMOVES-Jellyfin'
+  #     - 'PMOVES-Supaserch'
+  #     # Also rebuild when this workflow changes
+  #     - '.github/workflows/integrations-ghcr.yml'
+  # schedule:
+  #   - cron: '17 7 * * *'
 
 env:
   REGISTRY: ghcr.io
-  # Standard secret names (documented in docs/SECRETS_ONBOARDING.md)
-  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GH_PAT_PUBLISH || github.token }}
+  # Always prefer GitHub's ephemeral token for GHCR to avoid PAT scope drift.
+  GHCR_USERNAME: ${{ github.actor }}
+  GHCR_PASSWORD: ${{ github.token }}
+  # Optional PAT fallback for orgs that explicitly require it.
+  GHCR_USERNAME_FALLBACK: ${{ secrets.GHCR_USERNAME || github.actor }}
+  GHCR_PASSWORD_FALLBACK: ${{ secrets.GHCR_TOKEN || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.CI_DOCKERHUB_USERNAME }}
-  DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
+  DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
 
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
-    # PMOVES.AI: Use self-hosted runners for production CI
     runs-on: [self-hosted, vps]
     permissions:
       contents: read
@@ -72,7 +83,7 @@ jobs:
             image_name: pmoves-agent-zero
             build_args: |
               BRANCH=local
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/agent-zero.trivyignore
           - name: archon
@@ -82,7 +93,7 @@ jobs:
             dockerfile: pmoves/services/archon/Dockerfile
             image_name: pmoves-archon
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: archon-ui
@@ -92,7 +103,7 @@ jobs:
             dockerfile: archon-ui-main/Dockerfile
             image_name: pmoves-archon-ui
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/archon-ui.trivyignore
           - name: open-notebook
@@ -102,7 +113,7 @@ jobs:
             dockerfile: Dockerfile
             image_name: pmoves-open-notebook
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/open-notebook.trivyignore
           - name: wger
@@ -112,7 +123,7 @@ jobs:
             dockerfile: extras/docker/production/Dockerfile
             image_name: pmoves-health-wger
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: firefly-iii
@@ -122,7 +133,7 @@ jobs:
             dockerfile: pmoves/images/firefly-iii/Dockerfile
             image_name: pmoves-firefly-iii
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: jellyfin
@@ -132,7 +143,7 @@ jobs:
             dockerfile: pmoves/images/jellyfin/Dockerfile
             image_name: pmoves-jellyfin
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/jellyfin.trivyignore
           - name: pmoves-yt
@@ -142,7 +153,7 @@ jobs:
             dockerfile: pmoves/services/pmoves-yt/Dockerfile
             image_name: pmoves-yt
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           - name: deepresearch
@@ -152,7 +163,7 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: supaserch
@@ -162,7 +173,7 @@ jobs:
             dockerfile: pmoves/services/supaserch/Dockerfile
             image_name: pmoves-supaserch
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64,linux/arm64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
           # To add other integrations, duplicate one of the entries above.
@@ -223,11 +234,23 @@ jobs:
         uses: sigstore/cosign-installer@v4.0.0
 
       - name: Log in to GHCR
+        id: login_ghcr
+        continue-on-error: true
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
           password: ${{ env.GHCR_PASSWORD }}
+
+      - name: Fallback log in to GHCR (PAT)
+        id: login_ghcr_fallback
+        if: ${{ steps.login_ghcr.outcome != 'success' && env.GHCR_PASSWORD_FALLBACK != '' }}
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.GHCR_USERNAME_FALLBACK }}
+          password: ${{ env.GHCR_PASSWORD_FALLBACK }}
 
       - name: Optional login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
@@ -243,7 +266,9 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+          USE_GHCR: ${{ steps.login_ghcr.outcome == 'success' || steps.login_ghcr_fallback.outcome == 'success' }}
         run: |
+          set -euo pipefail
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
           echo "date_tag=${DATE_TAG}" >> $GITHUB_OUTPUT
@@ -254,16 +279,45 @@ jobs:
           # Docker tag validation requires the repository namespace be lowercase.
           GHCR_NS="${GHCR_NS_RAW,,}"
           echo "ghcr_ns=${GHCR_NS}" >> $GITHUB_OUTPUT
-          TAGS="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest\n${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+          echo "use_ghcr=${USE_GHCR}" >> $GITHUB_OUTPUT
+
+          TAGS=""
+          PRIMARY_TAG=""
+
+          # Only add GHCR tags if login succeeded.
+          if [ "$USE_GHCR" = "true" ]; then
+            GHCR_LATEST="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest"
+            GHCR_SHA="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            TAGS="${GHCR_LATEST}\n${GHCR_SHA}"
+            PRIMARY_TAG="${GHCR_LATEST}"
+          fi
+
           if [ "$INCLUDE_DOCKERHUB" = "true" ] && [ -n "$DOCKERHUB_USERNAME" ]; then
             DH_NS=${DOCKERHUB_NAMESPACE:-$DOCKERHUB_USERNAME}
-            TAGS="$TAGS\ndocker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest\ndocker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            DH_LATEST="docker.io/$DH_NS/${{ matrix.image_name }}:pmoves-latest"
+            DH_SHA="docker.io/$DH_NS/${{ matrix.image_name }}:${DATE_TAG}-${SHA_SHORT}"
+            if [ -n "$TAGS" ]; then
+              TAGS="$TAGS\n${DH_LATEST}\n${DH_SHA}"
+            else
+              TAGS="${DH_LATEST}\n${DH_SHA}"
+              PRIMARY_TAG="${DH_LATEST}"
+            fi
           fi
+
+          if [ -z "$PRIMARY_TAG" ]; then
+            echo "::warning::No tags generated; GHCR login failed and Docker Hub credentials are absent. Build/push, scan, and sign steps will be skipped."
+            echo "has_tags=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_tags=true" >> $GITHUB_OUTPUT
+            echo "primary_tag=${PRIMARY_TAG}" >> $GITHUB_OUTPUT
+          fi
+
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo -e "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Build and push (multi-arch)
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -279,6 +333,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Cosign sign GHCR digest (keyless)
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
@@ -287,20 +342,19 @@ jobs:
           cosign sign --yes "$IMAGE_DIGEST_REF"
 
       - name: Install Syft (SBOM)
-        if: ${{ matrix.generate_sbom }}
+        if: ${{ matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
         uses: anchore/sbom-action/download-syft@v0.21.0
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
-        if: ${{ matrix.generate_sbom }}
+        if: ${{ matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
-          TAG_PRIMARY=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
-          syft packages "$TAG_PRIMARY" -o cyclonedx-json > sbom.cdx.json
+          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
-        if: ${{ matrix.generate_sbom }}
+        if: ${{ matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}-sbom
@@ -316,17 +370,19 @@ jobs:
           df -h
 
       - name: Pull image for Trivy (private GHCR)
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
-          docker pull "${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest"
+          docker pull "${{ steps.meta.outputs.primary_tag }}"
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         uses: aquasecurity/trivy-action@0.33.1
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
           # fixable regressions as hard failures.
-          image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
+          image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table
           trivyignores: ${{ matrix.trivy_ignorefile }}
           exit-code: '1'
@@ -336,9 +392,10 @@ jobs:
           scanners: 'vuln'
 
       - name: Trivy vulnerability scan report (includes unfixed)
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}:pmoves-latest
+          image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table
           output: trivy-${{ matrix.name }}.txt
           # Always include full findings (even if the gate uses trivyignore to unblock a build).
@@ -350,12 +407,14 @@ jobs:
           scanners: 'vuln'
 
       - name: Upload Trivy report artifact
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
 
       - name: Cosign verify GHCR digest (keyless)
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"

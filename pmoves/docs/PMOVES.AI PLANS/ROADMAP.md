@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2025-12-14
+Last updated: 2026-02-15
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -52,6 +52,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log the validation timestamp (see operational reminders captured in the implementation plan)
 - integrate Wger + Firefly flows: set secrets, import flows, run smokes, and verify upserts/events
 - CHIT EvoSwarm loop: enable controller, confirm `geometry.swarm.meta.v1` events; ensure pack selection by producers and pack_id persisted in constellation meta (gateway v2)
+- Codex parity for focus submodules is now complete (8/8); continue expanding Codex onboarding across non-focus modules
 - PMOVES.YT SABR handling: prefer Invidious when needed; add Whisper transcript fallback in pipeline; update smokes accordingly.
 - [ ] CI TODO — surface `make lint-packs` as the pack manifest linter prior to publish, blocking `kb.pack.published.v1` unless manifests validate.
 - [ ] CI TODO — retrieval-eval persona gate must succeed (`persona.publish.request.v1` → `persona.published.v1`) with thresholds persisted to `pmoves_core.persona_eval_gates`.
@@ -115,5 +116,17 @@ Planned
 - ✅ Hi‑RAG reranker toggle + evaluation suite update — implemented (parameter sweeps still optional)
 - 🚧 Jellyfin refresh + rich Discord embeds — waiting on publisher metadata polish and Discord wiring
 - ✅ Roadmap/NEXT_STEPS — aligned with repo state (unified REST + single‑env + agent health)
+- ✅ Codex operator parity bootstrap — `make codex-config`, `make codex-audit`, and Codex runbooks now cover CHIT/EvoSwarm/Flute/Gateway flows
+- ✅ Makefile/operator preflight stabilization — `help`, `preflight`, `flight-check*`, `bringup-showtime`, and mini CLI `preflight` now provide a consistent diagnostics path across Windows/WSL/Linux
+- ✅ Model operations source-of-truth + dynamic tooling — runtime routing now documented against Supabase model registry, local profile fallback is codified, and `pmoves/tools/models/*` is restored for profile apply/swap/seed/snapshot workflows
+- ✅ Submodule integration contract for SDK scale-out — standardized `pmoves-integrations/` layout (compose/models/n8n/secrets/auth/docs) documented for future PMOVES SDK onboarding
+- ✅ Integration contract CI gate for onboarding quality — `.github/workflows/integration-contract.yml` enforces strict template checks and validates opted-in overlays for announcer/model/gpu hook wiring
+- ✅ Submodule docs coverage dossier + audit gate — `make -C pmoves submodule-docs-audit` now generates `pmoves/docs/SUBMODULE_DOCS_DOSSIER.md` so repo docs always reference local submodule documentation entry points
+- ✅ Local certification hard-stop for runner/deploy spread — runner phase policy + lane map tooling now enforce `local-certification` by default, and staging/production deploy workflows are gated behind `PMOVES_AUDIT_CERTIFIED=true`.
+- ✅ Local-first launch strategy codified from official Pinokio/Docker/Cloudflare/GitHub guidance — see `PINOKIO_DOCKER_CLOUDFLARE_GITHUB_STRATEGY.md` for phased execution, Dynamic MCP controls, Docker Model Runner alignment, and E2B Danger Room lane gating.
+- ✅ Secrets hardening baseline for onboarding — `make secrets-audit` now checks CHIT path integrity, in-repo secret sync regressions, Hostinger export redactions, and template placeholder hygiene; local sync writes to `~/.config/pmoves/*` by default
+- ✅ Programmatic CHIT manifest sync + label aliasing — `make chit-manifest-sync` / `chit-manifest-check` now keep v1 secrets manifest aligned with v2, and `secrets-funnel-sync` resolves canonical labels from common Supabase/service aliases
+- ✅ Auth-aware boot order + onboarding identity controls — `auth-bootstrap`/`auth-check` now run as a first-class phase with support for real operator email, JWT mode, and Google OAuth mode wiring for Supabase runtimes
+- ✅ Runtime `*_FILE` secret support for production hardening — focus services now resolve critical secrets through Docker/K8s-style file mounts (`services/common/env.py`), and the audit gate now blocks regressions to direct `os.getenv` secret reads in CHIT/Geometry/Gateway/Flute/EvoSwarm/Agent Zero/Archon paths
 - ✅ TensorZero gateway integration for LangExtract — gateway profile, Crush auto-detection, and observability metadata tags routed through `LANGEXTRACT_PROVIDER=tensorzero`.
 - ✅ LangExtract Workers AI option + docs/env wiring — 2025-10-23

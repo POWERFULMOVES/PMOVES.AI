@@ -374,6 +374,23 @@ PMOVES.AI uses git submodules to integrate external projects and specialized ser
 - **Note:** This is the same repository as `PMOVES-Archon/` but mounted at a different path for integration purposes.
 - **README:** [pmoves/integrations/archon/README.md](../../../pmoves/integrations/archon/README.md)
 
+### Pmoves-cipher
+- **Path:** `Pmoves-cipher/`
+- **Repository:** https://github.com/POWERFULMOVES/Pmoves-cipher.git
+- **Branch:** `main`
+- **Purpose:** Cipher Memory - knowledge-graph memory system for persistent agent memory
+- **Features:**
+  - Neo4j-backed knowledge graph storage
+  - Semantic memory search with embeddings
+  - Reasoning trace storage and retrieval
+  - Multi-agent memory agent YAML configs
+- **Integration Points:**
+  - MCP bridge at `pmoves-cipher-mcp/` (stdio transport for Claude Code)
+  - Docker service `cipher-api` on port 8096 (profile: `agents`)
+  - Shares existing Neo4j instance (no duplicate)
+  - NATS service discovery via `pmoves_announcer`
+- **README:** [Pmoves-cipher/README.md](../../../Pmoves-cipher/README.md)
+
 ---
 
 ## Submodule Management

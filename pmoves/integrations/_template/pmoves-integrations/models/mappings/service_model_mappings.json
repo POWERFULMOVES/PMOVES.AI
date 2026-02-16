@@ -1,0 +1,6 @@
+{
+  "service_name": "<integration-service>",
+  "function_name": "default",
+  "variant_name": "local",
+  "model_alias": "<registry-alias>"
+}

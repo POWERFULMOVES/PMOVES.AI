@@ -9,9 +9,9 @@ services:
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
-    networks: [monitoring_tier, pmoves_api, pmoves_data]
+    networks: [monitoring_tier, pmoves_api, pmoves_app, pmoves_data, pmoves_net]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -36,7 +36,8 @@ services:
     command: ["-config.file=/etc/loki/local-config.yaml"]
     ports: ["${LOKI_HOST_PORT:-3100}:3100"]
     volumes:
-      - ./loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+      # Mount the entire config directory to avoid file-vs-dir bind issues on Windows/WSL paths.
+      - ./loki:/etc/loki:ro
       - loki-data:/loki
     networks: [monitoring_tier]
 
@@ -48,16 +49,18 @@ services:
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./promtail/config.yml:/etc/promtail/config.yml:ro
+      - ./promtail:/etc/promtail:ro
     networks: [monitoring_tier]
 
   blackbox:
     image: prom/blackbox-exporter:v0.25.0
     restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox_exporter/blackbox.yml
     ports: ["${BLACKBOX_HOST_PORT:-9115}:9115"]
     volumes:
-      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
-    networks: [monitoring_tier, pmoves_api, pmoves_data]
+      - ./blackbox:/etc/blackbox_exporter:ro
+    networks: [monitoring_tier, pmoves_api, pmoves_app, pmoves_data, pmoves_net]
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -100,9 +103,15 @@ networks:
   pmoves_api:
     external: true
     name: pmoves_api
+  pmoves_app:
+    external: true
+    name: pmoves_app
   pmoves_data:
     external: true
     name: pmoves_data
+  pmoves_net:
+    external: true
+    name: pmoves-net
 
 volumes:
   prometheus-data: {}

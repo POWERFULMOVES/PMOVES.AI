@@ -1,8 +1,19 @@
-# Health – Wger n8n Flows
+# Health – Wger Integration Overlay
+
+This integration keeps Wger workflows and PMOVES integration contract wiring in one place.
+
+## Core flows
 
 Drop exported n8n workflow JSON files in `n8n/flows/`. The integration watcher and import scripts
 mount this directory and sync any `*.json` updates into the local n8n instance when the integrations
 compose profiles are running.
+
+## PMOVES hook surface
+
+- Event hook: `pmoves-announcer` compatible subject definitions in `events/subjects.yaml`.
+- Model hook: `tensorzero-gateway` + `model-registry` references in `models/mappings/`.
+- GPU hook: `gpu-orchestrator` event compatibility via `mesh.gpu.model.*` subjects.
+- Validation can-openers: `tools/validate-submodule.sh`, `tools/submodule-sitrep.sh`, `tools/validate-integration.sh`.
 
 ### Redis + Axes note
 

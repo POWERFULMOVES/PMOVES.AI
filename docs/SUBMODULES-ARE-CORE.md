@@ -153,8 +153,7 @@ When a submodule contains another submodule as a nested reference:
 
 | Submodule | Nested Submodules | Purpose |
 |-----------|-------------------|---------|
-| PMOVES-Wealth | None (uses Firefly-iii internally) | Personal finance manager |
-| PMOVES-Firefly-iii | None | Firefly III backend (forked) |
+| PMOVES-Wealth | None (Firefly III backend) | Personal finance manager |
 | Pmoves-Health-wger | None | Health & fitness tracker |
 
 ### UI & Frontend Services
@@ -261,7 +260,7 @@ submodule clones that are used for cross-submodule development and testing.
 Services in integrations-workspace:
 - PMOVES-Agent-Zero
 - PMOVES-Archon
-- PMOVES-Firefly-iii (alias for PMOVES-Wealth integration)
+- PMOVES-Wealth (renamed from PMOVES-Firefly-iii)
 - PMOVES-Ultimate-TTS-Studio
 - PMOVES-crush
 - PMOVES-jellyfin (alias for PMOVES-Jellyfin)

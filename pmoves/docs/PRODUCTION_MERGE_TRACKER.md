@@ -338,9 +338,9 @@ main (production)
 - [x] Completed CI infrastructure audit
 
 ### Next Steps
-- [ ] Migrate `codeql.yml` to self-hosted runners
-- [ ] Migrate `python-tests.yml` to self-hosted runners
-- [ ] Verify all workflows use self-hosted runners
+- [x] Migrate `codeql.yml` to self-hosted runners ✅ Completed 2026-02-08
+- [x] Migrate `python-tests.yml` to self-hosted runners ✅ Completed 2026-02-08
+- [x] Verify all workflows use self-hosted runners ✅ Completed 2026-02-08 (see CI_INFRASTRUCTURE_AUDIT_2026-02-08.md)
 - [ ] Rebase PRs #577-581 onto latest hardened
 - [ ] Resolve remaining conflicting PRs
 

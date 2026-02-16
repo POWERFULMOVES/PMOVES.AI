@@ -1,0 +1,26 @@
+{
+  "name": "pmoves-cipher-memory",
+  "description": "Persistent memory for PMOVES.AI development using Cipher Memory",
+  "version": "0.1.0",
+  "mcpServer": "pmoves-cipher",
+  "tools": [
+    "pmoves_cipher_store",
+    "pmoves_cipher_search",
+    "pmoves_cipher_store_reasoning",
+    "pmoves_cipher_reasoning_patterns"
+  ],
+  "categories": {
+    "code_pattern": "Reusable code patterns and conventions",
+    "decision": "Architectural decisions and rationale",
+    "context": "Project-specific context",
+    "submodule": "PMOVES submodule knowledge",
+    "architecture": "System patterns and design",
+    "reasoning": "Chain-of-thought reasoning traces"
+  },
+  "memory_hints": {
+    "submodule_integration": "Remember: PMOVES submodules use pmoves_integrations framework (announcer, health, registry, common)",
+    "tensorzero": "Remember: TensorZero is the LLM gateway - only tier with external API keys",
+    "networking_modes": "Remember: Services run in standalone/docked/hybrid modes",
+    "circular_references": "Remember: Nested submodules are often separate instances, not circular references"
+  }
+}
