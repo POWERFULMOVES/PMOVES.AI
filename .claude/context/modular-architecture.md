@@ -562,6 +562,51 @@ curl http://localhost:8080/healthz | jq '.docked'  # Should be false
 
 ---
 
+## Namespace Publishing
+
+Services publish their identity via the mesh agent's NATS announcement. This
+enables runtime discovery of which project, tier, and branch a node belongs to.
+
+### Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `SERVICE_SLUG` | Unique service identifier | `$NODE_NAME` |
+| `SERVICE_TIER` | Service tier (data, api, llm, worker, media, agent, ui) | `unknown` |
+| `SERVICE_MODE` | Deployment mode (`docked` or `standalone`) | `docked` |
+| `COMPOSE_PROJECT_NAME` | Docker Compose project namespace | `pmoves` |
+| `GIT_BRANCH` | Current branch for provenance | `unknown` |
+| `PEER_EXPECTATIONS` | Comma-separated list of expected peer slugs | empty |
+
+### v2 Announcement Schema
+
+```json
+{
+  "type": "mesh.node.announce.v2",
+  "node": "agent-zero-host",
+  "caps": {"clip": true, "rag": true},
+  "host": "100.64.1.5",
+  "tailscale_ip": "100.64.1.5",
+  "mode": "docked",
+  "ts": 1739750400,
+  "namespace": {
+    "project": "pmoves",
+    "tier": "agent",
+    "branch": "PMOVES.AI-Edition-Hardened"
+  },
+  "slug": "agent-zero",
+  "peers": ["archon", "hi-rag-gateway-v2"],
+  "health": {"status": "announcing"}
+}
+```
+
+The mesh agent publishes to both `mesh.node.announce.v1` (backward-compatible)
+and `mesh.node.announce.v2` (with namespace identity) on each announcement cycle.
+
+See `pmoves/docs/NAMESPACE_PUBLISHING.md` for the full standard.
+
+---
+
 ## Further Reading
 
 - **Tier Architecture:** [tier-architecture.md](tier-architecture.md) - Network and environment tiers

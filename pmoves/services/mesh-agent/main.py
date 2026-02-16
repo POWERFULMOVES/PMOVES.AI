@@ -117,17 +117,40 @@ async def register_with_service_registry(port: int = 0, health_url: Optional[str
 async def announce_loop(nc):
     """Main announcement loop - announces via NATS and Service Registry."""
     while True:
-        # NATS announcement for local discovery
-        msg = {
+        ts_now = int(time.time())
+
+        # v1 announcement for backward compatibility
+        msg_v1 = {
             "type": "mesh.node.announce.v1",
             "node": NODE_NAME,
             "caps": {cap: True for cap in NODE_CAPABILITIES},
             "host": get_mesh_host(),
             "tailscale_ip": get_tailscale_ip(),
             "mode": SERVICE_MODE,
-            "ts": int(time.time())
+            "ts": ts_now,
         }
-        await nc.publish("mesh.node.announce.v1", json.dumps(msg).encode())
+        await nc.publish("mesh.node.announce.v1", json.dumps(msg_v1).encode())
+
+        # v2 announcement with namespace identity
+        peer_raw = os.environ.get("PEER_EXPECTATIONS", "")
+        msg_v2 = {
+            "type": "mesh.node.announce.v2",
+            "node": NODE_NAME,
+            "caps": {cap: True for cap in NODE_CAPABILITIES},
+            "host": get_mesh_host(),
+            "tailscale_ip": get_tailscale_ip(),
+            "mode": SERVICE_MODE,
+            "ts": ts_now,
+            "namespace": {
+                "project": os.environ.get("COMPOSE_PROJECT_NAME", "pmoves"),
+                "tier": os.environ.get("SERVICE_TIER", "unknown"),
+                "branch": os.environ.get("GIT_BRANCH", "unknown"),
+            },
+            "slug": os.environ.get("SERVICE_SLUG", NODE_NAME),
+            "peers": [p for p in peer_raw.split(",") if p],
+            "health": {"status": "announcing"},
+        }
+        await nc.publish("mesh.node.announce.v2", json.dumps(msg_v2).encode())
 
         # Service Registry registration for multi-host discovery
         await register_with_service_registry()
