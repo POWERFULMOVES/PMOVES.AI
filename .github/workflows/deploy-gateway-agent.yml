@@ -7,7 +7,8 @@ on:
   push:
     branches:
       - main
-      - feat/gateway-agent
+      - integration
+      - PMOVES.AI-Edition-Hardened
     paths:
       - 'pmoves/services/gateway-agent/**'
       - 'pmoves/docker-compose.yml'

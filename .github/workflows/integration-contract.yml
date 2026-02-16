@@ -2,7 +2,7 @@ name: Integration Contract
 
 on:
   push:
-    branches: [main, PMOVES.AI-Edition-Hardened]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - "pmoves/integrations/**"
       - "pmoves/tools/integration_contract_check.py"
@@ -10,7 +10,7 @@ on:
       - "pmoves/Makefile"
       - ".github/workflows/integration-contract.yml"
   pull_request:
-    branches: [main, PMOVES.AI-Edition-Hardened]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - "pmoves/integrations/**"
       - "pmoves/tools/integration_contract_check.py"
