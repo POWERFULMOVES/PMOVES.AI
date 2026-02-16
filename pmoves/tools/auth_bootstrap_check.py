@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,10 +53,19 @@ def _looks_placeholder(value: str | None) -> bool:
     if not trimmed:
         return True
     lowered = trimmed.lower()
+    looks_example_email = lowered.endswith("@example.com")
+    host = ""
+    try:
+        candidate = trimmed if "://" in trimmed else f"https://{trimmed}"
+        host = (urllib.parse.urlparse(candidate).hostname or "").lower()
+    except Exception:
+        host = ""
+    looks_example_host = host in {"example.com", "www.example.com"}
     return (
         lowered.startswith("placeholder_")
         or "your_" in lowered
-        or "example.com" in lowered
+        or looks_example_email
+        or looks_example_host
         or lowered in {"changeme", "change_me", "none", "null"}
     )
 
@@ -249,4 +259,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
