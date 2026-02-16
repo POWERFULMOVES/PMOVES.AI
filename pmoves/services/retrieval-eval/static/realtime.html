@@ -95,7 +95,9 @@
       }
       function showAvatar(){
         const u = document.getElementById('avatarUrl').value.trim()
-        document.getElementById('avatar').src = u
+        if(u && (u.startsWith('https://') || u.startsWith('http://') || u.startsWith('/'))){
+          document.getElementById('avatar').src = u
+        }
       }
       async function uploadAvatar(){
         const f = document.getElementById('upload').files[0]
