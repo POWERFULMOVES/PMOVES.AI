@@ -331,4 +331,4 @@
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
