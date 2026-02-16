@@ -62,6 +62,74 @@ logger = logging.getLogger("hirag.gateway")
 
 qdrant = QdrantClient(url=QDRANT_URL, timeout=20.0)
 
+
+def _qdrant_search(
+    *,
+    collection_name: str,
+    query_vector: List[float],
+    limit: int,
+    query_filter: Optional[Filter],
+    with_payload: bool = True,
+    with_vectors: bool = False,
+):
+    """Handle qdrant-client API drift (`search` vs `query_points`)."""
+    if hasattr(qdrant, "search"):
+        return qdrant.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+
+    if hasattr(qdrant, "query_points"):
+        kwargs = {
+            "collection_name": collection_name,
+            "limit": limit,
+            "query_filter": query_filter,
+            "with_payload": with_payload,
+            "with_vectors": with_vectors,
+        }
+        try:
+            resp = qdrant.query_points(query=query_vector, **kwargs)
+        except TypeError:
+            resp = qdrant.query_points(vector=query_vector, **kwargs)
+        if isinstance(resp, list):
+            return resp
+        points = getattr(resp, "points", None)
+        if isinstance(points, list):
+            return points
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        if isinstance(resp, dict):
+            dict_points = resp.get("points")
+            if isinstance(dict_points, list):
+                return dict_points
+            dict_result = resp.get("result")
+            if isinstance(dict_result, list):
+                return dict_result
+        return []
+
+    if hasattr(qdrant, "search_points"):
+        resp = qdrant.search_points(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+        if isinstance(resp, list):
+            return resp
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        return []
+
+    raise AttributeError("qdrant client has no compatible search/query API")
+
 # Optional Neo4j: run even if service is not present
 driver = None
 if NEO4J_URL:
@@ -467,7 +535,14 @@ def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_
     if RERANK_ENABLE:
         topn = max(RERANK_TOPN, k)
     try:
-        sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=topn, query_filter=cond, with_payload=True, with_vectors=False)
+        sr = _qdrant_search(
+            collection_name=QDRANT_COLLECTION,
+            query_vector=emb,
+            limit=topn,
+            query_filter=cond,
+            with_payload=True,
+            with_vectors=False,
+        )
     except Exception as e:
         logger.exception("Qdrant search error")
         raise HTTPException(503, f"Qdrant search error: {e}")
