@@ -1,5 +1,6 @@
-import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io
+import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io, socket
 from pathlib import Path
+from urllib.parse import urlparse
 
 # ensure repo root is on sys.path for importing tools/* when running from service folder
 try:
@@ -90,6 +91,12 @@ CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
 CHIT_DECODE_IMAGE = os.environ.get("CHIT_DECODE_IMAGE", "false").lower() == "true"
 CHIT_DECODE_AUDIO = os.environ.get("CHIT_DECODE_AUDIO", "false").lower() == "true"
 CHIT_CLIP_MODEL = os.environ.get("CHIT_CLIP_MODEL", "clip-ViT-B-32")
+CHIT_IMAGE_FETCH_ALLOW_PRIVATE = os.environ.get("CHIT_IMAGE_FETCH_ALLOW_PRIVATE", "false").lower() == "true"
+CHIT_IMAGE_FETCH_ALLOWED_HOSTS = {
+    host.strip().lower()
+    for host in os.environ.get("CHIT_IMAGE_FETCH_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+}
 
 _codebook_cache = None
 _codebook_mtime = None
@@ -400,6 +407,59 @@ def require_tailscale(request: Request, admin_only: bool = False):
 def require_admin_tailscale(request: Request):
     return require_tailscale(request, admin_only=True)
 
+
+def _host_is_private_or_internal(hostname: str) -> bool:
+    host = (hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in {"localhost"} or host.endswith(".local"):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+
+    seen: set[str] = set()
+    for _, _, _, _, sockaddr in infos:
+        ip_raw = sockaddr[0]
+        if ip_raw in seen:
+            continue
+        seen.add(ip_raw)
+        try:
+            ip_obj = ipaddress.ip_address(ip_raw)
+        except ValueError:
+            return True
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _validate_remote_image_url(raw_url: Any) -> str:
+    url = str(raw_url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(400, f"invalid image URL scheme: {parsed.scheme or '<none>'}")
+    if not parsed.hostname:
+        raise HTTPException(400, "invalid image URL host")
+    if parsed.username or parsed.password:
+        raise HTTPException(400, "image URL credentials are not allowed")
+
+    host = parsed.hostname.lower()
+    if CHIT_IMAGE_FETCH_ALLOWED_HOSTS and host not in CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        raise HTTPException(400, f"image host not allowed: {host}")
+    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE and not CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        if _host_is_private_or_internal(host):
+            raise HTTPException(400, f"private/internal image host blocked: {host}")
+    return url
+
+
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
     emb = embed_query(query)
     cond = Filter(must=[FieldCondition(key="namespace", match=MatchValue(value=namespace))])
@@ -680,15 +740,18 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
         img_list = []
         for url in images:
+            safe_url = _validate_remote_image_url(url)
             try:
-                r = requests.get(url, timeout=20)
+                r = requests.get(safe_url, timeout=20, allow_redirects=False)
                 r.raise_for_status()
             except requests.RequestException as e:
-                raise HTTPException(502, f"failed to fetch image {url}: {e}")
+                raise HTTPException(502, f"failed to fetch image {safe_url}: {e}")
+            if 300 <= r.status_code < 400:
+                raise HTTPException(400, f"redirect responses are not allowed for image URL: {safe_url}")
             try:
                 img = Image.open(io.BytesIO(r.content)).convert("RGB")
             except Exception as e:
-                raise HTTPException(400, f"invalid image payload for {url}: {e}")
+                raise HTTPException(400, f"invalid image payload for {safe_url}: {e}")
             img_list.append(img)
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
         sims = (img_embs @ text_emb.T).squeeze()
