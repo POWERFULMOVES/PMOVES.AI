@@ -1,5 +1,10 @@
-# PMOVES.AI Security Constitution
+# PMOVES.AI Agent Zero Security Constitution
 # Implements "Defense in Depth" as per BoTZ specification
+#
+# This configuration defines security rules for Agent Zero MCP tool execution.
+# Rules are enforced via:
+# 1. Pre-command hook (security/hooks/pre_command.py)
+# 2. In-process validator (security/validator.py)
 
 global_protection:
   # BLOCKING RULES: Commands that are strictly forbidden
@@ -18,25 +23,25 @@ global_protection:
     - pattern: "format .*:"
       reason: "Disk formatting destroys data. BLOCKED."
 
-    # Git history manipulation
+    # Git history manipulation (dangerous for agent operations)
     - pattern: "git push --force"
       reason: "History rewriting is forbidden for agents. Ask a human."
     - pattern: "git reset --hard"
       reason: "Hard reset can destroy work. Ask a human."
     - pattern: "git rebase .*--onto"
       reason: "Complex rebases can destroy history. Ask a human."
-    - pattern: "\\+\\+\\+\\+\\+\\+"  # Note: escaped for YAML
+    - pattern: "\\+\\+\\+\\+\\+\\+"
       reason: "Force push detected. BLOCKED."
 
     # Database destruction
     - pattern: "drop database"
-      reason: "Database destruction requires human 'Ask' permission."
+      reason: "Database destruction requires human permission."
       case_insensitive: true
     - pattern: "truncate table"
-      reason: "Table truncation requires human 'Ask' permission."
+      reason: "Table truncation requires human permission."
       case_insensitive: true
     - pattern: "delete from .*where"
-      reason: "Mass deletion requires human 'Ask' permission."
+      reason: "Mass deletion requires human permission."
       case_insensitive: true
 
     # Permission escalation
@@ -79,7 +84,7 @@ global_protection:
     - pattern: "poweroff"
       reason: "System poweroff is forbidden."
 
-    # Cryptomining prevention
+    # Cryptomining/code injection prevention
     - pattern: "\\|.*bash"
       reason: "Pipe to bash is dangerous. BLOCKED."
     - pattern: "\\|.*sh"
@@ -93,6 +98,14 @@ global_protection:
     - pattern: "wget.*\\|"
       reason: "Wget piped to command is dangerous. BLOCKED."
 
+    # Agent-specific protections
+    - pattern: "docker rm -f"
+      reason: "Container removal requires human permission."
+    - pattern: "kubectl delete"
+      reason: "Kubernetes resource deletion requires human permission."
+    - pattern: "helm uninstall"
+      reason: "Helm release uninstallation requires human permission."
+
   # PATH PROTECTION: Granular file access control
   protected_paths:
     # Zero Access - Agent cannot see or modify
@@ -102,6 +115,7 @@ global_protection:
       - "*.key"
       - "**/secrets/**"
       - "**/.ssh/**"
+      - "**/security/patterns.yaml"
 
     # Read Only - Agent can read but not modify
     read_only:
@@ -109,6 +123,8 @@ global_protection:
       - "patterns.yaml"
       - "*.lock"
       - "requirements*.txt"
+      - "poetry.lock"
+      - "Pipfile.lock"
 
     # No Delete - Agent can modify but not delete
     no_delete:
@@ -132,5 +148,5 @@ hooks:
 
   audit:
     enabled: true
-    path: "memory/audit/"
+    path: "runtime/audit/agent_actions.jsonl"
     format: "jsonl"

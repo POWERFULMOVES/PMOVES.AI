@@ -2,11 +2,17 @@
 
 Manages vLLM container settings including tensor parallelism (TP),
 pipeline parallelism (PP), and resource allocation.
+
+Integrates with Hugging Face Hub for model discovery and metadata.
 """
 
 import dataclasses
+import os
 from enum import Enum
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+
+import yaml
 
 from ..resource_detector.hardware import NodeTier
 
@@ -34,7 +40,8 @@ class ModelConfig:
     supports_pp: bool = False
 
 
-# Common model configurations
+# Common model configurations (legacy - kept for backward compatibility)
+# New code should use HF_MODEL_CATALOG from load_hf_model_catalog()
 MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "llama-3-8b": ModelConfig(
         name="llama-3-8b",
@@ -105,6 +112,332 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
 }
 
 
+# =============================================================================
+# Hugging Face Model Catalog Integration
+# =============================================================================
+
+@dataclasses.dataclass
+class HFModelConfig:
+    """Extended model configuration from Hugging Face catalog."""
+
+    # Basic identity
+    pmoves_name: str
+    hf_id: str
+
+    # Model specs
+    params: int
+    context_length: int
+    quantization: str
+
+    # Hardware requirements
+    tier: str  # small, medium, large, xlarge
+    min_vram_mb: int
+    recommended_tp_size: int
+    max_tp_size: int
+    supports_pp: bool
+
+    # Backend support
+    backends: List[str]  # ollama, vllm, llama_cpp, transformers
+
+    # Use cases
+    uses: List[str]  # orchestrator, coding, utility, vl_sentinel, etc.
+
+    # Ollama specific
+    ollama_name: Optional[str] = None
+    ollama_variant: Optional[str] = None
+
+    # vLLM specific
+    vllm_name: Optional[str] = None
+
+    # Optional embedding dimensions
+    dimensions: Optional[int] = None
+
+
+def _parse_params(params_str: str) -> int:
+    """Parse parameter string like '7B' or '3.8B' to integer."""
+    params_str = params_str.lower().replace('b', '').strip()
+    if '.' in params_str:
+        # Handle '3.8B' -> 3800000000
+        return int(float(params_str) * 1_000_000_000)
+    return int(params_str) * 1_000_000_000
+
+
+def load_hf_model_catalog() -> Dict[str, HFModelConfig]:
+    """Load model catalog from Hugging Face configuration files.
+
+    Searches for models.yaml in the following locations:
+    1. /app/config/models.yaml (in container)
+    2. ../../config/models.yaml (relative to vllm-orchestrator)
+    3. /pmoves/config/models.yaml (absolute path)
+
+    Returns:
+        Dictionary mapping pmoves_name to HFModelConfig
+    """
+    catalog_path = os.environ.get(
+        "HF_MODEL_CATALOG",
+        "/pmoves/config/models.yaml"
+    )
+
+    if not Path(catalog_path).exists():
+        # Try relative path
+        relative_path = Path(__file__).parent.parent.parent / "config" / "models.yaml"
+        if relative_path.exists():
+            catalog_path = str(relative_path)
+        else:
+            # Fall back to built-in models
+            return _get_builtin_hf_catalog()
+
+    try:
+        with open(catalog_path) as f:
+            data = yaml.safe_load(f)
+    except Exception as e:
+        print(f"Warning: Failed to load HF catalog from {catalog_path}: {e}")
+        return _get_builtin_hf_catalog()
+
+    catalog = {}
+
+    for tier_name, models in data.get("models", {}).items():
+        if tier_name == "specialized":
+            for model_data in models:
+                config = _hf_model_from_dict(model_data, tier_name)
+                catalog[config.pmoves_name] = config
+        else:
+            for model_data in models:
+                config = _hf_model_from_dict(model_data, tier_name)
+                catalog[config.pmoves_name] = config
+
+    return catalog
+
+
+def _hf_model_from_dict(data: Dict[str, Any], tier: str) -> HFModelConfig:
+    """Create HFModelConfig from dictionary."""
+    params = _parse_params(data["params"]) if isinstance(data["params"], str) else data["params"]
+
+    return HFModelConfig(
+        pmoves_name=data["name"],
+        hf_id=data["hf_id"],
+        params=params,
+        context_length=data.get("context", 4096),
+        quantization=data.get("quantization", "fp16"),
+        tier=tier,
+        min_vram_mb=data.get("vram_min", 0),
+        recommended_tp_size=data.get("tp_size", 1),
+        max_tp_size=data.get("max_tp_size", 8),
+        supports_pp=data.get("supports_pp", False),
+        backends=data.get("backends", ["transformers"]),
+        uses=data.get("uses", []),
+        ollama_name=data.get("ollama_name"),
+        vllm_name=data.get("vllm_name"),
+        dimensions=data.get("dimensions"),
+    )
+
+
+def _get_builtin_hf_catalog() -> Dict[str, HFModelConfig]:
+    """Built-in HF model catalog as fallback."""
+    return {
+        "qwen2.5-7b": HFModelConfig(
+            pmoves_name="qwen2.5-7b",
+            hf_id="Qwen/Qwen2.5-7B-Instruct",
+            params=7_000_000_000,
+            context_length=32768,
+            quantization="fp16",
+            tier="medium",
+            min_vram_mb=16384,
+            recommended_tp_size=1,
+            max_tp_size=2,
+            supports_pp=False,
+            backends=["ollama", "vllm"],
+            uses=["orchestrator", "coding", "utility"],
+            ollama_name="qwen2.5:7b",
+            vllm_name="Qwen/Qwen2.5-7B-Instruct",
+        ),
+        "qwen2.5-14b": HFModelConfig(
+            pmoves_name="qwen2.5-14b",
+            hf_id="Qwen/Qwen2.5-14B-Instruct",
+            params=14_000_000_000,
+            context_length=32768,
+            quantization="fp16",
+            tier="medium",
+            min_vram_mb=24576,
+            recommended_tp_size=1,
+            max_tp_size=2,
+            supports_pp=False,
+            backends=["ollama", "vllm"],
+            uses=["orchestrator", "coding"],
+            ollama_name="qwen2.5:14b",
+            vllm_name="Qwen/Qwen2.5-14B-Instruct",
+        ),
+        "qwen2.5-32b": HFModelConfig(
+            pmoves_name="qwen2.5-32b",
+            hf_id="Qwen/Qwen2.5-32B-Instruct",
+            params=32_000_000_000,
+            context_length=32768,
+            quantization="fp16",
+            tier="large",
+            min_vram_mb=49152,
+            recommended_tp_size=2,
+            max_tp_size=4,
+            supports_pp=True,
+            backends=["vllm"],
+            uses=["orchestrator", "research"],
+            vllm_name="Qwen/Qwen2.5-32B-Instruct",
+        ),
+        "qwen2.5-coder-7b": HFModelConfig(
+            pmoves_name="qwen2.5-coder-7b",
+            hf_id="Qwen/Qwen2.5-Coder-7B-Instruct",
+            params=7_000_000_000,
+            context_length=32768,
+            quantization="fp16",
+            tier="medium",
+            min_vram_mb=16384,
+            recommended_tp_size=1,
+            max_tp_size=2,
+            supports_pp=False,
+            backends=["ollama", "vllm"],
+            uses=["coding"],
+            ollama_name="qwen2.5-coder:7b",
+            vllm_name="Qwen/Qwen2.5-Coder-7B-Instruct",
+        ),
+        "llama3.1-8b": HFModelConfig(
+            pmoves_name="llama3.1-8b",
+            hf_id="meta-llama/Llama-3.1-8B-Instruct",
+            params=8_000_000_000,
+            context_length=128000,
+            quantization="fp16",
+            tier="medium",
+            min_vram_mb=16384,
+            recommended_tp_size=1,
+            max_tp_size=4,
+            supports_pp=False,
+            backends=["ollama", "vllm"],
+            uses=["orchestrator", "utility"],
+            ollama_name="llama3.1:8b",
+            vllm_name="meta-llama/Llama-3.1-8B-Instruct",
+        ),
+        "qwen3-vl-8b": HFModelConfig(
+            pmoves_name="qwen3-vl-8b",
+            hf_id="Qwen/Qwen3-VL-8B-Instruct",
+            params=8_000_000_000,
+            context_length=32768,
+            quantization="fp16",
+            tier="medium",
+            min_vram_mb=16384,
+            recommended_tp_size=1,
+            max_tp_size=2,
+            supports_pp=False,
+            backends=["vllm"],
+            uses=["vl_sentinel"],
+            vllm_name="Qwen/Qwen3-VL-8B-Instruct",
+        ),
+        "qwen3-embedding-8b": HFModelConfig(
+            pmoves_name="qwen3-embedding-8b",
+            hf_id="Qwen/Qwen3-Embedding-8B",
+            params=8_000_000_000,
+            context_length=32768,
+            quantization="fp16",
+            tier="medium",
+            min_vram_mb=16384,
+            recommended_tp_size=1,
+            max_tp_size=2,
+            supports_pp=False,
+            backends=["ollama", "vllm"],
+            uses=["embeddings", "hirag"],
+            ollama_name="qwen3-embedding:8b",
+            vllm_name="Qwen/Qwen3-Embedding-8B",
+            dimensions=4096,
+        ),
+    }
+
+
+def get_hf_model_config(model_name: str) -> Optional[HFModelConfig]:
+    """Get HF model config by name.
+
+    Args:
+        model_name: PMOVES model name (e.g., 'qwen2.5-7b')
+
+    Returns:
+        HFModelConfig or None if not found
+    """
+    catalog = load_hf_model_catalog()
+    return catalog.get(model_name)
+
+
+def list_models_by_tier(tier: str, use_case: Optional[str] = None) -> List[HFModelConfig]:
+    """List models by hardware tier and optional use case.
+
+    Args:
+        tier: Hardware tier (small, medium, large, xlarge)
+        use_case: Optional filter by use case (coding, orchestrator, etc.)
+
+    Returns:
+        List of matching HFModelConfig
+    """
+    catalog = load_hf_model_catalog()
+
+    results = [
+        config for config in catalog.values()
+        if config.tier == tier
+    ]
+
+    if use_case:
+        results = [c for c in results if use_case in c.uses]
+
+    return results
+
+
+def recommend_models_for_hardware(
+    available_gpus: int,
+    vram_per_gpu_mb: int,
+) -> List[HFModelConfig]:
+    """Recommend models based on available hardware.
+
+    Args:
+        available_gpus: Number of GPUs available
+        vram_per_gpu_mb: VRAM per GPU in MB
+
+    Returns:
+        List of recommended HFModelConfig sorted by suitability
+    """
+    total_vram_mb = available_gpus * vram_per_gpu_mb
+
+    catalog = load_hf_model_catalog()
+    recommendations = []
+
+    for config in catalog.values():
+        # Check if model fits in VRAM
+        if config.min_vram_mb <= total_vram_mb:
+            # Check TP requirements
+            if config.recommended_tp_size <= available_gpus:
+                recommendations.append(config)
+
+    # Sort by parameter count (larger models first)
+    recommendations.sort(key=lambda c: c.params, reverse=True)
+
+    return recommendations
+
+
+def hf_config_to_model_config(hf_config: HFModelConfig) -> ModelConfig:
+    """Convert HFModelConfig to legacy ModelConfig.
+
+    Args:
+        hf_config: HFModelConfig to convert
+
+    Returns:
+        ModelConfig
+    """
+    return ModelConfig(
+        name=hf_config.pmoves_name,
+        params=hf_config.params,
+        context_length=hf_config.context_length,
+        quantization=hf_config.quantization,
+        requires_gpu=True,
+        min_vram_mb=hf_config.min_vram_mb,
+        recommended_tp_size=hf_config.recommended_tp_size,
+        max_tp_size=hf_config.max_tp_size,
+        supports_pp=hf_config.supports_pp,
+    )
+
+
 @dataclasses.dataclass
 class VLLMConfig:
     """Complete vLLM service configuration."""
@@ -145,7 +478,14 @@ class VLLMConfig:
     @property
     def docker_image(self) -> str:
         """Docker image for vLLM service."""
-        return "vllm/vllm-openai:latest"
+        return os.environ.get("VLLM_DOCKER_IMAGE", "vllm/vllm-openai:latest")
+
+    @property
+    def hf_model_id(self) -> Optional[str]:
+        """Get Hugging Face model ID if available."""
+        hf_catalog = load_hf_model_catalog()
+        hf_config = hf_catalog.get(self.model_name)
+        return hf_config.hf_id if hf_config else None
 
     def to_docker_compose(self) -> Dict:
         """Generate docker-compose service configuration.
@@ -190,8 +530,11 @@ class VLLMConfig:
 
     def _vllm_command(self) -> str:
         """Generate vLLM server command."""
+        # Use HF model ID if available, otherwise use model_name
+        model_to_use = self.hf_model_id or self.model_name
+
         cmd_parts = [
-            "--model", self.model_name,
+            "--model", model_to_use,
             "--tensor-parallel-size", str(self.tensor_parallel_size),
             "--gpu-memory-utilization", str(self.gpu_memory_utilization),
             "--max-num-seqs", str(self.max_num_seqs),
@@ -207,6 +550,19 @@ class VLLMConfig:
         if self.enable_prefix_caching:
             cmd_parts.extend(["--enable-prefix-caching"])
 
+        # Add quantization if specified
+        if self.quantization and self.quantization != "fp16":
+            if self.quantization == "awq":
+                cmd_parts.extend(["--quantization", "awq"])
+            elif self.quantization == "gptq":
+                cmd_parts.extend(["--quantization", "gptq"])
+            elif self.quantization == "fp8":
+                cmd_parts.extend(["--quantization", "fp8"])
+
+        # Add max model length if context is specified
+        if self.model_config.context_length > 4096:
+            cmd_parts.extend(["--max-model-len", str(self.model_config.context_length)])
+
         return " ".join(cmd_parts)
 
     def _environment(self) -> List[str]:
@@ -214,6 +570,9 @@ class VLLMConfig:
         return [
             f"HF_DATASET_LOADED_LIMIT=500",
             f"PYTHONUNBUFFERED=1",
+            f"HF_HOME={os.environ.get('HF_HOME', '/models')}",
+            f"HF_HUB_CACHE={os.environ.get('HF_HUB_CACHE', '/models/hub')}",
+            f"HF_HUB_ENABLE_HF_TRANSFER={os.environ.get('HF_HUB_ENABLE_HF_TRANSFER', '1')}",
         ]
 
 
@@ -305,7 +664,7 @@ def create_vllm_config(
     """Create optimal vLLM configuration for given hardware.
 
     Args:
-        model_name: Name of the model
+        model_name: Name of the model (PMOVES name or HF model ID)
         available_gpus: Total GPUs available
         vram_per_gpu_mb: VRAM per GPU in MB
         available_nodes: Number of nodes for PP
@@ -315,10 +674,21 @@ def create_vllm_config(
     Returns:
         VLLMConfig with optimal settings
     """
-    if model_name not in MODEL_CONFIGS:
-        raise ValueError(f"Unknown model: {model_name}. Available: {list(MODEL_CONFIGS.keys())}")
+    # Try HF catalog first
+    hf_config = get_hf_model_config(model_name)
 
-    model_config = MODEL_CONFIGS[model_name]
+    if hf_config:
+        # Convert HF config to legacy ModelConfig
+        model_config = hf_config_to_model_config(hf_config)
+        pmoves_name = hf_config.pmoves_name
+    elif model_name in MODEL_CONFIGS:
+        model_config = MODEL_CONFIGS[model_name]
+        pmoves_name = model_name
+    else:
+        raise ValueError(
+            f"Unknown model: {model_name}. "
+            f"Available: {list(MODEL_CONFIGS.keys()) + list(load_hf_model_catalog().keys())}"
+        )
 
     # Calculate TP size
     tp_size = calculate_optimal_tp_size(
@@ -347,7 +717,7 @@ def create_vllm_config(
         min_tier = NodeTier.CPU_PEER
 
     return VLLMConfig(
-        model_name=model_name,
+        model_name=pmoves_name,
         model_config=model_config,
         tensor_parallel_size=tp_size,
         pipeline_parallel_size=pp_size,

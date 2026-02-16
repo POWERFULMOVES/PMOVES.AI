@@ -1,0 +1,194 @@
+{
+  "keywords": [
+    "auth",
+    "user",
+    "login",
+    "credential",
+    "token",
+    "password",
+    "session",
+    "bootstrap",
+    "onboard",
+    "account",
+    "profile",
+    "secret"
+  ],
+  "allowed_extensions": [
+    ".py",
+    ".sh",
+    ".ps1",
+    ".js",
+    ".ts"
+  ],
+  "root_scan_dirs": [
+    "pmoves/scripts",
+    "pmoves/tools"
+  ],
+  "submodule_scan_dir_hints": [
+    "script",
+    "scripts",
+    "tool",
+    "tools",
+    "bin",
+    "cmd",
+    ".claude/commands"
+  ],
+  "submodule_skip_path_tokens": [
+    "/test/",
+    "/tests/",
+    "/doc/",
+    "/docs/",
+    "/example/",
+    "/examples/",
+    "/vendor/",
+    "/node_modules/",
+    "/dist/",
+    "/build/",
+    "/migrations/",
+    "/__pycache__/"
+  ],
+  "canonical_make_targets": [
+    "first-run",
+    "env-setup",
+    "env-check",
+    "preflight",
+    "bringup-showtime",
+    "supa-start",
+    "supabase-bootstrap",
+    "supabase-boot-user",
+    "up-agents-published",
+    "up-agents-ui",
+    "up-bots",
+    "up-yt",
+    "up-jellyfin",
+    "up-invidious",
+    "up-external"
+  ],
+  "canonical_files": [
+    "pmoves/tools/create_supabase_boot_user.py",
+    "pmoves/tools/credential_setup.py",
+    "pmoves/tools/credential_fetcher.py",
+    "pmoves/tools/onboarding_helper.py",
+    "pmoves/tools/secrets_sync.py",
+    "pmoves/scripts/env_setup.sh",
+    "pmoves/scripts/env_setup.ps1",
+    "pmoves/scripts/with-env.sh"
+  ],
+  "seeded_default_env_keys": [
+    "AGENT_ZERO_IMAGE",
+    "ARCHON_IMAGE",
+    "ARCHON_UI_IMAGE",
+    "DEEPRESEARCH_IMAGE",
+    "SUPASERCH_IMAGE",
+    "ULTIMATE_TTS_STUDIO_IMAGE",
+    "WGER_IMAGE",
+    "FIREFLY_IMAGE",
+    "COMFYUI_IMAGE"
+  ],
+  "cross_platform_pairs": [
+    {
+      "name": "env_setup",
+      "linux": "pmoves/scripts/env_setup.sh",
+      "windows": "pmoves/scripts/env_setup.ps1"
+    },
+    {
+      "name": "env_check",
+      "linux": "pmoves/scripts/env_check.sh",
+      "windows": "pmoves/scripts/env_check.ps1"
+    },
+    {
+      "name": "codex_bootstrap",
+      "linux": "pmoves/scripts/codex_bootstrap.sh",
+      "windows": "pmoves/scripts/codex_bootstrap.ps1"
+    },
+    {
+      "name": "install_all_requirements",
+      "linux": "pmoves/scripts/install_all_requirements.sh",
+      "windows": "pmoves/scripts/install_all_requirements.ps1"
+    },
+    {
+      "name": "create_venv",
+      "linux": "pmoves/scripts/create_venv.sh",
+      "windows": "pmoves/scripts/create_venv.ps1"
+    },
+    {
+      "name": "create_venv_min",
+      "linux": "pmoves/scripts/create_venv_min.sh",
+      "windows": "pmoves/scripts/create_venv_min.ps1"
+    },
+    {
+      "name": "discord_ping",
+      "linux": "pmoves/scripts/discord_ping.sh",
+      "windows": "pmoves/scripts/discord_ping.ps1"
+    },
+    {
+      "name": "buildx_agent_zero",
+      "linux": "pmoves/scripts/buildx-agent-zero.sh",
+      "windows": "pmoves/scripts/buildx-agent-zero.ps1"
+    },
+    {
+      "name": "smoke",
+      "linux": "pmoves/scripts/smoke-tests.sh",
+      "windows": "pmoves/scripts/smoke.ps1"
+    }
+  ],
+  "duplicate_stem_allowlist": [
+    "credential_setup",
+    "notebook_ingest_utils",
+    "monitoring_smoke"
+  ],
+  "known_non_submodule_dirs": [
+    "pmoves",
+    "PMOVES-BoTZ-check",
+    "pmoves-cipher-mcp",
+    "PMOVES-Pinokio-Ultimate-TTS-Studio.__backup_before_submodule_init"
+  ],
+  "workflow_routes": {
+    "auth": [
+      "supabase-boot-user",
+      "env-setup",
+      "preflight"
+    ],
+    "bootstrap": [
+      "first-run",
+      "env-setup",
+      "supa-start"
+    ],
+    "credential": [
+      "supabase-boot-user",
+      "env-setup",
+      "preflight"
+    ],
+    "login": [
+      "supabase-boot-user",
+      "first-run"
+    ],
+    "onboard": [
+      "first-run",
+      "preflight"
+    ],
+    "password": [
+      "supabase-boot-user",
+      "first-run"
+    ],
+    "profile": [
+      "env-setup",
+      "preflight"
+    ],
+    "secret": [
+      "env-setup",
+      "preflight",
+      "secrets-audit"
+    ],
+    "token": [
+      "supabase-boot-user",
+      "preflight"
+    ],
+    "user": [
+      "supabase-boot-user",
+      "up-agents-published",
+      "up-external"
+    ]
+  },
+  "max_overlap_rows_per_keyword": 20
+}

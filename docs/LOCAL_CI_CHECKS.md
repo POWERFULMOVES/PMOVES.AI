@@ -102,6 +102,46 @@ pwsh -NoProfile -File scripts/env_check.ps1 -Quick
 
 The script validates required binaries (`git`, `python`, `docker`, etc.), checks .env coverage, and lists port collisions. For Linux/macOS, run `scripts/env_check.sh -q` for parity.
 
+## 6. Integration Contract Gate (pmoves-integrations)
+
+Validate the contract template and any opted-in integration overlay before PR:
+
+```bash
+cd pmoves
+make integration-contract-check-baseline
+./integrations/tools/validate-integration.sh integrations/_template/pmoves-integrations --strict-hooks
+```
+
+For a concrete integration overlay under review:
+
+```bash
+cd pmoves
+INTEGRATION_PATH=integrations/<integration-name> make integration-contract-check-strict
+```
+
+For submodule-managed overlays (current blocker: `integrations/archon`), run:
+
+```bash
+python pmoves/tools/integration_contract_check.py pmoves/integrations/archon --strict-hooks
+```
+
+## 7. Self-Hosted Runner Lane Check (production CI)
+
+Before dispatching workflow jobs that require self-hosted labels, verify the lanes are online:
+
+```bash
+cd pmoves
+make ci-runners-check
+make ci-runners-check-strict
+python pmoves/tools/ci_runner_check.py --discover-workflow-groups
+```
+
+Expected required groups:
+- `self-hosted,vps` (core build/test lanes)
+- `self-hosted,ai-lab,gpu` (GPU build lanes)
+
+If strict mode fails, bring the runner(s) online first. Otherwise GHCR and hardened build workflows will queue indefinitely.
+
 ## Checklists
 
 Copy these bullets into PR descriptions (or tick the template boxes) after each local run:
@@ -111,6 +151,8 @@ Copy these bullets into PR descriptions (or tick the template boxes) after each 
 - [ ] Jellyfin credential check (when the publisher is in play)
 - [ ] SQL policy lint
 - [ ] Env preflight (`scripts/env_check.ps1 -Quick` or `env_check.sh -q`)
+- [ ] Integration contract check (`make integration-contract-check-strict`; plus `INTEGRATION_PATH=...` when onboarding/updating an opted-in integration)
 - [ ] Discord embed smoke (`make demo-content-published`) when validating multimedia metadata
+- [ ] Self-hosted runner lane check (`make ci-runners-check-strict`) before GHCR/self-hosted dispatches
 
 If any check is intentionally skipped (e.g., doc-only change), note the reason in the PR “Testing” section.

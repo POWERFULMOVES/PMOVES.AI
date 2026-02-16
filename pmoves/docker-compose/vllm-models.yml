@@ -1,0 +1,333 @@
+# =============================================================================
+# PMOVES.AI Local Model Stack - vLLM Services (Hardened)
+# =============================================================================
+# Docker Compose file for vLLM-based model hosting with tensor parallelism.
+# Includes container hardening following PMOVES.AI security standards.
+#
+# Metrics Exposure:
+#   All services expose Prometheus metrics on secondary port (8001 internally)
+#   Access via host ports: 8101, 8111, 8121, etc.
+#   Endpoint: GET http://localhost:<host_port>/metrics
+#
+# Profiles:
+#   - medium: Single GPU models (7B-14B)
+#   - large: Multi-GPU models (32B-72B) with TP
+#   - specialized: Coding, VL, Embedding models
+#   - all: All vLLM services
+#
+# Usage:
+#   docker compose -f pmoves/docker-compose/vllm-models.yml --profile medium up -d
+# =============================================================================
+
+services:
+  # =============================================================================
+  # Medium Models (7B-14B) - Single GPU
+  # =============================================================================
+
+  # Qwen 2.5 7B - Flagship general-purpose model
+  vllm-qwen-7b:
+    image: vllm/vllm-openai:latest
+    container_name: pmoves-vllm-qwen-7b
+    ports:
+      - "8100:8000"
+      - "8101:8001"
+    command: >
+      --model Qwen/Qwen2.5-7B-Instruct
+      --tensor-parallel-size 1
+      --gpu-memory-utilization 0.9
+      --max-num-seqs 256
+      --max-num-batched-tokens 4096
+      --enable-chunked-prefill
+      --enable-prefix-caching
+      --host 0.0.0.0
+      --port 8000
+      --metrics-port 8001
+    # Container Hardening (GPU service pattern)
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=16G  # Required for tensor parallelism
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+      - HF_HUB_CACHE=/home/pmoves/.cache/huggingface/hub
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - hf_models:/home/pmoves/.cache/huggingface:ro
+      - hf_models_torch:/home/pmoves/.cache/torch:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      # Note: vLLM uses /health (not /healthz) by default - this is a vLLM convention
+      # PMOVES.AI accepts this exception for third-party services
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health && curl -f http://localhost:8001/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - medium
+      - all
+
+  # Qwen 2.5 14B - Higher quality reasoning
+  vllm-qwen-14b:
+    image: vllm/vllm-openai:latest
+    container_name: pmoves-vllm-qwen-14b
+    ports:
+      - "8110:8000"
+      - "8111:8001"
+    command: >
+      --model Qwen/Qwen2.5-14B-Instruct
+      --tensor-parallel-size 1
+      --gpu-memory-utilization 0.9
+      --max-num-seqs 128
+      --max-num-batched-tokens 4096
+      --enable-chunked-prefill
+      --enable-prefix-caching
+      --host 0.0.0.0
+      --port 8000
+      --metrics-port 8001
+    # Container Hardening (GPU service pattern)
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=16G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+      - HF_HUB_CACHE=/home/pmoves/.cache/huggingface/hub
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - hf_models:/home/pmoves/.cache/huggingface:ro
+      - hf_models_torch:/home/pmoves/.cache/torch:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    profiles:
+      - medium
+      - all
+
+  # =============================================================================
+  # Large Models (30B-70B) - Multi-GPU with Tensor Parallelism
+  # =============================================================================
+
+  # Qwen 2.5 32B - High quality reasoning (TP=2)
+  vllm-qwen-32b:
+    image: vllm/vllm-openai:latest
+    container_name: pmoves-vllm-qwen-32b
+    ports:
+      - "8130:8000"
+      - "8131:8001"
+    command: >
+      --model Qwen/Qwen2.5-32B-Instruct
+      --tensor-parallel-size 2
+      --gpu-memory-utilization 0.9
+      --max-num-seqs 64
+      --max-num-batched-tokens 2048
+      --enable-chunked-prefill
+      --enable-prefix-caching
+      --host 0.0.0.0
+      --port 8000
+      --metrics-port 8001
+    # Container Hardening (Multi-GPU service pattern)
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=20G,uid=65532,gid=65532
+      - /dev/shm:size=16G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+      - HF_HUB_CACHE=/home/pmoves/.cache/huggingface/hub
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - hf_models:/home/pmoves/.cache/huggingface:ro
+      - hf_models_torch:/home/pmoves/.cache/torch:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    profiles:
+      - large
+      - all
+
+  # =============================================================================
+  # Specialized Models
+  # =============================================================================
+
+  # Qwen 2.5 Coder 7B - Specialized coding model
+  vllm-coder-7b:
+    image: vllm/vllm-openai:latest
+    container_name: pmoves-vllm-coder-7b
+    ports:
+      - "8140:8000"
+      - "8141:8001"
+    command: >
+      --model Qwen/Qwen2.5-Coder-7B-Instruct
+      --tensor-parallel-size 1
+      --gpu-memory-utilization 0.9
+      --max-num-seqs 256
+      --enable-chunked-prefill
+      --host 0.0.0.0
+      --port 8000
+      --metrics-port 8001
+    # Container Hardening (GPU service pattern)
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=16G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+      - HF_HUB_CACHE=/home/pmoves/.cache/huggingface/hub
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - hf_models:/home/pmoves/.cache/huggingface:ro
+      - hf_models_torch:/home/pmoves/.cache/torch:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - specialized
+      - all
+
+  # Qwen 3 VL 8B - Vision-language model
+  vllm-vl-8b:
+    image: vllm/vllm-openai:latest
+    container_name: pmoves-vllm-vl-8b
+    ports:
+      - "8150:8000"
+      - "8151:8001"
+    command: >
+      --model Qwen/Qwen3-VL-8B-Instruct
+      --tensor-parallel-size 1
+      --gpu-memory-utilization 0.85
+      --max-num-seqs 64
+      --limit-mm-per-prompt image 16
+      --enable-chunked-prefill
+      --host 0.0.0.0
+      --port 8000
+      --metrics-port 8001
+    # Container Hardening (GPU service pattern)
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+      - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
+      - /dev/shm:size=16G
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - HF_HOME=/home/pmoves/.cache/huggingface
+      - TORCH_HOME=/home/pmoves/.cache/torch
+      - TRANSFORMERS_CACHE=/home/pmoves/.cache/huggingface/transformers
+      - HF_HUB_CACHE=/home/pmoves/.cache/huggingface/hub
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - hf_models:/home/pmoves/.cache/huggingface:ro
+      - hf_models_torch:/home/pmoves/.cache/torch:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    profiles:
+      - specialized
+      - all
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  hf_models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HF_MODEL_PATH:-/mnt/models/hf}
+
+  hf_models_torch:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HF_MODEL_PATH:-/mnt/models/hf}/torch
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  default:
+    name: pmoves-local-models
+    external: true

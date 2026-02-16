@@ -48,8 +48,12 @@ jobs:
       # Install ripgrep
       - name: Install ripgrep
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ripgrep
+          if ! command -v rg &> /dev/null; then
+            echo "Installing ripgrep..."
+            apt-get update -qq && apt-get install -y ripgrep
+          else
+            echo "ripgrep already installed at $(which rg)"
+          fi
 
       - name: CHIT schema/endpoints checks
         shell: bash

@@ -59,7 +59,7 @@
 | PMOVES-n8n | Needs review |
 | PMOVES-crush | Needs review |
 | PMOVES-Wealth | Needs review |
-| PMOVES-Firefly-iii | Needs review |
+| PMOVES-Wealth (formerly PMOVES-Firefly-iii) | Needs review |
 | Pmoves-Health-wger | Needs review |
 | PMOVES-Tailscale | Needs review |
 | PMOVES-Remote-View | Needs review |

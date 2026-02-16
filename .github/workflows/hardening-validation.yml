@@ -91,7 +91,7 @@ jobs:
           - pmoves/services/archon/Dockerfile
           - pmoves/services/agent-zero/Dockerfile
           - pmoves/services/flute-gateway/Dockerfile
-          - pmoves/services/hirag-gateway/Dockerfile
+          - pmoves/services/hi-rag-gateway/Dockerfile
           - pmoves/services/extract-worker/Dockerfile
           - pmoves/services/tokenism-simulator/Dockerfile
           - pmoves/services/botz-gateway/Dockerfile
@@ -204,6 +204,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Materialize compose env files from templates
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "pmoves/env.shared" ] && [ -f "pmoves/env.shared.example" ]; then
+            cp pmoves/env.shared.example pmoves/env.shared
+          fi
+
+          for tier in data supabase api llm worker media agent ui; do
+            env_file="pmoves/env.tier-${tier}"
+            example_file="${env_file}.example"
+            if [ ! -f "${env_file}" ] && [ -f "${example_file}" ]; then
+              cp "${example_file}" "${env_file}"
+            fi
+          done
+
       - name: Validate compose syntax
         run: |
           echo "Validating docker-compose files..."
@@ -212,9 +228,9 @@ jobs:
           docker compose -f pmoves/docker-compose.yml config --quiet
           echo "✓ pmoves/docker-compose.yml is valid"
 
-          # Validate hardened compose file
-          docker compose -f pmoves/docker-compose.hardened.yml config --quiet
-          echo "✓ pmoves/docker-compose.hardened.yml is valid"
+          # Validate hardened compose syntax only (override file is intentionally partial)
+          docker compose -f pmoves/docker-compose.hardened.yml config --quiet --no-consistency
+          echo "✓ pmoves/docker-compose.hardened.yml syntax is valid"
 
           # Validate monitoring compose file
           if [ -f "pmoves/monitoring/docker-compose.monitoring.yml" ]; then

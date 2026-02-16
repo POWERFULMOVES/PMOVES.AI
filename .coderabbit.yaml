@@ -1,32 +1,72 @@
-# CodeRabbit Configuration for PMOVES.AI
-# Settings for automated code reviews
+# CodeRabbit configuration for PMOVES.AI
+# Goal: actionable review on hardened branches with PMOVES-specific security focus.
+
+language: "en-US"
 
 reviews:
-  # Enable reviews on the default hardened branch
   review_status: true
 
-  # Branches to review
+  # Ensure CodeRabbit runs automatically on PR updates and non-draft PRs.
+  auto_review:
+    enabled: true
+    drafts: false
+
+  # Hardened/default delivery branches and active work prefixes.
   branches:
     - "PMOVES.AI-Edition-Hardened"
     - "PMOVES.AI-Edition-Hardened-v3-clean"
     - "pr/hirag-legacy-decoders-v3-clean"
-    - "pr/*"          # PR branches
+    - "pr/*"
     - "feat/hardened-*"
     - "fix/hardened-*"
-    - "feat/*"          # Feature branches
-    - "fix/*"           # Fix branches
-    - "gpu-*"           # GPU orchestrator fixes
-    - "remove-*"        # Submodule removals
-    - "revert-*"        # Revert PRs
+    - "feat/*"
+    - "fix/*"
+    - "gpu-*"
+    - "remove-*"
+    - "revert-*"
 
-  # Disable reviews on these branches
   excluded_branches:
     - "main"
     - "origin/main"
 
-# Language setting (locale for reviews)
-language: "en-US"
+  # PMOVES hardening-aware review hints.
+  path_instructions:
+    - path: ".github/workflows/**"
+      instructions: |
+        Review for production hardening regressions:
+        - Keep CodeQL + Trivy HIGH/CRITICAL gates intact.
+        - Do not weaken StepSecurity or secret-handling paths.
+        - Ensure token/registry logic still works for GHCR and PR workflows.
 
-# Note: Documentation coverage and review depth settings are configured
-# via GitHub Actions and CI/CD pipelines. CodeRabbit focuses on automated
-# code quality checks and security scanning.
+    - path: "pmoves/docker-compose*.yml"
+      instructions: |
+        Validate runtime security and operability:
+        - Containers with published ports must bind to 0.0.0.0 in-container.
+        - Flag hardcoded credentials/default secrets in environment blocks.
+        - Preserve cross-platform bring-up behavior (Windows/WSL/Linux, amd64/arm64).
+
+    - path: "pmoves/services/**"
+      instructions: |
+        Focus on PMOVES secret hardening conventions:
+        - Prefer central env helpers and *_FILE secret loading paths.
+        - Flag direct critical-secret reads and plaintext fallbacks.
+        - Prioritize auth/bootstrap regressions affecting first-run onboarding.
+
+    - path: "pmoves/chit/**"
+      instructions: |
+        Treat CHIT as security-sensitive:
+        - Flag mismatches between documented crypto guarantees and implementation.
+        - Prioritize key-derivation, nonce handling, and backward-compatibility risk.
+
+    - path: "pmoves-cipher-mcp/**"
+      instructions: |
+        Review MCP bridge robustness:
+        - Ensure tool handlers return valid MCP payload types.
+        - Validate connection defaults against compose service endpoints.
+        - Flag exception handling that can hide operational failures.
+
+    - path: "pmoves/docs/**"
+      instructions: |
+        Check docs for operational accuracy:
+        - Keep status claims aligned with evidence in runbooks and smokes.
+        - Flag command drift across Windows/WSL/Linux instructions.

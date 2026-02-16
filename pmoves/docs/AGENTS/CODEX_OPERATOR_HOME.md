@@ -1,0 +1,102 @@
+# Codex Operator Home (PMOVES)
+_Last updated: 2026-02-14_
+
+This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
+Claude setup, but keeps Codex workflows command-first and Makefile-native.
+
+## Runtime signaling
+
+- Use `mode=focus` for implementation/validation windows.
+- Use `mode=open-chat+scout` for context gathering while staying conversational.
+- See protocol details in `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`.
+
+## Bootstrap
+
+1. Install pinned Codex config:
+   - `make -C pmoves codex-config`
+2. Start Codex with repo profile:
+   - `codex --profile pmoves`
+3. Open this runbook plus parity map:
+   - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+
+## Core Codex commands
+
+- `make -C pmoves codex-health-quick`
+- `make -C pmoves smoke`
+- `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`
+- `make -C pmoves verify-all`
+- `make -C pmoves codex-audit`
+
+## CHIT Geometry Bus
+
+- Service health:
+  - `curl -fsS http://localhost:8086/healthz`
+  - `curl -fsS http://localhost:8086/hirag/admin/stats | jq .`
+- Geometry validation:
+  - `curl -fsS http://localhost:8086/geometry/calibration/report | jq .`
+- Event subjects to watch:
+  - `geometry.cgp.v1`
+  - `geometry.swarm.meta.v1`
+  - `pmoves.geometry.cgp.ready.v1`
+
+## EvoSwarm
+
+- Controller health:
+  - `curl -fsS http://localhost:8113/healthz`
+- Swarm status:
+  - `curl -fsS http://localhost:8113/swarm/status | jq .`
+- Ensure downstream services persist and publish `pack_id` metadata in CGP flow.
+
+## Flute + Voice stack
+
+- Flute health:
+  - `curl -fsS http://localhost:8055/healthz | jq .`
+- Flute session status:
+  - `curl -fsS http://localhost:8055/v1/sessions -H "Authorization: Bearer $FLUTE_API_KEY" | jq .`
+- TTS backend:
+  - `curl -fsS http://localhost:7861/gradio_api/info | jq .`
+
+## Gateway + Agent Zero MCP
+
+- Agent Zero health:
+  - `curl -fsS http://localhost:8080/healthz | jq .`
+- Agent Zero MCP health:
+  - `curl -fsS http://localhost:8080/mcp/health | jq .`
+- Hi-RAG query (preferred knowledge path):
+  - `curl -X POST http://localhost:8086/hirag/query -H "Content-Type: application/json" -d '{"query":"agent orchestration", "top_k":10, "rerank":true}' | jq .`
+
+## Cipher MCP bridge
+
+- Cipher API health:
+  - `curl -fsS http://localhost:8096/health | jq .`
+- Local MCP bridge server:
+  - `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server`
+- Compose service check:
+  - `docker compose -f pmoves/docker-compose.yml --profile agents ps cipher-api`
+
+## BotZ alignment
+
+- BotZ has its own Codex mapping under `PMOVES-BoTZ/config/codex/mcp_gateway.json`.
+- Keep BotZ Codex mappings consistent with PMOVES root profile and MCP strategy.
+- For parity checks across all submodules, regenerate:
+  - `make -C pmoves codex-audit`
+
+## Priority links
+
+- Codex submodule audit:
+  - `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
+- Hyperdimensions control plane taxonomy:
+  - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
+- Claude parity map:
+  - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+- Persona style playbook:
+  - `pmoves/docs/AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`
+- Runtime protocol (focus + scout):
+  - `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`
+- Unified taxonomy:
+  - `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md`
+- PMOVES skill bundles:
+  - `pmoves/docs/AGENTS/PmovesSKillZ.md`
+- Existing Claude context stack:
+  - `.claude/CLAUDE.md`
+  - `.claude/context/`

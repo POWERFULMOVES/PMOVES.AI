@@ -1,0 +1,9 @@
+subjects:
+  - name: pmoves.announcer.event.v1
+    purpose: Integration announcements and operator UX notifications
+  - name: mesh.gpu.model.loaded.v1
+    purpose: GPU orchestrator model loaded event
+  - name: mesh.gpu.model.unloaded.v1
+    purpose: GPU orchestrator model unloaded event
+  - name: finance.transactions.ingested.v1
+    purpose: Finance transaction ingestion and downstream summaries
