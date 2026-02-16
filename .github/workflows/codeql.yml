@@ -13,7 +13,7 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    branches: [ "main", "integration", "PMOVES.AI-Edition-Hardened" ]
     paths-ignore:
       - 'integrations-workspace/**'
       - '**/.venv/**'
@@ -23,7 +23,7 @@ on:
       - '**/site-packages/**'
       - '**/.eggs/**'
   pull_request:
-    branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    branches: [ "main", "integration", "PMOVES.AI-Edition-Hardened" ]
     paths-ignore:
       - 'integrations-workspace/**'
       - '**/.venv/**'
