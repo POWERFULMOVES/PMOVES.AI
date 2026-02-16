@@ -93,6 +93,11 @@ _Last updated: 2026-02-15_
   - `make -C pmoves submodule-docs-audit` (report generation)
   - `make -C pmoves submodule-docs-audit-strict` (gate for missing docs/integration dossiers)
   - Report path: `pmoves/docs/SUBMODULE_DOCS_DOSSIER.md`
+- Added deterministic submodule-first validation lane:
+  - `make -C pmoves submodule-layer-validate` / `submodule-layer-validate-one SUBMODULE=<name-or-path>` / `submodule-layer-validate-strict`
+  - Manifest-driven checks live in `pmoves/configs/submodule_layer_validation_manifest.json`
+  - Layer orchestration targets: `make -C pmoves audit-layers-static` then `make -C pmoves audit-layers-runtime`
+  - Evidence paths: `pmoves/docs/SUBMODULE_LAYER_VALIDATION.md` and `pmoves/docs/evidence/submodule_layer_validation.json`
 - Added Supabase runtime anti-drift guardrails:
   - `make -C pmoves supa-runtime-guard` / `supa-runtime-reconcile` / `supa-stop-all`
   - `supa-start` now blocks mixed CLI+compose runtime unless reconciled

@@ -209,6 +209,20 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Strict gate that also enforces recursive traversal.
   - Recursive metadata blockers (`PMOVES-A2UI` Deskdesktop and nested `PMOVES-transcribe-and-fetch` mappings) are now fixed in local hardened work.
   - With all required submodules initialized, this target should pass in production-audit mode.
+- `make submodule-layer-validate`
+  - Manifest-driven deterministic submodule-level validator (`pmoves/configs/submodule_layer_validation_manifest.json`).
+  - Checks initialization status, gitlink remote commit reachability, top-level dossier/docs presence, nested `.gitmodules` integrity, and optional Python syntax compile for selected modules.
+  - Writes `pmoves/docs/SUBMODULE_LAYER_VALIDATION.md` and `pmoves/docs/evidence/submodule_layer_validation.json`.
+- `make submodule-layer-validate-one SUBMODULE=<name-or-path>`
+  - Runs the same deterministic validator for exactly one submodule so operators can certify module-by-module before running full strict gates.
+- `make submodule-layer-validate-strict`
+  - Strict mode for the same validator (warnings fail), intended as the first submodule gate before root-level checks.
+- `make audit-layers-static`
+  - Ordered static certification pipeline: `submodule-layer-validate-strict` -> `submodule-integrity-strict` -> `submodule-docs-audit-strict` -> integration/tooling/secrets/runner/runtime-guard checks.
+- `make audit-layers-runtime`
+  - Extends static certification with runtime checks (`smoke`, `monitoring-smoke-prod`, optional `smoke-gpu` via `AUDIT_RUNTIME_GPU=1`).
+- `make audit-layers`
+  - Alias for `audit-layers-static`.
 - `make integration-contract-check`
   - Validates `pmoves-integrations` overlay contract for a target path (`INTEGRATION_PATH`, default template).
   - Enforces required layout files and required event subjects (`pmoves.announcer.event.v1`, `mesh.gpu.model.*`).
