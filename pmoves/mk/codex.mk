@@ -73,7 +73,7 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 	@$(CODEX_PY) tools/runtime_secrets_hydrate.py --env-file env.shared --status-file .supabase.status.env
 
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
-	@$(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
 secrets-funnel: ## Portable secrets flow: CHIT export -> manifest sync -> audit gates (optional boot user)
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
@@ -83,3 +83,44 @@ secrets-funnel: ## Portable secrets flow: CHIT export -> manifest sync -> audit 
 ifneq ($(SECRETS_FUNNEL_BOOT_USER_TARGET),)
 	@$(MAKE) --no-print-directory $(SECRETS_FUNNEL_BOOT_USER_TARGET)
 endif
+
+# ---------------------------------------------------------------------------
+# Submodule sync targets
+# ---------------------------------------------------------------------------
+.PHONY: submodule-sync-one submodule-sync-all submodule-promote
+
+submodule-sync-one: ## Update single submodule: make submodule-sync-one SM=PMOVES-Agent-Zero
+	@if [ -z "$(SM)" ]; then \
+	  echo "ERROR: SM is required."; \
+	  echo "Usage:  make submodule-sync-one SM=PMOVES-Agent-Zero"; \
+	  exit 1; \
+	fi
+	@echo "=== Syncing submodule: $(SM) ==="
+	git submodule update --init -- "$(SM)"
+	git submodule update --remote -- "$(SM)"
+	@echo "Updated $(SM) to latest remote commit:"
+	@git -C "$(SM)" log -1 --oneline
+	@echo "Stage with: git add $(SM)"
+
+submodule-sync-all: ## Update all submodules to latest hardened branch
+	@echo "=== Syncing all submodules ==="
+	git submodule update --init --recursive
+	git submodule update --remote --recursive
+	@echo ""
+	@echo "Updated submodules:"
+	@git submodule status --recursive
+	@echo ""
+	@echo "Review changes with: git diff --submodule"
+
+submodule-promote: ## Create PR from integration -> hardened after audit passes
+	@echo "=== Promoting integration to PMOVES.AI-Edition-Hardened ==="
+	@CURRENT=$$(git branch --show-current); \
+	if [ "$$CURRENT" != "integration" ]; then \
+	  echo "ERROR: Must be on integration branch (currently on $$CURRENT)"; \
+	  exit 1; \
+	fi
+	gh pr create \
+	  --base PMOVES.AI-Edition-Hardened \
+	  --head integration \
+	  --title "promote: integration → hardened" \
+	  --body "Automated promotion from integration branch after CI gate passed."
