@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RUNS_ON_LIST_RE = re.compile(r"runs-on:\s*\[([^\]]+)\]", re.IGNORECASE)
+RUNS_ON_SCALAR_RE = re.compile(r"runs-on:\s*([A-Za-z0-9_.-]+)\s*$", re.IGNORECASE | re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mapping",
-        default="integrations/github-runners/compose/lane_hosts.json",
+        default="pmoves/integrations/github-runners/compose/lane_hosts.json",
         help="Lane mapping JSON file",
     )
     parser.add_argument(
@@ -65,7 +66,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--policy-file",
-        default="integrations/github-runners/compose/runner_phase_policy.json",
+        default="pmoves/integrations/github-runners/compose/runner_phase_policy.json",
         help="Runner phase policy JSON file.",
     )
     parser.add_argument(
@@ -91,9 +92,14 @@ def discover_groups(workflows_dir: Path) -> list[tuple[str, ...]]:
     groups: set[tuple[str, ...]] = set()
     if not workflows_dir.exists():
         return []
-    for wf in sorted(workflows_dir.glob("*.yml")):
+    workflow_files = sorted({*workflows_dir.glob("*.yml"), *workflows_dir.glob("*.yaml")})
+    for wf in workflow_files:
         text = wf.read_text(encoding="utf-8", errors="ignore")
         for match in RUNS_ON_LIST_RE.finditer(text):
+            group = normalize_group(match.group(1))
+            if "self-hosted" in group:
+                groups.add(group)
+        for match in RUNS_ON_SCALAR_RE.finditer(text):
             group = normalize_group(match.group(1))
             if "self-hosted" in group:
                 groups.add(group)
@@ -128,14 +134,20 @@ def resolve_path(raw: str, candidates: list[Path]) -> Path:
 
 
 def load_runners(repo: str) -> list[Runner]:
-    cmd = ["gh", "api", f"repos/{repo}/actions/runners?per_page=100"]
+    cmd = ["gh", "api", "--paginate", f"repos/{repo}/actions/runners?per_page=100", "--jq", ".runners"]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         msg = proc.stderr.strip() or proc.stdout.strip() or "unknown gh api error"
         raise RuntimeError(msg)
-    payload = json.loads(proc.stdout)
+    items: list[dict] = []
+    for line in proc.stdout.strip().splitlines():
+        if not line.strip():
+            continue
+        parsed = json.loads(line)
+        if isinstance(parsed, list):
+            items.extend(parsed)
     runners: list[Runner] = []
-    for item in payload.get("runners", []):
+    for item in items:
         labels = tuple(sorted(label.get("name", "") for label in item.get("labels", [])))
         runners.append(
             Runner(
@@ -360,8 +372,9 @@ def main() -> int:
         for failure in phase_failures:
             print(f"  - {failure}")
 
-    strict_fail = bool(unmapped)
+    strict_fail = False
     if args.strict:
+        strict_fail = bool(unmapped)
         if args.enforce_phase:
             strict_fail = strict_fail or bool(phase_failures)
         else:

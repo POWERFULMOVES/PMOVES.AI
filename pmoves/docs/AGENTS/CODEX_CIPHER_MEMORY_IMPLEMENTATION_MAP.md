@@ -60,20 +60,20 @@ This dossier maps where Codex integration and Cipher Memory integration exist in
 ### Runtime service wiring
 - `pmoves/docker-compose.yml` (cipher-api service/profile)
 
-## Worktree hygiene snapshot
+## Worktree hygiene checks (runtime-verified)
 
-### Clean/near-clean worktrees
-- `PMOVES.AI-hardened-audit` (clean)
-- `PMOVES.AI-hardened-ci` (clean)
-- `PMOVES.AI-slice-ci-ghcr` (clean)
-- `PMOVES.AI-submodule-audit` (clean after artifact cleanup)
+### Verify before acting
+- Run `git worktree list` to enumerate active worktrees.
+- For each worktree, run:
+  - `git -C <worktree-path> status --short`
+  - `git -C <worktree-path> branch --show-current`
+- If merge/cherry-pick state is suspected, inspect:
+  - `git -C <worktree-path> status`
+  - `git -C <worktree-path> rev-parse -q --verify MERGE_HEAD`
 
-### Dirty worktrees requiring triage
-- `PMOVES.AI` (root branch): large mixed change-set (code, docs, workflows, submodules)
-- `PMOVES.AI-main-audit`: many submodule pointer edits and integration updates pending commit policy
-- `PMOVES.AI-slice-cipher`: includes unresolved merge conflicts (`UU`) in:
-  - `.gitignore`
-  - `pmoves/docker-compose.yml`
+### Operator note
+- Do not treat historical clean/dirty examples as current truth.
+- Use `make -C pmoves worktree-sitrep` and `make -C pmoves worktree-sitrep-strict` as the authoritative snapshot/gate for current state.
 
 ## Cleanup strategy (safe path)
 
@@ -84,4 +84,3 @@ This dossier maps where Codex integration and Cipher Memory integration exist in
    - split by lane (CI / Codex / Cipher / service runtime / docs).
 3. Resolve conflict worktrees first (`PMOVES.AI-slice-cipher`) before any new feature commits there.
 4. Avoid deleting generated artifacts manually; prefer `git clean -fd` in targeted clean-up worktrees.
-

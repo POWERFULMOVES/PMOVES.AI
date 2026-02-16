@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from typing import Sequence
 
 
 @dataclass(frozen=True)
@@ -53,14 +54,14 @@ def require_tool(name: str) -> None:
         raise RuntimeError(f"required tool not found in PATH: {name}")
 
 
-def registration_token(repo: str, lane: str) -> str:
+def registration_token(repo: str, lane: str) -> tuple[str, str]:
     env_name = f"RUNNER_TOKEN_{lane.replace('-', '_').upper()}"
     lane_token = os.getenv(env_name)
     if lane_token:
-        return lane_token
+        return lane_token, env_name
     shared_token = os.getenv("RUNNER_TOKEN")
     if shared_token:
-        return shared_token
+        return shared_token, "RUNNER_TOKEN"
 
     out = run_cmd(
         [
@@ -76,7 +77,7 @@ def registration_token(repo: str, lane: str) -> str:
     token = out.stdout.strip()
     if not token:
         raise RuntimeError(f"failed to retrieve registration token for lane '{lane}'")
-    return token
+    return token, "gh-api"
 
 
 def docker_rm(container_name: str) -> None:
@@ -113,11 +114,15 @@ def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
 def cmd_up(repo: str, image: str) -> int:
     require_tool("docker")
     require_tool("gh")
+    print(
+        "NOTE: local-cert runner mounts Docker socket and passes RUNNER_TOKEN via env; "
+        "treat runner image + host as trusted."
+    )
     for lane in LANES:
-        token = registration_token(repo, lane.lane)
+        token, token_source = registration_token(repo, lane.lane)
         docker_rm(lane.container_name)
         docker_run(repo, image, lane, token)
-        print(f"started {lane.container_name} ({lane.runner_name})")
+        print(f"started {lane.container_name} ({lane.runner_name}) token_source={token_source}")
     return 0
 
 
@@ -168,7 +173,7 @@ def cmd_status(repo: str) -> int:
     return 0
 
 
-def parse_args(argv: list[str]) -> argparse.Namespace:
+def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Manage local-certification runner containers for PMOVES."
     )
@@ -190,7 +195,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: list[str]) -> int:
+def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
     try:
         if args.action == "up":
@@ -205,4 +210,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

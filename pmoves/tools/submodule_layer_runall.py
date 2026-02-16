@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import configparser
 import json
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from submodule_utils import parse_gitmodules_rows  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -49,18 +50,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def parse_gitmodules(path: Path) -> list[tuple[str, str]]:
-    cfg = configparser.ConfigParser()
-    cfg.read(path, encoding="utf-8")
-    rows: list[tuple[str, str]] = []
-    for section in cfg.sections():
-        if not section.startswith("submodule "):
-            continue
-        name = section[len("submodule ") :].strip().strip('"')
-        module_path = cfg.get(section, "path", fallback="").strip()
-        if module_path:
-            rows.append((name, module_path))
-    rows.sort(key=lambda item: item[1].lower())
-    return rows
+    return [(row["name"], row["path"]) for row in parse_gitmodules_rows(path)]
 
 
 def sanitize(path_value: str) -> str:
@@ -68,9 +58,16 @@ def sanitize(path_value: str) -> str:
 
 
 def read_summary(json_path: Path) -> tuple[int, int]:
+    if not json_path.exists():
+        print(f"WARN: summary json missing: {json_path}")
+        return (1, 0)
     try:
         data = json.loads(json_path.read_text(encoding="utf-8", errors="ignore"))
-    except Exception:
+    except json.JSONDecodeError as exc:
+        print(f"WARN: summary json malformed: {json_path} ({exc})")
+        return (1, 0)
+    except Exception as exc:
+        print(f"WARN: unable to parse summary json: {json_path} ({exc})")
         return (1, 0)
     summary = data.get("summary", {}) if isinstance(data, dict) else {}
     return int(summary.get("errors", 0)), int(summary.get("warnings", 0))
@@ -199,4 +196,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

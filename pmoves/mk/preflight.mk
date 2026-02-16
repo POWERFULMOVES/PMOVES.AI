@@ -113,19 +113,19 @@ preflight: ## Full preflight: env check + quick readiness + Codex health summary
 showtime: bringup-showtime ## Alias for bringup-showtime
 
 showtime-links: ## Build clickable UI/API verification pages and worker snapshot
-	@$(PYTHON) tools/showtime_verify_links.py $(ARGS)
+	@$(PRECHECK_PY) tools/showtime_verify_links.py $(ARGS)
 
 showtime-links-open: ## Build clickable UI/API verification pages and open in browser
-	@$(PYTHON) tools/showtime_verify_links.py --open $(ARGS)
+	@$(PRECHECK_PY) tools/showtime_verify_links.py --open $(ARGS)
 
 showtime-links-strict: ## Build verification pages and fail if required endpoints are down
-	@$(PYTHON) tools/showtime_verify_links.py --strict $(ARGS)
+	@$(PRECHECK_PY) tools/showtime_verify_links.py --strict $(ARGS)
 
 bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/BotZ/Evo/Flute aware)
 	@echo "→ Showtime bring-up starting..."
 	@watcher_pid=""; \
 	if [ "$${SHOWTIME_WATCH:-1}" = "1" ]; then \
-		$(PYTHON) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
+		$(PRECHECK_PY) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
 		watcher_pid=$$!; \
 		echo "→ Live watcher started (pid $$watcher_pid)"; \
 	fi; \
@@ -148,7 +148,7 @@ smoke-showtime: ## Run smoke tests with live Showtime watcher (core + monitoring
 	@echo "→ Showtime smoke starting..."
 	@watcher_pid=""; \
 	if [ "$${SHOWTIME_WATCH:-1}" = "1" ]; then \
-		$(PYTHON) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
+		$(PRECHECK_PY) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
 		watcher_pid=$$!; \
 		echo "→ Live watcher started (pid $$watcher_pid)"; \
 	fi; \

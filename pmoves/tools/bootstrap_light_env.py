@@ -30,8 +30,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--requirements",
         action="append",
-        default=["tools/requirements-lite.txt"],
-        help="Requirements file(s) relative to pmoves/ (repeatable).",
+        default=None,
+        help=(
+            "Requirements file(s) relative to pmoves/ (repeatable). "
+            "Defaults to tools/requirements-lite.txt when omitted."
+        ),
     )
     parser.add_argument(
         "--skip-install",
@@ -54,7 +57,12 @@ def resolve_under_pmoves(path_like: str) -> Path:
 
 
 def run(cmd: list[str]) -> None:
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"command failed (exit={exc.returncode}): {' '.join(cmd)}"
+        ) from exc
 
 
 def venv_python_path(venv_path: Path) -> Path:
@@ -121,7 +129,8 @@ def activation_hint(venv_path: Path) -> None:
 def main() -> int:
     args = parse_args()
     venv_path = resolve_under_pmoves(args.venv)
-    req_files = [resolve_under_pmoves(item) for item in args.requirements]
+    requirement_inputs = args.requirements or ["tools/requirements-lite.txt"]
+    req_files = [resolve_under_pmoves(item) for item in requirement_inputs]
 
     print(f"PMOVES root: {PMOVES_ROOT}")
     print(f"Repository root: {REPO_ROOT}")

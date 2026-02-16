@@ -21,7 +21,13 @@ DEFAULT_MD = REPO_ROOT / "pmoves" / "docs" / "SHOWTIME_VERIFY_LINKS.md"
 DEFAULT_HTML = REPO_ROOT / "pmoves" / "docs" / "SHOWTIME_VERIFY_LINKS.html"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from flight_check_retro import ENDPOINTS  # type: ignore
+try:
+    from flight_check_retro import ENDPOINTS  # type: ignore
+except ImportError as exc:  # pragma: no cover - startup guard
+    raise SystemExit(
+        f"Cannot import ENDPOINTS from flight_check_retro in "
+        f"{Path(__file__).resolve().parent}: {exc}"
+    ) from exc
 
 
 DEFAULT_REQUIRED = {
@@ -31,6 +37,13 @@ DEFAULT_REQUIRED = {
     "Grafana",
     "Console UI",
 }
+
+
+def display_path(path: Path) -> str:
+    try:
+        return path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,6 +58,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def check(url: str, timeout: float) -> tuple[str, int, str]:
+    if not url.startswith(("http://", "https://")):
+        return "error", 0, f"unsupported scheme for url: {url}"
     try:
         with urlopen(url, timeout=timeout) as resp:
             code = int(getattr(resp, "status", 200))
@@ -281,9 +296,9 @@ def main() -> int:
     output_md.write_text(render_markdown(results, workers), encoding="utf-8")
     output_html.write_text(render_html(results, workers), encoding="utf-8")
 
-    rel_json = output_json.relative_to(REPO_ROOT).as_posix()
-    rel_md = output_md.relative_to(REPO_ROOT).as_posix()
-    rel_html = output_html.relative_to(REPO_ROOT).as_posix()
+    rel_json = display_path(output_json)
+    rel_md = display_path(output_md)
+    rel_html = display_path(output_html)
     click_url = output_html.resolve().as_uri()
     print(f"Wrote {rel_json}")
     print(f"Wrote {rel_md}")
@@ -309,4 +324,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

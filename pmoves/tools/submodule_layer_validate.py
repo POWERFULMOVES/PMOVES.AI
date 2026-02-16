@@ -4,15 +4,17 @@
 from __future__ import annotations
 
 import argparse
-import configparser
 import datetime as dt
 import json
+import os
 import py_compile
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from submodule_utils import parse_gitmodules_rows  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -108,19 +110,10 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 
 def parse_gitmodules(path: Path) -> list[tuple[str, str, str]]:
-    cfg = configparser.ConfigParser()
-    cfg.read(path, encoding="utf-8")
-    rows: list[tuple[str, str, str]] = []
-    for section in cfg.sections():
-        if not section.startswith("submodule "):
-            continue
-        name = section[len("submodule ") :].strip().strip('"')
-        module_path = cfg.get(section, "path", fallback="").strip()
-        url = cfg.get(section, "url", fallback="").strip()
-        if module_path:
-            rows.append((name, module_path, url))
-    rows.sort(key=lambda item: item[1].lower())
-    return rows
+    return [
+        (row["name"], row["path"], row.get("url", ""))
+        for row in parse_gitmodules_rows(path)
+    ]
 
 
 def parse_submodule_status() -> dict[str, tuple[str, str, str]]:
@@ -171,7 +164,10 @@ def remote_commit_reachable(url: str, commit: str, timeout: float) -> tuple[bool
         return False, "timeout"
     if proc.returncode != 0:
         return False, proc.stderr.strip() or "ls-remote-failed"
-    matched = any(commit in line for line in proc.stdout.splitlines())
+    matched = any(
+        line.startswith(commit) or line.split("\t", 1)[0] == commit
+        for line in proc.stdout.splitlines()
+    )
     if matched:
         return True, "ok"
     return False, "commit-not-found-in-remote"
@@ -231,7 +227,7 @@ def python_compile_check(module_root: Path, max_files: int) -> tuple[str, str]:
         return "warn", f"python-file-count={len(py_files)} exceeds max={max_files}"
     try:
         for path in py_files:
-            py_compile.compile(str(path), doraise=True)
+            py_compile.compile(str(path), cfile=os.devnull, doraise=True)
     except py_compile.PyCompileError as exc:
         return "fail", str(exc)
     return "pass", f"compiled-files={len(py_files)}"

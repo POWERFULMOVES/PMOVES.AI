@@ -187,7 +187,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.
-  - Emits clickable verification artifacts (`pmoves/docs/SHOWTIME_VERIFY_LINKS.html|.md`) with pages/UI/API links and helper worker container states.
+  - Emits clickable verification artifacts (`pmoves/docs/SHOWTIME_VERIFY_LINKS.html|.md`) and JSON evidence (`pmoves/docs/evidence/showtime_links.json`) with pages/UI/API links and helper worker container states.
   - Tuning knobs: `SHOWTIME_INTERVAL`, `SHOWTIME_MAX_SECONDS`, `SHOWTIME_WATCH=0`.
 - `make showtime`
   - Shortcut alias for `make bringup-showtime`.
@@ -211,7 +211,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make tooling-audit-strict`
   - Same scan with strict gating (`warnings => failure`) for production-audit CI or release checks.
 - `make submodule-sitrep`
-  - Generates `pmoves/docs/SUBMODULE_ALIGNMENT_SITREP_2026-02-14.md` with current submodule initialization/drift state, duplicate canonical-vs-alias paths, and production decision guidance.
+  - Generates `pmoves/docs/SUBMODULE_ALIGNMENT_SITREP_<YYYY-MM-DD>.md` with current submodule initialization/drift state, duplicate canonical-vs-alias paths, and production decision guidance.
 - `make submodule-integrity`
   - Non-recursive submodule gate for production baseline checks.
   - Fails on unmapped gitlinks, drifted (`+`) submodules, conflicts (`U`), and uninitialized (`-`) submodules.

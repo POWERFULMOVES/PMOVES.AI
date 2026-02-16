@@ -11,6 +11,7 @@ import argparse
 import concurrent.futures as cf
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -18,18 +19,25 @@ from urllib.request import urlopen
 
 # Import sibling module directly so execution is stable from `pmoves/` Make targets.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from flight_check_retro import ENDPOINTS  # type: ignore
+try:
+    from flight_check_retro import ENDPOINTS  # type: ignore
+except ImportError as exc:  # pragma: no cover - startup guard
+    raise SystemExit(
+        f"Cannot import ENDPOINTS from flight_check_retro in "
+        f"{Path(__file__).resolve().parent}: {exc}"
+    ) from exc
 
 
-STOP = False
+STOP_EVENT = threading.Event()
 
 
 def _on_signal(_sig: int, _frame: object) -> None:
-    global STOP
-    STOP = True
+    STOP_EVENT.set()
 
 
 def probe(url: str, timeout: float = 2.5) -> tuple[bool, int]:
+    if not url.startswith(("http://", "https://")):
+        return False, 0
     try:
         with urlopen(url, timeout=timeout) as resp:
             code = getattr(resp, "status", 200)
@@ -68,7 +76,10 @@ def run(interval: float, max_seconds: int) -> int:
     cycle = 0
 
     def collect() -> list[tuple[str, bool, int]]:
-        with cf.ThreadPoolExecutor(max_workers=min(24, len(ENDPOINTS))) as ex:
+        if not ENDPOINTS:
+            return []
+        workers = max(1, min(24, len(ENDPOINTS)))
+        with cf.ThreadPoolExecutor(max_workers=workers) as ex:
             futs = {ex.submit(probe, url): name for name, url in ENDPOINTS}
             rows: list[tuple[str, bool, int]] = []
             for fut in cf.as_completed(futs):
@@ -79,14 +90,14 @@ def run(interval: float, max_seconds: int) -> int:
         return rows
 
     if Live is None:
-        while not STOP and int(time.time() - started) <= max_seconds:
+        while not STOP_EVENT.is_set() and int(time.time() - started) <= max_seconds:
             cycle += 1
             rows = collect()
             render_plain(cycle, started, rows)
             if rows and all(ok for _, ok, _ in rows):
                 return 0
             time.sleep(interval)
-        return 0
+        return 1
 
     table = Table(title="PMOVES Showtime Bring-Up", show_lines=False)
     table.add_column("Service", no_wrap=True)
@@ -94,7 +105,7 @@ def run(interval: float, max_seconds: int) -> int:
     table.add_column("Code")
 
     with Live(table, refresh_per_second=5, transient=True) as live:
-        while not STOP and int(time.time() - started) <= max_seconds:
+        while not STOP_EVENT.is_set() and int(time.time() - started) <= max_seconds:
             cycle += 1
             rows = collect()
             ready = sum(1 for _, ok, _ in rows if ok)
@@ -119,7 +130,7 @@ def run(interval: float, max_seconds: int) -> int:
                 return 0
             time.sleep(interval)
 
-    return 0
+    return 1
 
 
 def main() -> int:
