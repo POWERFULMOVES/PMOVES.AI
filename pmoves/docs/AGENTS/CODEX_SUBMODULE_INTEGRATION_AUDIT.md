@@ -57,9 +57,17 @@ _Generated: 2026-02-14_
 | `PMOVES-Wealth` | no | yes | `PMOVES-Wealth/.codex` | 13 | `medium` | Validate Codex docs are complete and linked from module README. |
 | `Pmoves-cipher` | no | no | - | 46 | `medium` | Validate Codex docs are complete and linked from module README. |
 
+## Update Log
+
+### 2026-02-16 — PR #634 Gitlink Sync
+- PR #634 synced 16 submodule gitlinks to their latest upstream commits
+- Fork architecture documented in `pmoves/docs/SUBMODULE_FORK_ARCHITECTURE.md`
+- Remaining Lane D work: integration contract check baseline, legacy `pmoves/vendor/` migration
+
 ## Recommended Next Steps
 1. Add Codex quickstart sections to all `high` priority modules.
 2. Reuse shared Codex runbooks for CHIT, EvoSwarm, Flute, and Gateway workflows.
 3. Keep module-level `AGENTS.md` and Codex docs in sync whenever interfaces change.
 4. Re-run this audit after submodule syncs and release cuts.
+5. Validate `make -C pmoves integration-contract-check-baseline` against updated gitlinks.
 
