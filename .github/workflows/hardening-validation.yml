@@ -2,13 +2,13 @@ name: Docker Hardening Validation
 
 on:
   push:
-    branches: [main, PMOVES.AI-Edition-Hardened]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
   pull_request:
-    branches: [main, PMOVES.AI-Edition-Hardened]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
@@ -42,7 +42,7 @@ jobs:
         run: |
           echo "Running Docker hardening validation..."
           ./pmoves/scripts/validate-hardening.sh
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate hardening report
         if: always()

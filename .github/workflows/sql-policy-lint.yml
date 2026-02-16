@@ -2,13 +2,13 @@ name: SQL Policy Lint
 
 on:
   push:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/supabase/sql/**'
       - 'pmoves/supabase/migrations/**'
       - '.github/workflows/sql-policy-lint.yml'
   pull_request:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/supabase/sql/**'
       - 'pmoves/supabase/migrations/**'

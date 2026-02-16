@@ -2,7 +2,7 @@ name: Env Preflight
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/.env*'
       - 'pmoves/scripts/env_check.ps1'

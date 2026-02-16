@@ -6,19 +6,24 @@ This document describes the proper workflow for working with PMOVES.AI submodule
 
 ### Branch Flow
 ```
-feature work → PMOVES.AI-Edition-Hardened-v3-clean → PMOVES.AI-Edition-Hardened → main
+feature/* → integration → PMOVES.AI-Edition-Hardened → main
 ```
 
-1. **PMOVES.AI-Edition-Hardened-v3-clean** - Staging branch for features
+1. **integration** - Feature aggregation and CI gate
    - All feature work targets this branch first
-   - Once verified and stable, merges to PMOVES.AI-Edition-Hardened
+   - CI runs integration-gate workflow for fast feedback
+   - Once verified, promoted to Hardened via PR
 
-2. **PMOVES.AI-Edition-Hardened** - Production-ready hardened branch
-   - Only receives merges from v3-clean after verification
+2. **PMOVES.AI-Edition-Hardened** - Security-hardened staging
+   - Only receives merges from integration after full audit
+   - Runs hardening validation and contract checks
    - More conservative, stable deployments
 
-3. **main** - Latest stable release
-   - Receives merges from hardened branch after full testing
+3. **main** - Production release
+   - Receives merges from Hardened after full testing
+   - Tagged for releases
+
+See `pmoves/docs/BRANCH_STRATEGY.md` for full details including TTLs and protection rules.
 
 ### Submodule Branch Strategy
 - Each submodule fork has a `PMOVES.AI-Edition-Hardened` branch
