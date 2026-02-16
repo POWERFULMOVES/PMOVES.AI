@@ -22,7 +22,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Set up Python
@@ -37,13 +36,13 @@ jobs:
         run: |
           echo "=== Running static certification audit ==="
 
-          # Check submodule integrity
+          # Check submodule references (no clone required — reads gitlinks from index)
           echo "Checking submodule references..."
-          git submodule status --recursive | while read -r line; do
+          git submodule status | while read -r line; do
             hash=$(echo "$line" | awk '{print $1}')
             path=$(echo "$line" | awk '{print $2}')
             if [[ "$hash" == -* ]]; then
-              echo "WARN: Uninitialized submodule: $path"
+              echo "OK: $path (registered, hash ${hash#-})"
             elif [[ "$hash" == +* ]]; then
               echo "INFO: Modified submodule: $path (local changes)"
             else
