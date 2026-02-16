@@ -115,8 +115,9 @@ def _looks_placeholder(value: str) -> bool:
     return (
         lowered.startswith("placeholder_")
         or lowered.startswith("your_")
-        or lowered in {"changeme", "change_me", "none", "null"}
-        or "example.com" in lowered
+        or lowered in {"changeme", "change_me", "none", "null", "example.com"}
+        or lowered.endswith("@example.com")
+        or lowered.endswith(".example.com")
     )
 
 

@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import threading
 from dataclasses import dataclass, field
@@ -59,13 +60,15 @@ _download_count = 0
 _download_lock = threading.Lock()
 
 
+_SAFE_MODEL_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
 def _safe_model_path(model_id: str) -> Path:
     """Resolve a model cache path, rejecting path traversal attempts."""
     sanitized = model_id.replace("/", "--")
-    candidate = (MODELS_BASE / sanitized).resolve()
-    if not str(candidate).startswith(str(MODELS_BASE.resolve())):
+    if not _SAFE_MODEL_RE.match(sanitized):
         raise HTTPException(status_code=400, detail="Invalid model ID")
-    return candidate
+    return MODELS_BASE / sanitized
 
 
 class ModelTier(Enum):
