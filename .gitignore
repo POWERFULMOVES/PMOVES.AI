@@ -83,6 +83,7 @@ yarn-error.log*
 *.sqlite
 *.sqlite3
 pmoves/data/agent-zero/memory/
+pmoves/data/agent-zero/logs/
 pmoves/data/open-notebook/surreal_data/
 
 # =============================================================================

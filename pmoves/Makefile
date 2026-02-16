@@ -1359,7 +1359,13 @@ manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visi
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
-.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+.PHONY: worktree-sitrep worktree-sitrep-strict submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+worktree-sitrep: ## Generate two-sided worktree + submodule SITREP (no-blind audit baseline)
+	@$(PYTHON) tools/worktree_sitrep.py
+
+worktree-sitrep-strict: ## Strict two-sided SITREP gate (fails on dirty worktrees or recursive submodule errors)
+	@$(PYTHON) tools/worktree_sitrep.py --strict
+
 submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 

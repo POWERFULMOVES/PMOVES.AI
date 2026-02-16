@@ -81,6 +81,7 @@ This means CI contract enforcement currently validates template + opted-in overl
   - `pmoves/tools/integration_contract_check.py`
   - `pmoves/integrations/_template/pmoves-integrations/*`
 - Exit criteria:
+  - `make -C pmoves worktree-sitrep`
   - `make -C pmoves submodule-integrity`
   - `make -C pmoves integration-contract-check-baseline`
   - `python pmoves/tools/integration_contract_check.py pmoves/integrations/archon --strict-hooks` passes locally (nested `pmoves-integrations` support), then mirror changes upstream in PMOVES-Archon
