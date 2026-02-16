@@ -1,4 +1,4 @@
-import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading
+import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading, socket
 import importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -14,7 +14,7 @@ import torch
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from services.common.geometry_params import get_decoder_pack
 from services.common.hrm_sidecar import HrmDecoderController
 import asyncio
@@ -1037,6 +1037,12 @@ CHIT_DECODE_AUDIO = os.environ.get("CHIT_DECODE_AUDIO", "false").lower()=="true"
 CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_dataset.jsonl")
 CHIT_T5_MODEL = os.environ.get("CHIT_T5_MODEL","t5-small")
 CHIT_CLIP_MODEL = os.environ.get("CHIT_CLIP_MODEL","clip-ViT-B-32")
+CHIT_IMAGE_FETCH_ALLOW_PRIVATE = os.environ.get("CHIT_IMAGE_FETCH_ALLOW_PRIVATE", "false").lower()=="true"
+CHIT_IMAGE_FETCH_ALLOWED_HOSTS = {
+    host.strip().lower()
+    for host in os.environ.get("CHIT_IMAGE_FETCH_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+}
 CHIT_PERSIST_DB = os.environ.get("CHIT_PERSIST_DB","false").lower()=="true"
 GAN_SIDECAR_ENABLED = os.environ.get("GAN_SIDECAR_ENABLED", "false").lower()=="true"
 
@@ -1166,6 +1172,58 @@ def require_tailscale(request: Request, admin_only: bool = False):
 
 def require_admin_tailscale(request: Request):
     return require_tailscale(request, admin_only=True)
+
+
+def _host_is_private_or_internal(hostname: str) -> bool:
+    host = (hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in {"localhost"} or host.endswith(".local"):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+
+    seen: set[str] = set()
+    for _, _, _, _, sockaddr in infos:
+        ip_raw = sockaddr[0]
+        if ip_raw in seen:
+            continue
+        seen.add(ip_raw)
+        try:
+            ip_obj = ipaddress.ip_address(ip_raw)
+        except ValueError:
+            return True
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _validate_remote_image_url(raw_url: Any) -> str:
+    url = str(raw_url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(400, f"invalid image URL scheme: {parsed.scheme or '<none>'}")
+    if not parsed.hostname:
+        raise HTTPException(400, "invalid image URL host")
+    if parsed.username or parsed.password:
+        raise HTTPException(400, "image URL credentials are not allowed")
+
+    host = parsed.hostname.lower()
+    if CHIT_IMAGE_FETCH_ALLOWED_HOSTS and host not in CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        raise HTTPException(400, f"image host not allowed: {host}")
+    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE and not CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        if _host_is_private_or_internal(host):
+            raise HTTPException(400, f"private/internal image host blocked: {host}")
+    return url
 
 
 def _build_media_url(media: Dict[str, Any]) -> Optional[str]:
@@ -1797,8 +1855,11 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
         img_list=[]
         for url in images:
-            r = requests.get(url, timeout=20)
+            safe_url = _validate_remote_image_url(url)
+            r = requests.get(safe_url, timeout=20, allow_redirects=False)
             r.raise_for_status()
+            if 300 <= r.status_code < 400:
+                raise HTTPException(400, f"redirect responses are not allowed for image URL: {safe_url}")
             img = Image.open(io.BytesIO(r.content)).convert('RGB')
             img_list.append(img)
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
@@ -1839,6 +1900,8 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
                     accept_threshold=accept_threshold,
                 )
         return payload
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("image decode error")
         raise HTTPException(500, f"image decode error: {e}")
