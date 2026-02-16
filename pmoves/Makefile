@@ -1877,42 +1877,11 @@ archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)
 
 .PHONY: archon-smoke
 archon-smoke: ## Combined Archon smoke: /healthz 200 and Supabase CLI REST reachable
-	@bash -lc 'api=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); \
-	rest="http://127.0.0.1:65421/rest/v1"; \
-	if [ -f pmoves/.env.local ]; then \
-	  val=$$(grep -m1 '^SUPA_REST_URL=' pmoves/.env.local | cut -d= -f2-); [ -n "$$val" ] && rest="$$val"; \
-	fi; \
-	probe="$$rest/it_errors?select=id&limit=1"; \
-	pg=$$(curl -s -o /dev/null -w "%{http_code}" "$$probe" || true); \
-	if [ "$$api" != "200" ]; then echo "✖ archon /healthz => $$api" && exit 1; fi; \
-	if [ "$$pg" = "000" ] || [ -z "$$pg" ] || [ "$$pg" -ge 500 ]; then echo "✖ Supabase REST probe failed (HTTP $$pg) URL: $$probe" && exit 1; fi; \
-	echo "✔ archon /healthz 200 and Supabase REST probe $$probe (HTTP $$pg)"; \
-	$(MAKE) archon-upload-smoke'
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py full
 
 .PHONY: archon-upload-smoke
 archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload) to validate embedding wiring
-	@which jq >/dev/null 2>&1 || (echo "jq is required for archon-upload-smoke" && exit 1)
-	@bash -lc 'set -euo pipefail; \
-	  base="http://localhost:8091"; \
-	  echo "→ Archon upload smoke ($$base/api/documents/upload)"; \
-	  : "If OpenAI isn’t configured, force local Ollama base + embedding model"; \
-	  openai_ok=$$(curl -sS "$$base/api/providers/openai/status" | jq -r ".ok // false" || echo "false"); \
-	  if [ "$$openai_ok" != "true" ]; then \
-	    ollama_base="$${ARCHON_OLLAMA_BASE_URL:-http://pmoves-ollama:11434/v1}"; \
-	    embed_model="$${ARCHON_EMBEDDING_MODEL:-qwen3-embedding:4b}"; \
-	    echo "→ OpenAI not configured; setting LLM_BASE_URL=$$ollama_base and EMBEDDING_MODEL=$$embed_model"; \
-	    curl -fsS -X PUT "$$base/api/credentials/LLM_PROVIDER" -H "content-type: application/json" -d "{\"value\":\"ollama\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: default to local Ollama\"}" >/dev/null; \
-	    curl -fsS -X PUT "$$base/api/credentials/EMBEDDING_PROVIDER" -H "content-type: application/json" -d "{\"value\":\"ollama\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: embeddings via local Ollama\"}" >/dev/null; \
-	    curl -fsS -X PUT "$$base/api/credentials/LLM_BASE_URL" -H "content-type: application/json" -d "{\"value\":\"$$ollama_base\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: in-network Ollama base URL\"}" >/dev/null; \
-	    curl -fsS -X PUT "$$base/api/credentials/EMBEDDING_MODEL" -H "content-type: application/json" -d "{\"value\":\"$$embed_model\",\"category\":\"rag_strategy\",\"description\":\"PMOVES smoke: local embedding model\"}" >/dev/null; \
-	  fi; \
-	  tmp=$$(mktemp); echo "PMOVES archon upload smoke $$(date -Is)" > "$$tmp"; \
-	  resp=$$(curl -fsS -F "file=@$$tmp;type=text/plain" -F "filename=smoke.txt" "$$base/api/documents/upload"); \
-	  rm -f "$$tmp"; \
-	  ok=$$(printf "%s" "$$resp" | jq -r ".success // false"); \
-	  pid=$$(printf "%s" "$$resp" | jq -r ".progressId // .progress_id // empty"); \
-	  if [ "$$ok" != "true" ] || [ -z "$$pid" ]; then echo "✖ archon upload response unexpected:"; echo "$$resp" | jq .; exit 1; fi; \
-	  echo "✔ archon upload accepted (progressId=$$pid)"'
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py upload
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
@@ -1930,58 +1899,7 @@ archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 
 
 .PHONY: archon-headless-smoke
 archon-headless-smoke: ## Verify Archon headless services: /ready 200 and MCP bridge responds
-	@bash -lc 'set -e; \
-	  ready=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/ready || true); \
-	  if [ "$$ready" != "200" ]; then \
-	    detail=$$(curl -s http://localhost:8091/healthz || echo ""); \
-	    code=$$(printf "%s\n" "$$detail" | jq -r ".detail.supabase.http // empty" 2>/dev/null || echo ""); \
-	    url=$$(printf "%s\n" "$$detail" | jq -r ".detail.supabase.url // empty" 2>/dev/null || echo ""); \
-	    if [ "$$ready" = "503" ] && [ "$$code" = "404" ] && printf "%s\n" "$$url" | grep -q "host.docker.internal:65421"; then \
-	      echo "↷ archon /ready 503 (Supabase CLI root 404) — treating as soft-ok"; \
-	    else \
-	      echo "✖ archon /ready => $$ready (supabase.http=$$code url=$$url)"; exit 1; \
-	    fi; \
-	  fi; \
-	  echo "→ Probing MCP bridge via /mcp/describe"; \
-	  desc=$$(curl -fsS http://localhost:8091/mcp/describe); \
-	  reach=$$(printf "%s\n" "$$desc" | jq -r ".reachable"); \
-	  if [ "$$reach" != "true" ]; then echo "✖ MCP bridge not reachable"; exit 1; fi; \
-	  echo "→ Checking Archon /healthz status"; \
-	  code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8091/healthz || true); \
-	  if command -v jq >/dev/null 2>&1; then \
-	    status=$$(curl -sf http://localhost:8091/healthz | jq -r ".status // \"\"" || echo ""); \
-	    if [ "$$status" != "ok" ]; then echo "↷ Archon /healthz reports '\''$$status'\'' (proceeding with MCP checks)."; fi; \
-	  else \
-	    if [ "$$code" != "200" ]; then echo "↷ Archon /healthz $$code (proceeding)."; fi; \
-	  fi; \
-	  echo "→ Listing MCP commands via /mcp/commands"; \
-	  cmds_json=$$(curl -s http://localhost:8091/mcp/commands 2>/dev/null || true); \
-	  if [ -z "$$cmds_json" ]; then \
-	    echo "↷ /mcp/commands not available (soft-ok; describe reachable)"; \
-	    echo "✔ archon headless health OK"; \
-	    exit 0; \
-	  fi; \
-	  cmds_count=$$(printf "%s\n" "$$cmds_json" | jq ".commands | length" 2>/dev/null || echo ""); \
-	  if [ -z "$$cmds_count" ]; then \
-	    echo "↷ /mcp/commands response not parseable (soft-ok; describe reachable)"; \
-	    echo "✔ archon headless health OK"; \
-	    exit 0; \
-	  fi; \
-	  if [ "$$cmds_count" = "0" ]; then \
-	    echo "↷ no MCP commands advertised (soft-ok for now)"; \
-	    echo "✔ archon headless health OK"; \
-	    exit 0; \
-	  fi; \
-	  echo "→ Attempting form.get if available (or first tool)"; \
-	  tool=$$(printf "%s\n" "$$cmds_json" | jq -r "first(.commands[] | select(.name==\"form.get\").name) // .commands[0].name"); \
-	  http_code=$$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8091/mcp/execute -H "content-type: application/json" -d "{\\\"tool\\\":\\\"$$tool\\\",\\\"arguments\\\":{}}" 2>/dev/null || true); \
-	  if [ "$$http_code" != "200" ]; then \
-	    echo "↷ MCP execute $$tool => $$http_code (soft-ok; bridge reachable)"; \
-	  else \
-	    echo "✔ archon MCP command executed: $$tool"; \
-	  fi; \
-	  echo "✔ archon headless health OK"; \
-	'
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/archon_smoke.py headless
 
 .PHONY: archon-rebuild
 archon-rebuild: ## Rebuild Archon image with vendor update (set ARCHON_GIT_REF/REMOTE as needed)

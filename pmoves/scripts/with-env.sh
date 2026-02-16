@@ -18,6 +18,8 @@ load_env_file() {
   tmpfile=$(mktemp)
   # Build a sanitized assignment file
   while IFS= read -r line; do
+    # Normalize CRLF when running on Windows/WSL.
+    line="${line%$'\r'}"
     # ignore comments/blank
     [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
     if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=.*$ ]]; then
@@ -26,6 +28,7 @@ load_env_file() {
       key=$(echo "$key" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
       # trim leading spaces on value
       val=$(echo "$val" | sed -E 's/^[[:space:]]+//')
+      val="${val%$'\r'}"
       # If value contains ${ for variable expansion, output line directly for shell evaluation
       # Otherwise wrap in single quotes to handle spaces and special characters
       if [[ "$val" =~ \$\{ ]]; then
