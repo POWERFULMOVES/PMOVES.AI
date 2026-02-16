@@ -1,24 +1,24 @@
 # PMOVES.AI Production Merge Tracker
 
-**Last Updated**: 2026-02-08 17:30 UTC
-**Production Branch**: `main`
+**Last Updated**: 2026-02-16 22:15 UTC
+**Production Branch**: `PMOVES.AI-Edition-Hardened`
 **Hardened Branch**: `PMOVES.AI-Edition-Hardened`
 
 ## Overview
 
-This document tracks the progress of hardening and bug fixes from feature branches to the production (`main`) branch.
+This document tracks hardening and bug-fix promotion into the production release branch (`PMOVES.AI-Edition-Hardened`) and subsequent promotion to `main`.
 
 ---
 
 ## Quick Status
 
-| Category | Open PRs | Mergeable | Blocked | Ready to Merge |
-|----------|----------|-----------|---------|----------------|
-| **Just Merged** | 4 | ✅ | 0 | - |
-| **Conflicting** | 5 | 0 ❌ | 5 | 0 |
-| **Closed** | 1 | ✅ | 0 | - |
-| **Total Active** | 5 | 0 | 5 | 0 |
-| **CI Migration Needed** | 3 workflows | ⏳ | 0 | - |
+| Category | Value | Notes |
+|----------|-------|-------|
+| **Open PRs** | `0` | Hardened merge queue currently clear. |
+| **Dependabot alerts** | `14` | `3 high`, `9 medium`, `2 low` (open). |
+| **Code scanning alerts (sampled page)** | `100` | `3 critical`, `64 high`, `33 medium`. |
+| **Core hardening workflows** | `active` | Build, CodeQL, Python/SQL tests, integration contract, env preflight all active. |
+| **Promotion policy** | `hardened -> main` | Keep production certification on hardened before promotion to main. |
 
 ---
 

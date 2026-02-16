@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 import os
+import socket
 import time
 import uuid
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -260,6 +262,69 @@ def _default_fallback_url() -> str:
     return os.getenv("SUPASERCH_HTTP_FALLBACK_URL", f"http://127.0.0.1:{port}/healthz")
 
 
+SUPASERCH_HTTP_FALLBACK_ALLOWED_HOSTS = {
+    host.strip().lower()
+    for host in os.getenv("SUPASERCH_HTTP_FALLBACK_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+}
+SUPASERCH_HTTP_FALLBACK_ALLOW_PRIVATE = (
+    os.getenv("SUPASERCH_HTTP_FALLBACK_ALLOW_PRIVATE", "true").strip().lower() == "true"
+)
+
+
+def _host_is_private_or_internal(hostname: str) -> bool:
+    host = (hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in {"localhost"} or host.endswith(".local"):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+    seen: set[str] = set()
+    for _, _, _, _, sockaddr in infos:
+        ip_raw = sockaddr[0]
+        if ip_raw in seen:
+            continue
+        seen.add(ip_raw)
+        try:
+            ip_obj = ipaddress.ip_address(ip_raw)
+        except ValueError:
+            return True
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _validate_fallback_url(target_url: str) -> str:
+    parsed = urlparse(target_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"invalid fallback URL scheme: {parsed.scheme or '<none>'}")
+    if not parsed.hostname:
+        raise ValueError("fallback URL host is required")
+    if parsed.username or parsed.password:
+        raise ValueError("fallback URL credentials are not allowed")
+
+    host = parsed.hostname.lower()
+    if SUPASERCH_HTTP_FALLBACK_ALLOWED_HOSTS and host not in SUPASERCH_HTTP_FALLBACK_ALLOWED_HOSTS:
+        raise ValueError(f"fallback host not allowed: {host}")
+    if (
+        not SUPASERCH_HTTP_FALLBACK_ALLOWED_HOSTS
+        and not SUPASERCH_HTTP_FALLBACK_ALLOW_PRIVATE
+        and _host_is_private_or_internal(host)
+    ):
+        raise ValueError(f"private/internal fallback host blocked: {host}")
+    return target_url
+
+
 async def run_http_fallback(query: str, *, request_id: str) -> Dict[str, Any]:
     """Invoke the HTTP fallback, returning diagnostics for observability."""
 
@@ -282,13 +347,29 @@ async def run_http_fallback(query: str, *, request_id: str) -> Dict[str, Any]:
             },
         }
     include_query_param = False
+    encoded_query = quote_plus(query)
     if "{encoded_query}" in fallback_url_template:
-        target_url = fallback_url_template.replace("{encoded_query}", quote_plus(query))
+        target_url = fallback_url_template.replace("{encoded_query}", encoded_query)
     elif "{query}" in fallback_url_template:
-        target_url = fallback_url_template.replace("{query}", query)
+        # `{query}` is treated as URL-encoded input to avoid raw path/query injection.
+        target_url = fallback_url_template.replace("{query}", encoded_query)
     else:
         target_url = fallback_url_template
         include_query_param = True
+    try:
+        target_url = _validate_fallback_url(target_url)
+    except ValueError as exc:
+        FALLBACK_COUNTER.labels(status="invalid_url").inc()
+        FALLBACK_LATENCY.labels(status="invalid_url").observe(0.0)
+        logger.warning("HTTP fallback URL rejected: %s", exc)
+        return {
+            "status": "error",
+            "url": target_url,
+            "via": "http",
+            "error": str(exc),
+            "latency_ms": 0.0,
+            "request_id": request_id,
+        }
 
     status_label = "error"
     start = time.perf_counter()
@@ -465,4 +546,3 @@ async def search(q: str = Query(..., min_length=1, description="Search query")) 
         raise HTTPException(status_code=500, detail="pipeline_error") from exc
     finally:
         REQUEST_LATENCY.labels(channel=channel).observe(time.perf_counter() - start)
-
