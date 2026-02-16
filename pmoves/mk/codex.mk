@@ -4,6 +4,9 @@ CHIT_EXPORT_ENV ?= env.shared
 CHIT_NO_CLEARTEXT ?= 1
 CHIT_MANIFEST_SOURCE ?= pmoves/chit/secrets_manifest_v2.yaml
 CHIT_MANIFEST_DEST ?= pmoves/chit/secrets_manifest.yaml
+PR_MONITOR_REPO ?= POWERFULMOVES/PMOVES.AI
+PR_MONITOR_INTERVAL ?= 15
+PR_MONITOR_TIMEOUT ?= 900
 SECRETS_ALLOW_MISSING ?= 1
 SECRETS_FUNNEL_BOOT_USER ?= 0
 ifeq ($(OS),Windows_NT)
@@ -30,7 +33,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-runtime-hydrate secrets-funnel-sync secrets-funnel
+.PHONY: codex-config codex-audit codex-home codex-health-quick pr-monitor pr-monitor-watch secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-runtime-hydrate secrets-funnel-sync secrets-funnel
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -47,6 +50,12 @@ codex-home: ## Show Codex operator docs for PMOVES agent workflows
 
 codex-health-quick: ## Fast Codex-oriented health check for core agent services
 	@$(CODEX_PY) scripts/codex_health_quick.py
+
+pr-monitor: ## Capture PR check/review snapshot to pmoves/docs/evidence/pr_monitor (set PR=<number>)
+	@$(CODEX_PY) tools/pr_review_monitor.py --repo "$(PR_MONITOR_REPO)" $(if $(PR),--pr "$(PR)",)
+
+pr-monitor-watch: ## Watch PR checks and keep writing local snapshots until settled/timeout
+	@$(CODEX_PY) tools/pr_review_monitor.py --repo "$(PR_MONITOR_REPO)" $(if $(PR),--pr "$(PR)",) --watch-seconds "$(PR_MONITOR_TIMEOUT)" --interval "$(PR_MONITOR_INTERVAL)" --strict
 
 secrets-audit: ## Run secrets hardening audit (CHIT paths, sync workflow, export hygiene)
 	@$(CODEX_PY) tools/secrets_hardening_audit.py
