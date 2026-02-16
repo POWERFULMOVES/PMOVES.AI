@@ -8,6 +8,7 @@ import secrets
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence
+from urllib.parse import urlparse
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -112,11 +113,20 @@ def _looks_placeholder(value: str) -> bool:
     lowered = value.strip().lower()
     if not lowered:
         return True
+    if "@" in lowered:
+        domain = lowered.split("@", 1)[1]
+        if domain == "example.com" or domain.endswith(".example.com"):
+            return True
+
+    parsed = urlparse(lowered if "://" in lowered else f"https://{lowered}")
+    host = (parsed.hostname or "").strip().lower()
+
     return (
         lowered.startswith("placeholder_")
         or lowered.startswith("your_")
         or lowered in {"changeme", "change_me", "none", "null"}
-        or "example.com" in lowered
+        or host == "example.com"
+        or host.endswith(".example.com")
     )
 
 
