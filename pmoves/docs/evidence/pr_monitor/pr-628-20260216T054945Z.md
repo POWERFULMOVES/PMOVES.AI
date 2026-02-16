@@ -1,0 +1,30 @@
+# PR Monitor Snapshot
+
+- Captured at: `2026-02-16T05:49:45.006346+00:00`
+- Repo: `POWERFULMOVES/PMOVES.AI`
+- PR: `#628`
+- Title: `chore(deps): bump axios in UI + jellyfin-ai gateway (hardened)`
+- Branch: `chore/deps-axios-1.13.5-hardened` -> `PMOVES.AI-Edition-Hardened`
+- State: `MERGED`
+- Review decision: ``
+- URL: https://github.com/POWERFULMOVES/PMOVES.AI/pull/628
+
+## Checks
+- Total: **5**
+- Passed: **5**
+- Pending: **0**
+- Failed: **0**
+
+| Name | Type | Status | Conclusion/State | Details |
+| --- | --- | --- | --- | --- |
+| `Analyze (actions)` | `CheckRun` | `COMPLETED` | `SUCCESS` | https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22051627176/job/63710830319 |
+| `Analyze (javascript-typescript)` | `CheckRun` | `COMPLETED` | `SUCCESS` | https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22051627176/job/63710830316 |
+| `Analyze (python)` | `CheckRun` | `COMPLETED` | `SUCCESS` | https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22051627176/job/63710830325 |
+| `CodeQL` | `CheckRun` | `COMPLETED` | `SUCCESS` | https://github.com/POWERFULMOVES/PMOVES.AI/runs/63710868757 |
+| `` | `StatusContext` | `n/a` | `SUCCESS` |  |
+
+## Review Artifacts
+- Reviews: **0**
+- PR issue comments: **0**
+- Inline review comments: **0**
+
