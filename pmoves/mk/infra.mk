@@ -10,7 +10,7 @@
 # Guard: SERVICE must be set for volume-reset
 VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-db nats
 
-.PHONY: volume-reset volume-list docker-prune docker-prune-all
+.PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
@@ -84,3 +84,15 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo ""
 	@echo "Volumes NOT pruned. Use 'make volume-reset SERVICE=...' for targeted resets."
 	@echo "=== Docker prune-all complete ==="
+
+branch-audit: ## List stale remote branches with age and merge status
+	@$(CODEX_PY) tools/branch_cleanup.py
+
+branch-cleanup: ## Archive stale branches (dry-run by default, EXECUTE=1 to run)
+ifeq ($(EXECUTE),1)
+	@$(CODEX_PY) tools/branch_cleanup.py --execute
+else
+	@$(CODEX_PY) tools/branch_cleanup.py
+	@echo ""
+	@echo "Dry-run only. Set EXECUTE=1 to perform cleanup."
+endif
