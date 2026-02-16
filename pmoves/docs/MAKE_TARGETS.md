@@ -184,6 +184,12 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Stops/removes the Docker-hosted local-cert runner containers (`gha-runner-ai-lab`, `gha-runner-vps`).
 - `make ci-runners-local-cert-status`
   - Shows both local container status and GitHub runner registration status for `pmoves-ai-lab-runner` and `pmoves-vps-runner`.
+- `make pr-monitor PR=<number>`
+  - Captures PR checks/reviews/comments to local evidence for offline analysis.
+  - Writes timestamped and rolling-latest files under `pmoves/docs/evidence/pr_monitor/` (`pr-<num>-<stamp>.json|.md` and `pr-<num>-latest.json|.md`).
+- `make pr-monitor-watch PR=<number>`
+  - Polls PR checks until settled (or timeout) and keeps refreshing local evidence snapshots.
+  - Tune with `PR_MONITOR_INTERVAL` (default `15`) and `PR_MONITOR_TIMEOUT` (default `900`).
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.
