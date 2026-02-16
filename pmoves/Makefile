@@ -135,6 +135,7 @@ help: ## Show available make targets and descriptions
 # Target modules (Phase 2 Makefile refactor).
 include mk/codex.mk
 include mk/preflight.mk
+include mk/infra.mk
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
