@@ -1,8 +1,10 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime submodule-integrity ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
 RUNNER_PHASE ?= local-certification
+SUBMODULE_LAYER_MANIFEST ?= configs/submodule_layer_validation_manifest.json
+AUDIT_RUNTIME_GPU ?= 0
 
 ifeq ($(OS),Windows_NT)
 PRECHECK_PY ?= py -3
@@ -63,6 +65,43 @@ ci-runners-local-cert-down: ## Stop local-cert runner containers (ai-lab + vps) 
 ci-runners-local-cert-status: ## Show local-cert runner container and GitHub registration status
 	@$(PRECHECK_PY) tools/local_cert_runners.py status $(ARGS)
 
+submodule-layer-validate: ## Deterministic submodule-level validation (manifest-driven)
+	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" $(ARGS)
+
+submodule-layer-validate-one: ## Deterministic validation for exactly one submodule (set SUBMODULE=<name-or-path>)
+	$(if $(strip $(SUBMODULE)),,$(error Usage: make -C pmoves submodule-layer-validate-one SUBMODULE=<name-or-path>))
+	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" --only "$(SUBMODULE)" $(ARGS)
+
+submodule-layer-validate-all: ## Run deterministic validation one submodule at a time and emit per-module evidence
+	@$(PRECHECK_PY) tools/submodule_layer_runall.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" $(ARGS)
+
+submodule-layer-validate-all-strict: ## Strict per-module deterministic validation (warnings fail)
+	@$(PRECHECK_PY) tools/submodule_layer_runall.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" --strict $(ARGS)
+
+submodule-layer-validate-strict: ## Strict submodule-level validation (errors and warnings fail)
+	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" --strict $(ARGS)
+
+audit-layers-static: ## Submodule-first static certification pass before runtime smokes
+	@$(MAKE) --no-print-directory submodule-layer-validate-all-strict
+	@$(MAKE) --no-print-directory submodule-layer-validate-strict
+	@$(MAKE) --no-print-directory submodule-integrity-strict
+	@$(MAKE) --no-print-directory submodule-docs-audit-strict
+	@$(MAKE) --no-print-directory integration-contract-check-baseline
+	@$(MAKE) --no-print-directory tooling-audit-strict
+	@$(MAKE) --no-print-directory secrets-audit
+	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
+	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
+
+audit-layers-runtime: ## Runtime certification pass once services are online
+	@$(MAKE) --no-print-directory audit-layers-static
+	@$(MAKE) --no-print-directory smoke
+	@$(MAKE) --no-print-directory monitoring-smoke-prod
+	@if [ "$${AUDIT_RUNTIME_GPU:-$(AUDIT_RUNTIME_GPU)}" = "1" ]; then \
+		GPU_SMOKE_STRICT="$${GPU_SMOKE_STRICT:-true}" $(MAKE) --no-print-directory smoke-gpu; \
+	fi
+
+audit-layers: audit-layers-static ## Alias for static layer certification
+
 preflight: ## Full preflight: env check + quick readiness + Codex health summary
 	@$(MAKE) --no-print-directory env-check
 	@$(MAKE) --no-print-directory submodule-integrity
@@ -73,11 +112,20 @@ preflight: ## Full preflight: env check + quick readiness + Codex health summary
 
 showtime: bringup-showtime ## Alias for bringup-showtime
 
+showtime-links: ## Build clickable UI/API verification pages and worker snapshot
+	@$(PRECHECK_PY) tools/showtime_verify_links.py $(ARGS)
+
+showtime-links-open: ## Build clickable UI/API verification pages and open in browser
+	@$(PRECHECK_PY) tools/showtime_verify_links.py --open $(ARGS)
+
+showtime-links-strict: ## Build verification pages and fail if required endpoints are down
+	@$(PRECHECK_PY) tools/showtime_verify_links.py --strict $(ARGS)
+
 bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/BotZ/Evo/Flute aware)
 	@echo "→ Showtime bring-up starting..."
 	@watcher_pid=""; \
 	if [ "$${SHOWTIME_WATCH:-1}" = "1" ]; then \
-		$(PYTHON) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
+		$(PRECHECK_PY) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
 		watcher_pid=$$!; \
 		echo "→ Live watcher started (pid $$watcher_pid)"; \
 	fi; \
@@ -91,6 +139,7 @@ bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/Bot
 	PARALLEL=$${PARALLEL:-1} WAIT_T_LONG=$${WAIT_T_LONG:-300} $(MAKE) --no-print-directory bringup-with-ui; \
 	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
 	$(MAKE) --no-print-directory codex-health-quick || true; \
+	$(MAKE) --no-print-directory showtime-links || true; \
 	cleanup; \
 	trap - EXIT INT TERM; \
 	echo "✔ Showtime sequence complete."
@@ -99,7 +148,7 @@ smoke-showtime: ## Run smoke tests with live Showtime watcher (core + monitoring
 	@echo "→ Showtime smoke starting..."
 	@watcher_pid=""; \
 	if [ "$${SHOWTIME_WATCH:-1}" = "1" ]; then \
-		$(PYTHON) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
+		$(PRECHECK_PY) tools/showtime_watch.py --interval "$${SHOWTIME_INTERVAL:-1.5}" --max-seconds "$${SHOWTIME_MAX_SECONDS:-900}" & \
 		watcher_pid=$$!; \
 		echo "→ Live watcher started (pid $$watcher_pid)"; \
 	fi; \
@@ -116,6 +165,7 @@ smoke-showtime: ## Run smoke tests with live Showtime watcher (core + monitoring
 		GPU_SMOKE_STRICT="$${GPU_SMOKE_STRICT:-true}" $(MAKE) --no-print-directory smoke-gpu; \
 	fi; \
 	RETRO_THEME=$${RETRO_THEME:-galaxy} $(MAKE) --no-print-directory flight-check-retro; \
+	$(MAKE) --no-print-directory showtime-links-strict; \
 	cleanup; \
 	trap - EXIT INT TERM; \
 	echo "✔ Showtime smoke complete."
