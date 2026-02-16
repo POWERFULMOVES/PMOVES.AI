@@ -1,7 +1,19 @@
 # PMOVES top-level Makefile
 
-# Many targets rely on bashisms (heredocs, arrays, $'...' quoting). Use bash for all recipes.
-SHELL := bash
+# Many targets rely on bashisms (heredocs, arrays, $'...' quoting).
+# On Windows, force Git Bash to avoid cmd.exe fallback for bash-style recipes.
+ifeq ($(OS),Windows_NT)
+  ifneq ("$(wildcard C:/PROGRA~1/Git/bin/bash.exe)","")
+    SHELL := C:/PROGRA~1/Git/bin/bash.exe
+  else ifneq ("$(wildcard C:/PROGRA~1/Git/usr/bin/bash.exe)","")
+    SHELL := C:/PROGRA~1/Git/usr/bin/bash.exe
+  else
+    SHELL := bash
+  endif
+  .SHELLFLAGS := -lc
+else
+  SHELL := bash
+endif
 
 # Docker Desktop / WSL often writes a credential helper (`credsStore=desktop.exe`) into ~/.docker/config.json
 # that is not executable in headless Linux environments. Prefer the repo-scoped nocreds config when present.
@@ -62,11 +74,38 @@ PROJECT ?= pmoves
 export DC
 export PROJECT
 
+# Compose env-file layering (cross-platform, no shell sourcing needed for compose interpolation).
+# Prefer runtime files and fall back to .example files for CI/config validation.
+# Order matters: later files override earlier ones.
+PRIMARY_ENV_FILE := $(if $(wildcard env.shared),env.shared,$(if $(wildcard env.shared.example),env.shared.example,))
+TIER_ENV_FILES := \
+	env.tier-data \
+	env.tier-supabase \
+	env.tier-api \
+	env.tier-llm \
+	env.tier-worker \
+	env.tier-media \
+	env.tier-agent \
+	env.tier-ui
+resolve_env_file = $(if $(wildcard $(1)),$(1),$(if $(wildcard $(1).example),$(1).example,))
+
+COMPOSE_ENV_FILES :=
+ifneq ($(strip $(PRIMARY_ENV_FILE)),)
+  COMPOSE_ENV_FILES += --env-file $(PRIMARY_ENV_FILE)
+endif
+COMPOSE_ENV_FILES += $(foreach file,$(TIER_ENV_FILES),$(if $(call resolve_env_file,$(file)),--env-file $(call resolve_env_file,$(file)),))
+ifneq ("$(wildcard .env.local)","")
+  COMPOSE_ENV_FILES += --env-file .env.local
+endif
+ifneq ("$(wildcard env.supa.runtime)","")
+  COMPOSE_ENV_FILES += --env-file env.supa.runtime
+endif
+
 # -------- Service Discovery Helper ----------
 # Resolve service URL using PMOVES service discovery (hybrid support)
 # Supports docked (NATS/Supabase) and standalone (Docker DNS) modes
 # Usage: $(call SERVICE_URL,service-slug,default-port)
-SERVICE_URL = python3 tools/service_health_check.py $(1) --port $(2)
+SERVICE_URL = $(PYTHON) tools/service_health_check.py $(1) --port $(2)
 
 # env.shared is dotenv-style and may contain values that are not safe to `source` directly (multi-line, etc).
 # Use the repo's sanitizer/loader so scripts get stable, safe environment variables.
@@ -148,7 +187,7 @@ check-tools: ## Check required tools and versions
 	if ! command -v docker >/dev/null 2>&1; then missing="$$missing docker"; fi; \
 	if ! docker compose version >/dev/null 2>&1; then missing="$$missing docker-compose"; fi; \
 	if ! command -v supabase >/dev/null 2>&1; then missing="$$missing supabase"; fi; \
-	if ! command -v python3 >/dev/null 2>&1; then missing="$$missing python3"; fi; \
+	if ! command -v $(PYTHON) >/dev/null 2>&1; then missing="$$missing $(PYTHON)"; fi; \
 	if [ -n "$$missing" ]; then \
 		echo "❌ Missing required tools:$$missing"; \
 		echo "   Install with:"; \
@@ -189,20 +228,31 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supa-init supa-start supa-stop supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor
+.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile
 supa-init: check-tools ## Initialize supabase/config.toml (one-time) and enforce PMOVES CLI defaults
 	@if [ ! -f "$(SUPABASE_CONFIG)" ]; then \
 		echo "🗂️ Initializing Supabase project in . ..."; \
 		supabase init --yes --workdir "."; \
 	fi
-	@python3 scripts/supabase/sync_config.py --config "$(SUPABASE_CONFIG)" --runtime "$(SUPABASE_RUNTIME)"
+	@$(PYTHON) scripts/supabase/sync_config.py --config "$(SUPABASE_CONFIG)" --runtime "$(SUPABASE_RUNTIME)"
 	@echo "✅ Supabase config ready ($(SUPABASE_CONFIG))"
 
 supa-env-doctor: ## Show layered env conflicts for critical Supabase keys
-	@python3 scripts/supabase/env_doctor.py
+	@$(PYTHON) scripts/supabase/env_doctor.py
 
-supa-start: check-tools ## Start Supabase stack for selected runtime (cli or kong/compose)
+supa-env-doctor-strict: ## Fail on Supabase env collisions or host-env bleed/interpolation risks
+	@$(PYTHON) scripts/supabase/env_doctor.py --strict
+
+supa-runtime-guard: ## Fail when conflicting Supabase runtime (CLI vs compose) is running
+	@$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)"
+
+supa-runtime-reconcile: ## Stop conflicting runtime so only SUPABASE_RUNTIME is active
+	@$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)" --reconcile
+
+supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected runtime (cli or kong/compose)
 	@$(MAKE) --no-print-directory supa-env-doctor
+	@flags=""; if [ "$${SUPABASE_RUNTIME_RECONCILE:-0}" = "1" ]; then flags="--reconcile"; fi; \
+		$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)" $$flags
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		$(MAKE) --no-print-directory supa-init; \
 		echo "🗄️ Starting Supabase CLI stack..."; \
@@ -242,6 +292,12 @@ supa-stop: ## Stop Supabase stack for selected runtime
 	fi
 	@echo "✅ Supabase stopped"
 
+supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-state drift
+	@echo "🛑 Stopping all Supabase runtimes..."
+	@supabase stop --workdir "." >/dev/null 2>&1 || true
+	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true
+	@echo "✅ All Supabase runtimes stopped"
+
 supa-restart: ## Restart Supabase stack for selected runtime
 	@echo "🔄 Restarting Supabase stack..."
 	@$(MAKE) --no-print-directory supa-stop
@@ -265,7 +321,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 			rm -f "$$env_snapshot"; \
 		fi; \
 		if [ -s ".supabase.status.env" ]; then \
-			python3 scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime >/dev/null 2>&1 || true; \
+			$(PYTHON) scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime >/dev/null 2>&1 || true; \
 			echo ""; \
 			echo "📌 Runtime env snapshot: .supabase.status.env"; \
 			grep -E '^(API_URL|DB_URL|STUDIO_URL|ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET)=' .supabase.status.env || true; \
@@ -290,7 +346,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 	fi
 
 supa-runtime-env: ## Regenerate env.supa.runtime from .supabase.status.env for service consumption
-	@python3 scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime
+	@$(PYTHON) scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime
 
 supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a single target)
 	@if [ -n "$${SVC:-}" ]; then \
@@ -338,11 +394,11 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 	if [ "$$studio_code" = "200" ]; then echo "  ✅ Studio ($$studio_url)"; else echo "  ❌ Studio ($$studio_url) -> $$studio_code"; fi
 
 supa-use-local: ## Write .env.local from local Supabase template and merge keys from current supa-status
-	@python3 scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env
+	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env
 	@echo "✅ .env.local updated for SUPABASE_RUNTIME=$(SUPABASE_RUNTIME)"
 
 supa-use-remote: ## Write .env.local from remote Supabase template (fill remote URL + keys)
-	@python3 scripts/supabase/apply_env_profile.py --profile remote --target .env.local
+	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile remote --target .env.local
 	@rm -f env.supa.runtime
 	@echo "✅ .env.local updated for remote Supabase runtime template"
 
@@ -353,38 +409,78 @@ supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase D
 		exit 1; \
 	fi
 	@$(MAKE) --no-print-directory supa-start >/dev/null
-	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
-	for migration in supabase/migrations/*.sql; do \
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
+	find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort | while read -r migration; do \
 		[ -f "$$migration" ] || continue; \
 		echo "   Applying: $$(basename "$$migration")"; \
 		docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
 	done
 	@echo "✅ Migrations complete"
 
-.PHONY: supabase-bootstrap
-supabase-bootstrap: ## Apply Supabase migrations + seeds against active Supabase DB container
+.PHONY: supabase-bootstrap supabase-bootstrap-mark-applied
+supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in public.pmoves_bootstrap_history)
 	@echo "🗄️ Applying Supabase schema + seeds..."
 	@$(MAKE) --no-print-directory supa-start >/dev/null
-	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
-		for migration in supabase/migrations/*.sql; do \
+		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$migration" ] || continue; \
-			echo "   Applying migration: $$(basename "$$migration")"; \
+			name=$$(basename "$$migration"); \
+			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   Skipping migration (already applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   Applying migration: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No migrations directory found"; \
 	fi; \
 	if [ -d "supabase/initdb" ]; then \
-		for seed in supabase/initdb/*.sql; do \
+		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$seed" ] || continue; \
-			echo "   Applying seed: $$(basename "$$seed")"; \
+			name=$$(basename "$$seed"); \
+			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   Skipping seed (already applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   Applying seed: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$seed"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No initdb directory found"; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
+
+supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in bootstrap history (no SQL execution)
+	@echo "📝 Marking migrations/seeds as applied in public.pmoves_bootstrap_history..."
+	@$(MAKE) --no-print-directory supa-start >/dev/null
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	if [ -d "supabase/migrations" ]; then \
+		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			name=$$(basename "$$migration"); \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+		done; \
+	fi; \
+	if [ -d "supabase/initdb" ]; then \
+		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			name=$$(basename "$$seed"); \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+		done; \
+	fi
+	@echo "✅ Bootstrap history updated"
 
 .PHONY: supabase-boot-user
 SUPABASE_BOOT_USER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),operator@pmoves.local)
@@ -637,7 +733,7 @@ first-run-multi-host: ## Guided first-run with multi-host mesh setup
 .PHONY: up-data-tier
 up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@echo "💾 Starting data tier..."
-	@$(DC) --profile data up -d
+	@$(DC) up -d $(DATA_SERVICES)
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
 
@@ -651,14 +747,14 @@ up-bus: ## Start message bus (NATS)
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."
-	@$(DC) --profile workers up -d
+	@$(DC) up -d $(WORKER_SERVICES)
 	@$(MAKE) --no-print-directory wait-workers
 	@echo "✅ Workers ready"
 
 .PHONY: up-agents
 up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@echo "🤖 Starting agent services..."
-	@$(DC) --profile agents up -d
+	@$(DC) up -d $(AGENT_SERVICES)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
 
@@ -722,6 +818,16 @@ up-minimal: ## Start minimal stack (Supabase + Data + Bus only)
 	@$(MAKE) up-bus
 	@echo "✅ Minimal stack ready (Supabase + Data + Bus)"
 
+.PHONY: bringup-layered
+bringup-layered: ## Deterministic local layered bring-up (minimal -> workers -> agents -> monitoring -> prod smoke)
+	@echo "🚀 Layered local bring-up (runtime=$${SUPABASE_RUNTIME:-cli})"
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-minimal
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-workers
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-agents
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-monitoring
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory smoke-prod
+	@echo "✅ Layered local bring-up passed"
+
 # =============================================================================
 # GRACEFUL SHUTDOWN (Reverse Dependency Order)
 # =============================================================================
@@ -752,12 +858,14 @@ down-tensorzero: ## Stop TensorZero gateway
 .PHONY: down-agents
 down-agents: ## Stop agent services
 	@echo "🤖 Stopping agents..."
-	@$(DC) --profile agents down
+	@$(DC) stop $(AGENT_SERVICES) archon-ui >/dev/null 2>&1 || true
+	@$(DC) rm -f $(AGENT_SERVICES) archon-ui >/dev/null 2>&1 || true
 
 .PHONY: down-workers
 down-workers: ## Stop worker services
 	@echo "⚙️ Stopping workers..."
-	@$(DC) --profile workers down
+	@$(DC) stop $(WORKER_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(WORKER_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-bus
 down-bus: ## Stop message bus
@@ -768,7 +876,8 @@ down-bus: ## Stop message bus
 .PHONY: down-data
 down-data: ## Stop data tier
 	@echo "💾 Stopping data tier..."
-	@$(DC) --profile data down
+	@$(DC) stop $(DATA_SERVICES) >/dev/null 2>&1 || true
+	@$(DC) rm -f $(DATA_SERVICES) >/dev/null 2>&1 || true
 
 .PHONY: down-obs
 down-obs: ## Stop observability stack
@@ -858,9 +967,9 @@ wait-workers: ## Wait for workers to be ready
 .PHONY: wait-agents
 wait-agents: ## Wait for agents to be ready
 	@echo "⏳ Waiting for agents..."
-	@timeout 60 bash -c 'until curl -sf http://localhost:8080/healthz; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:8091/healthz; do sleep 2; done' || true
-	@timeout 60 bash -c 'until curl -sf http://localhost:8098/healthz; do sleep 2; done' || true
+	@timeout 90 bash -c 'until curl -sf http://localhost:8080/healthz; do sleep 2; done'
+	@timeout 90 bash -c 'until [ "$$(docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}" "$(PROJECT)-archon-1" 2>/dev/null || echo missing)" = "healthy" ]; do sleep 2; done'
+	@timeout 90 bash -c 'until [ "$$(docker inspect --format "{{.State.Running}}" "$(PROJECT)-supaserch-1" 2>/dev/null || echo false)" = "true" ]; do sleep 2; done'
 	@echo "✅ Agents ready"
 
 # =============================================================================
@@ -1012,26 +1121,7 @@ restore: ## See docs/LOCAL_DEV.md for restore steps
 
 .PHONY: check-tier-envs
 check-tier-envs: ## Validate all tier environment files exist
-	@echo "Checking tier environment files..."
-	@missing=""; \
-	for tier in data supabase api llm worker media agent ui; do \
-		if [ ! -f "env.tier-$$tier" ]; then \
-			if [ -f "env.tier-$$tier.example" ]; then \
-				echo "⚠️  WARNING: env.tier-$$tier missing (example exists)"; \
-				echo "   Copy from example: cp env.tier-$$tier.example env.tier-$$tier"; \
-			else \
-				echo "❌ ERROR: env.tier-$$tier missing (no example found)"; \
-				missing="$$missing env.tier-$$tier"; \
-			fi; \
-		fi; \
-	done; \
-	if [ -n "$$missing" ]; then \
-		echo ""; \
-		echo "Missing tier files will cause services to fail or use defaults."; \
-		echo "Create missing files from their .example counterparts."; \
-		exit 1; \
-	fi; \
-	echo "✓ All tier env files exist."
+	@$(PYTHON) tools/check_tier_envs.py
 
 .PHONY: bootstrap-tier-envs
 bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened branch compliance)
@@ -1092,26 +1182,7 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 # -------- Network cleanup (WSL2 Docker Desktop fix) ----------
 .PHONY: clean-networks
 clean-networks: ## Remove stale Docker Compose networks (fixes WSL2 "incorrect label" issues)
-	@echo "Checking for stale Docker Compose networks..."
-	@failed=0; \
-	for net in pmoves_data pmoves_api pmoves_app pmoves_bus pmoves_monitoring; do \
-		if docker network inspect "$$net" >/dev/null 2>&1; then \
-			if ! docker network inspect "$$net" --format '{{len .Labels}}' | grep -q '[1-9]'; then \
-				echo "  Removing stale network: $$net (no labels)"; \
-				if ! docker network rm "$$net" 2>&1; then \
-					echo "  ⚠ WARNING: Failed to remove $$net - it may be in use"; \
-					failed=1; \
-				fi; \
-			else \
-				echo "  ✓ $$net (properly labeled)"; \
-			fi; \
-		fi; \
-	done; \
-	if [ $$failed -eq 1 ]; then \
-		echo "⚠ Network cleanup completed with warnings - run 'make down' first to remove containers"; \
-	else \
-		echo "✔ Network cleanup complete."; \
-	fi
+	@$(PYTHON) tools/clean_networks.py
 
 # -------- GPU profile ----------
 .PHONY: up up-gpu up-both-gateways
@@ -1195,26 +1266,20 @@ else
   N8N_DB_STACK_FILE :=
 endif
 
-# VibeVoice compose file is always included so compose invocations remain consistent.
-# The service itself is still gated behind the `voice` compose profile (see docker-compose.voice.yml).
-VOICE_STACK_FILE := -f docker-compose.voice.yml
-
-# Always pass the same compose file set for the $(PROJECT) stack.
-# Otherwise, invoking docker compose with different -f subsets causes noisy
-# "Found orphan containers" warnings (and makes status output confusing).
+# Default stack files for the base project.
+# Keep overlays required by common targets here so service-specific commands
+# don't fail with "no such service" on clean clones/CI.
 STACK_FILES ?= \
 	-f docker-compose.yml \
-	-f docker-compose.n8n.yml \
-	$(VOICE_STACK_FILE) \
-	$(N8N_DB_STACK_FILE) \
 	-f docker-compose.comfyui.yml \
 	-f docker-compose.ultimate-tts-studio.yml \
-	-f docker-compose.external.yml \
 	-f docker-compose.archon.submodule.yml \
-	-f docker-compose.archon-ui.submodule.yml \
-	-f monitoring/docker-compose.monitoring.yml
+	-f docker-compose.archon-ui.submodule.yml
 
-DC := $(LOAD_ENV_SHARED) docker compose -p $(PROJECT) --project-directory $(CURDIR) $(STACK_FILES)
+# Keep DC shell-agnostic for Windows/WSL/Linux. Targets that need sourced env
+# should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
+DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
+N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
@@ -1258,6 +1323,10 @@ DATA_SERVICES += postgres postgrest
 endif
 endif
 
+# Canonical layer service sets for deterministic tiered bring-up/down.
+WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord
+
 down:
 	@$(DC) down
 
@@ -1274,28 +1343,28 @@ else
 endif
 
 smoke-prod: ## Production smoke: core smoke + production monitoring/profile assertions
-	@$(MAKE) --no-print-directory smoke $(ARGS)
+	@$(PYTHON) tools/smoke_prod.py
 	@$(MAKE) --no-print-directory monitoring-smoke-prod
 
 smoke-gpu: ## Validate Hi-RAG v2 GPU rerank path (strict by default; set GPU_SMOKE_STRICT=false to relax)
-	@python3 tools/smoke_gpu.py $(ARGS) || python tools/smoke_gpu.py $(ARGS) || py -3 tools/smoke_gpu.py $(ARGS)
+	@$(PYTHON) tools/smoke_gpu.py $(ARGS) || python tools/smoke_gpu.py $(ARGS) || py -3 tools/smoke_gpu.py $(ARGS)
 
 smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict GPU smoke
-	@python3 tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || python tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || py -3 tools/smoke_gpu.py --require-qwen --stats-only $(ARGS)
+	@$(PYTHON) tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || python tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || py -3 tools/smoke_gpu.py --require-qwen --stats-only $(ARGS)
 	@GPU_SMOKE_STRICT=true $(MAKE) --no-print-directory smoke-gpu
 
 manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visibility)
-	@python3 tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || python tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || py -3 tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing
+	@$(PYTHON) tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || python tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || py -3 tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing
 
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
-.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
 submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
-submodule-integrity: ## Non-recursive submodule integrity gate (prod-safe baseline)
-	@$(PYTHON) tools/submodule_integrity.py --allow-uninitialized \
+submodule-integrity: ## Non-recursive submodule integrity gate (all declared submodules required)
+	@$(PYTHON) tools/submodule_integrity.py \
 		--required-initialized PMOVES-Agent-Zero \
 		--required-initialized PMOVES-Archon \
 		--required-initialized PMOVES-BoTZ \
@@ -1313,6 +1382,12 @@ submodule-integrity-strict: ## Strict submodule integrity gate (includes recursi
 		--required-initialized PMOVES-ToKenism-Multi \
 		--required-initialized PMOVES-supabase \
 		--required-initialized Pmoves-cipher
+
+submodule-docs-audit: ## Generate submodule docs dossier and coverage matrix
+	@$(PYTHON) tools/submodule_docs_audit.py
+
+submodule-docs-audit-strict: ## Strict docs coverage gate for initialized submodules
+	@$(PYTHON) tools/submodule_docs_audit.py --strict
 
 integration-contract-check: ## Validate pmoves-integrations layout + required announcer/gpu/model hooks
 	@$(PYTHON) tools/integration_contract_check.py $(INTEGRATION_PATH)
@@ -1434,23 +1509,27 @@ monitoring-status: ## Show Prometheus target statuses
 	@$(PYTHON) tools/monitoring_report.py --prom "http://localhost:$(PROMETHEUS_HOST_PORT)"
 
 monitoring-smoke: up-monitoring ## Confirm monitoring stack readiness + blackbox samples
-	@bash -lc '. ./scripts/with-env.sh; bash ./scripts/monitoring_smoke.sh'
+	@$(LOAD_ENV_SHARED); \
+	$(PYTHON) tools/monitoring_smoke.py
 
 monitoring-smoke-prod: up-monitoring ## Production-profile monitoring smoke (required jobs + healthy target ratio)
-	@bash -lc '. ./scripts/with-env.sh; \
+	@$(LOAD_ENV_SHARED); \
 		MONITORING_SMOKE_REQUIRED_JOBS="$${MONITORING_SMOKE_REQUIRED_JOBS:-prometheus,loki,blackbox_http,supabase_health,supabase-realtime,hi-rag-gateway-v2,agent-zero,archon,presign}" \
 		MONITORING_SMOKE_REQUIRE_JOB_UP="$${MONITORING_SMOKE_REQUIRE_JOB_UP:-1}" \
 		MONITORING_SMOKE_MIN_HEALTHY_RATIO="$${MONITORING_SMOKE_MIN_HEALTHY_RATIO:-0.50}" \
-		MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME="$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-compose,kong}" \
-		MONITORING_SMOKE_REALTIME_DEV_POLICY="$${MONITORING_SMOKE_REALTIME_DEV_POLICY:-forbid}" \
-		bash ./scripts/monitoring_smoke.sh'
+		MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME="$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-$${SUPABASE_RUNTIME:-compose,kong}}" \
+		MONITORING_SMOKE_REALTIME_DEV_POLICY="$${MONITORING_SMOKE_REALTIME_DEV_POLICY:-$$( [ "$${SUPABASE_RUNTIME:-compose}" = "cli" ] && echo warn || echo forbid )}" \
+		$(PYTHON) tools/monitoring_smoke.py
 
 observability-audit: ## Generate observability mapping report (Prom jobs -> dashboards -> live target health)
 	@$(PYTHON) tools/observability_audit.py --prom-url "http://localhost:$(PROMETHEUS_HOST_PORT)" --output docs/services/monitoring/OBSERVABILITY_MAP.md
 
-.PHONY: monitoring-report
+.PHONY: monitoring-report docker-logs-brief
 monitoring-report: ## Print a quick Prometheus summary (targets, failures, top CPU containers)
 	@$(PYTHON) tools/monitoring_report.py --prom "http://localhost:$(PROMETHEUS_HOST_PORT)"
+
+docker-logs-brief: ## Summarize recent Docker WARN/ERROR lines + container health for PMOVES/supabase containers
+	@$(PYTHON) tools/docker_logs_brief.py --tail $${DOCKER_LOGS_TAIL:-120} --save docs/evidence/docker_logs_brief_latest.txt
 
 # -------- Tailscale helpers --------
 .PHONY: tailscale-save-key tailscale-join tailscale-rejoin tailscale-status tailscale-logout
@@ -1492,7 +1571,7 @@ tailscale-logout: ## Log out of tailnet on this host
 
 brand-defaults: ensure-env-shared ## Apply branded defaults and create required buckets
 	@echo "→ Applying branded defaults to pmoves/env.shared"
-	@python3 tools/brand_defaults.py
+	@$(PYTHON) tools/brand_defaults.py
 	@echo "→ Creating MinIO buckets (assets, outputs) if missing"
 	@$(DC) exec -T minio sh -lc 'mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD >/dev/null 2>&1 || true; mc mb --ignore-existing local/assets; mc mb --ignore-existing local/outputs' || true
 	@echo "✔ Brand defaults applied"
@@ -1782,7 +1861,7 @@ up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use 
 
 .PHONY: a0-mcp-seed
 a0-mcp-seed: ## Write A0_MCP_SERVERS into Agent Zero runtime (data/agent-zero/runtime/mcp/servers.env)
-	@$(LOAD_ENV_SHARED) python3 tools/seed_agent_zero_mcp.py
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/seed_agent_zero_mcp.py
 
 .PHONY: archon-mcp-smoke
 archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
@@ -1940,6 +2019,30 @@ supaserch-smoke: ## Publish SupaSerch request via NATS and verify HTTP fallback 
 	@bash -lc $'$(LOAD_ENV_SHARED) python3 - <<"PY"\nimport asyncio\nimport json\nimport os\nimport sys\nimport uuid\nimport urllib.request\nfrom urllib.error import URLError, HTTPError\n\nfrom nats.aio.client import Client as NATS\n\n\nasync def publish_and_wait() -> dict[str, object]:\n    request_id = f"supaserch-smoke-{uuid.uuid4().hex[:8]}"\n    nc = NATS()\n    url = os.getenv("NATS_URL", "nats://localhost:4222")\n    await nc.connect(url)\n    loop = asyncio.get_running_loop()\n    future: asyncio.Future | None = loop.create_future()\n\n    async def handler(msg):\n        nonlocal future\n        try:\n            data = json.loads(msg.data.decode("utf-8"))\n        except json.JSONDecodeError:\n            return\n        if data.get("request_id") != request_id:\n            return\n        if future and not future.done():\n            future.set_result(data)\n\n    sid = await nc.subscribe("supaserch.result.v1", cb=handler)\n    payload = {\n        "request_id": request_id,\n        "query": "supaserch smoke verification",\n        "correlation_id": request_id,\n        "trigger": "make supaserch-smoke",\n    }\n    await nc.publish("supaserch.request.v1", json.dumps(payload).encode("utf-8"))\n    await nc.flush()\n    try:\n        result = await asyncio.wait_for(future, timeout=10)\n    except asyncio.TimeoutError:\n        print("✖ Did not receive supaserch.result.v1 within 10s")\n        await nc.unsubscribe(sid)\n        await nc.drain()\n        sys.exit(1)\n    await nc.unsubscribe(sid)\n    await nc.drain()\n    fallback = result.get("fallback", {}) if isinstance(result, dict) else {}\n    if fallback.get("status") != "ok":\n        print("✖ NATS fallback status not ok:", json.dumps(fallback))\n        sys.exit(1)\n    via = fallback.get("via", "unknown")\n    latency = fallback.get("latency_ms", 0)\n    print(f"✔ NATS round-trip complete (via {via}, latency {latency} ms)")\n    return result\n\n\nresult = asyncio.run(publish_and_wait())\nhost_port = os.getenv("SUPASERCH_HOST_PORT", os.getenv("SUPASERCH_PORT", "8099"))\nhttp_url = f"http://localhost:{host_port}/v1/search?q=supaserch+smoke+http"\ntry:\n    with urllib.request.urlopen(http_url, timeout=8) as resp:\n        body = json.loads(resp.read().decode("utf-8"))\nexcept (HTTPError, URLError, TimeoutError) as exc:\n    print(f"✖ HTTP fallback request failed: {exc}")\n    sys.exit(1)\n\nfallback = body.get("fallback", {}) if isinstance(body, dict) else {}\nif fallback.get("status") != "ok":\n    print("✖ HTTP fallback status not ok:", json.dumps(fallback))\n    sys.exit(1)\n\nvia = fallback.get("via", "unknown")\nlatency = fallback.get("latency_ms", 0)\nprint(f"✔ HTTP fallback responded (via {via}, latency {latency} ms)")\nPY'
 
 .PHONY: build-push-supaserch
+REGISTRY ?= ghcr.io
+IMAGE_NAMESPACE ?= powerfulmoves
+IMAGE_TAG ?= pmoves-latest
+TARGET_PLATFORMS ?= linux/amd64,linux/arm64
+BUILDX_BUILDER ?= pmoves-multiarch
+
+.PHONY: buildx-setup docker-login
+buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
+	@docker buildx inspect $(BUILDX_BUILDER) >/dev/null 2>&1 || docker buildx create --name $(BUILDX_BUILDER) --use
+	@docker buildx use $(BUILDX_BUILDER)
+	@docker buildx inspect --bootstrap >/dev/null
+	@echo "✔ buildx builder ready: $(BUILDX_BUILDER)"
+
+docker-login: ensure-env-shared ## Login to GHCR using env.shared or shell env credentials
+	@$(LOAD_ENV_SHARED); \
+	user="$${GHCR_USERNAME:-$${GITHUB_ACTOR:-$$(gh api user -q .login 2>/dev/null || true)}}"; \
+	token="$${GHCR_TOKEN:-$${GH_PAT_PUBLISH:-$${GITHUB_TOKEN:-$$(gh auth token 2>/dev/null || true)}}}"; \
+	if [ -z "$$token" ] && [ -n "$${GHCR_TOKEN_FILE:-}" ] && [ -f "$${GHCR_TOKEN_FILE}" ]; then token="$$(cat "$${GHCR_TOKEN_FILE}")"; fi; \
+	if [ -z "$$user" ] || [ -z "$$token" ]; then \
+	  echo "✖ Missing GHCR credentials. Set GHCR_USERNAME and GHCR_TOKEN (or GH_PAT_PUBLISH)."; \
+	  exit 1; \
+	fi; \
+	printf "%s" "$$token" | docker login ghcr.io -u "$$user" --password-stdin >/dev/null && echo "✔ GHCR login ok as $$user"
+
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
 	@ctx=$$(pwd); \
 	 df=$$ctx/services/supaserch/Dockerfile; \
@@ -1985,11 +2088,16 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 up-n8n: ensure-env-shared
 	@if [ "$(N8N_DB)" = "postgres" ]; then \
 	  echo "→ n8n DB mode: postgres"; \
-	  $(DC) up -d n8n-db n8n n8n-runners; \
+	  $(N8N_DC) up -d n8n-db n8n n8n-runners; \
 	else \
 	  echo "→ n8n DB mode: sqlite"; \
-	  $(DC) up -d n8n n8n-runners; \
+	  $(N8N_DC) up -d n8n n8n-runners; \
 	fi
+
+.PHONY: down-n8n
+down-n8n: ## Stop n8n workflow services
+	@$(N8N_DC) stop n8n n8n-runners n8n-db >/dev/null 2>&1 || true
+	@$(N8N_DC) rm -f n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 
 .PHONY: up-comfyui comfyui-smoke
 up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)

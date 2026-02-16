@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-02-14_
+_Last updated: 2026-02-15_
 
 - **Stabilization Checklist** — `STABILIZATION_CHECKLIST.md`
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
@@ -14,7 +14,17 @@ _Last updated: 2026-02-14_
 - **Smoke Tests** — `SMOKETESTS.md`
 - **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
 - **Production Audit Prep (latest runbook)** — `../PRODUCTION_AUDIT_PREP_2026-02-14.md`
+- **Local Certification Lockdown (hard-stop policy)** — `../AGENTS/LOCAL_CERTIFICATION_LOCKDOWN.md`
+- **Pinokio + Docker + Cloudflare + GitHub launch strategy** — `PINOKIO_DOCKER_CLOUDFLARE_GITHUB_STRATEGY.md`
+- **Secrets + CHIT Portability Workflow** — `../SECRETS_CHIT_PORTABILITY_WORKFLOW.md`
+- **Tooling Overlay Audit (scripts/tools vs submodules)** — `../AGENTS/TOOLING_SCRIPT_AUDIT.md`
+- **Alias Map (legacy -> canonical names)** — `../ALIASES_AND_CANONICAL_NAMES.md`
+- **Docs Validation (local source-of-truth audit)** — `../DOCS_VALIDATION_LOCAL_2026-02-14.md`
+- **Docs Consolidation + Archival Policy** — `../DOCS_CONSOLIDATION_ARCHIVAL_POLICY.md`
+- **Model Source Of Truth (Registry + Profiles + Tooling)** — `../MODEL_SOURCE_OF_TRUTH.md`
+- **Submodule Integration Contract (pmoves-integrations layout)** — `../SUBMODULE_INTEGRATION_CONTRACT.md`
 - **First-Run Bootstrap** — `FIRST_RUN.md`
+- **Auth + Boot Order Runbook** — `../AUTH_BOOT_ORDER_RUNBOOK.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
 - **Archon Service README** — `../services/archon/README.md`
@@ -70,9 +80,16 @@ Other tracked submodules:
 - Full bundle and profiles: `../codex_full_config_bundle/README-Codex-MCP-Full.md`
   - Includes `config.toml` with Docker MCP gateway, web search enabled, and multiple profiles for network/sandbox modes.
 - Codex operator runbook: `../AGENTS/CODEX_OPERATOR_HOME.md`
+- Hyperdimensions control-plane taxonomy: `../AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
 - Claude -> Codex parity map: `../AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
 - Submodule parity audit: `../AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
+- Tooling overlay audit: `../AGENTS/TOOLING_SCRIPT_AUDIT.md`
 - Persona style playbook: `../AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`
+
+## Docs Consolidation Policy
+- Do not delete historical docs during cleanup.
+- Move superseded docs into `pmoves/docs/archive/` (or service-level `archive/`) with date-stamped filenames.
+- Keep one canonical "current" doc per topic and add cross-links from archived docs to the replacement file.
 
 ## Evidence
 - Evidence folder (screenshots/logs): `pmoves/docs/evidence/`

@@ -1,7 +1,8 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro bringup-showtime smoke-showtime submodule-integrity ci-runners-check ci-runners-check-strict
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime submodule-integrity ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
+RUNNER_PHASE ?= local-certification
 
 ifeq ($(OS),Windows_NT)
 PRECHECK_PY ?= py -3
@@ -41,12 +42,36 @@ ci-runners-check: ## Check GitHub self-hosted runner availability (non-blocking 
 ci-runners-check-strict: ## Check GitHub self-hosted runner availability (strict mode, non-zero on missing lanes)
 	@$(PRECHECK_PY) tools/ci_runner_check.py --strict $(ARGS)
 
+ci-runners-map: ## Map workflow runner lanes to host assignments (optionally checks live GH runner status)
+	@$(PRECHECK_PY) tools/runner_lane_map.py --check-gh $(ARGS)
+
+ci-runners-map-strict: ## Strict lane mapping check (fails on unmapped/offline lanes)
+	@$(PRECHECK_PY) tools/runner_lane_map.py --check-gh --strict $(ARGS)
+
+ci-runners-lockdown: ## Phase policy check for runner lanes (default phase: local-certification)
+	@$(PRECHECK_PY) tools/runner_lane_map.py --check-gh --enforce-phase --phase "$(RUNNER_PHASE)" $(ARGS)
+
+ci-runners-lockdown-strict: ## Strict phase policy check (hard-stop when policy requirements are not met)
+	@$(PRECHECK_PY) tools/runner_lane_map.py --check-gh --enforce-phase --phase "$(RUNNER_PHASE)" --strict $(ARGS)
+
+ci-runners-local-cert-up: ## Start local-cert runner containers (ai-lab + vps) on this host
+	@$(PRECHECK_PY) tools/local_cert_runners.py up $(ARGS)
+
+ci-runners-local-cert-down: ## Stop local-cert runner containers (ai-lab + vps) on this host
+	@$(PRECHECK_PY) tools/local_cert_runners.py down $(ARGS)
+
+ci-runners-local-cert-status: ## Show local-cert runner container and GitHub registration status
+	@$(PRECHECK_PY) tools/local_cert_runners.py status $(ARGS)
+
 preflight: ## Full preflight: env check + quick readiness + Codex health summary
 	@$(MAKE) --no-print-directory env-check
 	@$(MAKE) --no-print-directory submodule-integrity
 	@$(MAKE) --no-print-directory ci-runners-check
+	@$(MAKE) --no-print-directory ci-runners-lockdown
 	@$(MAKE) --no-print-directory flight-check
 	@$(MAKE) --no-print-directory codex-health-quick || true
+
+showtime: bringup-showtime ## Alias for bringup-showtime
 
 bringup-showtime: ## Bring up stack and run retro readiness (Hyperdimensions/BotZ/Evo/Flute aware)
 	@echo "→ Showtime bring-up starting..."
