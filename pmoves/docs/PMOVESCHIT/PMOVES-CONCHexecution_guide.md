@@ -415,7 +415,7 @@ VALUES (
   '1.0',
   'An expert in consciousness theories spanning materialism, dualism, panpsychism, and quantum approaches',
   '{
-    "model": "claude-sonnet-4-5",
+    "model": "orchestrator",
     "tools": ["hirag_query", "geometry_decode"],
     "tone": "academic yet accessible"
   }',
