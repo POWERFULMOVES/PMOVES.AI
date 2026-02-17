@@ -747,6 +747,28 @@ zeroAccessPaths:
   - "pmoves/chit/*.key"
   - "pmoves/chit/*.seed"
 
+# ---------------------------------------------------------------------------
+# CHIT TOOL BYPASS — CHIT operations trump zero-access for env files
+# ---------------------------------------------------------------------------
+# CHIT credential tools need to read env files (to encode/rotate) and write
+# CGP archives. These patterns identify CHIT tool invocations so hooks can
+# skip zero-access checks while still enforcing destructive-command blocks.
+chitBypassPatterns:
+  - 'pmoves[/\\]tools[/\\]chit_'
+  - 'pmoves\.tools\.chit_'
+  - 'pmoves[/\\]tools[/\\]secrets_sync'
+  - 'pmoves\.tools\.secrets_sync'
+  - 'pmoves\.chit\.'
+  - 'chit_encode_secrets'
+  - 'chit_credential_demo'
+  - 'chit_security'
+
+# File paths that CHIT operations may create/write — bypass zero-access.
+# CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.
+chitSafePaths:
+  - "data/chit/"
+  - "data\\chit\\"
+
   # ---------------------------------------------------------------------------
   # PMOVES.AI - SERVICE CREDENTIALS
   # ---------------------------------------------------------------------------

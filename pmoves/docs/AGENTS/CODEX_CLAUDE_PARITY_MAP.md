@@ -1,5 +1,5 @@
 # Claude -> Codex Parity Map (PMOVES)
-_Last updated: 2026-02-14_
+_Last updated: 2026-02-16_
 
 This map translates common `.claude/commands/*` workflows into Codex-native
 operations (`make`, `curl`, and existing PMOVES scripts).
@@ -54,6 +54,17 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | --- | --- |
 | Manual review of module docs | `make -C pmoves codex-audit` |
 | Update command docs | Update `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md` and this parity map |
+
+## Infrastructure (Known Roads)
+
+| Claude command | Codex equivalent |
+| --- | --- |
+| `/deploy:services` (volume reset) | `make -C pmoves volume-reset SERVICE=...` |
+| `/deploy:services` (volume list) | `make -C pmoves volume-list` |
+| docker prune (safe) | `make -C pmoves docker-prune` |
+| docker prune (aggressive) | `make -C pmoves docker-prune-all` |
+| branch audit | `make -C pmoves branch-audit` |
+| branch cleanup | `make -C pmoves branch-cleanup EXECUTE=1` |
 
 ## Guidance
 

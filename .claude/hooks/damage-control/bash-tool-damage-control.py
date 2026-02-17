@@ -219,6 +219,20 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
         except re.error:
             continue
 
+    # CHIT bypass: CHIT tool commands can access env files they need to encode/rotate.
+    # Destructive patterns (rm, DROP, git push --force) still apply — checked above.
+    chit_bypass = config.get("chitBypassPatterns", [])
+    is_chit_op = any(
+        re.search(pat, command, re.IGNORECASE)
+        for pat in chit_bypass
+        if pat
+    )
+    if is_chit_op:
+        return False, False, ""
+
+    # Template suffixes that should trigger ask instead of block
+    template_suffixes = (".example", ".sample", ".template", ".defaults")
+
     # 2. Check for ANY access to zero-access paths (including reads)
     for zero_path in zero_access_paths:
         if is_glob_pattern(zero_path):
@@ -226,6 +240,14 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
             glob_regex = glob_to_regex(zero_path)
             try:
                 if re.search(glob_regex, command, re.IGNORECASE):
+                    # Check if command targets a template file
+                    if any(suffix in command.lower() for suffix in template_suffixes):
+                        return False, True, (
+                            f"ENV TEMPLATE: Command matches zero-access pattern {zero_path} but targets a template file. "
+                            f"In production, env files populate from the secrets pipeline (make -C pmoves secrets-funnel). "
+                            f"Template files should update from source. "
+                            f"Approve only if intentionally modifying templates (e.g., security remediation)."
+                        )
                     return True, False, f"Blocked: zero-access pattern {zero_path} (no operations allowed)"
             except re.error:
                 continue
@@ -237,6 +259,14 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
 
             # Check both expanded path (/Users/x/.ssh/) and original tilde form (~/.ssh/)
             if re.search(escaped_expanded, command) or re.search(escaped_original, command):
+                # Check if command targets a template file
+                if any(suffix in command.lower() for suffix in template_suffixes):
+                    return False, True, (
+                        f"ENV TEMPLATE: Command matches zero-access path {zero_path} but targets a template file. "
+                        f"In production, env files populate from the secrets pipeline (make -C pmoves secrets-funnel). "
+                        f"Template files should update from source. "
+                        f"Approve only if intentionally modifying templates (e.g., security remediation)."
+                    )
                 return True, False, f"Blocked: zero-access path {zero_path} (no operations allowed)"
 
     # 3. Check for modifications to read-only paths (reads allowed)
