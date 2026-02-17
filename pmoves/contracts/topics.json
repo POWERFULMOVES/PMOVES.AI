@@ -194,6 +194,26 @@
     "content.draft.created.v1": {
       "schema": "schemas/content/draft.created.v1.schema.json",
       "description": "Content draft created in studio_board"
+    },
+    "agent.graphiti.signed.v1": {
+      "schema": "schemas/agent-graphiti/signature.v1.schema.json",
+      "description": "Agent signature trail event — emitted after significant work"
+    },
+    "crush.graphiti.discovered.v1": {
+      "schema": "schemas/crush/graphiti.discovered.v1.schema.json",
+      "description": "Crush CLI discovered the Agent Trail on first boot"
+    },
+    "shape.trace.recorded.v1": {
+      "schema": "schemas/shape/trace.recorded.v1.schema.json",
+      "description": "Individual interaction trace recorded for shape discovery"
+    },
+    "shape.profile.updated.v1": {
+      "schema": "schemas/shape/profile.updated.v1.schema.json",
+      "description": "User shape profile updated from accumulated traces"
+    },
+    "shape.distillation.requested.v1": {
+      "schema": "schemas/shape/distillation.requested.v1.schema.json",
+      "description": "User requested CHIT distillation for their discovered shape"
     }
   }
 }

@@ -7,7 +7,18 @@
 # Query with: python -m pmoves.tools.agent_taxonomy_helper list
 # Docs: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
 
-taxonomy_version: "1.2.0"
+taxonomy_version: "1.3.0"
+
+# External contributors — AI agents and humans who contribute via git
+# Links to visual identity in agent_signatures.yaml
+external_contributors:
+  - claude-opus
+  - kilocode
+  - codex
+  - gemini
+  - cline
+  - powerfulmoves
+  - crush
 
 # Resilience attribute definitions
 # See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
@@ -58,6 +69,7 @@ agents:
     health: "/healthz"
     layers: [L0, L1, L2, L2.5, L3, L4, L5]
     evolution_stage: mega
+    signature: "claude-opus"      # Primary architect — see agent_signatures.yaml
     nats:
       publishes: ["agent.tool.executed.v1"]
       subscribes: ["mesh.node.announce.v1"]
@@ -571,6 +583,33 @@ agents:
       attribution_gated: false
     submodule: "PMOVES-MAI-UI"
     description: "Main user interface"
+
+  crush:
+    name: "Crush"
+    class: standard
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "crush"
+    nats:
+      publishes: ["crush.graphiti.discovered.v1", "shape.trace.recorded.v1"]
+      subscribes: ["agent.graphiti.signed.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    submodule: "PMOVES-crush"
+    description: "Terminal AI coding assistant — the gateway where model and user begin their journey"
 
   cipher_memory:
     name: "Cipher Memory"

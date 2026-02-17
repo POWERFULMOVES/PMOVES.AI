@@ -314,6 +314,9 @@ def build_config() -> Tuple[Dict[str, object], Dict[str, ProviderSpec]]:
     repo_root = PROJECT_ROOT.parent
     context_candidates = [
         Path("CRUSH.md"),
+        Path("docs/AGENT_TRAIL.md"),
+        Path("pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md"),
+        Path("pmoves/config/agent_signatures.yaml"),
         Path("docs/LOCAL_DEV.md"),
         Path("docs/LOCAL_TOOLING_REFERENCE.md"),
         Path("pmoves/docs/ROADMAP.md"),

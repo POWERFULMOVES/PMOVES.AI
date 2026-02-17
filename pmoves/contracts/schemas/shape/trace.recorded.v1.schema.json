@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shape Trace Recorded v1",
+  "description": "Individual interaction trace — the atomic unit of shape discovery. Each trace records a gravitational measurement between the three bodies (human, AI, system).",
+  "type": "object",
+  "required": [
+    "user_id",
+    "agent_id",
+    "timestamp",
+    "interaction_type"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Unique identifier for the human body in the three-body system"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent identifier — matches agent_signatures.yaml agent_id and CGP attribution address"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the interaction"
+    },
+    "interaction_type": {
+      "type": "string",
+      "enum": [
+        "query",
+        "research",
+        "code",
+        "voice",
+        "media",
+        "review",
+        "orchestration"
+      ],
+      "description": "Classification of the interaction modality"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session identifier for grouping related traces"
+    },
+    "resonance_domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Topic/capability domains activated during this interaction"
+    },
+    "tool_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Identifiers of tools or agents invoked during the interaction"
+    },
+    "media_modality": {
+      "type": "string",
+      "enum": ["text", "audio", "visual", "code", "mixed"],
+      "description": "Primary media channel used in this interaction"
+    },
+    "depth_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Depth vs breadth signal — 1.0 = deep single-topic exploration, 0.0 = broad multi-topic scan"
+    },
+    "entropy_delta": {
+      "type": "number",
+      "description": "How much this interaction reduced uncertainty in the user-AI interaction space. Negative = entropy reduced (signal found). Ties to CGP entropy math."
+    }
+  }
+}
