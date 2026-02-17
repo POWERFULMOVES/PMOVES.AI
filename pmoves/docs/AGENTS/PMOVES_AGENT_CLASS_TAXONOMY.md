@@ -365,9 +365,52 @@ See [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) f
 
 ---
 
+## 10. Resilience Attributes
+
+Agents operating as background tasks (via Claude Code `Task` tool or NATS-dispatched workers) can hit context limits or fail mid-operation. Each agent declares resilience attributes to enable structured recovery.
+
+### Resilience Schema
+
+```yaml
+resilience:
+  context_budget: small | medium | large
+  checkpoint_frequency: per_file | per_wave | per_submodule
+  recovery_strategy: cipher_resumable | idempotent_replay | manual_handoff
+  cipher_categories: [agent_plan, agent_checkpoint]
+```
+
+### Context Budget Classes
+
+| Class | Budget | Use Case |
+|-------|--------|----------|
+| **small** | ~25K tokens | Single-file fixes, health checks |
+| **medium** | ~50K tokens | Multi-file changes within one repo |
+| **large** | ~100K+ tokens | Cross-repo orchestration, complex refactors |
+
+### Recovery Strategies
+
+| Strategy | Description | Example Agents |
+|----------|-------------|----------------|
+| `cipher_resumable` | Full plan + checkpoints in Cipher Memory; new agent reads and continues | Agent Zero, Archon |
+| `idempotent_replay` | Work is idempotent; re-run from scratch is safe | Extract Worker, Notebook Sync |
+| `manual_handoff` | Produces structured handoff doc for human completion | SupaSerch, DeepResearch |
+
+### Failure Modes
+
+| Mode | Trigger | Recovery |
+|------|---------|----------|
+| **Graceful** | Budget pressure detected | Commit, push, Cipher snapshot, stop |
+| **Hard** | Context wall mid-operation | Check branch git log, reconstruct |
+| **Blocked** | External dependency failure | Cipher blocker entry, human resolves |
+
+See [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) for the full resilience protocol, including Cipher Memory API usage and practical patterns.
+
+---
+
 ## Related Documents
 
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference
+- [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) — Resilience protocol and patterns
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
 - `pmoves/config/agent_registry.yaml` — Machine-readable registry
 - `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool
