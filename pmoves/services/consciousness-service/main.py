@@ -136,9 +136,9 @@ async def generate_cgp(theory: TheoryInput):
         theory_dict = theory.model_dump()
         packet = cgp_mapper.theory_to_constellation(theory_dict)
         return {"status": "success", "packet": packet}
-    except Exception as e:
-        logger.error(f"CGP generation failed: {e}")
-        raise HTTPException(status_code=500, detail="CGP generation failed")
+    except Exception:
+        logger.error("CGP generation failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="CGP generation failed") from None
 
 
 @app.post("/cgp/publish")
@@ -156,9 +156,9 @@ async def publish_cgp(theory: TheoryInput):
         packet = cgp_mapper.theory_to_constellation(theory_dict)
         result = await cgp_mapper.publish_to_hirag(packet)
         return {"status": "published", "packet": packet, "result": result}
-    except Exception as e:
-        logger.error(f"CGP publish failed: {e}")
-        raise HTTPException(status_code=500, detail="CGP publish failed")
+    except Exception:
+        logger.error("CGP publish failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="CGP publish failed") from None
 
 
 @app.post("/cgp/batch")

@@ -11,6 +11,9 @@ on:
       - '.github/workflows/env-preflight.yml'
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   preflight:
     name: Preflight (windows-latest)
