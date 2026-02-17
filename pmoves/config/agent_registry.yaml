@@ -7,7 +7,20 @@
 # Query with: python -m pmoves.tools.agent_taxonomy_helper list
 # Docs: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
 
-taxonomy_version: "1.0.0"
+taxonomy_version: "1.1.0"
+
+# Resilience attribute definitions
+# See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
+resilience_classes:
+  small:
+    token_budget: 25000
+    description: "Single-file fixes, health checks"
+  medium:
+    token_budget: 50000
+    description: "Multi-file changes within one repo"
+  large:
+    token_budget: 100000
+    description: "Cross-repo orchestration, complex refactors"
 
 # Class definitions
 classes:
@@ -54,6 +67,11 @@ agents:
       hz_sensitive: true
       swarm_participant: true
       attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint, agent_completion]
     submodule: "PMOVES-Agent-Zero"
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
 
@@ -75,6 +93,11 @@ agents:
       hz_sensitive: true
       swarm_participant: false
       attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
     submodule: "PMOVES-Archon"
     description: "Supabase-driven planning/execution copilot"
 
@@ -96,6 +119,11 @@ agents:
       hz_sensitive: true
       swarm_participant: true
       attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_submodule
+      recovery_strategy: manual_handoff
+      cipher_categories: [agent_plan, agent_checkpoint]
     description: "Multimodal holographic deep research orchestrator"
 
   botz_gateway:
@@ -116,6 +144,11 @@ agents:
       hz_sensitive: false
       swarm_participant: true
       attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
     submodule: "PMOVES-BotZ-gateway"
     description: "Work item distribution across BoTZ CLI instances"
 
@@ -156,6 +189,11 @@ agents:
       hz_sensitive: true
       swarm_participant: true
       attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_file
+      recovery_strategy: idempotent_replay
+      cipher_categories: [agent_plan]
     submodule: "PMOVES-HiRAG"
     description: "Hybrid RAG gateway combining Qdrant + Neo4j + Meilisearch"
 
@@ -177,6 +215,11 @@ agents:
       hz_sensitive: true
       swarm_participant: false
       attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: manual_handoff
+      cipher_categories: [agent_plan, agent_checkpoint]
     submodule: "PMOVES-Deep-Serch"
     description: "LLM-based research planner (Alibaba Tongyi)"
 
@@ -339,6 +382,11 @@ agents:
       hz_sensitive: true
       swarm_participant: false
       attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_file
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
     description: "Text embedding and indexing to Qdrant + Meilisearch"
 
   channel_monitor:
@@ -540,8 +588,13 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_file
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
     submodule: "Pmoves-cipher"
-    description: "Knowledge-graph memory for agents (Neo4j backend)"
+    description: "Knowledge-graph memory for agents (Neo4j backend). Also serves as the resilience backbone — stores agent_plan, agent_checkpoint, and agent_completion snapshots for all agents."
 
   hyperdimensions:
     name: "Hyperdimensions"

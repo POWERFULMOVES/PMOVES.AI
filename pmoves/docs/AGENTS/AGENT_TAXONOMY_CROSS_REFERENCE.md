@@ -26,6 +26,7 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | 14 | **Original Vision (agnotes2)** | `pmoves/docs/AGENTS/agnotes2.md` | Pokemon/Transformers metaphor, latent space amplification, portal mapping | Vision |
 | 15 | **Agent Registry** | `pmoves/config/agent_registry.yaml` | Single source of truth: 35 agents with class, type, tier, layers, NATS, toggles | Data |
 | 16 | **CLI Helper Tool** | `pmoves/tools/agent_taxonomy_helper.py` | list/show/connections/types commands | Tool |
+| 17 | **Agent Resilience Patterns** | `pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md` | 3-layer resilience model, Cipher snapshots, checkpoint protocol, budget classes, recovery strategies | Pattern |
 
 ---
 
@@ -66,6 +67,7 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | **Poincare disk rendering** | Agent Topology Surface | #5 Control Plane, #8 Living Template |
 | **Latent space amplification** | #14 agnotes2 | #8 Living Template (Use Case 2) |
 | **Deployment readiness score** | #5 Control Plane | #8 Living Template (Use Case 4) |
+| **Agent resilience** (context budgets, checkpoints, recovery) | #17 Resilience Patterns | #1 Class Taxonomy (Section 10), #15 Registry |
 
 ---
 
@@ -85,6 +87,7 @@ When you change one of these concepts, update the listed documents:
 | New submodule | #11 Submodules Catalog, possibly #15 Registry |
 | Port change | #10 Services Catalog, #15 Registry |
 | Geometry state vector change | #5 Control Plane, #8 Living Template, Agent Topology Surface |
+| Change agent resilience attributes | #15 Registry, #17 Resilience Patterns, #1 Class Taxonomy (Section 10) |
 
 ---
 
@@ -107,4 +110,5 @@ After taxonomy changes, verify:
 
 - [Agent Class Taxonomy](./PMOVES_AGENT_CLASS_TAXONOMY.md)
 - [Living Template](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md)
+- [Agent Resilience Patterns](./AGENT_RESILIENCE_PATTERNS.md)
 - [Hyperdimensions Control Plane](./PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md)
