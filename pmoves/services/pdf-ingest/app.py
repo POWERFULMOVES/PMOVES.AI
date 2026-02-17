@@ -144,8 +144,8 @@ PDF_NATS_PUBLISHED = Counter(
 )
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "")
 MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() == "true"
 DEFAULT_BUCKET = os.environ.get("PDF_DEFAULT_BUCKET", os.environ.get("YT_BUCKET", "assets"))
 DEFAULT_NAMESPACE = os.environ.get("PDF_DEFAULT_NAMESPACE", os.environ.get("INDEXER_NAMESPACE", "pmoves"))

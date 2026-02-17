@@ -16,6 +16,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -168,10 +169,14 @@ def get_docker_config() -> Dict[str, str]:
                 import base64
                 decoded = base64.b64decode(auth_data["auth"]).decode()
                 username, password = decoded.split(":", 1)
-                if "ghcr.io" in registry:
+                # Use proper URL hostname parsing to avoid substring false positives
+                registry_host = urlparse(
+                    f"https://{registry}" if "://" not in registry else registry
+                ).hostname or ""
+                if registry_host == "ghcr.io":
                     creds["GHCR_USERNAME"] = username
                     creds["GHCR_PASSWORD"] = password
-                elif "index.docker.io" in registry or "docker.io" in registry:
+                elif registry_host in ("index.docker.io", "docker.io"):
                     creds["DOCKERHUB_USERNAME"] = username
                     creds["DOCKERHUB_PASSWORD"] = password
         return creds
@@ -375,7 +380,7 @@ def wizard_docker_auth():
     if docker_creds:
         log_success("Found Docker credentials:")
         for key, value in docker_creds.items():
-            print(f"  {key}: {value[:10]}..." if len(value) > 10 else f"  {key}: {value}")
+            print(f"  {key}: ***")
 
     return docker_creds
 

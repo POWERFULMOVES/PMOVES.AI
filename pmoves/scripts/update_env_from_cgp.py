@@ -28,7 +28,7 @@ for label, value in sorted(secrets.items()):
         if line.startswith(f"{label}="):
             lines[i] = f"{label}={value}"
             updated = True
-            print(f"Updated: {label}")
+            print(f"Updated: {label} = ***")
             break
 
     if not updated and f"{label}=" in env_content:
@@ -36,7 +36,7 @@ for label, value in sorted(secrets.items()):
         for i, line in enumerate(lines):
             if line == f"{label}=":
                 lines[i] = f"{label}={value}"
-                print(f"Updated (empty): {label}")
+                print(f"Updated (empty): {label} = ***")
                 break
 
 # Write back

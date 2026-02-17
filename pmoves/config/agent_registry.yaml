@@ -906,6 +906,41 @@ agents:
     submodule: "PMOVES-Health"
     description: "Fitness tracking — the body is a system too"
 
+  evoswarm_controller:
+    name: "EvoSwarm Controller"
+    class: standard
+    primary_type: worker
+    secondary_type: agent
+    port: 8113
+    health: "/health"
+    layers: [L0, L2, L2.5, L3, L4]
+    evolution_stage: stage_2
+    nats:
+      publishes:
+        - "geometry.swarm.meta.v1"
+        - "evoswarm.training.genome.v1"
+        - "evoswarm.training.fitness.v1"
+      subscribes:
+        - "geometry.packet.encoded.v1"
+        - "geometry.attribution.result.v1"
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    evoswarm_training_genome:
+      parameters:
+        learning_rate: { range: [1.0e-5, 1.0e-3] }
+        chit_weight: { range: [0.1, 0.9] }
+        reconstruction_target: { choices: [text, image, audio, cross] }
+        lane_mixing_ratio: { range: [0.0, 1.0] }
+        distillation_temperature: { range: [0.5, 5.0] }
+      fitness_function: "reconstruction_fidelity * cost_efficiency"
+      population_size: 16
+      generations_per_epoch: 5
+    description: "Evolutionary optimizer for CGP geometry parameters — evolves CG Builder, Decoder, Energy, and Training genomes"
+
   swarm_attribution:
     name: "Swarm Attribution"
     class: specialized
