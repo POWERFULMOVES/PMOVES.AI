@@ -95,9 +95,11 @@
       }
       function showAvatar(){
         const u = document.getElementById('avatarUrl').value.trim()
-        if(u && (u.startsWith('https://') || u.startsWith('http://') || u.startsWith('/'))){
-          document.getElementById('avatar').src = u
-        }
+        try {
+          const parsed = new URL(u, window.location.origin)
+          if (!['http:', 'https:'].includes(parsed.protocol)) return
+          document.getElementById('avatar').src = parsed.href
+        } catch(e) { /* invalid URL, ignore */ }
       }
       async function uploadAvatar(){
         const f = document.getElementById('upload').files[0]
