@@ -69,7 +69,12 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
     iv = base64.b64decode(enc["iv"]); salt = base64.b64decode(enc["salt"]); ct = base64.b64decode(enc["ct"])
     key = hashlib.scrypt(CHIT_PASSPHRASE.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
     aead = AESGCM(key); aad = canon({"id": const.get("id","")})
-    pt = aead.decrypt(iv, ct, aad)
+    try:
+        pt = aead.decrypt(iv, ct, aad)
+    except Exception as exc:
+        logger.error("Failed to decrypt anchor for constellation %s: %s",
+                     const.get("id", "<unknown>"), exc)
+        return
     try:
         const["anchor"] = json.loads(pt.decode())
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
