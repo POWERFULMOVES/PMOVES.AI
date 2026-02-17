@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from pmoves.chit import CGP_SPEC_VERSION
+
 # Zeta filter for spectral analysis
 try:
     from pmoves.tools.zeta_filter import (
@@ -140,7 +142,7 @@ class CGPMapper:
             zeta_meta = {"zeta_filter_enabled": False}
 
         cgp_packet = {
-            "spec": "chit.cgp.v0.2",  # Standard CGP schema version
+            "spec": CGP_SPEC_VERSION,
             "summary": f"Consciousness Theory: {name} ({category})",
             "created_at": datetime.now(timezone.utc).isoformat() + "Z",
             "super_nodes": [

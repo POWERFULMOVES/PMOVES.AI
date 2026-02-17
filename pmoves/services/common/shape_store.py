@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import json
 
+from pmoves.chit import CGP_SPEC_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ class ShapeStore:
 
         Expected shape (subset):
         {
-          "spec": "chit.cgp.v0.2",
+          "spec": CGP_SPEC_VERSION,
           "super_nodes": [
             { "constellations": [ { "id": str, "points": [ {...} ] } ] }
           ]
@@ -358,7 +359,7 @@ class ShapeStore:
             if not isinstance(candidate, dict):
                 return None
             if "spec" not in candidate:
-                candidate = {**candidate, "spec": "chit.cgp.v0.2"}
+                candidate = {**candidate, "spec": CGP_SPEC_VERSION}
             return candidate
 
         def _map_constellation(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -406,7 +407,7 @@ class ShapeStore:
                 points.append(point)
             const["points"] = points
             return {
-                "spec": "chit.cgp.v0.2",
+                "spec": CGP_SPEC_VERSION,
                 "source": "supabase",
                 "super_nodes": [{"constellations": [const]}],
             }
@@ -484,7 +485,7 @@ class ShapeStore:
         return count
 
     # ---- event hook ----
-    _ACCEPTED_CGP_TYPES = {"geometry.cgp.v1", "chit.cgp.v0.2"}
+    _ACCEPTED_CGP_TYPES = {"geometry.cgp.v1", CGP_SPEC_VERSION}
 
     def on_geometry_event(self, event: Dict[str, Any]) -> None:
         """Handle CGP bus messages (chit.cgp.v0.2 and legacy geometry.cgp.v1)."""

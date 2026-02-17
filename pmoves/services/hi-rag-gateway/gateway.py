@@ -531,6 +531,42 @@ def _validate_remote_image_url(raw_url: Any) -> str:
     return url
 
 
+def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response:
+    """Validate URL for SSRF and fetch with DNS-pinned IP check.
+
+    Resolves DNS once, validates all IPs against private ranges, then fetches.
+    Prevents DNS rebinding TOCTOU attacks.
+    """
+    url = _validate_remote_image_url(raw_url)
+    parsed = urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    try:
+        addrs = socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise HTTPException(400, f"cannot resolve image host: {host}")
+    if not addrs:
+        raise HTTPException(400, f"no addresses for host: {host}")
+
+    for _, _, _, _, sockaddr in addrs:
+        try:
+            ip_obj = ipaddress.ip_address(sockaddr[0])
+        except ValueError:
+            raise HTTPException(400, f"invalid IP for host: {host}")
+        if (
+            ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
+            or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified
+        ):
+            raise HTTPException(400, f"private/internal image host blocked: {host}")
+
+    resp = requests.get(url, timeout=timeout, allow_redirects=False)
+    resp.raise_for_status()
+    if 300 <= resp.status_code < 400:
+        raise HTTPException(400, f"redirect responses are not allowed for image URL: {url}")
+    return resp
+
+
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
     emb = embed_query(query)
     cond = Filter(must=[FieldCondition(key="namespace", match=MatchValue(value=namespace))])
@@ -818,14 +854,10 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
         img_list = []
         for url in images:
-            safe_url = _validate_remote_image_url(url)
             try:
-                r = requests.get(safe_url, timeout=20, allow_redirects=False)
-                r.raise_for_status()
+                r = _fetch_remote_image(url)
             except requests.RequestException as e:
-                raise HTTPException(502, f"failed to fetch image {safe_url}: {e}")
-            if 300 <= r.status_code < 400:
-                raise HTTPException(400, f"redirect responses are not allowed for image URL: {safe_url}")
+                raise HTTPException(502, f"failed to fetch image: {e}")
             try:
                 img = Image.open(io.BytesIO(r.content)).convert("RGB")
             except Exception as e:

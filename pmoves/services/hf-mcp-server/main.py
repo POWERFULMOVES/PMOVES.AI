@@ -634,7 +634,9 @@ async def hf_model_convert_gguf(
         if ".." in output_dir or not re.match(r"^[a-zA-Z0-9._\-/]+$", output_dir):
             raise HTTPException(status_code=400, detail="Invalid output_dir")
         resolved = (cache_dir / output_dir).resolve()
-        if not str(resolved).startswith(str(cache_dir.resolve())):
+        try:
+            resolved.relative_to(cache_dir.resolve())
+        except ValueError:
             raise HTTPException(status_code=400, detail="output_dir must be within model cache")
         output_path = str(resolved)
     else:
