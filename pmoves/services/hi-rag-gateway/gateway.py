@@ -532,10 +532,11 @@ def _validate_remote_image_url(raw_url: Any) -> str:
 
 
 def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response:
-    """Validate URL for SSRF and fetch with DNS-pinned IP check.
+    """Validate URL for SSRF and fetch with DNS-resolved IP check.
 
-    Resolves DNS once, validates all IPs against private ranges, then fetches.
-    Prevents DNS rebinding TOCTOU attacks.
+    Resolves DNS once and validates all IPs against private ranges before fetch.
+    Note: ``requests.get`` re-resolves DNS independently, so this does not fully
+    prevent DNS-rebinding TOCTOU attacks but raises the bar significantly.
     """
     url = _validate_remote_image_url(raw_url)
     parsed = urlparse(url)
@@ -549,16 +550,17 @@ def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response
     if not addrs:
         raise HTTPException(400, f"no addresses for host: {host}")
 
-    for _, _, _, _, sockaddr in addrs:
-        try:
-            ip_obj = ipaddress.ip_address(sockaddr[0])
-        except ValueError:
-            raise HTTPException(400, f"invalid IP for host: {host}")
-        if (
-            ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
-            or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified
-        ):
-            raise HTTPException(400, f"private/internal image host blocked: {host}")
+    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE:
+        for _, _, _, _, sockaddr in addrs:
+            try:
+                ip_obj = ipaddress.ip_address(sockaddr[0])
+            except ValueError:
+                raise HTTPException(400, f"invalid IP for host: {host}")
+            if (
+                ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
+                or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified
+            ):
+                raise HTTPException(400, f"private/internal image host blocked: {host}")
 
     resp = requests.get(url, timeout=timeout, allow_redirects=False)
     resp.raise_for_status()
@@ -861,7 +863,7 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
             try:
                 img = Image.open(io.BytesIO(r.content)).convert("RGB")
             except Exception as e:
-                raise HTTPException(400, f"invalid image payload for {safe_url}: {e}")
+                raise HTTPException(400, f"invalid image payload for {url}: {e}")
             img_list.append(img)
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
         sims = (img_embs @ text_emb.T).squeeze()
