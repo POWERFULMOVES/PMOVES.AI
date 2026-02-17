@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 import requests
 import yaml
 
+from pmoves.chit import CGP_SPEC_VERSION
 from services.common.forms import (
     DEFAULT_AGENT_FORM,
     DEFAULT_AGENT_FORMS_DIR,
@@ -47,7 +48,7 @@ def load_form(name: str) -> Dict[str, Any]:
 
 
 def geometry_publish_cgp(cgp: Dict[str, Any]) -> Dict[str, Any]:
-    r = requests.post(f"{GATEWAY_URL}/geometry/event", json={"type":"chit.cgp.v0.2", "data": cgp}, timeout=20)
+    r = requests.post(f"{GATEWAY_URL}/geometry/event", json={"type": CGP_SPEC_VERSION, "data": cgp}, timeout=20)
     r.raise_for_status()
     return r.json()
 

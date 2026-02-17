@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
 
+from pmoves.chit import CGP_SPEC_VERSION
+
 router = APIRouter(tags=["CHIT"])
 logger = logging.getLogger(__name__)
 
@@ -144,7 +146,7 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     if const_ids:
         _shape_to_constellations[shape_id] = list(dict.fromkeys(const_ids))
 
-    shape_store.on_geometry_event({"type": "chit.cgp.v0.2", "data": cgp})
+    shape_store.on_geometry_event({"type": CGP_SPEC_VERSION, "data": cgp})
 
     os.makedirs("data", exist_ok=True)
     json.dump(cgp, open(f"data/{shape_id}.json", "w"), indent=2)
@@ -166,7 +168,7 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     return shape_id
 
 # Accepted geometry event types (backward-compat for legacy "geometry.cgp.v1" producers)
-_ACCEPTED_EVENT_TYPES = {"geometry.cgp.v1", "chit.cgp.v0.2"}
+_ACCEPTED_EVENT_TYPES = {"geometry.cgp.v1", CGP_SPEC_VERSION}
 
 
 @router.post("/geometry/event")

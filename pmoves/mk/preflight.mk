@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
@@ -81,6 +81,9 @@ submodule-layer-validate-all-strict: ## Strict per-module deterministic validati
 submodule-layer-validate-strict: ## Strict submodule-level validation (errors and warnings fail)
 	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" --strict $(ARGS)
 
+skill-registry-validate: ## Validate submodule-skill registry completeness
+	@$(PRECHECK_PY) tools/skill_registry_validate.py
+
 audit-layers-static: ## Submodule-first static certification pass before runtime smokes
 	@$(MAKE) --no-print-directory submodule-layer-validate-all-strict
 	@$(MAKE) --no-print-directory submodule-layer-validate-strict
@@ -91,6 +94,7 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory secrets-audit
 	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
+	@$(MAKE) --no-print-directory skill-registry-validate
 
 audit-layers-runtime: ## Runtime certification pass once services are online
 	@$(MAKE) --no-print-directory audit-layers-static

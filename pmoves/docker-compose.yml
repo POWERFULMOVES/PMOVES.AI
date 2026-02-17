@@ -1490,7 +1490,7 @@ services:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
     environment:
-    - NATS_URL=nats://nats:pmoves@nats:4222
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     volumes:
     - ./scripts/nats:/scripts:ro
     networks:
