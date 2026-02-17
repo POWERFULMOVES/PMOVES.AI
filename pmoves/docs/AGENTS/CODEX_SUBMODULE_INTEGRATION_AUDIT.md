@@ -40,7 +40,7 @@ _Generated: 2026-02-14_
 | `PMOVES-supabase` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
 | `PMOVES-surf` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
 | `PMOVES-tensorzero` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
-| `PMOVES-transcribe-and-fetch` | no | yes | - | 14 | `low` | No immediate action required unless this module becomes active. |
+| `PMOVES-transcribe-and-fetch` | no | yes | - | 14 | `medium` | Security remediation in progress (3 CRITICAL fixed). Rotate Supabase JWT and Langfuse keys before public release. |
 | `PMOVES.YT` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
 | `Pmoves-AgentGym-RL` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
 | `Pmoves-Health-wger` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
@@ -49,7 +49,7 @@ _Generated: 2026-02-14_
 | `Pmoves-open-notebook` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
 | `pmoves-e2b-mcp-server` | no | no | - | 7 | `low` | No immediate action required unless this module becomes active. |
 | `pmoves/integrations/archon` | no | no | - | 0 | `low` | No immediate action required unless this module becomes active. |
-| `PMOVES-Agent-Zero` | no | no | `PMOVES-Agent-Zero/.codex` | 102 | `medium` | Validate Codex docs are complete and linked from module README. |
+| `PMOVES-Agent-Zero` | no | no | `PMOVES-Agent-Zero/.codex` | 102 | `medium` | DoX branch reset (PR #5). Validate Codex docs are complete and linked from module README. |
 | `PMOVES-BotZ-gateway` | no | no | `PMOVES-BotZ-gateway/.codex` | 179 | `medium` | Validate Codex docs are complete and linked from module README. |
 | `PMOVES-Creator` | no | no | `PMOVES-Creator/.codex` | 0 | `medium` | Validate Codex docs are complete and linked from module README. |
 | `PMOVES-HiRAG` | no | no | `PMOVES-HiRAG/.codex` | 0 | `medium` | Validate Codex docs are complete and linked from module README. |
@@ -58,6 +58,15 @@ _Generated: 2026-02-14_
 | `Pmoves-cipher` | no | no | - | 46 | `medium` | Validate Codex docs are complete and linked from module README. |
 
 ## Update Log
+
+### 2026-02-16 — Branch Consolidation & Security Audit
+- PRs merged to Hardened: #640 (Agent Zero audit), #641 (branch strategy docs),
+  #643 (submodule sync targets), #645 (Known Roads infra), #646 (CI sudo fix)
+- PRs fixed, CI re-running: #633 (eval+cipher), #634 (hf-mcp security),
+  #642 (integration-gate), #644 (namespace publishing)
+- Agent Zero DoX branch reset: PR #4 closed, PR #5 created (Hardened + 3 DoX commits)
+- transcribe-and-fetch security audit: 3 CRITICAL, 6 HIGH, 8 MEDIUM findings
+- PMOVES-transcribe-and-fetch promoted from `low` → `medium` priority (planned public release)
 
 ### 2026-02-16 — PR #634 Gitlink Sync
 - PR #634 synced 16 submodule gitlinks to their latest upstream commits

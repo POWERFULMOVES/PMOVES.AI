@@ -1,5 +1,5 @@
 # PMOVES PR Review Learnings Index
-**Last Updated:** 2026-01-15
+**Last Updated:** 2026-02-16
 
 This directory catalogs learnings from PR reviews to capture patterns and implementation guidance for PMOVES.AI development.
 
@@ -12,6 +12,11 @@ This directory catalogs learnings from PR reviews to capture patterns and implem
   - Environment variable fallback patterns
   - Credential management anti-patterns
   - AI tool false positive verification
+- [Branch Consolidation & Security Audit (Feb 2026)](./branch-consolidation-learnings-2026-02.md)
+  - DoX branch reset pattern (386-commit divergence)
+  - Dependency-ordered PR merging
+  - CodeQL fix patterns, XSS via img.src
+  - transcribe-and-fetch security remediation patterns
 
 ### Architecture Patterns
 - [Tier Branches Learnings](./tier-branches-learnings.md)
@@ -77,29 +82,32 @@ git submodule foreach 'echo "$name: $(git branch --show-current)"'
 
 | Category | Count | Action Required |
 |----------|-------|-----------------|
-| Open PRs | 3 | PR #489 has 2 MAJOR security issues |
-| Submodules synced | 16 | 3 need branch fix (detached HEAD) |
-| Tier branches | 6 | All identical - need consolidation |
-| TAC reviews | 11 | Review completion pending |
+| PRs merged (Feb batch) | 5 | #640, #641, #643, #645, #646 |
+| PRs fixed, CI re-running | 4 | #633, #634, #642, #644 |
+| Submodules synced | 16+ | Agent Zero DoX branch reset (PR #5) |
+| Security audits | 1 | transcribe-and-fetch: 3 CRITICAL, 6 HIGH |
+| Tier branches | Consolidated | Merged to PMOVES.AI-Edition-Hardened |
 
 ---
 
 ## Action Items
 
 ### High Priority
-- [ ] Fix ClickHouse credentials in docker-compose.yml (PR #489)
-- [ ] Fix Invidious password pattern in docker-compose.yml (PR #489)
-- [ ] Consolidate or differentiate tier branches
+- [x] Fix ClickHouse credentials in docker-compose.yml (PR #489) — resolved
+- [x] Fix Invidious password pattern in docker-compose.yml (PR #489) — resolved
+- [x] Consolidate or differentiate tier branches — consolidated to Hardened
+- [ ] Rotate Supabase JWT for transcribe-and-fetch (manual, dashboard)
+- [ ] Rotate Langfuse/MinIO keys for transcribe-and-fetch (manual)
+- [ ] Run `git filter-repo` on transcribe-and-fetch monitoring/*.env (destructive, needs approval)
 
 ### Medium Priority
-- [ ] Fix detached HEAD in PMOVES-Archon submodule
-- [ ] Fix detached HEAD in PMOVES-E2B-Danger-Room-Deskdesktop
-- [ ] Verify PMOVES-Jellyfin feature branch status
+- [ ] Complete CI green on PRs #633, #634, #642, #644
+- [ ] transcribe-and-fetch: scrub supabase-agent example config (blocked by damage-control hook)
+- [ ] Verify Agent Zero PR #5 merges cleanly
 
 ### Low Priority
-- [ ] Prune /tmp/observability-restore worktree
-- [ ] Push tier branches to remote (if keeping separate)
-- [ ] Add documentation to tier branches
+- [ ] Prune stale worktrees
+- [ ] Add Codex quickstart to all `high` priority submodules
 
 ---
 
