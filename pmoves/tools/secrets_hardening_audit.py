@@ -232,14 +232,66 @@ def main() -> int:
                 )
                 break
 
+    # 8) Production-readiness gate: tier env files must have all .example keys populated.
+    #    This catches the exact TensorZero failure scenario: .example declares a key,
+    #    but secrets_sync.py didn't populate it because it wasn't in the CHIT manifest.
+    project_root = REPO_ROOT / "pmoves"
+    tier_names = ("data", "supabase", "api", "llm", "worker", "media", "agent", "ui")
+    placeholder_tokens = (
+        "placeholder_until_configured",
+        "PLACEHOLDER",
+        "change_me",
+        "CHANGE_ME",
+        "your-key-here",
+        "YOUR_KEY_HERE",
+        "xxx",
+    )
+    for tier in tier_names:
+        example_path = project_root / f"env.tier-{tier}.example"
+        runtime_path = project_root / f"env.tier-{tier}"
+        if not example_path.exists() or not runtime_path.exists():
+            continue
+        example_keys = set(parse_env_file(example_path).keys())
+        runtime_values = parse_env_file(runtime_path)
+        runtime_keys = set(runtime_values.keys())
+
+        # 8a) Keys in .example but missing from runtime = DRIFT
+        missing_keys = sorted(example_keys - runtime_keys)
+        if missing_keys:
+            findings.append(
+                Finding(
+                    "WARN",
+                    f"env.tier-{tier}: {len(missing_keys)} keys in .example but missing from runtime: {', '.join(missing_keys[:5])}{'...' if len(missing_keys) > 5 else ''}. "
+                    f"Fix: add to secrets_manifest_v2.yaml and run 'make secrets-funnel'.",
+                    str(runtime_path.relative_to(REPO_ROOT)),
+                )
+            )
+
+        # 8b) Runtime keys with empty or placeholder values
+        for key in sorted(runtime_keys):
+            value = runtime_values.get(key, "")
+            if not value:
+                continue  # Empty is OK for optional keys
+            if any(token in value for token in placeholder_tokens):
+                findings.append(
+                    Finding(
+                        "WARN",
+                        f"env.tier-{tier}: key {key} has placeholder value '{value[:30]}...'. "
+                        f"Fix: set real value in env.shared and run 'make secrets-funnel'.",
+                        str(runtime_path.relative_to(REPO_ROOT)),
+                    )
+                )
+
     if findings:
-        print("Secrets hardening audit: FAILED")
+        errors = [f for f in findings if f.level == "ERROR"]
+        warns = [f for f in findings if f.level == "WARN"]
+        print(f"Secrets hardening audit: {'FAILED' if errors else 'WARN'} ({len(errors)} errors, {len(warns)} warnings)")
         for finding in findings:
             if finding.path:
                 print(f"[{finding.level}] {finding.path}: {finding.message}")
             else:
                 print(f"[{finding.level}] {finding.message}")
-        return 1
+        return 1 if errors else 0
 
     print("Secrets hardening audit: PASS")
     return 0

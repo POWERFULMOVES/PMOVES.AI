@@ -1,4 +1,4 @@
-import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading, socket
+import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading, socket, inspect
 import importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -357,6 +357,75 @@ def _coerce_vector(vec: Any) -> Optional[List[float]]:
     except (TypeError, ValueError):
         return None
     return out if out else None
+
+
+def _qdrant_search(
+    *,
+    collection_name: str,
+    query_vector: List[float],
+    limit: int,
+    query_filter: Optional[Filter],
+    with_payload: bool = True,
+    with_vectors: bool = False,
+):
+    """Handle qdrant-client API drift (`search` vs `query_points`)."""
+    if hasattr(qdrant, "search"):
+        return qdrant.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+
+    if hasattr(qdrant, "query_points"):
+        kwargs = {
+            "collection_name": collection_name,
+            "limit": limit,
+            "query_filter": query_filter,
+            "with_payload": with_payload,
+            "with_vectors": with_vectors,
+        }
+        try:
+            resp = qdrant.query_points(query=query_vector, **kwargs)
+        except TypeError:
+            # Older signatures may still use `vector=...`.
+            resp = qdrant.query_points(vector=query_vector, **kwargs)
+        if isinstance(resp, list):
+            return resp
+        points = getattr(resp, "points", None)
+        if isinstance(points, list):
+            return points
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        if isinstance(resp, dict):
+            dict_points = resp.get("points")
+            if isinstance(dict_points, list):
+                return dict_points
+            dict_result = resp.get("result")
+            if isinstance(dict_result, list):
+                return dict_result
+        return []
+
+    if hasattr(qdrant, "search_points"):
+        resp = qdrant.search_points(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+        if isinstance(resp, list):
+            return resp
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        return []
+
+    raise AttributeError("qdrant client has no compatible search/query API")
 
 def ensure_qdrant_collection(vector_dim: int):
     """Create or resync the Qdrant collection when the embed dimension changes."""
@@ -945,13 +1014,22 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         if SUPABASE_REALTIME_KEY:
             headers["Authorization"] = f"Bearer {SUPABASE_REALTIME_KEY}"
         try:
-            async with websockets.connect(
-                full_url,
-                ping_interval=20,
-                ping_timeout=20,
-                max_queue=None,
-                extra_headers=headers or None,
-            ) as ws:
+            connect_kwargs: Dict[str, Any] = {
+                "ping_interval": 20,
+                "ping_timeout": 20,
+                "max_queue": None,
+            }
+            if headers:
+                # websockets>=13 renamed extra_headers -> additional_headers.
+                try:
+                    sig = inspect.signature(websockets.connect)
+                    if "additional_headers" in sig.parameters:
+                        connect_kwargs["additional_headers"] = headers
+                    else:
+                        connect_kwargs["extra_headers"] = headers
+                except Exception:
+                    connect_kwargs["extra_headers"] = headers
+            async with websockets.connect(full_url, **connect_kwargs) as ws:
                 join_payload = {
                     "topic": "realtime:geometry.cgp.v1",
                     "event": "phx_join",
@@ -1326,12 +1404,13 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         except Exception:
             pass
         must = [FieldCondition(key="namespace", match=MatchValue(value=req.namespace))]
-        hits = qdrant.search(
+        hits = _qdrant_search(
             collection_name=COLL,
             query_vector=vec,
             limit=max(req.k, RERANK_TOPN),
             query_filter=Filter(must=must),
             with_payload=True,
+            with_vectors=False,
         )
         logger.warning("hirag.query hits=%d namespace=%s ip=%s", len(hits), req.namespace, client_ip)
     except Exception as e:

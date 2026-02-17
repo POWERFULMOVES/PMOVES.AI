@@ -1,6 +1,6 @@
 # PMOVES.AI Documentation Index
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026
 **Purpose:** Cross-reference navigation for PMOVES.AI documentation
 
 ---
@@ -14,6 +14,8 @@
 | **Personas** | `PERSONAS.md` | `voice-personas.md` | `voice.persona.*` |
 | **Services** | `services-catalog.md` | CLAUDE.md | `nats-subjects.md` |
 | **Brand** | `CATACLYSM_STUDIOS_INC.md` | Services | N/A |
+| **Agents/CODEX** | `CODEX_OPERATOR_HOME.md` | `CODEX_CLAUDE_PARITY_MAP.md` | — |
+| **Tooling Audit** | `TOOLING_SCRIPT_AUDIT.md` | `AGENTS/` | — |
 
 ---
 
@@ -157,6 +159,19 @@ agent.voice.speaking.v1  # Agent voice state
 
 ---
 
+## CODEX Operations
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| Operator Home | `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md` | Codex quickstart & runbooks |
+| Claude Parity Map | `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md` | Claude ↔ Codex command translation |
+| Submodule Audit | `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md` | Submodule Codex coverage |
+| Tooling Audit | `pmoves/docs/AGENTS/TOOLING_SCRIPT_AUDIT.md` | Scripts & Make target inventory |
+| Known Roads | `.claude/CLAUDE.md` (Known Roads table) | Dangerous ops → Make targets |
+| Infra Makefile | `pmoves/mk/infra.mk` | volume-reset, docker-prune targets |
+
+---
+
 ## Cross-Reference: Services ↔ NATS
 
 | Service | Port | Key NATS Subjects |
@@ -186,6 +201,7 @@ agent.voice.speaking.v1  # Agent voice state
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | Dec 2025 | Initial index, PR #343 alignment |
+| 2.0 | Feb 2026 | CODEX parity, Known Roads, tooling audit, Agent Zero DoX |
 
 ---
 

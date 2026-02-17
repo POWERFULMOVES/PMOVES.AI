@@ -49,6 +49,7 @@ This dossier maps where Codex integration and Cipher Memory integration exist in
 - `pmoves-cipher-mcp/cipher_mcp/tools.py`
 - `pmoves-cipher-mcp/cipher_mcp/client.py`
 - `pmoves-cipher-mcp/main.py`
+- `pmoves-cipher-mcp/pyproject.toml` — **Fixed** (commit `17cc8706`): added hatchling `[tool.hatch.build.targets.wheel]` package discovery so `pip install -e .` finds `cipher_mcp/` correctly
 
 ### Claude wiring for Cipher MCP
 - `.claude/mcp.json`
