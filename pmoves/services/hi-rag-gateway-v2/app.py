@@ -740,6 +740,10 @@ async def _fetch_geometry_pack(
     base_url = (rest_url or SUPABASE_REST_URL or "").strip()
     if not base_url:
         return None
+    # Validate URL scheme to prevent SSRF via env or parameter injection
+    if urlparse(base_url).scheme not in ("http", "https"):
+        logger.warning("Invalid scheme in Supabase REST URL: %s", base_url[:60])
+        return None
     base = base_url.rstrip("/")
     if not base.endswith("/rest/v1"):
         base = f"{base}/rest/v1"

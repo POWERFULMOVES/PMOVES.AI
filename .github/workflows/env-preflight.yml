@@ -17,6 +17,8 @@ jobs:
     # NOTE: Uses windows-latest for Windows-specific environment validation
     # This is intentional as we need to validate Windows PowerShell scripts
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2

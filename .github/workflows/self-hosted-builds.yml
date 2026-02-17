@@ -35,6 +35,9 @@ jobs:
   build-gpu:
     name: GPU Services
     runs-on: [self-hosted, ai-lab, gpu]
+    permissions:
+      contents: read
+      packages: write
     if: |
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
@@ -106,6 +109,9 @@ jobs:
   build-cpu:
     name: CPU Services
     runs-on: [self-hosted, vps]
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         service:
@@ -193,6 +199,8 @@ jobs:
   deploy-staging:
     name: Deploy Staging
     runs-on: [self-hosted, cloudstartup, staging]
+    permissions:
+      contents: read
     needs: [build-cpu, validate-contracts]
     if: |
       github.ref == 'refs/heads/develop' ||
@@ -220,6 +228,8 @@ jobs:
   deploy-production:
     name: Deploy Production
     runs-on: [self-hosted, kvm4, production]
+    permissions:
+      contents: read
     needs: [build-cpu, build-gpu, validate-contracts, deploy-staging]
     if: |
       github.ref == 'refs/heads/main' ||
@@ -260,6 +270,8 @@ jobs:
   functional-tests:
     name: Functional Tests
     runs-on: [self-hosted, vps]
+    permissions:
+      contents: read
     needs: [deploy-staging]
     if: needs.deploy-staging.result == 'success'
 

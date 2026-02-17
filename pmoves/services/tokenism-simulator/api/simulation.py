@@ -395,7 +395,7 @@ def run_simulation():
             parameters = SimulationParameters(**params_data)
         except Exception as e:
             return jsonify({
-                'error': f'Invalid parameters: {str(e)}',
+                'error': 'Invalid simulation parameters',
             }), 400
 
         # Run simulation asynchronously
@@ -429,7 +429,7 @@ def run_simulation():
             status='error'
         ).inc()
         return jsonify({
-            'error': str(e),
+            'error': 'Simulation execution failed',
         }), 500
 
 
@@ -542,7 +542,7 @@ def run_simulation_async():
 
     except Exception as e:
         logger.error(f"Error queuing simulation: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to queue simulation'}), 500
 
 
 @simulation_bp.route('/api/v1/simulate/<simulation_id>', methods=['GET'])
