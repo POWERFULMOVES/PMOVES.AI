@@ -1,12 +1,42 @@
 # PMOVES.AI Submodules Reference
 
-Comprehensive documentation of all 20 git submodules in the PMOVES.AI repository.
+Comprehensive documentation of all git submodules in the PMOVES.AI repository.
 
 ## Overview
 
 PMOVES.AI uses git submodules to integrate external projects and specialized services. All submodules are configured with `ignore = all` to prevent accidental commits of submodule state changes.
 
 **Repository:** `https://github.com/POWERFULMOVES/PMOVES.AI`
+**Branch tracking:** All submodules track `PMOVES.AI-Edition-Hardened`
+**Total submodules:** 49 (including vendor/legacy dual-mounts)
+
+## Fork Architecture (Vendor-to-Fork Migration)
+
+Many submodules originated as upstream vendor mirrors (`pmoves/vendor/`, `research/`) and have been migrated to PMOVES.AI-enhanced forks at top-level paths. The forks:
+
+- **Stay synced** with upstream via periodic merges to `main`
+- **Add PMOVES.AI integration overlays** on the `PMOVES.AI-Edition-Hardened` branch
+- **Preserve legacy vendor paths** during migration (both paths point to the same fork repo)
+
+**Detailed documentation:** [Submodule Fork Architecture](../../pmoves/docs/SUBMODULE_FORK_ARCHITECTURE.md)
+
+### Fork ↔ Vendor Path Mapping
+
+| Fork (Canonical) | Legacy Path | Upstream |
+|---|---|---|
+| `PMOVES-E2B-Danger-Room-Desktop/` | `pmoves/vendor/e2b-desktop/` | e2b-dev/desktop |
+| `PMOVES-Danger-infra/` | `pmoves/vendor/e2b-infra/` | e2b-dev/infra |
+| `PMOVES-E2b-Spells/` | `pmoves/vendor/e2b-spells/` | e2b-dev/fragments |
+| `pmoves-e2b-mcp-server/` | `pmoves/vendor/e2b-mcp-server/` | e2b-dev/mcp-server |
+| `PMOVES-surf/` + `pmoves-surf/` | `pmoves/vendor/e2b-surf/` | e2b-dev/surf |
+| `PMOVES-AgentGym/` | `pmoves/vendor/agentgym/` | THUDM/AgentGym |
+| `Pmoves-AgentGym-RL/` | `pmoves/vendor/agentgym-rl/` | THUDM/AgentGym |
+| `PMOVES-A2UI/` | `research/A2UI/` | Internal |
+| `PMOVES-Archon/` | `pmoves/integrations/archon/` | Internal (multi-mount) |
+
+### Integration Overlay Standard
+
+Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source, PMOVES provisions, service dependencies, NATS subjects, Docker profiles, and cross-links. See the [template](../../pmoves/docs/SUBMODULE_FORK_ARCHITECTURE.md#template).
 
 ---
 
@@ -444,32 +474,70 @@ git submodule foreach 'echo $name: $(git rev-parse HEAD)'
 
 ## Quick Reference Table
 
+### Core Services
+
 | Submodule | Primary Port(s) | Purpose | Profile |
 |-----------|----------------|---------|---------|
 | PMOVES-Agent-Zero | 8080, 8081 | Agent orchestrator | agents |
 | PMOVES-Archon | 8091, 3737 | Agent service + UI | agents |
 | PMOVES-BoTZ | 2091, 3020, 7071, 7072, 8110 | MCP tools ecosystem + VPN | varies |
+| PMOVES-BotZ-gateway | — | BoTZ gateway service | agents |
 | PMOVES-Creator | varies | ComfyUI image generation | orchestration |
 | PMOVES-Deep-Serch | 8098, 8099 | Research orchestration | orchestration |
 | PMOVES-DoX | 8092 | Document processing | workers |
 | PMOVES-HiRAG | 8086-8090 | Hybrid RAG | default |
 | PMOVES-Jellyfin | 8093 | Media server bridge | varies |
 | Pmoves-Jellyfin-AI-Media-Stack | 8078-8083 | AI media processing | workers |
+| PMOVES-MAI-UI | — | Main AI UI frontend | ui |
 | PMOVES-Open-Notebook | varies | Knowledge base (SurrealDB) | varies |
+| PMOVES-Pipecat | 8055, 8056 | Voice/multimodal comms | varies |
 | PMOVES-Remote-View | varies | Remote desktop server | varies |
+| PMOVES-Headscale | varies | Mesh VPN coordinator | varies |
 | PMOVES-Tailscale | N/A | VPN mesh networking | varies |
 | PMOVES-ToKenism-Multi | N/A | Token economy simulator | N/A |
 | PMOVES-Wealth | varies | Finance tracking (Firefly III) | varies |
 | PMOVES-crush | N/A | Terminal AI assistant | N/A |
 | PMOVES-n8n | varies | Workflow automation | varies |
+| PMOVES-supabase | 3010 | Postgres + pgvector | data |
+| PMOVES-tensorzero | 3030, 4000 | LLM gateway + observability | default |
+| PMOVES-transcribe-and-fetch | varies | Media transcription | workers |
+| PMOVES.YT | 8077 | YouTube ingestion | yt |
 | Pmoves-Health-wger | varies | Fitness tracking | varies |
-| pmoves/vendor/agentgym-rl | N/A | RL training framework | N/A |
+| Pmoves-cipher | 8096 | Knowledge-graph memory | agents |
+| Pmoves-hyperdimensions | — | Holographic visualization | varies |
+| PMOVES-Pinokio-Ultimate-TTS-Studio | — | TTS Pinokio launcher | varies |
+| PMOVES-Ultimate-TTS-Studio | 7861 | Multi-engine TTS | gpu |
+| PMOVES-llama-throughput-lab | — | LLM throughput testing | N/A |
+
+### Forks with Legacy Vendor Paths
+
+All repos are POWERFULMOVES-owned forks. The legacy `pmoves/vendor/` and `research/` paths are kept during migration — both paths point to the same fork repo.
+
+| Fork (Canonical) | Legacy Path | Purpose |
+|---|---|---|
+| PMOVES-E2B-Danger-Room | — | E2B sandbox runtime |
+| PMOVES-E2B-Danger-Room-Desktop | pmoves/vendor/e2b-desktop | E2B desktop sandbox |
+| PMOVES-Danger-infra | pmoves/vendor/e2b-infra | E2B infrastructure |
+| PMOVES-E2b-Spells | pmoves/vendor/e2b-spells | E2B sandbox recipes |
+| pmoves-e2b-mcp-server | pmoves/vendor/e2b-mcp-server | E2B MCP server |
+| PMOVES-surf / pmoves-surf | pmoves/vendor/e2b-surf | Browser automation |
+| PMOVES-AgentGym | pmoves/vendor/agentgym | Agent training framework |
+| Pmoves-AgentGym-RL | pmoves/vendor/agentgym-rl | RL training framework |
+| PMOVES-A2UI | research/A2UI | UI generation research |
+
+### Multi-Mount (same repo, different context)
+
+| Primary Path | Integration Mount | Purpose |
+|---|---|---|
+| PMOVES-Archon/ | pmoves/integrations/archon/ | Agent service vs integration wiring |
+| PMOVES-surf/ | pmoves-surf/ | Top-level reference vs integration path |
 
 ---
 
 ## See Also
 
-- [CLAUDE.md](../../CLAUDE.md) - Main developer context
-- [services-catalog.md](./services-catalog.md) - Complete service listing
+- [CLAUDE.md](../../.claude/CLAUDE.md) - Main developer context
+- [Fork Architecture](../../pmoves/docs/SUBMODULE_FORK_ARCHITECTURE.md) - Vendor-to-fork migration pattern, integration overlay standard, and contribution flow
+- [services-catalog.md](./services-catalog.md) - Complete service listing with ports and profiles
 - [nats-subjects.md](./nats-subjects.md) - NATS event subjects
 - [testing-strategy.md](./testing-strategy.md) - Testing guidelines

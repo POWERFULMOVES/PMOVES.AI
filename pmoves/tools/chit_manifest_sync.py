@@ -7,13 +7,7 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
-try:
-    import yaml
-except ImportError as exc:  # pragma: no cover - operator dependency path
-    raise SystemExit(
-        "PyYAML is required for chit_manifest_sync.py. Install with: "
-        "pip install PyYAML>=6.0"
-    ) from exc
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE = REPO_ROOT / "pmoves" / "chit" / "secrets_manifest_v2.yaml"
@@ -26,7 +20,7 @@ CANONICAL_SOURCE_ALIASES: Dict[str, Tuple[str, ...]] = {
     "SUPABASE_REALTIME_KEY": ("SUPABASE_ANON_KEY", "ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
     "SUPABASE_REALTIME_SECRET": ("SUPABASE_JWT_SECRET", "JWT_SECRET"),
     "SERVICE_PASSWORD_POSTGRES": ("POSTGRES_PASSWORD", "SUPABASE_DB_PASSWORD"),
-    "SERVICE_PASSWORD_ADMIN": ("DASHBOARD_PASSWORD", "SUPABASE_DASHBOARD_PASSWORD"),
+    "SERVICE_PASSWORD_ADMIN": ("POSTGRES_PASSWORD", "SUPABASE_DB_PASSWORD"),
     "SERVICE_USER_ADMIN": ("POSTGRES_USER", "SUPABASE_DB_USER"),
     "GITHUB_PAT": ("GH_PAT_PUBLISH",),
     "TENSORZERO_GATEWAY_URL": ("TENSORZERO_BASE_URL",),
@@ -199,10 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help=(
-            "Do not write files; fail with exit 1 if destination content differs from "
-            "canonical generated output (including ordering)."
-        ),
+        help="Do not write files; fail with exit 1 if the destination is out of sync.",
     )
     args = parser.parse_args(argv)
 
