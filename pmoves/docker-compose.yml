@@ -1502,6 +1502,8 @@ services:
     profiles:
     - data
     - orchestration
+    - agents
+    - botz
   agent-zero:
     <<: *tier-agent-hardened
     build:
