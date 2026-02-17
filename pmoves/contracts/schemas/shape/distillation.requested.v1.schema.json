@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shape Distillation Requested v1",
+  "description": "User requests CHIT distillation — building a model or configuration tuned to their discovered shape. Always user-initiated. The system may suggest readiness but never auto-triggers.",
+  "type": "object",
+  "required": [
+    "user_id",
+    "timestamp",
+    "shape_version",
+    "distillation_type"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Unique identifier for the human body requesting distillation"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the distillation request"
+    },
+    "shape_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Shape profile version to distill from — ties to profile.updated.v1 shape_version"
+    },
+    "distillation_type": {
+      "type": "string",
+      "enum": [
+        "config_tuning",
+        "model_fine_tune",
+        "context_priming",
+        "full_distillation"
+      ],
+      "description": "What kind of distillation to perform"
+    },
+    "target_agent_id": {
+      "type": "string",
+      "description": "Optional — distill for a specific agent (default: all preferred agents)"
+    },
+    "trace_window_days": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optional — only use traces from the last N days (default: all available traces)"
+    },
+    "custom_constraints": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional user-defined constraints for the distillation (e.g., max token budget, excluded domains, temperature bounds)"
+    }
+  }
+}

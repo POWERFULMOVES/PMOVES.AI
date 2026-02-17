@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shape Profile Updated v1",
+  "description": "Accumulated user shape profile — emitted when trace patterns crystallize into a stable shape representation. The profile captures the discovered orbital characteristics of a specific human-AI pair.",
+  "type": "object",
+  "required": [
+    "user_id",
+    "timestamp",
+    "trace_count",
+    "shape_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Unique identifier for the human body"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the profile update"
+    },
+    "trace_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total number of traces incorporated into this shape version"
+    },
+    "shape_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonically increasing version number for the shape profile"
+    },
+    "tabula_rasa": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the user chose a fresh start — all prior shape data was zeroed before this version"
+    },
+    "resonance_spectrum": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+      "description": "Dirichlet-weighted domain affinities — each float represents affinity for a resonance domain. Sum normalizes to 1.0."
+    },
+    "dominant_domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Top resonance domains by affinity weight"
+    },
+    "preferred_voice": {
+      "type": "string",
+      "enum": [
+        "analytical",
+        "architectural",
+        "terse",
+        "strategic",
+        "conversational",
+        "directive",
+        "companion"
+      ],
+      "description": "Discovered voice preference — which agent communication style the user responds to best"
+    },
+    "preferred_agents": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Agent IDs the user most frequently interacts with"
+    },
+    "interaction_style": {
+      "type": "string",
+      "enum": ["deep", "broad", "balanced"],
+      "description": "Dominant interaction pattern — deep (single-topic), broad (multi-topic), or balanced"
+    },
+    "orbit_stability": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "How stable the human-AI orbital resonance is. 0.0 = chaotic exploration, 1.0 = deep locked resonance."
+    }
+  }
+}
