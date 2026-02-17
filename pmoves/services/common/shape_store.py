@@ -489,8 +489,26 @@ class ShapeStore:
 
     def on_geometry_event(self, event: Dict[str, Any]) -> None:
         """Handle CGP bus messages (chit.cgp.v0.2 and legacy geometry.cgp.v1)."""
-        if event.get("type") in self._ACCEPTED_CGP_TYPES:
-            payload = event.get("data") or {}
-            if isinstance(payload, dict):
-                self.put_cgp(payload)
+        event_type = event.get("type")
+        if event_type not in self._ACCEPTED_CGP_TYPES:
+            logger.warning(
+                "ShapeStore.on_geometry_event: ignoring unrecognized type %r (accepted: %s)",
+                event_type,
+                self._ACCEPTED_CGP_TYPES,
+            )
+            return
+
+        payload = event.get("data")
+        if not isinstance(payload, dict) or not payload:
+            logger.warning(
+                "ShapeStore.on_geometry_event: expected non-empty dict payload, got %s (type: %s)",
+                type(payload).__name__,
+                event_type,
+            )
+            return
+
+        try:
+            self.put_cgp(payload)
+        except Exception:
+            logger.exception("ShapeStore.on_geometry_event: put_cgp failed (type: %s)", event_type)
 
