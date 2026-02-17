@@ -165,8 +165,10 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     try:
         from pmoves.services.gateway.gateway.api.events import emit_event  # late import to avoid cycles
         emit_event({"type": "geometry.event", "shape_id": shape_id})
+    except ImportError:
+        logger.debug("events module not available; skipping geometry event emission")
     except Exception:
-        pass
+        logger.exception("Failed to emit geometry.event for shape_id=%s", shape_id)
 
     return shape_id
 
