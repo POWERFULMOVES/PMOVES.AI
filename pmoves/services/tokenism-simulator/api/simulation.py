@@ -393,7 +393,7 @@ def run_simulation():
         params_data = data.get('parameters', {})
         try:
             parameters = SimulationParameters(**params_data)
-        except Exception as e:
+        except Exception:
             return jsonify({
                 'error': 'Invalid simulation parameters',
             }), 400
@@ -422,8 +422,8 @@ def run_simulation():
         finally:
             loop.close()
 
-    except Exception as e:
-        logger.error(f"Error running simulation: {e}")
+    except Exception:
+        logger.error("Error running simulation", exc_info=True)
         simulation_requests.labels(
             scenario=scenario.value if 'scenario' in locals() else 'unknown',
             status='error'
@@ -540,8 +540,8 @@ def run_simulation_async():
             'message': 'Simulation queued for processing',
         }), 202
 
-    except Exception as e:
-        logger.error(f"Error queuing simulation: {e}")
+    except Exception:
+        logger.error("Error queuing simulation", exc_info=True)
         return jsonify({'error': 'Failed to queue simulation'}), 500
 
 

@@ -68,7 +68,12 @@ def _safe_model_path(model_id: str) -> Path:
     if ".." in model_id or not _SAFE_MODEL_RE.match(model_id):
         raise HTTPException(status_code=400, detail="Invalid model ID")
     sanitized = model_id.replace("/", "--")
-    return MODELS_BASE / sanitized
+    resolved = (MODELS_BASE / sanitized).resolve()
+    try:
+        resolved.relative_to(MODELS_BASE.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID") from None
+    return resolved
 
 
 class ModelTier(Enum):
