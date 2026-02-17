@@ -22,24 +22,23 @@ env_content = env_file.read_text()
 lines = env_content.split("\n")
 
 # Update or add each secret
+updated_count = 0
 for label, value in sorted(secrets.items()):
-    updated = False
+    matched = False
     for i, line in enumerate(lines):
         if line.startswith(f"{label}="):
             lines[i] = f"{label}={value}"
-            updated = True
-            print(f"Updated: {label}")
+            matched = True
+            updated_count += 1
             break
-
-    if not updated and f"{label}=" in env_content:
-        # Key exists but with empty value
+    if not matched:
         for i, line in enumerate(lines):
             if line == f"{label}=":
                 lines[i] = f"{label}={value}"
-                print(f"Updated (empty): {label}")
+                updated_count += 1
                 break
 
 # Write back
 env_file.write_text("\n".join(lines))
 
-print(f"\nUpdated env.tier-llm with {len(secrets)} credentials")
+print(f"\nUpdated env.tier-llm with {updated_count}/{len(secrets)} credentials")

@@ -87,8 +87,8 @@ app = FastAPI(title="FFmpeg+Whisper", version="4.0.0", lifespan=lifespan)
 
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID") or "minioadmin"
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY") or "minioadmin"
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() == "true"
 
 MEDIA_AUDIO_URL = os.environ.get("MEDIA_AUDIO_URL")

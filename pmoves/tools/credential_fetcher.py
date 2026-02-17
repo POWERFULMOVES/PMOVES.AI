@@ -220,7 +220,7 @@ class GitHubSecretsFetcher:
             )
             return [s["name"] for s in data.get("secrets", [])]
         except httpx.HTTPStatusError as e:
-            logger.error(f"Failed to list secrets for {owner}/{repo}: {e}")
+            logger.error(f"Failed to list secrets for {owner}/{repo}: HTTP {e.response.status_code}")
             return []
 
     async def get_repository_secret(
@@ -256,7 +256,7 @@ class GitHubSecretsFetcher:
                 updated_at=data.get("updated_at"),
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Failed to get secret {secret_name}: {e}")
+            logger.error(f"Failed to get secret {secret_name}: HTTP {e.response.status_code}")
             return None
 
     async def fetch_repository_secrets(
@@ -800,10 +800,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 for key, value in sorted(credentials.items()):
                     if _is_credential_key(key):
-                        value = "***"
+                        display_value = "***"
                     elif len(value) > 50:
-                        value = value[:47] + "..."
-                    print(f"{key}={value}")
+                        display_value = value[:47] + "..."
+                    else:
+                        display_value = value
+                    print(f"{key}={display_value}")
 
         elif args.action == "list-github":
             if not args.github_owner or not args.github_repo:

@@ -94,19 +94,33 @@ def load_config() -> Dict[str, Any]:
     return config
 
 
-def check_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, str]:
-    """Check if file_path is blocked. Returns (blocked, reason)."""
+TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".defaults")
+
+
+def check_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, str, bool]:
+    """Check if file_path is blocked. Returns (blocked, reason, is_template)."""
+    # CHIT safe paths — CGP archives and CHIT data directories bypass zero-access
+    chit_safe = config.get("chitSafePaths", [])
+    normalized_fwd = os.path.normpath(file_path).replace("\\", "/")
+    for safe_pat in chit_safe:
+        safe_normalized = safe_pat.replace("\\", "/")
+        if safe_normalized in normalized_fwd:
+            return False, "", False
+
     # Check zero-access paths first (no access at all)
     for zero_path in config.get("zeroAccessPaths", []):
         if match_path(file_path, zero_path):
-            return True, f"zero-access path {zero_path} (no operations allowed)"
+            basename = os.path.basename(file_path).lower()
+            if any(basename.endswith(suffix) for suffix in TEMPLATE_SUFFIXES):
+                return True, f"zero-access path {zero_path}", True
+            return True, f"zero-access path {zero_path} (no operations allowed)", False
 
     # Check read-only paths (edits not allowed)
     for readonly in config.get("readOnlyPaths", []):
         if match_path(file_path, readonly):
-            return True, f"read-only path {readonly}"
+            return True, f"read-only path {readonly}", False
 
-    return False, ""
+    return False, "", False
 
 
 def main() -> None:
@@ -131,10 +145,26 @@ def main() -> None:
         sys.exit(0)
 
     # Check if file is blocked
-    blocked, reason = check_path(file_path, config)
+    blocked, reason, is_template = check_path(file_path, config)
     if blocked:
-        print(f"SECURITY: Blocked edit to {reason}: {file_path}", file=sys.stderr)
-        sys.exit(2)
+        if is_template:
+            output = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "ask",
+                    "permissionDecisionReason": (
+                        f"ENV TEMPLATE: This file matches {reason} but appears to be a template file. "
+                        f"In production, env files populate from the secrets pipeline (make -C pmoves secrets-funnel). "
+                        f"Template files should update from source. "
+                        f"Approve this edit only if you are intentionally modifying the template (e.g., security remediation)."
+                    )
+                }
+            }
+            print(json.dumps(output))
+            sys.exit(0)
+        else:
+            print(f"SECURITY: Blocked edit to {reason}: {file_path}", file=sys.stderr)
+            sys.exit(2)
 
     sys.exit(0)
 

@@ -17,8 +17,12 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-# CHIT CGP Spec Version
-CHIT_CGP_VERSION = "chit.cgp.v0.1"
+# CHIT CGP Spec Version — canonical reference:
+# PMOVES-ToKenism-Multi/integrations/contracts/chit/cgp-generator.ts
+CGP_SPEC_VERSION = "chit.cgp.v0.2"
+
+# Backward-compat alias
+CHIT_CGP_VERSION = CGP_SPEC_VERSION
 
 
 @dataclass
@@ -32,7 +36,7 @@ class CGPPoint:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "label": self.label,
-            "value": self.value if self.encoding == "cleartext" else _hex_encode(self.value),
+            "value": self.value if self.encoding == "cleartext" else _hex_encode(self.value),  # noqa: CodeQL [py/clear-text-storage-sensitive-data] — CGP by-design encodes secrets for tier env file generation
             "anchor": self.anchor,
             "encoding": self.encoding,
         }

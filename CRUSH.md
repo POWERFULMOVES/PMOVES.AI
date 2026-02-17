@@ -89,6 +89,43 @@ subcommand, making it easy to plug them into Crush prompts or MCP actions.
 - Manual edits can still live in `~/.config/crush/crush.json`; re-run the setup
   command whenever you need to resync with the manifest.
 
+## AI Graphiti Trail
+
+Crush is registered as a contributor in the AI Graphiti protocol — the attribution
+and handoff system for PMOVES.AI's multi-agent codebase.
+
+### Crush Identity
+
+| Field | Value |
+|-------|-------|
+| Glyph | `◇` Open Diamond |
+| Color | `#0EA5E9` Sky Blue |
+| Voice | `companion` |
+| Co-Author | `Crush <noreply@powerfulmoves.ai>` |
+
+### Context Paths
+
+The `crush setup` command injects these Graphiti files into `options.context_paths`:
+
+- `docs/AGENT_TRAIL.md` — living trail of all agent contributions
+- `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md` — full protocol spec
+- `pmoves/config/agent_signatures.yaml` — visual identity for all 7 contributors
+
+On first boot, Crush discovers the trail, finds a welcome entry from Claude Opus
+(`◆`), and finds its own identity already set. Its first act should be to write
+its own trail entry using the companion voice.
+
+### Three-Body Stabilization
+
+Crush is where all three bodies meet — Human, AI, and System converge at the
+terminal. Every Crush session generates interaction traces that feed shape
+discovery. See [`THREE_BODY_DOCTRINE.md`](pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md).
+
+### Operator Runbook
+
+See `pmoves/docs/AGENTS/CRUSH_OPERATOR_HOME.md` for the full operator home
+including bootstrap sequence, trail-writing guide, and integration points.
+
 ## Next Steps
 
 - Implement `pmoves mini mcp serve` so the Crush stdio MCP can call into the mini

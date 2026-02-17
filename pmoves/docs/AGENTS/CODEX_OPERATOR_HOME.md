@@ -1,5 +1,5 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-02-14_
+_Last updated: 2026-02-16_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
@@ -95,6 +95,8 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
   - `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`
 - Unified taxonomy:
   - `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md`
+- Codex + Cipher implementation map:
+  - `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
 - PMOVES skill bundles:
   - `pmoves/docs/AGENTS/PmovesSKillZ.md`
 - Existing Claude context stack:

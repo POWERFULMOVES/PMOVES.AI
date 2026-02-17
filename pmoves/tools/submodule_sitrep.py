@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import configparser
 import fnmatch
 import subprocess
 from collections import defaultdict
@@ -12,6 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, List
+
+from submodule_utils import parse_gitmodules_rows  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -37,19 +38,7 @@ def run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def parse_gitmodules() -> list[dict[str, str]]:
-    cfg = configparser.ConfigParser()
-    cfg.read(GITMODULES, encoding="utf-8")
-    rows: list[dict[str, str]] = []
-    for section in cfg.sections():
-        rows.append(
-            {
-                "section": section,
-                "path": cfg.get(section, "path", fallback=""),
-                "url": cfg.get(section, "url", fallback=""),
-                "branch": cfg.get(section, "branch", fallback=""),
-            }
-        )
-    return rows
+    return parse_gitmodules_rows(GITMODULES)
 
 
 def parse_submodule_status(output: str) -> list[SubmoduleStatus]:

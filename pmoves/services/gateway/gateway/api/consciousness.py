@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Literal, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from pmoves.chit import CGP_SPEC_VERSION
 from .chit import ingest_cgp
 
 router = APIRouter(prefix="/workflow", tags=["Consciousness Demo"])
@@ -145,7 +146,7 @@ def _theory_to_cgp(theory: TheoryInfo, idx: int) -> Dict[str, Any]:
     }
 
     return {
-        "spec": "chit.cgp.v0.1",
+        "spec": CGP_SPEC_VERSION,
         "meta": {
             "source": "consciousness-taxonomy",
             "theory": theory.name,

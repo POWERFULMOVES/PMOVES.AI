@@ -1,0 +1,509 @@
+# =============================================================================
+# Model Spotlight: Strength Profile Seeds
+# =============================================================================
+# Initial strength profiles for all models in the PMOVES catalog.
+# Seeded from known characteristics — not yet measured from production data.
+# Load into pmoves_core.model_strengths via migration or n8n workflow.
+#
+# Strength dimensions (0.0–1.0):
+#   reasoning       — complex multi-hop logic, planning, architecture
+#   speed           — tokens/sec, time to first token
+#   coding          — code generation, analysis, debugging
+#   multilingual    — non-English language quality
+#   creativity      — open-ended generation, brainstorming
+#   context_handling — effective use of long context windows
+#
+# Notes field: tongue-in-cheek personality — the name IS the function.
+# =============================================================================
+
+models:
+  # ===========================================================================
+  # Small Models (3B-8B) — CPU/Edge
+  # ===========================================================================
+
+  phi3-mini:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.50
+      speed: 0.95
+      coding: 0.45
+      multilingual: 0.35
+      creativity: 0.40
+      context_handling: 0.80
+    preferred_functions: [orchestrator, langextract]
+    cost_efficiency_score: 9.5
+    notes: "The sprinter — fast enough to think twice before you blink once. 128K context in a 3.8B frame."
+
+  gemma-2-2b:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.35
+      speed: 0.98
+      coding: 0.30
+      multilingual: 0.30
+      creativity: 0.35
+      context_handling: 0.30
+    preferred_functions: [orchestrator]
+    cost_efficiency_score: 9.8
+    notes: "The hummingbird — tiny, relentless, impossibly efficient. Google's proof that 2B can matter."
+
+  qwen2.5-3b:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.45
+      speed: 0.92
+      coding: 0.40
+      multilingual: 0.65
+      creativity: 0.40
+      context_handling: 0.50
+    preferred_functions: [orchestrator, langextract]
+    cost_efficiency_score: 9.2
+    notes: "The scout — quick, multilingual, and surprisingly sharp for its size."
+
+  # ===========================================================================
+  # Medium Models (7B-14B) — Single GPU
+  # ===========================================================================
+
+  qwen2.5-7b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.70
+      speed: 0.80
+      coding: 0.70
+      multilingual: 0.80
+      creativity: 0.65
+      context_handling: 0.60
+    preferred_functions: [agent_zero, orchestrator, coding]
+    cost_efficiency_score: 8.5
+    notes: "The workhorse — solid at everything, exceptional at nothing less than its best."
+
+  qwen2.5-14b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.85
+      speed: 0.70
+      coding: 0.80
+      multilingual: 0.85
+      creativity: 0.75
+      context_handling: 0.65
+    preferred_functions: [agent_zero, agent_zero_subordinate, pmoves_research_coordinator]
+    cost_efficiency_score: 7.8
+    notes: "The steady hand — reliable reasoning that punches above its weight class."
+
+  llama3.1-8b:
+    primary_strength: context_handling
+    strength_scores:
+      reasoning: 0.65
+      speed: 0.78
+      coding: 0.60
+      multilingual: 0.55
+      creativity: 0.60
+      context_handling: 0.90
+    preferred_functions: [agent_zero, langextract]
+    cost_efficiency_score: 8.0
+    notes: "The archivist — remembers 128K tokens like you remember your name."
+
+  gemma-2-9b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.68
+      speed: 0.75
+      coding: 0.55
+      multilingual: 0.50
+      creativity: 0.60
+      context_handling: 0.30
+    preferred_functions: [orchestrator]
+    cost_efficiency_score: 7.5
+    notes: "The diplomat — balanced, composed, Google's quiet achiever."
+
+  qwen2.5-coder-7b:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.60
+      speed: 0.75
+      coding: 0.90
+      multilingual: 0.30
+      creativity: 0.45
+      context_handling: 0.55
+    preferred_functions: [coding]
+    cost_efficiency_score: 8.2
+    notes: "The artisan — writes code like poetry, reads code like a detective."
+
+  deepseek-coder-6.7b:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.55
+      speed: 0.78
+      coding: 0.88
+      multilingual: 0.25
+      creativity: 0.40
+      context_handling: 0.45
+    preferred_functions: [coding]
+    cost_efficiency_score: 8.0
+    notes: "The deep diver — goes places in codebases others won't reach."
+
+  nemotron-mini-3-8b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.65
+      speed: 0.82
+      coding: 0.50
+      multilingual: 0.40
+      creativity: 0.55
+      context_handling: 0.30
+    preferred_functions: [deepresearch]
+    cost_efficiency_score: 7.8
+    notes: "The researcher — NVIDIA-bred curiosity in a compact frame."
+
+  qwen3-8b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.72
+      speed: 0.80
+      coding: 0.68
+      multilingual: 0.82
+      creativity: 0.70
+      context_handling: 0.60
+    preferred_functions: [langextract, orchestrator, deepresearch]
+    cost_efficiency_score: 8.3
+    notes: "The heir apparent — next-gen Qwen, sharper edges, deeper thoughts."
+
+  # ===========================================================================
+  # Large Models (30B-70B) — Multi-GPU
+  # ===========================================================================
+
+  qwen2.5-32b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.90
+      speed: 0.55
+      coding: 0.85
+      multilingual: 0.90
+      creativity: 0.82
+      context_handling: 0.70
+    preferred_functions: [pmoves_research_coordinator, archon_work_orders, archon_code_review]
+    cost_efficiency_score: 6.5
+    notes: "The strategist — thinks three moves ahead, speaks in blueprints."
+
+  qwen2.5-72b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.95
+      speed: 0.35
+      coding: 0.88
+      multilingual: 0.95
+      creativity: 0.88
+      context_handling: 0.85
+    preferred_functions: [pmoves_research_coordinator]
+    cost_efficiency_score: 4.5
+    notes: "The oracle — 72 billion parameters of hard-earned wisdom. Ask big questions."
+
+  mixtral-8x7b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.80
+      speed: 0.65
+      coding: 0.72
+      multilingual: 0.75
+      creativity: 0.78
+      context_handling: 0.60
+    preferred_functions: [orchestrator]
+    cost_efficiency_score: 6.8
+    notes: "The ensemble — eight experts, one voice. Mixture of Experts, master of versatility."
+
+  mixtral-8x22b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.92
+      speed: 0.30
+      coding: 0.80
+      multilingual: 0.85
+      creativity: 0.85
+      context_handling: 0.75
+    preferred_functions: [pmoves_research_coordinator]
+    cost_efficiency_score: 3.8
+    notes: "The council — 141B parameters discussing among themselves to give you one perfect answer."
+
+  # ===========================================================================
+  # Specialized Models — Vision-Language
+  # ===========================================================================
+
+  qwen2-vl-7b:
+    primary_strength: creativity
+    strength_scores:
+      reasoning: 0.60
+      speed: 0.70
+      coding: 0.35
+      multilingual: 0.70
+      creativity: 0.80
+      context_handling: 0.55
+    preferred_functions: [vl_sentinel]
+    cost_efficiency_score: 7.5
+    notes: "The observer — sees what text cannot describe. Vision meets language."
+
+  qwen3-vl-8b:
+    primary_strength: creativity
+    strength_scores:
+      reasoning: 0.65
+      speed: 0.68
+      coding: 0.40
+      multilingual: 0.75
+      creativity: 0.85
+      context_handling: 0.60
+    preferred_functions: [vl_sentinel]
+    cost_efficiency_score: 7.2
+    notes: "The visionary — next-gen eyes, sharper than its predecessor. Reads images like open books."
+
+  llava-v1.6-7b:
+    primary_strength: creativity
+    strength_scores:
+      reasoning: 0.50
+      speed: 0.72
+      coding: 0.20
+      multilingual: 0.30
+      creativity: 0.75
+      context_handling: 0.25
+    preferred_functions: [vl_sentinel]
+    cost_efficiency_score: 7.0
+    notes: "The pioneer — one of the first to truly see. Respected for opening the door."
+
+  # ===========================================================================
+  # Specialized Models — Embeddings
+  # ===========================================================================
+
+  qwen3-embedding-8b:
+    primary_strength: context_handling
+    strength_scores:
+      reasoning: 0.40
+      speed: 0.60
+      coding: 0.50
+      multilingual: 0.85
+      creativity: 0.20
+      context_handling: 0.90
+    preferred_functions: [hirag_rerank]
+    cost_efficiency_score: 7.0
+    notes: "The cartographer — maps meaning into 4096 dimensions with surgical precision."
+
+  qwen3-embedding-4b:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.30
+      speed: 0.80
+      coding: 0.40
+      multilingual: 0.78
+      creativity: 0.15
+      context_handling: 0.80
+    preferred_functions: [hirag_rerank]
+    cost_efficiency_score: 8.5
+    notes: "The cartographer's apprentice — lighter, faster, still draws excellent maps."
+
+  bge-large-en-v1.5:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.25
+      speed: 0.88
+      coding: 0.35
+      multilingual: 0.20
+      creativity: 0.10
+      context_handling: 0.20
+    preferred_functions: [hirag_rerank]
+    cost_efficiency_score: 9.0
+    notes: "The compass — points to meaning in English with unwavering accuracy."
+
+  nomic-embed-text:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.20
+      speed: 0.92
+      coding: 0.30
+      multilingual: 0.30
+      creativity: 0.10
+      context_handling: 0.50
+    preferred_functions: [hirag_rerank]
+    cost_efficiency_score: 9.5
+    notes: "The needle — tiny, sharp, finds what you need in the haystack."
+
+  gemma-embedding-300m:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.15
+      speed: 0.95
+      coding: 0.20
+      multilingual: 0.60
+      creativity: 0.05
+      context_handling: 0.45
+    preferred_functions: [hirag_rerank]
+    cost_efficiency_score: 9.8
+    notes: "The featherweight — 300M parameters, all muscle, no fat."
+
+  # ===========================================================================
+  # Specialized Models — Rerankers
+  # ===========================================================================
+
+  qwen3-reranker-4b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.75
+      speed: 0.70
+      coding: 0.30
+      multilingual: 0.80
+      creativity: 0.10
+      context_handling: 0.40
+    preferred_functions: [hirag_rerank]
+    cost_efficiency_score: 8.0
+    notes: "The judge — reads both sides, ranks without bias. Cross-encoder justice."
+
+  jina-reranker-v2-base:
+    primary_strength: multilingual
+    strength_scores:
+      reasoning: 0.65
+      speed: 0.85
+      coding: 0.25
+      multilingual: 0.90
+      creativity: 0.05
+      context_handling: 0.30
+    preferred_functions: [hirag_rerank]
+    cost_efficiency_score: 8.8
+    notes: "The polyglot judge — ranks relevance in any language you throw at it."
+
+  # ===========================================================================
+  # Cloud Models
+  # ===========================================================================
+
+  gpt-4o-mini:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.82
+      speed: 0.85
+      coding: 0.80
+      multilingual: 0.80
+      creativity: 0.78
+      context_handling: 0.75
+    preferred_functions: [orchestrator, agent_zero]
+    cost_efficiency_score: 7.0
+    notes: "The cloud ace — OpenAI's efficiency play. Fast, capable, and always available."
+
+  llama-3.1-8b-instant:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.60
+      speed: 0.95
+      coding: 0.55
+      multilingual: 0.50
+      creativity: 0.55
+      context_handling: 0.70
+    preferred_functions: [agent_zero, langextract]
+    cost_efficiency_score: 9.0
+    notes: "The lightning bolt — Groq-hosted, instant inference. Blink and you'll miss it thinking."
+
+  moonshot-v1-32k:
+    primary_strength: multilingual
+    strength_scores:
+      reasoning: 0.70
+      speed: 0.72
+      coding: 0.55
+      multilingual: 0.92
+      creativity: 0.68
+      context_handling: 0.65
+    preferred_functions: [agent_zero, langextract]
+    cost_efficiency_score: 6.5
+    notes: "The bridge — Moonshot's multilingual gem. CJK languages are its native tongue."
+
+  glm-4-flash:
+    primary_strength: multilingual
+    strength_scores:
+      reasoning: 0.65
+      speed: 0.88
+      coding: 0.50
+      multilingual: 0.90
+      creativity: 0.60
+      context_handling: 0.55
+    preferred_functions: [langextract]
+    cost_efficiency_score: 8.0
+    notes: "The dragon — Zhipu's flash model. Chinese NLP with lightning speed."
+
+  meta-llama-3.1-70b-instruct:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.88
+      speed: 0.45
+      coding: 0.82
+      multilingual: 0.65
+      creativity: 0.80
+      context_handling: 0.80
+    preferred_functions: [agent_zero, pmoves_research_coordinator]
+    cost_efficiency_score: 5.0
+    notes: "The titan — Meta's flagship, Together-hosted. When you need the big guns."
+
+  cloudflare-gpt-oss-20b:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.62
+      speed: 0.82
+      coding: 0.58
+      multilingual: 0.50
+      creativity: 0.55
+      context_handling: 0.50
+    preferred_functions: [agent_zero, langextract]
+    cost_efficiency_score: 8.5
+    notes: "The edge runner — Cloudflare Workers AI, inference at the edge. Low latency everywhere."
+
+  # ===========================================================================
+  # PMOVES-Built Models (CHIT-Distilled)
+  # ===========================================================================
+  # These models are trained by PMOVES using CHIT-distilled datasets.
+  # Geometry parameters (delta, kappa, Hz) shape training data via EvoSwarm.
+  # Published to HuggingFace Hub under DARKXSIDE organization.
+
+  pmoves-chit-text-7b:
+    primary_strength: context_handling
+    strength_scores:
+      reasoning: 0.70
+      speed: 0.75
+      coding: 0.55
+      multilingual: 0.80
+      creativity: 0.60
+      context_handling: 0.92
+    preferred_functions: [langextract, deepresearch]
+    cost_efficiency_score: 8.5
+    notes: "The reconstructor — born from CHIT geometry, sees signal where others see noise."
+
+  pmoves-chit-multi-7b:
+    primary_strength: creativity
+    strength_scores:
+      reasoning: 0.65
+      speed: 0.70
+      coding: 0.45
+      multilingual: 0.75
+      creativity: 0.88
+      context_handling: 0.85
+    preferred_functions: [vl_sentinel, deepresearch, langextract]
+    cost_efficiency_score: 8.0
+    notes: "The synaesthete — maps text to images to sound through shared geometry. Multi-lane native."
+
+  pmoves-agent-dpo-7b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.82
+      speed: 0.72
+      coding: 0.70
+      multilingual: 0.60
+      creativity: 0.65
+      context_handling: 0.78
+    preferred_functions: [agent_zero, orchestrator, archon_work_orders]
+    cost_efficiency_score: 8.2
+    notes: "The apprentice — learned from production agent traces via DPO. Thinks like Agent Zero, runs like a 7B."
+
+# =============================================================================
+# Strength Dimensions Reference
+# =============================================================================
+# reasoning:        Complex multi-hop logic, task planning, architecture design
+# speed:            Tokens/sec throughput, time to first token
+# coding:           Code generation, analysis, debugging, refactoring
+# multilingual:     Non-English language quality (especially CJK, RTL)
+# creativity:       Open-ended generation, brainstorming, novel solutions
+# context_handling: Effective use of long context windows (RAG, documents)
+#
+# cost_efficiency_score: Relative 0-10 scale. Higher = more tokens per dollar.
+#   Local models score higher (no API cost), cloud models score by price tier.
+# =============================================================================

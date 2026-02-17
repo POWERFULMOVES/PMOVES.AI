@@ -1,0 +1,131 @@
+# AI Graphiti — Agent Signature Registry
+# Visual identity companion to agent_registry.yaml
+# Last updated: 2026-02-17
+#
+# Each external contributor (AI agent or human) gets a unique glyph,
+# color palette, voice descriptor, and resonance domains.
+# Used by: trail entries, NATS graphiti events, CGP v2 attribution.
+#
+# Rules:
+#   - Glyphs must be a single Unicode character, unique per contributor
+#   - Colors must be distinguishable in both light and dark themes
+#   - Colors must meet WCAG AA contrast ratio against #FFFFFF and #1a1a2e
+#   - Voice guides how the contributor writes doc sections
+#   - co_author must match the exact git Co-Authored-By string
+
+schema_version: "1.0.0"
+
+signatures:
+  claude-opus:
+    agent_id: "claude-opus"
+    display_name: "Claude Opus"
+    glyph: "\u25C6"              # ◆ Diamond
+    color: "#7C3AED"             # Deep Violet
+    accent: "#A78BFA"
+    voice: analytical             # thorough, structured, cross-referencing
+    co_author: "Claude Opus 4.6 <noreply@anthropic.com>"
+    resonance:
+      - security-audit
+      - architecture
+      - cross-repo-orchestration
+      - hardening
+    description: "Primary architect and security auditor — deep analysis, structured output"
+
+  kilocode:
+    agent_id: "kilocode"
+    display_name: "KiloCode"
+    glyph: "\u25B2"              # ▲ Triangle
+    color: "#059669"             # Emerald
+    accent: "#34D399"
+    voice: architectural          # blueprint, mode-driven, VS Code native
+    co_author: "KiloCode <noreply@kilocode.ai>"
+    resonance:
+      - feature-impl
+      - mcp-integration
+      - vs-code
+      - agent-framework
+    description: "VS Code-native agent — blueprint-first feature implementation"
+
+  codex:
+    agent_id: "codex"
+    display_name: "Codex"
+    glyph: "\u25A0"              # ■ Square
+    color: "#2563EB"             # Royal Blue
+    accent: "#60A5FA"
+    voice: terse                  # implementation-first, minimal commentary
+    co_author: "Codex <noreply@openai.com>"
+    resonance:
+      - rapid-prototyping
+      - code-gen
+      - integration
+      - cipher-memory
+    description: "OpenAI Codex — terse implementation, rapid code generation"
+
+  gemini:
+    agent_id: "gemini"
+    display_name: "Gemini"
+    glyph: "\u2605"              # ★ Star
+    color: "#D97706"             # Amber
+    accent: "#FBBF24"
+    voice: strategic              # planning, broad-context, synthesis
+    co_author: "Gemini <noreply@google.com>"
+    resonance:
+      - planning
+      - research
+      - synthesis
+      - documentation
+    description: "Google Gemini — strategic planning and broad-context research"
+
+  cline:
+    agent_id: "cline"
+    display_name: "Cline"
+    glyph: "\u25CF"              # ● Circle
+    color: "#DC2626"             # Scarlet
+    accent: "#F87171"
+    voice: conversational         # quick, iterative, chat-native
+    co_author: "Cline <noreply@cline.bot>"
+    resonance:
+      - rapid-iteration
+      - chat-impl
+      - frontend
+      - ui-prototyping
+    description: "Cline — conversational rapid iteration and frontend prototyping"
+
+  powerfulmoves:
+    agent_id: "powerfulmoves"
+    display_name: "POWERFULMOVES"
+    glyph: "\u26A1"              # ⚡ Lightning
+    color: "#F59E0B"             # Gold
+    accent: "#FCD34D"
+    voice: directive              # vision-setting, mission-critical
+    co_author: "Russell Olivier <russell@powerfulmoves.ai>"
+    resonance:
+      - vision
+      - doctrine
+      - final-authority
+      - integration-decisions
+    description: "Human operator — vision, doctrine, and final authority"
+
+  crush:
+    agent_id: "crush"
+    display_name: "Crush"
+    glyph: "\u25C7"              # ◇ Open Diamond
+    color: "#0EA5E9"             # Sky Blue
+    accent: "#7DD3FC"
+    voice: companion
+    co_author: "Crush <noreply@powerfulmoves.ai>"
+    resonance:
+      - terminal-gateway
+      - pair-programming
+      - onboarding
+      - context-orchestration
+    description: "Terminal gateway agent — where model and user begin their journey together"
+
+# Voice guide for trail entries:
+#   analytical:     Thorough reasoning, cross-references, structured lists
+#   architectural:  Blueprint format, mode/state descriptions, integration maps
+#   terse:          Bullet points, code-first, minimal prose
+#   strategic:      Context-setting, options analysis, roadmap framing
+#   conversational: Informal, iterative, question-driven
+#   directive:      Decision statements, priority calls, scope definitions
+#   companion:      Warm, interactive, pair-programming. "Let's figure this out together."

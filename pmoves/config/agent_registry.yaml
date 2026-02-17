@@ -1,0 +1,1001 @@
+# PMOVES Agent Registry — Single Source of Truth
+# Last updated: 2026-02-17
+#
+# This file encodes every agent's class, type(s), tier, layers,
+# NATS subjects, health endpoint, CHIT toggles, and evolution stage.
+#
+# Query with: python -m pmoves.tools.agent_taxonomy_helper list
+# Docs: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
+
+taxonomy_version: "1.3.0"
+
+# External contributors — AI agents and humans who contribute via git
+# Links to visual identity in agent_signatures.yaml
+external_contributors:
+  - claude-opus
+  - kilocode
+  - codex
+  - gemini
+  - cline
+  - powerfulmoves
+  - crush
+
+# Resilience attribute definitions
+# See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
+resilience_classes:
+  small:
+    token_budget: 25000
+    description: "Single-file fixes, health checks"
+  medium:
+    token_budget: 50000
+    description: "Multi-file changes within one repo"
+  large:
+    token_budget: 100000
+    description: "Cross-repo orchestration, complex refactors"
+
+# Class definitions
+classes:
+  legendary:
+    prefix: "POWERFULMOVES"
+    description: "Organization/brand umbrella, doctrine"
+  standard:
+    prefix: "PMOVES-"
+    description: "Core production agents and services"
+  specialized:
+    prefix: "Pmoves-"
+    description: "Domain-specific agents with focused capabilities"
+  utility:
+    prefix: "pmoves-"
+    description: "Infrastructure components, helpers, tools"
+
+# Type definitions (from 7 canonical service tiers)
+types:
+  data:   { tier: 1, element: "Earth",    color: "#8B4513" }
+  api:    { tier: 2, element: "Water",    color: "#4169E1" }
+  llm:    { tier: 3, element: "Fire",     color: "#DC143C" }
+  worker: { tier: 4, element: "Electric", color: "#FFD700" }
+  media:  { tier: 5, element: "Wind",     color: "#00CED1" }
+  agent:  { tier: 6, element: "Psychic",  color: "#9370DB" }
+  ui:     { tier: 7, element: "Light",    color: "#F5F5F5" }
+
+# Agent entries
+agents:
+  agent_zero:
+    name: "Agent Zero"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: 8080
+    health: "/healthz"
+    layers: [L0, L1, L2, L2.5, L3, L4, L5]
+    evolution_stage: mega
+    signature: "claude-opus"      # Primary architect — see agent_signatures.yaml
+    nats:
+      publishes: ["agent.tool.executed.v1"]
+      subscribes: ["mesh.node.announce.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint, agent_completion]
+    submodule: "PMOVES-Agent-Zero"
+    description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
+
+  archon:
+    name: "Archon"
+    class: standard
+    primary_type: agent
+    secondary_type: llm
+    port: 8091
+    health: "/healthz"
+    layers: [L0, L1, L2, L2.5, L4, L5]
+    evolution_stage: stage_2
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    submodule: "PMOVES-Archon"
+    description: "Supabase-driven planning/execution copilot"
+
+  supaserch:
+    name: "SupaSerch"
+    class: standard
+    primary_type: agent
+    secondary_type: llm
+    port: 8099
+    health: "/metrics"
+    layers: [L0, L2, L2.5, L3, L4]
+    evolution_stage: stage_2
+    nats:
+      publishes: ["supaserch.result.v1"]
+      subscribes: ["supaserch.request.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_submodule
+      recovery_strategy: manual_handoff
+      cipher_categories: [agent_plan, agent_checkpoint]
+    description: "Multimodal holographic deep research orchestrator"
+
+  botz_gateway:
+    name: "BoTZ Gateway"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: 8054
+    health: "/healthz"
+    layers: [L0, L2, L3, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["botz.workitem.assigned.v1", "botz.work.available.v1"]
+      subscribes: ["botz.heartbeat.v1", "botz.register.v1", "botz.work.claimed.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    submodule: "PMOVES-BotZ-gateway"
+    description: "Work item distribution across BoTZ CLI instances"
+
+  mesh_agent:
+    name: "Mesh Agent"
+    class: standard
+    primary_type: agent
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0, L2]
+    evolution_stage: base
+    nats:
+      publishes: ["mesh.node.announce.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Distributed node announcer for multi-host orchestration"
+
+  hirag_v2:
+    name: "Hi-RAG v2"
+    class: standard
+    primary_type: worker
+    secondary_type: data
+    port: 8086
+    health: "/healthz"
+    layers: [L0, L2, L2.5, L4, L5]
+    evolution_stage: stage_2
+    nats:
+      publishes: ["geometry.packet.encoded.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_file
+      recovery_strategy: idempotent_replay
+      cipher_categories: [agent_plan]
+    submodule: "PMOVES-HiRAG"
+    description: "Hybrid RAG gateway combining Qdrant + Neo4j + Meilisearch"
+
+  deep_research:
+    name: "DeepResearch"
+    class: standard
+    primary_type: llm
+    secondary_type: worker
+    port: 8098
+    health: "/healthz"
+    layers: [L0, L2, L4, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["research.deepresearch.result.v1"]
+      subscribes: ["research.deepresearch.request.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_wave
+      recovery_strategy: manual_handoff
+      cipher_categories: [agent_plan, agent_checkpoint]
+    submodule: "PMOVES-Deep-Serch"
+    description: "LLM-based research planner (Alibaba Tongyi)"
+
+  tensorzero:
+    name: "TensorZero Gateway"
+    class: standard
+    primary_type: api
+    secondary_type: llm
+    port: 3030
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Centralized LLM gateway for all model providers"
+
+  flute_gateway:
+    name: "Flute-Gateway"
+    class: standard
+    primary_type: api
+    secondary_type: media
+    port: 8055
+    health: "/healthz"
+    layers: [L0, L2, L2.5, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["tokenism.geometry.event.v1"]
+      subscribes: ["geometry.packet.decoded.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: true
+    description: "Multimodal voice communication layer with Pipecat"
+
+  pmoves_yt:
+    name: "PMOVES.YT"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: 8077
+    health: "/healthz"
+    layers: [L0, L2, L4, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["ingest.file.added.v1", "ingest.transcript.ready.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES.YT"
+    description: "YouTube ingestion service"
+
+  ffmpeg_whisper:
+    name: "FFmpeg-Whisper"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: 8078
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Media transcription with OpenAI Whisper (GPU)"
+
+  media_video:
+    name: "Media-Video Analyzer"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: 8079
+    health: "/healthz"
+    layers: [L0, L2, L4, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Object/frame analysis with YOLOv8"
+
+  media_audio:
+    name: "Media-Audio Analyzer"
+    class: standard
+    primary_type: media
+    secondary_type: worker
+    port: 8082
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Audio analysis (emotion/speaker detection)"
+
+  ultimate_tts:
+    name: "Ultimate-TTS-Studio"
+    class: standard
+    primary_type: media
+    secondary_type: llm
+    port: 7861
+    health: "/gradio_api/info"
+    layers: [L0, L4]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Multi-engine TTS with 7 engines (GPU)"
+
+  extract_worker:
+    name: "Extract Worker"
+    class: standard
+    primary_type: worker
+    secondary_type: data
+    port: 8083
+    health: "/healthz"
+    layers: [L0, L2, L4, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: ["ingest.file.added.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_file
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    description: "Text embedding and indexing to Qdrant + Meilisearch"
+
+  channel_monitor:
+    name: "Channel Monitor"
+    class: standard
+    primary_type: worker
+    secondary_type: media
+    port: 8097
+    health: "/healthz"
+    layers: [L0, L2]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "External content watcher (YouTube channels)"
+
+  notebook_sync:
+    name: "Notebook Sync"
+    class: standard
+    primary_type: worker
+    secondary_type: data
+    port: 8095
+    health: "/healthz"
+    layers: [L0, L2, L5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "SurrealDB Open Notebook synchronizer"
+
+  pdf_ingest:
+    name: "PDF Ingest"
+    class: standard
+    primary_type: worker
+    secondary_type: data
+    port: 8092
+    health: "/healthz"
+    layers: [L0, L2, L4, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: false
+    description: "Document ingestion orchestrator for PDFs"
+
+  publisher_discord:
+    name: "Publisher-Discord"
+    class: standard
+    primary_type: worker
+    secondary_type: api
+    port: 8094
+    health: "/healthz"
+    layers: [L0, L2]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: ["ingest.file.added.v1", "ingest.transcript.ready.v1", "ingest.summary.ready.v1", "ingest.chapters.ready.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Discord notification bot"
+
+  langextract:
+    name: "LangExtract"
+    class: standard
+    primary_type: worker
+    secondary_type: llm
+    port: 8084
+    health: "/healthz"
+    layers: [L0, L4]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Language detection and NLP preprocessing"
+
+  presign:
+    name: "Presign"
+    class: utility
+    primary_type: api
+    secondary_type: data
+    port: 8088
+    health: "/healthz"
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "MinIO URL presigner for short-lived download URLs"
+
+  render_webhook:
+    name: "Render Webhook"
+    class: utility
+    primary_type: api
+    secondary_type: worker
+    port: 8085
+    health: "/healthz"
+    layers: [L0, L5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "ComfyUI render callback handler"
+
+  jellyfin_bridge:
+    name: "Jellyfin Bridge"
+    class: specialized
+    primary_type: media
+    secondary_type: data
+    port: 8093
+    health: "/healthz"
+    layers: [L0, L2, L5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Jellyfin"
+    description: "Jellyfin metadata webhook and helper"
+
+  mai_ui:
+    name: "MAI-UI"
+    class: standard
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0, L4, L5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-MAI-UI"
+    description: "Main user interface"
+
+  crush:
+    name: "Crush"
+    class: standard
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "crush"
+    nats:
+      publishes: ["crush.graphiti.discovered.v1", "shape.trace.recorded.v1"]
+      subscribes: ["agent.graphiti.signed.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_wave
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    submodule: "PMOVES-crush"
+    description: "Terminal AI coding assistant — the gateway where model and user begin their journey"
+
+  cipher_memory:
+    name: "Cipher Memory"
+    class: specialized
+    primary_type: data
+    secondary_type: agent
+    port: 8096
+    health: "/health"
+    layers: [L0, L5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_file
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    submodule: "Pmoves-cipher"
+    description: "Knowledge-graph memory for agents (Neo4j backend). Also serves as the resilience backbone — stores agent_plan, agent_checkpoint, and agent_completion snapshots for all agents."
+
+  hyperdimensions:
+    name: "Hyperdimensions"
+    class: specialized
+    primary_type: ui
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0, L2.5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: ["geometry.visualization.request.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    submodule: "Pmoves-hyperdimensions"
+    description: "Geometry visualization surface and control plane (L2.5)"
+
+  # --- Data infrastructure (Utility class) ---
+
+  nats:
+    name: "NATS"
+    class: utility
+    primary_type: data
+    secondary_type: api
+    port: 4222
+    health: "http://localhost:8222/varz"
+    layers: [L0, L2]
+    evolution_stage: base
+    description: "JetStream-enabled event broker — the nervous system"
+
+  supabase:
+    name: "Supabase"
+    class: utility
+    primary_type: data
+    secondary_type: api
+    port: 3010
+    health: null
+    layers: [L0, L5]
+    evolution_stage: base
+    description: "Postgres with pgvector — metadata and state"
+
+  qdrant:
+    name: "Qdrant"
+    class: utility
+    primary_type: data
+    secondary_type: worker
+    port: 6333
+    health: "/healthz"
+    layers: [L0, L5]
+    evolution_stage: base
+    description: "Vector embeddings for semantic search"
+
+  neo4j:
+    name: "Neo4j"
+    class: utility
+    primary_type: data
+    secondary_type: agent
+    port: 7474
+    health: null
+    layers: [L0, L5]
+    evolution_stage: base
+    description: "Knowledge graph storage"
+
+  meilisearch:
+    name: "Meilisearch"
+    class: utility
+    primary_type: data
+    secondary_type: api
+    port: 7700
+    health: "/health"
+    layers: [L0, L5]
+    evolution_stage: base
+    description: "Full-text keyword search"
+
+  minio:
+    name: "MinIO"
+    class: utility
+    primary_type: data
+    secondary_type: api
+    port: 9000
+    health: "/minio/health/live"
+    layers: [L0, L5]
+    evolution_stage: base
+    description: "S3-compatible object storage"
+
+  prometheus:
+    name: "Prometheus"
+    class: utility
+    primary_type: data
+    secondary_type: ui
+    port: 9090
+    health: "/-/healthy"
+    layers: [L0]
+    evolution_stage: base
+    description: "Metrics scraping from all services"
+
+  grafana:
+    name: "Grafana"
+    class: utility
+    primary_type: ui
+    secondary_type: data
+    port: 3000
+    health: "/api/health"
+    layers: [L0]
+    evolution_stage: base
+    description: "Dashboard visualization"
+
+  loki:
+    name: "Loki"
+    class: utility
+    primary_type: data
+    secondary_type: api
+    port: 3100
+    health: "/ready"
+    layers: [L0]
+    evolution_stage: base
+    description: "Centralized log aggregation"
+
+  # --- Missing agents added in Phase E (source dual enforcement) ---
+
+  dox:
+    name: "DoX"
+    class: standard
+    primary_type: worker
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0, L2, L4, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-DoX"
+    description: "Document intelligence — path-safe processing with fail-closed JWT"
+
+  open_notebook:
+    name: "Open Notebook"
+    class: standard
+    primary_type: data
+    secondary_type: ui
+    port: null
+    health: null
+    layers: [L0, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Open-Notebook"
+    description: "Knowledge base / note-taking integration (SurrealDB)"
+
+  consciousness_service:
+    name: "Consciousness Service"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2.5, L4]
+    evolution_stage: base
+    nats:
+      publishes: ["geometry.consciousness.event.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: true
+    description: "CGP consciousness mapper — geometric cognitive processing"
+
+  n8n:
+    name: "n8n"
+    class: utility
+    primary_type: worker
+    secondary_type: agent
+    port: 5678
+    health: "/healthz"
+    layers: [L0, L2]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Workflow automation — glue for multi-step processes"
+
+  headscale:
+    name: "Headscale"
+    class: utility
+    primary_type: data
+    secondary_type: api
+    port: 8181
+    health: "/health"
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Network coordination — mesh VPN overlay"
+
+  rustdesk:
+    name: "RustDesk"
+    class: utility
+    primary_type: ui
+    secondary_type: api
+    port: 21115
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Remote desktop — self-hosted remote access"
+
+  invidious:
+    name: "Invidious"
+    class: utility
+    primary_type: ui
+    secondary_type: media
+    port: 3333
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Privacy-focused video frontend"
+
+  wealth:
+    name: "Wealth (Firefly III)"
+    class: specialized
+    primary_type: ui
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Wealth"
+    description: "Finance management — tongue-in-cheek wealth tracking"
+
+  health:
+    name: "Health (wger)"
+    class: specialized
+    primary_type: ui
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Health"
+    description: "Fitness tracking — the body is a system too"
+
+  evoswarm_controller:
+    name: "EvoSwarm Controller"
+    class: standard
+    primary_type: worker
+    secondary_type: agent
+    port: 8113
+    health: "/health"
+    layers: [L0, L2, L2.5, L3, L4]
+    evolution_stage: stage_2
+    nats:
+      publishes:
+        - "geometry.swarm.meta.v1"
+        - "evoswarm.training.genome.v1"
+        - "evoswarm.training.fitness.v1"
+      subscribes:
+        - "geometry.packet.encoded.v1"
+        - "geometry.attribution.result.v1"
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    evoswarm_training_genome:
+      parameters:
+        learning_rate: { range: [1.0e-5, 1.0e-3] }
+        chit_weight: { range: [0.1, 0.9] }
+        reconstruction_target: { choices: [text, image, audio, cross] }
+        lane_mixing_ratio: { range: [0.0, 1.0] }
+        distillation_temperature: { range: [0.5, 5.0] }
+      fitness_function: "reconstruction_fidelity * cost_efficiency"
+      population_size: 16
+      generations_per_epoch: 5
+    description: "Evolutionary optimizer for CGP geometry parameters — evolves CG Builder, Decoder, Energy, and Training genomes"
+
+  swarm_attribution:
+    name: "Swarm Attribution"
+    class: specialized
+    primary_type: worker
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0, L3]
+    evolution_stage: base
+    nats:
+      publishes: ["geometry.attribution.result.v1"]
+      subscribes: ["geometry.attribution.request.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    description: "Shape-attribution engine for swarm consensus (CHIT L3)"

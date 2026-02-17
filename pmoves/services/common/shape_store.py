@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import json
 
+from pmoves.chit import CGP_SPEC_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -124,11 +125,11 @@ class ShapeStore:
         return pack
 
     def put_cgp(self, cgp: Dict[str, Any]) -> None:
-        """Ingest a CGP (chit.cgp.v0.1) blob into the store.
+        """Ingest a CGP (chit.cgp.v0.2) blob into the store.
 
         Expected shape (subset):
         {
-          "spec": "chit.cgp.v0.1",
+          "spec": CGP_SPEC_VERSION,
           "super_nodes": [
             { "constellations": [ { "id": str, "points": [ {...} ] } ] }
           ]
@@ -358,7 +359,7 @@ class ShapeStore:
             if not isinstance(candidate, dict):
                 return None
             if "spec" not in candidate:
-                candidate = {**candidate, "spec": "geometry.cgp.v1"}
+                candidate = {**candidate, "spec": CGP_SPEC_VERSION}
             return candidate
 
         def _map_constellation(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -406,7 +407,7 @@ class ShapeStore:
                 points.append(point)
             const["points"] = points
             return {
-                "spec": "geometry.cgp.v1",
+                "spec": CGP_SPEC_VERSION,
                 "source": "supabase",
                 "super_nodes": [{"constellations": [const]}],
             }
@@ -483,11 +484,31 @@ class ShapeStore:
                 logger.exception("ShapeStore warm ingest error", exc_info=True)
         return count
 
-    # ---- event hook (stub) ----
+    # ---- event hook ----
+    _ACCEPTED_CGP_TYPES = {"geometry.cgp.v1", CGP_SPEC_VERSION}
+
     def on_geometry_event(self, event: Dict[str, Any]) -> None:
-        """Handle `geometry.cgp.v1` bus messages."""
-        if event.get("type") == "geometry.cgp.v1":
-            payload = event.get("data") or {}
-            if isinstance(payload, dict):
-                self.put_cgp(payload)
+        """Handle CGP bus messages (chit.cgp.v0.2 and legacy geometry.cgp.v1)."""
+        event_type = event.get("type")
+        if event_type not in self._ACCEPTED_CGP_TYPES:
+            logger.warning(
+                "ShapeStore.on_geometry_event: ignoring unrecognized type %r (accepted: %s)",
+                event_type,
+                self._ACCEPTED_CGP_TYPES,
+            )
+            return
+
+        payload = event.get("data")
+        if not isinstance(payload, dict) or not payload:
+            logger.warning(
+                "ShapeStore.on_geometry_event: expected non-empty dict payload, got %s (type: %s)",
+                type(payload).__name__,
+                event_type,
+            )
+            return
+
+        try:
+            self.put_cgp(payload)
+        except Exception:
+            logger.exception("ShapeStore.on_geometry_event: put_cgp failed (type: %s)", event_type)
 

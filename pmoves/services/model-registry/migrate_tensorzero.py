@@ -19,6 +19,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 import tomli
@@ -118,11 +119,12 @@ class TensorZeroParser:
         api_base = provider_def.get("api_base", "")
         api_key = provider_def.get("api_key_location", "")
 
-        # Normalize provider type
+        # Normalize provider type using proper URL hostname parsing
         if provider_type == "openai":
-            if "ollama" in api_base.lower():
+            parsed_host = urlparse(api_base).hostname or ""
+            if parsed_host == "ollama" or (parsed_host or "").endswith(".ollama"):
                 provider_type = "ollama"
-            elif api_base.startswith("https://api.anthropic.com"):
+            elif parsed_host == "api.anthropic.com":
                 provider_type = "anthropic"
             else:
                 provider_type = "openai_compatible"

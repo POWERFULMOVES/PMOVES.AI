@@ -84,7 +84,7 @@ except Exception:  # pragma: no cover - fallback when utils module missing
         pass
 import boto3
 import requests
-from urllib.parse import urlparse, parse_qs, urlunparse
+from urllib.parse import urlparse, parse_qs, urlunparse, quote
 from nats.aio.client import Client as NATS
 from tenacity import AsyncRetrying, retry_if_exception, wait_exponential, stop_after_attempt, RetryError
 # Prefer shared envelope util if present; otherwise, fall back to a local stub
@@ -270,8 +270,8 @@ def _parse_bool(value: Optional[str]) -> Optional[bool]:
     return None
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT") or os.environ.get("S3_ENDPOINT") or "minio:9000"
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID") or "minioadmin"
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY") or "minioadmin"
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("AWS_ACCESS_KEY_ID", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 MINIO_SECURE = (os.environ.get("MINIO_SECURE","false").lower() == "true")
 DEFAULT_BUCKET = os.environ.get("YT_BUCKET","assets")
 DEFAULT_NAMESPACE = os.environ.get("INDEXER_NAMESPACE","pmoves")
@@ -825,13 +825,11 @@ def supa_update(table: str, match: Dict[str,Any], patch: Dict[str,Any]):
         JSON response from Supabase if successful, None on error.
     """
     try:
-        # Build a simple eq filter query string
+        # Build eq filter query string with URL-encoded values
         qs = []
         for k, v in match.items():
-            if isinstance(v, str):
-                qs.append(f"{k}=eq.{v}")
-            else:
-                qs.append(f"{k}=eq.{json.dumps(v)}")
+            encoded = quote(str(v), safe='') if isinstance(v, str) else quote(json.dumps(v), safe='')
+            qs.append(f"{k}=eq.{encoded}")
         url = f"{SUPA}/{table}?" + "&".join(qs)
         headers = {'content-type': 'application/json'}
         if SUPA_SERVICE_KEY:
@@ -857,10 +855,8 @@ def supa_get(table: str, match: Dict[str,Any]) -> Optional[List[Dict[str,Any]]]:
     try:
         qs = []
         for k, v in match.items():
-            if isinstance(v, str):
-                qs.append(f"{k}=eq.{v}")
-            else:
-                qs.append(f"{k}=eq.{json.dumps(v)}")
+            encoded = quote(str(v), safe='') if isinstance(v, str) else quote(json.dumps(v), safe='')
+            qs.append(f"{k}=eq.{encoded}")
         url = f"{SUPA}/{table}?" + "&".join(qs)
         headers: Dict[str, str] = {}
         if SUPA_SERVICE_KEY:

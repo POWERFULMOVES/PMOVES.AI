@@ -339,6 +339,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `pmoves_cipher_search` - Semantic search over memories
   - `pmoves_cipher_store_reasoning` - Store reasoning traces
   - `pmoves_cipher_reasoning_patterns` - Search past reasoning
+- **Resilience Role:** Stores `agent_plan`, `agent_checkpoint`, and `agent_completion` snapshots for all agents. See `pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md` for checkpoint protocol.
 - **Dependencies:** Neo4j (shared), NATS
 - **Compose Profile:** `agents`
 - **Health:** `GET http://localhost:8096/health`

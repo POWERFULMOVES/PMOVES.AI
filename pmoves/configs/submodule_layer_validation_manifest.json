@@ -1,0 +1,30 @@
+{
+  "required_files_any": [
+    "README.md",
+    "PMOVES.AI_INTEGRATION.md"
+  ],
+  "top_level_required_files": [
+    "PMOVES.AI_INTEGRATION.md"
+  ],
+  "allow_uninitialized_paths": [],
+  "known_path_typos": [
+    "deskdesktop"
+  ],
+  "python_compile": {
+    "enabled": true,
+    "max_files": 600,
+    "include_paths": [
+      "PMOVES-Agent-Zero",
+      "PMOVES-Archon",
+      "PMOVES-HiRAG",
+      "PMOVES-BoTZ",
+      "Pmoves-cipher",
+      "PMOVES-Pipecat"
+    ]
+  },
+  "overrides": {
+    "PMOVES-supabase": {
+      "top_level_required_files": []
+    }
+  }
+}

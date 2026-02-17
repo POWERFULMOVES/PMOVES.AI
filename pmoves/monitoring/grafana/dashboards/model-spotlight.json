@@ -1,0 +1,425 @@
+{
+  "title": "Model Spotlight",
+  "description": "Per-model analytics, strength profiles, and fair routing — every model deserves its spotlight",
+  "schemaVersion": 38,
+  "version": 1,
+  "uid": "model-spotlight",
+  "tags": ["llm", "models", "spotlight", "analytics", "tensorzero"],
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "label": "Model",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(tensorzero_inferences_total, model_name)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "function",
+        "type": "query",
+        "label": "Function",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(tensorzero_inferences_total, function_name)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Model Leaderboard",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "table",
+      "title": "Model Leaderboard — Requests Served",
+      "description": "Top models ranked by total requests served. Click column headers to sort.",
+      "gridPos": { "x": 0, "y": 1, "w": 24, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT m.name AS \"Model\", p.name AS \"Provider\", m.model_type AS \"Type\", m.context_length AS \"Context\", m.vram_mb AS \"VRAM (MB)\", COALESCE(s.total_requests, 0) AS \"Requests\", COALESCE(s.total_tokens_served, 0) AS \"Tokens Served\", COALESCE(s.avg_latency_ms, 0) AS \"Avg Latency (ms)\", COALESCE(s.primary_strength, '—') AS \"Primary Strength\", COALESCE(s.cost_efficiency_score, 0) AS \"Cost Efficiency\", COALESCE(s.uptime_pct, 0) AS \"Uptime %\" FROM pmoves_core.models m JOIN pmoves_core.model_providers p ON m.provider_id = p.id LEFT JOIN pmoves_core.model_strengths s ON m.id = s.model_id WHERE m.active = true ORDER BY COALESCE(s.total_requests, 0) DESC",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "Requests", "desc": true }]
+      },
+      "fieldConfig": {
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Requests" },
+            "properties": [{ "id": "custom.width", "value": 100 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Tokens Served" },
+            "properties": [{ "id": "custom.width", "value": 120 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Avg Latency (ms)" },
+            "properties": [
+              { "id": "custom.width", "value": 120 },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 500 },
+                    { "color": "red", "value": 2000 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Request & Throughput Metrics",
+      "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests by Model",
+      "description": "Per-model request rate over time from Prometheus/TensorZero metrics",
+      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (model_name) (rate(tensorzero_inferences_total{model_name=~\"$model\"}[5m]))",
+          "legendFormat": "{{model_name}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum", "mean"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "fillOpacity": 15, "pointSize": 5 }
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency by Model (p95)",
+      "description": "Per-model p95 inference latency over time",
+      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, model_name) (rate(tensorzero_inference_duration_seconds_bucket{model_name=~\"$model\"}[5m])))",
+          "legendFormat": "{{model_name}} p95"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Token Throughput & Cost",
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "Token Throughput — Total Tokens Served",
+      "description": "All-time tokens served per model (from model_strengths)",
+      "gridPos": { "x": 0, "y": 19, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT m.name AS \"Model\", COALESCE(s.total_tokens_served, 0) AS \"Tokens Served\" FROM pmoves_core.models m LEFT JOIN pmoves_core.model_strengths s ON m.id = s.model_id WHERE m.active = true AND COALESCE(s.total_tokens_served, 0) > 0 ORDER BY s.total_tokens_served DESC LIMIT 20",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": -45,
+        "barWidth": 0.8,
+        "showValue": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "green", "value": 100000 },
+              { "color": "yellow", "value": 1000000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Cost Efficiency — Tokens per Cost Unit",
+      "description": "Relative cost efficiency score per model (higher = more efficient). Local models score higher.",
+      "gridPos": { "x": 12, "y": 19, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT m.name AS \"Model\", COALESCE(s.cost_efficiency_score, 0) AS \"Cost Efficiency\" FROM pmoves_core.models m LEFT JOIN pmoves_core.model_strengths s ON m.id = s.model_id WHERE m.active = true AND s.cost_efficiency_score IS NOT NULL ORDER BY s.cost_efficiency_score DESC LIMIT 15",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 10,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "green", "value": 7 },
+              { "color": "blue", "value": 9 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Model Strengths & Profiles",
+      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "table",
+      "title": "Model Strength Scores",
+      "description": "Dimensional strength scores per model — reasoning, speed, coding, multilingual, creativity, context_handling",
+      "gridPos": { "x": 0, "y": 28, "w": 16, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT m.name AS \"Model\", s.primary_strength AS \"Primary\", CAST(s.strength_scores->>'reasoning' AS NUMERIC) AS \"Reasoning\", CAST(s.strength_scores->>'speed' AS NUMERIC) AS \"Speed\", CAST(s.strength_scores->>'coding' AS NUMERIC) AS \"Coding\", CAST(s.strength_scores->>'multilingual' AS NUMERIC) AS \"Multilingual\", CAST(s.strength_scores->>'creativity' AS NUMERIC) AS \"Creativity\", CAST(s.strength_scores->>'context_handling' AS NUMERIC) AS \"Context\" FROM pmoves_core.models m JOIN pmoves_core.model_strengths s ON m.id = s.model_id WHERE m.active = true ORDER BY m.name",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "Model", "desc": false }]
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "cellOptions": { "type": "color-background" } }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Reasoning" },
+            "properties": [
+              { "id": "custom.width", "value": 85 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.4 }, { "color": "yellow", "value": 0.6 }, { "color": "green", "value": 0.8 }] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Speed" },
+            "properties": [
+              { "id": "custom.width", "value": 70 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.4 }, { "color": "yellow", "value": 0.6 }, { "color": "green", "value": 0.8 }] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Coding" },
+            "properties": [
+              { "id": "custom.width", "value": 70 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.4 }, { "color": "yellow", "value": 0.6 }, { "color": "green", "value": 0.8 }] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Multilingual" },
+            "properties": [
+              { "id": "custom.width", "value": 95 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.4 }, { "color": "yellow", "value": 0.6 }, { "color": "green", "value": 0.8 }] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Creativity" },
+            "properties": [
+              { "id": "custom.width", "value": 85 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.4 }, { "color": "yellow", "value": 0.6 }, { "color": "green", "value": 0.8 }] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Context" },
+            "properties": [
+              { "id": "custom.width", "value": 75 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.4 }, { "color": "yellow", "value": 0.6 }, { "color": "green", "value": 0.8 }] } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "text",
+      "title": "Model Personality",
+      "description": "The tongue-in-cheek personality note for each model — the name IS the function",
+      "gridPos": { "x": 16, "y": 28, "w": 8, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT m.name || ': ' || COALESCE(s.notes, '(no personality yet)') AS \"note\" FROM pmoves_core.models m LEFT JOIN pmoves_core.model_strengths s ON m.id = s.model_id WHERE m.active = true AND s.notes IS NOT NULL ORDER BY m.name",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "mode": "markdown",
+        "content": ""
+      }
+    },
+    {
+      "type": "row",
+      "title": "Hardware & Deployment",
+      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 1 },
+      "collapsed": false
+    },
+    {
+      "type": "barchart",
+      "title": "VRAM Footprint per Model",
+      "description": "VRAM requirement (MB) per active model, from model registry",
+      "gridPos": { "x": 0, "y": 37, "w": 12, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT m.name AS \"Model\", m.vram_mb AS \"VRAM (MB)\" FROM pmoves_core.models m WHERE m.active = true AND m.vram_mb > 0 ORDER BY m.vram_mb DESC LIMIT 20",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": -45,
+        "barWidth": 0.75,
+        "showValue": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes",
+          "color": { "mode": "continuous-blues" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 16000 },
+              { "color": "orange", "value": 32000 },
+              { "color": "red", "value": 64000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total Active Models",
+      "gridPos": { "x": 12, "y": 37, "w": 4, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) AS \"Active Models\" FROM pmoves_core.models WHERE active = true",
+          "format": "table"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Total Providers",
+      "gridPos": { "x": 16, "y": 37, "w": 4, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) AS \"Providers\" FROM pmoves_core.model_providers WHERE active = true",
+          "format": "table"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "purple", "value": 0 }] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Loaded Deployments",
+      "gridPos": { "x": 20, "y": 37, "w": 4, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) AS \"Loaded\" FROM pmoves_core.model_deployments WHERE status = 'loaded'",
+          "format": "table"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": 0 }] } } }
+    },
+    {
+      "type": "piechart",
+      "title": "Models by Type",
+      "description": "Distribution of active models by model_type (chat, embedding, reranker, vl, etc.)",
+      "gridPos": { "x": 12, "y": 41, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT model_type AS \"Type\", count(*) AS \"Count\" FROM pmoves_core.models WHERE active = true GROUP BY model_type ORDER BY count(*) DESC",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "legend": { "displayMode": "list", "placement": "right" },
+        "pieType": "donut"
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Models by Provider",
+      "description": "Distribution of active models by provider",
+      "gridPos": { "x": 18, "y": 41, "w": 6, "h": 4 },
+      "datasource": { "type": "postgres", "uid": "supabase" },
+      "targets": [
+        {
+          "rawSql": "SELECT p.name AS \"Provider\", count(*) AS \"Count\" FROM pmoves_core.models m JOIN pmoves_core.model_providers p ON m.provider_id = p.id WHERE m.active = true GROUP BY p.name ORDER BY count(*) DESC",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "legend": { "displayMode": "list", "placement": "right" },
+        "pieType": "donut"
+      }
+    }
+  ]
+}

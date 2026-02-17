@@ -273,6 +273,7 @@ import uvicorn
 from nats.aio.msg import Msg
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
+from pmoves.chit import CGP_SPEC_VERSION
 from services.common.events import envelope
 from .parser import parse_model_output, prepare_result
 
@@ -442,7 +443,7 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
         request_id: Unique request identifier (correlation_id or parent_id)
 
     Returns:
-        Dict conforming to chit.cgp.v0.1 schema
+        Dict conforming to chit.cgp.v0.2 schema
     """
     # Build points from iterations (research steps)
     points: List[Dict[str, Any]] = []
@@ -495,7 +496,7 @@ def _build_cgp_packet(result: "ResearchResult", request_id: str) -> Dict[str, An
     spectrum = [max(0.0, min(1.0, v)) for v in spectrum]
 
     return {
-        "spec": "chit.cgp.v0.1",
+        "spec": CGP_SPEC_VERSION,
         "summary": f"DeepResearch: {shorten(result.query, width=100)}",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "super_nodes": [

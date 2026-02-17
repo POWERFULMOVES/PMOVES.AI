@@ -2,7 +2,7 @@ name: Env Preflight
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/.env*'
       - 'pmoves/scripts/env_check.ps1'
@@ -17,6 +17,8 @@ jobs:
     # NOTE: Uses windows-latest for Windows-specific environment validation
     # This is intentional as we need to validate Windows PowerShell scripts
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
