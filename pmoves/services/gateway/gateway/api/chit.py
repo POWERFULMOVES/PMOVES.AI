@@ -75,8 +75,11 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
         logger.error("Failed to decrypt anchor for constellation %s: %s",
                      const.get("id", "<unknown>"), exc)
         return
-    try: const["anchor"] = json.loads(pt.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError): pass
+    try:
+        const["anchor"] = json.loads(pt.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        logger.error("Failed to decode anchor for constellation %s: %s", const.get("id", "<unknown>"), exc)
+        return
     const.pop("anchor_enc", None)
 
 class Point(BaseModel):
@@ -167,8 +170,10 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     try:
         from pmoves.services.gateway.gateway.api.events import emit_event  # late import to avoid cycles
         emit_event({"type": "geometry.event", "shape_id": shape_id})
+    except ImportError:
+        logger.debug("events module not available; skipping geometry event emission")
     except Exception:
-        pass
+        logger.exception("Failed to emit geometry.event for shape_id=%s", shape_id)
 
     return shape_id
 
@@ -180,8 +185,8 @@ _ACCEPTED_EVENT_TYPES = {"geometry.cgp.v1", CGP_SPEC_VERSION}
 def geometry_event(event: GeometryEventEnvelope):
     if event.type not in _ACCEPTED_EVENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported geometry event type")
-    ingest_cgp(event.data.model_dump())
-    return {"ok": True}
+    shape_id = ingest_cgp(event.data.model_dump())
+    return {"ok": True, "shape_id": shape_id, "event": event.type}
 
 
 @router.get("/shape/point/{pid}/jump")
@@ -349,8 +354,10 @@ def _learned_enhance(items: List[Dict[str, Any]]) -> Dict[str, Any]:
             summarizer = pipeline("summarization", model=CHIT_T5_MODEL)
             summ = summarizer(head, max_length=64, min_length=10, do_sample=False)[0]["summary_text"]
             return {"mode": "transformers", "summary": summ}
+    except ImportError:
+        logger.warning("transformers not installed; falling back to keyword summarizer")
     except Exception:
-        pass
+        logger.exception("Transformer summarization failed for model %s; falling back", CHIT_T5_MODEL)
 
     # Fallback: naive keyword summary
     from collections import Counter
