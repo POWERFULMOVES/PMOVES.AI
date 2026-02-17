@@ -9,7 +9,9 @@
 #   TOKENISM_ATTRIBUTION   tokenism.>    interest 90d  2GB
 #   BOTZ_COORDINATION      botz.>        limits   7d   500MB
 
-set -eu
+set -u
+# Note: set -e intentionally omitted — add_stream returns non-zero on real
+# failures but we continue trying remaining streams, then fail at the end.
 
 NATS_URL="${NATS_URL:-nats://nats:4222}"
 
@@ -28,14 +30,27 @@ done
 
 echo "NATS reachable at $NATS_URL — creating streams"
 
-# Helper: create stream idempotently, log outcome with visible errors
+# Helper: create stream idempotently — distinguish "already exists" from real errors
+FAIL_COUNT=0
 add_stream() {
   name="$1"; shift
-  if nats -s "$NATS_URL" stream add "$name" "$@" --defaults 2>&1; then
+  output=$(nats -s "$NATS_URL" stream add "$name" "$@" --defaults 2>&1) && {
     echo "$name: created"
-  else
-    echo "$name: already exists or error (see above)"
-  fi
+    return 0
+  }
+  # nats CLI returned non-zero — check if benign "already exists"
+  case "$output" in
+    *"already in use"*|*"already exists"*)
+      echo "$name: already exists (ok)"
+      return 0
+      ;;
+    *)
+      echo "ERROR: failed to create stream $name" >&2
+      echo "$output" >&2
+      FAIL_COUNT=$((FAIL_COUNT + 1))
+      return 1
+      ;;
+  esac
 }
 
 # ---------- GEOMETRY_CGP ----------
@@ -67,6 +82,11 @@ add_stream BOTZ_COORDINATION \
   --max-bytes 524288000 \
   --discard old \
   --replicas 1
+
+if [ "$FAIL_COUNT" -gt 0 ]; then
+  echo "ERROR: $FAIL_COUNT stream(s) failed to create" >&2
+  exit 1
+fi
 
 echo "NATS stream init complete"
 nats -s "$NATS_URL" stream ls
