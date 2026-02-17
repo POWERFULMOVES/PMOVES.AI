@@ -70,8 +70,11 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
     key = hashlib.scrypt(CHIT_PASSPHRASE.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
     aead = AESGCM(key); aad = canon({"id": const.get("id","")})
     pt = aead.decrypt(iv, ct, aad)
-    try: const["anchor"] = json.loads(pt.decode())
-    except: pass
+    try:
+        const["anchor"] = json.loads(pt.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        logger.error("Failed to decode anchor for constellation %s: %s", const.get("id", "<unknown>"), exc)
+        return
     const.pop("anchor_enc", None)
 
 class Point(BaseModel):
