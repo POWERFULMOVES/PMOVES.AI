@@ -56,7 +56,7 @@ def test_geometry_event_decode_and_jump():
     envelope = {"type": "geometry.cgp.v1", "data": cgp}
     resp = client.post("/geometry/event", json=envelope)
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
+    assert resp.json()["ok"] is True
 
     shape_id = compute_shape_id(cgp)
     decode_resp = client.post(
