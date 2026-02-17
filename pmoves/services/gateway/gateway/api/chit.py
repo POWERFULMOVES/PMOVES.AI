@@ -349,8 +349,10 @@ def _learned_enhance(items: List[Dict[str, Any]]) -> Dict[str, Any]:
             summarizer = pipeline("summarization", model=CHIT_T5_MODEL)
             summ = summarizer(head, max_length=64, min_length=10, do_sample=False)[0]["summary_text"]
             return {"mode": "transformers", "summary": summ}
+    except ImportError:
+        logger.warning("transformers not installed; falling back to keyword summarizer")
     except Exception:
-        pass
+        logger.exception("Transformer summarization failed for model %s; falling back", CHIT_T5_MODEL)
 
     # Fallback: naive keyword summary
     from collections import Counter
