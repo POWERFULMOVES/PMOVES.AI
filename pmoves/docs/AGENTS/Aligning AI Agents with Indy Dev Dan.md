@@ -31,7 +31,7 @@ Regardless of the complexity of the agent—whether it is a simple automation sc
 | Primitive | Definition | Role in PMOVES Architecture |
 | :---- | :---- | :---- |
 | **Context** | The state and knowledge available to the agent. | Managed via "Progressive Disclosure" using a cookbook/ directory to prevent context window overflow.9 |
-| **Model** | The underlying intelligence engine (e.g., Claude 3.5 Sonnet, Opus 4.5). | Models are selected based on task type: "Opus" for architectural planning ("The Brain"), "Haiku" for rapid safety checks.10 |
+| **Model** | The underlying intelligence engine (routed via TensorZero by role). | Models are selected based on task type: an orchestrator model for architectural planning ("The Brain"), a utility model for rapid safety checks.10 |
 | **Prompt** | The functional unit of engineering; a program written in natural language. | Prompts are treated as code: versioned, modular, and composed of "Meta-Prompts" that generate other prompts.11 |
 | **Tools** | The capabilities granted to the agent (e.g., CLI access, API calls). | Tools are standardized as executable scripts in tools/ directories, invokable via specific command patterns.12 |
 
@@ -44,7 +44,7 @@ The PMOVES architecture must support the following thread taxonomy to align with
 * **Base Thread (B):** A standard prompt-response loop. This is the default interaction with the PMOVES-BoTZ CLI.  
 * **Parallel Thread (P):** Multiple agents running simultaneously. This utilizes mprocs to run multiple agent processes in parallel panes for bulk tasks, a technique used by top engineers to multiply output.8  
 * **Chained Thread (C):** Sequential dependency where Task A must complete before Task B begins. This is implemented via scripted workflows in patterns.yaml where one agent's output acts as the input for the next.  
-* **Fusion Thread (F):** One prompt sent to multiple models (e.g., Claude \+ Gemini) to aggregate the best possible answer. This is crucial for high-stakes architectural decisions where consensus reduces hallucination risk.  
+* **Fusion Thread (F):** One prompt sent to multiple models (via TensorZero multi-provider routing) to aggregate the best possible answer. This is crucial for high-stakes architectural decisions where consensus reduces hallucination risk.  
 * **Big Thread (B):** A meta-structure where an "Orchestrator" agent manages sub-agents. This is the core logic of the PMOVES-BotZ-gateway.  
 * **Zero Touch Thread (Z):** The ultimate goal—workflows requiring no human verification. This applies to low-risk tasks like dependency updates or formatting.8
 
@@ -90,7 +90,7 @@ This section introduces the concept of "Meta-Agentics" and self-improving system
 
 These sources dictate the specific software stack.
 
-* **Opus 4.5 & Verdant:** For high-level architecture ("The Brain"), usage of graphical IDEs like Verdant is recommended over pure CLI to visualize complex diffs.10  
+* **Orchestrator model & Verdant:** For high-level architecture ("The Brain"), usage of graphical IDEs like Verdant is recommended over pure CLI to visualize complex diffs.10
 * **mprocs:** The orchestration console. It allows running multiple processes in a TUI, enabling the "Parallel Thread" pattern.13  
 * **Astral UV:** The Python package manager of choice for speed and reliability in agent environments.9
 
@@ -278,7 +278,7 @@ hooks:
   pre\_execution:  
     \- name: "Probabilistic Safety Check"  
       type: "llm\_eval"  
-      model: "claude-3-haiku-20240307"  
+      model: "utility"  # TensorZero role — routes to fast/cheap model  
       \# The "Prompt Hook" \- asks the LLM to judge the command  
       prompt: |  
         Analyze the following shell command: '{command}'  

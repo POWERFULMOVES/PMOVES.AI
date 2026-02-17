@@ -1,6 +1,6 @@
 # PMOVES Agent Class Taxonomy
 
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-17_
 
 This document formalizes the PMOVES agent naming and classification system as a **type system** — composable, collectible agents with classes, types, evolutions, and connections. Think Pokemon and Transformers: no matter how small, every agent has a type, a place in the hierarchy, and connections through all the layers it can touch.
 
@@ -407,6 +407,44 @@ See [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) for the ful
 
 ---
 
+## 11. Invocation Discipline
+
+Agents are **explicitly invoked, never implicitly triggered**. This is the "no teleportation" rule — an agent cannot jump into action without being actually called.
+
+### Rules
+
+1. **No transitive calls**: Agent A cannot call Agent B which silently calls Agent C. Agent C must be explicitly invoked by the orchestrator (Agent Zero). The call chain is always visible and auditable.
+
+2. **NATS subject ownership**: Each agent declares which subjects it publishes and subscribes to (see `agent_registry.yaml`). An agent MUST NOT publish to subjects it doesn't own. Cross-cutting events flow through the orchestrator.
+
+3. **MCP tool gating**: MCP tools require explicit `call_tool` invocations. Agents cannot inject tool calls into other agents' contexts. Each MCP call is logged via Agent Zero.
+
+4. **Damage-control enforcement**: The `patterns.yaml` hook system blocks unauthorized operations via `ask:true` patterns, requiring human confirmation. This is the Known Roads principle applied to invocation.
+
+5. **Audit trail**: All invocations flow through observable channels:
+   - NATS events (traceable subjects with JetStream replay)
+   - MCP tool calls (logged via Agent Zero `/mcp/*`)
+   - Claude Code hooks (pre/post execution logging)
+   - Cipher Memory snapshots (durable invocation records)
+
+### Registry Schema Extension
+
+Each agent in `agent_registry.yaml` may declare an `invocation_policy`:
+
+```yaml
+invocation_policy:
+  explicit_only: true          # must be directly called
+  nats_trigger_allowed: true   # can be triggered by NATS events
+  mcp_callable: true           # can be called via MCP
+  transitive_call: false       # cannot be silently chained
+```
+
+### Naming Connection
+
+The invocation discipline mirrors the naming principle: every agent name carries semantic alignment with its technical function. "Cipher Memory" encrypts and stores. "DoX" processes documents. "BoTZ" orchestrates bots. The name IS the invocation contract — you know what you're calling by what it's called.
+
+---
+
 ## Related Documents
 
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference
@@ -414,3 +452,4 @@ See [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) for the ful
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
 - `pmoves/config/agent_registry.yaml` — Machine-readable registry
 - `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool
+- [`../MODEL_SOURCE_OF_TRUTH.md`](../MODEL_SOURCE_OF_TRUTH.md) — Model-agnostic role names (no concrete model IDs in architecture docs)

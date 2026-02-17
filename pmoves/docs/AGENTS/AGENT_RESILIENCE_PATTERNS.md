@@ -1,6 +1,6 @@
 # Agent Resilience Patterns
 
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-17_
 
 Canonical patterns for ensuring PMOVES agents can survive context limits, recover from failures, and resume interrupted work. Born from Phase C hardening (2026-02-16) where 7 background agents hit context walls before completing PR workflows.
 
@@ -264,9 +264,41 @@ This document is part of the PMOVES Agent Class Taxonomy system:
 
 ---
 
+## Known Limitation: Hook/Settings Portability
+
+Claude Code CLI loads `.claude/settings.json` and hooks from the **current repo root**. When you `cd` into a submodule worktree (e.g., `PMOVES-BoTZ/`), Claude Code loads **that repo's** settings — the parent repo's damage-control hooks do not apply.
+
+### Impact
+
+- Submodule branches lack the parent repo's `patterns.yaml` enforcement
+- `.env` file protections, Known Roads redirects, and adversarial detection hooks are absent
+- Agents working in submodule worktrees operate without the safety net
+
+### Workaround Pattern
+
+1. **Work from parent repo when possible** — Use `path` attributes in `shell.run` rather than `cd` into submodules
+2. **Copy critical hooks** — Each submodule that agents work in should have its own `.claude/settings.json` referencing the parent patterns:
+   ```json
+   {
+     "hooks": {
+       "note": "For full damage-control hooks, work from the parent PMOVES.AI repo"
+     }
+   }
+   ```
+3. **Agent awareness** — Agents must check `{{cwd}}` and note when they're operating outside the parent repo's hook umbrella
+4. **Pre-flight check** — Before starting agent work in a submodule, verify hook presence:
+   ```bash
+   test -f .claude/settings.json && echo "HOOKS PRESENT" || echo "WARNING: No hooks"
+   ```
+
+This is a Claude Code CLI architectural limitation, not a PMOVES bug. The workaround is documentation and awareness until the CLI supports hook inheritance.
+
+---
+
 ## Related Documents
 
 - [Agent Class Taxonomy](./PMOVES_AGENT_CLASS_TAXONOMY.md)
 - [Taxonomy Cross-Reference](./AGENT_TAXONOMY_CROSS_REFERENCE.md)
 - [Cipher Memory Service](../../.claude/context/services-catalog.md) (port 8096)
 - [Phase C Audit Summary](../hardening/PMOVES-hardening-tracker.md)
+- [Model Source of Truth](../MODEL_SOURCE_OF_TRUTH.md) — Role names vs concrete model IDs

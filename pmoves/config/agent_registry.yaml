@@ -1,5 +1,5 @@
 # PMOVES Agent Registry — Single Source of Truth
-# Last updated: 2026-02-16
+# Last updated: 2026-02-17
 #
 # This file encodes every agent's class, type(s), tier, layers,
 # NATS subjects, health endpoint, CHIT toggles, and evolution stage.
@@ -7,7 +7,7 @@
 # Query with: python -m pmoves.tools.agent_taxonomy_helper list
 # Docs: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
 
-taxonomy_version: "1.1.0"
+taxonomy_version: "1.2.0"
 
 # Resilience attribute definitions
 # See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
@@ -156,6 +156,7 @@ agents:
     name: "Mesh Agent"
     class: standard
     primary_type: agent
+    secondary_type: data
     port: null
     health: null
     layers: [L0, L2]
@@ -473,6 +474,7 @@ agents:
     name: "LangExtract"
     class: standard
     primary_type: worker
+    secondary_type: llm
     port: 8084
     health: "/healthz"
     layers: [L0, L4]
@@ -645,6 +647,7 @@ agents:
     name: "Qdrant"
     class: utility
     primary_type: data
+    secondary_type: worker
     port: 6333
     health: "/healthz"
     layers: [L0, L5]
@@ -655,6 +658,7 @@ agents:
     name: "Neo4j"
     class: utility
     primary_type: data
+    secondary_type: agent
     port: 7474
     health: null
     layers: [L0, L5]
@@ -709,8 +713,215 @@ agents:
     name: "Loki"
     class: utility
     primary_type: data
+    secondary_type: api
     port: 3100
     health: "/ready"
     layers: [L0]
     evolution_stage: base
     description: "Centralized log aggregation"
+
+  # --- Missing agents added in Phase E (source dual enforcement) ---
+
+  dox:
+    name: "DoX"
+    class: standard
+    primary_type: worker
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0, L2, L4, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: false
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-DoX"
+    description: "Document intelligence — path-safe processing with fail-closed JWT"
+
+  open_notebook:
+    name: "Open Notebook"
+    class: standard
+    primary_type: data
+    secondary_type: ui
+    port: null
+    health: null
+    layers: [L0, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Open-Notebook"
+    description: "Knowledge base / note-taking integration (SurrealDB)"
+
+  consciousness_service:
+    name: "Consciousness Service"
+    class: specialized
+    primary_type: agent
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L2.5, L4]
+    evolution_stage: base
+    nats:
+      publishes: ["geometry.consciousness.event.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: false
+      attribution_gated: true
+    description: "CGP consciousness mapper — geometric cognitive processing"
+
+  n8n:
+    name: "n8n"
+    class: utility
+    primary_type: worker
+    secondary_type: agent
+    port: 5678
+    health: "/healthz"
+    layers: [L0, L2]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Workflow automation — glue for multi-step processes"
+
+  headscale:
+    name: "Headscale"
+    class: utility
+    primary_type: data
+    secondary_type: api
+    port: 8181
+    health: "/health"
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Network coordination — mesh VPN overlay"
+
+  rustdesk:
+    name: "RustDesk"
+    class: utility
+    primary_type: ui
+    secondary_type: api
+    port: 21115
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Remote desktop — self-hosted remote access"
+
+  invidious:
+    name: "Invidious"
+    class: utility
+    primary_type: ui
+    secondary_type: media
+    port: 3333
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    description: "Privacy-focused video frontend"
+
+  wealth:
+    name: "Wealth (Firefly III)"
+    class: specialized
+    primary_type: ui
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Wealth"
+    description: "Finance management — tongue-in-cheek wealth tracking"
+
+  health:
+    name: "Health (wger)"
+    class: specialized
+    primary_type: ui
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Health"
+    description: "Fitness tracking — the body is a system too"
+
+  swarm_attribution:
+    name: "Swarm Attribution"
+    class: specialized
+    primary_type: worker
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0, L3]
+    evolution_stage: base
+    nats:
+      publishes: ["geometry.attribution.result.v1"]
+      subscribes: ["geometry.attribution.request.v1"]
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: true
+      swarm_participant: true
+      attribution_gated: true
+    description: "Shape-attribution engine for swarm consensus (CHIT L3)"
