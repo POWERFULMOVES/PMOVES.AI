@@ -145,7 +145,7 @@ def _theory_to_cgp(theory: TheoryInfo, idx: int) -> Dict[str, Any]:
     }
 
     return {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v0.2",
         "meta": {
             "source": "consciousness-taxonomy",
             "theory": theory.name,

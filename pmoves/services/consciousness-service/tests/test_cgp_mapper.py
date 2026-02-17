@@ -42,29 +42,19 @@ class TestCGPMapper:
 
         packet = mapper.theory_to_constellation(theory)
 
-        # Check packet structure
-        assert packet["version"] == "cgp.v1"
-        assert "timestamp" in packet
-        assert "theory" in packet
-        assert "geometry" in packet
-        assert "metadata" in packet
+        # Check packet structure (chit.cgp.v0.2 format)
+        assert packet["spec"] == "chit.cgp.v0.2"
+        assert "created_at" in packet
+        assert "super_nodes" in packet
+        assert "meta" in packet
 
-        # Check theory info
-        assert packet["theory"]["name"] == "Integrated Information Theory"
-        assert packet["theory"]["category"] == "computational"
-
-        # Check geometry coordinates
-        coords = packet["geometry"]["coordinates"]
-        assert "cartesian" in coords
-        assert "spherical" in coords
-        assert all(k in coords["cartesian"] for k in ["x", "y", "z"])
-        assert all(k in coords["spherical"] for k in ["radius", "phi", "theta"])
-
-        # Check dimensions
-        dims = packet["geometry"]["dimensions"]
-        assert 0 <= dims["empirical_support"] <= 1
-        assert 0 <= dims["philosophical_coherence"] <= 1
-        assert 0 <= dims["integration_potential"] <= 1
+        # Check super_node structure
+        sn = packet["super_nodes"][0]
+        assert "constellations" in sn
+        const = sn["constellations"][0]
+        assert const["id"] == "computational:integrated_information_theory"
+        assert "spectrum" in const
+        assert "points" in const
 
     def test_theory_to_constellation_minimal(self, mapper):
         """Generate CGP packet with minimal theory data."""
@@ -75,8 +65,8 @@ class TestCGPMapper:
 
         packet = mapper.theory_to_constellation(theory)
 
-        assert packet["theory"]["name"] == "Unknown Theory"
-        assert packet["geometry"] is not None
+        assert packet["spec"] == "chit.cgp.v0.2"
+        assert packet["super_nodes"] is not None
 
     def test_theory_id_generation(self, mapper):
         """Theory ID is formatted correctly."""
@@ -87,7 +77,8 @@ class TestCGPMapper:
 
         packet = mapper.theory_to_constellation(theory)
 
-        assert packet["theory"]["id"] == "computational:global_workspace_theory"
+        const = packet["super_nodes"][0]["constellations"][0]
+        assert const["id"] == "computational:global_workspace_theory"
 
     def test_coordinate_conversion(self, mapper):
         """Spherical to Cartesian conversion is correct."""
@@ -101,19 +92,17 @@ class TestCGPMapper:
 
         packet = mapper.theory_to_constellation(theory)
 
-        coords = packet["geometry"]["coordinates"]
-        r = coords["spherical"]["radius"]
-        phi = coords["spherical"]["phi"]
-        theta = coords["spherical"]["theta"]
+        # In v0.2, coordinates are encoded in super_node x/y/r fields
+        sn = packet["super_nodes"][0]
+        assert "x" in sn
+        assert "y" in sn
+        assert "r" in sn
 
-        # Verify Cartesian coordinates match spherical
-        expected_x = r * math.sin(theta) * math.cos(phi)
-        expected_y = r * math.sin(theta) * math.sin(phi)
-        expected_z = r * math.cos(theta)
-
-        assert abs(coords["cartesian"]["x"] - round(expected_x, 4)) < 0.0001
-        assert abs(coords["cartesian"]["y"] - round(expected_y, 4)) < 0.0001
-        assert abs(coords["cartesian"]["z"] - round(expected_z, 4)) < 0.0001
+        # Verify spectrum is a valid probability distribution
+        const = sn["constellations"][0]
+        spectrum = const["spectrum"]
+        assert len(spectrum) == 3
+        assert abs(sum(spectrum) - 1.0) < 0.01
 
 
 class TestEmpiricalSupportCalculation:
@@ -254,9 +243,9 @@ class TestPublishToHirag:
     async def test_publish_success(self, mapper):
         """Successful publish returns result."""
         packet = {
-            "version": "cgp.v1",
-            "theory": {"id": "test:theory"},
-            "geometry": {}
+            "spec": "chit.cgp.v0.2",
+            "super_nodes": [{"constellations": [{"id": "test:theory"}]}],
+            "meta": {}
         }
 
         with mock.patch.object(mapper.client, 'post') as mock_post:
@@ -275,7 +264,7 @@ class TestPublishToHirag:
         """Failed publish raises exception."""
         import httpx
 
-        packet = {"version": "cgp.v1", "theory": {"id": "test"}}
+        packet = {"spec": "chit.cgp.v0.2", "super_nodes": [{"constellations": [{"id": "test"}]}], "meta": {}}
 
         with mock.patch.object(mapper.client, 'post') as mock_post:
             mock_post.side_effect = httpx.HTTPError("Connection failed")

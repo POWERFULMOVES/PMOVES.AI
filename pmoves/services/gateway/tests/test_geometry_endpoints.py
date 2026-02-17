@@ -27,7 +27,7 @@ def test_geometry_event_decode_and_jump():
     client = TestClient(app)
 
     cgp = {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v0.2",
         "meta": {},
         "super_nodes": [
             {
@@ -97,7 +97,7 @@ def test_geometry_event_supabase_idempotent(monkeypatch):
     client = TestClient(app)
 
     cgp = {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v0.2",
         "meta": {},
         "super_nodes": [
             {

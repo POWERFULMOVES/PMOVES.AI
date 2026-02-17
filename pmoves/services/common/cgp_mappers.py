@@ -84,7 +84,7 @@ def map_health_weekly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
     })
 
     cgp: Dict[str, Any] = {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v0.2",
         "summary": f"health weekly summary ({period})",
         "created_at": _now_iso(),
         "super_nodes": [
@@ -122,7 +122,7 @@ def map_finance_monthly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
         })
 
     cgp: Dict[str, Any] = {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v0.2",
         "summary": f"finance monthly summary ({month})",
         "created_at": _now_iso(),
         "super_nodes": [
