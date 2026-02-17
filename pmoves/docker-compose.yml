@@ -1486,6 +1486,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+  nats-init:
+    image: natsio/nats-box:0.14.5
+    entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
+    environment:
+    - NATS_URL=nats://nats:pmoves@nats:4222
+    volumes:
+    - ./scripts/nats:/scripts:ro
+    networks:
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: "no"
+    profiles:
+    - data
+    - orchestration
   agent-zero:
     <<: *tier-agent-hardened
     build:

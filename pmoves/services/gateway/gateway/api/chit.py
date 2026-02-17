@@ -144,7 +144,7 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     if const_ids:
         _shape_to_constellations[shape_id] = list(dict.fromkeys(const_ids))
 
-    shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": cgp})
+    shape_store.on_geometry_event({"type": "chit.cgp.v0.2", "data": cgp})
 
     os.makedirs("data", exist_ok=True)
     json.dump(cgp, open(f"data/{shape_id}.json", "w"), indent=2)
@@ -165,14 +165,16 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
 
     return shape_id
 
+# Accepted geometry event types (backward-compat for legacy "geometry.cgp.v1" producers)
+_ACCEPTED_EVENT_TYPES = {"geometry.cgp.v1", "chit.cgp.v0.2"}
+
+
 @router.post("/geometry/event")
 def geometry_event(event: GeometryEventEnvelope):
-    if event.type != "geometry.cgp.v1":
+    if event.type not in _ACCEPTED_EVENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported geometry event type")
     ingest_cgp(event.data.model_dump())
     return {"ok": True}
-
-    return {"ok": True, "shape_id": shape_hash, "event": "geometry.cgp.v1"}
 
 
 @router.get("/shape/point/{pid}/jump")

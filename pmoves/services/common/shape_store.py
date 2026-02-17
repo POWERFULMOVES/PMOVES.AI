@@ -124,11 +124,11 @@ class ShapeStore:
         return pack
 
     def put_cgp(self, cgp: Dict[str, Any]) -> None:
-        """Ingest a CGP (chit.cgp.v0.1) blob into the store.
+        """Ingest a CGP (chit.cgp.v0.2) blob into the store.
 
         Expected shape (subset):
         {
-          "spec": "chit.cgp.v0.1",
+          "spec": "chit.cgp.v0.2",
           "super_nodes": [
             { "constellations": [ { "id": str, "points": [ {...} ] } ] }
           ]
@@ -358,7 +358,7 @@ class ShapeStore:
             if not isinstance(candidate, dict):
                 return None
             if "spec" not in candidate:
-                candidate = {**candidate, "spec": "geometry.cgp.v1"}
+                candidate = {**candidate, "spec": "chit.cgp.v0.2"}
             return candidate
 
         def _map_constellation(rec: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -406,7 +406,7 @@ class ShapeStore:
                 points.append(point)
             const["points"] = points
             return {
-                "spec": "geometry.cgp.v1",
+                "spec": "chit.cgp.v0.2",
                 "source": "supabase",
                 "super_nodes": [{"constellations": [const]}],
             }
@@ -483,10 +483,12 @@ class ShapeStore:
                 logger.exception("ShapeStore warm ingest error", exc_info=True)
         return count
 
-    # ---- event hook (stub) ----
+    # ---- event hook ----
+    _ACCEPTED_CGP_TYPES = {"geometry.cgp.v1", "chit.cgp.v0.2"}
+
     def on_geometry_event(self, event: Dict[str, Any]) -> None:
-        """Handle `geometry.cgp.v1` bus messages."""
-        if event.get("type") == "geometry.cgp.v1":
+        """Handle CGP bus messages (chit.cgp.v0.2 and legacy geometry.cgp.v1)."""
+        if event.get("type") in self._ACCEPTED_CGP_TYPES:
             payload = event.get("data") or {}
             if isinstance(payload, dict):
                 self.put_cgp(payload)

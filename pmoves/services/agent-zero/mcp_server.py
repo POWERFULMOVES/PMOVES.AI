@@ -47,7 +47,7 @@ def load_form(name: str) -> Dict[str, Any]:
 
 
 def geometry_publish_cgp(cgp: Dict[str, Any]) -> Dict[str, Any]:
-    r = requests.post(f"{GATEWAY_URL}/geometry/event", json={"type":"geometry.cgp.v1", "data": cgp}, timeout=20)
+    r = requests.post(f"{GATEWAY_URL}/geometry/event", json={"type":"chit.cgp.v0.2", "data": cgp}, timeout=20)
     r.raise_for_status()
     return r.json()
 
