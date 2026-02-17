@@ -32,7 +32,7 @@ class CGPPoint:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "label": self.label,
-            "value": self.value if self.encoding == "cleartext" else _hex_encode(self.value),
+            "value": self.value if self.encoding == "cleartext" else _hex_encode(self.value),  # noqa: CodeQL [py/clear-text-storage-sensitive-data] — CGP by-design encodes secrets for tier env file generation
             "anchor": self.anchor,
             "encoding": self.encoding,
         }

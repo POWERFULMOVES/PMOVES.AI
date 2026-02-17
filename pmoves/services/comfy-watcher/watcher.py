@@ -212,8 +212,8 @@ from services.common.events import envelope
 
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT","minio:9000")
 MINIO_USE_SSL = os.environ.get("MINIO_USE_SSL","false").lower() == "true"
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY","pmoves")
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY","password")
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "")
 BUCKET = os.environ.get("MINIO_BUCKET","pmoves-comfyui")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL","http://localhost:9000")
 PRESIGN_HOURS = int(os.environ.get("PRESIGN_EXPIRES_HOURS","24"))

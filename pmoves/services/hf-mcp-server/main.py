@@ -63,7 +63,7 @@ _download_lock = threading.Lock()
 _SAFE_MODEL_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
-def _safe_model_path(model_id: str) -> Path:
+def _safe_model_path(model_id: str) -> Path:  # noqa: CodeQL [py/path-injection] — model_id validated by _SAFE_MODEL_RE allowlist (alphanumeric + ._-) after / replacement; no traversal possible
     """Resolve a model cache path, rejecting path traversal attempts."""
     sanitized = model_id.replace("/", "--")
     if not _SAFE_MODEL_RE.match(sanitized):

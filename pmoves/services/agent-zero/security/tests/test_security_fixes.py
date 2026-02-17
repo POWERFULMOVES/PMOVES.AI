@@ -156,13 +156,14 @@ class TestReDoSProtection:
         """Test that long-running regexes are interrupted."""
         import re
 
+        # noqa: CodeQL [py/redos] — intentional pathological regex to test ReDoS timeout protection
         # This is a pathological regex that causes catastrophic backtracking
         # Note: We can't actually test timeout without a long-running regex,
         # but we can verify the context manager doesn't break normal operation
 
         # Simple test to ensure the mechanism works
         with _regex_timeout(seconds=5):
-            result = re.search(r"(a+)+b", "aaaaaaaaaaaaaaaaaaaaaac")
+            result = re.search(r"(a+)+b", "aaaaaaaaaaaaaaaaaaaaaac")  # noqa: CodeQL [py/redos] — intentional ReDoS pattern for testing timeout guard
             # This will fail to match, but should timeout or complete quickly
             assert result is None
 
