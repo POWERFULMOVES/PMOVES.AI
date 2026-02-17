@@ -26,11 +26,10 @@ def read_text(path: Path) -> str:
 
 def candidate_files() -> Iterable[Path]:
     allowed = {".md", ".py", ".sh", ".yaml", ".yml", ".json", ".txt"}
-    skip_dirs = {".git", "node_modules", "__pycache__", ".venv", ".venv-pmoves", "dist", "build"}
     for path in REPO_ROOT.rglob("*"):
         if not path.is_file():
             continue
-        if skip_dirs & set(path.parts):
+        if ".git" in path.parts:
             continue
         if path.suffix.lower() not in allowed:
             continue

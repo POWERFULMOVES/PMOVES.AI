@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import threading
 from dataclasses import dataclass, field
@@ -52,9 +53,22 @@ HF_HUB_CACHE = os.environ.get("HF_HUB_CACHE", "/models/hub")
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 SERVER_PORT = int(os.environ.get("PORT", "8096"))
 
+MODELS_BASE = Path(HF_HUB_CACHE) / "models"
+
 # Metrics counter with thread safety
 _download_count = 0
 _download_lock = threading.Lock()
+
+
+_SAFE_MODEL_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+def _safe_model_path(model_id: str) -> Path:
+    """Resolve a model cache path, rejecting path traversal attempts."""
+    sanitized = model_id.replace("/", "--")
+    if not _SAFE_MODEL_RE.match(sanitized):
+        raise HTTPException(status_code=400, detail="Invalid model ID")
+    return MODELS_BASE / sanitized
 
 
 class ModelTier(Enum):
@@ -498,7 +512,7 @@ async def hf_model_download(
         hf_id = model_id
         model_data = {}
 
-    cache_dir = Path(HF_HUB_CACHE) / "models" / hf_id.replace("/", "--")
+    cache_dir = _safe_model_path(hf_id)
 
     try:
         # Create cache directory (must be inside try block for error handling)
@@ -608,7 +622,7 @@ async def hf_model_convert_gguf(
     # This is a placeholder - actual GGUF conversion requires llama.cpp
     # In production, this would spawn a conversion job or call an external service
 
-    cache_dir = Path(HF_HUB_CACHE) / "models" / model_id.replace("/", "--")
+    cache_dir = _safe_model_path(model_id)
 
     if not cache_dir.exists():
         raise HTTPException(
