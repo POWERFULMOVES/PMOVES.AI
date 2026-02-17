@@ -12,8 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from submodule_utils import parse_gitmodules_rows  # type: ignore
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = REPO_ROOT / "pmoves/configs/tooling_script_audit_manifest.json"
@@ -92,7 +90,29 @@ def load_manifest(path: Path) -> dict:
 def parse_gitmodules(path: Path) -> list[tuple[str, str]]:
     if not path.exists():
         return []
-    return [(row["name"], row["path"]) for row in parse_gitmodules_rows(path)]
+
+    modules: list[tuple[str, str]] = []
+    name = ""
+    module_path = ""
+    for raw in read_text(path).splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        section = re.match(r'\[submodule "(.+)"\]', line)
+        if section:
+            if name and module_path:
+                modules.append((name, module_path))
+            name = section.group(1)
+            module_path = ""
+            continue
+        if "=" not in line:
+            continue
+        key, value = [part.strip() for part in line.split("=", 1)]
+        if key == "path":
+            module_path = value
+    if name and module_path:
+        modules.append((name, module_path))
+    return modules
 
 
 def normalize_tokens(path: Path) -> set[str]:
@@ -252,7 +272,11 @@ def collect_submodule_records(
 def jaccard(a: set[str], b: set[str]) -> float:
     if not a or not b:
         return 0.0
-    return len(a & b) / len(a | b)
+    shared = a & b
+    union = a | b
+    if not union:
+        return 0.0
+    return len(shared) / len(union)
 
 
 def build_overlap_rows(
@@ -424,7 +448,7 @@ def check_orphan_pmoves_dirs(
             continue
         name = path.name
         lower = name.lower()
-        if not lower.startswith("pmoves"):
+        if not (lower.startswith("pmoves") or lower.startswith("pmoves-")):
             continue
         if name in module_top_dirs or name in known_non_submodule_dirs:
             continue
