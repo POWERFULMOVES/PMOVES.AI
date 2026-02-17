@@ -146,8 +146,74 @@ Use this sequence for audit evidence:
 5. Observability:
    - confirm dashboards/logs include geometry + swarm + model-routing decisions
 
+## Per-agent CHIT toggle schema
+
+Each agent declares which geometry state vector signals it responds to. This determines whether control-plane changes from Hyperdimensions affect a given agent's runtime behavior.
+
+### Toggle definition
+
+```yaml
+# In pmoves/config/agent_registry.yaml per agent entry
+chit_toggles:
+  delta_sensitive: true       # responds to tree-likeness changes
+  kappa_sensitive: false      # not affected by hierarchy pressure
+  hz_sensitive: true          # filters on spectral entropy
+  swarm_participant: true     # participates in EvoSwarm fitness
+  attribution_gated: true     # blocked when attribution proof weak
+```
+
+### Toggle → control mapping
+
+When a toggle is `true`, the agent responds to the corresponding geometry signal:
+
+| Toggle | Signal | Agent Action When Active |
+| --- | --- | --- |
+| `delta_sensitive` | `delta_proxy` | Adjust generation randomness, retrieval grounding |
+| `kappa_sensitive` | `curvature_k` | Switch between hierarchical and flat retrieval |
+| `hz_sensitive` | `spectral_entropy_z` | Increase/decrease filtering passes |
+| `swarm_participant` | `swarm_fitness` | Join/leave EvoSwarm pack selection |
+| `attribution_gated` | `attribution_confidence` | Gate publish actions on proof strength |
+
+When a toggle is `false`, the agent ignores that signal entirely — no runtime adjustment occurs.
+
+### Aggregate readiness score
+
+The toggle state per agent doubles as a deployment readiness metric:
+
+```
+readiness = (passing_toggles / active_toggles)
+
+GREEN  (1.00): all active toggles within healthy range
+YELLOW (0.50-0.99): some toggles in warning range
+RED    (<0.50): multiple toggles blocked or failing
+```
+
+### Hyperdimensions agent topology surface
+
+A saved surface at `Pmoves-hyperdimensions/saves/agent_topology.json` renders the agent network on a Poincare disk:
+
+- **Ring position** = class depth (Legendary center → Utility edge)
+- **Sector angle** = primary type (7 sectors for 7 types)
+- **Height** = CHIT toggle density (more active toggles = higher)
+- **Color** = readiness score (green → yellow → red gradient)
+- **Animated parameters** = `delta`, `fitness`, `hz` oscillate to show control response
+
+The surface accepts the full geometry state vector as input parameters, making it an interactive control surface — drag `delta` and watch which agents respond.
+
+### Source of truth
+
+Agent toggle declarations live in `pmoves/config/agent_registry.yaml`. Query with:
+
+```bash
+python -m pmoves.tools.agent_taxonomy_helper show <agent_name>
+```
+
+Full taxonomy: `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`
+
 ## Expansion backlog (next)
 
 - Add a dedicated `hyperdimensions.control.v1` event (optional) that carries only normalized control vector updates.
 - Add server-side normalization utility so all producers output `chit.cgp.v0.2` payloads.
 - Add Creator widget spec in `PMOVES-A2UI` for the geometry control panel and replay timeline.
+- ~~Add per-agent CHIT toggle schema~~ ✅ Done (2026-02-16)
+- ~~Add agent topology saved surface~~ ✅ Done (2026-02-16)
