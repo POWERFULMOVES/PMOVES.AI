@@ -180,8 +180,8 @@ _ACCEPTED_EVENT_TYPES = {"geometry.cgp.v1", CGP_SPEC_VERSION}
 def geometry_event(event: GeometryEventEnvelope):
     if event.type not in _ACCEPTED_EVENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported geometry event type")
-    ingest_cgp(event.data.model_dump())
-    return {"ok": True}
+    shape_id = ingest_cgp(event.data.model_dump())
+    return {"ok": True, "shape_id": shape_id, "event": event.type}
 
 
 @router.get("/shape/point/{pid}/jump")
