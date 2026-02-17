@@ -111,3 +111,8 @@ temp/
 pmoves-cipher-mcp/.venv/
 pmoves-cipher-mcp/__pycache__/
 pmoves-cipher-mcp/uv.lock
+
+# =============================================================================
+# Orphaned submodule directories (gitlink removed, physical dir remains)
+# =============================================================================
+pmoves-e2b-mcp-server/
