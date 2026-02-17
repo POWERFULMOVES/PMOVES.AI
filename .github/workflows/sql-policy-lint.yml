@@ -2,13 +2,13 @@ name: SQL Policy Lint
 
 on:
   push:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/supabase/sql/**'
       - 'pmoves/supabase/migrations/**'
       - '.github/workflows/sql-policy-lint.yml'
   pull_request:
-    branches: [main]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/supabase/sql/**'
       - 'pmoves/supabase/migrations/**'
@@ -18,6 +18,8 @@ jobs:
   lint:
     # PMOVES.AI: Use self-hosted runners for production CI
     runs-on: [self-hosted, vps]
+    permissions:
+      contents: read
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2

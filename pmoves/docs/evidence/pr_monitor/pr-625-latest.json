@@ -1,0 +1,70 @@
+{
+  "captured_at": "2026-02-16T05:43:49.197440+00:00",
+  "repo": "POWERFULMOVES/PMOVES.AI",
+  "pr": 625,
+  "summary": {
+    "checks_total": 4,
+    "checks_pending": 0,
+    "checks_failed": 0,
+    "checks_passed": 4
+  },
+  "pr_view": {
+    "author": {
+      "is_bot": true,
+      "login": "app/dependabot"
+    },
+    "baseRefName": "main",
+    "headRefName": "dependabot/npm_and_yarn/CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/docker-stacks/jellyfin-ai/api-gateway/npm_and_yarn-a9d963296c",
+    "latestReviews": [],
+    "number": 625,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:44:01Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22046293290/job/63695659983",
+        "name": "Analyze (actions)",
+        "startedAt": "2026-02-16T00:43:06Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:44:22Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22046293290/job/63695659968",
+        "name": "Analyze (javascript-typescript)",
+        "startedAt": "2026-02-16T00:43:06Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:44:24Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22046293290/job/63695659972",
+        "name": "Analyze (python)",
+        "startedAt": "2026-02-16T00:43:06Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:43:57Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/runs/63695695351",
+        "name": "CodeQL",
+        "startedAt": "2026-02-16T00:43:50Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      }
+    ],
+    "title": "chore(deps): bump the npm_and_yarn group across 2 directories with 2 updates",
+    "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/625"
+  },
+  "reviews": [],
+  "issue_comments": [],
+  "review_comments": []
+}

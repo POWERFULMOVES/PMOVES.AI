@@ -66,6 +66,11 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # =============================================================================
+# Claude Code local settings (user-specific permissions, never commit)
+# =============================================================================
+.claude/settings.local.json
+
+# =============================================================================
 # IDE
 # =============================================================================
 .idea/
@@ -83,6 +88,7 @@ yarn-error.log*
 *.sqlite
 *.sqlite3
 pmoves/data/agent-zero/memory/
+pmoves/data/agent-zero/logs/
 pmoves/data/open-notebook/surreal_data/
 
 # =============================================================================
@@ -104,3 +110,9 @@ temp/
 # =============================================================================
 pmoves-cipher-mcp/.venv/
 pmoves-cipher-mcp/__pycache__/
+pmoves-cipher-mcp/uv.lock
+
+# =============================================================================
+# Orphaned submodule directories (gitlink removed, physical dir remains)
+# =============================================================================
+pmoves-e2b-mcp-server/

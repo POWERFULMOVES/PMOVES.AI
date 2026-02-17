@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Tuple
 
 
@@ -66,6 +68,66 @@ def _http_json(
         return 0, None
 
 
+def _docker_compose_file() -> str:
+    return str(Path(__file__).resolve().parents[1] / "docker-compose.yml")
+
+
+def _docker_http_json(
+    path: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+    timeout: float = 20.0,
+    service: str = "hi-rag-gateway-v2-gpu",
+) -> Tuple[int, dict[str, Any] | None]:
+    url = f"http://127.0.0.1:8086{path}"
+    marker = "__HTTP_STATUS__:"
+    cmd = [
+        "docker",
+        "compose",
+        "-f",
+        _docker_compose_file(),
+        "exec",
+        "-T",
+        service,
+        "curl",
+        "-sS",
+        "--max-time",
+        str(int(timeout)),
+        "-H",
+        "content-type: application/json",
+        "-X",
+        method,
+    ]
+    if payload is not None:
+        cmd.extend(["--data-binary", json.dumps(payload, separators=(",", ":"))])
+    cmd.extend([url, "-w", f"\\n{marker}%{{http_code}}"])
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except Exception:
+        return 0, None
+    if proc.returncode != 0:
+        return 0, None
+    raw = proc.stdout or ""
+    if marker not in raw:
+        return 0, None
+    body, _, status_text = raw.rpartition(f"\n{marker}")
+    try:
+        status = int(status_text.strip())
+    except ValueError:
+        status = 0
+    body = body.strip()
+    if not body:
+        return status, None
+    try:
+        parsed = json.loads(body)
+        if isinstance(parsed, dict):
+            return status, parsed
+    except Exception:
+        pass
+    return status, None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Hi-RAG v2 GPU smoke checks.")
     parser.add_argument("--require-qwen", action="store_true", help="Fail unless rerank model contains 'qwen'.")
@@ -80,14 +142,23 @@ def main() -> int:
         print("[Qwen] Inspect v2 stats...")
 
     print(f"[GPU] Check v2-gpu (:{gpu_port}) up...")
+    host_mode = True
     root_code = _http_status(f"http://localhost:{gpu_port}/")
     if root_code != 200:
-        print(f"[FAIL] v2-gpu root endpoint unavailable on :{gpu_port} (HTTP {root_code})")
-        return 1
+        docker_root_code, _ = _docker_http_json("/", timeout=10.0)
+        if docker_root_code == 200:
+            host_mode = False
+            print(f"[WARN] host port :{gpu_port} unavailable; using in-network docker exec path")
+        else:
+            print(f"[FAIL] v2-gpu unavailable (host HTTP {root_code}, in-network HTTP {docker_root_code})")
+            return 1
     print("OK")
 
     print("[GPU] v2-gpu stats...")
-    stats_code, stats = _http_json(f"http://localhost:{gpu_port}/hirag/admin/stats")
+    if host_mode:
+        stats_code, stats = _http_json(f"http://localhost:{gpu_port}/hirag/admin/stats")
+    else:
+        stats_code, stats = _docker_http_json("/hirag/admin/stats")
     if stats_code == 200 and stats is not None:
         print("OK")
     else:
@@ -113,17 +184,26 @@ def main() -> int:
         return 0
 
     print("[GPU] v2-gpu rerank query...")
-    query_code, query_data = _http_json(
-        f"http://localhost:{gpu_port}/hirag/query",
-        method="POST",
-        payload={
-            "query": "pmoves gpu rerank smoke",
-            "namespace": namespace,
-            "k": 3,
-            "use_rerank": True,
-        },
-        timeout=30.0,
-    )
+    payload = {
+        "query": "pmoves gpu rerank smoke",
+        "namespace": namespace,
+        "k": 3,
+        "use_rerank": True,
+    }
+    if host_mode:
+        query_code, query_data = _http_json(
+            f"http://localhost:{gpu_port}/hirag/query",
+            method="POST",
+            payload=payload,
+            timeout=30.0,
+        )
+    else:
+        query_code, query_data = _docker_http_json(
+            "/hirag/query",
+            method="POST",
+            payload=payload,
+            timeout=30.0,
+        )
     if query_code != 200 or query_data is None:
         print(f"[FAIL] v2-gpu rerank query failed (HTTP {query_code})")
         return 1

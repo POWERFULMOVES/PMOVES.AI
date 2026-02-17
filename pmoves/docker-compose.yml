@@ -1486,6 +1486,24 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+  nats-init:
+    image: natsio/nats-box:0.14.5
+    entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    volumes:
+    - ./scripts/nats:/scripts:ro
+    networks:
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: "no"
+    profiles:
+    - data
+    - orchestration
+    - agents
+    - botz
   agent-zero:
     <<: *tier-agent-hardened
     build:
@@ -1508,6 +1526,8 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
     ports:
     - ${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_PORT:-8081}:80
@@ -1644,6 +1664,8 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
     ports: ["8054:8054"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
@@ -1671,7 +1693,10 @@ services:
     ports:
     - 9224:9224
     depends_on:
-    - nats
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
     profiles:
     - agents
     networks:

@@ -2,6 +2,8 @@
 
 This guide covers setting up and running PMOVES.AI entirely with local models using Hugging Face integration.
 
+> **Note:** This document lists specific model IDs for local deployment (ollama pull commands, VRAM sizing). Runtime code must reference TensorZero role names (orchestrator, utility, reasoning, embed, coding), not these concrete model IDs. See `pmoves/docs/MODEL_SOURCE_OF_TRUTH.md`.
+
 ## Table of Contents
 
 1. [Quick Start](#quick-start)

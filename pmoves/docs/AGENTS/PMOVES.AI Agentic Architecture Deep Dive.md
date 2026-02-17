@@ -38,7 +38,7 @@ The second layer of the taxonomy characterizes agents that are not static but dy
 
 A critical innovation highlighted in the research is the **Reflective Glance-or-Gaze (GoG)** mechanism, particularly for multi-modal agents. Standard visual models often process images or video frames in a monolithic pass, which is computationally expensive and prone to "visual redundancy." GoG introduces a **Selective Gaze** mechanism. The agent first takes a low-cost "glance" at the global context to identify regions of high entropy or relevance. It then makes a decision to "gaze"—to deploy high-resolution processing resources—only on those specific regions.9 This is underpinned by a dual-stage training strategy involving **Reflective Behavior Alignment** (learning *where* to look) and **Complexity-Adaptive Reinforcement Learning** (learning *how deep* to reason).10
 
-**PMOVES Alignment:** This theoretical framework finds concrete implementation in the PMOVES **Media Ingestion Pipeline**. The **Channel Monitor** and video analysis services utilize a hierarchical model strategy. A lightweight, efficient model (like **YOLOv8** running on a Jetson Orin) performs the "glance," detecting objects, scene changes, and potential points of interest in real-time video feeds.11 Only when a frame is flagged as significant does the system invoke a heavier, more capable model (such as **Qwen-2.5-Omni** or **GPT-4o**) to perform the "gaze"—generating detailed captions, extracting text, or analyzing sentiment.11 This **Active Visual Planning** is essential for processing high-bandwidth data streams on edge hardware without saturating the compute budget.
+**PMOVES Alignment:** This theoretical framework finds concrete implementation in the PMOVES **Media Ingestion Pipeline**. The **Channel Monitor** and video analysis services utilize a hierarchical model strategy. A lightweight, efficient model (like **YOLOv8** running on a Jetson Orin) performs the "glance," detecting objects, scene changes, and potential points of interest in real-time video feeds.11 Only when a frame is flagged as significant does the system invoke a heavier, more capable model (routed via TensorZero to a vision-language or orchestrator model) to perform the "gaze"—generating detailed captions, extracting text, or analyzing sentiment.11 This **Active Visual Planning** is essential for processing high-bandwidth data streams on edge hardware without saturating the compute budget.
 
 ### **2.3 Collective Multi-Agent Reasoning: Swarm Intelligence**
 
@@ -48,7 +48,7 @@ The apex of the taxonomy is collective reasoning, where intelligence emerges not
 
 Collaborative systems often suffer from overhead; the cost of coordination can outweigh the benefits of specialization. The **OneFlow** algorithm addresses this by automatically optimizing agentic workflows. It analyzes the task requirements and determines the optimal topology—when to spawn parallel agents, when to enforce sequential dependencies, and crucially, when to collapse a multi-agent workflow back into a single-agent execution to save tokens and reduce latency.13
 
-**PMOVES Alignment:** PMOVES operationalizes OneFlow logic through its **mprocs** orchestration layer. The system supports **"Fusion Threads,"** where a prompt is sent to multiple models (e.g., Claude 3.5 Sonnet and Gemini 1.5 Pro) simultaneously to generate diverse perspectives, which are then aggregated for consensus.1 However, the **Agent Zero** supervisor also possesses the capability to execute tasks serially if the complexity assessment determines that a swarm is unnecessary. This dynamic topology adjustment—scaling from a single thread to a parallel swarm and back—ensures that PMOVES maximizes the "Token-to-Insight" ratio, aligning with the efficiency goals of OneFlow.
+**PMOVES Alignment:** PMOVES operationalizes OneFlow logic through its **mprocs** orchestration layer. The system supports **"Fusion Threads,"** where a prompt is sent to multiple models (via TensorZero multi-provider routing) simultaneously to generate diverse perspectives, which are then aggregated for consensus.1 However, the **Agent Zero** supervisor also possesses the capability to execute tasks serially if the complexity assessment determines that a swarm is unnecessary. This dynamic topology adjustment—scaling from a single thread to a parallel swarm and back—ensures that PMOVES maximizes the "Token-to-Insight" ratio, aligning with the efficiency goals of OneFlow.
 
 ## ---
 
@@ -154,7 +154,7 @@ The ambition of PMOVES requires a stratified hardware strategy that optimizes th
 * **Role:** Deep Reasoning, Orchestration, Training, and hosting the "Brain" models.  
 * **Models:**  
   * **Agent Zero:** Runs on **Qwen-2.5-14B** or **Phi-3-Medium (14B)**. These models fit comfortably within 24GB VRAM while offering state-of-the-art reasoning capabilities.  
-  * **Hi-RAG Reasoning:** Uses **DeepSeek-V3.1** (or its distilled variants) for complex, multi-hop logical tasks. While the full 671B model requires a cluster (or API), distilled versions or quantized 70B models can run on dual-3090 setups or the RTX 5090\.11  
+  * **Hi-RAG Reasoning:** Uses a **reasoning model** (e.g., DeepSeek-V3.1 distilled — see HARDWARE_TTS_REQUIREMENTS.md for sizing) for complex, multi-hop logical tasks. Runtime routing via TensorZero; distilled/quantized variants can run on dual-3090 or RTX 5090.11  
   * **Backend:** **vLLM** is the mandatory inference backend here, enabling continuous batching and high throughput for the orchestration API.11
 
 ### **6.2 Edge / Field: The Edge Compute Tier**
@@ -170,7 +170,7 @@ The ambition of PMOVES requires a stratified hardware strategy that optimizes th
 
 To bridge the gap between local hardware and frontier capabilities, PMOVES integrates **Venice.ai**.
 
-* **Role:** Provides private, uncensored access to massive models (Qwen-235B, Llama-405B) via an OpenAI-compatible API.  
+* **Role:** Provides private, uncensored access to frontier-scale models (see HARDWARE_TTS_REQUIREMENTS.md for specific model IDs) via an OpenAI-compatible API.  
 * **Mechanism:** When a local agent encounters a task exceeding its reasoning capacity (e.g., a "Big Thread" requiring complex architectural design), it can offload the specific inference request to Venice.ai. This allows the local mesh to exhibit "Superintelligence" properties without owning H100 clusters, while the **VVV token staking** model offers a crypto-economic mechanism for sustainable compute access.7
 
 ## ---
@@ -197,7 +197,7 @@ The result is a system that is not merely a tool, but a **self-evolving organism
 
 | Component | Function & Role | Alignment with Agentic Reasoning (arXiv:2601.12538) | BoTZ Engineering & Implementation Detail |
 | :---- | :---- | :---- | :---- |
-| **Agent Zero** | **Control Plane:** Master Orchestrator & Planner | **Foundational Layer:** Implements Planning & Tool Use. Aligns with **PPA-Plan** by checking "Expertise Files" for constraints. | **Class 3 Agent:** Manages "Big Threads" (B). Decomposes intent into DAGs. Uses **Opus 4.5** for high-level architecture. |
+| **Agent Zero** | **Control Plane:** Master Orchestrator & Planner | **Foundational Layer:** Implements Planning & Tool Use. Aligns with **PPA-Plan** by checking "Expertise Files" for constraints. | **Class 3 Agent:** Manages "Big Threads" (B). Decomposes intent into DAGs. Uses an **orchestrator model** (via TensorZero) for high-level architecture. |
 | **Archon / Hi-RAG** | **Knowledge Plane:** Retrieval & Synthesis | **Foundational & Collective:** Implements **Agentic Search**. Enables **Multi-Hop Reasoning** across global graph nodes. | **Memory Layer:** Provides persistent context via cookbook/ and vector stores. Supports **Chained Threads** (C). |
 | **LangExtract** | **Sensory Cortex:** Perception & Ingestion | **Foundational:** Specialized **Tool Use** for converting unstructured data to structured schemas. | **Tool:** Standardized skill exposed via **MCP**. Uses deterministic LLM calls (Fabric patterns) for precision. |
 | **DeepResearch** | **Worker Node:** Deep Analysis & Synthesis | **Collective Layer:** Spawns sub-agents for parallel research. | **Parallel Thread** (P): Utilizes **mprocs** to run multiple research streams concurrently. Logs to Open Notebook. |

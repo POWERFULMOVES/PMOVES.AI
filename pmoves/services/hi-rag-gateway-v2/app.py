@@ -1,4 +1,4 @@
-import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading
+import os, time, math, json, logging, re, sys, contextlib, ipaddress, copy, threading, socket, inspect
 import importlib.util
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -14,7 +14,7 @@ import torch
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from services.common.geometry_params import get_decoder_pack
 from services.common.hrm_sidecar import HrmDecoderController
 import asyncio
@@ -358,6 +358,75 @@ def _coerce_vector(vec: Any) -> Optional[List[float]]:
         return None
     return out if out else None
 
+
+def _qdrant_search(
+    *,
+    collection_name: str,
+    query_vector: List[float],
+    limit: int,
+    query_filter: Optional[Filter],
+    with_payload: bool = True,
+    with_vectors: bool = False,
+):
+    """Handle qdrant-client API drift (`search` vs `query_points`)."""
+    if hasattr(qdrant, "search"):
+        return qdrant.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+
+    if hasattr(qdrant, "query_points"):
+        kwargs = {
+            "collection_name": collection_name,
+            "limit": limit,
+            "query_filter": query_filter,
+            "with_payload": with_payload,
+            "with_vectors": with_vectors,
+        }
+        try:
+            resp = qdrant.query_points(query=query_vector, **kwargs)
+        except TypeError:
+            # Older signatures may still use `vector=...`.
+            resp = qdrant.query_points(vector=query_vector, **kwargs)
+        if isinstance(resp, list):
+            return resp
+        points = getattr(resp, "points", None)
+        if isinstance(points, list):
+            return points
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        if isinstance(resp, dict):
+            dict_points = resp.get("points")
+            if isinstance(dict_points, list):
+                return dict_points
+            dict_result = resp.get("result")
+            if isinstance(dict_result, list):
+                return dict_result
+        return []
+
+    if hasattr(qdrant, "search_points"):
+        resp = qdrant.search_points(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+        if isinstance(resp, list):
+            return resp
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        return []
+
+    raise AttributeError("qdrant client has no compatible search/query API")
+
 def ensure_qdrant_collection(vector_dim: int):
     """Create or resync the Qdrant collection when the embed dimension changes."""
     try:
@@ -671,6 +740,10 @@ async def _fetch_geometry_pack(
     base_url = (rest_url or SUPABASE_REST_URL or "").strip()
     if not base_url:
         return None
+    # Validate URL scheme to prevent SSRF via env or parameter injection
+    if urlparse(base_url).scheme not in ("http", "https"):
+        logger.warning("Invalid scheme in Supabase REST URL: %s", base_url[:60])
+        return None
     base = base_url.rstrip("/")
     if not base.endswith("/rest/v1"):
         base = f"{base}/rest/v1"
@@ -945,13 +1018,22 @@ async def _geometry_realtime_worker(ws_url: str, api_key: str) -> None:
         if SUPABASE_REALTIME_KEY:
             headers["Authorization"] = f"Bearer {SUPABASE_REALTIME_KEY}"
         try:
-            async with websockets.connect(
-                full_url,
-                ping_interval=20,
-                ping_timeout=20,
-                max_queue=None,
-                extra_headers=headers or None,
-            ) as ws:
+            connect_kwargs: Dict[str, Any] = {
+                "ping_interval": 20,
+                "ping_timeout": 20,
+                "max_queue": None,
+            }
+            if headers:
+                # websockets>=13 renamed extra_headers -> additional_headers.
+                try:
+                    sig = inspect.signature(websockets.connect)
+                    if "additional_headers" in sig.parameters:
+                        connect_kwargs["additional_headers"] = headers
+                    else:
+                        connect_kwargs["extra_headers"] = headers
+                except Exception:
+                    connect_kwargs["extra_headers"] = headers
+            async with websockets.connect(full_url, **connect_kwargs) as ws:
                 join_payload = {
                     "topic": "realtime:geometry.cgp.v1",
                     "event": "phx_join",
@@ -1037,6 +1119,12 @@ CHIT_DECODE_AUDIO = os.environ.get("CHIT_DECODE_AUDIO", "false").lower()=="true"
 CHIT_CODEBOOK_PATH = os.environ.get("CHIT_CODEBOOK_PATH", "datasets/structured_dataset.jsonl")
 CHIT_T5_MODEL = os.environ.get("CHIT_T5_MODEL","t5-small")
 CHIT_CLIP_MODEL = os.environ.get("CHIT_CLIP_MODEL","clip-ViT-B-32")
+CHIT_IMAGE_FETCH_ALLOW_PRIVATE = os.environ.get("CHIT_IMAGE_FETCH_ALLOW_PRIVATE", "false").lower()=="true"
+CHIT_IMAGE_FETCH_ALLOWED_HOSTS = {
+    host.strip().lower()
+    for host in os.environ.get("CHIT_IMAGE_FETCH_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+}
 CHIT_PERSIST_DB = os.environ.get("CHIT_PERSIST_DB","false").lower()=="true"
 GAN_SIDECAR_ENABLED = os.environ.get("GAN_SIDECAR_ENABLED", "false").lower()=="true"
 
@@ -1168,6 +1256,96 @@ def require_admin_tailscale(request: Request):
     return require_tailscale(request, admin_only=True)
 
 
+def _host_is_private_or_internal(hostname: str) -> bool:
+    host = (hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in {"localhost"} or host.endswith(".local"):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+
+    seen: set[str] = set()
+    for _, _, _, _, sockaddr in infos:
+        ip_raw = sockaddr[0]
+        if ip_raw in seen:
+            continue
+        seen.add(ip_raw)
+        try:
+            ip_obj = ipaddress.ip_address(ip_raw)
+        except ValueError:
+            return True
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _validate_remote_image_url(raw_url: Any) -> str:
+    url = str(raw_url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(400, f"invalid image URL scheme: {parsed.scheme or '<none>'}")
+    if not parsed.hostname:
+        raise HTTPException(400, "invalid image URL host")
+    if parsed.username or parsed.password:
+        raise HTTPException(400, "image URL credentials are not allowed")
+
+    host = parsed.hostname.lower()
+    if CHIT_IMAGE_FETCH_ALLOWED_HOSTS and host not in CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        raise HTTPException(400, f"image host not allowed: {host}")
+    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE and not CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        if _host_is_private_or_internal(host):
+            raise HTTPException(400, f"private/internal image host blocked: {host}")
+    return url
+
+
+def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response:
+    """Validate URL for SSRF and fetch with DNS-resolved IP check.
+
+    Resolves DNS once and validates all IPs against private ranges before fetch.
+    Note: ``requests.get`` re-resolves DNS independently, so this does not fully
+    prevent DNS-rebinding TOCTOU attacks but raises the bar significantly.
+    """
+    url = _validate_remote_image_url(raw_url)
+    parsed = urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    try:
+        addrs = socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise HTTPException(400, f"cannot resolve image host: {host}")
+    if not addrs:
+        raise HTTPException(400, f"no addresses for host: {host}")
+
+    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE:
+        for _, _, _, _, sockaddr in addrs:
+            try:
+                ip_obj = ipaddress.ip_address(sockaddr[0])
+            except ValueError:
+                raise HTTPException(400, f"invalid IP for host: {host}")
+            if (
+                ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
+                or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified
+            ):
+                raise HTTPException(400, f"private/internal image host blocked: {host}")
+
+    resp = requests.get(url, timeout=timeout, allow_redirects=False)
+    resp.raise_for_status()
+    if 300 <= resp.status_code < 400:
+        raise HTTPException(400, f"redirect responses are not allowed for image URL: {url}")
+    return resp
+
+
 def _build_media_url(media: Dict[str, Any]) -> Optional[str]:
     modality = (media.get("modality") or "").lower()
     ref_id = media.get("ref_id") or media.get("uid") or ""
@@ -1268,12 +1446,13 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         except Exception:
             pass
         must = [FieldCondition(key="namespace", match=MatchValue(value=req.namespace))]
-        hits = qdrant.search(
+        hits = _qdrant_search(
             collection_name=COLL,
             query_vector=vec,
             limit=max(req.k, RERANK_TOPN),
             query_filter=Filter(must=must),
             with_payload=True,
+            with_vectors=False,
         )
         logger.warning("hirag.query hits=%d namespace=%s ip=%s", len(hits), req.namespace, client_ip)
     except Exception as e:
@@ -1797,8 +1976,7 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
         img_list=[]
         for url in images:
-            r = requests.get(url, timeout=20)
-            r.raise_for_status()
+            r = _fetch_remote_image(url)
             img = Image.open(io.BytesIO(r.content)).convert('RGB')
             img_list.append(img)
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
@@ -1839,6 +2017,8 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
                     accept_threshold=accept_threshold,
                 )
         return payload
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("image decode error")
         raise HTTPException(500, f"image decode error: {e}")

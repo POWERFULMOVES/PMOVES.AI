@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Graphiti Signature",
+  "description": "Signature block emitted by an AI agent or human contributor after significant work. Used in trail entries, NATS events, and CGP v2 attribution.",
+  "type": "object",
+  "required": [
+    "agent_id",
+    "glyph",
+    "color",
+    "phase",
+    "timestamp",
+    "summary"
+  ],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "description": "Contributor identifier — must match a key in agent_signatures.yaml",
+      "examples": ["claude-opus", "kilocode", "codex", "gemini", "cline", "powerfulmoves", "crush"]
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable display name",
+      "examples": ["Claude Opus", "KiloCode"]
+    },
+    "glyph": {
+      "type": "string",
+      "maxLength": 2,
+      "description": "Single Unicode glyph identifying the contributor",
+      "examples": ["\u25c6", "\u25b2", "\u25a0", "\u2605", "\u25cf", "\u26a1"]
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "Primary brand color (hex)",
+      "examples": ["#7C3AED", "#059669"]
+    },
+    "accent": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "Accent color (hex)"
+    },
+    "voice": {
+      "type": "string",
+      "enum": ["analytical", "architectural", "terse", "strategic", "conversational", "directive", "companion"],
+      "description": "Writing voice used in trail entries"
+    },
+    "phase": {
+      "type": "string",
+      "description": "Project phase during which the work was done",
+      "examples": ["Phase H", "Phase C", "KiloCode Onboarding"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of signature"
+    },
+    "resonance": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Strength domains activated during this work"
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "One-line summary of the work signed"
+    },
+    "handoff": {
+      "type": "object",
+      "description": "Handoff context for the next contributor",
+      "properties": {
+        "done": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Completed items"
+        },
+        "remaining": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Items left behind (not blockers)"
+        },
+        "for_next_agent": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Guidance for the next contributor"
+        }
+      },
+      "additionalProperties": false
+    },
+    "cgp_attribution": {
+      "type": "object",
+      "description": "Optional CGP v2 attribution extension",
+      "properties": {
+        "contributor_address": {
+          "type": "string",
+          "description": "CGP contributor address (matches agent_id)"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Dirichlet-weighted contribution fraction"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

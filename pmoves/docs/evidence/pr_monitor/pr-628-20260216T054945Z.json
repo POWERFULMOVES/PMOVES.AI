@@ -1,0 +1,79 @@
+{
+  "captured_at": "2026-02-16T05:49:45.006346+00:00",
+  "repo": "POWERFULMOVES/PMOVES.AI",
+  "pr": 628,
+  "summary": {
+    "checks_total": 5,
+    "checks_pending": 0,
+    "checks_failed": 0,
+    "checks_passed": 5
+  },
+  "pr_view": {
+    "author": {
+      "id": "U_kgDOCHrjYA",
+      "is_bot": false,
+      "login": "POWERFULMOVES",
+      "name": ""
+    },
+    "baseRefName": "PMOVES.AI-Edition-Hardened",
+    "headRefName": "chore/deps-axios-1.13.5-hardened",
+    "latestReviews": [],
+    "number": 628,
+    "reviewDecision": "",
+    "state": "MERGED",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T05:48:57Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22051627176/job/63710830319",
+        "name": "Analyze (actions)",
+        "startedAt": "2026-02-16T05:48:06Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T05:49:10Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22051627176/job/63710830316",
+        "name": "Analyze (javascript-typescript)",
+        "startedAt": "2026-02-16T05:48:06Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T05:49:30Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22051627176/job/63710830325",
+        "name": "Analyze (python)",
+        "startedAt": "2026-02-16T05:48:06Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T05:48:49Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/runs/63710868757",
+        "name": "CodeQL",
+        "startedAt": "2026-02-16T05:48:47Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      },
+      {
+        "__typename": "StatusContext",
+        "context": "CodeRabbit",
+        "startedAt": "2026-02-16T05:48:06Z",
+        "state": "SUCCESS",
+        "targetUrl": ""
+      }
+    ],
+    "title": "chore(deps): bump axios in UI + jellyfin-ai gateway (hardened)",
+    "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/628"
+  },
+  "reviews": [],
+  "issue_comments": [],
+  "review_comments": []
+}

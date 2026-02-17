@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - integration
       - PMOVES.AI-Edition-Hardened
     paths:
       - 'pmoves/supabase/**/*.sql'
@@ -14,6 +15,10 @@ on:
       - 'pmoves/docs/SUPABASE_*.md'
       - '.github/workflows/chit-contract.yml'
   pull_request:
+    branches:
+      - main
+      - integration
+      - PMOVES.AI-Edition-Hardened
     paths:
       - 'pmoves/supabase/**/*.sql'
       - 'pmoves/supabase/initdb/**'
@@ -26,7 +31,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: [self-hosted, ai-lab]
+    runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -50,7 +55,7 @@ jobs:
         run: |
           if ! command -v rg &> /dev/null; then
             echo "Installing ripgrep..."
-            apt-get update -qq && apt-get install -y ripgrep
+            sudo apt-get update -qq && sudo apt-get install -y ripgrep
           else
             echo "ripgrep already installed at $(which rg)"
           fi

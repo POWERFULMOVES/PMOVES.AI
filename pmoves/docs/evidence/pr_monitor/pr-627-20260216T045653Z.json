@@ -1,0 +1,105 @@
+{
+  "captured_at": "2026-02-16T04:56:53.147385+00:00",
+  "repo": "POWERFULMOVES/PMOVES.AI",
+  "pr": 627,
+  "summary": {
+    "checks_total": 6,
+    "checks_pending": 0,
+    "checks_failed": 0,
+    "checks_passed": 6
+  },
+  "pr_view": {
+    "author": {
+      "id": "U_kgDOCHrjYA",
+      "is_bot": false,
+      "login": "POWERFULMOVES",
+      "name": ""
+    },
+    "baseRefName": "PMOVES.AI-Edition-Hardened",
+    "headRefName": "feat/submodule-layer-deterministic-validation",
+    "latestReviews": [
+      {
+        "id": "",
+        "author": {
+          "login": "coderabbitai"
+        },
+        "authorAssociation": "CONTRIBUTOR",
+        "body": "**Actionable comments posted: 1**\n\n> [!CAUTION]\n> Some comments are outside the diff and can\u2019t be posted inline due to platform limitations.\n> \n> \n> \n> <details>\n> <summary>\u26a0\ufe0f Outside diff range comments (1)</summary><blockquote>\n> \n> <details>\n> <summary>pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md (1)</summary><blockquote>\n> \n> `2-2`: _\u26a0\ufe0f Potential issue_ | _\ud83d\udfe1 Minor_\n> \n> **Update the \u201cLast updated\u201d date to reflect this change.**\n> \n> The doc now includes a new link, so the date should reflect the current edit window (2026-02-16). As per coding guidelines, keep status claims aligned with evidence in runbooks and smokes.\n> \n> <details>\n> <summary>\u270f\ufe0f Suggested fix</summary>\n> \n> ```diff\n> -_Last updated: 2026-02-14_\n> +_Last updated: 2026-02-16_\n> ```\n> </details>\n> \n> </blockquote></details>\n> \n> </blockquote></details>\n\n<details>\n<summary>\ud83e\udd16 Fix all issues with AI agents</summary>\n\n```\nIn `@pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`:\n- Around line 65-77: Replace the definitive cleanliness claims under the\n\"Clean/near-clean worktrees\" and \"Dirty worktrees requiring triage\" sections\nwith guidance to verify state at runtime\u2014e.g., change entries like\n`PMOVES.AI-hardened-audit`, `PMOVES.AI`, and `PMOVES.AI-slice-cipher` to a\nchecklist or operator note that instructs readers to run git status/inspect\nmerge state (or link to the runbook/smoke tests) rather than asserting they are\nclean/dirty; update the section header text and any bullet wording to indicate\nthese are examples or require verification instead of factual snapshots.\n```\n\n</details>\n\n<!-- This is an auto-generated comment by CodeRabbit for review status -->",
+        "submittedAt": "2026-02-16T02:24:49Z",
+        "includesCreatedEdit": false,
+        "reactionGroups": [],
+        "state": "COMMENTED",
+        "commit": {
+          "oid": ""
+        }
+      }
+    ],
+    "number": 627,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:23Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240220/job/63703810688",
+        "name": "Analyze (actions)",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:36:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240225/job/63703810683",
+        "name": "Integration Contract Gate",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "Integration Contract"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:45Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240220/job/63703810686",
+        "name": "Analyze (javascript-typescript)",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240220/job/63703810680",
+        "name": "Analyze (python)",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:14Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/runs/63703841013",
+        "name": "CodeQL",
+        "startedAt": "2026-02-16T03:37:12Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      },
+      {
+        "__typename": "StatusContext",
+        "context": "CodeRabbit",
+        "startedAt": "2026-02-16T03:36:32Z",
+        "state": "SUCCESS",
+        "targetUrl": ""
+      }
+    ],
+    "title": "feat(preflight): deterministic submodule lane + showtime verify pages",
+    "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627"
+  },
+  "reviews": [],
+  "issue_comments": [],
+  "review_comments": []
+}

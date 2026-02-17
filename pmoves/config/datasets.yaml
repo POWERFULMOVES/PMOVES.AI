@@ -1,0 +1,224 @@
+# =============================================================================
+# PMOVES Dataset Catalog — HuggingFace Publishing Pipeline
+# =============================================================================
+# Defines datasets that PMOVES builds and publishes to HuggingFace Hub.
+# These are CHIT-distilled datasets: raw data encoded through CGP v0.2
+# geometry, shaped by EvoSwarm-evolved parameters, targeting model training.
+#
+# Publishing: pmoves/scripts/publish_dataset.py
+# Auth: HuggingFace Hub (DARKXSIDE org)
+# Format: Parquet (columnar, efficient for training pipelines)
+# =============================================================================
+
+hf_organization: "DARKXSIDE"
+
+datasets:
+  # ===========================================================================
+  # Text Lane — CHIT-encoded text corpus
+  # ===========================================================================
+  pmoves-chit-text:
+    hf_id: "DARKXSIDE/pmoves-chit-text"
+    description: >
+      CHIT-encoded text corpus — CGP v0.2 packets from the PMOVES ingestion
+      pipeline. Each row pairs original text with its geometric encoding and
+      reconstruction, enabling models to learn the CHIT compression manifold.
+    modality: text
+    sources:
+      - extract-worker    # Text embedding + indexing
+      - langextract       # Language detection + NLP
+      - hi-rag-v2         # Hybrid RAG query/response pairs
+    format: parquet
+    columns:
+      - name: cgp_packet
+        type: json
+        description: "CGP v0.2 packet (super_nodes, constellations, points)"
+      - name: original_text
+        type: string
+        description: "Source text before CHIT encoding"
+      - name: reconstruction
+        type: string
+        description: "Text reconstructed from CGP packet"
+      - name: delta
+        type: float
+        description: "Hyperbolic curvature parameter"
+      - name: kappa
+        type: float
+        description: "Spectral concentration parameter"
+      - name: hz
+        type: float
+        description: "Frequency domain parameter"
+      - name: fidelity_score
+        type: float
+        description: "Reconstruction fidelity (0.0-1.0, higher = more faithful)"
+      - name: evoswarm_pack_id
+        type: string
+        description: "EvoSwarm parameter pack that shaped this encoding"
+    supabase_source:
+      table: "pmoves_core.geometry_cgp_v1"
+      filter: "payload->>spec=eq.chit.cgp.v0.2"
+
+  # ===========================================================================
+  # Multimodal Lane — Cross-modal CHIT packets
+  # ===========================================================================
+  pmoves-chit-multimodal:
+    hf_id: "DARKXSIDE/pmoves-chit-multimodal"
+    description: >
+      Multi-lane CHIT dataset — text, image, and audio CGP packets with
+      reconstruction targets. Each lane uses lane-specific EvoSwarm-evolved
+      geometry parameters (delta, kappa, Hz). Enables cross-modal training
+      where models learn to map between modalities via shared geometric space.
+    modality: [text, image, audio]
+    sources:
+      - pmoves-yt               # Video transcripts + audio
+      - media-video-analyzer    # Frame analysis (YOLO)
+      - media-audio-analyzer    # Audio emotion/speaker
+      - extract-worker          # Text embeddings
+    format: parquet
+    columns:
+      - name: lane
+        type: string
+        description: "Modality lane: text, image, audio, or mixed"
+      - name: cgp_packet
+        type: json
+        description: "CGP v0.2 packet for this modality"
+      - name: original
+        type: bytes
+        description: "Original data (text string, image bytes, audio bytes)"
+      - name: original_mime
+        type: string
+        description: "MIME type of original (text/plain, image/png, audio/wav)"
+      - name: reconstruction
+        type: bytes
+        description: "Reconstructed data from CGP packet"
+      - name: modality_scores
+        type: json
+        description: "Per-dimension fidelity scores {semantic, spectral, temporal}"
+      - name: evoswarm_pack_id
+        type: string
+        description: "EvoSwarm parameter pack that shaped this encoding"
+    supabase_source:
+      table: "pmoves_core.geometry_cgp_v1"
+      filter: "payload->>spec=eq.chit.cgp.v0.2"
+
+  # ===========================================================================
+  # Agent Traces — Behavioral cloning + DPO pairs
+  # ===========================================================================
+  pmoves-agent-traces:
+    hf_id: "DARKXSIDE/pmoves-agent-traces"
+    description: >
+      Agent execution traces for behavioral cloning and DPO training.
+      Chosen/rejected response pairs from production Agent Zero and Archon
+      runs, with reward signals derived from task completion and user feedback.
+    modality: text
+    sources:
+      - agent-zero               # Orchestrator traces
+      - archon                   # Planning/execution traces
+      - tensorzero-clickhouse    # Inference logs with latency/quality
+    format: parquet
+    columns:
+      - name: agent_id
+        type: string
+        description: "Agent that produced the trace (agent_zero, archon, etc.)"
+      - name: function
+        type: string
+        description: "TensorZero function/role used (orchestrator, coding, etc.)"
+      - name: prompt
+        type: string
+        description: "Input prompt or task description"
+      - name: chosen_response
+        type: string
+        description: "Preferred response (higher reward)"
+      - name: rejected_response
+        type: string
+        description: "Rejected response (lower reward)"
+      - name: reward_signal
+        type: float
+        description: "Reward score (0.0-1.0) — task completion, user feedback"
+      - name: model_id
+        type: string
+        description: "Concrete model that generated responses"
+      - name: latency_ms
+        type: float
+        description: "Inference latency in milliseconds"
+      - name: token_count
+        type: integer
+        description: "Total tokens (prompt + completion)"
+    clickhouse_source:
+      query: >
+        SELECT
+          function_name AS function,
+          model_name AS model_id,
+          input AS prompt,
+          output AS chosen_response,
+          inference_params,
+          processing_time_ms AS latency_ms
+        FROM inference
+        WHERE timestamp > now() - INTERVAL 7 DAY
+        ORDER BY timestamp DESC
+
+# =============================================================================
+# EvoSwarm Training Genome Parameters
+# =============================================================================
+# These parameters are evolved by EvoSwarm and injected into training runs.
+# Published on NATS: evoswarm.training.genome.v1
+# Fitness reported on: evoswarm.training.fitness.v1
+
+evoswarm_training_genome:
+  parameters:
+    learning_rate:
+      range: [1.0e-5, 1.0e-3]
+      description: "Base learning rate for fine-tuning"
+    chit_weight:
+      range: [0.1, 0.9]
+      description: "Weight of CHIT reconstruction loss in total training loss"
+    reconstruction_target:
+      choices: [text, image, audio, cross]
+      description: "Which lane(s) the model trains to reconstruct"
+    lane_mixing_ratio:
+      range: [0.0, 1.0]
+      description: "0.0 = pure single-lane, 1.0 = pure cross-lane training"
+    distillation_temperature:
+      range: [0.5, 5.0]
+      description: "Softmax temperature for knowledge distillation"
+  fitness_function: "reconstruction_fidelity * cost_efficiency"
+  population_size: 16
+  generations_per_epoch: 5
+
+# =============================================================================
+# Publishing Configuration
+# =============================================================================
+publishing:
+  default_license: "apache-2.0"
+  default_tags:
+    - pmoves
+    - chit
+    - geometry
+    - cgp-v0.2
+  card_template: |
+    ---
+    license: {license}
+    tags: {tags}
+    ---
+    # {title}
+
+    {description}
+
+    ## Source
+    Built by the PMOVES.AI pipeline. Data encoded through CHIT (Compressed
+    Hierarchical Information Transfer) geometry using CGP v0.2 packets.
+
+    ## Geometry Parameters
+    - **delta**: Hyperbolic curvature — controls information density
+    - **kappa**: Spectral concentration — controls frequency distribution
+    - **Hz**: Frequency domain — controls temporal/spectral resolution
+
+    ## EvoSwarm
+    Geometry parameters are evolved by EvoSwarm (port 8113) using
+    evolutionary optimization. Each row's `evoswarm_pack_id` links to
+    the specific parameter pack that shaped its encoding.
+
+    ## Usage
+    ```python
+    from datasets import load_dataset
+    ds = load_dataset("{hf_id}")
+    ```

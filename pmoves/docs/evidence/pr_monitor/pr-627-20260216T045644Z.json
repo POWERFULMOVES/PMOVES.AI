@@ -1,0 +1,914 @@
+{
+  "captured_at": "2026-02-16T04:56:44.260245+00:00",
+  "repo": "POWERFULMOVES/PMOVES.AI",
+  "pr": 627,
+  "summary": {
+    "checks_total": 6,
+    "checks_pending": 0,
+    "checks_failed": 0,
+    "checks_passed": 6
+  },
+  "pr_view": {
+    "author": {
+      "id": "U_kgDOCHrjYA",
+      "is_bot": false,
+      "login": "POWERFULMOVES",
+      "name": ""
+    },
+    "baseRefName": "PMOVES.AI-Edition-Hardened",
+    "headRefName": "feat/submodule-layer-deterministic-validation",
+    "latestReviews": [
+      {
+        "id": "",
+        "author": {
+          "login": "coderabbitai"
+        },
+        "authorAssociation": "CONTRIBUTOR",
+        "body": "**Actionable comments posted: 1**\n\n> [!CAUTION]\n> Some comments are outside the diff and can\u2019t be posted inline due to platform limitations.\n> \n> \n> \n> <details>\n> <summary>\u26a0\ufe0f Outside diff range comments (1)</summary><blockquote>\n> \n> <details>\n> <summary>pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md (1)</summary><blockquote>\n> \n> `2-2`: _\u26a0\ufe0f Potential issue_ | _\ud83d\udfe1 Minor_\n> \n> **Update the \u201cLast updated\u201d date to reflect this change.**\n> \n> The doc now includes a new link, so the date should reflect the current edit window (2026-02-16). As per coding guidelines, keep status claims aligned with evidence in runbooks and smokes.\n> \n> <details>\n> <summary>\u270f\ufe0f Suggested fix</summary>\n> \n> ```diff\n> -_Last updated: 2026-02-14_\n> +_Last updated: 2026-02-16_\n> ```\n> </details>\n> \n> </blockquote></details>\n> \n> </blockquote></details>\n\n<details>\n<summary>\ud83e\udd16 Fix all issues with AI agents</summary>\n\n```\nIn `@pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`:\n- Around line 65-77: Replace the definitive cleanliness claims under the\n\"Clean/near-clean worktrees\" and \"Dirty worktrees requiring triage\" sections\nwith guidance to verify state at runtime\u2014e.g., change entries like\n`PMOVES.AI-hardened-audit`, `PMOVES.AI`, and `PMOVES.AI-slice-cipher` to a\nchecklist or operator note that instructs readers to run git status/inspect\nmerge state (or link to the runbook/smoke tests) rather than asserting they are\nclean/dirty; update the section header text and any bullet wording to indicate\nthese are examples or require verification instead of factual snapshots.\n```\n\n</details>\n\n<!-- This is an auto-generated comment by CodeRabbit for review status -->",
+        "submittedAt": "2026-02-16T02:24:49Z",
+        "includesCreatedEdit": false,
+        "reactionGroups": [],
+        "state": "COMMENTED",
+        "commit": {
+          "oid": ""
+        }
+      }
+    ],
+    "number": 627,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:23Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240220/job/63703810688",
+        "name": "Analyze (actions)",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:36:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240225/job/63703810683",
+        "name": "Integration Contract Gate",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "Integration Contract"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:45Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240220/job/63703810686",
+        "name": "Analyze (javascript-typescript)",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22049240220/job/63703810680",
+        "name": "Analyze (python)",
+        "startedAt": "2026-02-16T03:36:33Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T03:37:14Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/runs/63703841013",
+        "name": "CodeQL",
+        "startedAt": "2026-02-16T03:37:12Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      },
+      {
+        "__typename": "StatusContext",
+        "context": "CodeRabbit",
+        "startedAt": "2026-02-16T03:36:32Z",
+        "state": "SUCCESS",
+        "targetUrl": ""
+      }
+    ],
+    "title": "feat(preflight): deterministic submodule lane + showtime verify pages",
+    "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627"
+  },
+  "reviews": [
+    {
+      "id": 3806279252,
+      "node_id": "PRR_kwDOPkuAKM7i3zZU",
+      "user": {
+        "login": "github-advanced-security[bot]",
+        "id": 62310815,
+        "node_id": "MDM6Qm90NjIzMTA4MTU=",
+        "avatar_url": "https://avatars.githubusercontent.com/in/57789?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/github-advanced-security%5Bbot%5D",
+        "html_url": "https://github.com/apps/github-advanced-security",
+        "followers_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "",
+      "state": "COMMENTED",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#pullrequestreview-3806279252",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "author_association": "NONE",
+      "_links": {
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#pullrequestreview-3806279252"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "submitted_at": "2026-02-16T02:06:28Z",
+      "commit_id": "d513b6cc29f96115fe83d429547469ee8e447152"
+    },
+    {
+      "id": 3806299195,
+      "node_id": "PRR_kwDOPkuAKM7i34Q7",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "**Actionable comments posted: 5**\n\n> [!CAUTION]\n> Some comments are outside the diff and can\u2019t be posted inline due to platform limitations.\n> \n> \n> \n> <details>\n> <summary>\u26a0\ufe0f Outside diff range comments (1)</summary><blockquote>\n> \n> <details>\n> <summary>pmoves/docs/NEXT_STEPS.md (1)</summary><blockquote>\n> \n> `333-338`: _\u26a0\ufe0f Potential issue_ | _\ud83d\udfe1 Minor_\n> \n> **Duplicate content: the entire block from Line 333 onward is a stale copy of earlier sections.**\n> \n> Lines 333\u2013459 repeat the `# PMOVES v5 \u2022 NEXT_STEPS` header and most of the `Immediate`, `n8n Flow Operations`, `Backlog Snapshot`, `Later`, and `Next Session Focus` sections already present above, but with **stale timestamps** (`2025-09-26`, `2025-10-05`) and missing the newer entries. This looks like a leftover from a prior merge. Remove the duplicate block to avoid confusion and keep a single authoritative section.\n> \n> As per coding guidelines, \"Refresh both `docs/ROADMAP.md` and `docs/NEXT_STEPS.md` when significant features ship, priorities move, or a new sprint starts; adjust their `_Last updated` timestamps\".\n> \n> </blockquote></details>\n> \n> </blockquote></details>\n\n<details>\n<summary>\ud83e\udd16 Fix all issues with AI agents</summary>\n\n```\nIn `@pmoves/docs/MAKE_TARGETS.md`:\n- Around line 190-191: Update the \"bringup-showtime\" bullet so it lists the JSON\nevidence artifact as well as the HTML/MD outputs: mention that the target emits\npmoves/docs/SHOWTIME_VERIFY_LINKS.html|.md and\npmoves/docs/evidence/showtime_links.json (to match the existing showtime-links\nentry). Locate the text containing the existing strings\n\"SHOWTIME_VERIFY_LINKS.html|.md\" and adjust the sentence to explicitly include\n\"pmoves/docs/evidence/showtime_links.json\" so both descriptions are consistent.\n\nIn `@pmoves/tools/bootstrap_light_env.py`:\n- Around line 30-35: The --requirements argument currently uses action=\"append\"\nwith default=[\"tools/requirements-lite.txt\"], causing user values to be appended\nrather than replace; change the parser.add_argument call for \"--requirements\" to\nuse default=None (keep action=\"append\"), and in the entry point (e.g., main() or\nwhere args are processed) add a conditional that sets args.requirements =\n[\"tools/requirements-lite.txt\"] if args.requirements is None so defaulting\nhappens post-parse and user-specified values replace the default.\n\nIn `@pmoves/tools/chit_manifest_sync.py`:\n- Line 10: The module-level bare import \"import yaml\" in\npmoves/tools/chit_manifest_sync.py can raise ImportError if PyYAML isn't\ninstalled; either add a pmoves/tools/requirements-lite.txt listing PyYAML or\nwrap the import in a try/except like manifest_audit.py does and raise SystemExit\nwith a clear message instructing the user to install PyYAML (include the package\nname and optional install command), so that the import failure is handled\ngracefully at startup.\n\nIn `@pmoves/tools/runner_lane_map.py`:\n- Around line 363-371: The code unconditionally sets strict_fail =\nbool(unmapped) which makes unmapped lanes cause exit 2 even when args.strict is\nfalse; change the logic so strict_fail is only driven by unmapped/other checks\nwhen args.strict is true. Specifically, initialize strict_fail = False, then if\nargs.strict set strict_fail = bool(unmapped) and, if args.enforce_phase, OR in\nbool(phase_failures) else OR in bool(unavailable) (using the same symbols:\nstrict_fail, args.strict, args.enforce_phase, unmapped, phase_failures,\nunavailable) so the non-zero exit is only returned when --strict is passed.\n\nIn `@pmoves/tools/runtime_secrets_hydrate.py`:\n- Around line 160-168: The current or-chain for MEILI_MASTER_KEY (and similarly\nFIREFLY_APP_KEY/FIREFLY_ACCESS_TOKEN) lets stub values like \"changeme\"\nshort-circuit and prevents secrets.token_urlsafe from being used; update the\nlogic used by set_if_missing to treat placeholder values as missing by\nfiltering/normalizing env_values and container-found values before the or-chain\n(e.g., trim and compare against known placeholders like \"changeme\" or empty\nstring), or introduce a small helper (used by _find_container_env_value result\nand env_values.get(...).strip()) that returns None for placeholders so that\nsecrets.token_urlsafe(24) will be selected when appropriate; adjust usages for\nMEILI_MASTER_KEY and FIREFLY_APP_KEY to use this sanitation.\n```\n\n</details>\n\n<details>\n<summary>\ud83e\uddf9 Nitpick comments (16)</summary><blockquote>\n\n<details>\n<summary>pmoves/tools/secrets_hardening_audit.py (1)</summary><blockquote>\n\n`27-36`: **Consider skipping additional high-volume directories in `candidate_files()`.**\n\nThe function already skips `.git`, but `rglob(\"*\")` will still traverse `node_modules`, `__pycache__`, `.venv*`, `dist`, `build`, etc. For a large monorepo this can noticeably slow the audit. Adding a few more skip patterns would help.\n\n\n<details>\n<summary>\u267b\ufe0f Suggested skip set</summary>\n\n```diff\n def candidate_files() -> Iterable[Path]:\n     allowed = {\".md\", \".py\", \".sh\", \".yaml\", \".yml\", \".json\", \".txt\"}\n+    skip_dirs = {\".git\", \"node_modules\", \"__pycache__\", \".venv\", \".venv-pmoves\", \"dist\", \"build\"}\n     for path in REPO_ROOT.rglob(\"*\"):\n         if not path.is_file():\n             continue\n-        if \".git\" in path.parts:\n+        if skip_dirs & set(path.parts):\n             continue\n         if path.suffix.lower() not in allowed:\n             continue\n         yield path\n```\n</details>\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/runtime_secrets_hydrate.py (1)</summary><blockquote>\n\n`33-54`: **`_write_env_file` reads the file even when `updates` is empty.**\n\nMinor: if `updates` is empty, the function still reads, re-indexes, and rewrites the file. The caller guards this (`if not updates: return 0`), so this is not triggered today, but a defensive early return would make the function safer for future callers.\n\n</blockquote></details>\n<details>\n<summary>pmoves/mk/preflight.mk (1)</summary><blockquote>\n\n`115-122`: **`showtime-links*` targets use `$(PYTHON)` while `submodule-layer-validate*` targets use `$(PRECHECK_PY)`.**\n\nOn Windows, `$(PRECHECK_PY)` resolves to `py -3` while `$(PYTHON)` may differ. If `showtime-links` can be invoked standalone during preflight (outside bring-up), consider using `$(PRECHECK_PY)` for consistency, or document that these targets require a full Python environment.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/showtime_watch.py (1)</summary><blockquote>\n\n`32-42`: **`probe()` opens URLs without scheme validation.**\n\n`urlopen` accepts `file://` and other non-HTTP schemes. Since `ENDPOINTS` is imported from `flight_check_retro` and should only contain `http://`/`https://` URLs, this is low risk. A one-line guard would harden it against accidental misconfiguration upstream.\n\n\n<details>\n<summary>\ud83d\udee1\ufe0f Optional scheme guard</summary>\n\n```diff\n def probe(url: str, timeout: float = 2.5) -> tuple[bool, int]:\n+    if not url.startswith((\"http://\", \"https://\")):\n+        return False, 0\n     try:\n         with urlopen(url, timeout=timeout) as resp:\n```\n</details>\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/bootstrap_light_env.py (1)</summary><blockquote>\n\n`56-57`: **Bare `subprocess.run(cmd, check=True)` gives poor error UX on failure.**\n\nWhen a subprocess fails, the raw `CalledProcessError` traceback is printed. For a user-facing bootstrap tool, consider catching it and printing a friendlier message with the failed command and return code.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/chit_manifest_sync.py (1)</summary><blockquote>\n\n`214-219`: **`--check` mode is sensitive to alias ordering, not just content.**\n\n`yaml.safe_dump(next_manifest, sort_keys=False)` preserves insertion order. If the existing v1 manifest was hand-edited with aliases in a different order, `--check` will report \"OUT-OF-SYNC\" even with no semantic difference. This is acceptable if the tool is the sole writer of the v1 manifest, but worth noting for operators who might hand-edit.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/local_cert_runners.py (2)</summary><blockquote>\n\n`86-110`: **Runner token visible via `docker inspect` and Docker socket grants full host Docker access.**\n\nTwo security posture notes:\n\n1. `RUNNER_TOKEN` passed via `-e` is readable in `docker inspect`. Consider using Docker secrets or a file-mount if the environment requires stronger isolation.\n2. Mounting `/var/run/docker.sock` gives the runner container full control over the host Docker daemon. This is standard for self-hosted GHA runners but should be documented as a conscious trust decision.\n\nNeither is a blocker \u2014 both are typical trade-offs for local-cert runners \u2014 but worth calling out for operational awareness.\n\n---\n\n`56-79`: **Token fallback chain is sound; consider logging which source was used.**\n\nThe `registration_token` function checks lane-specific env \u2192 shared env \u2192 `gh api` call. For operator debugging, it would help to print which token source was selected (without printing the token itself).\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/showtime_verify_links.py (1)</summary><blockquote>\n\n`23-24`: **Fragile `sys.path` manipulation for sibling import.**\n\nInserting into `sys.path` at import time and importing `flight_check_retro.ENDPOINTS` couples this script to a specific directory layout and produces a confusing error if the module is missing. Consider a guarded import with a clear error message.\n\n\n\n<details>\n<summary>\u267b\ufe0f Proposed guarded import</summary>\n\n```diff\n sys.path.insert(0, str(Path(__file__).resolve().parent))\n-from flight_check_retro import ENDPOINTS  # type: ignore\n+try:\n+    from flight_check_retro import ENDPOINTS  # type: ignore\n+except ImportError as exc:\n+    raise SystemExit(\n+        f\"Cannot import ENDPOINTS from flight_check_retro \u2014 \"\n+        f\"ensure the module exists in {Path(__file__).resolve().parent}: {exc}\"\n+    ) from exc\n```\n</details>\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/runner_lane_map.py (2)</summary><blockquote>\n\n`130-148`: **`load_runners` doesn't paginate \u2014 repos with >100 runners will be silently truncated.**\n\nUnlike the `cmd_status` function in `local_cert_runners.py` which uses `--paginate`, this function requests a single page of 100 runners. Consider using `gh api --paginate` or iterating pages to avoid silent truncation.\n\n\n\n<details>\n<summary>\u267b\ufe0f Proposed fix using gh --paginate</summary>\n\n```diff\n def load_runners(repo: str) -> list[Runner]:\n-    cmd = [\"gh\", \"api\", f\"repos/{repo}/actions/runners?per_page=100\"]\n-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)\n+    cmd = [\"gh\", \"api\", \"--paginate\", f\"repos/{repo}/actions/runners?per_page=100\", \"--jq\", \".runners\"]\n+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)\n     if proc.returncode != 0:\n         msg = proc.stderr.strip() or proc.stdout.strip() or \"unknown gh api error\"\n         raise RuntimeError(msg)\n-    payload = json.loads(proc.stdout)\n+    items: list[dict] = []\n+    for line in proc.stdout.strip().splitlines():\n+        if line.strip():\n+            items.extend(json.loads(line))\n     runners: list[Runner] = []\n-    for item in payload.get(\"runners\", []):\n+    for item in items:\n```\n\nAlternatively, keep the current approach if you're confident the runner count stays under 100.\n</details>\n\n---\n\n`90-100`: **Regex-based YAML discovery is adequate but limited.**\n\n`RUNS_ON_LIST_RE` only matches `runs-on: [...]` on a single line. Multi-line array syntax, matrix expressions, and bare-string `runs-on:` are skipped. This is an acceptable trade-off for tooling that only targets self-hosted multi-label lanes, but worth documenting the limitation.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/tooling_script_audit.py (2)</summary><blockquote>\n\n`439-463`: **Redundant `startswith` check.**\n\n`lower.startswith(\"pmoves\")` on Line 451 already matches strings starting with `\"pmoves-\"`, making the second condition redundant.\n\n\n\n<details>\n<summary>\u267b\ufe0f Simplified condition</summary>\n\n```diff\n-        if not (lower.startswith(\"pmoves\") or lower.startswith(\"pmoves-\")):\n+        if not lower.startswith(\"pmoves\"):\n```\n</details>\n\n---\n\n`90-115`: **`parse_gitmodules` is duplicated across 4 tools with different signatures and implementations.**\n\nFound in `tooling_script_audit.py`, `submodule_layer_runall.py`, `submodule_layer_validate.py`, and `submodule_sitrep.py`. However, they are not \"nearly identical\"\u2014they have different return types (name+path tuples, name+path+url tuples, and dictionaries) and implementations (regex parsing vs. configparser). Evaluate whether a shared utility is warranted; if extracted, account for the different return types and data requirements.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/submodule_layer_runall.py (1)</summary><blockquote>\n\n`70-76`: **`read_summary` silently returns `(1, 0)` on any parse failure \u2014 consider distinguishing real errors from missing files.**\n\nIf the validator crashes before writing the JSON, this function defaults to 1 error, which is reasonable. However, it might mask the root cause. Consider logging the exception or differentiating \"file not found\" from \"malformed JSON\" for operator debugging.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/submodule_layer_validate.py (2)</summary><blockquote>\n\n`221-237`: **`py_compile.compile` writes `.pyc` files into submodule `__pycache__` directories as a side effect.**\n\nEach compiled file creates (or updates) a `.pyc` in `__pycache__/` under the submodule tree. While these are typically gitignored, it pollutes the working tree. You can avoid this by redirecting the bytecode output.\n\n\n\n<details>\n<summary>\u267b\ufe0f Suppress .pyc side effect</summary>\n\n```diff\n+import os\n ...\n def python_compile_check(module_root: Path, max_files: int) -> tuple[str, str]:\n+    # Prevent py_compile from writing .pyc files into submodule trees\n+    old_dont_write = os.environ.get(\"PYTHONDONTWRITEBYTECODE\")\n+    os.environ[\"PYTHONDONTWRITEBYTECODE\"] = \"1\"\n     py_files: list[Path] = []\n     ...\n     try:\n         for path in py_files:\n             py_compile.compile(str(path), doraise=True)\n     except py_compile.PyCompileError as exc:\n+        if old_dont_write is None:\n+            os.environ.pop(\"PYTHONDONTWRITEBYTECODE\", None)\n+        else:\n+            os.environ[\"PYTHONDONTWRITEBYTECODE\"] = old_dont_write\n         return \"fail\", str(exc)\n+    if old_dont_write is None:\n+        os.environ.pop(\"PYTHONDONTWRITEBYTECODE\", None)\n+    else:\n+        os.environ[\"PYTHONDONTWRITEBYTECODE\"] = old_dont_write\n     return \"pass\", f\"compiled-files={len(py_files)}\"\n```\n\nOr more simply, redirect the `.pyc` output to a temp file:\n\n```diff\n     try:\n         for path in py_files:\n-            py_compile.compile(str(path), doraise=True)\n+            py_compile.compile(str(path), cfile=os.devnull, doraise=True)\n     except py_compile.PyCompileError as exc:\n```\n</details>\n\n---\n\n`165-177`: **`remote_commit_reachable` uses substring match on `ls-remote` output.**\n\nLine 174: `any(commit in line for line in ...)` does a substring match. While full 40-char SHA collisions are extremely unlikely, an exact-prefix match would be more precise.\n\n\n\n<details>\n<summary>\u267b\ufe0f Use startswith for exact prefix match</summary>\n\n```diff\n-    matched = any(commit in line for line in proc.stdout.splitlines())\n+    matched = any(line.startswith(commit) or line.split(\"\\t\", 1)[0] == commit for line in proc.stdout.splitlines())\n```\n</details>\n\n</blockquote></details>\n\n</blockquote></details>\n\n<!-- This is an auto-generated comment by CodeRabbit for review status -->",
+      "state": "COMMENTED",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#pullrequestreview-3806299195",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "author_association": "CONTRIBUTOR",
+      "_links": {
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#pullrequestreview-3806299195"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "submitted_at": "2026-02-16T02:17:16Z",
+      "commit_id": "d513b6cc29f96115fe83d429547469ee8e447152"
+    },
+    {
+      "id": 3806310755,
+      "node_id": "PRR_kwDOPkuAKM7i37Fj",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "**Actionable comments posted: 1**\n\n> [!CAUTION]\n> Some comments are outside the diff and can\u2019t be posted inline due to platform limitations.\n> \n> \n> \n> <details>\n> <summary>\u26a0\ufe0f Outside diff range comments (1)</summary><blockquote>\n> \n> <details>\n> <summary>pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md (1)</summary><blockquote>\n> \n> `2-2`: _\u26a0\ufe0f Potential issue_ | _\ud83d\udfe1 Minor_\n> \n> **Update the \u201cLast updated\u201d date to reflect this change.**\n> \n> The doc now includes a new link, so the date should reflect the current edit window (2026-02-16). As per coding guidelines, keep status claims aligned with evidence in runbooks and smokes.\n> \n> <details>\n> <summary>\u270f\ufe0f Suggested fix</summary>\n> \n> ```diff\n> -_Last updated: 2026-02-14_\n> +_Last updated: 2026-02-16_\n> ```\n> </details>\n> \n> </blockquote></details>\n> \n> </blockquote></details>\n\n<details>\n<summary>\ud83e\udd16 Fix all issues with AI agents</summary>\n\n```\nIn `@pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`:\n- Around line 65-77: Replace the definitive cleanliness claims under the\n\"Clean/near-clean worktrees\" and \"Dirty worktrees requiring triage\" sections\nwith guidance to verify state at runtime\u2014e.g., change entries like\n`PMOVES.AI-hardened-audit`, `PMOVES.AI`, and `PMOVES.AI-slice-cipher` to a\nchecklist or operator note that instructs readers to run git status/inspect\nmerge state (or link to the runbook/smoke tests) rather than asserting they are\nclean/dirty; update the section header text and any bullet wording to indicate\nthese are examples or require verification instead of factual snapshots.\n```\n\n</details>\n\n<!-- This is an auto-generated comment by CodeRabbit for review status -->",
+      "state": "COMMENTED",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#pullrequestreview-3806310755",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "author_association": "CONTRIBUTOR",
+      "_links": {
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#pullrequestreview-3806310755"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "submitted_at": "2026-02-16T02:24:49Z",
+      "commit_id": "be71b54c45fdee57dbbda3ed3d082a6232478c5d"
+    }
+  ],
+  "issue_comments": [
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/issues/comments/3906081828",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#issuecomment-3906081828",
+      "issue_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/issues/627",
+      "id": 3906081828,
+      "node_id": "IC_kwDOPkuAKM7o0hQk",
+      "user": {
+        "login": "chatgpt-codex-connector[bot]",
+        "id": 199175422,
+        "node_id": "BOT_kgDOC98s_g",
+        "avatar_url": "https://avatars.githubusercontent.com/in/1144995?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D",
+        "html_url": "https://github.com/apps/chatgpt-codex-connector",
+        "followers_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/chatgpt-codex-connector%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "created_at": "2026-02-16T02:05:10Z",
+      "updated_at": "2026-02-16T02:05:10Z",
+      "body": "You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/settings/usage).",
+      "author_association": "NONE",
+      "pin": null,
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/issues/comments/3906081828/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "performed_via_github_app": {
+        "id": 1144995,
+        "client_id": "Iv23liVemv8A9if9v0F2",
+        "slug": "chatgpt-codex-connector",
+        "node_id": "A_kwHOAOQ6Gs4AEXij",
+        "owner": {
+          "login": "openai",
+          "id": 14957082,
+          "node_id": "MDEyOk9yZ2FuaXphdGlvbjE0OTU3MDgy",
+          "avatar_url": "https://avatars.githubusercontent.com/u/14957082?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/openai",
+          "html_url": "https://github.com/openai",
+          "followers_url": "https://api.github.com/users/openai/followers",
+          "following_url": "https://api.github.com/users/openai/following{/other_user}",
+          "gists_url": "https://api.github.com/users/openai/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/openai/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/openai/subscriptions",
+          "organizations_url": "https://api.github.com/users/openai/orgs",
+          "repos_url": "https://api.github.com/users/openai/repos",
+          "events_url": "https://api.github.com/users/openai/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/openai/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "ChatGPT Codex Connector",
+        "description": "Bring ChatGPT and Codex to your GitHub repositories.",
+        "external_url": "https://www.chatgpt.com",
+        "html_url": "https://github.com/apps/chatgpt-codex-connector",
+        "created_at": "2025-02-14T01:37:05Z",
+        "updated_at": "2025-08-25T23:37:47Z",
+        "permissions": {
+          "actions": "write",
+          "checks": "read",
+          "contents": "write",
+          "issues": "write",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "read",
+          "workflows": "write"
+        },
+        "events": [
+          "check_run",
+          "check_suite",
+          "commit_comment",
+          "issues",
+          "issue_comment",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "pull_request_review_thread",
+          "repository",
+          "status",
+          "sub_issues"
+        ]
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/issues/comments/3906082449",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#issuecomment-3906082449",
+      "issue_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/issues/627",
+      "id": 3906082449,
+      "node_id": "IC_kwDOPkuAKM7o0haR",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "created_at": "2026-02-16T02:05:29Z",
+      "updated_at": "2026-02-16T02:27:15Z",
+      "body": "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- This is an auto-generated comment: skip review by coderabbit.ai -->\n\n> [!IMPORTANT]\n> ## Review skipped\n> \n> Auto reviews are disabled on base/target branches other than the default branch.\n> \n> \n> \n> Please check the settings in the CodeRabbit UI or the `.coderabbit.yaml` file in this repository. To trigger a single review, invoke the `@coderabbitai review` command.\n> \n> You can disable this status message by setting the `reviews.review_status` to `false` in the CodeRabbit configuration file.\n> \n> Use the checkbox below for a quick retry:\n> - [ ] <!-- {\"checkboxId\": \"e9bb8d72-00e8-4f67-9cb2-caf3b22574fe\"} --> \ud83d\udd0d Trigger review\n\n<!-- end of auto-generated comment: skip review by coderabbit.ai -->\n\n<!-- walkthrough_start -->\n\n<details>\n<summary>\ud83d\udcdd Walkthrough</summary>\n\n## Walkthrough\n\nAdds a manifest and Make targets for deterministic submodule-layer validation; introduces multiple new command-line tools for bootstrapping, submodule validation/orchestration, secrets hydration/audit, runner management/mapping, and Showtime endpoint verification; updates docs and build infra to wire these tools into audit and bringup flows.\n\n## Changes\n\n|Cohort / File(s)|Summary|\n|---|---|\n|**Submodule Reference & Manifest** <br> `PMOVES-Agent-Zero` (submodule), `pmoves/configs/submodule_layer_validation_manifest.json`|Submodule pointer updated; added JSON manifest describing required files, python_compile rules, known typos, and per-submodule overrides for layer validation.|\n|**Makefile & Build Targets** <br> `pmoves/mk/preflight.mk`, `pmoves/docs/MAKE_TARGETS.md`|Added many new public phony targets and variables (submodule-layer-validate*, audit-layers*, showtime-links*), integrated validation and showtime link checks into preflight/bringup flows.|\n|**Documentation / Next Steps** <br> `pmoves/docs/NEXT_STEPS.md`, `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`, `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md`|Documented new validation lanes, showtime link artifacts, and added Codex/Cipher implementation mapping doc; updated NEXT_STEPS with new lanes and artifacts.|\n|**Submodule Validation Tools** <br> `pmoves/tools/submodule_layer_validate.py`, `pmoves/tools/submodule_layer_runall.py`|New deterministic submodule validator and runall orchestrator: git/.gitmodules parsing, remote checks, nested .gitmodules validation, Python compile checks, JSON/Markdown evidence generation, and per-module aggregation.|\n|**Showtime Verification & Watcher** <br> `pmoves/tools/showtime_verify_links.py`, `pmoves/tools/showtime_watch.py`|New tools to check endpoint health and render JSON/MD/HTML reports (showtime-links) and a live readiness watcher (showtime_watch) with optional Rich UI and strict-mode behavior.|\n|**Secrets & CHIT Tools** <br> `pmoves/tools/chit_manifest_sync.py`, `pmoves/tools/runtime_secrets_hydrate.py`, `pmoves/tools/secrets_hardening_audit.py`|Added CHIT v2\u2192v1 sync tool, runtime secrets hydrator (inspects containers/status and updates env files), and a repository secrets-hardening auditor.|\n|**Runner & Infrastructure Helpers** <br> `pmoves/tools/local_cert_runners.py`, `pmoves/tools/runner_lane_map.py`, `pmoves/tools/bootstrap_light_env.py`|Added Docker-backed local runner manager, lane-to-host mapping and live status checker, and a uv-first lightweight bootstrap script for venv creation and requirements installation.|\n|**Tooling Audit** <br> `pmoves/tools/tooling_script_audit.py`|New comprehensive tooling-script audit: token-overlap detection, canonical workflows/targets checks, environment seed validation, and Markdown report generation.|\n\n## Sequence Diagram(s)\n\n```mermaid\nsequenceDiagram\n    participant User\n    participant Validator as Submodule<br/>Validator\n    participant Manifest\n    participant Git\n    participant Filesystem\n    participant PythonCheck as Python<br/>Compiler\n    participant Reports as JSON/MD\n\n    User->>Validator: run submodule-layer-validate\n    Validator->>Manifest: load manifest & policy\n    Validator->>Git: parse .gitmodules & status\n    loop per submodule\n        Validator->>Filesystem: check required/top-level files\n        Filesystem-->>Validator: file results\n        Validator->>Git: check remote commit reachability\n        Git-->>Validator: reachability result\n        Validator->>PythonCheck: run python_compile_check (if enabled)\n        PythonCheck-->>Validator: compile results\n    end\n    Validator->>Reports: aggregate findings, write JSON & MD\n    Reports-->>User: artifacts written\n```\n\n```mermaid\nsequenceDiagram\n    participant User\n    participant Showtime as Showtime<br/>Verify\n    participant Endpoints\n    participant Docker\n    participant Renderer\n\n    User->>Showtime: run showtime-links\n    Showtime->>Endpoints: load endpoint definitions\n    par Health checks and service snapshot\n        Showtime->>Endpoints: HTTP health probes\n        Endpoints-->>Showtime: status codes/errors\n        Showtime->>Docker: compose services snapshot\n        Docker-->>Showtime: service list\n    end\n    Showtime->>Showtime: filter worker services\n    Showtime->>Renderer: render JSON / MD / HTML\n    Renderer-->>User: write artifacts (and optionally open HTML)\n```\n\n## Estimated code review effort\n\n\ud83c\udfaf 5 (Critical) | \u23f1\ufe0f ~120 minutes\n\n## Poem\n\n> \ud83d\udc30 *I hopped through manifests and scripts so bright,*  \n> *Validated submodules deep into the night,*  \n> *I checked the endpoints, tended secrets tight,*  \n> *Launched runners, built reports \u2014 what a sight!*  \n> *A burrow of tools, vetted and light.* \ud83c\udf3f\n\n</details>\n\n<!-- walkthrough_end -->\n\n<!-- pre_merge_checks_walkthrough_start -->\n\n<details>\n<summary>\ud83d\udea5 Pre-merge checks | \u2705 3 | \u274c 1</summary>\n\n### \u274c Failed checks (1 warning)\n\n|     Check name     | Status     | Explanation                                                                          | Resolution                                                                         |\n| :----------------: | :--------- | :----------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------- |\n| Docstring Coverage | \u26a0\ufe0f Warning | Docstring coverage is 0.00% which is insufficient. The required threshold is 80.00%. | Write docstrings for the functions missing them to satisfy the coverage threshold. |\n<details>\n<summary>\u2705 Passed checks (3 passed)</summary>\n\n|        Check name        | Status   | Explanation                                                                                                                                                                                                             |\n| :----------------------: | :------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n|        Title check       | \u2705 Passed | The PR title clearly and concisely identifies the main changes: adding deterministic submodule layer validation and showtime verification pages, directly matching the content of the changeset.                        |\n|     Description check    | \u2705 Passed | The PR description follows the template structure with Summary and Changes sections documenting the additions, includes local validation commands confirming testing was performed, and notes about generated evidence. |\n| Merge Conflict Detection | \u2705 Passed | \u2705 No merge conflicts detected when merging into `PMOVES.AI-Edition-Hardened`                                                                                                                                            |\n\n</details>\n\n<sub>\u270f\ufe0f Tip: You can configure your own custom pre-merge checks in the settings.</sub>\n\n</details>\n\n<!-- pre_merge_checks_walkthrough_end -->\n\n<!-- finishing_touch_checkbox_start -->\n\n<details>\n<summary>\u2728 Finishing touches</summary>\n\n<details>\n<summary>\ud83e\uddea Generate unit tests (beta)</summary>\n\n- [ ] <!-- {\"checkboxId\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\", \"radioGroupId\": \"utg-output-choice-group-unknown_comment_id\"} -->   Create PR with unit tests\n- [ ] <!-- {\"checkboxId\": \"07f1e7d6-8a8e-4e23-9900-8731c2c87f58\", \"radioGroupId\": \"utg-output-choice-group-unknown_comment_id\"} -->   Post copyable unit tests in a comment\n- [ ] <!-- {\"checkboxId\": \"6ba7b810-9dad-11d1-80b4-00c04fd430c8\", \"radioGroupId\": \"utg-output-choice-group-unknown_comment_id\"} -->   Commit unit tests in branch `feat/submodule-layer-deterministic-validation`\n\n</details>\n\n</details>\n\n<!-- finishing_touch_checkbox_end -->\n\n<!-- tips_start -->\n\n---\n\nThanks for using [CodeRabbit](https://coderabbit.ai?utm_source=oss&utm_medium=github&utm_campaign=POWERFULMOVES/PMOVES.AI&utm_content=627)! It's free for OSS, and your support helps us grow. If you like it, consider giving us a shout-out.\n\n<details>\n<summary>\u2764\ufe0f Share</summary>\n\n- [X](https://twitter.com/intent/tweet?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A&url=https%3A//coderabbit.ai)\n- [Mastodon](https://mastodon.social/share?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A%20https%3A%2F%2Fcoderabbit.ai)\n- [Reddit](https://www.reddit.com/submit?title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&text=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code.%20Check%20it%20out%3A%20https%3A//coderabbit.ai)\n- [LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fcoderabbit.ai&mini=true&title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&summary=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code)\n\n</details>\n\n<sub>Comment `@coderabbitai help` to get the list of available commands and usage tips.</sub>\n\n<!-- tips_end -->\n\n<!-- internal state start -->\n\n\n<!-- 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 -->\n\n<!-- internal state end -->",
+      "author_association": "CONTRIBUTOR",
+      "pin": null,
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/issues/comments/3906082449/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "performed_via_github_app": {
+        "id": 347564,
+        "client_id": "Iv1.6aaafe4fe882736b",
+        "slug": "coderabbitai",
+        "node_id": "A_kwHOB96YWc4ABU2s",
+        "owner": {
+          "login": "coderabbitai",
+          "id": 132028505,
+          "node_id": "O_kgDOB96YWQ",
+          "avatar_url": "https://avatars.githubusercontent.com/u/132028505?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/coderabbitai",
+          "html_url": "https://github.com/coderabbitai",
+          "followers_url": "https://api.github.com/users/coderabbitai/followers",
+          "following_url": "https://api.github.com/users/coderabbitai/following{/other_user}",
+          "gists_url": "https://api.github.com/users/coderabbitai/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/coderabbitai/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/coderabbitai/subscriptions",
+          "organizations_url": "https://api.github.com/users/coderabbitai/orgs",
+          "repos_url": "https://api.github.com/users/coderabbitai/repos",
+          "events_url": "https://api.github.com/users/coderabbitai/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/coderabbitai/received_events",
+          "type": "Organization",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "coderabbitai",
+        "description": "# Transforming Code Reviews with AI\r\n\r\n## Features\r\n\r\n**Automated Reviews**: Continuous reviews of the pull requests including incremental commits. \r\n\r\n**Summarization**: Generates high-level summary and a technical walkthrough of the PR changes.\u00a0\r\n\r\n**Line-by-line review**: Provides line-by-line suggestions committable with one click.\r\n\r\n**Codebase verification**:  Verifies the impact on the overall codebase and identifies missing changes.\r\n\r\n**Insights into your code**:  Ask any questions on your codebase within the pull request \r\n\r\n**Chat about your code** : Chat with the bot around your code.\u00a0The more you chat, the smarter it gets.\r\n\r\n**Issue Validation**:  Validates the PR against the linked issues and identifies other related issues\u00a0\r\n\r\n\r\n\r\n",
+        "external_url": "https://coderabbit.ai?utm_source=cr_app&utm_medium=github",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "created_at": "2023-06-14T15:47:27Z",
+        "updated_at": "2026-02-11T07:48:59Z",
+        "permissions": {
+          "actions": "read",
+          "checks": "write",
+          "contents": "write",
+          "discussions": "read",
+          "issues": "write",
+          "members": "read",
+          "metadata": "read",
+          "pull_requests": "write",
+          "statuses": "write"
+        },
+        "events": [
+          "issues",
+          "issue_comment",
+          "label",
+          "organization",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "pull_request_review_thread",
+          "release",
+          "repository"
+        ]
+      }
+    }
+  ],
+  "review_comments": [
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810377072",
+      "pull_request_review_id": 3806279252,
+      "id": 2810377072,
+      "node_id": "PRRC_kwDOPkuAKM6ngvNw",
+      "diff_hunk": "@@ -0,0 +1,219 @@\n+#!/usr/bin/env python3\n+\"\"\"Hydrate runtime-emitted secrets into env files after services start.\"\"\"\n+\n+from __future__ import annotations\n+\n+import argparse\n+import secrets\n+import subprocess\n+from pathlib import Path\n+from typing import Dict, List, Mapping, Sequence\n+\n+\n+PROJECT_ROOT = Path(__file__).resolve().parents[1]\n+DEFAULT_ENV_FILE = PROJECT_ROOT / \"env.shared\"\n+DEFAULT_STATUS_FILE = PROJECT_ROOT / \".supabase.status.env\"\n+\n+\n+def _parse_env_file(path: Path) -> Dict[str, str]:\n+    values: Dict[str, str] = {}\n+    if not path.exists():\n+        return values\n+    for raw in path.read_text(encoding=\"utf-8\", errors=\"ignore\").splitlines():\n+        line = raw.strip()\n+        if not line or line.startswith(\"#\") or \"=\" not in line:\n+            continue\n+        key, value = line.split(\"=\", 1)\n+        key = key.strip()\n+        if key:\n+            values[key] = value\n+    return values\n+\n+\n+def _write_env_file(path: Path, updates: Mapping[str, str]) -> None:\n+    path.parent.mkdir(parents=True, exist_ok=True)\n+    lines = path.read_text(encoding=\"utf-8\", errors=\"ignore\").splitlines() if path.exists() else []\n+\n+    index: Dict[str, int] = {}\n+    for idx, raw in enumerate(lines):\n+        if not raw or raw.lstrip().startswith(\"#\") or \"=\" not in raw:\n+            continue\n+        key, _ = raw.split(\"=\", 1)\n+        index[key.strip()] = idx\n+\n+    for key, value in updates.items():\n+        entry = f\"{key}={value}\"\n+        if key in index:\n+            lines[index[key]] = entry\n+        else:\n+            lines.append(entry)\n+\n+    text = \"\\n\".join(lines)\n+    if text and not text.endswith(\"\\n\"):\n+        text += \"\\n\"\n+    path.write_text(text, encoding=\"utf-8\")\n+\n+\n+def _run(cmd: Sequence[str]) -> str:\n+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)\n+    if proc.returncode != 0:\n+        return \"\"\n+    return proc.stdout.strip()\n+\n+\n+def _docker_list_containers() -> List[str]:\n+    output = _run([\"docker\", \"ps\", \"--format\", \"{{.Names}}\"])\n+    if not output:\n+        return []\n+    return [line.strip() for line in output.splitlines() if line.strip()]\n+\n+\n+def _docker_env(container: str) -> Dict[str, str]:\n+    output = _run(\n+        [\"docker\", \"inspect\", \"--format\", \"{{range .Config.Env}}{{println .}}{{end}}\", container]\n+    )\n+    envs: Dict[str, str] = {}\n+    if not output:\n+        return envs\n+    for line in output.splitlines():\n+        if \"=\" not in line:\n+            continue\n+        key, value = line.split(\"=\", 1)\n+        envs[key] = value\n+    return envs\n+\n+\n+def _find_container_env_value(\n+    containers: Sequence[str],\n+    *,\n+    name_tokens: Sequence[str],\n+    keys: Sequence[str],\n+) -> str:\n+    lower_tokens = tuple(token.lower() for token in name_tokens)\n+    for container in containers:\n+        container_l = container.lower()\n+        if not any(token in container_l for token in lower_tokens):\n+            continue\n+        envs = _docker_env(container)\n+        for key in keys:\n+            value = envs.get(key, \"\").strip()\n+            if value:\n+                return value\n+    return \"\"\n+\n+\n+def _masked(value: str) -> str:\n+    if len(value) < 8:\n+        return \"***\"\n+    return f\"{value[:4]}...{value[-4:]}\"\n+\n+\n+def _looks_placeholder(value: str) -> bool:\n+    lowered = value.strip().lower()\n+    if not lowered:\n+        return True\n+    return (\n+        lowered.startswith(\"placeholder_\")\n+        or lowered.startswith(\"your_\")\n+        or lowered in {\"changeme\", \"change_me\", \"none\", \"null\"}\n+        or \"example.com\" in lowered",
+      "path": "pmoves/tools/runtime_secrets_hydrate.py",
+      "commit_id": "be71b54c45fdee57dbbda3ed3d082a6232478c5d",
+      "original_commit_id": "d513b6cc29f96115fe83d429547469ee8e447152",
+      "user": {
+        "login": "github-advanced-security[bot]",
+        "id": 62310815,
+        "node_id": "MDM6Qm90NjIzMTA4MTU=",
+        "avatar_url": "https://avatars.githubusercontent.com/in/57789?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/github-advanced-security%5Bbot%5D",
+        "html_url": "https://github.com/apps/github-advanced-security",
+        "followers_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/github-advanced-security%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "## Incomplete URL substring sanitization\n\nThe string [example.com](1) may be at an arbitrary position in the sanitized URL.\n\n[Show more details](https://github.com/POWERFULMOVES/PMOVES.AI/security/code-scanning/130)",
+      "created_at": "2026-02-16T02:06:28Z",
+      "updated_at": "2026-02-16T02:06:28Z",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810377072",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810377072"
+        },
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810377072"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810377072/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "start_line": null,
+      "original_start_line": null,
+      "start_side": null,
+      "line": null,
+      "original_line": 119,
+      "side": "RIGHT",
+      "author_association": "NONE",
+      "original_position": 119,
+      "position": 1,
+      "subject_type": "line"
+    },
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392889",
+      "pull_request_review_id": 3806299195,
+      "id": 2810392889,
+      "node_id": "PRRC_kwDOPkuAKM6ngzE5",
+      "diff_hunk": "@@ -187,11 +187,22 @@ This file summarizes the most-used targets and maps them to what they do under d\n - `make bringup-showtime`\n   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.\n   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.\n+  - Emits clickable verification artifacts (`pmoves/docs/SHOWTIME_VERIFY_LINKS.html|.md`) with pages/UI/API links and helper worker container states.\n   - Tuning knobs: `SHOWTIME_INTERVAL`, `SHOWTIME_MAX_SECONDS`, `SHOWTIME_WATCH=0`.",
+      "path": "pmoves/docs/MAKE_TARGETS.md",
+      "commit_id": "6fe3e29f1a5c8ec65e38fbc930d4aa1c250f04e3",
+      "original_commit_id": "d513b6cc29f96115fe83d429547469ee8e447152",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "_\u26a0\ufe0f Potential issue_ | _\ud83d\udfe1 Minor_\n\n**`bringup-showtime` description omits the JSON evidence artifact.**\n\nLine 190 mentions HTML and MD artifacts but the tool also produces `pmoves/docs/evidence/showtime_links.json`. The `showtime-links` entry at Line 198 correctly lists all three. Consider aligning for consistency.\n\n<details>\n<summary>\ud83e\udd16 Prompt for AI Agents</summary>\n\n```\nIn `@pmoves/docs/MAKE_TARGETS.md` around lines 190 - 191, Update the\n\"bringup-showtime\" bullet so it lists the JSON evidence artifact as well as the\nHTML/MD outputs: mention that the target emits\npmoves/docs/SHOWTIME_VERIFY_LINKS.html|.md and\npmoves/docs/evidence/showtime_links.json (to match the existing showtime-links\nentry). Locate the text containing the existing strings\n\"SHOWTIME_VERIFY_LINKS.html|.md\" and adjust the sentence to explicitly include\n\"pmoves/docs/evidence/showtime_links.json\" so both descriptions are consistent.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:phoenix -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+      "created_at": "2026-02-16T02:17:15Z",
+      "updated_at": "2026-02-16T02:17:16Z",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392889",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392889"
+        },
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392889"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392889/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "start_line": null,
+      "original_start_line": 190,
+      "start_side": "RIGHT",
+      "line": null,
+      "original_line": 191,
+      "side": "RIGHT",
+      "author_association": "CONTRIBUTOR",
+      "original_position": 5,
+      "position": 1,
+      "subject_type": "line"
+    },
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392893",
+      "pull_request_review_id": 3806299195,
+      "id": 2810392893,
+      "node_id": "PRRC_kwDOPkuAKM6ngzE9",
+      "diff_hunk": "@@ -0,0 +1,142 @@\n+#!/usr/bin/env python3\n+\"\"\"Bootstrap a lightweight PMOVES runtime environment (uv-first).\"\"\"\n+\n+from __future__ import annotations\n+\n+import argparse\n+import os\n+import shutil\n+import subprocess\n+import sys\n+from pathlib import Path\n+\n+\n+REPO_ROOT = Path(__file__).resolve().parents[2]\n+PMOVES_ROOT = Path(__file__).resolve().parents[1]\n+\n+\n+def parse_args() -> argparse.Namespace:\n+    parser = argparse.ArgumentParser(\n+        description=(\n+            \"Create/update a lightweight local venv for PMOVES tooling and \"\n+            \"validate baseline host commands.\"\n+        )\n+    )\n+    parser.add_argument(\n+        \"--venv\",\n+        default=\".venv-pmoves\",\n+        help=\"Virtual environment path relative to pmoves/ (default: .venv-pmoves).\",\n+    )\n+    parser.add_argument(\n+        \"--requirements\",\n+        action=\"append\",\n+        default=[\"tools/requirements-lite.txt\"],\n+        help=\"Requirements file(s) relative to pmoves/ (repeatable).\",\n+    )",
+      "path": "pmoves/tools/bootstrap_light_env.py",
+      "commit_id": "4d5cb2b2881029ac7bd901bcc127d767e3382209",
+      "original_commit_id": "d513b6cc29f96115fe83d429547469ee8e447152",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "_\u26a0\ufe0f Potential issue_ | _\ud83d\udfe1 Minor_\n\n**`action=\"append\"` with a list default will append to it, not replace it.**\n\nWith `default=[\"tools/requirements-lite.txt\"]` and `action=\"append\"`, passing `--requirements custom.txt` yields `[\"tools/requirements-lite.txt\", \"custom.txt\"]` instead of the expected `[\"custom.txt\"]`. This is a well-known argparse gotcha.\n\n\n<details>\n<summary>\ud83d\udc1b Proposed fix: use `default=None` and set the default post-parse</summary>\n\n```diff\n     parser.add_argument(\n         \"--requirements\",\n         action=\"append\",\n-        default=[\"tools/requirements-lite.txt\"],\n+        default=None,\n         help=\"Requirements file(s) relative to pmoves/ (repeatable).\",\n     )\n```\n\nThen in `main()`:\n\n```diff\n     args = parse_args()\n+    if args.requirements is None:\n+        args.requirements = [\"tools/requirements-lite.txt\"]\n     venv_path = resolve_under_pmoves(args.venv)\n```\n</details>\n\n<details>\n<summary>\ud83e\udd16 Prompt for AI Agents</summary>\n\n```\nIn `@pmoves/tools/bootstrap_light_env.py` around lines 30 - 35, The --requirements\nargument currently uses action=\"append\" with\ndefault=[\"tools/requirements-lite.txt\"], causing user values to be appended\nrather than replace; change the parser.add_argument call for \"--requirements\" to\nuse default=None (keep action=\"append\"), and in the entry point (e.g., main() or\nwhere args are processed) add a conditional that sets args.requirements =\n[\"tools/requirements-lite.txt\"] if args.requirements is None so defaulting\nhappens post-parse and user-specified values replace the default.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:phoenix -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+      "created_at": "2026-02-16T02:17:15Z",
+      "updated_at": "2026-02-16T02:17:16Z",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392893",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392893"
+        },
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392893"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392893/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "start_line": 30,
+      "original_start_line": 30,
+      "start_side": "RIGHT",
+      "line": 38,
+      "original_line": 35,
+      "side": "RIGHT",
+      "author_association": "CONTRIBUTOR",
+      "original_position": 35,
+      "position": 38,
+      "subject_type": "line"
+    },
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392896",
+      "pull_request_review_id": 3806299195,
+      "id": 2810392896,
+      "node_id": "PRRC_kwDOPkuAKM6ngzFA",
+      "diff_hunk": "@@ -0,0 +1,228 @@\n+#!/usr/bin/env python3\n+\"\"\"Sync the v1 CHIT secrets manifest from the richer v2 manifest.\"\"\"\n+\n+from __future__ import annotations\n+\n+import argparse\n+from pathlib import Path\n+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple\n+\n+import yaml",
+      "path": "pmoves/tools/chit_manifest_sync.py",
+      "commit_id": "6fe3e29f1a5c8ec65e38fbc930d4aa1c250f04e3",
+      "original_commit_id": "d513b6cc29f96115fe83d429547469ee8e447152",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "_\u26a0\ufe0f Potential issue_ | _\ud83d\udd34 Critical_\n\n<details>\n<summary>\ud83e\udde9 Analysis chain</summary>\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Find all requirements files in pmoves and check for PyYAML\necho \"=== Searching for requirements files containing PyYAML ===\"\nfind pmoves -type f -name '*requirements*' -o -name 'pyproject.toml' -o -name 'setup.py' | head -20\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 1239\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Check if PyYAML or yaml is listed in requirements files\necho \"=== Checking pmoves/tools/ for requirements files ===\"\nls -la pmoves/tools/ | grep -i req\necho \"\"\necho \"=== Checking pmoves/ for requirements files ===\"\nls -la pmoves/ | grep -i req\necho \"\"\necho \"=== Full search for requirements files ===\"\nfind pmoves -name '*requirements*' -type f\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 3786\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Search for PyYAML in all files\necho \"=== Searching for PyYAML references ===\"\nrg -i 'pyyaml|PyYAML' pmoves/ --type py\necho \"\"\necho \"=== Checking requirements files content ===\"\nfind pmoves -name '*requirements*' -type f -exec echo \"File: {}\" \\; -exec cat {} \\;\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 50381\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# More specific search for requirements-lite in pmoves/tools\necho \"=== Looking for requirements-lite.txt in pmoves/tools ===\"\nfind pmoves/tools -name '*requirements*' -type f\n\necho \"\"\necho \"=== Checking if pyproject.toml in pmoves has PyYAML ===\"\ngrep -i 'pyyaml\\|yaml' pmoves/pyproject.toml || echo \"PyYAML not found in pyproject.toml\"\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 216\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Check what files are in pmoves/tools directory\necho \"=== Contents of pmoves/tools directory ===\"\nls -la pmoves/tools/\n\necho \"\"\necho \"=== Check chit_manifest_sync.py for any setup comments ===\"\nhead -30 pmoves/tools/chit_manifest_sync.py\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 7741\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Check for bootstrap scripts that might install dependencies\necho \"=== Looking for bootstrap-lite or lightweight environment setup ===\"\nfind pmoves -name '*bootstrap*' -o -name '*lite*' -type f | grep -v '.pyc' | head -20\n\necho \"\"\necho \"=== Check if manifest_audit.py shows how PyYAML is handled ===\"\ngrep -A5 -B5 'PyYAML' pmoves/tools/manifest_audit.py\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 1746\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Check if there's any shared requirements or dependencies documentation\necho \"=== Look for any requirements files at pmoves root or similar patterns ===\"\nfind pmoves -maxdepth 2 -name 'requirements*.txt' -o -name '*.txt' | grep -i req\n\necho \"\"\necho \"=== Check bootstrap_light_env.py to understand dependency model ===\"\nhead -50 pmoves/tools/bootstrap_light_env.py\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 1575\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Check if requirements-lite.txt actually exists in pmoves/tools\necho \"=== Does pmoves/tools/requirements-lite.txt exist? ===\"\nls -la pmoves/tools/requirements-lite.txt 2>&1\n\necho \"\"\necho \"=== Full path check ===\"\ntest -f pmoves/tools/requirements-lite.txt && echo \"File exists\" || echo \"File DOES NOT exist\"\n\necho \"\"\necho \"=== Check what bootstrap_light_env.py does when it's missing ===\"\ngrep -A10 'def.*requirements\\|def.*install' pmoves/tools/bootstrap_light_env.py | head -40\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 1004\n\n---\n\n\ud83c\udfc1 Script executed:\n\n```shell\n#!/bin/bash\n# Let's see the full bootstrap_light_env.py to understand the dependency model\nwc -l pmoves/tools/bootstrap_light_env.py\ntail -100 pmoves/tools/bootstrap_light_env.py\n```\n\nRepository: POWERFULMOVES/PMOVES.AI\n\nLength of output: 3066\n\n---\n\n\n\n</details>\n\n**Create `pmoves/tools/requirements-lite.txt` and include PyYAML, or add error handling for the missing import.**\n\nThis tool imports `yaml` (PyYAML) at module scope (line 10) without fallback error handling. The file `pmoves/tools/requirements-lite.txt` does not exist, and PyYAML is not listed in `pmoves/pyproject.toml`. Runtime import failure will occur if PyYAML is not pre-installed. Compare with `pmoves/tools/manifest_audit.py`, which wraps the yaml import in try/except and raises a clear SystemExit message when the dependency is missing\u2014this tool should follow the same pattern or ensure the dependency is declared.\n\n<details>\n<summary>\ud83e\udd16 Prompt for AI Agents</summary>\n\n```\nIn `@pmoves/tools/chit_manifest_sync.py` at line 10, The module-level bare import\n\"import yaml\" in pmoves/tools/chit_manifest_sync.py can raise ImportError if\nPyYAML isn't installed; either add a pmoves/tools/requirements-lite.txt listing\nPyYAML or wrap the import in a try/except like manifest_audit.py does and raise\nSystemExit with a clear message instructing the user to install PyYAML (include\nthe package name and optional install command), so that the import failure is\nhandled gracefully at startup.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:phoenix -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+      "created_at": "2026-02-16T02:17:15Z",
+      "updated_at": "2026-02-16T02:17:16Z",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392896",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392896"
+        },
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392896"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392896/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "start_line": null,
+      "original_start_line": null,
+      "start_side": null,
+      "line": null,
+      "original_line": 10,
+      "side": "RIGHT",
+      "author_association": "CONTRIBUTOR",
+      "original_position": 10,
+      "position": 1,
+      "subject_type": "line"
+    },
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392900",
+      "pull_request_review_id": 3806299195,
+      "id": 2810392900,
+      "node_id": "PRRC_kwDOPkuAKM6ngzFE",
+      "diff_hunk": "@@ -0,0 +1,375 @@\n+#!/usr/bin/env python3\n+\"\"\"Map workflow runner lanes to host assignments and optional live runner status.\"\"\"\n+\n+from __future__ import annotations\n+\n+import argparse\n+import json\n+import re\n+import subprocess\n+import sys\n+from dataclasses import dataclass\n+from pathlib import Path\n+\n+RUNS_ON_LIST_RE = re.compile(r\"runs-on:\\s*\\[([^\\]]+)\\]\", re.IGNORECASE)\n+\n+\n+@dataclass(frozen=True)\n+class Runner:\n+    name: str\n+    status: str\n+    busy: bool\n+    labels: tuple[str, ...]\n+\n+    @property\n+    def online(self) -> bool:\n+        return self.status.lower() == \"online\"\n+\n+\n+def parse_args() -> argparse.Namespace:\n+    parser = argparse.ArgumentParser(\n+        description=(\n+            \"Discover self-hosted lanes from workflow files and map them to \"\n+            \"host inventory entries.\"\n+        )\n+    )\n+    parser.add_argument(\n+        \"--workflows-dir\",\n+        default=\".github/workflows\",\n+        help=\"Workflow directory (default: %(default)s)\",\n+    )\n+    parser.add_argument(\n+        \"--mapping\",\n+        default=\"integrations/github-runners/compose/lane_hosts.json\",\n+        help=\"Lane mapping JSON file\",\n+    )\n+    parser.add_argument(\n+        \"--repo\",\n+        default=\"POWERFULMOVES/PMOVES.AI\",\n+        help=\"GitHub repository (OWNER/REPO) for live runner status\",\n+    )\n+    parser.add_argument(\n+        \"--check-gh\",\n+        action=\"store_true\",\n+        help=\"Query GitHub Actions runner status via gh api\",\n+    )\n+    parser.add_argument(\n+        \"--strict\",\n+        action=\"store_true\",\n+        help=\"Exit non-zero on unmapped lanes or unavailable live lanes.\",\n+    )\n+    parser.add_argument(\n+        \"--emit-markdown\",\n+        default=\"\",\n+        help=\"Optional file path to write markdown table output.\",\n+    )\n+    parser.add_argument(\n+        \"--policy-file\",\n+        default=\"integrations/github-runners/compose/runner_phase_policy.json\",\n+        help=\"Runner phase policy JSON file.\",\n+    )\n+    parser.add_argument(\n+        \"--phase\",\n+        default=\"\",\n+        help=\"Phase name from policy file (for example: local-certification).\",\n+    )\n+    parser.add_argument(\n+        \"--enforce-phase\",\n+        action=\"store_true\",\n+        help=\"Enforce phase required_online/required_offline checks.\",\n+    )\n+    return parser.parse_args()\n+\n+\n+def normalize_group(raw: str) -> tuple[str, ...]:\n+    labels_set = {part.strip().strip(\"'\\\"\") for part in raw.split(\",\") if part.strip()}\n+    labels = sorted(labels_set, key=lambda item: (0 if item == \"self-hosted\" else 1, item))\n+    return tuple(labels)\n+\n+\n+def discover_groups(workflows_dir: Path) -> list[tuple[str, ...]]:\n+    groups: set[tuple[str, ...]] = set()\n+    if not workflows_dir.exists():\n+        return []\n+    for wf in sorted(workflows_dir.glob(\"*.yml\")):\n+        text = wf.read_text(encoding=\"utf-8\", errors=\"ignore\")\n+        for match in RUNS_ON_LIST_RE.finditer(text):\n+            group = normalize_group(match.group(1))\n+            if \"self-hosted\" in group:\n+                groups.add(group)\n+    return sorted(groups)\n+\n+\n+def normalize_key(raw: str) -> str:\n+    return \",\".join(normalize_group(raw))\n+\n+\n+def load_mapping(path: Path) -> dict[str, dict]:\n+    payload = json.loads(path.read_text(encoding=\"utf-8\"))\n+    lane_hosts = payload.get(\"lane_hosts\", {})\n+    out: dict[str, dict] = {}\n+    for raw_key, value in lane_hosts.items():\n+        out[normalize_key(raw_key)] = value\n+    return out\n+\n+\n+def load_policy(path: Path) -> dict:\n+    return json.loads(path.read_text(encoding=\"utf-8\"))\n+\n+\n+def resolve_path(raw: str, candidates: list[Path]) -> Path:\n+    direct = Path(raw)\n+    if direct.exists():\n+        return direct\n+    for candidate in candidates:\n+        if candidate.exists():\n+            return candidate\n+    return direct\n+\n+\n+def load_runners(repo: str) -> list[Runner]:\n+    cmd = [\"gh\", \"api\", f\"repos/{repo}/actions/runners?per_page=100\"]\n+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)\n+    if proc.returncode != 0:\n+        msg = proc.stderr.strip() or proc.stdout.strip() or \"unknown gh api error\"\n+        raise RuntimeError(msg)\n+    payload = json.loads(proc.stdout)\n+    runners: list[Runner] = []\n+    for item in payload.get(\"runners\", []):\n+        labels = tuple(sorted(label.get(\"name\", \"\") for label in item.get(\"labels\", [])))\n+        runners.append(\n+            Runner(\n+                name=item.get(\"name\", \"unknown\"),\n+                status=item.get(\"status\", \"unknown\"),\n+                busy=bool(item.get(\"busy\", False)),\n+                labels=tuple(label for label in labels if label),\n+            )\n+        )\n+    return runners\n+\n+\n+def lane_online(group: tuple[str, ...], runners: list[Runner]) -> tuple[bool, str]:\n+    wanted = set(group)\n+    matches = [runner for runner in runners if wanted.issubset(set(runner.labels))]\n+    online = [runner for runner in matches if runner.online]\n+    if online:\n+        return True, \", \".join(sorted(r.name for r in online))\n+    if matches:\n+        return False, \"registered but offline\"\n+    return False, \"no matching runner\"\n+\n+\n+def to_markdown(rows: list[dict[str, str]]) -> str:\n+    header = (\n+        \"| Lane | Host | Runner Name | Registration Script | Live Status |\\n\"\n+        \"| --- | --- | --- | --- | --- |\\n\"\n+    )\n+    body = \"\\n\".join(\n+        f\"| `{row['lane']}` | {row['host']} | `{row['runner_name']}` | `{row['script']}` | {row['status']} |\"\n+        for row in rows\n+    )\n+    return header + body + (\"\\n\" if body else \"\")\n+\n+\n+def evaluate_phase(\n+    phase_name: str,\n+    phase_cfg: dict,\n+    group_by_lane: dict[str, tuple[str, ...]],\n+    runners: list[Runner],\n+    check_gh: bool,\n+) -> tuple[list[str], list[str]]:\n+    failures: list[str] = []\n+    notes: list[str] = []\n+\n+    required_online = [normalize_key(item) for item in phase_cfg.get(\"required_online\", [])]\n+    required_offline = [normalize_key(item) for item in phase_cfg.get(\"required_offline\", [])]\n+\n+    for lane in required_online:\n+        group = group_by_lane.get(lane)\n+        if not group:\n+            failures.append(f\"[{phase_name}] required_online lane missing from workflows: {lane}\")\n+            continue\n+        if check_gh:\n+            ok, detail = lane_online(group, runners)\n+            if not ok:\n+                failures.append(f\"[{phase_name}] lane must be online but is offline: {lane} ({detail})\")\n+        else:\n+            notes.append(f\"[{phase_name}] cannot validate online state without --check-gh: {lane}\")\n+\n+    for lane in required_offline:\n+        group = group_by_lane.get(lane)\n+        if not group:\n+            notes.append(f\"[{phase_name}] required_offline lane not present in workflows: {lane}\")\n+            continue\n+        if check_gh:\n+            ok, detail = lane_online(group, runners)\n+            if ok:\n+                failures.append(f\"[{phase_name}] lane must be offline but is online: {lane} ({detail})\")\n+        else:\n+            notes.append(f\"[{phase_name}] cannot validate offline state without --check-gh: {lane}\")\n+\n+    return failures, notes\n+\n+\n+def main() -> int:\n+    args = parse_args()\n+    pmoves_root = Path(__file__).resolve().parents[1]\n+    repo_root = pmoves_root.parent\n+\n+    workflows_dir = resolve_path(\n+        args.workflows_dir,\n+        [\n+            pmoves_root / args.workflows_dir,\n+            repo_root / args.workflows_dir,\n+            repo_root / \".github\" / \"workflows\",\n+        ],\n+    )\n+    mapping_path = resolve_path(\n+        args.mapping,\n+        [\n+            pmoves_root / args.mapping,\n+            repo_root / args.mapping,\n+            repo_root / \"pmoves\" / \"integrations\" / \"github-runners\" / \"compose\" / \"lane_hosts.json\",\n+        ],\n+    )\n+    policy_path = resolve_path(\n+        args.policy_file,\n+        [\n+            pmoves_root / args.policy_file,\n+            repo_root / args.policy_file,\n+            repo_root / \"pmoves\" / \"integrations\" / \"github-runners\" / \"compose\" / \"runner_phase_policy.json\",\n+        ],\n+    )\n+\n+    if not workflows_dir.exists():\n+        print(f\"ERROR: workflow directory not found: {workflows_dir}\")\n+        return 2\n+    if not mapping_path.exists():\n+        print(f\"ERROR: mapping file not found: {mapping_path}\")\n+        return 2\n+    if not policy_path.exists():\n+        print(f\"ERROR: policy file not found: {policy_path}\")\n+        return 2\n+\n+    groups = discover_groups(workflows_dir)\n+    repo_workflows = repo_root / \".github\" / \"workflows\"\n+    if not groups and repo_workflows.exists() and repo_workflows != workflows_dir:\n+        groups = discover_groups(repo_workflows)\n+        if groups:\n+            workflows_dir = repo_workflows\n+    mapping = load_mapping(mapping_path)\n+    policy = load_policy(policy_path)\n+    runners: list[Runner] = []\n+    if args.check_gh:\n+        runners = load_runners(args.repo)\n+\n+    rows: list[dict[str, str]] = []\n+    unmapped: list[str] = []\n+    unavailable: list[str] = []\n+    phase_failures: list[str] = []\n+    phase_notes: list[str] = []\n+\n+    for group in groups:\n+        lane = \",\".join(group)\n+        meta = mapping.get(lane)\n+        if not meta:\n+            unmapped.append(lane)\n+            rows.append(\n+                {\n+                    \"lane\": lane,\n+                    \"host\": \"UNMAPPED\",\n+                    \"runner_name\": \"UNMAPPED\",\n+                    \"script\": \"UNMAPPED\",\n+                    \"status\": \"UNMAPPED\",\n+                }\n+            )\n+            continue\n+\n+        live_status = \"not checked\"\n+        if args.check_gh:\n+            ok, detail = lane_online(group, runners)\n+            live_status = f\"online ({detail})\" if ok else f\"offline ({detail})\"\n+            if not ok:\n+                unavailable.append(lane)\n+\n+        rows.append(\n+            {\n+                \"lane\": lane,\n+                \"host\": meta.get(\"host\", \"UNKNOWN\"),\n+                \"runner_name\": meta.get(\"runner_name\", \"UNKNOWN\"),\n+                \"script\": meta.get(\"registration_script\", \"UNKNOWN\"),\n+                \"status\": live_status,\n+            }\n+        )\n+\n+    print(\"Runner lane map\")\n+    print(f\"- workflows: {workflows_dir}\")\n+    print(f\"- mapping: {mapping_path}\")\n+    print(f\"- policy: {policy_path}\")\n+    print(f\"- lanes discovered: {len(groups)}\")\n+    if args.check_gh:\n+        print(f\"- gh runner checks: enabled (repo={args.repo})\")\n+    else:\n+        print(\"- gh runner checks: disabled\")\n+    print()\n+    print(to_markdown(rows))\n+\n+    selected_phase = args.phase.strip()\n+    if args.enforce_phase:\n+        if not selected_phase:\n+            selected_phase = str(policy.get(\"default_phase\", \"\")).strip()\n+        phases = policy.get(\"phases\", {})\n+        if not selected_phase:\n+            phase_failures.append(\"No phase specified and policy has no default_phase.\")\n+        elif selected_phase not in phases:\n+            phase_failures.append(f\"Phase not found in policy: {selected_phase}\")\n+        else:\n+            group_by_lane = {\",\".join(group): group for group in groups}\n+            failures, notes = evaluate_phase(\n+                selected_phase, phases[selected_phase], group_by_lane, runners, args.check_gh\n+            )\n+            phase_failures.extend(failures)\n+            phase_notes.extend(notes)\n+            print(f\"Phase check: {selected_phase}\")\n+            if phases[selected_phase].get(\"description\"):\n+                print(f\"- {phases[selected_phase]['description']}\")\n+            if not failures:\n+                print(\"- status: PASS\")\n+            else:\n+                print(\"- status: FAIL\")\n+            print()\n+\n+    if args.emit_markdown:\n+        Path(args.emit_markdown).write_text(to_markdown(rows), encoding=\"utf-8\")\n+        print(f\"Wrote markdown table: {args.emit_markdown}\")\n+\n+    if unmapped:\n+        print(\"WARN: unmapped lanes:\")\n+        for lane in unmapped:\n+            print(f\"  - {lane}\")\n+    if unavailable:\n+        print(\"WARN: unavailable lanes:\")\n+        for lane in unavailable:\n+            print(f\"  - {lane}\")\n+    if phase_notes:\n+        print(\"INFO: phase notes:\")\n+        for note in phase_notes:\n+            print(f\"  - {note}\")\n+    if phase_failures:\n+        print(\"ERROR: phase policy failures:\")\n+        for failure in phase_failures:\n+            print(f\"  - {failure}\")\n+\n+    strict_fail = bool(unmapped)\n+    if args.strict:\n+        if args.enforce_phase:\n+            strict_fail = strict_fail or bool(phase_failures)\n+        else:\n+            strict_fail = strict_fail or bool(unavailable)\n+    if strict_fail:\n+        return 2\n+    return 0",
+      "path": "pmoves/tools/runner_lane_map.py",
+      "commit_id": "6fe3e29f1a5c8ec65e38fbc930d4aa1c250f04e3",
+      "original_commit_id": "d513b6cc29f96115fe83d429547469ee8e447152",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "_\u26a0\ufe0f Potential issue_ | _\ud83d\udfe0 Major_\n\n**Unmapped lanes always cause exit 2, even without `--strict`.**\n\n`strict_fail = bool(unmapped)` on Line 363 is evaluated unconditionally, so unmapped lanes cause a non-zero exit regardless of `--strict`. The `--strict` help text says \"Exit non-zero on unmapped lanes or unavailable live lanes\", implying both checks should be gated.\n\n\n\n<details>\n<summary>\ud83d\udc1b Proposed fix to gate unmapped check behind --strict</summary>\n\n```diff\n-    strict_fail = bool(unmapped)\n-    if args.strict:\n+    strict_fail = False\n+    if args.strict:\n+        strict_fail = bool(unmapped) or bool(unavailable)\n         if args.enforce_phase:\n-            strict_fail = strict_fail or bool(phase_failures)\n-        else:\n-            strict_fail = strict_fail or bool(unavailable)\n+            strict_fail = strict_fail or bool(phase_failures)\n     if strict_fail:\n         return 2\n     return 0\n```\n</details>\n\n<details>\n<summary>\ud83e\udd16 Prompt for AI Agents</summary>\n\n```\nIn `@pmoves/tools/runner_lane_map.py` around lines 363 - 371, The code\nunconditionally sets strict_fail = bool(unmapped) which makes unmapped lanes\ncause exit 2 even when args.strict is false; change the logic so strict_fail is\nonly driven by unmapped/other checks when args.strict is true. Specifically,\ninitialize strict_fail = False, then if args.strict set strict_fail =\nbool(unmapped) and, if args.enforce_phase, OR in bool(phase_failures) else OR in\nbool(unavailable) (using the same symbols: strict_fail, args.strict,\nargs.enforce_phase, unmapped, phase_failures, unavailable) so the non-zero exit\nis only returned when --strict is passed.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:phoenix -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+      "created_at": "2026-02-16T02:17:15Z",
+      "updated_at": "2026-02-16T02:17:16Z",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392900",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392900"
+        },
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392900"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392900/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "start_line": null,
+      "original_start_line": 363,
+      "start_side": "RIGHT",
+      "line": null,
+      "original_line": 371,
+      "side": "RIGHT",
+      "author_association": "CONTRIBUTOR",
+      "original_position": 371,
+      "position": 1,
+      "subject_type": "line"
+    },
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392902",
+      "pull_request_review_id": 3806299195,
+      "id": 2810392902,
+      "node_id": "PRRC_kwDOPkuAKM6ngzFG",
+      "diff_hunk": "@@ -0,0 +1,219 @@\n+#!/usr/bin/env python3\n+\"\"\"Hydrate runtime-emitted secrets into env files after services start.\"\"\"\n+\n+from __future__ import annotations\n+\n+import argparse\n+import secrets\n+import subprocess\n+from pathlib import Path\n+from typing import Dict, List, Mapping, Sequence\n+\n+\n+PROJECT_ROOT = Path(__file__).resolve().parents[1]\n+DEFAULT_ENV_FILE = PROJECT_ROOT / \"env.shared\"\n+DEFAULT_STATUS_FILE = PROJECT_ROOT / \".supabase.status.env\"\n+\n+\n+def _parse_env_file(path: Path) -> Dict[str, str]:\n+    values: Dict[str, str] = {}\n+    if not path.exists():\n+        return values\n+    for raw in path.read_text(encoding=\"utf-8\", errors=\"ignore\").splitlines():\n+        line = raw.strip()\n+        if not line or line.startswith(\"#\") or \"=\" not in line:\n+            continue\n+        key, value = line.split(\"=\", 1)\n+        key = key.strip()\n+        if key:\n+            values[key] = value\n+    return values\n+\n+\n+def _write_env_file(path: Path, updates: Mapping[str, str]) -> None:\n+    path.parent.mkdir(parents=True, exist_ok=True)\n+    lines = path.read_text(encoding=\"utf-8\", errors=\"ignore\").splitlines() if path.exists() else []\n+\n+    index: Dict[str, int] = {}\n+    for idx, raw in enumerate(lines):\n+        if not raw or raw.lstrip().startswith(\"#\") or \"=\" not in raw:\n+            continue\n+        key, _ = raw.split(\"=\", 1)\n+        index[key.strip()] = idx\n+\n+    for key, value in updates.items():\n+        entry = f\"{key}={value}\"\n+        if key in index:\n+            lines[index[key]] = entry\n+        else:\n+            lines.append(entry)\n+\n+    text = \"\\n\".join(lines)\n+    if text and not text.endswith(\"\\n\"):\n+        text += \"\\n\"\n+    path.write_text(text, encoding=\"utf-8\")\n+\n+\n+def _run(cmd: Sequence[str]) -> str:\n+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)\n+    if proc.returncode != 0:\n+        return \"\"\n+    return proc.stdout.strip()\n+\n+\n+def _docker_list_containers() -> List[str]:\n+    output = _run([\"docker\", \"ps\", \"--format\", \"{{.Names}}\"])\n+    if not output:\n+        return []\n+    return [line.strip() for line in output.splitlines() if line.strip()]\n+\n+\n+def _docker_env(container: str) -> Dict[str, str]:\n+    output = _run(\n+        [\"docker\", \"inspect\", \"--format\", \"{{range .Config.Env}}{{println .}}{{end}}\", container]\n+    )\n+    envs: Dict[str, str] = {}\n+    if not output:\n+        return envs\n+    for line in output.splitlines():\n+        if \"=\" not in line:\n+            continue\n+        key, value = line.split(\"=\", 1)\n+        envs[key] = value\n+    return envs\n+\n+\n+def _find_container_env_value(\n+    containers: Sequence[str],\n+    *,\n+    name_tokens: Sequence[str],\n+    keys: Sequence[str],\n+) -> str:\n+    lower_tokens = tuple(token.lower() for token in name_tokens)\n+    for container in containers:\n+        container_l = container.lower()\n+        if not any(token in container_l for token in lower_tokens):\n+            continue\n+        envs = _docker_env(container)\n+        for key in keys:\n+            value = envs.get(key, \"\").strip()\n+            if value:\n+                return value\n+    return \"\"\n+\n+\n+def _masked(value: str) -> str:\n+    if len(value) < 8:\n+        return \"***\"\n+    return f\"{value[:4]}...{value[-4:]}\"\n+\n+\n+def _looks_placeholder(value: str) -> bool:\n+    lowered = value.strip().lower()\n+    if not lowered:\n+        return True\n+    return (\n+        lowered.startswith(\"placeholder_\")\n+        or lowered.startswith(\"your_\")\n+        or lowered in {\"changeme\", \"change_me\", \"none\", \"null\"}\n+        or \"example.com\" in lowered\n+    )\n+\n+\n+def hydrate_runtime_labels(\n+    env_values: Dict[str, str],\n+    *,\n+    status_values: Mapping[str, str],\n+    containers: Sequence[str],\n+) -> Dict[str, str]:\n+    updates: Dict[str, str] = {}\n+\n+    def set_if_missing(key: str, value: str) -> None:\n+        if not value:\n+            return\n+        current = env_values.get(key, \"\").strip()\n+        if current and not _looks_placeholder(current):\n+            return\n+        env_values[key] = value\n+        updates[key] = value\n+\n+    # Supabase runtime aliases from status and existing env aliases.\n+    set_if_missing(\n+        \"SUPABASE_SERVICE_KEY\",\n+        status_values.get(\"SERVICE_ROLE_KEY\", \"\").strip()\n+        or env_values.get(\"SUPABASE_SERVICE_ROLE_KEY\", \"\").strip()\n+        or env_values.get(\"SERVICE_ROLE_KEY\", \"\").strip(),\n+    )\n+    set_if_missing(\n+        \"SUPABASE_REALTIME_KEY\",\n+        status_values.get(\"ANON_KEY\", \"\").strip()\n+        or env_values.get(\"SUPABASE_ANON_KEY\", \"\").strip()\n+        or env_values.get(\"ANON_KEY\", \"\").strip(),\n+    )\n+    set_if_missing(\n+        \"SUPABASE_REALTIME_SECRET\",\n+        status_values.get(\"JWT_SECRET\", \"\").strip()\n+        or env_values.get(\"SUPABASE_JWT_SECRET\", \"\").strip()\n+        or env_values.get(\"JWT_SECRET\", \"\").strip(),\n+    )\n+\n+    # Pull runtime-emitted labels from running containers when available.\n+    set_if_missing(\n+        \"MEILI_MASTER_KEY\",\n+        _find_container_env_value(\n+            containers, name_tokens=(\"meili\",), keys=(\"MEILI_MASTER_KEY\", \"MEILI_ENV\")\n+        )\n+        or env_values.get(\"MEILI_MASTER_KEY\", \"\").strip()\n+        or secrets.token_urlsafe(24),\n+    )",
+      "path": "pmoves/tools/runtime_secrets_hydrate.py",
+      "commit_id": "4d5cb2b2881029ac7bd901bcc127d767e3382209",
+      "original_commit_id": "d513b6cc29f96115fe83d429547469ee8e447152",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "_\u26a0\ufe0f Potential issue_ | _\ud83d\udfe0 Major_\n\n**Placeholder values in env file are never replaced by `secrets.token_urlsafe()` due to short-circuit evaluation.**\n\nThe `or` chain at Lines 163\u2013167 includes `env_values.get(\"MEILI_MASTER_KEY\", \"\").strip()` *before* `secrets.token_urlsafe(24)`. If the env file already contains `MEILI_MASTER_KEY=changeme`, the `or` chain short-circuits at step 2 with `\"changeme\"` (truthy), so the token is never generated. Then `set_if_missing` receives `\"changeme\"`, detects it as a placeholder, but re-sets the same placeholder value \u2014 effectively a no-op.\n\nThe same pattern applies to `FIREFLY_APP_KEY` (Lines 170\u2013176) if `FIREFLY_ACCESS_TOKEN` contains a placeholder.\n\n\n<details>\n<summary>\ud83d\udc1b Proposed fix: filter out placeholder values before the `or` chain</summary>\n\n```diff\n+    def _non_placeholder(val: str) -> str:\n+        \"\"\"Return val only if it is not a placeholder, else empty string.\"\"\"\n+        v = val.strip()\n+        return v if v and not _looks_placeholder(v) else \"\"\n+\n     set_if_missing(\n         \"MEILI_MASTER_KEY\",\n         _find_container_env_value(\n             containers, name_tokens=(\"meili\",), keys=(\"MEILI_MASTER_KEY\", \"MEILI_ENV\")\n         )\n-        or env_values.get(\"MEILI_MASTER_KEY\", \"\").strip()\n+        or _non_placeholder(env_values.get(\"MEILI_MASTER_KEY\", \"\"))\n         or secrets.token_urlsafe(24),\n     )\n     set_if_missing(\n         \"FIREFLY_APP_KEY\",\n         _find_container_env_value(\n             containers, name_tokens=(\"firefly\", \"wealth\"), keys=(\"FIREFLY_APP_KEY\", \"APP_KEY\")\n         )\n-        or env_values.get(\"FIREFLY_ACCESS_TOKEN\", \"\").strip()\n+        or _non_placeholder(env_values.get(\"FIREFLY_ACCESS_TOKEN\", \"\"))\n         or secrets.token_urlsafe(24),\n     )\n```\n</details>\n\n<details>\n<summary>\ud83e\udd16 Prompt for AI Agents</summary>\n\n```\nIn `@pmoves/tools/runtime_secrets_hydrate.py` around lines 160 - 168, The current\nor-chain for MEILI_MASTER_KEY (and similarly\nFIREFLY_APP_KEY/FIREFLY_ACCESS_TOKEN) lets stub values like \"changeme\"\nshort-circuit and prevents secrets.token_urlsafe from being used; update the\nlogic used by set_if_missing to treat placeholder values as missing by\nfiltering/normalizing env_values and container-found values before the or-chain\n(e.g., trim and compare against known placeholders like \"changeme\" or empty\nstring), or introduce a small helper (used by _find_container_env_value result\nand env_values.get(...).strip()) that returns None for placeholders so that\nsecrets.token_urlsafe(24) will be selected when appropriate; adjust usages for\nMEILI_MASTER_KEY and FIREFLY_APP_KEY to use this sanitation.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:phoenix -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+      "created_at": "2026-02-16T02:17:15Z",
+      "updated_at": "2026-02-16T02:17:16Z",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392902",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392902"
+        },
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810392902"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810392902/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "start_line": 200,
+      "original_start_line": 160,
+      "start_side": "RIGHT",
+      "line": 205,
+      "original_line": 168,
+      "side": "RIGHT",
+      "author_association": "CONTRIBUTOR",
+      "original_position": 168,
+      "position": 205,
+      "subject_type": "line"
+    },
+    {
+      "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810404246",
+      "pull_request_review_id": 3806310755,
+      "id": 2810404246,
+      "node_id": "PRRC_kwDOPkuAKM6ng12W",
+      "diff_hunk": "@@ -0,0 +1,87 @@\n+# Codex + Cipher Memory Implementation Map\n+_Last updated: 2026-02-16_\n+\n+This dossier maps where Codex integration and Cipher Memory integration exist in PMOVES.AI, and gives an operator-facing hygiene snapshot for active worktrees.\n+\n+## Codex implementation locations\n+\n+### Operator onboarding + parity docs\n+- `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md`\n+- `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`\n+- `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`\n+- `pmoves/docs/AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`\n+- `.codex/README.md`\n+- `pmoves/docs/codex_full_config_bundle/README-Codex-MCP-Full.md`\n+\n+### Codex command/bootstrap scripts\n+- `pmoves/scripts/codex_bootstrap.ps1`\n+- `pmoves/scripts/codex_bootstrap.sh`\n+- `pmoves/scripts/codex_apply_config.ps1`\n+- `pmoves/scripts/codex_submodule_audit.py`\n+- `pmoves/scripts/codex_health_quick.py`\n+\n+### Codex Make targets\n+- `pmoves/mk/codex.mk`\n+  - `codex-config`\n+  - `codex-audit`\n+  - `codex-home`\n+  - `codex-health-quick`\n+  - `secrets-audit`\n+  - `tooling-audit`\n+\n+### Layered audit + showtime extensions (Codex-led)\n+- `pmoves/mk/preflight.mk`\n+  - `submodule-layer-validate-one`\n+  - `submodule-layer-validate-all`\n+  - `audit-layers-static`\n+  - `audit-layers-runtime`\n+  - `showtime-links`\n+  - `showtime-links-strict`\n+- `pmoves/tools/submodule_layer_validate.py`\n+- `pmoves/tools/submodule_layer_runall.py`\n+- `pmoves/tools/showtime_verify_links.py`\n+\n+## Cipher Memory implementation locations\n+\n+### Cipher MCP bridge (repo-local)\n+- `pmoves-cipher-mcp/README.md`\n+- `pmoves-cipher-mcp/cipher_mcp/server.py`\n+- `pmoves-cipher-mcp/cipher_mcp/tools.py`\n+- `pmoves-cipher-mcp/cipher_mcp/client.py`\n+- `pmoves-cipher-mcp/main.py`\n+\n+### Claude wiring for Cipher MCP\n+- `.claude/mcp.json`\n+- `.claude/CLAUDE.md` (Cipher section)\n+- `.claude/context/services-catalog.md` (Cipher service catalog)\n+- `.claude/skills/pmoves-cipher-memory/SKILL.md`\n+- `.claude/skills/pmoves-cipher-memory/skill.json`\n+\n+### Runtime service wiring\n+- `pmoves/docker-compose.yml` (cipher-api service/profile)\n+\n+## Worktree hygiene snapshot\n+\n+### Clean/near-clean worktrees\n+- `PMOVES.AI-hardened-audit` (clean)\n+- `PMOVES.AI-hardened-ci` (clean)\n+- `PMOVES.AI-slice-ci-ghcr` (clean)\n+- `PMOVES.AI-submodule-audit` (clean after artifact cleanup)\n+\n+### Dirty worktrees requiring triage\n+- `PMOVES.AI` (root branch): large mixed change-set (code, docs, workflows, submodules)\n+- `PMOVES.AI-main-audit`: many submodule pointer edits and integration updates pending commit policy\n+- `PMOVES.AI-slice-cipher`: includes unresolved merge conflicts (`UU`) in:\n+  - `.gitignore`\n+  - `pmoves/docker-compose.yml`\n+",
+      "path": "pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md",
+      "commit_id": "6fe3e29f1a5c8ec65e38fbc930d4aa1c250f04e3",
+      "original_commit_id": "be71b54c45fdee57dbbda3ed3d082a6232478c5d",
+      "user": {
+        "login": "coderabbitai[bot]",
+        "id": 136622811,
+        "node_id": "BOT_kgDOCCSy2w",
+        "avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+        "html_url": "https://github.com/apps/coderabbitai",
+        "followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+        "following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+        "gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+        "organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+        "repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+        "events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "body": "_\u26a0\ufe0f Potential issue_ | _\ud83d\udfe1 Minor_\n\n**Avoid asserting live worktree cleanliness in docs.**\n\nThese status claims are environment-specific and will drift quickly; they should be phrased as a checklist (\u201cverify clean/dirty via git status\u201d) or moved to a local/operator note instead of a definitive snapshot. As per coding guidelines, keep status claims aligned with evidence in runbooks and smokes.\n\n<details>\n<summary>\u270f\ufe0f Suggested rewrite</summary>\n\n```diff\n-### Clean/near-clean worktrees\n-- `PMOVES.AI-hardened-audit` (clean)\n-- `PMOVES.AI-hardened-ci` (clean)\n-- `PMOVES.AI-slice-ci-ghcr` (clean)\n-- `PMOVES.AI-submodule-audit` (clean after artifact cleanup)\n-\n-### Dirty worktrees requiring triage\n-- `PMOVES.AI` (root branch): large mixed change-set (code, docs, workflows, submodules)\n-- `PMOVES.AI-main-audit`: many submodule pointer edits and integration updates pending commit policy\n-- `PMOVES.AI-slice-cipher`: includes unresolved merge conflicts (`UU`) in:\n-  - `.gitignore`\n-  - `pmoves/docker-compose.yml`\n+### Worktree hygiene checklist (verify locally)\n+- Run `git status --short` in each worktree.\n+- Flag any worktree with `UU` or large mixed change-sets for triage.\n+- Prefer documenting local findings in your operator notes or runbook evidence.\n```\n</details>\n\n<details>\n<summary>\ud83e\udd16 Prompt for AI Agents</summary>\n\n```\nIn `@pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md` around lines 65\n- 77, Replace the definitive cleanliness claims under the \"Clean/near-clean\nworktrees\" and \"Dirty worktrees requiring triage\" sections with guidance to\nverify state at runtime\u2014e.g., change entries like `PMOVES.AI-hardened-audit`,\n`PMOVES.AI`, and `PMOVES.AI-slice-cipher` to a checklist or operator note that\ninstructs readers to run git status/inspect merge state (or link to the\nrunbook/smoke tests) rather than asserting they are clean/dirty; update the\nsection header text and any bullet wording to indicate these are examples or\nrequire verification instead of factual snapshots.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:triton:eagle -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+      "created_at": "2026-02-16T02:24:49Z",
+      "updated_at": "2026-02-16T02:24:50Z",
+      "html_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810404246",
+      "pull_request_url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810404246"
+        },
+        "html": {
+          "href": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/627#discussion_r2810404246"
+        },
+        "pull_request": {
+          "href": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/627"
+        }
+      },
+      "reactions": {
+        "url": "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/pulls/comments/2810404246/reactions",
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "start_line": null,
+      "original_start_line": 65,
+      "start_side": "RIGHT",
+      "line": null,
+      "original_line": 77,
+      "side": "RIGHT",
+      "author_association": "CONTRIBUTOR",
+      "original_position": 77,
+      "position": 1,
+      "subject_type": "line"
+    }
+  ]
+}

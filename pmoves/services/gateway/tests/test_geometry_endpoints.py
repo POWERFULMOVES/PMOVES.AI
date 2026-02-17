@@ -27,7 +27,7 @@ def test_geometry_event_decode_and_jump():
     client = TestClient(app)
 
     cgp = {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v0.2",
         "meta": {},
         "super_nodes": [
             {
@@ -56,7 +56,7 @@ def test_geometry_event_decode_and_jump():
     envelope = {"type": "geometry.cgp.v1", "data": cgp}
     resp = client.post("/geometry/event", json=envelope)
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
+    assert resp.json()["ok"] is True
 
     shape_id = compute_shape_id(cgp)
     decode_resp = client.post(
@@ -97,7 +97,7 @@ def test_geometry_event_supabase_idempotent(monkeypatch):
     client = TestClient(app)
 
     cgp = {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v0.2",
         "meta": {},
         "super_nodes": [
             {

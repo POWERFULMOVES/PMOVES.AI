@@ -2,7 +2,7 @@ name: Self-Hosted Builds (Hardened)
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, integration, PMOVES.AI-Edition-Hardened]
     paths:
       - 'services/**'
       - 'pmoves/**'

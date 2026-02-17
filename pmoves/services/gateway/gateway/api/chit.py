@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
 
+from pmoves.chit import CGP_SPEC_VERSION
+
 router = APIRouter(tags=["CHIT"])
 logger = logging.getLogger(__name__)
 
@@ -67,9 +69,17 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
     iv = base64.b64decode(enc["iv"]); salt = base64.b64decode(enc["salt"]); ct = base64.b64decode(enc["ct"])
     key = hashlib.scrypt(CHIT_PASSPHRASE.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
     aead = AESGCM(key); aad = canon({"id": const.get("id","")})
-    pt = aead.decrypt(iv, ct, aad)
-    try: const["anchor"] = json.loads(pt.decode())
-    except: pass
+    try:
+        pt = aead.decrypt(iv, ct, aad)
+    except Exception as exc:
+        logger.error("Failed to decrypt anchor for constellation %s: %s",
+                     const.get("id", "<unknown>"), exc)
+        return
+    try:
+        const["anchor"] = json.loads(pt.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        logger.error("Failed to decode anchor for constellation %s: %s", const.get("id", "<unknown>"), exc)
+        return
     const.pop("anchor_enc", None)
 
 class Point(BaseModel):
@@ -144,7 +154,7 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     if const_ids:
         _shape_to_constellations[shape_id] = list(dict.fromkeys(const_ids))
 
-    shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": cgp})
+    shape_store.on_geometry_event({"type": CGP_SPEC_VERSION, "data": cgp})
 
     os.makedirs("data", exist_ok=True)
     json.dump(cgp, open(f"data/{shape_id}.json", "w"), indent=2)
@@ -160,19 +170,23 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
     try:
         from pmoves.services.gateway.gateway.api.events import emit_event  # late import to avoid cycles
         emit_event({"type": "geometry.event", "shape_id": shape_id})
+    except ImportError:
+        logger.debug("events module not available; skipping geometry event emission")
     except Exception:
-        pass
+        logger.exception("Failed to emit geometry.event for shape_id=%s", shape_id)
 
     return shape_id
 
+# Accepted geometry event types (backward-compat for legacy "geometry.cgp.v1" producers)
+_ACCEPTED_EVENT_TYPES = {"geometry.cgp.v1", CGP_SPEC_VERSION}
+
+
 @router.post("/geometry/event")
 def geometry_event(event: GeometryEventEnvelope):
-    if event.type != "geometry.cgp.v1":
+    if event.type not in _ACCEPTED_EVENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported geometry event type")
-    ingest_cgp(event.data.model_dump())
-    return {"ok": True}
-
-    return {"ok": True, "shape_id": shape_hash, "event": "geometry.cgp.v1"}
+    shape_id = ingest_cgp(event.data.model_dump())
+    return {"ok": True, "shape_id": shape_id, "event": event.type}
 
 
 @router.get("/shape/point/{pid}/jump")
@@ -340,8 +354,10 @@ def _learned_enhance(items: List[Dict[str, Any]]) -> Dict[str, Any]:
             summarizer = pipeline("summarization", model=CHIT_T5_MODEL)
             summ = summarizer(head, max_length=64, min_length=10, do_sample=False)[0]["summary_text"]
             return {"mode": "transformers", "summary": summ}
+    except ImportError:
+        logger.warning("transformers not installed; falling back to keyword summarizer")
     except Exception:
-        pass
+        logger.exception("Transformer summarization failed for model %s; falling back", CHIT_T5_MODEL)
 
     # Fallback: naive keyword summary
     from collections import Counter

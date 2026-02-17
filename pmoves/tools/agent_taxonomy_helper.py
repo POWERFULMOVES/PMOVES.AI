@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""PMOVES Agent Taxonomy Helper — CLI tool for querying the agent registry.
+
+Usage:
+    python -m pmoves.tools.agent_taxonomy_helper list          # all agents, table format
+    python -m pmoves.tools.agent_taxonomy_helper show <name>   # single agent card
+    python -m pmoves.tools.agent_taxonomy_helper connections    # network graph (JSON)
+    python -m pmoves.tools.agent_taxonomy_helper types          # type effectiveness chart
+
+Registry: pmoves/config/agent_registry.yaml
+Docs:     pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
+"""
+
+import argparse
+import io
+import json
+import os
+import sys
+from pathlib import Path
+
+# Force UTF-8 output on Windows
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+try:
+    import yaml
+except ImportError:
+    yaml = None  # Fallback to manual parsing not needed — PyYAML is standard
+
+
+REGISTRY_PATH = Path(__file__).parent.parent / "config" / "agent_registry.yaml"
+
+# Type effectiveness matrix (attacker → target → effectiveness)
+TYPE_EFFECTIVENESS = {
+    "agent":  {"worker": "super", "llm": "super", "data": "effective", "api": "effective", "media": "effective", "agent": "neutral", "ui": "effective"},
+    "worker": {"data": "super", "agent": "effective", "worker": "neutral", "llm": "neutral", "media": "neutral", "api": "neutral", "ui": "neutral"},
+    "media":  {"worker": "super", "data": "effective", "media": "neutral", "llm": "neutral", "api": "neutral", "agent": "neutral", "ui": "effective"},
+    "llm":    {"data": "super", "worker": "effective", "llm": "neutral", "api": "effective", "media": "neutral", "agent": "neutral", "ui": "neutral"},
+    "api":    {"data": "effective", "llm": "effective", "worker": "effective", "api": "neutral", "media": "neutral", "agent": "neutral", "ui": "effective"},
+    "data":   {"api": "effective", "data": "neutral", "llm": "neutral", "worker": "neutral", "media": "neutral", "agent": "neutral", "ui": "neutral"},
+    "ui":     {"agent": "effective", "ui": "neutral", "data": "neutral", "llm": "neutral", "worker": "neutral", "media": "neutral", "api": "neutral"},
+}
+
+
+def load_registry():
+    """Load agent registry from YAML."""
+    if yaml is None:
+        print("Error: PyYAML required. Install with: uv pip install pyyaml", file=sys.stderr)
+        sys.exit(1)
+    if not REGISTRY_PATH.exists():
+        print(f"Error: Registry not found at {REGISTRY_PATH}", file=sys.stderr)
+        sys.exit(1)
+    with open(REGISTRY_PATH) as f:
+        return yaml.safe_load(f)
+
+
+def cmd_list(registry, args):
+    """List all agents in table format."""
+    agents = registry.get("agents", {})
+    fmt = args.format
+
+    if fmt == "json":
+        print(json.dumps(agents, indent=2))
+        return
+
+    # Table format
+    header = f"{'ID':<22} {'Name':<24} {'Class':<13} {'Type':<14} {'Tier':<5} {'Port':<6} {'Layers':<8} {'Stage':<10}"
+    print(header)
+    print("─" * len(header))
+
+    types_def = registry.get("types", {})
+    for aid, agent in sorted(agents.items()):
+        primary = agent.get("primary_type", "")
+        secondary = agent.get("secondary_type", "")
+        type_str = f"{primary}/{secondary}" if secondary else primary
+        tier = types_def.get(primary, {}).get("tier", "?")
+        layers = len(agent.get("layers", []))
+        port = agent.get("port") or "—"
+        stage = agent.get("evolution_stage", "base")
+        cls = agent.get("class", "?")
+        name = agent.get("name", aid)
+        print(f"{aid:<22} {name:<24} {cls:<13} {type_str:<14} {tier:<5} {str(port):<6} {layers:<8} {stage:<10}")
+
+    print(f"\nTotal: {len(agents)} agents")
+
+
+def cmd_show(registry, args):
+    """Show a single agent card."""
+    agents = registry.get("agents", {})
+    types_def = registry.get("types", {})
+    classes_def = registry.get("classes", {})
+
+    agent_id = args.name.lower().replace("-", "_").replace(" ", "_")
+    agent = agents.get(agent_id)
+    if not agent:
+        # Fuzzy match
+        matches = [k for k in agents if agent_id in k or agent_id in agents[k].get("name", "").lower()]
+        if matches:
+            agent_id = matches[0]
+            agent = agents[agent_id]
+        else:
+            print(f"Agent '{args.name}' not found. Available: {', '.join(sorted(agents.keys()))}", file=sys.stderr)
+            sys.exit(1)
+
+    primary = agent.get("primary_type", "")
+    secondary = agent.get("secondary_type", "")
+    cls = agent.get("class", "?")
+    cls_info = classes_def.get(cls, {})
+    type_info = types_def.get(primary, {})
+    layers = agent.get("layers", [])
+    toggles = agent.get("chit_toggles", {})
+    nats = agent.get("nats", {})
+
+    print(f"╔══════════════════════════════════════════╗")
+    print(f"║  {agent.get('name', agent_id):^38}  ║")
+    print(f"╠══════════════════════════════════════════╣")
+    print(f"║  ID:        {agent_id:<28} ║")
+    print(f"║  Class:     {cls:<12} ({cls_info.get('prefix', '?')})       ║")
+    type_display = f"{primary}/{secondary}" if secondary else primary
+    print(f"║  Type:      {type_display:<28} ║")
+    print(f"║  Element:   {type_info.get('element', '?'):<28} ║")
+    print(f"║  Tier:      {type_info.get('tier', '?'):<28} ║")
+    print(f"║  Port:      {str(agent.get('port') or '—'):<28} ║")
+    print(f"║  Health:    {str(agent.get('health') or '—'):<28} ║")
+    print(f"║  Stage:     {agent.get('evolution_stage', 'base'):<28} ║")
+    print(f"║  Layers:    {', '.join(layers):<28} ║")
+    if agent.get("submodule"):
+        print(f"║  Submodule: {agent['submodule']:<28} ║")
+    print(f"╠══════════════════════════════════════════╣")
+    print(f"║  CHIT Toggles:                           ║")
+    for k, v in toggles.items():
+        icon = "●" if v else "○"
+        print(f"║    {icon} {k:<36} ║")
+    print(f"╠══════════════════════════════════════════╣")
+    print(f"║  NATS Subjects:                          ║")
+    pubs = nats.get("publishes", [])
+    subs = nats.get("subscribes", [])
+    if pubs:
+        for p in pubs:
+            print(f"║    PUB  {p:<32} ║")
+    if subs:
+        for s in subs:
+            print(f"║    SUB  {s:<32} ║")
+    if not pubs and not subs:
+        print(f"║    (none)                                ║")
+    print(f"╠══════════════════════════════════════════╣")
+    desc = agent.get("description", "")
+    # Word-wrap description to 38 chars
+    words = desc.split()
+    lines = []
+    current = ""
+    for w in words:
+        if len(current) + len(w) + 1 <= 38:
+            current = f"{current} {w}" if current else w
+        else:
+            lines.append(current)
+            current = w
+    if current:
+        lines.append(current)
+    for line in lines:
+        print(f"║  {line:<38}  ║")
+    print(f"╚══════════════════════════════════════════╝")
+
+
+def cmd_connections(registry, args):
+    """Output network graph as JSON (nodes + edges from NATS subject overlaps)."""
+    agents = registry.get("agents", {})
+    types_def = registry.get("types", {})
+
+    nodes = []
+    edges = []
+
+    # Build subject → publisher/subscriber maps
+    publishers = {}   # subject → [agent_id]
+    subscribers = {}  # subject → [agent_id]
+
+    for aid, agent in agents.items():
+        nats = agent.get("nats", {})
+        layers = agent.get("layers", [])
+        nodes.append({
+            "id": aid,
+            "name": agent.get("name", aid),
+            "class": agent.get("class", "?"),
+            "primary_type": agent.get("primary_type", "?"),
+            "layers": len(layers),
+            "evolution_stage": agent.get("evolution_stage", "base"),
+            "port": agent.get("port"),
+        })
+        for subj in nats.get("publishes", []):
+            publishers.setdefault(subj, []).append(aid)
+        for subj in nats.get("subscribes", []):
+            subscribers.setdefault(subj, []).append(aid)
+
+    # Create edges where publishers meet subscribers
+    for subj in set(publishers.keys()) | set(subscribers.keys()):
+        pubs = publishers.get(subj, [])
+        subs = subscribers.get(subj, [])
+        for pub in pubs:
+            for sub in subs:
+                if pub != sub:
+                    edges.append({
+                        "source": pub,
+                        "target": sub,
+                        "via": subj,
+                        "type": "nats_event",
+                    })
+
+    graph = {"nodes": nodes, "edges": edges}
+
+    if args.format == "json" or True:  # Always JSON for connections
+        print(json.dumps(graph, indent=2))
+
+
+def cmd_types(registry, args):
+    """Display type effectiveness chart."""
+    types_def = registry.get("types", {})
+    type_names = sorted(types_def.keys(), key=lambda t: types_def[t].get("tier", 0))
+
+    # Header
+    header = f"{'Attacker ↓ / Target →':<24}"
+    for t in type_names:
+        header += f" {t:<8}"
+    print(header)
+    print("─" * len(header))
+
+    for attacker in type_names:
+        row = f"{attacker:<24}"
+        for target in type_names:
+            eff = TYPE_EFFECTIVENESS.get(attacker, {}).get(target, "neutral")
+            if eff == "super":
+                icon = "★★"
+            elif eff == "effective":
+                icon = "★ "
+            else:
+                icon = "· "
+            row += f" {icon:<8}"
+        print(row)
+
+    print()
+    print("★★ = Super effective  ★  = Effective  ·  = Neutral")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="PMOVES Agent Taxonomy Helper",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument("--format", choices=["table", "json"], default="table",
+                        help="Output format (default: table)")
+
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    subparsers.add_parser("list", help="List all agents")
+
+    show_parser = subparsers.add_parser("show", help="Show agent card")
+    show_parser.add_argument("name", help="Agent ID or name (fuzzy match)")
+
+    subparsers.add_parser("connections", help="Network graph (JSON)")
+
+    subparsers.add_parser("types", help="Type effectiveness chart")
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
+
+    registry = load_registry()
+
+    commands = {
+        "list": cmd_list,
+        "show": cmd_show,
+        "connections": cmd_connections,
+        "types": cmd_types,
+    }
+
+    commands[args.command](registry, args)
+
+
+if __name__ == "__main__":
+    main()

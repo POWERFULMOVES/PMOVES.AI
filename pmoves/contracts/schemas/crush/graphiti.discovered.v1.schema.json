@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Crush Graphiti Discovery Event",
+  "description": "Emitted when Crush CLI discovers the Agent Trail and Graphiti protocol on first boot.",
+  "type": "object",
+  "required": [
+    "agent_id",
+    "timestamp",
+    "trail_entries_found",
+    "own_identity_found"
+  ],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "const": "crush",
+      "description": "Always 'crush' for this event"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of discovery"
+    },
+    "trail_entries_found": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of graphiti trail entries found in AGENT_TRAIL.md"
+    },
+    "own_identity_found": {
+      "type": "boolean",
+      "description": "Whether Crush found its own entry in agent_signatures.yaml"
+    },
+    "ecosystem_agents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of agent_ids discovered in the signature registry"
+    },
+    "welcome_entry_acknowledged": {
+      "type": "boolean",
+      "description": "Whether Crush acknowledged the welcome entry addressed to it"
+    }
+  },
+  "additionalProperties": false
+}

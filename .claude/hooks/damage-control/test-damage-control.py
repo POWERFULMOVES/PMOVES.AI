@@ -171,7 +171,11 @@ def check_bash_command(command: str, config: Dict[str, Any]) -> Tuple[bool, List
             glob_regex = glob_to_regex(zero_path)
             try:
                 if re.search(glob_regex, command, re.IGNORECASE):
-                    reasons.append(f"zero-access pattern: {zero_path}")
+                    # Check if command targets a template file
+                    if any(suffix in command.lower() for suffix in TEMPLATE_SUFFIXES):
+                        reasons.append(f"zero-access pattern (template, ask): {zero_path}")
+                    else:
+                        reasons.append(f"zero-access pattern: {zero_path}")
             except re.error:
                 continue
         else:
@@ -179,7 +183,11 @@ def check_bash_command(command: str, config: Dict[str, Any]) -> Tuple[bool, List
             expanded = os.path.expanduser(zero_path)
             escaped = re.escape(expanded)
             if re.search(escaped, command) or re.search(re.escape(zero_path), command):
-                reasons.append(f"zero-access path: {zero_path}")
+                # Check if command targets a template file
+                if any(suffix in command.lower() for suffix in TEMPLATE_SUFFIXES):
+                    reasons.append(f"zero-access path (template, ask): {zero_path}")
+                else:
+                    reasons.append(f"zero-access path: {zero_path}")
 
     # 3. Check readOnlyPaths (modifications blocked)
     for readonly in config.get("readOnlyPaths", []):
@@ -208,21 +216,30 @@ def check_bash_command(command: str, config: Dict[str, Any]) -> Tuple[bool, List
     return len(reasons) > 0, reasons
 
 
-def check_file_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, List[str]]:
-    """Check file path for Edit/Write tools. Returns (blocked, list of reasons)."""
+TEMPLATE_SUFFIXES = (".example", ".sample", ".template", ".defaults")
+
+
+def check_file_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, List[str], bool]:
+    """Check file path for Edit/Write tools. Returns (blocked, list of reasons, is_template)."""
     reasons = []
+    is_template = False
 
     # Check zeroAccessPaths - supports glob patterns
     for zero_path in config.get("zeroAccessPaths", []):
         if match_path(file_path, zero_path):
-            reasons.append(f"zero-access path: {zero_path}")
+            basename = os.path.basename(file_path).lower()
+            if any(basename.endswith(suffix) for suffix in TEMPLATE_SUFFIXES):
+                reasons.append(f"zero-access path (template): {zero_path}")
+                is_template = True
+            else:
+                reasons.append(f"zero-access path: {zero_path}")
 
     # Check readOnlyPaths - supports glob patterns
     for readonly in config.get("readOnlyPaths", []):
         if match_path(file_path, readonly):
             reasons.append(f"read-only path: {readonly}")
 
-    return len(reasons) > 0, reasons
+    return len(reasons) > 0, reasons, is_template
 
 
 # ============================================================================
@@ -301,12 +318,17 @@ def run_interactive_mode():
         # Test the input
         if tool == 'Bash':
             blocked, reasons = check_bash_command(user_input, config)
+            is_template = False
         else:
-            blocked, reasons = check_file_path(user_input, config)
+            blocked, reasons, is_template = check_file_path(user_input, config)
 
         # Print result
         print()
-        if blocked:
+        if blocked and is_template:
+            print(f"\033[93mASK\033[0m - {len(reasons)} pattern(s) matched (template file, user confirmation required):")
+            for reason in reasons:
+                print(f"   - {reason}")
+        elif blocked:
             print(f"\033[91mBLOCKED\033[0m - {len(reasons)} pattern(s) matched:")
             for reason in reasons:
                 print(f"   - {reason}")
@@ -376,14 +398,25 @@ def run_test(hook_type: str, tool_name: str, value: str, expectation: str) -> bo
 
     # Handle PreToolUse hooks (exit code based)
     blocked = exit_code == 2
+    is_ask = exit_code == 0 and '"permissionDecision": "ask"' in stdout
     expect_blocked = expectation == "blocked"
-    passed = blocked == expect_blocked
+
+    if is_ask:
+        actual = "ASK"
+    elif blocked:
+        actual = "BLOCKED"
+    else:
+        actual = "ALLOWED"
 
     expected = "BLOCKED" if expect_blocked else "ALLOWED"
-    actual = "BLOCKED" if blocked else "ALLOWED"
+
+    # ASK counts as ALLOWED for expectation purposes (exit 0, not exit 2)
+    actual_for_comparison = "BLOCKED" if blocked else "ALLOWED"
+    passed = actual_for_comparison == expected
 
     if passed:
-        print(f"PASS: {expected} - {value}")
+        status_suffix = f" (via {actual})" if actual == "ASK" else ""
+        print(f"PASS: {expected}{status_suffix} - {value}")
     else:
         print(f"FAIL: Expected {expected}, got {actual} - {value}")
         if stderr:

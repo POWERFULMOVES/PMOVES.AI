@@ -1,0 +1,95 @@
+{
+  "captured_at": "2026-02-16T05:43:48.551151+00:00",
+  "repo": "POWERFULMOVES/PMOVES.AI",
+  "pr": 626,
+  "summary": {
+    "checks_total": 5,
+    "checks_pending": 0,
+    "checks_failed": 1,
+    "checks_passed": 4
+  },
+  "pr_view": {
+    "author": {
+      "id": "U_kgDOCHrjYA",
+      "is_bot": false,
+      "login": "POWERFULMOVES",
+      "name": ""
+    },
+    "baseRefName": "main",
+    "headRefName": "fix/main-audit-tooling-submodule-integrity",
+    "latestReviews": [
+      {
+        "id": "",
+        "author": {
+          "login": "coderabbitai"
+        },
+        "authorAssociation": "CONTRIBUTOR",
+        "body": "**Actionable comments posted: 7**\n\n<details>\n<summary>\ud83e\udd16 Fix all issues with AI agents</summary>\n\n```\nIn `@pmoves/tools/chit_manifest_sync.py`:\n- Around line 18-29: CANONICAL_SOURCE_ALIASES currently maps\nSERVICE_PASSWORD_POSTGRES and SERVICE_PASSWORD_ADMIN to the exact same alias\ntuple (\"POSTGRES_PASSWORD\", \"SUPABASE_DB_PASSWORD\"), which will create\noverlapping v1 alias lists; either consolidate those two keys into a single\ncanonical key if they are the same secret, or give them distinct alias tuples so\nthey do not overlap (e.g., adjust the tuple for SERVICE_PASSWORD_ADMIN or\nSERVICE_PASSWORD_POSTGRES), updating the CANONICAL_SOURCE_ALIASES mapping\naccordingly and ensuring any resolution logic that uses CANONICAL_SOURCE_ALIASES\nstill finds the intended alias names.\n- Line 10: Create the missing requirements file\npmoves/tools/requirements-lite.txt and list the tool dependencies required by\nscripts in pmoves/tools (at minimum add PyYAML>=6.0 to satisfy the import yaml\nused in chit_manifest_sync.py and the other tools), and include any other common\nruntime deps referenced by those tools; ensure bootstrap_light_env.py\u2019s default\nrequirement path is satisfied by this new requirements-lite.txt so pip install\n-r pmoves/tools/requirements-lite.txt will install the necessary packages.\n\nIn `@pmoves/tools/runner_lane_map.py`:\n- Around line 363-370: The code currently sets strict_fail = bool(unmapped)\nunconditionally causing unmapped lanes to force exit code 2 even when\nargs.strict is False; change the logic so strict_fail starts False and only\nconsiders unmapped when args.strict is True (i.e., if args.strict then\nstrict_fail = strict_fail or bool(unmapped)), while preserving the existing\nhandling of args.enforce_phase, args.enforce_phase -> phase_failures, and\nunavailable so that strict_fail is only true when the user requested strict\nbehavior; keep the final if strict_fail: return 2.\n- Around line 90-100: discover_groups currently only globs \"*.yml\" and will miss\nworkflows with a \".yaml\" extension; update discover_groups to scan both \"*.yml\"\nand \"*.yaml\" (e.g., iterate over both glob patterns or combine results) so every\nworkflow file is inspected, then continue using RUNS_ON_LIST_RE and\nnormalize_group as before to collect groups; ensure duplicates are still\ndeduplicated in the groups set before returning the sorted list.\n\nIn `@pmoves/tools/runtime_secrets_hydrate.py`:\n- Around line 161-183: The calls to set_if_missing for MEILI_MASTER_KEY,\nFIREFLY_APP_KEY, and AGENT_ZERO_EVENTS_TOKEN silently generate random tokens via\nsecrets.token_urlsafe when no container/env value exists; change each call site\nto first compute the candidate value and a boolean flag (e.g., is_generated =\nTrue when both _find_container_env_value(...) and env_values.get(...) are empty\nand you fallback to secrets.token_urlsafe(...)), then call set_if_missing with\nthe value and, if is_generated, emit a warning log entry (use the existing\nmodule logger) that includes the secret name (e.g., \"MEILI_MASTER_KEY\"), a short\nmarker like \"[AUTO-GENERATED-PLACEHOLDER]\", and that the value was generated as\na placeholder so operators can distinguish hydrated vs generated secrets; keep\nthe rest of the logic (calls to _find_container_env_value, env_values.get, and\nsecrets.token_urlsafe) unchanged.\n\nIn `@pmoves/tools/showtime_watch.py`:\n- Around line 82-89: The loop in showtime_watch.py currently returns 0 on\ntimeout or when STOP is set, which masks failures; change the exit codes so that\nsuccessful readiness (when collect returns rows all OK) returns 0, but the\ntimeout path and STOP-triggered path return a non-zero code (e.g., 1).\nConcretely, update the loop surrounding collect(), render_plain(), and the\nSTOP/max_seconds check to return 1 on exit due to timeout or STOP (and mirror\nthe same change for the Rich-render loop around render_rich at lines ~118-122),\nleaving the existing return 0 only for the all-ready condition so callers can\ndistinguish success from timeout/stop.\n- Around line 70-79: The collect function can call ThreadPoolExecutor with\nmax_workers=0 when ENDPOINTS is empty; add a guard at the top of collect to\nreturn an empty list if ENDPOINTS is falsy (e.g., if not ENDPOINTS: return []),\nor alternatively compute workers = max(1, min(24, len(ENDPOINTS))) so\nThreadPoolExecutor never receives 0; update the code paths around\nThreadPoolExecutor/ probe/ futs accordingly to use the non-zero worker count or\nearly return.\n```\n\n</details>\n\n<details>\n<summary>\ud83e\uddf9 Nitpick comments (13)</summary><blockquote>\n\n<details>\n<summary>pmoves/tools/runtime_secrets_hydrate.py (2)</summary><blockquote>\n\n`18-30`: **`_parse_env_file` does not strip values, unlike `parse_env_file` in `secrets_hardening_audit.py`.**\n\nLine 29 stores the raw value after `=` without stripping, while the nearly identical `parse_env_file` in `secrets_hardening_audit.py` (line 45) does `.strip()` on both key and value. Callers in this file compensate by calling `.strip()` at every access site (e.g., lines 134, 143\u2013157, 166, 174), but this is fragile and duplicative. Consider stripping here for consistency or extracting a shared env-parsing helper across the two modules.\n\n\n<details>\n<summary>\u267b\ufe0f Strip values at parse time for consistency</summary>\n\n```diff\n         key = key.strip()\n         if key:\n-            values[key] = value\n+            values[key] = value.strip()\n     return values\n```\n</details>\n\n---\n\n`33-54`: **`_write_env_file` reads the file then writes it back without any atomicity safeguard.**\n\nIf the process crashes mid-write, `path.write_text(text, ...)` can truncate the env file. For a secrets-related file this could be painful. Consider writing to a temporary file in the same directory and then using `os.replace()` for an atomic rename.\n\n\n<details>\n<summary>\ud83d\udee1\ufe0f Atomic write pattern</summary>\n\n```diff\n+import tempfile\n+\n def _write_env_file(path: Path, updates: Mapping[str, str]) -> None:\n     path.parent.mkdir(parents=True, exist_ok=True)\n     lines = path.read_text(encoding=\"utf-8\", errors=\"ignore\").splitlines() if path.exists() else []\n     ...\n     text = \"\\n\".join(lines)\n     if text and not text.endswith(\"\\n\"):\n         text += \"\\n\"\n-    path.write_text(text, encoding=\"utf-8\")\n+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=\".tmp\")\n+    try:\n+        os.write(fd, text.encode(\"utf-8\"))\n+        os.close(fd)\n+        os.replace(tmp, path)\n+    except BaseException:\n+        os.close(fd) if not os.get_inheritable(fd) else None\n+        Path(tmp).unlink(missing_ok=True)\n+        raise\n```\n</details>\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/showtime_watch.py (2)</summary><blockquote>\n\n`19-21`: **Fragile `sys.path` manipulation for sibling import.**\n\nInserting `sys.path[0]` at module scope is a common pattern for Make-invoked scripts, but it can shadow stdlib or third-party modules if the `tools/` directory happens to contain a file with a colliding name. A relative import or `importlib` approach would be more robust, though this is acceptable for operator tooling.\n\n---\n\n`24-29`: **Global `STOP` flag is not declared as `threading`-safe.**\n\nThe `STOP` bool is written by the signal handler and read by the main-thread loop. In CPython this works due to the GIL, but it's technically a data race per the language model. A `threading.Event` would be more correct and still simple.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/bootstrap_light_env.py (2)</summary><blockquote>\n\n`56-57`: **`run()` propagates `CalledProcessError` with no context.**\n\nWhen a subprocess fails, the traceback includes the raw command but not which step (venv creation vs. pip install) failed. Adding a brief wrapper or context message would improve operator UX.\n\n---\n\n`30-34`: **`action=\"append\"` with a non-`None` default accumulates values rather than replacing the default.**\n\nIf a user passes `--requirements custom.txt`, argparse appends to the default, yielding `[\"tools/requirements-lite.txt\", \"custom.txt\"]`. Since the lite requirements are always included, this should be documented in the help text to clarify intent. If users should be able to replace the default entirely, use `default=None` and handle it in code.\n\n<details>\n<summary>\ud83d\udca1 Option A: document the behavior; Option B: use None default</summary>\n\n```diff\n     parser.add_argument(\n         \"--requirements\",\n         action=\"append\",\n-        default=[\"tools/requirements-lite.txt\"],\n-        help=\"Requirements file(s) relative to pmoves/ (repeatable).\",\n+        default=None,\n+        help=\"Requirements file(s) relative to pmoves/ (repeatable; always includes tools/requirements-lite.txt unless overridden).\",\n     )\n```\n\nThen in `main()`:\n\n```diff\n-    req_files = [resolve_under_pmoves(item) for item in args.requirements]\n+    reqs = args.requirements or [\"tools/requirements-lite.txt\"]\n+    req_files = [resolve_under_pmoves(item) for item in reqs]\n```\n</details>\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/secrets_hardening_audit.py (2)</summary><blockquote>\n\n`27-36`: **`candidate_files()` does a full recursive scan of the repo root.**\n\nThis is fine for an audit tool, but on very large repos `rglob(\"*\")` can be slow. If performance becomes an issue, consider using `git ls-files` to restrict to tracked files only, which also avoids scanning build artifacts.\n\n---\n\n`39-46`: **`parse_env_file` and `is_placeholder` duplicate logic from `runtime_secrets_hydrate.py`.**\n\nBoth modules have their own env-parsing and placeholder-detection functions with slightly different semantics (e.g., stripping behavior, placeholder token sets). Consider extracting a shared `env_utils` module under `pmoves/tools/` to avoid drift.\n\n\n\n\nAlso applies to: 49-62\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/local_cert_runners.py (2)</summary><blockquote>\n\n`86-110`: **Docker socket mount grants the runner container full host Docker access.**\n\nLine 107 (`/var/run/docker.sock:/var/run/docker.sock`) is standard for self-hosted GitHub runners that need Docker-in-Docker capability, but it's effectively root-equivalent access to the host's Docker daemon. Ensure this is documented in operator runbooks and that the runner image is pinned or verified.\n\n---\n\n`193-203`: **`main()` signature takes `argv: list[str]` but `Sequence[str]` would be more flexible.**\n\nOther scripts in this PR use `Sequence[str] | None` for their `main` signatures. Minor inconsistency.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/runner_lane_map.py (1)</summary><blockquote>\n\n`130-148`: **`load_runners` fetches only the first page (100 runners) without pagination.**\n\nLine 131 uses `per_page=100` but doesn't follow pagination links. If the repo has >100 runners, some will be missed and `lane_online` checks could give false negatives. For most local-cert setups this is fine, but consider using `gh api --paginate` (as done in `local_cert_runners.py` line 154) for consistency.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/chit_manifest_sync.py (1)</summary><blockquote>\n\n`211-219`: **`--check` mode compares `yaml.safe_dump` output textually.**\n\nThis works when the destination is always written by this tool (formatting is deterministic), but will report \"out of sync\" if the file was hand-edited with equivalent data in different formatting. This is probably the desired behavior (enforcing machine-generated output), but worth noting in the `--help` or a comment.\n\n</blockquote></details>\n<details>\n<summary>pmoves/tools/tooling_script_audit.py (1)</summary><blockquote>\n\n`272-279`: **Redundant `not union` guard in `jaccard()`.**\n\nLine 277 checks `if not union: return 0.0`, but this is unreachable \u2014 `a` and `b` are already confirmed non-empty on line 273, so their union is always non-empty.\n\n\n<details>\n<summary>\u267b\ufe0f Simplify</summary>\n\n```diff\n def jaccard(a: set[str], b: set[str]) -> float:\n     if not a or not b:\n         return 0.0\n-    shared = a & b\n-    union = a | b\n-    if not union:\n-        return 0.0\n-    return len(shared) / len(union)\n+    return len(a & b) / len(a | b)\n```\n</details>\n\n</blockquote></details>\n\n</blockquote></details>\n\n<!-- This is an auto-generated comment by CodeRabbit for review status -->",
+        "submittedAt": "2026-02-16T00:58:24Z",
+        "includesCreatedEdit": false,
+        "reactionGroups": [],
+        "state": "COMMENTED",
+        "commit": {
+          "oid": ""
+        }
+      }
+    ],
+    "number": 626,
+    "reviewDecision": "",
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:48:54Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22046376660/job/63695886590",
+        "name": "Analyze (actions)",
+        "startedAt": "2026-02-16T00:47:51Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:49:07Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22046376660/job/63695886574",
+        "name": "Analyze (javascript-typescript)",
+        "startedAt": "2026-02-16T00:47:51Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:49:15Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22046376660/job/63695886576",
+        "name": "Analyze (python)",
+        "startedAt": "2026-02-16T00:47:51Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL Advanced"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-02-16T00:48:50Z",
+        "conclusion": "FAILURE",
+        "detailsUrl": "https://github.com/POWERFULMOVES/PMOVES.AI/runs/63695931670",
+        "name": "CodeQL",
+        "startedAt": "2026-02-16T00:48:44Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      },
+      {
+        "__typename": "StatusContext",
+        "context": "CodeRabbit",
+        "startedAt": "2026-02-16T00:58:27Z",
+        "state": "SUCCESS",
+        "targetUrl": ""
+      }
+    ],
+    "title": "fix(audit): restore codex helper scripts + valid Agent-Zero gitlink",
+    "url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/626"
+  },
+  "reviews": [],
+  "issue_comments": [],
+  "review_comments": []
+}

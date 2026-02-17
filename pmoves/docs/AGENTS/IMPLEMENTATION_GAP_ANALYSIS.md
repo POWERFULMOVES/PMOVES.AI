@@ -180,7 +180,7 @@ hooks:
   pre_execution:
     - name: "Probabilistic Safety Check"
       type: "llm_eval"
-      model: "claude-3-haiku-20240307"
+      model: "utility"  # TensorZero role — routes to fast/cheap model
       trigger_on: "shell_command"
       action_on_risk: "ask_user"
 ```

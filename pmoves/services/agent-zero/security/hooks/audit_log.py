@@ -53,7 +53,7 @@ SECRET_PATTERNS = [
     (r'access[_-]?token\s*[:=]\s*[^\s\'"]{20,}', 'access_token=[REDACTED]'),
 
     # Private keys (SSH, GPG, etc.) - Use DOTALL to match multiline
-    (r'-----BEGIN [A-Z]+ PRIVATE KEY-----(.|\n)*?-----END [A-Z]+ PRIVATE KEY-----', '[REDACTED_PRIVATE_KEY]'),
+    (r'-----BEGIN [A-Z]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z]+ PRIVATE KEY-----', '[REDACTED_PRIVATE_KEY]'),
     (r'ssh-rsa [A-Za-z0-9+/=]+', '[REDACTED_SSH_KEY]'),
     (r'ssh-ed25519 [A-Za-z0-9+/=]+', '[REDACTED_SSH_KEY]'),
 ]
@@ -119,7 +119,7 @@ class AuditLogger:
         # CRITICAL: Scrub secrets before logging
         scrubbed_data = _scrub_secrets(data)
 
-        event = {
+        event = {  # CodeQL: [py/clear-text-storage-sensitive-data] — values are scrubbed by _scrub_secrets() above
             "id": event_id,
             "timestamp": datetime.utcnow().isoformat(),
             "type": event_type,

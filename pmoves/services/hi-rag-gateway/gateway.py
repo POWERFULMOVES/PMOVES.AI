@@ -1,5 +1,6 @@
-import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io
+import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io, socket
 from pathlib import Path
+from urllib.parse import urlparse
 
 # ensure repo root is on sys.path for importing tools/* when running from service folder
 try:
@@ -27,7 +28,10 @@ QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
 SENTENCE_MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
 USE_OLLAMA_EMBED = os.environ.get("USE_OLLAMA_EMBED","false").lower()=="true"
-OLLAMA_URL = os.environ.get("OLLAMA_URL","http://ollama:11434")
+_raw_ollama_url = os.environ.get("OLLAMA_URL","http://ollama:11434")
+if not urlparse(_raw_ollama_url).scheme in ("http", "https"):
+    raise ValueError(f"OLLAMA_URL must use http/https scheme")
+OLLAMA_URL = _raw_ollama_url
 HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
 NEO4J_URL = (os.environ.get("NEO4J_URL","bolt://neo4j:7687") or "").strip()
 NEO4J_USER = os.environ.get("NEO4J_USER","neo4j")
@@ -61,6 +65,74 @@ logger = logging.getLogger("hirag.gateway")
 
 qdrant = QdrantClient(url=QDRANT_URL, timeout=20.0)
 
+
+def _qdrant_search(
+    *,
+    collection_name: str,
+    query_vector: List[float],
+    limit: int,
+    query_filter: Optional[Filter],
+    with_payload: bool = True,
+    with_vectors: bool = False,
+):
+    """Handle qdrant-client API drift (`search` vs `query_points`)."""
+    if hasattr(qdrant, "search"):
+        return qdrant.search(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+
+    if hasattr(qdrant, "query_points"):
+        kwargs = {
+            "collection_name": collection_name,
+            "limit": limit,
+            "query_filter": query_filter,
+            "with_payload": with_payload,
+            "with_vectors": with_vectors,
+        }
+        try:
+            resp = qdrant.query_points(query=query_vector, **kwargs)
+        except TypeError:
+            resp = qdrant.query_points(vector=query_vector, **kwargs)
+        if isinstance(resp, list):
+            return resp
+        points = getattr(resp, "points", None)
+        if isinstance(points, list):
+            return points
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        if isinstance(resp, dict):
+            dict_points = resp.get("points")
+            if isinstance(dict_points, list):
+                return dict_points
+            dict_result = resp.get("result")
+            if isinstance(dict_result, list):
+                return dict_result
+        return []
+
+    if hasattr(qdrant, "search_points"):
+        resp = qdrant.search_points(
+            collection_name=collection_name,
+            query_vector=query_vector,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+        if isinstance(resp, list):
+            return resp
+        result = getattr(resp, "result", None)
+        if isinstance(result, list):
+            return result
+        return []
+
+    raise AttributeError("qdrant client has no compatible search/query API")
+
 # Optional Neo4j: run even if service is not present
 driver = None
 if NEO4J_URL:
@@ -90,6 +162,12 @@ CHIT_DECODE_TEXT = os.environ.get("CHIT_DECODE_TEXT", "false").lower() == "true"
 CHIT_DECODE_IMAGE = os.environ.get("CHIT_DECODE_IMAGE", "false").lower() == "true"
 CHIT_DECODE_AUDIO = os.environ.get("CHIT_DECODE_AUDIO", "false").lower() == "true"
 CHIT_CLIP_MODEL = os.environ.get("CHIT_CLIP_MODEL", "clip-ViT-B-32")
+CHIT_IMAGE_FETCH_ALLOW_PRIVATE = os.environ.get("CHIT_IMAGE_FETCH_ALLOW_PRIVATE", "false").lower() == "true"
+CHIT_IMAGE_FETCH_ALLOWED_HOSTS = {
+    host.strip().lower()
+    for host in os.environ.get("CHIT_IMAGE_FETCH_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+}
 
 _codebook_cache = None
 _codebook_mtime = None
@@ -400,6 +478,97 @@ def require_tailscale(request: Request, admin_only: bool = False):
 def require_admin_tailscale(request: Request):
     return require_tailscale(request, admin_only=True)
 
+
+def _host_is_private_or_internal(hostname: str) -> bool:
+    host = (hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in {"localhost"} or host.endswith(".local"):
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+
+    seen: set[str] = set()
+    for _, _, _, _, sockaddr in infos:
+        ip_raw = sockaddr[0]
+        if ip_raw in seen:
+            continue
+        seen.add(ip_raw)
+        try:
+            ip_obj = ipaddress.ip_address(ip_raw)
+        except ValueError:
+            return True
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _validate_remote_image_url(raw_url: Any) -> str:
+    url = str(raw_url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(400, f"invalid image URL scheme: {parsed.scheme or '<none>'}")
+    if not parsed.hostname:
+        raise HTTPException(400, "invalid image URL host")
+    if parsed.username or parsed.password:
+        raise HTTPException(400, "image URL credentials are not allowed")
+
+    host = parsed.hostname.lower()
+    if CHIT_IMAGE_FETCH_ALLOWED_HOSTS and host not in CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        raise HTTPException(400, f"image host not allowed: {host}")
+    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE and not CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        if _host_is_private_or_internal(host):
+            raise HTTPException(400, f"private/internal image host blocked: {host}")
+    return url
+
+
+def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response:
+    """Validate URL for SSRF and fetch with DNS-resolved IP check.
+
+    Resolves DNS once and validates all IPs against private ranges before fetch.
+    Note: ``requests.get`` re-resolves DNS independently, so this does not fully
+    prevent DNS-rebinding TOCTOU attacks but raises the bar significantly.
+    """
+    url = _validate_remote_image_url(raw_url)
+    parsed = urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    try:
+        addrs = socket.getaddrinfo(host, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise HTTPException(400, f"cannot resolve image host: {host}")
+    if not addrs:
+        raise HTTPException(400, f"no addresses for host: {host}")
+
+    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE:
+        for _, _, _, _, sockaddr in addrs:
+            try:
+                ip_obj = ipaddress.ip_address(sockaddr[0])
+            except ValueError:
+                raise HTTPException(400, f"invalid IP for host: {host}")
+            if (
+                ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
+                or ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified
+            ):
+                raise HTTPException(400, f"private/internal image host blocked: {host}")
+
+    resp = requests.get(url, timeout=timeout, allow_redirects=False)
+    resp.raise_for_status()
+    if 300 <= resp.status_code < 400:
+        raise HTTPException(400, f"redirect responses are not allowed for image URL: {url}")
+    return resp
+
+
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
     emb = embed_query(query)
     cond = Filter(must=[FieldCondition(key="namespace", match=MatchValue(value=namespace))])
@@ -407,7 +576,14 @@ def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_
     if RERANK_ENABLE:
         topn = max(RERANK_TOPN, k)
     try:
-        sr = qdrant.search(QDRANT_COLLECTION, query_vector=emb, limit=topn, query_filter=cond, with_payload=True, with_vectors=False)
+        sr = _qdrant_search(
+            collection_name=QDRANT_COLLECTION,
+            query_vector=emb,
+            limit=topn,
+            query_filter=cond,
+            with_payload=True,
+            with_vectors=False,
+        )
     except Exception as e:
         logger.exception("Qdrant search error")
         raise HTTPException(503, f"Qdrant search error: {e}")
@@ -681,10 +857,9 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         img_list = []
         for url in images:
             try:
-                r = requests.get(url, timeout=20)
-                r.raise_for_status()
+                r = _fetch_remote_image(url)
             except requests.RequestException as e:
-                raise HTTPException(502, f"failed to fetch image {url}: {e}")
+                raise HTTPException(502, f"failed to fetch image: {e}")
             try:
                 img = Image.open(io.BytesIO(r.content)).convert("RGB")
             except Exception as e:

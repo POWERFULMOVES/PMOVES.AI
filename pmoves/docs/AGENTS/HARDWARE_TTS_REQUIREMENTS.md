@@ -2,6 +2,8 @@
 
 Actionable specifications extracted from the PMOVES.AI Agentic Architecture documentation.
 
+> **Note:** This document lists specific model names for hardware sizing and VRAM planning. Runtime code must reference TensorZero role names (orchestrator, utility, reasoning, embed), not these concrete model IDs. See `pmoves/docs/MODEL_SOURCE_OF_TRUTH.md`.
+
 ---
 
 ## Table of Contents

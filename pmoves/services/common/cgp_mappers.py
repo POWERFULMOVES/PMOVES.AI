@@ -3,6 +3,8 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Dict, List, Any
 
+from pmoves.chit import CGP_SPEC_VERSION
+
 
 def _now_iso() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat().replace("+00:00", "Z")
@@ -84,7 +86,7 @@ def map_health_weekly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
     })
 
     cgp: Dict[str, Any] = {
-        "spec": "chit.cgp.v0.1",
+        "spec": CGP_SPEC_VERSION,
         "summary": f"health weekly summary ({period})",
         "created_at": _now_iso(),
         "super_nodes": [
@@ -122,7 +124,7 @@ def map_finance_monthly_summary_to_cgp(evt: Dict[str, Any]) -> Dict[str, Any]:
         })
 
     cgp: Dict[str, Any] = {
-        "spec": "chit.cgp.v0.1",
+        "spec": CGP_SPEC_VERSION,
         "summary": f"finance monthly summary ({month})",
         "created_at": _now_iso(),
         "super_nodes": [
