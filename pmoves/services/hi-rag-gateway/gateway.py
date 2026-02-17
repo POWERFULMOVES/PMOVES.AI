@@ -28,7 +28,10 @@ QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
 SENTENCE_MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
 USE_OLLAMA_EMBED = os.environ.get("USE_OLLAMA_EMBED","false").lower()=="true"
-OLLAMA_URL = os.environ.get("OLLAMA_URL","http://ollama:11434")
+_raw_ollama_url = os.environ.get("OLLAMA_URL","http://ollama:11434")
+if not urlparse(_raw_ollama_url).scheme in ("http", "https"):
+    raise ValueError(f"OLLAMA_URL must use http/https scheme")
+OLLAMA_URL = _raw_ollama_url
 HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
 NEO4J_URL = (os.environ.get("NEO4J_URL","bolt://neo4j:7687") or "").strip()
 NEO4J_USER = os.environ.get("NEO4J_USER","neo4j")

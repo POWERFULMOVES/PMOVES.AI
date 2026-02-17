@@ -138,7 +138,7 @@ async def generate_cgp(theory: TheoryInput):
         return {"status": "success", "packet": packet}
     except Exception as e:
         logger.error(f"CGP generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="CGP generation failed")
 
 
 @app.post("/cgp/publish")
@@ -158,7 +158,7 @@ async def publish_cgp(theory: TheoryInput):
         return {"status": "published", "packet": packet, "result": result}
     except Exception as e:
         logger.error(f"CGP publish failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="CGP publish failed")
 
 
 @app.post("/cgp/batch")

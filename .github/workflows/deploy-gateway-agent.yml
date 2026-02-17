@@ -55,6 +55,8 @@ jobs:
   build-ai-lab:
     name: Build Gateway Agent (AI-Lab)
     runs-on: [self-hosted, ai-lab]
+    permissions:
+      contents: read
     needs: validate
     steps:
       - name: Checkout code
@@ -76,6 +78,8 @@ jobs:
   deploy-ai-lab:
     name: Deploy to AI-Lab
     runs-on: [self-hosted, ai-lab]
+    permissions:
+      contents: read
     needs: build-ai-lab
     steps:
       - name: Checkout code
@@ -120,6 +124,8 @@ jobs:
   deploy-vps:
     name: Deploy to VPS (KVM4-1)
     runs-on: [self-hosted, kvm4]
+    permissions:
+      contents: read
     needs: validate
     steps:
       - name: Checkout code
@@ -178,6 +184,8 @@ jobs:
   rollback-ai-lab:
     name: Rollback AI-Lab
     runs-on: [self-hosted, ai-lab]
+    permissions:
+      contents: read
     needs: deploy-ai-lab
     if: failure()
     steps:
@@ -193,6 +201,8 @@ jobs:
   rollback-vps:
     name: Rollback VPS
     runs-on: [self-hosted, kvm4]
+    permissions:
+      contents: read
     needs: deploy-vps
     if: failure()
     steps:

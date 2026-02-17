@@ -201,9 +201,10 @@ async def health_check():
             "vram_usage_percent": round(metrics.vram_usage_percent, 2),
         }
     except Exception as e:
+        logger.error(f"GPU health check failed: {e}")
         return {
             "status": "unhealthy",
-            "error": str(e),
+            "error": "GPU monitoring unavailable",
         }, status.HTTP_503_SERVICE_UNAVAILABLE
 
 

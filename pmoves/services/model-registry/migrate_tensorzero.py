@@ -122,7 +122,7 @@ class TensorZeroParser:
         # Normalize provider type using proper URL hostname parsing
         if provider_type == "openai":
             parsed_host = urlparse(api_base).hostname or ""
-            if "ollama" in parsed_host:
+            if parsed_host == "ollama" or (parsed_host or "").endswith(".ollama"):
                 provider_type = "ollama"
             elif parsed_host == "api.anthropic.com":
                 provider_type = "anthropic"
