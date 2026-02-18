@@ -16,7 +16,7 @@ permissions:
 jobs:
   bump-yt-dlp:
     # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -61,3 +61,4 @@ jobs:
           git commit -m "chore(pmoves-yt): bump yt-dlp to ${VERSION}"
           git push origin "$branch"
           gh pr create --title "chore(pmoves-yt): bump yt-dlp to ${VERSION}" --body "Automated weekly bump to yt-dlp ${VERSION}." || true
+
