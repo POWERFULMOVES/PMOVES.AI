@@ -107,8 +107,8 @@ Documents outside this directory that reference CHIT:
 
 | External Document | Relationship |
 |-------------------|-------------|
-| [docs/subsystems/CHIT_GEOMETRY_BUS.md](../../docs/subsystems/CHIT_GEOMETRY_BUS.md) | Complete CHIT & Geometry Bus reference |
-| [docs/PLAN_Geometric_Intelligence.md](../../docs/PLAN_Geometric_Intelligence.md) | Integration planning for geometric intelligence |
+| [docs/subsystems/CHIT_GEOMETRY_BUS.md](../../../docs/subsystems/CHIT_GEOMETRY_BUS.md) | Complete CHIT & Geometry Bus reference |
+| [docs/PLAN_Geometric_Intelligence.md](../../../docs/PLAN_Geometric_Intelligence.md) | Integration planning for geometric intelligence |
 | [pmoves/docs/CHIT_INTEGRATION_STATUS.md](../CHIT_INTEGRATION_STATUS.md) | Service-by-service CHIT integration status |
 | [pmoves/docs/CHIT_USER_GUIDE.md](../CHIT_USER_GUIDE.md) | CHIT encoding/decoding user guide (secrets focus) |
 | [pmoves/docs/CHIT_AUDIT_TRACKING.md](../CHIT_AUDIT_TRACKING.md) | Code presence audit across branches |

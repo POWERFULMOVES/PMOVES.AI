@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # Production Validation Checklist
 **PMOVES.AI Edition - Hardened Branch**
 **Created:** 2026-02-07

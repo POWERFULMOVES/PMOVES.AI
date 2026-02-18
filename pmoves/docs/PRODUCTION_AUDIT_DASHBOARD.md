@@ -5,7 +5,7 @@
 
 **Last Updated:** 2026-02-18
 **Branch:** `docs/documentation-organization`
-**Consolidated From:** 17 audit documents
+**Consolidated From:** 27 audit documents
 
 ---
 
@@ -15,10 +15,10 @@
 |--------|-------|
 | Total tracked items | 24 |
 | Resolved | 17 |
-| Active blockers | 7 |
+| Active blockers | 8 |
 | Critical | 1 |
 | High | 3 |
-| Medium | 2 |
+| Medium | 3 |
 | Low | 1 |
 
 ---
@@ -34,6 +34,7 @@
 | AB-5 | 18 service health checks not validated | Readiness Audit 2026-02-07 | **MEDIUM** | OPEN | Run `make -C pmoves verify-all` in WSL2 with full stack up |
 | AB-6 | DB migrations not validated | Readiness Audit 2026-02-07 | **MEDIUM** | OPEN | Validate Supabase, Neo4j Cypher, and Qdrant collection migrations |
 | AB-7 | CodeRabbit PR #606 fixes pending | CR Review 2026-02-08 | **LOW** | OPEN | Fix `corpus=` → `corpus_path=` parameter name, add CGP v1.0 validation evidence, bump PBKDF2 to 600k |
+| AB-8 | 5 conflicting PRs (#577-581) need rebase | Merge Tracker | **MEDIUM** | OPEN | Rebase onto latest hardened or close as stale |
 
 ### Blocker Detail
 
@@ -54,6 +55,9 @@ Health checks and DB migrations cannot be validated until the full stack is brou
 
 **AB-7: CodeRabbit Fixes**
 12 actionable comments on PR #606. Critical subset: parameter naming consistency (`corpus=` vs `corpus_path=`), PBKDF2 iteration count (100k → 600k per OWASP), missing `corpus_idx` in decoder output, and hardcoded coverage value in `compute_metrics`.
+
+**AB-8: Conflicting PRs**
+5 PRs (#577-581) from the merge tracker have conflicts with the current hardened branch. These need to be rebased onto the latest `PMOVES.AI-Edition-Hardened` or closed as stale if their changes have been superseded by later work.
 
 ---
 
@@ -127,6 +131,16 @@ These items are fully resolved and documented for historical reference.
 | 15 | `CHIT_AUDIT_TRACKING.md` | Feb 7 | Resolved | Core CHIT code verified on hardened |
 | 16 | `AUDIT_LOG_2026-02-07.md` | Feb 7 | Resolved | Security remediation (credentials, hardening) |
 | 17 | `CLAUDE_CONTEXT_AUDIT.md` | Feb 11 | Resolved | 51 worktrees, 31 CLAUDE.md files audited |
+| 18 | `SUBMODULE_HARDENED_ALIGNMENT_2026-02-07.md` | Feb 7 | Resolved | Submodule main vs hardened diff |
+| 19 | `SUBMODULE_SYNC_PROGRESS_2026-02-07.md` | Feb 7 | Resolved | Sync tracking (duplicate of Review Tasks) |
+| 20 | `SUBMODULE_MERGE_READINESS_2026-02-07.md` | Feb 7 | Resolved | Merge readiness review |
+| 21 | `PRODUCTION_VALIDATION_PLAN.md` | Feb 7 | Resolved | Validation plan (superseded by dashboard checklist) |
+| 22 | `PRODUCTION_VALIDATION_SUMMARY_2026-02-07.md` | Feb 7 | Resolved | Env/compose validation summary |
+| 23 | `PRODUCTION_BRING_UP_REPORT_2026-02-07.md` | Feb 7 | Resolved | Phase 1 bring-up progress |
+| 24 | `PRODUCTION_READINESS_REPORT_2026-02-07.md` | Feb 7 | Resolved | "NOT READY" snapshot |
+| 25 | `CI_VALIDATION_SUMMARY_2026-02-08.md` | Feb 8 | Resolved | CI migration complete (same as CI_INFRASTRUCTURE_AUDIT) |
+| 26 | `PRODUCTION_VALIDATION_CHECKLIST.md` | Feb 7 | Resolved | Step-by-step checklist (TODOs now in dashboard AB-4/5) |
+| 27 | `PRODUCTION_MERGE_TRACKER.md` | Feb 16 | **Active** | PR merge tracker; PRs #577-581 conflicting (see AB-8) |
 
 **Diagnostic artifact:** `SUBMODULE_ALIGNMENT_SITREP_2026-02-14.md` -- machine-generated snapshot of submodule state including duplicate URL groups and recursive traversal errors.
 
@@ -164,6 +178,7 @@ make -C pmoves codex-health-quick
 4. **AB-2** (merge DoX feat branch) -- targeted PR
 5. **AB-3** (fix GHCR workflow) -- independent, can parallelize
 6. **AB-7** (CodeRabbit fixes) -- lowest priority, pre-merge cleanup
+7. **AB-8** (rebase conflicting PRs) -- independent, can parallelize with AB-3
 
 ---
 
@@ -171,4 +186,5 @@ make -C pmoves codex-health-quick
 
 | Date | Change |
 |------|--------|
+| 2026-02-18 | Added 10 missed audit docs (#18-27), AB-8 conflicting PRs blocker |
 | 2026-02-18 | Initial dashboard consolidating 17 audit documents |
