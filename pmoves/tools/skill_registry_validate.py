@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from submodule_utils import parse_gitmodules_rows  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -122,7 +123,7 @@ def main() -> int:
     print(f"\nSummary: {len(fails)} error(s), {len(warns)} warning(s)")
 
     if "--strict" in sys.argv:
-        return 1 if issues else 0
+        return 1
 
     return 1 if fails else 0
 

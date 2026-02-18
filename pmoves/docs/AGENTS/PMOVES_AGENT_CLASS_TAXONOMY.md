@@ -107,7 +107,6 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | Ultimate-TTS-Studio | Standard | Media | LLM | 5 |
 | TensorZero Gateway | Standard | API | LLM | 2 |
 | BoTZ Gateway | Standard | Agent | Worker | 6 |
-| Gateway Agent | Standard | Agent | API | 6 |
 | Channel Monitor | Standard | Worker | Media | 4 |
 | Cipher Memory | Specialized | Data | Agent | 1 |
 | Hyperdimensions | Specialized | UI | Data | 7 |
@@ -118,10 +117,10 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | Render Webhook | Utility | API | Worker | 2 |
 | Publisher-Discord | Standard | Worker | API | 4 |
 | Jellyfin Bridge | Specialized | Media | Data | 5 |
-| Mesh Agent | Standard | Agent | — | 6 |
+| Mesh Agent | Standard | Agent | Data | 6 |
 | NATS | Utility | Data | API | 1 |
 | Supabase | Utility | Data | API | 1 |
-| Qdrant | Utility | Data | — | 1 |
+| Qdrant | Utility | Data | Worker | 1 |
 | Neo4j | Utility | Data | — | 1 |
 | Meilisearch | Utility | Data | API | 1 |
 | MinIO | Utility | Data | API | 1 |
@@ -140,6 +139,19 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | E2B Spells | Utility | Agent | Worker | 6 |
 | Transcribe and Fetch | Specialized | Media | Worker | 5 |
 | Jellyfin AI Media Stack | Specialized | Media | LLM | 5 |
+| LangExtract | Standard | Worker | LLM | 4 |
+| Crush | Standard | UI | Agent | 7 |
+| DoX | Standard | Worker | Data | 4 |
+| Open Notebook | Standard | Data | UI | 1 |
+| Consciousness Service | Specialized | Agent | LLM | 6 |
+| n8n | Utility | Worker | Agent | 4 |
+| Headscale | Utility | Data | API | 1 |
+| RustDesk | Utility | UI | API | 7 |
+| Invidious | Utility | UI | Media | 7 |
+| Wealth | Specialized | UI | Data | 7 |
+| Health | Specialized | UI | Data | 7 |
+| EvoSwarm Controller | Standard | Worker | Agent | 4 |
+| Swarm Attribution | Specialized | Worker | Data | 4 |
 
 ### Dual-Type Interactions (Type Effectiveness)
 

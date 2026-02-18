@@ -942,7 +942,7 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
-    submodule: "PMOVES-Health"
+    submodule: "Pmoves-Health-wger"
     description: "Fitness tracking — the body is a system too"
 
   evoswarm_controller:
@@ -1125,7 +1125,7 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
-    submodule: "pmoves-surf"
+    submodule: "PMOVES-surf"
     description: "E2B browser automation agent — web interaction sandbox"
 
   e2b_danger_room:
