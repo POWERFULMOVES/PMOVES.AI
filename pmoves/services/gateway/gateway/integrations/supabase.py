@@ -12,7 +12,7 @@ def enabled() -> bool:
 
 
 def _headers(*, prefer: Optional[Sequence[str]] = None) -> Dict[str, str]:
-    key = os.environ["SUPABASE_KEY"]
+    key = get_secret("SUPABASE_KEY")
     prefer_values = ["return=representation"]
     if prefer:
         prefer_values.extend(prefer)
@@ -31,7 +31,7 @@ def _post(
     params: Optional[Dict[str, str]] = None,
     prefer: Optional[Sequence[str]] = None,
 ):
-    url = f"{os.environ['SUPABASE_URL'].rstrip('/')}/rest/v1/{table}"
+    url = f"{os.getenv('SUPABASE_URL', '').rstrip('/')}/rest/v1/{table}"
     resp = requests.post(
         url,
         headers=_headers(prefer=prefer),
