@@ -329,12 +329,13 @@ def _append_class_defs(lines):
 
 def cmd_mermaid(registry, args):
     """Generate Mermaid diagram from agent registry."""
+    style = args.style
     agents = registry.get("agents", {})
 
     handlers = {"topology": _mermaid_topology, "tac": _mermaid_tac, "nats": _mermaid_nats}
-    handler = handlers.get(args.style)
+    handler = handlers.get(style)
     if handler is None:
-        print(f"Error: Unknown mermaid style '{args.style}'. Available: {', '.join(handlers)}", file=sys.stderr)
+        print(f"Error: Unknown mermaid style '{style}'. Available: {', '.join(handlers)}", file=sys.stderr)
         sys.exit(1)
     handler(agents)
 
@@ -454,12 +455,14 @@ def _mermaid_nats(agents):
 
     publishers = {}   # subject -> [agent_id]
     subscribers = {}  # subject -> [agent_id]
+    nats_agents = set()
 
     for aid, agent in agents.items():
         nats = agent.get("nats", {})
         pubs = nats.get("publishes", [])
         subs = nats.get("subscribes", [])
         if pubs or subs:
+            nats_agents.add(aid)
             cls = agent.get("class", "utility")
             name = agent.get("name", aid)
             lines.append(f"    {aid}[\"{name}\"]:::{cls}")
