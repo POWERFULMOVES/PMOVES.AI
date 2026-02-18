@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # Submodule Hardened Branch Alignment Summary
 
 **Date:** February 7, 2026

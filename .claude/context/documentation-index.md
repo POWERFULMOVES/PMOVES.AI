@@ -96,10 +96,12 @@ PMOVES-ToKenism-Multi/integrations/contracts/chit/
 
 ### Deprecated Locations
 
+Both deprecated copies are byte-identical (66KB, curly-quoted `"Flute"`) and already contain in-file `> [!CAUTION] DEPRECATED DOCUMENT LOCATION` headers pointing to canonical locations. No further action needed.
+
 | Document | Status |
 |----------|--------|
-| `docs/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED → use `.claude/context/flute-gateway.md` |
-| `pmoves/docs/context/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED → duplicate |
+| `docs/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED (has in-file notice) → use `.claude/context/flute-gateway.md` |
+| `pmoves/docs/context/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED (has in-file notice) → duplicate |
 
 ### NATS Subjects
 
@@ -220,6 +222,7 @@ agent.voice.speaking.v1  # Agent voice state
 | 1.0 | Dec 2025 | Initial index, PR #343 alignment |
 | 2.0 | Feb 2026 | CODEX parity, Known Roads, tooling audit, Agent Zero DoX |
 | 2.1 | Feb 2026 | Submodule-skill registry, Skills Reference, CLAUDE.md inventory |
+| 2.2 | Feb 2026 | Supersede 10 more audit docs, Flute deprecation status clarified, cross-ref fixes |
 
 ---
 
@@ -299,14 +302,14 @@ Machine-readable JSON mapping every submodule to relevant skills, context files,
 
 | Document | Path | Purpose |
 |----------|------|---------|
-| **Production Audit Dashboard** | `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` | **Single source of truth** — consolidates 17 audit docs |
+| **Production Audit Dashboard** | `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` | **Single source of truth** — consolidates 27 audit docs |
 | Blocker Status | `pmoves/docs/PRODUCTION_AUDIT_BLOCKER_STATUS.md` | B1-B5 resolution details (resolved) |
 | Readiness Audit | `pmoves/docs/PRODUCTION_READINESS_AUDIT_2026-02-07.md` | Master checklist (active — health/DB pending) |
 | CI Audit | `pmoves/docs/CI_AUDIT_REPORT_2026-02-08.md` | GHCR failures (active) |
 | Env Tier Audit | `pmoves/docs/ENV_TIER_AUDIT_2026-02-07.md` | Missing credentials (active) |
 | Submodule SITREP | `pmoves/docs/SUBMODULE_ALIGNMENT_SITREP_2026-02-14.md` | Diagnostic snapshot |
 
-All 17 audit documents have navigation headers pointing to the dashboard.
+All 27 audit documents have navigation headers pointing to the dashboard.
 
 ---
 
