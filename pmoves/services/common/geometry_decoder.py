@@ -203,9 +203,11 @@ def sign_cgp(
     passphrase = passphrase or CHITConfig.get_passphrase()
     doc = deepcopy(cgp)
     ts = int(datetime.now().timestamp())
-    # Key identifier derived via HMAC with domain separator (not for auth — just an ID tag).
+    # Key identifier derived via keyed hash with domain separator (not for auth — just an ID tag).
     # Actual cryptographic integrity uses HMAC-SHA256 below.
-    kid = kid or hmac.new(passphrase.encode(), b"chit-kid-v1", hashlib.sha256).hexdigest()[:16]
+    kid = kid or hashlib.blake2b(
+        b"chit-kid-v1", key=passphrase.encode()[:64], digest_size=8
+    ).hexdigest()
 
     meta = {
         "alg": "HMAC-SHA256",
