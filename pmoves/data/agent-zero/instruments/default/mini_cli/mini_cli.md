@@ -53,12 +53,12 @@ python3 -m pmoves.tools.mini_cli mcp setup <tool_id>
 # Encode env to CHIT CGP bundle
 python3 -m pmoves.tools.mini_cli secrets encode \
   [--env-file pmoves/env.shared] \
-  [--out pmoves/pmoves/data/chit/env.cgp.json] \
+  [--out pmoves/data/chit/env.cgp.json] \
   [--no-cleartext]
 
 # Decode CHIT bundle to env format
 python3 -m pmoves.tools.mini_cli secrets decode \
-  [--cgp pmoves/pmoves/data/chit/env.cgp.json] \
+  [--cgp pmoves/data/chit/env.cgp.json] \
   [--out /tmp/env.decoded]
 ```
 

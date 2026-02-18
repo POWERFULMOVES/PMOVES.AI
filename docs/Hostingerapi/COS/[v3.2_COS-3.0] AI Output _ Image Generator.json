@@ -295,7 +295,7 @@
             {
               "id": "aad68b30-648b-4172-b3e7-4861fd056974",
               "name": "tinifyAPI",
-              "value": "wcDv4t3YjlqhS3THVHd5WJBj7ctykfYS",
+              "value": "REDACTED_API_KEY",
               "type": "string"
             }
           ]
@@ -405,7 +405,7 @@
             "cf-ray": "8ff09e0f0524dd3a-HKG",
             "cf-visitor": "{\"scheme\":\"https\"}",
             "cf-worker": "n8n.cloud",
-            "cookie": "rl_page_init_referrer=RudderEncrypt%3AU2FsdGVkX19s8mt0nLwSKOAWckJO%2BfhhpEZFGBr6exU%3D; rl_page_init_referring_domain=RudderEncrypt%3AU2FsdGVkX1%2BuwugQmn5SpOg4hEvV1dT2rVXzd6WiOVk%3D; n8n-auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjM4NmZjM2RmLWM3ZmMtNGE5Zi05ZjQyLTMxYTYwZmQzYmQzNyIsImhhc2giOiJpdkZEb2w0YjREIiwiYnJvd3NlcklkIjoiWGljMXhOOGgvWWNxRWVRZVdTcXlKU2xoYWNTNFJBSEVFczFYMVBRZ09WMD0iLCJpYXQiOjE3MzYxMjU0MDIsImV4cCI6MTczNjczMDIwMn0.wyzS8ATdxVjPK6pM8Pin3SVjM-CxOu5oNdwVqNWxs0U; rl_anonymous_id=RudderEncrypt%3AU2FsdGVkX1%2FPIFdIwHUyEqaC9q968IfRxQe6u9fhiwkDokmu3U7DjXqZVxotAv2gOXJmndalpgZ5zGRNank4Ew%3D%3D; rl_user_id=RudderEncrypt%3AU2FsdGVkX1%2BtGGKVZolbSHj1JgP06qYasqYQTU%2FYmcFpPDFYX8%2FprxWvpJavoQvoSxrIZ0tdTOMiQJlXwFc5wElYcxS9O1EkTt1kALKMh0VnoMJa1IAAdnIGmkHGkgQja3FzEy%2FTgRKh5TupgsQMr%2FvQ3ynOvg4MHVkMVAda8hc%3D; rl_trait=RudderEncrypt%3AU2FsdGVkX19NwCIyzTQR0UGVUnI00%2FX0r7GfHnuDQTZWtqfq7OsZBoFzD3KoaM8UFSkRsY0jaRFobGZvCL1EpmCCLN2Lx85gT6vFelK9eD5xDWkPjCq%2Bf%2FyxfQ7Id3TRfMhlZEeFkaD6hhttFTaFbexyM9bAGXcRmSef5I6uUP8%3D; n8n_anonymous_id=16b6a0d9-ad8d-40b2-8fcb-b429db09abca; ph_phc_4URIAm1uYfJO7j8kWSe0J8lc8IqnstRLS7Jx8NcakHo_posthog=%7B%22distinct_id%22%3A%22fa8972778f1b26c95c2f56e5dcac0460449919a72b08cf533215bb49c07cb34d%23386fc3df-c7fc-4a9f-9f42-31a60fd3bd37%22%2C%22%24sesid%22%3A%5B1736385756951%2C%2201944899-e630-7da6-8935-6dd5abadf1c3%22%2C1736384833072%5D%2C%22%24epp%22%3Atrue%2C%22%24initial_person_info%22%3A%7B%22r%22%3A%22%24direct%22%2C%22u%22%3A%22https%3A%2F%2Fbigmovesio.app.n8n.cloud%2Fsignin%22%7D%7D; rl_session=RudderEncrypt%3AU2FsdGVkX1%2FAD3EkmaQvrwKhu%2BlOLJmRDfTqf0v2WjTtV8%2BoDZ58Tw4I5EyHYvYxgqdteBXTpb7%2BYTkX%2FrtMObknNqbk3UiXuwxDVhC9QQ0Y1qoHc9SLuyydmZdXpNDOj4gCP8WOYnrvTEH5L6HS3g%3D%3D",
+            "cookie": "REDACTED_SESSION_COOKIE",
             "priority": "u=0, i",
             "sec-ch-ua": "\"Not)A;Brand\";v=\"99\", \"Brave\";v=\"127\", \"Chromium\";v=\"127\"",
             "sec-ch-ua-mobile": "?0",

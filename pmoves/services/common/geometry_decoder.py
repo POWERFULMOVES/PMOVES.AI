@@ -28,6 +28,8 @@ import binascii
 import hashlib
 import hmac
 import struct
+
+from .env import get_secret
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 from copy import deepcopy
@@ -101,7 +103,7 @@ class CHITConfig:
             ValueError: If CHIT_PASSPHRASE is not set and a secure value is required
         """
         if cls._passphrase is None:
-            cls._passphrase = os.getenv("CHIT_PASSPHRASE", "")
+            cls._passphrase = get_secret("CHIT_PASSPHRASE", "")
             if not cls._passphrase:
                 # Only log once to avoid spam
                 if not cls._warned_default_passphrase:

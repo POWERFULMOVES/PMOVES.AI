@@ -15,6 +15,8 @@ import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
 from pydantic import BaseModel, Field
 
+from services.common.env import get_secret
+
 # NATS service announcement integration
 try:
     from services.common.nats_service_listener import announce_service, ServiceTier
@@ -93,9 +95,9 @@ def _sync_openai_compat_env() -> None:
             logger.info("OpenAI-compatible base resolved to %s", resolved_base)
         else:
             logger.debug("OpenAI-compatible base already set to %s", resolved_base)
-    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    key = (get_secret("OPENAI_API_KEY") or "").strip()
     if not key:
-        tz_key = (os.environ.get("TENSORZERO_API_KEY") or "").strip()
+        tz_key = (get_secret("TENSORZERO_API_KEY") or "").strip()
         if tz_key:
             os.environ["OPENAI_API_KEY"] = tz_key
             os.putenv("OPENAI_API_KEY", tz_key)

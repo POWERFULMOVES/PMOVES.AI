@@ -2,8 +2,10 @@ import os
 from typing import Any, Dict, List, Optional
 from supabase import create_client, Client
 
+from .env import get_secret
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_KEY = get_secret("SUPABASE_KEY")
 
 _client: Client | None = None
 

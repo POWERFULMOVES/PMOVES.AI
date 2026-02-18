@@ -7,9 +7,7 @@
     "PMOVES.AI_INTEGRATION.md"
   ],
   "allow_uninitialized_paths": [],
-  "known_path_typos": [
-    "deskdesktop"
-  ],
+  "known_path_typos": [],
   "python_compile": {
     "enabled": true,
     "max_files": 600,

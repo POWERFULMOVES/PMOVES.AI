@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 import yaml
 
+from services.common.env import get_secret
 from services.common.forms import (
     DEFAULT_AGENT_FORM,
     DEFAULT_AGENT_FORMS_DIR,
@@ -19,7 +20,7 @@ from services.common.forms import (
 ARCHON_SERVER_URL = os.environ.get("ARCHON_SERVER_URL", os.environ.get("ARCHON_HTTP_URL", "http://localhost:8181")).rstrip("/")
 ARCHON_API_URL = os.environ.get("ARCHON_API_URL", f"{ARCHON_SERVER_URL}/api").rstrip("/")
 ARCHON_SOCKET_URL = os.environ.get("ARCHON_SOCKET_URL", ARCHON_SERVER_URL)
-ARCHON_API_TOKEN = os.environ.get("ARCHON_API_TOKEN")
+ARCHON_API_TOKEN = get_secret("ARCHON_API_TOKEN")
 FORM_NAME = resolve_form_name(
     prefer_keys=("ARCHON_FORM",),
     fallback=DEFAULT_AGENT_FORM,

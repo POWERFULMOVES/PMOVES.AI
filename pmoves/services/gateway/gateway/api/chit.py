@@ -6,13 +6,14 @@ from pydantic import BaseModel, Field, ConfigDict
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
+from services.common.env import get_secret
 
 router = APIRouter(tags=["CHIT"])
 logger = logging.getLogger(__name__)
 
 CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="true"
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
-CHIT_PASSPHRASE = os.getenv("CHIT_PASSPHRASE","change-me")
+CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE","change-me")
 CHIT_CODEBOOK_PATH = os.getenv("CHIT_CODEBOOK_PATH","tests/data/codebook.jsonl")
 CHIT_LEARNED_TEXT = os.getenv("CHIT_LEARNED_TEXT","false").lower()=="true"
 CHIT_T5_MODEL = os.getenv("CHIT_T5_MODEL")  # optional HF model path/name
