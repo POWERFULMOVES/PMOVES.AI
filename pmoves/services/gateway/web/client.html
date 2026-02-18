@@ -35,6 +35,15 @@
 
 <script>
 const $ = s => document.querySelector(s);
+const safeBase = (raw) => {
+  try {
+    const u = new URL(raw);
+    if (u.protocol === "http:" || u.protocol === "https:") return raw;
+  } catch (_) {
+    if (raw.startsWith("/")) return raw;
+  }
+  return "http://localhost:8000";
+};
 const show = o => {
   $("#out").textContent = JSON.stringify(o, null, 2);
   const L = document.querySelector('#learned');
@@ -47,11 +56,23 @@ const show = o => {
 };
 const links = (shapeId, base) => {
   const el = $("#links");
-  if (!shapeId) { el.textContent = ""; return; }
-  const svg = `${base}/viz/shape/${shapeId}.svg`;
-  const raw = `${base}/data/${shapeId}.json`;
-  const dec = `${base}/viz/decode/${shapeId}.html`;
-  el.innerHTML = `View: <a href="${svg}" target="_blank">Shape SVG</a> · <a href="${raw}" target="_blank">Raw JSON</a> · <a href="${dec}" target="_blank">Decode</a>`;
+  el.textContent = "";
+  if (!shapeId) return;
+  const pairs = [
+    [`${base}/viz/shape/${shapeId}.svg`, "Shape SVG"],
+    [`${base}/data/${shapeId}.json`, "Raw JSON"],
+    [`${base}/viz/decode/${shapeId}.html`, "Decode"],
+  ];
+  el.appendChild(document.createTextNode("View: "));
+  pairs.forEach(([href, label], i) => {
+    const a = document.createElement("a");
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = label;
+    el.appendChild(a);
+    if (i < pairs.length - 1) el.appendChild(document.createTextNode(" \u00b7 "));
+  });
 };
 const cloneCgp = cgp => {
   if (typeof structuredClone === 'function') return structuredClone(cgp);
@@ -97,7 +118,7 @@ async function maybeSign(cgp) {
   return cgp;
 }
 $("#publish").onclick = async () => {
-  const base = $("#base").value.trim();
+  const base = safeBase($("#base").value.trim());
   let cgp = JSON.parse($("#cgp").value || "{}");
   cgp = await maybeSign(cgp);
   lastCgp = cgp;
@@ -110,7 +131,7 @@ $("#publish").onclick = async () => {
   links(lastShapeId, base);
 };
 $("#decode").onclick = async () => {
-  const base = $("#base").value.trim();
+  const base = safeBase($("#base").value.trim());
   if (!lastCgp) lastCgp = JSON.parse($("#cgp").value || "{}");
   if (!lastShapeId) lastShapeId = await computeShapeId(lastCgp);
   const decodeBody = {
@@ -122,9 +143,9 @@ $("#decode").onclick = async () => {
   show(obj);
 };
 $("#calib").onclick = async () => {
-  const base = $("#base").value.trim();
+  const base = safeBase($("#base").value.trim());
   let cgp = JSON.parse($("#cgp").value || "{}");
-  const r = await fetch(base + "/geometry/calibration/report", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify(cgp)});
+  const r = await fetch(base + "/geometry/calibration/report", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({cgp: cgp})});
   show(await r.json());
 };
 </script>

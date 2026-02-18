@@ -1117,8 +1117,14 @@ def _infer_platform(url: Optional[str], entry_meta: Optional[Dict[str, Any]] = N
                 return value.strip().lower()
     if url:
         lowered = url.lower()
-        if "soundcloud.com" in lowered or lowered.startswith("soundcloud:"):
+        if lowered.startswith("soundcloud:"):
             return "soundcloud"
+        try:
+            netloc = urlparse(lowered).netloc
+            if netloc == "soundcloud.com" or netloc.endswith(".soundcloud.com"):
+                return "soundcloud"
+        except Exception:
+            logger.debug("_infer_platform: urlparse failed for %r", lowered)
     return "youtube"
 
 def _apply_provider_defaults(
