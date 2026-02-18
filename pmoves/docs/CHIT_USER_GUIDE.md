@@ -1,5 +1,7 @@
 # PMOVES.AI CHIT User Guide
 
+> **See also:** [CHIT Documentation Suite](PMOVESCHIT/README.md) for the full CHIT protocol reference, and [Human_side.md](PMOVESCHIT/Human_side.md) for how CHIT attribution works for cooperative members.
+
 **CHIT** (Compressed Hierarchical Information Transfer) is PMOVES.AI's secure encoding format for secrets, configuration, and structured data.
 
 ## What is CHIT?

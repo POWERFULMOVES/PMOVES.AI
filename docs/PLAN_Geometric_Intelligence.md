@@ -1,5 +1,7 @@
 # Geometric Intelligence & CHIT Integration Plan
 
+> **See also:** [CHIT Documentation Suite](../pmoves/docs/PMOVESCHIT/README.md) for the complete CHIT reference, and [Mathematical UI Design Specification](../pmoves/docs/PMOVESCHIT/Mathematical_UI_Design_Specification.md) for the UI visualization spec.
+
 **Status:** Planning
 **Created:** 2025-12-27
 **Feature Branch:** `feat/geometry-intelligence`

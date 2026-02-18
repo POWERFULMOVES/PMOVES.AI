@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # PMOVES.AI Claude Code CLI Context Audit Report
 
 **Date:** 2026-02-11  

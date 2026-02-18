@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # CI/CD Audit Report - PMOVES.AI
 
 **Date:** 2026-02-08

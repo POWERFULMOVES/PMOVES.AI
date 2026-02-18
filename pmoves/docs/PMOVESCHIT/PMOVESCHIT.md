@@ -1,3 +1,9 @@
+> [!NOTE]
+> **Historical Document (v0.1)**
+>
+> This is the original CHIT specification from December 2025. It has been superseded by [CGP v1.0 Specification](CGP_v1.0_SPECIFICATION.md).
+> For the current documentation entry point, see **[README.md](README.md)**.
+
 > [!TIP]
 > **Implementation Cross-Reference**
 >

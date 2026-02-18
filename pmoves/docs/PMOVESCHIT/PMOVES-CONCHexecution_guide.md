@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 3: Applied Systems
+>
+> Execution guide for the Consciousness Harvest (CONCH) pipeline. Builds on CHIT encoding to transform consciousness research datasets into grounded personas via CGP packets. Prerequisites: Layer 1 protocol docs.
+
 # PMOVES Consciousness Integration • Execution Guide
 _Last updated: 2025-12-09_
 

@@ -19,6 +19,23 @@
 
 ---
 
+## Integration Layer
+
+The [PMOVES.AI Integration Layer Overview](../../pmoves/docs/INTEGRATIONS_OVERVIEW.md) is the master entry point for all integration documentation, organized by five systems: Skill Registry, CHIT Tools, Secrets Pipeline, GPU Orchestration, and Damage Control Hooks.
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| Integration Overview | `pmoves/docs/INTEGRATIONS_OVERVIEW.md` | Master entry point for all integration docs |
+| CHIT Tools Catalog | `pmoves/docs/CHIT_TOOLS_CATALOG.md` | All 13+ CHIT Python tools with usage |
+| Secrets Pipeline Reference | `pmoves/docs/SECRETS_PIPELINE_REFERENCE.md` | Complete 6-step funnel, tier architecture |
+| GPU Orchestration Guide | `pmoves/docs/GPU_ORCHESTRATION_GUIDE.md` | GPU API, CLI skills, make targets, hardware |
+| Service Integration Guide | `pmoves/docs/INTEGRATIONS.md` | Service auth, API endpoints |
+| Submodule Integration Guide | `pmoves/docs/PMOVES.AI_SUBMODULE_INTEGRATION_GUIDE.md` | Tier credentials, bootstrap |
+| Submodule Contract | `pmoves/docs/SUBMODULE_INTEGRATION_CONTRACT.md` | Overlay structure and rules |
+| Hooks README | `.claude/hooks/README.md` | Pre/post-tool hooks, damage control |
+
+---
+
 ## PMOVESCHIT / GEOMETRY BUS
 
 ### Specifications
@@ -79,10 +96,12 @@ PMOVES-ToKenism-Multi/integrations/contracts/chit/
 
 ### Deprecated Locations
 
+Both deprecated copies are byte-identical (66KB, curly-quoted `"Flute"`) and already contain in-file `> [!CAUTION] DEPRECATED DOCUMENT LOCATION` headers pointing to canonical locations. No further action needed.
+
 | Document | Status |
 |----------|--------|
-| `docs/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED → use `.claude/context/flute-gateway.md` |
-| `pmoves/docs/context/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED → duplicate |
+| `docs/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED (has in-file notice) → use `.claude/context/flute-gateway.md` |
+| `pmoves/docs/context/PMOVES Multimodal Communication Layer ("Flute")...md` | DEPRECATED (has in-file notice) → duplicate |
 
 ### NATS Subjects
 
@@ -202,6 +221,95 @@ agent.voice.speaking.v1  # Agent voice state
 |---------|------|---------|
 | 1.0 | Dec 2025 | Initial index, PR #343 alignment |
 | 2.0 | Feb 2026 | CODEX parity, Known Roads, tooling audit, Agent Zero DoX |
+| 2.1 | Feb 2026 | Submodule-skill registry, Skills Reference, CLAUDE.md inventory |
+| 2.2 | Feb 2026 | Supersede 10 more audit docs, Flute deprecation status clarified, cross-ref fixes |
+
+---
+
+## Skills & Commands Reference
+
+All Claude Code CLI skills are stored in `.claude/commands/` as Markdown files organized by category.
+
+| Category | Count | Key Skills |
+|----------|-------|------------|
+| `agent-sdk/` | 4 | `create`, `handoff`, `resume`, `run` |
+| `agents/` | 2 | `status`, `mcp-query` |
+| `botz/` | 4 | `init`, `mcp`, `profile`, `secrets` |
+| `chit/` | 4 | `encode`, `decode`, `visualize`, `bus` |
+| `crush/` | 2 | `setup`, `status` |
+| `db/` | 3 | `backup`, `migrate`, `query` |
+| `deploy/` | 7 | `up`, `services`, `secrets-funnel`, `preflight`, `audit-layers`, `bootstrap-env`, `smoke-test` |
+| `github/` | 4 | `actions`, `issues`, `pr-review`, `security` |
+| `gpu/` | 3 | `status`, `models`, `optimize` |
+| `health/` | 3 | `check-all`, `metrics`, `quick` |
+| `hyperdim/` | 3 | `render`, `animate`, `export` |
+| `k8s/` | 3 | `deploy`, `logs`, `status` |
+| `langextract/` | 4 | `extract`, `process`, `provider`, `status` |
+| `model/` | 2 | `load`, `unload` |
+| `n8n/` | 4 | `execute`, `nodes`, `suggest`, `workflows` |
+| `pipecat/` | 2 | `connect`, `status` |
+| `search/` | 3 | `hirag`, `deepresearch`, `supaserch` |
+| `tensorzero/` | 1 | `models` |
+| `test/` | 2 | `pr`, `smoke` |
+| `tts/` | 4 | `status`, `synthesize`, `test-all`, `voices` |
+| `workitems/` | 3 | `claim`, `complete`, `list` |
+| `worktree/` | 4 | `cleanup`, `create`, `list`, `switch` |
+| `yt/` | 10 | `add-channel`, `ingest-video`, `status`, `check-now`, + 6 more |
+| _(root)_ | 1 | `pr-monitor` |
+| **Total** | **84** | |
+
+---
+
+## Submodule CLAUDE.md Inventory
+
+Submodule context files that Claude Code CLI may load based on the context tier strategy.
+
+| Submodule | CLAUDE.md Path | Tier | Scope |
+|-----------|---------------|------|-------|
+| PMOVES-Archon | `PMOVES-Archon/CLAUDE.md` | 2 | Agent service architecture |
+| PMOVES-BoTZ | `PMOVES-BoTZ/.claude/CLAUDE.md` | 2 | Skills marketplace framework |
+| PMOVES-DoX | `PMOVES-DoX/CLAUDE.md`, `PMOVES-DoX/.claude/CLAUDE.md` | 2 | Document processing |
+| PMOVES-Danger-infra | `PMOVES-Danger-infra/CLAUDE.md` | 3 | E2B infrastructure |
+| PMOVES-Headscale | `PMOVES-Headscale/CLAUDE.md` | 3 | Mesh VPN coordinator |
+| PMOVES-Open-Notebook | `PMOVES-Open-Notebook/CLAUDE.md` | 2 | Knowledge base (SurrealDB) |
+| PMOVES-Pipecat | `PMOVES-Pipecat/CLAUDE.md` | 2 | Voice/multimodal comms |
+| PMOVES-tensorzero | `PMOVES-tensorzero/CLAUDE.md` | 2 | LLM gateway + observability |
+| PMOVES-ToKenism-Multi | `PMOVES-ToKenism-Multi/CLAUDE.md` | 2 | Token economy / CHIT |
+
+**Nested contexts** (Tier 4 - load only when working on specific component):
+- `PMOVES-Archon/archon-example-workflow/CLAUDE.md`
+- `PMOVES-BoTZ/features/skills/repos/*/CLAUDE.md`
+- `PMOVES-Open-Notebook/*/CLAUDE.md` (13+ nested contexts)
+- `PMOVES-tensorzero/*/CLAUDE.md` (3 nested contexts)
+
+---
+
+## Submodule-Skill Registry
+
+**Registry file:** `pmoves/configs/submodule_skill_registry.json`
+
+Machine-readable JSON mapping every submodule to relevant skills, context files, AGENTS docs, domain tags, and context tier. Used by Claude Code CLI context orchestration and validated by `make -C pmoves skill-registry-validate`.
+
+**Validation:** Integrated as step 10 of `audit-layers-static` in `pmoves/mk/preflight.mk`.
+
+**Companion tools:**
+- `pmoves/tools/skill_registry_validate.py` - Validates registry against `.gitmodules` + skill files
+- `pmoves/tools/skill_tag_injector.py` - Injects context-tag blocks into submodule CLAUDE.md files
+
+---
+
+## Production Audit
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| **Production Audit Dashboard** | `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` | **Single source of truth** — consolidates 27 audit docs |
+| Blocker Status | `pmoves/docs/PRODUCTION_AUDIT_BLOCKER_STATUS.md` | B1-B5 resolution details (resolved) |
+| Readiness Audit | `pmoves/docs/PRODUCTION_READINESS_AUDIT_2026-02-07.md` | Master checklist (active — health/DB pending) |
+| CI Audit | `pmoves/docs/CI_AUDIT_REPORT_2026-02-08.md` | GHCR failures (active) |
+| Env Tier Audit | `pmoves/docs/ENV_TIER_AUDIT_2026-02-07.md` | Missing credentials (active) |
+| Submodule SITREP | `pmoves/docs/SUBMODULE_ALIGNMENT_SITREP_2026-02-14.md` | Diagnostic snapshot |
+
+All 27 audit documents have navigation headers pointing to the dashboard.
 
 ---
 

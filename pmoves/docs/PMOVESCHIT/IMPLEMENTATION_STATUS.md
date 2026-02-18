@@ -1,3 +1,5 @@
+> For the full CHIT documentation suite, see [README.md](README.md).
+
 # PMOVESCHIT Implementation Status
 
 **Last Updated:** February 18, 2026

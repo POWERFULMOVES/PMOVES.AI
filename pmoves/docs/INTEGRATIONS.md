@@ -1,5 +1,7 @@
 # PMOVES Service Integration Guide
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture
+
 This guide provides comprehensive documentation for all PMOVES service integrations, including authentication, API endpoints, setup scripts, and troubleshooting.
 
 ---
