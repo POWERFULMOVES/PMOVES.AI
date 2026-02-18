@@ -19,6 +19,7 @@ This taxonomy is grounded in and cross-references:
 - [`../PMOVESCHIT/IMPLEMENTATION_STATUS.md`](../PMOVESCHIT/IMPLEMENTATION_STATUS.md) — CHIT 5 pillars status
 - [`../PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md`](../PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md) — CGP format, producers
 - [`./agnotes2.md`](./agnotes2.md) — Original vision statement
+- [`PMOVES_AGENT_TOPOLOGY.md`](./PMOVES_AGENT_TOPOLOGY.md) — Visual topology (5 Mermaid diagrams + TAC tree)
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference hub
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
 - `pmoves/config/agent_registry.yaml` — Single source of truth (machine-readable)
@@ -272,6 +273,8 @@ All agent interactions flow through defined channels. The primary connection bus
 
 ### Connection Topology
 
+> **Full visual topology:** See [`PMOVES_AGENT_TOPOLOGY.md`](./PMOVES_AGENT_TOPOLOGY.md) for comprehensive Mermaid diagrams covering all 60 agents, NATS nervous system, data flow, and evolution paths. Generate from registry with `python -m pmoves.tools.agent_taxonomy_helper mermaid --style topology`.
+
 ```
                               ┌─────────────┐
                               │  Agent Zero  │ (L1 Orchestrator)
@@ -482,9 +485,10 @@ The invocation discipline mirrors the naming principle: every agent name carries
 
 ## Related Documents
 
+- [`PMOVES_AGENT_TOPOLOGY.md`](./PMOVES_AGENT_TOPOLOGY.md) — Agent topology Mermaid diagrams and TAC tree
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference
 - [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) — Resilience protocol and patterns
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
 - `pmoves/config/agent_registry.yaml` — Machine-readable registry
-- `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool
+- `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool (`mermaid` subcommand for diagram generation)
 - [`../MODEL_SOURCE_OF_TRUTH.md`](../MODEL_SOURCE_OF_TRUTH.md) — Model-agnostic role names (no concrete model IDs in architecture docs)
