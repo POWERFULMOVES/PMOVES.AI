@@ -1,6 +1,6 @@
 # PMOVES Agent Class Taxonomy
 
-_Last updated: 2026-02-17_
+_Last updated: 2026-02-18 — v1.4.0 (59 agents)_
 
 This document formalizes the PMOVES agent naming and classification system as a **type system** — composable, collectible agents with classes, types, evolutions, and connections. Think Pokemon and Transformers: no matter how small, every agent has a type, a place in the hierarchy, and connections through all the layers it can touch.
 
@@ -51,16 +51,26 @@ Agent classes are named by prefix convention. Each class maps to a role scope an
 - `PMOVES-DoX` — document processing
 - `PMOVES-Headscale` — network coordination
 - `PMOVES.YT` — media ingestion
+- `PMOVES-A2UI` — research UI surface _(v1.4.0)_
+- `PMOVES-AgentGym` — agent training gymnasium _(v1.4.0)_
+- `PMOVES-Creator` — media creation pipeline _(v1.4.0)_
+- `PMOVES-E2B-Danger-Room` — sandboxed code execution _(v1.4.0)_
+- `PMOVES-E2B-Danger-Room-Desktop` — desktop sandbox _(v1.4.0)_
 
 **Specialized (`Pmoves-`):**
 - `Pmoves-hyperdimensions` — geometry visualization (L2.5)
 - `Pmoves-cipher` — knowledge-graph memory (L5)
-- `Pmoves-Jellyfin-AI-Media-Stack` — media intelligence
+- `Pmoves-Jellyfin-AI-Media-Stack` — AI-enhanced media management _(v1.4.0)_
 - `Pmoves-Health-wger` — health domain agent
+- `Pmoves-AgentGym-RL` — reinforcement learning extension _(v1.4.0)_
+- `PMOVES-llama-throughput-lab` — LLM benchmarking lab _(v1.4.0)_
+- `PMOVES-transcribe-and-fetch` — transcription utility _(v1.4.0)_
 
 **Utility (`pmoves-`):**
-- `pmoves-surf` — web browsing tool
+- `pmoves-surf` — web browsing tool _(v1.4.0)_
 - `pmoves-e2b-mcp-server` — sandbox execution
+- `PMOVES-Danger-infra` — E2B infrastructure provisioning _(v1.4.0)_
+- `PMOVES-E2b-Spells` — sandbox templates _(v1.4.0)_
 - `pmoves/tools/*` — CLI utilities
 
 ---
@@ -118,6 +128,18 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | Prometheus | Utility | Data | UI | 1 |
 | Grafana | Utility | UI | Data | 7 |
 | Loki | Utility | Data | — | 1 |
+| A2UI | Standard | UI | Agent | 7 |
+| AgentGym | Standard | Agent | Worker | 6 |
+| AgentGym RL | Specialized | Agent | Worker | 6 |
+| Creator | Standard | Media | UI | 5 |
+| Llama Throughput Lab | Specialized | LLM | Worker | 3 |
+| Surf | Utility | Agent | UI | 6 |
+| E2B Danger Room | Standard | Agent | Worker | 6 |
+| E2B Desktop | Standard | UI | Agent | 7 |
+| Danger Infra | Utility | Worker | Agent | 4 |
+| E2B Spells | Utility | Agent | Worker | 6 |
+| Transcribe and Fetch | Specialized | Media | Worker | 5 |
+| Jellyfin AI Media Stack | Specialized | Media | LLM | 5 |
 
 ### Dual-Type Interactions (Type Effectiveness)
 

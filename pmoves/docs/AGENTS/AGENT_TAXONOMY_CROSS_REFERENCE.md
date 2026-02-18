@@ -1,6 +1,6 @@
 # Agent Taxonomy Cross-Reference Hub
 
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-18 — v1.4.0 (59 agents)_
 
 Master cross-reference for all documents, concepts, and implementation files involved in the PMOVES Agent Class Taxonomy. When the taxonomy changes, use this document to identify which files need updates.
 
