@@ -256,7 +256,7 @@ class GitHubSecretsFetcher:
                 updated_at=data.get("updated_at"),
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Failed to get secret {secret_name}: HTTP {e.response.status_code}")
+            logger.error("Failed to get secret: HTTP %s", e.response.status_code)
             return None
 
     async def fetch_repository_secrets(
