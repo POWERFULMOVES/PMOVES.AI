@@ -76,13 +76,12 @@ jobs:
       matrix:
         include:
           - name: agent-zero
-            git_url: https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
-            ref: PMOVES.AI-Edition-Hardened
-            context: .
-            dockerfile: DockerfileLocal
+            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
+            ref: main
+            context: pmoves/services/agent-zero
+            dockerfile: pmoves/services/agent-zero/Dockerfile.multiarch
             image_name: pmoves-agent-zero
-            build_args: |
-              BRANCH=local
+            build_args: ''
             platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/agent-zero.trivyignore
