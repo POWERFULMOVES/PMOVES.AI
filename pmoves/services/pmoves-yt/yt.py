@@ -748,6 +748,7 @@ def base_prefix(video_id: str, platform: Optional[str] = None):
     Returns:
         S3 key prefix string (e.g., 'yt/dQw4w9WgXcQ' or 'sc/123456').
     """
+    safe_vid = _safe_video_id(video_id)
     prefix = "yt"
     if platform:
         normalized = str(platform).strip().lower()
@@ -759,7 +760,7 @@ def base_prefix(video_id: str, platform: Optional[str] = None):
             prefix = normalized.split(":")[0].replace("/", "-")
             if not prefix:
                 prefix = "yt"
-    return f"{prefix}/{video_id}"
+    return f"{prefix}/{safe_vid}"
 
 def supa_insert(table: str, row: Dict[str,Any]):
     """Insert a row into a Supabase/PostgREST table.
@@ -1081,6 +1082,21 @@ def _extract_video_id(url: str) -> Optional[str]:
         return url
     return None
 
+_SAFE_VID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+
+def _safe_video_id(vid: str) -> str:
+    """Sanitize a video ID for safe use in file paths.
+
+    Applies os.path.basename to clear CodeQL taint and validates against
+    an allowlist regex. Raises HTTPException 400 on invalid input.
+    """
+    safe = os.path.basename(vid)
+    if not safe or safe != vid or not _SAFE_VID_RE.match(safe):
+        raise HTTPException(400, "Invalid video ID")
+    return safe
+
+
 def _infer_platform(url: Optional[str], entry_meta: Optional[Dict[str, Any]] = None) -> str:
     """Infer the content platform from URL or metadata.
 
@@ -1204,6 +1220,7 @@ def _download_with_yt_dlp(
             else:
                 outpath = ydl.prepare_filename(info)
             vid = info.get('id') or os.path.splitext(os.path.basename(outpath))[0]
+            vid = _safe_video_id(vid)
             title = info.get('title') or vid
             base = base_prefix(vid, platform_key)
             vid_dir = YT_TEMP_ROOT / vid
@@ -1378,6 +1395,7 @@ def _download_with_companion(
     video_id = _extract_video_id(url)
     if not video_id:
         raise HTTPException(400, "Unable to determine video id for Invidious companion fallback")
+    video_id = _safe_video_id(video_id)
     player_endpoint = f"{INVIDIOUS_COMPANION_URL.rstrip('/')}/companion/youtubei/v1/player"
     headers = {
         "Authorization": f"Bearer {INVIDIOUS_COMPANION_KEY}",
@@ -1528,6 +1546,7 @@ def _download_with_invidious(
     video_id = _extract_video_id(url)
     if not video_id:
         raise HTTPException(400, 'Unable to determine YouTube video id for fallback')
+    video_id = _safe_video_id(video_id)
     platform_key = platform or "youtube"
     api_url = f"{INVIDIOUS_BASE_URL.rstrip('/')}/api/v1/videos/{video_id}"
     try:
@@ -1729,7 +1748,9 @@ def yt_download(body: Dict[str,Any] = Body(...)):
     archive_enabled = bool(yt_options.get('use_download_archive', YT_ENABLE_DOWNLOAD_ARCHIVE))
     archive_path_value = yt_options.get('download_archive', YT_DOWNLOAD_ARCHIVE)
     if archive_enabled and archive_path_value:
-        archive_path = Path(archive_path_value)
+        archive_path = Path(archive_path_value).resolve()
+        if not str(archive_path).startswith(str(YT_ARCHIVE_DIR.resolve())):
+            archive_path = YT_ARCHIVE_DIR / os.path.basename(archive_path_value)
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         ydl_opts['download_archive'] = str(archive_path)
 
@@ -1821,6 +1842,7 @@ def yt_transcript(body: Dict[str,Any] = Body(...)):
     """
     vid = body.get('video_id'); bucket = body.get('bucket') or DEFAULT_BUCKET
     if not vid: raise HTTPException(400, 'video_id required')
+    vid = _safe_video_id(vid)
     ns = body.get('namespace') or DEFAULT_NAMESPACE
     audio_key = f"{base_prefix(vid)}/audio.m4a"
     # Ensure raw.mp4 exists before attempting transcription. This triggers

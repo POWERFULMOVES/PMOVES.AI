@@ -115,11 +115,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
     print(f"Namespace: {cgp.get('namespace', 'unknown')}")
     print(f"Description: {cgp.get('description', '')}")
     print(f"Points: {len(cgp.get('points', []))}")
-    print(f"\nDecoded keys ({len(secrets)}):")
+    print(f"\nDecoded {len(secrets)} key(s).")
     for key in sorted(secrets):
         val = secrets[key]
-        # Truncate long values
-        display = val[:40] + "..." if len(val) > 40 else val
+        # Mask secret values — show only first 4 chars
+        display = val[:4] + "****" if len(val) > 4 else "****"
         print(f"  {key} = {display}")
 
     return 0
@@ -162,7 +162,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     )
 
     save_cgp(new_cgp, cgp_path)
-    print(f"Rotated {len(new_values)} keys in {cgp_path.name}: {', '.join(sorted(new_values))}")
+    print(f"Rotated {len(new_values)} key(s) in {cgp_path.name}")
     return 0
 
 
