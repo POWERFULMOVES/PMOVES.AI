@@ -1748,9 +1748,10 @@ def yt_download(body: Dict[str,Any] = Body(...)):
     archive_enabled = bool(yt_options.get('use_download_archive', YT_ENABLE_DOWNLOAD_ARCHIVE))
     archive_path_value = yt_options.get('download_archive', YT_DOWNLOAD_ARCHIVE)
     if archive_enabled and archive_path_value:
-        archive_path = Path(archive_path_value).resolve()
-        if not str(archive_path).startswith(str(YT_ARCHIVE_DIR.resolve())):
-            archive_path = YT_ARCHIVE_DIR / os.path.basename(archive_path_value)
+        safe_name = os.path.basename(archive_path_value)
+        if not safe_name:
+            safe_name = "download-archive.txt"
+        archive_path = YT_ARCHIVE_DIR / safe_name
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         ydl_opts['download_archive'] = str(archive_path)
 
