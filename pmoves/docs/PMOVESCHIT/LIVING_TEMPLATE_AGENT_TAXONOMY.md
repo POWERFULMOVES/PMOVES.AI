@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 3: Applied Systems
+>
+> Demonstrates how the PMOVES Agent Class Taxonomy maps through all five CHIT mathematical pillars. Agents are encoded as CGP packets ("Agent Cards") flowing through the GEOMETRY BUS.
+
 # Living Template: Agent Taxonomy in CHIT
 
 _Last updated: 2026-02-16_

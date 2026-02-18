@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 3: Applied Systems (Legacy Pointer)
+>
+> This file redirects to the canonical execution guide. See [PMOVES-CONCHexecution_guide.md](PMOVES-CONCHexecution_guide.md).
+
 # PMOVES Consciousness Integration • Reference
 
 This appendix now defers to the canonical execution guide at:

@@ -1,5 +1,7 @@
 # CHIT Integration Status by Service
 
+> **See also:** [CHIT Documentation Suite](PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary.
+
 **Last Updated:** December 30, 2025
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence

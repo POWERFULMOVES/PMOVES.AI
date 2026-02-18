@@ -52,6 +52,26 @@ Quick-reference definitions for terms used throughout the CHIT documentation sui
 
 **Zeta Filter** — A signal processing technique that uses the non-trivial zeros of the Riemann zeta function as filter frequencies. Enhances meaningful patterns in spectra while suppressing noise. See: [CGP_v1.0_SPECIFICATION.md](CGP_v1.0_SPECIFICATION.md) § Zeta Spectral Filtering.
 
+**Agent Card** — A CGP v0.2 packet encoding an agent's capabilities, taxonomy position, and topology as geometry. Flows through the GEOMETRY BUS for agent coordination. See: [LIVING_TEMPLATE_AGENT_TAXONOMY.md](LIVING_TEMPLATE_AGENT_TAXONOMY.md).
+
+**CONCH (Consciousness Harvest)** — Pipeline for encoding consciousness research datasets into CGP packets and grounding them as personas via Supabase, Hi-RAG v2, and Evo Swarm. See: [PMOVES-CONCHexecution_guide.md](PMOVES-CONCHexecution_guide.md).
+
+**DARKXSIDE** — Creative persona of Cataclysm Studios; the artistic identity layer that personifies the platform's culture of empowerment. See: [CATACLYSM_STUDIOS_INC.md](CATACLYSM_STUDIOS_INC.md).
+
+**Distillation** — Progressive specialization of an agent or model through four stages: `config_tuning` → `context_priming` → `model_fine_tune` → `full_distillation`. Each stage reduces the gap between generic capability and domain-specific performance. See: [THREE_BODY_DOCTRINE.md](THREE_BODY_DOCTRINE.md).
+
+**Flute** — Multimodal Communication Layer providing prosodic voice synthesis with natural pauses and emphasis. Uses GEOMETRY BUS for shape-encoded transport. See: [FLUTE_PROSODIC_ARCHITECTURE.md](../FLUTE_PROSODIC_ARCHITECTURE.md).
+
+**Orbital Resonance** — Stable equilibrium between three-body entities (Human, AI, System). Measured as a stability metric from 0.0 (chaotic) to 1.0 (locked resonance). See: [THREE_BODY_DOCTRINE.md](THREE_BODY_DOCTRINE.md).
+
+**Prosodic Synthesis** — Voice output with natural pauses, emphasis, and breath boundaries. Achieves sub-100ms time-to-first-speech via the Flute sidecar. See: [FLUTE_PROSODIC_ARCHITECTURE.md](../FLUTE_PROSODIC_ARCHITECTURE.md).
+
+**SHIFTEST (Shape Harmonic Intelligence Framework for Testing)** — Conceptual framework and shareable explainer for CHIT. Describes the encoder/decoder/viewer triad. See: [PMOVESSHIFTEST.md](PMOVESSHIFTEST.md).
+
+**Tabula Rasa** — An agent or model's starting state before shape discovery — no geometric priors, no constellation assignments. The distillation process moves an agent from tabula rasa to specialized shape. See: [THREE_BODY_DOCTRINE.md](THREE_BODY_DOCTRINE.md).
+
+**Three-Body Problem** — The dynamic equilibrium model underlying PMOVES: Human, AI, and System orbit each other with mutual influence and non-linear dynamics. CHIT provides the "gravitational field" that keeps all three bodies in resonance. See: [THREE_BODY_DOCTRINE.md](THREE_BODY_DOCTRINE.md).
+
 ---
 
 [Back to README](README.md)
