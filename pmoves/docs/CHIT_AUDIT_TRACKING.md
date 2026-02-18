@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # CHIT / GEOMETRY BUS / EvoSwarm Audit & Tracking Document
 
 > **See also:** [CHIT Documentation Suite](PMOVESCHIT/README.md) for the complete index, and [CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md](PMOVESCHIT/CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md) for the detailed implementation audit report.

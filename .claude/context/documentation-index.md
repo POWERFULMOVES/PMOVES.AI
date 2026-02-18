@@ -295,6 +295,21 @@ Machine-readable JSON mapping every submodule to relevant skills, context files,
 
 ---
 
+## Production Audit
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| **Production Audit Dashboard** | `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` | **Single source of truth** — consolidates 17 audit docs |
+| Blocker Status | `pmoves/docs/PRODUCTION_AUDIT_BLOCKER_STATUS.md` | B1-B5 resolution details (resolved) |
+| Readiness Audit | `pmoves/docs/PRODUCTION_READINESS_AUDIT_2026-02-07.md` | Master checklist (active — health/DB pending) |
+| CI Audit | `pmoves/docs/CI_AUDIT_REPORT_2026-02-08.md` | GHCR failures (active) |
+| Env Tier Audit | `pmoves/docs/ENV_TIER_AUDIT_2026-02-07.md` | Missing credentials (active) |
+| Submodule SITREP | `pmoves/docs/SUBMODULE_ALIGNMENT_SITREP_2026-02-14.md` | Diagnostic snapshot |
+
+All 17 audit documents have navigation headers pointing to the dashboard.
+
+---
+
 ## Related
 
 - Main CLAUDE.md: `.claude/CLAUDE.md`

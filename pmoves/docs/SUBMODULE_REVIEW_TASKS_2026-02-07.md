@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # Submodule Review Tasks - 2026-02-07
 
 **Purpose:** Track progress of syncing commits from main to PMOVES.AI-Edition-Hardened
