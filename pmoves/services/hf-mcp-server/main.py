@@ -68,12 +68,10 @@ def _safe_model_path(model_id: str) -> Path:
     if ".." in model_id or not _SAFE_MODEL_RE.match(model_id):
         raise HTTPException(status_code=400, detail="Invalid model ID")
     sanitized = model_id.replace("/", "--")
-    resolved = (MODELS_BASE / sanitized).resolve()
-    try:
-        resolved.relative_to(MODELS_BASE.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid model ID") from None
-    return resolved
+    safe_name = os.path.basename(sanitized)
+    if not safe_name or safe_name != sanitized:
+        raise HTTPException(status_code=400, detail="Invalid model ID")
+    return MODELS_BASE / safe_name
 
 
 class ModelTier(Enum):
@@ -636,14 +634,10 @@ async def hf_model_convert_gguf(
         )
 
     if output_dir:
-        if ".." in output_dir or not re.match(r"^[a-zA-Z0-9._\-/]+$", output_dir):
+        safe_output = os.path.basename(output_dir)
+        if not safe_output or safe_output != output_dir or ".." in output_dir:
             raise HTTPException(status_code=400, detail="Invalid output_dir")
-        resolved = (cache_dir / output_dir).resolve()
-        try:
-            resolved.relative_to(cache_dir.resolve())
-        except ValueError:
-            raise HTTPException(status_code=400, detail="output_dir must be within model cache")
-        output_path = str(resolved)
+        output_path = str(cache_dir / safe_output)
     else:
         output_path = str(cache_dir / "gguf")
 
