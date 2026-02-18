@@ -6,6 +6,7 @@ Usage:
     python -m pmoves.tools.agent_taxonomy_helper show <name>   # single agent card
     python -m pmoves.tools.agent_taxonomy_helper connections    # network graph (JSON)
     python -m pmoves.tools.agent_taxonomy_helper types          # type effectiveness chart
+    python -m pmoves.tools.agent_taxonomy_helper mermaid        # Mermaid diagram (topology|tac|nats)
 
 Registry: pmoves/config/agent_registry.yaml
 Docs:     pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
@@ -52,8 +53,16 @@ def load_registry():
     if not REGISTRY_PATH.exists():
         print(f"Error: Registry not found at {REGISTRY_PATH}", file=sys.stderr)
         sys.exit(1)
-    with open(REGISTRY_PATH) as f:
-        return yaml.safe_load(f)
+    try:
+        with open(REGISTRY_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        print(f"Error: Failed to parse registry YAML:\n  {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(data, dict):
+        print(f"Error: Registry is empty or not a YAML mapping", file=sys.stderr)
+        sys.exit(1)
+    return data
 
 
 def cmd_list(registry, args):
@@ -209,8 +218,7 @@ def cmd_connections(registry, args):
 
     graph = {"nodes": nodes, "edges": edges}
 
-    if args.format == "json" or True:  # Always JSON for connections
-        print(json.dumps(graph, indent=2))
+    print(json.dumps(graph, indent=2))
 
 
 def cmd_types(registry, args):
@@ -242,6 +250,251 @@ def cmd_types(registry, args):
     print("★★ = Super effective  ★  = Effective  ·  = Neutral")
 
 
+SUBSYSTEM_MAP = {
+    "AGENT_ZERO_CORE": {
+        "label": "Agent Zero Core — The Matrix",
+        "agents": ["agent_zero"],
+    },
+    "ARCHON_NEXUS": {
+        "label": "Archon Nexus — External Data Gate",
+        "agents": ["archon"],
+    },
+    "BOTZ_SHIP": {
+        "label": "BoTZ Ship — Agent Runtime",
+        "agents": ["botz_gateway", "gateway_agent"],
+    },
+    "DOX_INTEL": {
+        "label": "DoX Intel — Document Intelligence",
+        "agents": ["dox"],
+    },
+    "RESEARCH_KNOWLEDGE": {
+        "label": "Research & Knowledge",
+        "agents": ["supaserch", "deep_research", "hirag_v2", "open_notebook"],
+    },
+    "MEDIA_PIPELINE": {
+        "label": "Media Pipeline",
+        "agents": ["pmoves_yt", "ffmpeg_whisper", "media_video", "media_audio",
+                    "channel_monitor", "extract_worker", "langextract"],
+    },
+    "VOICE_COMMS": {
+        "label": "Voice & Comms — Flute",
+        "agents": ["flute_gateway", "ultimate_tts"],
+    },
+    "CIPHER_EVOLUTION": {
+        "label": "Cipher Evolution Backbone",
+        "agents": ["cipher_memory", "consciousness_service", "evoswarm_controller",
+                    "swarm_attribution"],
+    },
+    "AGENT_TRAINING": {
+        "label": "Agent Training & Sandbox",
+        "agents": ["agentgym", "agentgym_rl", "e2b_danger_room", "e2b_desktop",
+                    "danger_infra", "e2b_spells", "surf"],
+    },
+    "UI_FRONTEND": {
+        "label": "UI & Frontend",
+        "agents": ["mai_ui", "a2ui", "crush", "hyperdimensions"],
+    },
+    "PERSISTENCE": {
+        "label": "Persistence — CHIT Data Stores",
+        "agents": ["supabase", "qdrant", "neo4j", "meilisearch", "minio"],
+    },
+    "INFRA": {
+        "label": "Infrastructure Backbone",
+        "agents": ["nats", "tensorzero", "prometheus", "grafana", "loki",
+                    "n8n", "headscale", "rustdesk", "invidious"],
+    },
+    "DOMAIN_APPS": {
+        "label": "Domain Applications",
+        "agents": ["wealth", "health", "creator", "llama_lab", "jellyfin_bridge",
+                    "jellyfin_ai", "transcribe_and_fetch", "pdf_ingest",
+                    "notebook_sync", "publisher_discord", "presign",
+                    "render_webhook", "mesh_agent"],
+    },
+}
+
+# Class colors for Mermaid classDef
+CLASS_COLORS = {
+    "legendary": {"fill": "#FFD700", "stroke": "#B8860B", "color": "#000"},
+    "standard":  {"fill": "#9370DB", "stroke": "#6A0DAD", "color": "#fff"},
+    "specialized": {"fill": "#00CED1", "stroke": "#008B8B", "color": "#000"},
+    "utility":   {"fill": "#A9A9A9", "stroke": "#696969", "color": "#000"},
+}
+
+
+def cmd_mermaid(registry, args):
+    """Generate Mermaid diagram from agent registry."""
+    style = args.style
+    agents = registry.get("agents", {})
+
+    handlers = {"topology": _mermaid_topology, "tac": _mermaid_tac, "nats": _mermaid_nats}
+    handler = handlers.get(style)
+    if handler is None:
+        print(f"Error: Unknown mermaid style '{style}'. Available: {', '.join(handlers)}", file=sys.stderr)
+        sys.exit(1)
+    handler(agents)
+
+
+def _mermaid_topology(agents):
+    """Generate master topology graph TD with subgraphs."""
+    # Validate SUBSYSTEM_MAP coverage
+    mapped = set()
+    for sg in SUBSYSTEM_MAP.values():
+        for aid in sg["agents"]:
+            mapped.add(aid)
+            if aid not in agents:
+                print(f"Warning: SUBSYSTEM_MAP references '{aid}' not in registry", file=sys.stderr)
+    orphans = set(agents.keys()) - mapped
+    if orphans:
+        print(f"Warning: {len(orphans)} agent(s) not in any subsystem: {', '.join(sorted(orphans))}", file=sys.stderr)
+
+    lines = ["graph TD"]
+
+    # ClassDefs
+    for cls, colors in CLASS_COLORS.items():
+        lines.append(f"    classDef {cls} fill:{colors['fill']},stroke:{colors['stroke']},color:{colors['color']}")
+
+    lines.append("")
+
+    # Subgraphs
+    for sg_id, sg in SUBSYSTEM_MAP.items():
+        lines.append(f"    subgraph {sg_id}[\"{sg['label']}\"]")
+        for aid in sg["agents"]:
+            agent = agents.get(aid)
+            if agent:
+                name = agent.get("name", aid)
+                port = agent.get("port")
+                label = f"{name}<br/>:{port}" if port else name
+                cls = agent.get("class", "utility")
+                lines.append(f"        {aid}[\"{label}\"]:::{cls}")
+        lines.append("    end")
+        lines.append("")
+
+    # Core connections (MCP / orchestration)
+    lines.append("    %% MCP / orchestration links")
+    lines.append("    agent_zero --> archon")
+    lines.append("    agent_zero --> botz_gateway")
+    lines.append("    agent_zero --> mesh_agent")
+    lines.append("    agent_zero --> supaserch")
+    lines.append("    agent_zero --> deep_research")
+    lines.append("    archon --> tensorzero")
+    lines.append("    botz_gateway --> gateway_agent")
+    lines.append("")
+
+    # Data flow (dotted)
+    lines.append("    %% Data flow")
+    lines.append("    extract_worker -.-> qdrant")
+    lines.append("    extract_worker -.-> meilisearch")
+    lines.append("    hirag_v2 -.-> qdrant")
+    lines.append("    hirag_v2 -.-> neo4j")
+    lines.append("    hirag_v2 -.-> meilisearch")
+    lines.append("    cipher_memory -.-> neo4j")
+    lines.append("")
+
+    # NATS connections (dashed)
+    lines.append("    %% NATS pub/sub")
+    lines.append("    pmoves_yt -.- |NATS| extract_worker")
+    lines.append("    pmoves_yt -.- |NATS| publisher_discord")
+    lines.append("    mesh_agent -.- |NATS| agent_zero")
+    lines.append("    flute_gateway -.- |NATS| hirag_v2")
+    lines.append("    evoswarm_controller -.- |NATS| swarm_attribution")
+
+    print("\n".join(lines))
+
+
+def _mermaid_tac(agents):
+    """Generate TAC hierarchy graph TD."""
+    lines = ["graph TD"]
+
+    for cls, colors in CLASS_COLORS.items():
+        lines.append(f"    classDef {cls} fill:{colors['fill']},stroke:{colors['stroke']},color:{colors['color']}")
+
+    lines.append("")
+    lines.append("    PMOVES[\"POWERFULMOVES\"]:::legendary")
+    lines.append("    PMOVES --> agent_zero")
+    lines.append("")
+
+    # Group agents by class
+    by_class = {}
+    for aid, agent in agents.items():
+        cls = agent.get("class", "utility")
+        by_class.setdefault(cls, []).append((aid, agent))
+
+    for cls in ["standard", "specialized", "utility"]:
+        for aid, agent in sorted(by_class.get(cls, [])):
+            name = agent.get("name", aid)
+            lines.append(f"    {aid}[\"{name}\"]:::{cls}")
+
+    lines.append("")
+
+    # Connections from Agent Zero to major subsystem heads
+    lines.append("    agent_zero --> archon")
+    lines.append("    agent_zero --> botz_gateway")
+    lines.append("    agent_zero --> supaserch")
+    lines.append("    agent_zero --> deep_research")
+    lines.append("    agent_zero --> dox")
+    lines.append("    agent_zero --> flute_gateway")
+    lines.append("    agent_zero --> cipher_memory")
+    lines.append("    agent_zero --> evoswarm_controller")
+    lines.append("    agent_zero --> mai_ui")
+    lines.append("")
+
+    # Subsystem internal links
+    lines.append("    archon --> tensorzero")
+    lines.append("    botz_gateway --> gateway_agent")
+    lines.append("    supaserch --> hirag_v2")
+    lines.append("    deep_research --> open_notebook")
+
+    print("\n".join(lines))
+
+
+def _mermaid_nats(agents):
+    """Generate NATS nervous system graph LR — only agents with NATS subjects."""
+    lines = ["graph LR"]
+
+    for cls, colors in CLASS_COLORS.items():
+        lines.append(f"    classDef {cls} fill:{colors['fill']},stroke:{colors['stroke']},color:{colors['color']}")
+    lines.append("    classDef subject fill:#FFF3E0,stroke:#FF9800,color:#000")
+    lines.append("")
+
+    publishers = {}   # subject -> [agent_id]
+    subscribers = {}  # subject -> [agent_id]
+    nats_agents = set()
+
+    for aid, agent in agents.items():
+        nats = agent.get("nats", {})
+        pubs = nats.get("publishes", [])
+        subs = nats.get("subscribes", [])
+        if pubs or subs:
+            nats_agents.add(aid)
+            cls = agent.get("class", "utility")
+            name = agent.get("name", aid)
+            lines.append(f"    {aid}[\"{name}\"]:::{cls}")
+        for subj in pubs:
+            publishers.setdefault(subj, []).append(aid)
+        for subj in subs:
+            subscribers.setdefault(subj, []).append(aid)
+
+    lines.append("")
+
+    # Subject nodes
+    all_subjects = sorted(set(publishers.keys()) | set(subscribers.keys()))
+    for subj in all_subjects:
+        node_id = subj.replace(".", "_")
+        lines.append(f"    {node_id}{{\"{subj}\"}}:::subject")
+
+    lines.append("")
+
+    # Edges: publisher --> subject --> subscriber
+    for subj in all_subjects:
+        node_id = subj.replace(".", "_")
+        for pub in publishers.get(subj, []):
+            lines.append(f"    {pub} --> {node_id}")
+        for sub in subscribers.get(subj, []):
+            lines.append(f"    {node_id} --> {sub}")
+
+    print("\n".join(lines))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="PMOVES Agent Taxonomy Helper",
@@ -262,6 +515,10 @@ def main():
 
     subparsers.add_parser("types", help="Type effectiveness chart")
 
+    mermaid_parser = subparsers.add_parser("mermaid", help="Generate Mermaid diagram")
+    mermaid_parser.add_argument("--style", choices=["topology", "tac", "nats"],
+                                default="topology", help="Diagram style (default: topology)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -275,6 +532,7 @@ def main():
         "show": cmd_show,
         "connections": cmd_connections,
         "types": cmd_types,
+        "mermaid": cmd_mermaid,
     }
 
     commands[args.command](registry, args)
