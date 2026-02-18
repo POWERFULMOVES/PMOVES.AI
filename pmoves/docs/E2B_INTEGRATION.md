@@ -23,7 +23,7 @@ E2B (Execution Environment for Bots) provides **self-hosted isolated sandboxes**
 |-----------|------------|---------|------|
 | E2B Infra | `PMOVES-Danger-infra` | Self-hosting Terraform/Makefiles | N/A |
 | E2B Sandbox | `PMOVES-E2B-Danger-Room` | Core sandbox execution backend | `app_tier`, `bus_tier` |
-| E2B Desktop | `PMOVES-E2B-Danger-Room-Deskdesktop` | NoVNC virtual desktop | `app_tier`, `monitoring_tier` |
+| E2B Desktop | `PMOVES-E2B-Danger-Room-Desktop` | NoVNC virtual desktop | `app_tier`, `monitoring_tier` |
 | E2B Spells | `PMOEVES-E2b-Spells` | Code execution patterns | N/A (library) |
 | E2B Surf | `pmoves-surf` | Next.js web UI | `api_tier`, `app_tier` |
 | E2B MCP Server | `pmoves-e2b-mcp-server` | Agent Zero bridge | `llm_tier`, `bus_tier` |
