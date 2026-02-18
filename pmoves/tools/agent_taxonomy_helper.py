@@ -60,7 +60,7 @@ def load_registry():
         print(f"Error: Failed to parse registry YAML:\n  {exc}", file=sys.stderr)
         sys.exit(1)
     if not isinstance(data, dict):
-        print(f"Error: Registry is empty or not a YAML mapping", file=sys.stderr)
+        print("Error: Registry is empty or not a YAML mapping", file=sys.stderr)
         sys.exit(1)
     return data
 
@@ -321,15 +321,20 @@ CLASS_COLORS = {
 }
 
 
+def _append_class_defs(lines):
+    """Append Mermaid classDef styles for agent classes."""
+    for cls, colors in CLASS_COLORS.items():
+        lines.append(f"    classDef {cls} fill:{colors['fill']},stroke:{colors['stroke']},color:{colors['color']}")
+
+
 def cmd_mermaid(registry, args):
     """Generate Mermaid diagram from agent registry."""
-    style = args.style
     agents = registry.get("agents", {})
 
     handlers = {"topology": _mermaid_topology, "tac": _mermaid_tac, "nats": _mermaid_nats}
-    handler = handlers.get(style)
+    handler = handlers.get(args.style)
     if handler is None:
-        print(f"Error: Unknown mermaid style '{style}'. Available: {', '.join(handlers)}", file=sys.stderr)
+        print(f"Error: Unknown mermaid style '{args.style}'. Available: {', '.join(handlers)}", file=sys.stderr)
         sys.exit(1)
     handler(agents)
 
@@ -348,11 +353,7 @@ def _mermaid_topology(agents):
         print(f"Warning: {len(orphans)} agent(s) not in any subsystem: {', '.join(sorted(orphans))}", file=sys.stderr)
 
     lines = ["graph TD"]
-
-    # ClassDefs
-    for cls, colors in CLASS_COLORS.items():
-        lines.append(f"    classDef {cls} fill:{colors['fill']},stroke:{colors['stroke']},color:{colors['color']}")
-
+    _append_class_defs(lines)
     lines.append("")
 
     # Subgraphs
@@ -404,10 +405,7 @@ def _mermaid_topology(agents):
 def _mermaid_tac(agents):
     """Generate TAC hierarchy graph TD."""
     lines = ["graph TD"]
-
-    for cls, colors in CLASS_COLORS.items():
-        lines.append(f"    classDef {cls} fill:{colors['fill']},stroke:{colors['stroke']},color:{colors['color']}")
-
+    _append_class_defs(lines)
     lines.append("")
     lines.append("    PMOVES[\"POWERFULMOVES\"]:::legendary")
     lines.append("    PMOVES --> agent_zero")
@@ -450,22 +448,18 @@ def _mermaid_tac(agents):
 def _mermaid_nats(agents):
     """Generate NATS nervous system graph LR — only agents with NATS subjects."""
     lines = ["graph LR"]
-
-    for cls, colors in CLASS_COLORS.items():
-        lines.append(f"    classDef {cls} fill:{colors['fill']},stroke:{colors['stroke']},color:{colors['color']}")
+    _append_class_defs(lines)
     lines.append("    classDef subject fill:#FFF3E0,stroke:#FF9800,color:#000")
     lines.append("")
 
     publishers = {}   # subject -> [agent_id]
     subscribers = {}  # subject -> [agent_id]
-    nats_agents = set()
 
     for aid, agent in agents.items():
         nats = agent.get("nats", {})
         pubs = nats.get("publishes", [])
         subs = nats.get("subscribes", [])
         if pubs or subs:
-            nats_agents.add(aid)
             cls = agent.get("class", "utility")
             name = agent.get("name", aid)
             lines.append(f"    {aid}[\"{name}\"]:::{cls}")
