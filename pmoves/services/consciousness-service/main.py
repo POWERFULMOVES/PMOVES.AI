@@ -136,9 +136,9 @@ async def generate_cgp(theory: TheoryInput):
         theory_dict = theory.model_dump()
         packet = cgp_mapper.theory_to_constellation(theory_dict)
         return {"status": "success", "packet": packet}
-    except Exception as e:
-        logger.error(f"CGP generation failed: {e}")
-        raise HTTPException(status_code=500, detail="CGP generation failed")
+    except Exception:
+        logger.error("CGP generation failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="CGP generation failed") from None
 
 
 @app.post("/cgp/publish")
@@ -156,9 +156,9 @@ async def publish_cgp(theory: TheoryInput):
         packet = cgp_mapper.theory_to_constellation(theory_dict)
         result = await cgp_mapper.publish_to_hirag(packet)
         return {"status": "published", "packet": packet, "result": result}
-    except Exception as e:
-        logger.error(f"CGP publish failed: {e}")
-        raise HTTPException(status_code=500, detail="CGP publish failed")
+    except Exception:
+        logger.error("CGP publish failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="CGP publish failed") from None
 
 
 @app.post("/cgp/batch")
@@ -178,9 +178,9 @@ async def batch_publish_cgp(theories: List[TheoryInput]):
             "successful": sum(1 for r in results if r["status"] == "success"),
             "results": results,
         }
-    except Exception as e:
-        logger.error(f"Batch CGP publish failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.error("Batch CGP publish failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="Batch CGP publish failed") from None
 
 
 @app.post("/persona/evaluate")
@@ -196,9 +196,9 @@ async def evaluate_persona(input_data: PersonaEvalInput):
     try:
         result = await persona_gate.evaluate(input_data.persona_id, input_data.metrics)
         return result
-    except Exception as e:
-        logger.error(f"Persona evaluation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.error("Persona evaluation failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="Persona evaluation failed") from None
 
 
 @app.get("/persona/thresholds")
