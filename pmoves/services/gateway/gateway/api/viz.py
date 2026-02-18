@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, HTMLResponse
 from typing import List, Dict, Any, Optional
-import json, os, math
+import json, os, math, re
+
+_SAFE_SHAPE_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 from gateway.api.chit import Constellation, CGP, decode_constellations
 
@@ -102,7 +104,10 @@ def constellation_svg(const: Constellation, dim_x: int = Query(0, ge=0), dim_y: 
 
 @router.get("/shape/{shape_id}.svg")
 def shape_svg(shape_id: str, super_idx: int = Query(0, ge=0), const_idx: int = Query(0, ge=0), dim_x: int = Query(0, ge=0), dim_y: int = Query(1, ge=0), rotate: float = 0.0):
-    path = os.path.join("data", f"{shape_id}.json")
+    safe_id = os.path.basename(shape_id)
+    if not safe_id or safe_id != shape_id or not _SAFE_SHAPE_RE.match(safe_id):
+        raise HTTPException(status_code=400, detail="invalid shape_id")
+    path = os.path.join("data", f"{safe_id}.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="shape not found")
     with open(path, "r", encoding="utf-8") as f:
@@ -186,7 +191,10 @@ def recent_shapes(limit: int = 10):
 
 @router.get("/shape/{shape_id}/constellations")
 def shape_constellations(shape_id: str):
-    path = os.path.join("data", f"{shape_id}.json")
+    safe_id = os.path.basename(shape_id)
+    if not safe_id or safe_id != shape_id or not _SAFE_SHAPE_RE.match(safe_id):
+        raise HTTPException(status_code=400, detail="invalid shape_id")
+    path = os.path.join("data", f"{safe_id}.json")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="shape not found")
     obj = json.loads(open(path, "r", encoding="utf-8").read())

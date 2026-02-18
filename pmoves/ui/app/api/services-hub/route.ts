@@ -127,7 +127,10 @@ function getCriticalDownServices(
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const timeout = parseInt(searchParams.get('timeout') || '3000', 10);
+  const rawTimeout = parseInt(searchParams.get('timeout') || '3000', 10);
+  const timeout = Number.isFinite(rawTimeout) && rawTimeout > 0
+    ? Math.min(Math.max(rawTimeout, 1000), 30_000)
+    : 3000;
   const tier = searchParams.get('tier') as ServiceCategory | null;
   const simple = searchParams.get('simple') === 'true';
 

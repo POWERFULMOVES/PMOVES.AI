@@ -158,8 +158,8 @@ class TestReDoSProtection:
 
         # Verify the timeout context manager works with a safe non-matching pattern
         with _regex_timeout(seconds=5):
-            result = re.search(r"[a-z]+b", "aaaaaaaaaaaaaaaaaaaaaac")
-            # Safe pattern — no catastrophic backtracking, simply fails to match
+            result = re.search(r"xyz", "aaaaaaaaaaaaaaaaaaaaaac")
+            # Simple literal pattern — no backtracking possible, simply fails to match
             assert result is None
 
     def test_blocked_command_patterns_safe(self):
