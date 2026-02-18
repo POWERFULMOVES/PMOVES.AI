@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 5: Reference & Operations
+>
+> Decoder specification (v0.1) — implemented at `pmoves/tools/chit/chit_decoder.py`. Supports exact (lossless) and geometry-only (retrieval) decode modes. See also: [PMOVESCHIT_DECODER_MULTIv0.1.md](PMOVESCHIT_DECODER_MULTIv0.1.md) for the multi-modal extension.
+
 > [!NOTE]
 > **Implementation Status: SPECIFICATION ONLY**
 >

@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 3: Applied Systems
+>
+> Specification for visualizing CHIT geometry in the PMOVES.AI UI — hyperbolic navigation, zeta spectral displays, and holographic data rendering. See also: [Mathematical_UI_Implementation_Plan.md](Mathematical_UI_Implementation_Plan.md).
+
 # Mathematical UI Design Specification: Integrating Hyperbolic Geometry and Spectral Resonance into PMOVES.AI
 
 ## Executive Summary

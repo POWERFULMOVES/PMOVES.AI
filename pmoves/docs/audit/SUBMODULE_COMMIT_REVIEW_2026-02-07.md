@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # Submodule Commit Review: main vs PMOVES.AI-Edition-Hardened
 
 **Date:** February 7, 2026

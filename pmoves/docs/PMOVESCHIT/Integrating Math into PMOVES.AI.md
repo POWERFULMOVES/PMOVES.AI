@@ -1,4 +1,4 @@
-
+> **Advanced Theory** — Deep mathematical foundations for CHIT. For an accessible introduction, start at [README.md](README.md).
 
 # **Architectural Synthesis: Integrating Hyperbolic Geometry and Spectral Resonance into the PMOVES.AI Ecosystem**
 

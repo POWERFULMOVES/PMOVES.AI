@@ -1,5 +1,7 @@
 # PMOVES.AI Secrets Onboarding Guide
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Secrets & Credentials | See also: [Secrets Pipeline Reference](SECRETS_PIPELINE_REFERENCE.md)
+
 This guide helps you set up API keys and secrets for PMOVES.AI in under 5 minutes.
 
 ## Quick Start (5 Minutes)

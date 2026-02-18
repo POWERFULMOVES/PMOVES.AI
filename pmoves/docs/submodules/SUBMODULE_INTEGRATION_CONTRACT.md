@@ -1,4 +1,7 @@
 # Submodule Integration Contract
+
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture
+
 _Last updated: 2026-02-14_
 
 This contract defines how PMOVES integrates new submodules without ad-hoc drift.

@@ -1,3 +1,6 @@
+> **Canonical Specification** — This is the authoritative CGP protocol reference.
+> Start here: [README.md](README.md) · API usage: [API Reference](04_API_REFERENCE.md)
+
 # CHIT Geometry Packet (CGP) v1.0 Specification
 
 **Comprehensive specification for the CHIT (Cymatic-Holographic Information Transfer) protocol**

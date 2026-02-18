@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # PMOVES.AI Production Merge Tracker
 
 **Last Updated**: 2026-02-16 22:15 UTC

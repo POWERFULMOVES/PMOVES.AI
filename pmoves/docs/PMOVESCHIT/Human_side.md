@@ -1,3 +1,5 @@
+> **Part of the [CHIT documentation suite](README.md).** For a conceptual introduction to CHIT, see [What Is CHIT?](01_WHAT_IS_CHIT.md).
+
 # CHIT Attribution System - Human Guide
 
 Welcome to the PMOVES CHIT (Context-Hybrid Information Token) attribution system. This guide explains how your contributions to the ToKenism cooperative are tracked, weighted, and verified.

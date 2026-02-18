@@ -1,5 +1,7 @@
 # E2B Agentic Computer Use Integration Guide
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture
+
 **Status:** Beta
 **Version:** 1.0.0
 **Last Updated:** 2025-12-29

@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 5: Reference & Operations
+>
+> Multi-modal decoder specification (CLIP/CLAP, calibration, security). Core CLIP/CLAP decoder is implemented at `pmoves/tools/chit/chit_decoder_mm.py`. T5 learning-based generation remains a future enhancement. See [PMOVESCHIT_DECODERv0.1.md](PMOVESCHIT_DECODERv0.1.md) for the base decoder.
+
 > [!WARNING]
 > **Implementation Status: NOT IMPLEMENTED**
 >

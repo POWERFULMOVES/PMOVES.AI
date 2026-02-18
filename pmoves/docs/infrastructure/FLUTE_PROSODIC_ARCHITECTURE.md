@@ -1,5 +1,7 @@
 # Flute Prosodic Sidecar Architecture
 
+> **See also:** [02_GEOMETRY_BUS.md](PMOVESCHIT/02_GEOMETRY_BUS.md) — Flute uses the GEOMETRY BUS for shape-encoded voice transport.
+
 **Version:** 1.0
 **Last Updated:** December 2025
 **Related PR:** #332 (Pipecat Integration)

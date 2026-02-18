@@ -1,5 +1,7 @@
 # Archon External Integration Architecture
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture
+
 ## Overview
 
 Archon uses **nested git submodules** in its `external/` directory to provide integration with the PMOVES.AI ecosystem. This design allows Archon to operate standalone while accessing critical services.

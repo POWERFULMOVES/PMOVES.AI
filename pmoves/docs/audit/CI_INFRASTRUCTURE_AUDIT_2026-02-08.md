@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # PMOVES.AI CI Infrastructure Audit
 
 **Audit Date:** February 8, 2026
