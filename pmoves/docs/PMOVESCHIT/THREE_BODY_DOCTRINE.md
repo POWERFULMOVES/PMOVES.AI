@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 2: Conceptual Frameworks
+>
+> The Three-Body Doctrine models Human/AI/System interaction as a classical three-body problem stabilized by CHIT geometry. Prerequisite: [01 What Is CHIT?](01_WHAT_IS_CHIT.md).
+
 # Three-Body Doctrine
 
 > PMOVES is a three-body problem. Human, AI, and System orbit each other.

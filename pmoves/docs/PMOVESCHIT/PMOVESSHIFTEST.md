@@ -1,4 +1,8 @@
-Here’s a clear, shareable explainer you can send to friends. I’ve kept it tight, plain‑English, and layered so people can skim or dive deeper.
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 2: Conceptual Frameworks
+>
+> Shape Harmonic Intelligence — an accessible, shareable introduction to CHIT for non-technical audiences. See also: [01 What Is CHIT?](01_WHAT_IS_CHIT.md) for the developer-oriented explainer.
+
+Here's a clear, shareable explainer you can send to friends. I've kept it tight, plain‑English, and layered so people can skim or dive deeper.
 
 ---
 

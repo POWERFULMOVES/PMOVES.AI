@@ -1,3 +1,5 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 4: Vision & Business
+
 # Cataclysm Studios Platform Vision & Brand Identity
 
 > [!TIP]
