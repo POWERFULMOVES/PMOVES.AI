@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   smoke:
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -45,4 +45,5 @@ jobs:
           else \
             python tools/smoke_webhook.py; \
           fi
+
 

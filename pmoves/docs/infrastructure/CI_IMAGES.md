@@ -22,8 +22,9 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
 
 - By default, images push under `ghcr.io/<repo_owner>`.
 - To push under a different org (e.g., `cataclysm-studios-inc`), set the repository secret `CI_GHCR_NAMESPACE` (legacy `GHCR_NAMESPACE` is still honored) and ensure the workflow token has `packages:write` scope in that org.
-- GHCR auth defaults to `github.token` (recommended). Optional override secret: `GHCR_TOKEN`.
-  - If using a PAT for `GHCR_TOKEN`, minimum scopes:
+- GHCR auth defaults to `github.token` (recommended). Optional override secrets: `GHCR_TOKEN` + `GHCR_USERNAME`.
+  - If using a PAT for `GHCR_TOKEN`, set `GHCR_USERNAME` to the PAT owner account.
+  - Minimum scopes:
     - `write:packages`
     - `read:packages`
     - `repo` (only if publishing/cloning private repos)
@@ -40,6 +41,7 @@ This repo includes a GitHub Actions workflow that builds and publishes Docker im
 
 - Confirm workflow permissions include `packages: write` (set in workflow job).
 - Prefer removing/rotating under-scoped PAT secrets and let `github.token` handle GHCR auth.
+- If PAT auth is required, ensure `GHCR_USERNAME` matches the PAT owner (mismatches produce `denied: denied`).
 - Verify actor/org package publish permissions in repository/org package settings.
 
 ### Secret Sync Helper
