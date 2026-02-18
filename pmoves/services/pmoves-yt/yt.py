@@ -1124,7 +1124,7 @@ def _infer_platform(url: Optional[str], entry_meta: Optional[Dict[str, Any]] = N
             if netloc == "soundcloud.com" or netloc.endswith(".soundcloud.com"):
                 return "soundcloud"
         except Exception:
-            pass
+            logger.debug("_infer_platform: urlparse failed for %r", lowered)
     return "youtube"
 
 def _apply_provider_defaults(

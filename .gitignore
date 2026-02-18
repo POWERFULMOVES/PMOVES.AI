@@ -10,6 +10,7 @@
 !.env.shared.sh
 !.env.template
 !.env.tier-*
+env.tier-*
 secrets/
 !pmoves/integrations/**/secrets/
 !pmoves/integrations/**/secrets/labels.yaml
