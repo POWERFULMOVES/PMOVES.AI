@@ -47,11 +47,23 @@ const show = o => {
 };
 const links = (shapeId, base) => {
   const el = $("#links");
-  if (!shapeId) { el.textContent = ""; return; }
-  const svg = `${base}/viz/shape/${shapeId}.svg`;
-  const raw = `${base}/data/${shapeId}.json`;
-  const dec = `${base}/viz/decode/${shapeId}.html`;
-  el.innerHTML = `View: <a href="${svg}" target="_blank">Shape SVG</a> · <a href="${raw}" target="_blank">Raw JSON</a> · <a href="${dec}" target="_blank">Decode</a>`;
+  el.textContent = "";
+  if (!shapeId) return;
+  const pairs = [
+    [`${base}/viz/shape/${shapeId}.svg`, "Shape SVG"],
+    [`${base}/data/${shapeId}.json`, "Raw JSON"],
+    [`${base}/viz/decode/${shapeId}.html`, "Decode"],
+  ];
+  el.appendChild(document.createTextNode("View: "));
+  pairs.forEach(([href, label], i) => {
+    const a = document.createElement("a");
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = label;
+    el.appendChild(a);
+    if (i < pairs.length - 1) el.appendChild(document.createTextNode(" \u00b7 "));
+  });
 };
 const cloneCgp = cgp => {
   if (typeof structuredClone === 'function') return structuredClone(cgp);
