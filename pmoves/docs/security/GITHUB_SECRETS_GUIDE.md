@@ -1,5 +1,7 @@
 # GitHub Secrets Guide for PMOVES.AI
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Secrets & Credentials | See also: [Secrets Pipeline Reference](SECRETS_PIPELINE_REFERENCE.md)
+
 This guide covers setting up and using GitHub Secrets for PMOVES.AI CI/CD pipelines.
 
 ## Overview

@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # Submodule Merge Readiness Review - 2026-02-07
 
 **Purpose:** Review submodules worked on this session and determine readiness to merge to parent PMOVES.AI repo.

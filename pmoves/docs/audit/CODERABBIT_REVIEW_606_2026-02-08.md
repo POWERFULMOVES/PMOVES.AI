@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # CodeRabbit Review Findings - PR #606
 
 **Date:** 2026-02-09 00:43 UTC

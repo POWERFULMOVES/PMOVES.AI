@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # Production Validation Summary - 2026-02-07
 
 ## Audit Scope

@@ -406,5 +406,5 @@ jobs:
 
 - [Docker Compose Hardening Configuration](../docker-compose.hardened.yml)
 - [Security Hardening Summary](../../docs/Security-Hardening-Summary-2025-01-29.md)
-- [Hardened Services Catalog](../../docs/hardening/services-catalog.md)
+- [Hardened Services Catalog](../../.claude/context/services-catalog.md)
 - [PMOVES.AI Developer Context](../../.claude/CLAUDE.md)
