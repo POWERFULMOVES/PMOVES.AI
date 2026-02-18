@@ -17,11 +17,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt requirements.lock ./
+COPY services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
-COPY . .
+COPY services /app/services
 
 # Security: Run as non-root user (PMOVES standard: UID/GID 65532)
 RUN groupadd -r pmoves --gid=65532 && \
@@ -31,4 +31,4 @@ RUN groupadd -r pmoves --gid=65532 && \
 USER pmoves:pmoves
 
 EXPOSE 8080
-CMD ["python","main.py"]
+CMD ["python","services/agent-zero/main.py"]
