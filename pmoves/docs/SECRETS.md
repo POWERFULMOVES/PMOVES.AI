@@ -1,5 +1,7 @@
 # PMOVES.AI Secrets Management Guide
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Secrets & Credentials | See also: [Secrets Pipeline Reference](SECRETS_PIPELINE_REFERENCE.md)
+
 **Universal credential management for all PMOVES.AI submodules and services.**
 
 ---

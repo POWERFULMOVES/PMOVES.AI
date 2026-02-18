@@ -1,5 +1,7 @@
 # External Integrations Bring‑Up (Wger, Firefly III, Open Notebook, Jellyfin)
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture
+
 This guide links the official integration repos and explains how to run them alongside PMOVES on the shared `cataclysm-net` so n8n flows and services can talk to them directly.
 
 ## Repos

@@ -1,5 +1,7 @@
 # Monitoring Stack Integration for SEED BRANCHED DEFAULTS
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture
+
 ## Overview
 
 This document describes the **production monitoring stack** that should be enabled as part of the hardened PMOVES.AI baseline. All monitoring components have been tested and are production-ready.

@@ -1,5 +1,7 @@
 # PMOVES.AI Submodule Integration Guide
 
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: Integration Architecture
+
 **Universal guide for integrating any submodule with PMOVES.AI production infrastructure.**
 
 ---

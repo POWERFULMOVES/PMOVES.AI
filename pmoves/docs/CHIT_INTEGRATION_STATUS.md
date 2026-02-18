@@ -1,6 +1,8 @@
 # CHIT Integration Status by Service
 
-> **See also:** [CHIT Documentation Suite](PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary.
+> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: CHIT & Geometry
+>
+> **See also:** [CHIT Documentation Suite](PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](CHIT_TOOLS_CATALOG.md) for all Python tools.
 
 **Last Updated:** December 30, 2025
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (current)
