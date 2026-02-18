@@ -118,6 +118,12 @@ class GeometryEventEnvelope(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class GeometryCalibrationRequest(BaseModel):
+    cgp: CGP
+    codebook_path: Optional[str] = None
+    sig: Optional[Dict[str, Any]] = None
+
+
 class GeometryDecodeTextRequest(BaseModel):
     shape_id: Optional[str] = None
     constellation_ids: List[str] = Field(default_factory=list)
@@ -222,7 +228,11 @@ def _load_codebook(codebook_path: Optional[str] = None):
         for ln in f:
             ln = ln.strip()
             if ln:
-                items.append(json.loads(ln))
+                try:
+                    items.append(json.loads(ln))
+                except json.JSONDecodeError:
+                    logger.warning("Skipping malformed codebook line in %s", path)
+                    continue
     return items
 
 def decode_constellations(
@@ -320,16 +330,16 @@ def geometry_decode_text(body: GeometryDecodeTextRequest):
     return resp
 
 @router.post("/geometry/calibration/report")
-def geometry_calibration_report(cgp: CGP, codebook_path: Optional[str] = None, sig: Optional[Dict[str, Any]] = None):
-    if codebook_path and CHIT_REQUIRE_SIGNATURE:
-        payload = {"codebook_path": codebook_path, "cgp": cgp.model_dump()}
-        if sig:
-            payload["sig"] = sig
+def geometry_calibration_report(body: GeometryCalibrationRequest):
+    if body.codebook_path and CHIT_REQUIRE_SIGNATURE:
+        payload = {"codebook_path": body.codebook_path, "cgp": body.cgp.model_dump()}
+        if body.sig:
+            payload["sig"] = body.sig
         if not verify_hmac(payload):
             raise HTTPException(status_code=403, detail="codebook_path requires CHIT-signed request")
-    items = _load_codebook(codebook_path)
+    items = _load_codebook(body.codebook_path)
     if not items: return {"KL": None, "JS": None, "coverage": 0.0}
-    const = cgp.super_nodes[0].constellations[0]
+    const = body.cgp.super_nodes[0].constellations[0]
     anchor = const.anchor or []
     if not anchor and const.anchor_enc:
         d = const.model_dump(); decrypt_anchor(d); anchor = d.get("anchor") or []
