@@ -22,6 +22,8 @@
 - GHCR publishing:
   - Prefer `github.token` in workflows.
   - If a PAT is required, include `write:packages` + `read:packages` (and `repo` for private repos).
+  - If using PAT auth, set both `GHCR_TOKEN` and `GHCR_USERNAME` secrets so login-action uses a matching username/token pair.
+  - For local GitHub App/webhook setup (Smee/cloudflared), see `docs/GITHUB_APP_LOCAL_SETUP.md`.
 
 ## Rotation cadence
 - Mandatory rotation when alerted.

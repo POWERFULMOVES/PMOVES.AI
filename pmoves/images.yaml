@@ -12,14 +12,14 @@ images:
     repo: PMOVES-Agent-Zero
     ref: heads/PMOVES.AI-Edition-Hardened
     context: .
-    dockerfile: Dockerfile
+    dockerfile: DockerfileLocal
     image: ghcr.io/powerfulmoves/pmoves-agent-zero
 
   - name: pmoves-archon
     repo: PMOVES-Archon
     ref: heads/PMOVES.AI-Edition-Hardened
     context: .
-    dockerfile: Dockerfile
+    dockerfile: pmoves/services/archon/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-archon
 
   - name: pmoves-creator

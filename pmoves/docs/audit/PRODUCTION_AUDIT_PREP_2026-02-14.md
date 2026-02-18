@@ -90,3 +90,32 @@ This prep pass focused on:
    - `make -C pmoves verify-all`
    - `make -C pmoves agents-headless-smoke`
    - `make -C pmoves codex-health-quick`
+
+## CI Hardening Updates (2026-02-14)
+
+Additional production-audit fixes were applied on branch `pr/hardened-ghcr-standardize` (PR #623):
+
+1. GHCR auth standardized across active self-hosted build workflows:
+   - `.github/workflows/integrations-ghcr.yml`
+   - `.github/workflows/build-images.yml`
+   - `.github/workflows/self-hosted-builds.yml`
+   - `.github/workflows/self-hosted-builds-hardened.yml`
+   - Uses `GHCR_USERNAME` + (`GHCR_TOKEN` or `GH_PAT_PUBLISH`) with fallback to `github.token`.
+2. Workflow parser blockers resolved:
+   - `codeql.yml`: moved `paths-ignore` under `on.push` and `on.pull_request`.
+   - `sync-secrets-local.yml`: removed inline `${{` parse hazard and fixed secret summary variable reference bug.
+3. Added operator docs:
+   - `docs/GITHUB_APP_LOCAL_SETUP.md`
+   - Updated GHCR/PAT guidance in `docs/SECRETS_ONBOARDING.md` and `pmoves/docs/CI_IMAGES.md`.
+
+### Remaining CI audit checks to confirm before merge
+
+1. Validate new queued runs on PR #623:
+   - `CodeQL Advanced`
+   - `Build and publish integration images to GHCR`
+2. If GHCR still reports `denied: denied`, rotate PAT and verify:
+   - `GHCR_USERNAME` matches PAT owner.
+   - PAT scopes include `read:packages` + `write:packages` (+ `repo` for private clone flows).
+3. Self-hosted runner capacity/availability:
+   - Repository runner inventory currently reports only `pmoves-ai-lab-runner` and `status=offline`.
+   - While offline, PR checks that target self-hosted labels remain `queued` and cannot validate merged fixes.

@@ -2,7 +2,7 @@ name: Python Tests
 
 on:
   push:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/__init__.py'
       - 'pmoves/services/**/*.py'
@@ -12,7 +12,7 @@ on:
       - 'pytest.ini'
       - '.github/workflows/python-tests.yml'
   pull_request:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/__init__.py'
       - 'pmoves/services/**/*.py'
@@ -26,7 +26,7 @@ on:
 jobs:
   tests:
     # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       actions: read
@@ -138,5 +138,4 @@ jobs:
             pmoves/services/hi-rag-gateway-v2/tests \
             pmoves/services/jellyfin-bridge/tests \
             --ignore=pmoves/services/media-audio/tests \
-            --ignore=pmoves/services/media-video/tests \
-            # Tests must pass for CI gate
+            --ignore=pmoves/services/media-video/tests

@@ -1,6 +1,6 @@
 # Agent Taxonomy Cross-Reference Hub
 
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-18 — v1.4.0 (60 agents)_
 
 Master cross-reference for all documents, concepts, and implementation files involved in the PMOVES Agent Class Taxonomy. When the taxonomy changes, use this document to identify which files need updates.
 
@@ -19,14 +19,15 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | 7 | **Geometry Bus Integration** | `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` | CGP format, point modality types, CGP producers/consumers | Integration |
 | 8 | **Living Template** | `pmoves/docs/PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md` | 5 pillars applied to taxonomy, CGP agent card, 4 expanded use cases | Template |
 | 9 | **CGP v1.0 Specification** | `pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md` | Production CGP spec | Spec |
-| 10 | **Services Catalog** | `.claude/context/services-catalog.md` | 59+ services, ports, health endpoints, tiers | Catalog |
+| 10 | **Services Catalog** | `.claude/context/services-catalog.md` | 60 services, ports, health endpoints, tiers | Catalog |
 | 11 | **Submodules Catalog** | `.claude/context/submodules.md` | 20+ git submodules, branches, URLs | Catalog |
 | 12 | **NATS Subjects** | `.claude/context/nats-subjects.md` | Research, media, agent, mesh, remote event subjects | Events |
 | 13 | **Geometry NATS Subjects** | `.claude/context/geometry-nats-subjects.md` | ToKenism, geometry core, CGP schema subjects | Events |
 | 14 | **Original Vision (agnotes2)** | `pmoves/docs/AGENTS/agnotes2.md` | Pokemon/Transformers metaphor, latent space amplification, portal mapping | Vision |
-| 15 | **Agent Registry** | `pmoves/config/agent_registry.yaml` | Single source of truth: 35 agents with class, type, tier, layers, NATS, toggles | Data |
+| 15 | **Agent Registry** | `pmoves/config/agent_registry.yaml` | Single source of truth: 60 agents with class, type, tier, layers, NATS, toggles | Data |
 | 16 | **CLI Helper Tool** | `pmoves/tools/agent_taxonomy_helper.py` | list/show/connections/types commands | Tool |
 | 17 | **Agent Resilience Patterns** | `pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md` | 3-layer resilience model, Cipher snapshots, checkpoint protocol, budget classes, recovery strategies | Pattern |
+| 18 | **Agent Topology & TAC Tree** | `pmoves/docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` | 5 Mermaid diagrams: master topology, TAC tree, evolution path, data flow, NATS nervous system | Visual |
 
 ---
 
@@ -68,6 +69,7 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | **Latent space amplification** | #14 agnotes2 | #8 Living Template (Use Case 2) |
 | **Deployment readiness score** | #5 Control Plane | #8 Living Template (Use Case 4) |
 | **Agent resilience** (context budgets, checkpoints, recovery) | #17 Resilience Patterns | #1 Class Taxonomy (Section 10), #15 Registry |
+| **Agent topology diagrams** (Mermaid visual maps) | #18 Topology & TAC Tree | #1 Class Taxonomy, #15 Registry, #12 NATS Subjects |
 
 ---
 
@@ -77,10 +79,10 @@ When you change one of these concepts, update the listed documents:
 
 | Changed | Update These |
 |---------|-------------|
-| Add/remove an agent | #15 Registry, #1 Class Taxonomy, #10 Services Catalog |
+| Add/remove an agent | #15 Registry, #1 Class Taxonomy, #10 Services Catalog, #18 Topology |
 | Change agent type/tier | #15 Registry, #1 Class Taxonomy |
 | Change agent layers | #15 Registry, #1 Class Taxonomy, #2 Unified Taxonomy |
-| Add NATS subject | #12 NATS Subjects (or #13), #15 Registry, #1 Class Taxonomy |
+| Add NATS subject | #12 NATS Subjects (or #13), #15 Registry, #1 Class Taxonomy, #18 Topology |
 | Change CHIT toggle | #15 Registry, #5 Control Plane, #8 Living Template |
 | New CHIT pillar | #6 CHIT Status, #8 Living Template, #7 Geometry Bus |
 | CGP spec version | #9 CGP Spec, #6 CHIT Status, #8 Living Template |
@@ -110,5 +112,6 @@ After taxonomy changes, verify:
 
 - [Agent Class Taxonomy](./PMOVES_AGENT_CLASS_TAXONOMY.md)
 - [Living Template](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md)
+- [Agent Topology & TAC Tree](./PMOVES_AGENT_TOPOLOGY.md)
 - [Agent Resilience Patterns](./AGENT_RESILIENCE_PATTERNS.md)
 - [Hyperdimensions Control Plane](./PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md)

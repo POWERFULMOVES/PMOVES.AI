@@ -1,0 +1,648 @@
+{
+  "$schema_version": "1.0.0",
+  "$description": "Maps every PMOVES.AI submodule to its relevant skills, context files, AGENTS docs, domain tags, and context tier. Source of truth for Claude Code CLI context orchestration.",
+  "$domain_tag_skill_map": {
+    "orchestration": ["agents/*", "deploy/*", "health/*", "nats/*"],
+    "media": ["yt/*", "tts/*", "pipecat/*", "jellyfin/*"],
+    "voice": ["tts/*", "pipecat/*"],
+    "knowledge": ["search/*", "db/*", "notebook/*"],
+    "documents": ["langextract/*", "search/hirag"],
+    "infra": ["deploy/*", "k8s/*", "gpu/*", "minio/*", "nats/*"],
+    "llm": ["tensorzero/*", "model/*"],
+    "math": ["chit/*", "hyperdim/*"],
+    "ci": ["github/*", "test/*"],
+    "memory": ["agents/*", "cipher/*"],
+    "sandbox": ["botz/*"],
+    "workflows": ["n8n/*"],
+    "ui": [],
+    "finance": [],
+    "health": [],
+    "networking": [],
+    "research": ["search/*"],
+    "training": [],
+    "monitoring": ["observability/*", "health/*"],
+    "messaging": ["nats/*", "discord/*"],
+    "storage": ["minio/*", "db/*"],
+    "agents": ["agents/*", "deploy:services"],
+    "mcp": ["agents/*", "deploy:services"]
+  },
+  "submodules": {
+    "PMOVES-Agent-Zero": {
+      "context_tier": 2,
+      "domain_tags": ["orchestration", "agents", "mcp"],
+      "skills": [
+        "agents/status",
+        "agents/mcp-query",
+        "deploy/up",
+        "deploy/services",
+        "health/quick",
+        "health/check-all"
+      ],
+      "context_files": [
+        "mcp-api.md",
+        "nats-subjects.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "PMOVES_UNIFIED_AGENT_TAXONOMY.md",
+        "PMOVES.AI Agentic Architecture Deep Dive.md"
+      ]
+    },
+    "PMOVES-Archon": {
+      "context_tier": 2,
+      "domain_tags": ["orchestration", "agents", "mcp"],
+      "skills": [
+        "agents/status",
+        "agents/mcp-query",
+        "deploy/up",
+        "deploy/services",
+        "health/quick",
+        "botz/profile"
+      ],
+      "context_files": [
+        "mcp-api.md",
+        "nats-subjects.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "PMOVES_UNIFIED_AGENT_TAXONOMY.md",
+        "BOTZ_GATEWAY_AGENT_INTEGRATION.md",
+        "PMOVES_AGENT_CLASS_TAXONOMY.md"
+      ],
+      "dual_mount": "pmoves/integrations/archon"
+    },
+    "PMOVES-BoTZ": {
+      "context_tier": 2,
+      "domain_tags": ["sandbox", "mcp", "agents"],
+      "skills": [
+        "botz/init",
+        "botz/mcp",
+        "botz/profile",
+        "botz/secrets",
+        "agents/mcp-query"
+      ],
+      "context_files": [
+        "mcp-api.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "BOTZ_GATEWAY_AGENT_INTEGRATION.md",
+        "PmovesSKillZ.md",
+        "PMOVES_UNIFIED_AGENT_TAXONOMY.md"
+      ]
+    },
+    "PMOVES-BotZ-gateway": {
+      "context_tier": 3,
+      "domain_tags": ["sandbox", "mcp", "agents"],
+      "skills": [
+        "botz/mcp",
+        "deploy/up",
+        "health/quick"
+      ],
+      "context_files": [
+        "mcp-api.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "BOTZ_GATEWAY_AGENT_INTEGRATION.md"
+      ]
+    },
+    "PMOVES-A2UI": {
+      "context_tier": 4,
+      "domain_tags": ["ui", "research"],
+      "skills": [],
+      "context_files": [
+        "ui-patterns.md"
+      ],
+      "agents_docs": [],
+      "dual_mount": "research/A2UI"
+    },
+    "PMOVES-Deep-Serch": {
+      "context_tier": 2,
+      "domain_tags": ["knowledge", "research", "orchestration"],
+      "skills": [
+        "search/deepresearch",
+        "search/supaserch",
+        "deploy/up",
+        "health/quick"
+      ],
+      "context_files": [
+        "nats-subjects.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-HiRAG": {
+      "context_tier": 2,
+      "domain_tags": ["knowledge", "documents"],
+      "skills": [
+        "search/hirag",
+        "deploy/up",
+        "health/quick",
+        "db/query"
+      ],
+      "context_files": [
+        "nats-subjects.md",
+        "services-catalog.md",
+        "geometry-nats-subjects.md"
+      ],
+      "agents_docs": []
+    },
+    "Pmoves-hyperdimensions": {
+      "context_tier": 3,
+      "domain_tags": ["math", "ui"],
+      "skills": [
+        "hyperdim/render",
+        "hyperdim/animate",
+        "hyperdim/export"
+      ],
+      "context_files": [
+        "chit-geometry-bus.md"
+      ],
+      "agents_docs": [
+        "PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md"
+      ]
+    },
+    "PMOVES-AgentGym": {
+      "context_tier": 4,
+      "domain_tags": ["training", "research"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "dual_mount": "pmoves/vendor/agentgym"
+    },
+    "Pmoves-AgentGym-RL": {
+      "context_tier": 4,
+      "domain_tags": ["training", "research"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "dual_mount": "pmoves/vendor/agentgym-rl"
+    },
+    "PMOVES-llama-throughput-lab": {
+      "context_tier": 4,
+      "domain_tags": ["llm", "training"],
+      "skills": [
+        "gpu/status",
+        "model/load"
+      ],
+      "context_files": [
+        "hardware-profiles.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-surf": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox", "research"],
+      "skills": [
+        "botz/mcp"
+      ],
+      "context_files": [],
+      "agents_docs": [],
+      "dual_mount": "pmoves/vendor/e2b-surf"
+    },
+    "pmoves-surf": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox", "research"],
+      "skills": [
+        "botz/mcp"
+      ],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-surf"
+    },
+    "PMOVES-E2B-Danger-Room": {
+      "context_tier": 3,
+      "domain_tags": ["sandbox", "infra"],
+      "skills": [
+        "botz/mcp",
+        "deploy/up"
+      ],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "PMOVES-E2B-Danger-Room-Desktop": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox", "infra"],
+      "skills": [
+        "botz/mcp"
+      ],
+      "context_files": [],
+      "agents_docs": [],
+      "dual_mount": "pmoves/vendor/e2b-desktop"
+    },
+    "PMOVES-Danger-infra": {
+      "context_tier": 3,
+      "domain_tags": ["sandbox", "infra"],
+      "skills": [
+        "deploy/up",
+        "k8s/deploy",
+        "k8s/status"
+      ],
+      "context_files": [],
+      "agents_docs": [],
+      "dual_mount": "pmoves/vendor/e2b-infra"
+    },
+    "PMOVES-E2b-Spells": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox"],
+      "skills": [
+        "botz/mcp"
+      ],
+      "context_files": [],
+      "agents_docs": [],
+      "dual_mount": "pmoves/vendor/e2b-spells"
+    },
+    "PMOVES-Pipecat": {
+      "context_tier": 2,
+      "domain_tags": ["voice", "media"],
+      "skills": [
+        "pipecat/connect",
+        "pipecat/status",
+        "tts/synthesize",
+        "deploy/up",
+        "health/quick"
+      ],
+      "context_files": [
+        "flute-gateway.md",
+        "voice-personas.md",
+        "nats-subjects.md"
+      ],
+      "agents_docs": [
+        "HARDWARE_TTS_REQUIREMENTS.md"
+      ]
+    },
+    "PMOVES-Pinokio-Ultimate-TTS-Studio": {
+      "context_tier": 4,
+      "domain_tags": ["voice"],
+      "skills": [
+        "tts/status",
+        "tts/voices"
+      ],
+      "context_files": [
+        "voice-personas.md"
+      ],
+      "agents_docs": [
+        "HARDWARE_TTS_REQUIREMENTS.md"
+      ]
+    },
+    "PMOVES-Ultimate-TTS-Studio": {
+      "context_tier": 3,
+      "domain_tags": ["voice", "media"],
+      "skills": [
+        "tts/status",
+        "tts/synthesize",
+        "tts/test-all",
+        "tts/voices",
+        "gpu/status"
+      ],
+      "context_files": [
+        "flute-gateway.md",
+        "voice-personas.md"
+      ],
+      "agents_docs": [
+        "HARDWARE_TTS_REQUIREMENTS.md"
+      ]
+    },
+    "PMOVES-transcribe-and-fetch": {
+      "context_tier": 3,
+      "domain_tags": ["media", "voice"],
+      "skills": [
+        "yt/ingest-video",
+        "deploy/up"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES.YT": {
+      "context_tier": 2,
+      "domain_tags": ["media"],
+      "skills": [
+        "yt/add-channel",
+        "yt/add-playlist",
+        "yt/check-now",
+        "yt/help",
+        "yt/ingest-video",
+        "yt/list-channels",
+        "yt/pending",
+        "yt/remove-channel",
+        "yt/status",
+        "yt/toggle-channel",
+        "deploy/up",
+        "health/quick"
+      ],
+      "context_files": [
+        "nats-subjects.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-Jellyfin": {
+      "context_tier": 3,
+      "domain_tags": ["media"],
+      "skills": [
+        "deploy/up",
+        "health/quick",
+        "jellyfin/status",
+        "jellyfin/sync"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "Pmoves-Jellyfin-AI-Media-Stack": {
+      "context_tier": 3,
+      "domain_tags": ["media"],
+      "skills": [
+        "deploy/up",
+        "health/quick",
+        "gpu/status",
+        "jellyfin/status",
+        "jellyfin/sync"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-Open-Notebook": {
+      "context_tier": 2,
+      "domain_tags": ["knowledge", "documents"],
+      "skills": [
+        "search/deepresearch",
+        "db/query",
+        "deploy/up",
+        "health/quick",
+        "notebook/status",
+        "notebook/sync",
+        "notebook/query"
+      ],
+      "context_files": [
+        "services-catalog.md",
+        "nats-subjects.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-DoX": {
+      "context_tier": 2,
+      "domain_tags": ["documents"],
+      "skills": [
+        "langextract/extract",
+        "langextract/process",
+        "langextract/provider",
+        "langextract/status",
+        "deploy/up",
+        "health/quick"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-Creator": {
+      "context_tier": 3,
+      "domain_tags": ["media", "ui"],
+      "skills": [
+        "deploy/up"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-n8n": {
+      "context_tier": 2,
+      "domain_tags": ["workflows"],
+      "skills": [
+        "n8n/execute",
+        "n8n/nodes",
+        "n8n/suggest",
+        "n8n/workflows",
+        "deploy/up"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-crush": {
+      "context_tier": 3,
+      "domain_tags": ["llm"],
+      "skills": [
+        "crush/setup",
+        "crush/status"
+      ],
+      "context_files": [],
+      "agents_docs": [
+        "CRUSH_OPERATOR_HOME.md"
+      ]
+    },
+    "PMOVES-tensorzero": {
+      "context_tier": 2,
+      "domain_tags": ["llm", "infra"],
+      "skills": [
+        "tensorzero/models",
+        "model/load",
+        "model/unload",
+        "deploy/up",
+        "health/quick"
+      ],
+      "context_files": [
+        "tensorzero.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-Wealth": {
+      "context_tier": 3,
+      "domain_tags": ["finance"],
+      "skills": [
+        "deploy/up"
+      ],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "Pmoves-Health-wger": {
+      "context_tier": 3,
+      "domain_tags": ["health"],
+      "skills": [
+        "deploy/up"
+      ],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "PMOVES-ToKenism-Multi": {
+      "context_tier": 2,
+      "domain_tags": ["math", "finance"],
+      "skills": [
+        "chit/encode",
+        "chit/decode",
+        "chit/visualize",
+        "chit/bus"
+      ],
+      "context_files": [
+        "chit-geometry-bus.md",
+        "geometry-nats-subjects.md"
+      ],
+      "agents_docs": [
+        "TBE_IMPLEMENTATION_CROSS_REFERENCE.md"
+      ]
+    },
+    "PMOVES-MAI-UI": {
+      "context_tier": 3,
+      "domain_tags": ["ui"],
+      "skills": [],
+      "context_files": [
+        "ui-patterns.md"
+      ],
+      "agents_docs": []
+    },
+    "PMOVES-Tailscale": {
+      "context_tier": 3,
+      "domain_tags": ["networking", "infra"],
+      "skills": [
+        "deploy/up"
+      ],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "PMOVES-Remote-View": {
+      "context_tier": 3,
+      "domain_tags": ["networking", "infra"],
+      "skills": [
+        "deploy/up"
+      ],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "PMOVES-Headscale": {
+      "context_tier": 3,
+      "domain_tags": ["networking", "infra"],
+      "skills": [
+        "deploy/up",
+        "botz/mcp"
+      ],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "PMOVES-supabase": {
+      "context_tier": 2,
+      "domain_tags": ["infra", "knowledge"],
+      "skills": [
+        "db/backup",
+        "db/migrate",
+        "db/query",
+        "deploy/up",
+        "health/quick"
+      ],
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": []
+    },
+    "Pmoves-cipher": {
+      "context_tier": 2,
+      "domain_tags": ["memory", "agents"],
+      "skills": [
+        "agents/mcp-query",
+        "deploy/up",
+        "health/quick",
+        "cipher/store",
+        "cipher/search",
+        "cipher/reasoning"
+      ],
+      "context_files": [
+        "mcp-api.md",
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md"
+      ]
+    },
+    "pmoves-e2b-mcp-server": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox", "mcp"],
+      "skills": [
+        "botz/mcp"
+      ],
+      "context_files": [],
+      "agents_docs": [],
+      "dual_mount": "pmoves/vendor/e2b-mcp-server"
+    },
+    "pmoves/integrations/archon": {
+      "context_tier": 3,
+      "domain_tags": ["orchestration", "agents"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-Archon"
+    },
+    "research/A2UI": {
+      "context_tier": 4,
+      "domain_tags": ["ui", "research"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-A2UI"
+    },
+    "pmoves/vendor/agentgym": {
+      "context_tier": 4,
+      "domain_tags": ["training"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-AgentGym"
+    },
+    "pmoves/vendor/agentgym-rl": {
+      "context_tier": 4,
+      "domain_tags": ["training"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "Pmoves-AgentGym-RL"
+    },
+    "pmoves/vendor/e2b-desktop": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-E2B-Danger-Room-Desktop"
+    },
+    "pmoves/vendor/e2b-infra": {
+      "context_tier": 4,
+      "domain_tags": ["infra", "sandbox"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-Danger-infra"
+    },
+    "pmoves/vendor/e2b-mcp-server": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox", "mcp"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "pmoves-e2b-mcp-server"
+    },
+    "pmoves/vendor/e2b-spells": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-E2b-Spells"
+    },
+    "pmoves/vendor/e2b-surf": {
+      "context_tier": 4,
+      "domain_tags": ["sandbox"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": [],
+      "canonical": "PMOVES-surf"
+    }
+  }
+}
