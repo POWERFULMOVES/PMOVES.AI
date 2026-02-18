@@ -51,12 +51,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # Always prefer GitHub's ephemeral token for GHCR to avoid PAT scope drift.
-  GHCR_USERNAME: ${{ github.actor }}
-  GHCR_PASSWORD: ${{ github.token }}
-  # Optional PAT fallback for orgs that explicitly require it.
-  GHCR_USERNAME_FALLBACK: ${{ secrets.GHCR_USERNAME || github.actor }}
-  GHCR_PASSWORD_FALLBACK: ${{ secrets.GHCR_TOKEN || '' }}
+  # Prefer workflow token first; optional PAT fallback uses GHCR_USERNAME + GHCR_PAT.
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || '' }}
+  GHCR_PAT: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
@@ -66,7 +63,7 @@ env:
 jobs:
   build-publish:
     name: Build ${{ matrix.name }}
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       packages: write
@@ -76,13 +73,12 @@ jobs:
       matrix:
         include:
           - name: agent-zero
-            git_url: https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
-            ref: PMOVES.AI-Edition-Hardened
-            context: .
-            dockerfile: DockerfileLocal
+            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
+            ref: main
+            context: pmoves/services/agent-zero
+            dockerfile: pmoves/services/agent-zero/Dockerfile.multiarch
             image_name: pmoves-agent-zero
-            build_args: |
-              BRANCH=local
+            build_args: ''
             platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: .github/trivy/agent-zero.trivyignore
@@ -176,14 +172,6 @@ jobs:
             platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
-          # To add other integrations, duplicate one of the entries above.
-          # Example (commented):
-          # - name: open-notebook
-          #   git_url: https://github.com/lfnovo/open-notebook.git
-          #   ref: main
-          #   context: .
-          #   dockerfile: Dockerfile
-          #   image_name: pmoves-open-notebook
 
     steps:
       - name: Harden Runner
@@ -233,24 +221,30 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
 
-      - name: Log in to GHCR
-        id: login_ghcr
+      - name: Log in to GHCR (workflow token)
+        id: login_ghcr_actions
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Log in to GHCR (PAT fallback)
+        id: login_ghcr_pat
+        if: ${{ steps.login_ghcr_actions.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
-          password: ${{ env.GHCR_PASSWORD }}
+          password: ${{ env.GHCR_PAT }}
 
-      - name: Fallback log in to GHCR (PAT)
-        id: login_ghcr_fallback
-        if: ${{ steps.login_ghcr.outcome != 'success' && env.GHCR_PASSWORD_FALLBACK != '' }}
-        continue-on-error: true
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ env.GHCR_USERNAME_FALLBACK }}
-          password: ${{ env.GHCR_PASSWORD_FALLBACK }}
+      - name: Require GHCR authentication
+        if: ${{ steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        run: |
+          echo "::error::Unable to authenticate to GHCR. Ensure repo Actions has packages:write and/or set GHCR_USERNAME + GHCR_TOKEN (or GH_PAT_PUBLISH)."
+          exit 1
 
       - name: Optional login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
@@ -266,7 +260,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-          USE_GHCR: ${{ steps.login_ghcr.outcome == 'success' || steps.login_ghcr_fallback.outcome == 'success' }}
+          USE_GHCR: ${{ steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' }}
         run: |
           set -euo pipefail
           DATE_TAG=$(date +%Y%m%d)

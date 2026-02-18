@@ -56,6 +56,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Connects to Supabase, Hi-RAG, PMOVES.YT
 - **Health Check:** `GET http://localhost:8080/healthz`
 - **Docker Profile:** `agents`
+- **Relevant Skills:** `/agents:status`, `/agents:mcp-query`, `/deploy:up`, `/health:quick`
 - **README:** [PMOVES-Agent-Zero/README.md](../../../PMOVES-Agent-Zero/README.md)
 
 ### PMOVES-Archon
@@ -73,6 +74,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - NATS event coordination
 - **Health Check:** `GET http://localhost:8091/healthz`
 - **Docker Profile:** `agents`
+- **Relevant Skills:** `/agents:status`, `/agents:mcp-query`, `/deploy:up`, `/botz:profile`
 - **README:** [PMOVES-Archon/README.md](../../../PMOVES-Archon/README.md)
 - **Duplicate Path:** Also mounted at `pmoves/integrations/archon/`
 
@@ -105,6 +107,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - NATS event publishing
   - Headscale API for VPN management
   - Supabase for session logging
+- **Relevant Skills:** `/botz:init`, `/botz:mcp`, `/botz:profile`, `/botz:secrets`
 - **README:** [PMOVES-BoTZ/README.md](../../../PMOVES-BoTZ/README.md)
 
 ---
@@ -126,6 +129,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Render webhook callback to `render-webhook` service (port 8085)
   - Stores outputs to MinIO
   - Workflow automation via n8n
+- **Relevant Skills:** `/deploy:up`
 - **README:** [PMOVES-Creator/README.md](../../../PMOVES-Creator/README.md)
 
 ### PMOVES.YT
@@ -142,6 +146,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Retrieves transcripts (YouTube auto-captions or Whisper fallback)
   - Publishes NATS events: `ingest.file.added.v1`, `ingest.transcript.ready.v1`
   - Triggered by Channel Monitor service
+- **Relevant Skills:** `/yt:status`, `/yt:ingest-video`, `/yt:add-channel`, `/yt:check-now`, + 6 more
 - **README:** [PMOVES.YT/README.md](../../../PMOVES.YT/README.md)
 
 ---
@@ -160,6 +165,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - NATS topics: `research.deepresearch.request.v1`, `supaserch.request.v1`
   - Auto-publishes results to Open Notebook
   - Coordinates with Archon/Agent Zero MCP tools
+- **Relevant Skills:** `/search:deepresearch`, `/search:supaserch`, `/deploy:up`, `/health:quick`
 - **README:** [PMOVES-Deep-Serch/README.md](../../../PMOVES-Deep-Serch/README.md)
 
 ### PMOVES-HiRAG
@@ -180,6 +186,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Cross-encoder reranking (BAAI/bge-reranker-base CPU, Qwen GPU)
   - CHIT Geometry Bus integration
   - Supabase realtime event broadcasting
+- **Relevant Skills:** `/search:hirag`, `/deploy:up`, `/health:quick`, `/db:query`
 - **README:** [PMOVES-HiRAG/readme.md](../../../PMOVES-HiRAG/readme.md)
 
 ### PMOVES-Open-Notebook
@@ -193,6 +200,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Used by DeepResearch for persistent storage
   - Synced via `notebook-sync` service (port 8095)
   - Indexed via LangExtract and Extract Worker
+- **Relevant Skills:** `/search:deepresearch`, `/db:query`, `/deploy:up`, `/health:quick`
 - **README:** [PMOVES-Open-Notebook/README.md](../../../PMOVES-Open-Notebook/README.md)
 
 ---
@@ -215,6 +223,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Processes PDFs from MinIO
   - Sends to extract-worker for indexing
   - MCP/MS Teams Copilot compatible
+- **Relevant Skills:** `/langextract:extract`, `/langextract:process`, `/langextract:status`, `/deploy:up`
 - **README:** [PMOVES-DoX/README.md](../../../PMOVES-DoX/README.md)
 
 ---
@@ -232,6 +241,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Syncs Jellyfin events to Supabase
   - Metadata webhook handler
   - Integrates with media processing pipeline
+- **Relevant Skills:** `/deploy:up`, `/health:quick`
 - **README:** [PMOVES-Jellyfin/README.md](../../../PMOVES-Jellyfin/README.md)
 
 ### Pmoves-Jellyfin-AI-Media-Stack
@@ -248,6 +258,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Reads/writes to MinIO
   - Indexes to Qdrant and Meilisearch
   - Outputs analysis to Supabase
+- **Relevant Skills:** `/deploy:up`, `/health:quick`, `/gpu:status`
 - **README:** [Pmoves-Jellyfin-AI-Media-Stack/README.md](../../../Pmoves-Jellyfin-AI-Media-Stack/README.md)
 
 ---
@@ -267,6 +278,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Synced to Supabase via n8n workflow: `firefly_sync_to_supabase.json`
   - Monthly reports to CGP via n8n: `finance_monthly_to_cgp.json`
   - Real data calibration for PMOVES-ToKenism-Multi
+- **Relevant Skills:** `/deploy:up`
 - **README:** [PMOVES-Wealth/readme.md](../../../PMOVES-Wealth/readme.md)
 
 ### PMOVES-ToKenism-Multi
@@ -283,6 +295,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
 - **Integration Points:**
   - Calibrates with actual spending from Firefly-iii
   - Contains integrations for PMOVES-Firefly-iii and PMOVES-DoX
+- **Relevant Skills:** `/chit:encode`, `/chit:decode`, `/chit:visualize`, `/chit:bus`
 - **README:** [PMOVES-ToKenism-Multi/README.md](../../../PMOVES-ToKenism-Multi/README.md)
 
 ### Pmoves-Health-wger
@@ -316,6 +329,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
 - **Integration Points:**
   - Provides secure networking layer for distributed PMOVES services
   - Used for remote access and multi-host coordination
+- **Relevant Skills:** `/deploy:up`
 - **README:** [PMOVES-Tailscale/README.md](../../../PMOVES-Tailscale/README.md)
 
 ### PMOVES-Remote-View
@@ -353,6 +367,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - `pmoves_echo_ingest.json` - PMOVES echo ingestion
   - `pmoves_comfy_gen.json` - ComfyUI generation trigger
   - `pmoves_content_approval.json` - Content approval workflow
+- **Relevant Skills:** `/n8n:execute`, `/n8n:nodes`, `/n8n:suggest`, `/n8n:workflows`
 - **README:** [PMOVES-n8n/README.md](../../../PMOVES-n8n/README.md)
 
 ---
@@ -373,6 +388,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
 - **Integration Points:**
   - Can integrate with TensorZero gateway for model routing
   - MCP-compatible for tool extensions
+- **Relevant Skills:** `/crush:setup`, `/crush:status`
 - **README:** [PMOVES-crush/README.md](../../../PMOVES-crush/README.md)
 
 ---
@@ -419,6 +435,7 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
   - Docker service `cipher-api` on port 8096 (profile: `agents`)
   - Shares existing Neo4j instance (no duplicate)
   - NATS service discovery via `pmoves_announcer`
+- **Relevant Skills:** `/agents:mcp-query`, `/deploy:up`, `/health:quick`
 - **README:** [Pmoves-cipher/README.md](../../../Pmoves-cipher/README.md)
 
 ---
@@ -541,3 +558,4 @@ All repos are POWERFULMOVES-owned forks. The legacy `pmoves/vendor/` and `resear
 - [services-catalog.md](./services-catalog.md) - Complete service listing with ports and profiles
 - [nats-subjects.md](./nats-subjects.md) - NATS event subjects
 - [testing-strategy.md](./testing-strategy.md) - Testing guidelines
+- [Submodule-Skill Registry](../../pmoves/configs/submodule_skill_registry.json) - Machine-readable submodule-to-skill mapping (validated by `make -C pmoves skill-registry-validate`)

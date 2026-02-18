@@ -6,8 +6,8 @@ on:
     paths:
       - 'pmoves/.env*'
       - 'pmoves/scripts/env_check.ps1'
-      - 'pmoves/docs/LOCAL_DEV.md'
-      - 'pmoves/docs/LOCAL_TOOLING_REFERENCE.md'
+      - 'pmoves/docs/**/LOCAL_DEV.md'
+      - 'pmoves/docs/**/LOCAL_TOOLING_REFERENCE.md'
       - '.github/workflows/env-preflight.yml'
   workflow_dispatch: {}
 
