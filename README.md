@@ -1,16 +1,31 @@
-# PMOVES.AI Repository Overview
-[![PMOVES Integrations CI](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/pmoves-integrations-ci.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/pmoves-integrations-ci.yml)
+# PMOVES.AI
 
-PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agent Zero, Archon, and a fleet of specialized "muscle" services for retrieval, generation, and enrichment workflows. The ecosystem focuses on local-first autonomy, reproducible provisioning, and self-improving research loops that integrate knowledge management, workflow automation, and rich media processing pipelines.
+[![Integration Contract](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/integration-contract.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/integration-contract.yml)
+[![CodeQL Advanced](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/codeql.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/codeql.yml)
+[![CHIT Contract Check](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/chit-contract.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/chit-contract.yml)
+[![Docker Hardening Validation](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/hardening-validation.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/hardening-validation.yml)
+[![Python Tests](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/python-tests.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/python-tests.yml)
+
+A local-first, multi-agent orchestration platform that coordinates autonomous agents (Agent Zero, Archon), hybrid retrieval (Hi-RAG v2), voice synthesis, media processing, and knowledge graphs — all wired together with NATS event-driven messaging and full Prometheus/Grafana/Loki observability.
+
+## Quick Start
+
+```bash
+make first-run
+```
+
+This single command orchestrates the full onboarding sequence: environment prompts, Supabase CLI bring-up, data/service seeding, core + agent + external stacks, and the 12-step smoke harness. When it finishes successfully every bundled integration (Wger, Firefly, Jellyfin, Open Notebook, Agent mesh) is online with branded defaults. See the [First-Run Bootstrap Overview](pmoves/docs/FIRST_RUN.md) for a detailed breakdown of each step.
 
 ## Key Directories
+
 - **`CATACLYSM_STUDIOS_INC/`** – Provisioning bundles and infrastructure automations for homelab and field hardware, including unattended OS installs, Jetson bootstrap scripts, and ready-to-run Docker stacks that mirror the production mesh topology.
-- **`docs/`** – High-level strategy, architecture, and integration guides for the overall PMOVES ecosystem, such as system overviews, multi-agent coordination notes, and archival research digests. See also `pmoves/docs/ENVIRONMENT_POLICY.md` for the single‑file environment policy and Jellyfin host‑mount instructions.
+- **`docs/`** – High-level strategy, architecture, and integration guides for the overall PMOVES ecosystem. See also `pmoves/docs/ENVIRONMENT_POLICY.md` for the single-file environment policy and Jellyfin host-mount instructions.
 - **`pmoves/`** – The primary application stack with docker-compose definitions, service code, datasets, Supabase schema, and in-depth runbooks for daily operations and advanced workflows.
 - **`pmoves/contracts/solidity/`** – Hardhat workspace prototyping Food-USD / GroToken governance flows with automated tests that model staking, quadratic voting, and group-buy execution.
 - **`pmoves/ui/`** – Next.js + Supabase Platform Kit workspace for the upcoming web UI; reuses `pmoves/.env.local` so frontend hooks can target the same Supabase CLI stack.
 
 ## Essential Documentation
+
 - **[Claude Code CLI Integration](.claude/README.md)** – TAC integration with custom slash commands, security hooks, and PMOVES-aware context for AI-assisted development.
 - **[Testing Strategy](docs/testing/TESTING.md)** – Comprehensive testing guide covering smoke tests, functional tests, and end-to-end validation workflows.
 - [PMOVES Stack README](pmoves/README.md) – Quickstart environment setup, service inventory, and Codex bootstrap steps for running the orchestration mesh locally.
@@ -18,21 +33,104 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - [Supabase Service Guide](pmoves/docs/services/supabase/README.md) – CLI vs compose expectations, realtime wiring (`supabase start --network-id pmoves-net`), and how PMOVES consumes PostgREST/Realtime in both local and self-hosted deployments.
 - [PMOVES Docs Index](pmoves/docs/README_DOCS_INDEX.md) – Curated entry points into the pmoves-specific runbooks covering Creator Pipeline, ComfyUI flows, reranker configurations, and smoke tests.
 - [UI workspace bring-up](pmoves/docs/LOCAL_DEV.md#ui-workspace-nextjs--supabase-platform-kit) – Next.js + Supabase quickstart (npm/yarn commands, env loading from `pmoves/.env.local`, Supabase CLI prerequisites).
-- [Service Docs Index](pmoves/docs/services/README.md) – Per‑service guides (overview, compose/ports, runbooks, smoke tests, and roadmap alignment).
+- [Service Docs Index](pmoves/docs/services/README.md) – Per-service guides (overview, compose/ports, runbooks, smoke tests, and roadmap alignment).
 - [External Integrations Bring-Up](pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md) – Wger, Firefly III, Open Notebook, and Jellyfin commands, token wiring, and port overrides for `make up-external`.
 - [Architecture Primer](docs/PMOVES_ARC.md) – Deep dive into mesh topology, service responsibilities, and evolution of the orchestration layers.
 - [Complete Architecture Map](pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md) – Full-fidelity view of the latest integration mesh, including data planes and edge deployments.
 - [Multi-Agent Integration Guidelines](docs/PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md) – Operational patterns for coordinating Agent Zero, Archon, and automation hubs across environments.
-- [Codex + Copilot Review Workflow](docs/COPILOT_REVIEW_WORKFLOW.md) – How to combine the Codex CLI reviewer with GitHub Copilot’s PR assistant, including token setup and evidence logging expectations.
-- [Archon Updates for PMOVES](pmoves/docs/archonupdateforpmoves.md) – What changed in the October 2025 Archon bundle, how to wire the Supabase CLI stack, and the MCP/NATS expectations.
+- [Archon Updates for PMOVES](pmoves/docs/PMOVES.AI%20PLANS/archonupdateforpmoves.md) – What changed in the October 2025 Archon bundle, how to wire the Supabase CLI stack, and the MCP/NATS expectations.
 - [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) – Command catalog for starting, stopping, and tailoring compose profiles (core data plane, media analyzers, Supabase modes, and agent bundles).
- - [Single‑User (Owner) Mode](pmoves/docs/SECURITY_SINGLE_USER.md) – Personal‑first operation without login prompts; boot‑JWT auto‑auth, owner chip in the UI, and security notes.
+- [Single-User (Owner) Mode](pmoves/docs/SECURITY_SINGLE_USER.md) – Personal-first operation without login prompts; boot-JWT auto-auth, owner chip in the UI, and security notes.
+- [Production Readiness Report](pmoves/docs/PRODUCTION_READINESS_REPORT_2026-02-07.md) – Feb 2026 audit of service health, security posture, and deployment readiness.
+- [Codex + Copilot Review Workflow](docs/COPILOT_REVIEW_WORKFLOW.md) – How to combine the Codex CLI reviewer with GitHub Copilot's PR assistant, including token setup and evidence logging expectations.
+
+## CHIT & Geometry Documentation
+
+Compressed Hierarchical Information Transfer (CHIT) and the Geometry Bus are core to how PMOVES.AI encodes, routes, and decodes structured knowledge across the agent mesh.
+
+- **[CHIT Gateway API Reference](pmoves/docs/PMOVESCHIT/CHIT_GATEWAY_API.md)** – Full endpoint reference (encode/decode, calibration, HMAC signatures)
+- **[CGP v1.0 Specification](pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md)** – Compressed Geometry Packet wire format
+- **[Geometry Bus Integration](pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md)** – How services publish/subscribe geometry events via NATS
+- **[PMOVESCHIT Overview](pmoves/docs/PMOVESCHIT/PMOVESCHIT.md)** – Compressed Hierarchical Information Transfer concepts
+- **[Implementation Status](pmoves/docs/PMOVESCHIT/IMPLEMENTATION_STATUS.md)** – Current status of CHIT endpoints and security posture
+- **[Local Model Setup](pmoves/docs/PMOVESCHIT/LOCAL_MODEL_SETUP.md)** – Running CHIT encoding/decoding with local models
+- **[Three Body Doctrine](pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md)** – Foundational constraints governing geometry state propagation
+- **[Integrating Math into PMOVES.AI](pmoves/docs/PMOVESCHIT/Integrating%20Math%20into%20PMOVES.AI.md)** – Mathematical foundations behind the geometry encoding
+
+See [`pmoves/docs/PMOVESCHIT/`](pmoves/docs/PMOVESCHIT/) for the full 19-document collection including decoder specifications, neural-network notebooks, audit reports, and UI design specs.
+
+## Service Index + CHIT Map
+
+**Geometry + CHIT core**
+- `pmoves/services/hi-rag-gateway-v2/` — v2 gateway (CPU `:8086`, GPU `:8087`). Handles `/geometry/*`, jump, decode, calibration, Supabase realtime warmups, and CGP persistence.
+- `pmoves/services/hi-rag-gateway/` — v1 legacy gateway (host `:8089`). Minimal CHIT endpoints for backward compatibility.
+- `pmoves/services/gateway/` — Experimental CHIT UI/API for live geometry visualisation and WebRTC broadcast.
+- `pmoves/services/mesh-agent/` — Geometry mesh bridge; signs and republishes `geometry.cgp.v1` across deployments.
+- `pmoves/services/evo-controller/` — Geometry tuning controller; reads CGPs from Supabase, emits tuning capsules back into the bus.
+- `pmoves/services/tokenism-simulator/` — Token geometry simulation and visualization.
+
+**Voice & audio**
+- `pmoves/services/flute-gateway/` — Multimodal voice communication layer (HTTP `:8055`, WebSocket `:8056`) with Pipecat integration and prosodic synthesis.
+- `pmoves/services/vibevoice-realtime/` — Real-time voice synthesis service.
+
+**Orchestration & knowledge**
+- `pmoves/services/agent-zero/` — MCP bridge + decision engine (ingests Supabase + CHIT events).
+- `pmoves/services/archon/` — Agent builder/knowledge management with Supabase CLI realtime + NATS clients.
+- `pmoves/services/deepresearch/` — Tongyi DeepResearch bridge with OpenRouter/local modes plus Open Notebook mirroring.
+- `pmoves/services/supaserch/` — Multimodal holographic deep research orchestrator.
+- `pmoves/services/n8n/` — Workflow orchestrator; health/finance webhooks emit CGPs via hi-rag v2.
+- `pmoves/services/graph-linker/` — Knowledge graph linking and entity relationship management.
+- `pmoves/services/session-context-worker/` — Session context aggregation for multi-turn agent conversations.
+
+**Agent infrastructure**
+- `pmoves/services/botz-gateway/` — Skills marketplace gateway for BoTZ agent capabilities.
+- `pmoves/services/gateway-agent/` — Unified API gateway with agent-aware routing.
+- `pmoves/services/agentgym-rl-coordinator/` — Reinforcement learning coordinator for agent skill training.
+- `pmoves/services/consciousness-service/` — Agent self-model and meta-cognitive state tracking.
+
+**Model & GPU management**
+- `pmoves/services/tensorzero-config-api/` — Dynamic TensorZero model configuration API.
+- `pmoves/services/gpu-orchestrator/` — GPU resource allocation and scheduling.
+- `pmoves/services/vllm-orchestrator/` — vLLM inference server lifecycle management.
+- `pmoves/services/model-registry/` — Central model catalog with version tracking.
+
+**Communication & messaging**
+- `pmoves/services/messaging-gateway/` — Multi-channel messaging gateway.
+- `pmoves/services/chat-relay/` — Agent-to-agent and agent-to-user chat relay.
+- `pmoves/services/a2ui-nats-bridge/` — Agent Zero UI to NATS event bridge.
+
+**External integrations (pmoves-net)**
+- `pmoves/services/open-notebook/` (doc lives in `pmoves/docs/services/open-notebook/`) — Streamlit UI + SurrealDB API (container ports 8502/5055 per upstream; host defaults map to `:8503` UI and `:5055` API, override with `OPEN_NOTEBOOK_*_PORT`) mounted via `make up-open-notebook` for research assets and MCP notebooks.
+- `pmoves/services/wger/` — Health metrics ingest (paired with Supabase tables + `health.weekly.summary.v1` CGPs).
+- `pmoves/services/firefly-iii/` — Personal finance ingest; finance flows create `finance.monthly.summary.v1` CGPs.
+- `pmoves/services/jellyfin-bridge/` + `pmoves/docs/services/jellyfin-ai/` — Media sync bridging Jellyfin metadata into Supabase + Discord publisher.
+
+**Infrastructure & observability**
+- `pmoves/services/node-registry/` — Multi-host node discovery and health reporting.
+- `pmoves/services/resource-detector/` — Hardware capability detection (GPU, CPU, memory).
+- `pmoves/services/work-marshaling/` — Distributed task scheduling and work queue management.
+- `pmoves/services/benchmark-runner/` — Automated performance benchmarking harness.
+- `pmoves/services/nats-echo/` — NATS message debugging and replay tool.
+- `pmoves/services/analysis-echo/` — Analysis pipeline event echo and auditing.
+- `pmoves/services/evoswarm/` — Evolutionary swarm optimization coordinator.
+
+**Operational substrates**
+- `pmoves/services/pmoves-yt/` — YouTube ingest; publishes geometry packets after segmentation.
+- `pmoves/services/channel-monitor/` — External content watcher; triggers ingestion on new uploads.
+- `pmoves/services/retrieval-eval/` — Retrieval benchmarking, relies on Supabase + hi-rag.
+- `pmoves/services/publisher/` — Discord & Jellyfin publisher with geometry-aware payloads.
+- `pmoves/services/publisher-discord/` — Dedicated Discord notification bot for ingest/summary events.
+- `pmoves/services/{presign,render-webhook,extract-worker,langextract,media-audio,media-video,pdf-ingest,comfy-watcher,comfyui}` — Supporting ingestion, extraction, and media tooling.
+- `pmoves/services/notebook-sync/` — Bridges Open Notebook datasets into Supabase and LangExtract flows.
+
+See each directory's README for ports, Make targets, and geometry notes. New integrations reference external repositories under `integrations-workspace/` and the setup steps captured in `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`.
 
 ## Dashboards & UIs (local defaults)
+
 - Supabase Studio: http://127.0.0.1:65433 (CLI stack) — created by `make supa-start`.
-- Hi‑RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (after `make up`).
+- Hi-RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (after `make up`).
 - TensorZero UI: http://localhost:4000 (after `make up-tensorzero`).
-- TensorZero Gateway: http://localhost:3030 (proxy to 3000 in‑container).
+- TensorZero Gateway: http://localhost:3030 (proxy to 3000 in-container).
 - Agent Zero UI: http://localhost:8080 (after `make up-agents`).
 - Archon Health: http://localhost:8091/healthz (after `make up-agents`).
   - If your forks use non-standard health endpoints, set `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` / `NEXT_PUBLIC_ARCHON_HEALTH_PATH`. See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
@@ -43,12 +141,13 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
 - n8n: http://localhost:5678 (after `make -C pmoves up-n8n`).
 
 ### Default access and operator credentials
+
 - Supabase operator is provisioned by `make supabase-boot-user` (also run by `make first-run`). The command writes values to `pmoves/env.shared` and `pmoves/.env.local`:
   - `SUPABASE_BOOT_USER_EMAIL`, `SUPABASE_BOOT_USER_PASSWORD`, `SUPABASE_BOOT_USER_JWT`.
-  - The PMOVES UI auto‑authenticates with `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` so most routes won’t prompt for a password. If you need to log in manually, use the email/password above from your env files.
+  - The PMOVES UI auto-authenticates with `NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT` so most routes won't prompt for a password. If you need to log in manually, use the email/password above from your env files.
 - Jellyfin uses the LinuxServer image defaults. After first boot, confirm the admin user and API key in `pmoves/env.jellyfin-ai` or via the Jellyfin UI (Settings → Dashboard). Update `JELLYFIN_API_KEY` and `JELLYFIN_USER_ID` in `pmoves/env.shared` if you rotate.
-- Wger and Firefly are brought up with PMOVES‑branded defaults sourced from `pmoves/env.shared` (see `pmoves/docs/FIRST_RUN.md` “Seeded & Branded Defaults” for the exact initial usernames and emails).
-- Open Notebook’s UI password also serves as its API bearer token; keep `OPEN_NOTEBOOK_API_TOKEN` identical to `OPEN_NOTEBOOK_PASSWORD` so CLI helpers and agents work against the same branded login (see `pmoves/docs/services/open-notebook/README.md`).
+- Wger and Firefly are brought up with PMOVES-branded defaults sourced from `pmoves/env.shared` (see `pmoves/docs/FIRST_RUN.md` "Seeded & Branded Defaults" for the exact initial usernames and emails).
+- Open Notebook's UI password also serves as its API bearer token; keep `OPEN_NOTEBOOK_API_TOKEN` identical to `OPEN_NOTEBOOK_PASSWORD` so CLI helpers and agents work against the same branded login (see `pmoves/docs/services/open-notebook/README.md`).
 - For a full list of seeded branded logins and where they come from, see:
   - `pmoves/docs/FIRST_RUN.md` (Seeded & Branded Defaults)
   - `docs/SECRETS.md` (Secret Management Playbook)
@@ -59,57 +158,6 @@ PMOVES.AI powers a distributed, multi-agent orchestration mesh built around Agen
   - [VibeVoice TTS Tutorial](pmoves/creator/tutorials/vibevoice_tts_tutorial.md)
   - [WAN Animate Installation Scripts](pmoves/creator/tutorials/waninstall%20guide.md)
 - [Creator Pipeline Runbook](pmoves/docs/PMOVES.AI%20PLANS/CREATOR_PIPELINE.md) – Current status of n8n automations (health/finance live, creative flows staging) plus geometry mapping and persona playback prep.
-
-### Zero-to-running stack (fast path)
-
-```bash
-make first-run
-```
-
-This single command orchestrates the full onboarding sequence: environment prompts, Supabase CLI bring-up, data/service seeding, core + agent + external stacks, and the 12-step smoke harness. When it finishes successfully every bundled integration (Wger, Firefly, Jellyfin, Open Notebook, Agent mesh) is online with branded defaults. See the [First-Run Bootstrap Overview](pmoves/docs/FIRST_RUN.md) for a detailed breakdown of each step.
-
-### Initial Setup & Tooling Flow (manual path)
-1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, seed `pmoves/env.shared`, and populate secrets. Use `make bootstrap` (wrapping `python -m pmoves.scripts.bootstrap_env`) when you need finer control, or invoke `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` to script the same flow alongside the provisioning bundle. Both paths update `env.shared`, `.env.generated`, `.env.local`, and the auxiliary `env.*.additions` files consumed by Compose and the UI launcher.
-2. **Supabase realtime alignment** – Follow the [Supabase Service Guide](pmoves/docs/services/supabase/README.md) to start the CLI stack with `supabase start --network-id pmoves-net` (run this before accepting Supabase prompts in `make bootstrap`) and mirror the websocket endpoint (`SUPABASE_REALTIME_URL=ws://host.docker.internal:65421/realtime/v1`). This matches our self-hosted Supabase deployments.
-3. **UI workspace bring-up** – `cd pmoves/ui` then `npm install` (or `yarn install`). The Next.js app loads Supabase creds from `pmoves/.env.local` and expects the Supabase CLI stack (`make supa-start` + `make supa-status`) before running `npm run dev`.
-4. **Tooling cheatsheet** – Keep [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) handy for Make targets, smoke tests, and environment scripts (`env_setup`, `flight-check`, `smoke`).
-5. **Provisioning & hardware targets** – Browse `CATACLYSM_STUDIOS_INC/` for automated OS images, Jetson bootstrap bundles, and pmoves-net Docker stacks ready for edge hardware.
-
-## Service Index + CHIT Map
-
-**Geometry + CHIT core**
-- `pmoves/services/hi-rag-gateway-v2/` — v2 gateway (CPU `:8086`, GPU `:8087`). Handles `/geometry/*`, jump, decode, calibration, Supabase realtime warmups, and CGP persistence.
-- `pmoves/services/hi-rag-gateway/` — v1 legacy gateway (host `:8089`). Minimal CHIT endpoints for backward compatibility.
-- `pmoves/services/gateway/` — Experimental CHIT UI/API for live geometry visualisation and WebRTC broadcast.
-- `pmoves/services/mesh-agent/` — Geometry mesh bridge; signs and republishes `geometry.cgp.v1` across deployments.
-- `pmoves/services/evo-controller/` — Geometry tuning controller; reads CGPs from Supabase, emits tuning capsules back into the bus.
-
-**Orchestration & knowledge**
-- `pmoves/services/agent-zero/` — MCP bridge + decision engine (ingests Supabase + CHIT events).
-- `pmoves/services/archon/` — Agent builder/knowledge management with Supabase CLI realtime + NATS clients.
-- `pmoves/services/deepresearch/` — Tongyi DeepResearch bridge with OpenRouter/local modes plus Open Notebook mirroring.
-- `pmoves/services/n8n/` — Workflow orchestrator; health/finance webhooks emit CGPs via hi-rag v2.
-
-**External integrations (pmoves-net)**
-- `pmoves/services/open-notebook/` (doc lives in `pmoves/docs/services/open-notebook/`) — Streamlit UI + SurrealDB API (container ports 8502/5055 per upstream; host defaults map to `:8503` UI and `:5055` API, override with `OPEN_NOTEBOOK_*_PORT`) mounted via `make up-open-notebook` for research assets and MCP notebooks.
-- `pmoves/services/wger/` — Health metrics ingest (paired with Supabase tables + `health.weekly.summary.v1` CGPs).
-- `pmoves/services/firefly-iii/` — Personal finance ingest; finance flows create `finance.monthly.summary.v1` CGPs.
-- `pmoves/services/jellyfin-bridge/` + `pmoves/docs/services/jellyfin-ai/` — Media sync bridging Jellyfin metadata into Supabase + Discord publisher.
-
-**Operational substrates**
-- `pmoves/services/pmoves-yt/` — YouTube ingest; publishes geometry packets after segmentation.
-- `pmoves/services/retrieval-eval/` — Retrieval benchmarking, relies on Supabase + hi-rag.
-- `pmoves/services/publisher/` — Discord & Jellyfin publisher with geometry-aware payloads.
-- `pmoves/services/{presign,render-webhook,extract-worker,langextract,media-audio,media-video,pdf-ingest,comfy-watcher,comfyui}` — Supporting ingestion, extraction, and media tooling.
-- `pmoves/services/notebook-sync/` — Bridges Open Notebook datasets into Supabase and LangExtract flows.
-
-See each directory’s README for ports, Make targets, and geometry notes. New integrations reference external repositories under `integrations-workspace/` and the setup steps captured in `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`.
-
-## Getting Started
-1. **Bootstrap the stack** – For brand-new machines run `make first-run`. For incremental setup follow the environment and container launch instructions in the [pmoves/README.md](pmoves/README.md): place overrides in `pmoves/.env.local`, run `make bootstrap` to capture credentials, `make up` to start the core services, and `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smoke testing.
-2. **Review orchestration flows** – Use the [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) for day-to-day compose control, and consult the architecture and multi-agent guides in `/docs` for how Agent Zero, Archon, and supporting services communicate across the mesh.
-
-Need a full directory tour? Regenerate `folders.md` using the embedded script to explore the repository structure at depth two before diving deeper into service-specific documentation.
 
 ## Developer Tools & Testing
 
@@ -186,7 +234,7 @@ make test-agent-mesh
 - Media processing (YouTube ingestion, Whisper transcription, YOLO analysis)
 - Observability (Prometheus metrics, Grafana dashboards, Loki logs)
 
-**Learn more:** [docs/testing/TESTING.md](docs/testing/TESTING.md) | [pmoves/tests/README.md](pmoves/tests/README.md)
+**Learn more:** [docs/testing/TESTING.md](docs/testing/TESTING.md)
 
 ### Development Workflow
 
@@ -205,21 +253,36 @@ make test-agent-mesh
 - Run smoke tests after infrastructure changes
 - Use security hooks to prevent dangerous operations
 
-## Build Status & Recent Improvements
+## Build Status & Security
 
-**Docker Build Reliability**: ✅ All core services build successfully
+**Security posture:** 0 active CodeQL alerts (reduced from 36 across the codebase). Two accepted-risk SSRF findings remain documented in the security audit — both are intentional proxy behaviors in gateway services.
 
-Following Phase 2 Security Hardening, we resolved critical Docker build failures:
-- **DeepResearch**: Fixed build context mismatch and container restart loops
-- **FFmpeg-Whisper**: Eliminated permission denied errors with proper .dockerignore
-- **Environment Files**: Fixed JSON parsing errors in shell-sourced configs
+**CI gates (all enforced on PRs to main):**
+- **CodeQL Advanced** — Static analysis for JS/Python/Go vulnerabilities
+- **CHIT Contract Check** — Schema validation for geometry packet contracts
+- **SQL Policy Lint** — Migration and policy validation
+- **Docker Hardening Validation** — Container security baseline enforcement
+- **Integration Contract** — Cross-service API contract verification
+- **Python Tests** — Unit and integration test suite
 
-Build success rate improved from intermittent failures to 100% for affected services.
+**Key security PRs:**
+- [#651](https://github.com/POWERFULMOVES/PMOVES.AI/pull/651) – Initial CodeQL alert triage (36 → 12)
+- [#653](https://github.com/POWERFULMOVES/PMOVES.AI/pull/653) – Remaining CodeQL fixes (12 → 6)
+- [#654](https://github.com/POWERFULMOVES/PMOVES.AI/pull/654) – Final 6 alerts resolved across gateway and YT services
 
-**See**: [Build Fixes Documentation](docs/build-fixes-2025-12-07.md) for detailed analysis and lessons learned.
+**Docker build reliability:** All core services build successfully. See [Build Fixes Documentation](docs/build-fixes-2025-12-07.md) for historical context on DeepResearch, FFmpeg-Whisper, and environment file fixes.
 
-**Production Readiness** (2025-12-07):
-- **TensorZero**: Added 5 Qwen models (32B, 14B, 7B-VL, 4B-Reranker) for local inference
-- **Monitoring**: Fixed Prometheus network configuration, all services properly isolated
-- **Automation**: Configured Dependabot for automated dependency updates
-- **Documentation**: Complete network tier segmentation guide (421 lines)
+**Production readiness:** See the [Feb 2026 Production Readiness Report](pmoves/docs/PRODUCTION_READINESS_REPORT_2026-02-07.md) for the latest audit covering service health, TensorZero model inventory (5 Qwen models for local inference), monitoring configuration, and dependency automation.
+
+## Getting Started
+
+1. **Bootstrap the stack** – For brand-new machines run `make first-run`. For incremental setup follow the environment and container launch instructions in the [pmoves/README.md](pmoves/README.md): place overrides in `pmoves/.env.local`, run `make bootstrap` to capture credentials, `make up` to start the core services, and `make bootstrap-data` to apply Supabase SQL, seed Neo4j, and load the demo Qdrant/Meili corpus before smoke testing.
+2. **Review orchestration flows** – Use the [Make Targets Reference](pmoves/docs/MAKE_TARGETS.md) for day-to-day compose control, and consult the architecture and multi-agent guides in `/docs` for how Agent Zero, Archon, and supporting services communicate across the mesh.
+
+### Initial Setup & Tooling Flow (manual path)
+
+1. **Environment bootstrap** – Walk through [pmoves/README.md](pmoves/README.md) to provision runtime prerequisites, seed `pmoves/env.shared`, and populate secrets. Use `make bootstrap` (wrapping `python -m pmoves.scripts.bootstrap_env`) when you need finer control, or invoke `python3 -m pmoves.tools.mini_cli bootstrap --accept-defaults` to script the same flow alongside the provisioning bundle. Both paths update `env.shared`, `.env.generated`, `.env.local`, and the auxiliary `env.*.additions` files consumed by Compose and the UI launcher.
+2. **Supabase realtime alignment** – Follow the [Supabase Service Guide](pmoves/docs/services/supabase/README.md) to start the CLI stack with `supabase start --network-id pmoves-net` (run this before accepting Supabase prompts in `make bootstrap`) and mirror the websocket endpoint (`SUPABASE_REALTIME_URL=ws://host.docker.internal:65421/realtime/v1`). This matches our self-hosted Supabase deployments.
+3. **UI workspace bring-up** – `cd pmoves/ui` then `npm install` (or `yarn install`). The Next.js app loads Supabase creds from `pmoves/.env.local` and expects the Supabase CLI stack (`make supa-start` + `make supa-status`) before running `npm run dev`.
+4. **Tooling cheatsheet** – Keep [Local Tooling Reference](pmoves/docs/LOCAL_TOOLING_REFERENCE.md) handy for Make targets, smoke tests, and environment scripts (`env_setup`, `flight-check`, `smoke`).
+5. **Provisioning & hardware targets** – Browse `CATACLYSM_STUDIOS_INC/` for automated OS images, Jetson bootstrap bundles, and pmoves-net Docker stacks ready for edge hardware.
