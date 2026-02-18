@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 3: Applied Systems
+>
+> Research roadmap and implementation plan for the Mathematical UI. Companion to [Mathematical_UI_Design_Specification.md](Mathematical_UI_Design_Specification.md).
+
 # Mathematical UI Implementation Plan: Research Requirements and Documentation
 
 ## Executive Summary

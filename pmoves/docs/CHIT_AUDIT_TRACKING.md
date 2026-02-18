@@ -1,5 +1,7 @@
 # CHIT / GEOMETRY BUS / EvoSwarm Audit & Tracking Document
 
+> **See also:** [CHIT Documentation Suite](PMOVESCHIT/README.md) for the complete index, and [CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md](PMOVESCHIT/CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md) for the detailed implementation audit report.
+
 **Generated:** 2026-02-07
 **Purpose:** Ensure ALL CRITICAL CHIT GEOMETRY BUS code is present on `PMOVES.AI-Edition-Hardened`
 **Status:** ✅ CORE CODE VERIFIED PRESENT

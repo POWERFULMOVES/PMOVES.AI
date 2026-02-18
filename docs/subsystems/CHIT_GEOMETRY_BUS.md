@@ -1,5 +1,7 @@
 # CHIT & Geometry Bus - Complete Reference
 
+> **Canonical CHIT documentation:** [pmoves/docs/PMOVESCHIT/README.md](../../pmoves/docs/PMOVESCHIT/README.md) — structured 5-layer documentation suite with reading paths, glossary, and full file index.
+
 **Purpose:** Comprehensive reference for CHIT (Compressed Hierarchical Information Transfer) protocol and the PMOVES Geometry Bus - a universal geometric data fabric enabling hyperbolic encoding, swarm intelligence, and geometric reasoning.
 
 **Last Updated:** 2026-01-31
