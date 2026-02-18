@@ -62,7 +62,7 @@ def _canon(obj: Dict[str, Any]) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 def derive_key(passphrase: str, salt: bytes, length: int = 32) -> bytes:
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=length, salt=salt, iterations=100_000)
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=length, salt=salt, iterations=600_000)
     return kdf.derive(passphrase.encode("utf-8"))
 
 def sign_cgp(cgp: Dict[str, Any], passphrase: str, kid: str = None) -> Dict[str, Any]:
