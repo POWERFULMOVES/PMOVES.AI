@@ -1,3 +1,5 @@
+> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+
 # PMOVES.AI Production Readiness Audit
 
 **Audit Date:** February 7-8, 2026
