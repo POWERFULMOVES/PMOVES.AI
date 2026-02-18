@@ -1,6 +1,6 @@
 # PMOVES Agent Class Taxonomy
 
-_Last updated: 2026-02-18 — v1.4.0 (59 agents)_
+_Last updated: 2026-02-18 — v1.4.0 (60 agents)_
 
 This document formalizes the PMOVES agent naming and classification system as a **type system** — composable, collectible agents with classes, types, evolutions, and connections. Think Pokemon and Transformers: no matter how small, every agent has a type, a place in the hierarchy, and connections through all the layers it can touch.
 
@@ -107,6 +107,7 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | Ultimate-TTS-Studio | Standard | Media | LLM | 5 |
 | TensorZero Gateway | Standard | API | LLM | 2 |
 | BoTZ Gateway | Standard | Agent | Worker | 6 |
+| Gateway Agent | Standard | Agent | API | 6 |
 | Channel Monitor | Standard | Worker | Media | 4 |
 | Cipher Memory | Specialized | Data | Agent | 1 |
 | Hyperdimensions | Specialized | UI | Data | 7 |

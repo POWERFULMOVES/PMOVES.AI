@@ -164,6 +164,27 @@ agents:
     submodule: "PMOVES-BotZ-gateway"
     description: "Work item distribution across BoTZ CLI instances"
 
+  gateway_agent:
+    name: "Gateway Agent"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: 8100
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: null
+    description: "MCP tool orchestration service — discovers and executes 100+ tools via Agent Zero"
+
   mesh_agent:
     name: "Mesh Agent"
     class: standard
