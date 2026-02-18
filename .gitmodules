@@ -93,11 +93,6 @@
 	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
 	branch = PMOVES.AI-Edition-Hardened
 
-[submodule "pmoves-surf"]
-	path = pmoves-surf
-	url = https://github.com/POWERFULMOVES/PMOVES-surf.git
-	branch = PMOVES.AI-Edition-Hardened
-
 # =============================================================================
 # E2B Danger Room - Sandboxed Code Execution
 # =============================================================================
