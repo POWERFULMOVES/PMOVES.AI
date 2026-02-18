@@ -119,15 +119,19 @@ class TensorZeroParser:
         api_base = provider_def.get("api_base", "")
         api_key = provider_def.get("api_key_location", "")
 
-        # Normalize provider type using proper URL hostname parsing
+        # Normalize provider type using proper URL scheme + hostname parsing
         if provider_type == "openai":
-            parsed_host = urlparse(api_base).hostname or ""
-            if parsed_host == "ollama" or (parsed_host or "").endswith(".ollama"):
-                provider_type = "ollama"
-            elif parsed_host == "api.anthropic.com":
-                provider_type = "anthropic"
-            else:
+            parsed_url = urlparse(api_base)
+            if parsed_url.scheme not in ("http", "https", ""):
                 provider_type = "openai_compatible"
+            else:
+                parsed_host = parsed_url.hostname or ""
+                if parsed_host == "ollama" or parsed_host.endswith(".ollama"):
+                    provider_type = "ollama"
+                elif parsed_host == "api.anthropic.com":
+                    provider_type = "anthropic"
+                else:
+                    provider_type = "openai_compatible"
 
         # Extract env var name if specified
         api_key_env_var = None

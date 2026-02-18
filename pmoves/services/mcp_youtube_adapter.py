@@ -560,7 +560,7 @@ async def ingest_youtube_video(
         parsed = urlparse(url)
         video_id = None
         netloc = parsed.netloc.lower()
-        if netloc == "youtube.com" or netloc == "www.youtube.com" or netloc.endswith(".youtube.com"):
+        if netloc == "youtube.com" or netloc.endswith(".youtube.com"):
             from urllib.parse import parse_qs
             query_params = parse_qs(parsed.query)
             video_id = query_params.get("v", [None])[0]

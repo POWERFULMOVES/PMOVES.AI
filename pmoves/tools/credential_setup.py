@@ -169,9 +169,12 @@ def get_docker_config() -> Dict[str, str]:
                 import base64
                 decoded = base64.b64decode(auth_data["auth"]).decode()
                 username, password = decoded.split(":", 1)
-                # Use proper URL hostname parsing with explicit scheme check
-                registry_url = registry if registry.startswith(("http://", "https://")) else f"https://{registry}"
-                registry_host = urlparse(registry_url).hostname or ""
+                # Parse registry URL with proper scheme validation
+                parsed_reg = urlparse(registry)
+                if parsed_reg.scheme in ("http", "https"):
+                    registry_host = parsed_reg.hostname or ""
+                else:
+                    registry_host = urlparse(f"https://{registry}").hostname or ""
                 if registry_host == "ghcr.io":
                     creds["GHCR_USERNAME"] = username
                     creds["GHCR_PASSWORD"] = password

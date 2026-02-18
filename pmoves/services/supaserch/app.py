@@ -539,7 +539,7 @@ async def search(q: str = Query(..., min_length=1, description="Search query")) 
         return result
     except ValueError as exc:
         REQUEST_ERRORS.labels(channel=channel, reason="ValueError").inc()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Invalid search request") from None
     except Exception as exc:  # noqa: BLE001
         REQUEST_ERRORS.labels(channel=channel, reason=exc.__class__.__name__).inc()
         logger.exception("HTTP search failed")

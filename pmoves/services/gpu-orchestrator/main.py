@@ -200,8 +200,8 @@ async def health_check():
             "gpu": metrics.name,
             "vram_usage_percent": round(metrics.vram_usage_percent, 2),
         }
-    except Exception as e:
-        logger.error(f"GPU health check failed: {e}")
+    except Exception:
+        logger.error("GPU health check failed", exc_info=True)
         return {
             "status": "unhealthy",
             "error": "GPU monitoring unavailable",
