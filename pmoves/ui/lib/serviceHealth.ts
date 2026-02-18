@@ -40,6 +40,9 @@ export async function probeService(
   service: ServiceDefinition,
   timeout = 5000
 ): Promise<ServiceHealth> {
+  // CodeQL alert #89 accepted risk: timeout param is internal-only (not HTTP-exposed),
+  // default 5000ms, clamped to 30s max. No external caller can set this value.
+  const safeTimeout = Math.min(Math.max(timeout, 1000), 30_000);
   const startTime = performance.now();
 
   // If service has no health check, mark as unknown
@@ -53,7 +56,7 @@ export async function probeService(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeoutId = setTimeout(() => controller.abort(), safeTimeout);
 
     const response = await fetch(service.healthCheck, {
       method: 'GET',
