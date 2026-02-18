@@ -1,5 +1,27 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-02-15_
+_Last updated: 2026-02-18 — v2.3 with directory map_
+
+## Directory Map
+
+After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
+
+| Directory | Contents | Files |
+|-----------|----------|-------|
+| `audit/` | Dated audit reports, validation summaries, PR reviews | 29 |
+| `operations/` | Bring-up guides, env config, ports, testing, make targets | 19 |
+| `infrastructure/` | Docker, CI, GPU, networking, distributed compute | 14 |
+| `submodules/` | Submodule architecture, contracts, sync guides | 8 |
+| `security/` | Secrets management, runbooks, credentials | 6 |
+| `integrations/` | Cross-service integration guides | 5+ |
+| `services/` | Per-service documentation (supabase/, neo4j/, etc.) | many |
+| `AGENTS/` | Agent taxonomy, personas, context patterns | many |
+| `PMOVESCHIT/` | CHIT math framework, CGP specs, living templates | many |
+| `archive/` | Historical build notes, draft PRs, superseded docs | 7+ |
+| _(root)_ | Navigation indexes, roadmap, model registry | 8 |
+
+---
+
+## Quick Links
 
 - **Stabilization Checklist** — `STABILIZATION_CHECKLIST.md`
 - **Creator Pipeline** — `CREATOR_PIPELINE.md`
@@ -7,13 +29,13 @@ _Last updated: 2026-02-15_
 - **Hi‑RAG Reranker Providers** — `HI_RAG_RERANK_PROVIDERS.md`
 - **Qwen (CUDA Torch) Notes** — `HIRAG_QWEN_CUDA_NOTES.md`
 - **Retrieval Eval Guide** — `RETRIEVAL_EVAL_GUIDE.md`
-- **Publisher Enrichments** — `CREATOR_PIPELINE.md` (see “Publisher enrichments” section)
+- **Publisher Enrichments** — `CREATOR_PIPELINE.md` (see "Publisher enrichments" section)
 - **Render Completion Webhook** — `RENDER_COMPLETION_WEBHOOK.md`
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md` (includes health check for presign API)
-  - Storage policy: Supabase Storage is the default S3-compatible backend for local bring-up; standalone MinIO is off by default. See `ENVIRONMENT_POLICY.md` for single‑env mode expectations and storage endpoints.
-- **Smoke Tests** — `SMOKETESTS.md`
+  - Storage policy: Supabase Storage is the default S3-compatible backend for local bring-up; standalone MinIO is off by default. See `../operations/ENVIRONMENT_POLICY.md` for single‑env mode expectations and storage endpoints.
+- **Smoke Tests** — `../operations/SMOKETESTS.md`
 - **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
-- **Production Audit Prep (latest runbook)** — `../PRODUCTION_AUDIT_PREP_2026-02-14.md`
+- **Production Audit Prep (latest runbook)** — `../audit/PRODUCTION_AUDIT_PREP_2026-02-14.md`
 - **Local Certification Lockdown (hard-stop policy)** — `../AGENTS/LOCAL_CERTIFICATION_LOCKDOWN.md`
 - **Pinokio + Docker + Cloudflare + GitHub launch strategy** — `PINOKIO_DOCKER_CLOUDFLARE_GITHUB_STRATEGY.md`
 - **Secrets + CHIT Portability Workflow** — `../SECRETS_CHIT_PORTABILITY_WORKFLOW.md`
@@ -22,7 +44,7 @@ _Last updated: 2026-02-15_
 - **Docs Validation (local source-of-truth audit)** — `../DOCS_VALIDATION_LOCAL_2026-02-14.md`
 - **Docs Consolidation + Archival Policy** — `../DOCS_CONSOLIDATION_ARCHIVAL_POLICY.md`
 - **Model Source Of Truth (Registry + Profiles + Tooling)** — `../MODEL_SOURCE_OF_TRUTH.md`
-- **Submodule Integration Contract (pmoves-integrations layout)** — `../SUBMODULE_INTEGRATION_CONTRACT.md`
+- **Submodule Integration Contract** — `../submodules/SUBMODULE_INTEGRATION_CONTRACT.md`
 - **First-Run Bootstrap** — `FIRST_RUN.md`
 - **Auth + Boot Order Runbook** — `../AUTH_BOOT_ORDER_RUNBOOK.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
@@ -37,9 +59,9 @@ _Last updated: 2026-02-15_
 - **PMOVES v5.12 Task Backlog** — `context/pmoves_v_5.12_tasks.md`
 
 ## UI workspace bring-up
-- Quickstart: [`LOCAL_DEV.md` – Web UI quick links](../LOCAL_DEV.md#web-ui-quick-links)
+- Quickstart: [`LOCAL_DEV.md` – Web UI quick links](../operations/LOCAL_DEV.md#web-ui-quick-links)
   - Supabase CLI prerequisites: run `make supa-start` then `make supa-status` to refresh Supabase keys. `npm run dev` now layers `env.shared` + `.env.local` automatically, so keep those root files current.
-- Notebook Workbench: [`UI_NOTEBOOK_WORKBENCH.md`](../UI_NOTEBOOK_WORKBENCH.md) — Supabase prerequisites, smoketest target, and troubleshooting tips for the `/notebook-workbench` page.
+- Notebook Workbench: [`UI_NOTEBOOK_WORKBENCH.md`](../infrastructure/UI_NOTEBOOK_WORKBENCH.md) — Supabase prerequisites, smoketest target, and troubleshooting tips for the `/notebook-workbench` page.
 
 ## Creative Tutorials (Automation Inputs)
 - Qwen Image Edit Plus — `pmoves/creator/tutorials/qwen_image_edit_plus_tutorial.md`
