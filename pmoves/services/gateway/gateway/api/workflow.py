@@ -73,7 +73,7 @@ async def demo_run(body: DemoRunRequest, request: Request) -> Dict[str, Any]:
             ingest_resp.raise_for_status()
         except httpx.HTTPError as exc:
             logger.error("/yt/ingest failed: %s", exc)
-            raise HTTPException(status_code=502, detail=f"yt ingest failed: {exc}")
+            raise HTTPException(status_code=502, detail="yt ingest failed") from None
         ingest_data = ingest_resp.json()
 
         video = ingest_data.get("video") or {}
@@ -111,7 +111,7 @@ async def demo_run(body: DemoRunRequest, request: Request) -> Dict[str, Any]:
             hirag_upsert = upsert_resp.json()
         except httpx.HTTPError as exc:
             logger.error("/hirag/upsert-batch failed: %s", exc)
-            raise HTTPException(status_code=502, detail=f"Hi-RAG upsert failed: {exc}")
+            raise HTTPException(status_code=502, detail="Hi-RAG upsert failed") from None
 
         if event_bus:
             await event_bus.publish(
