@@ -193,6 +193,8 @@ def cmd_connections(registry, args):
             "name": agent.get("name", aid),
             "class": agent.get("class", "?"),
             "primary_type": agent.get("primary_type", "?"),
+            "secondary_type": agent.get("secondary_type", ""),
+            "tier": types_def.get(agent.get("primary_type", ""), {}).get("tier", "?"),
             "layers": len(layers),
             "evolution_stage": agent.get("evolution_stage", "base"),
             "port": agent.get("port"),
