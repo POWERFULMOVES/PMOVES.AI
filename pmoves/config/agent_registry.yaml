@@ -7,7 +7,7 @@
 # Query with: python -m pmoves.tools.agent_taxonomy_helper list
 # Docs: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
 
-taxonomy_version: "1.3.0"
+taxonomy_version: "1.4.0"
 
 # External contributors — AI agents and humans who contribute via git
 # Links to visual identity in agent_signatures.yaml
@@ -999,3 +999,257 @@ agents:
       swarm_participant: true
       attribution_gated: true
     description: "Shape-attribution engine for swarm consensus (CHIT L3)"
+
+  # --- Agents added in v1.4.0 (12 new agents) ---
+
+  a2ui:
+    name: "A2UI"
+    class: standard
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0, L4, L5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-A2UI"
+    description: "Research UI surface — artifact-to-UI prototyping"
+
+  agentgym:
+    name: "AgentGym"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-AgentGym"
+    description: "Agent training gymnasium — environment suite for RL evaluation"
+
+  agentgym_rl:
+    name: "AgentGym RL"
+    class: specialized
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "Pmoves-AgentGym-RL"
+    description: "Reinforcement learning extension for AgentGym"
+
+  creator:
+    name: "Creator"
+    class: standard
+    primary_type: media
+    secondary_type: ui
+    port: null
+    health: null
+    layers: [L0, L4, L5]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Creator"
+    description: "Media creation pipeline — ComfyUI + render orchestration"
+
+  llama_lab:
+    name: "Llama Throughput Lab"
+    class: specialized
+    primary_type: llm
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L4]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-llama-throughput-lab"
+    description: "LLM benchmarking and throughput testing laboratory"
+
+  surf:
+    name: "Surf"
+    class: utility
+    primary_type: agent
+    secondary_type: ui
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "pmoves-surf"
+    description: "E2B browser automation agent — web interaction sandbox"
+
+  e2b_danger_room:
+    name: "E2B Danger Room"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-E2B-Danger-Room"
+    description: "Sandboxed code execution environment for untrusted workloads"
+
+  e2b_desktop:
+    name: "E2B Desktop"
+    class: standard
+    primary_type: ui
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-E2B-Danger-Room-Desktop"
+    description: "Desktop sandbox environment for GUI-based agent tasks"
+
+  danger_infra:
+    name: "Danger Infra"
+    class: utility
+    primary_type: worker
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-Danger-infra"
+    description: "E2B infrastructure provisioning and sandbox orchestration"
+
+  e2b_spells:
+    name: "E2B Spells"
+    class: utility
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-E2b-Spells"
+    description: "Pre-built sandbox templates and execution recipes"
+
+  transcribe_and_fetch:
+    name: "Transcribe and Fetch"
+    class: specialized
+    primary_type: media
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L4]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "PMOVES-transcribe-and-fetch"
+    description: "Standalone transcription and content fetching utility"
+
+  jellyfin_ai:
+    name: "Jellyfin AI Media Stack"
+    class: specialized
+    primary_type: media
+    secondary_type: llm
+    port: null
+    health: null
+    layers: [L0, L4]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "Pmoves-Jellyfin-AI-Media-Stack"
+    description: "AI-enhanced media management with Jellyfin integration"
