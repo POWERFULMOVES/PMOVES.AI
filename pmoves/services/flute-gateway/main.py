@@ -30,6 +30,8 @@ import httpx
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, WebSocket
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+
+from services.common.env import get_secret
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 # Provider imports
@@ -81,14 +83,14 @@ logger = logging.getLogger("flute-gateway")
 # Environment configuration
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://localhost:3010")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_KEY = get_secret("SUPABASE_SERVICE_ROLE_KEY", "")
 # VibeVoice is now served by Ultimate-TTS-Studio (port 7861)
 # Default to the host-gateway URL so the Flute stack is voice-ready by default.
 VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:7861").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7860")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
-FLUTE_API_KEY = os.getenv("FLUTE_API_KEY", "")
+FLUTE_API_KEY = get_secret("FLUTE_API_KEY", "")
 
 # CHIT integration configuration
 CHIT_VOICE_ATTRIBUTION = os.getenv("CHIT_VOICE_ATTRIBUTION", "false").lower() == "true"

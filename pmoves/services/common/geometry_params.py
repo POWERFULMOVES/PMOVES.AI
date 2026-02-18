@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from .env import get_secret
+
 _CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
 _LOCK = threading.RLock()
 _DEFAULT_TTL = int(os.getenv("GEOMETRY_PACK_TTL", "600"))
@@ -16,10 +18,10 @@ _DEFAULT_TTL = int(os.getenv("GEOMETRY_PACK_TTL", "600"))
 def _rest_config() -> tuple[Optional[str], Optional[str]]:
     rest_url = os.getenv("SUPA_REST_URL") or os.getenv("SUPABASE_REST_URL")
     service_key = (
-        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        or os.getenv("SUPABASE_SERVICE_KEY")
-        or os.getenv("SUPABASE_KEY")
-        or os.getenv("SUPABASE_ANON_KEY")
+        get_secret("SUPABASE_SERVICE_ROLE_KEY")
+        or get_secret("SUPABASE_SERVICE_KEY")
+        or get_secret("SUPABASE_KEY")
+        or get_secret("SUPABASE_ANON_KEY")
     )
     return rest_url, service_key
 

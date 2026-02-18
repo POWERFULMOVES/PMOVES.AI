@@ -11,6 +11,7 @@ import requests
 import yaml
 
 from pmoves.chit import CGP_SPEC_VERSION
+from services.common.env import get_secret
 from services.common.forms import (
     DEFAULT_AGENT_FORM,
     DEFAULT_AGENT_FORMS_DIR,
@@ -35,7 +36,7 @@ NOTEBOOK_WORKSPACE = os.environ.get(
 
 # E2B Configuration
 E2B_MCP_SERVER_URL = os.environ.get("E2B_MCP_SERVER_URL", "http://e2b-mcp-server:7073")
-E2B_API_KEY = os.environ.get("E2B_API_KEY", "")
+E2B_API_KEY = get_secret("E2B_API_KEY", "")
 E2B_SANDBOX_URL = os.environ.get("E2B_SANDBOX_URL", "http://e2b-sandbox:7070")
 E2B_DESKTOP_URL = os.environ.get("E2B_DESKTOP_URL", "http://e2b-desktop:6080")
 

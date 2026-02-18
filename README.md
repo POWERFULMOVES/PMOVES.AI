@@ -255,7 +255,9 @@ make test-agent-mesh
 
 ## Build Status & Security
 
-**Security posture:** 0 active CodeQL alerts (reduced from 36 across the codebase). Two accepted-risk SSRF findings remain documented in the security audit — both are intentional proxy behaviors in gateway services.
+**Security posture:** 29 open CodeQL alerts (2 critical, 22 high, 5 medium) — triaged into 7 remediation groups. PRs #651/#653/#654 resolved 36 alerts, but the Hardened branch scope re-surfaced 29 on a broader CodeQL scan. The 2 critical alerts are SSRF findings in Hi-RAG gateway services requiring URL allowlisting.
+
+> **Pre-production blockers (6 remaining):** AB-1 (A2UI nested gitlink), AB-3 (GHCR triggers), AB-4 (real credentials), AB-5/AB-6 (runtime validation, deferred until AB-4), AB-7 (PBKDF2 iteration bump). See the [Production Audit Dashboard](pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md) for full details and resolution sequence.
 
 **CI gates (all enforced on PRs to main):**
 - **CodeQL Advanced** — Static analysis for JS/Python/Go vulnerabilities
@@ -269,10 +271,11 @@ make test-agent-mesh
 - [#651](https://github.com/POWERFULMOVES/PMOVES.AI/pull/651) – Initial CodeQL alert triage (36 → 12)
 - [#653](https://github.com/POWERFULMOVES/PMOVES.AI/pull/653) – Remaining CodeQL fixes (12 → 6)
 - [#654](https://github.com/POWERFULMOVES/PMOVES.AI/pull/654) – Final 6 alerts resolved across gateway and YT services
+- *Note: 29 alerts re-surfaced on the Hardened branch due to expanded CodeQL scan scope*
 
 **Docker build reliability:** All core services build successfully. See [Build Fixes Documentation](docs/build-fixes-2025-12-07.md) for historical context on DeepResearch, FFmpeg-Whisper, and environment file fixes.
 
-**Production readiness:** See the [Feb 2026 Production Readiness Report](pmoves/docs/PRODUCTION_READINESS_REPORT_2026-02-07.md) for the latest audit covering service health, TensorZero model inventory (5 Qwen models for local inference), monitoring configuration, and dependency automation.
+**Production readiness:** See the [Production Audit Dashboard](pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md) for the consolidated audit covering active blockers, CodeQL triage, static audit layers, and resolution sequence. Historical context: [Feb 2026 Readiness Report](pmoves/docs/PRODUCTION_READINESS_REPORT_2026-02-07.md).
 
 ## Getting Started
 

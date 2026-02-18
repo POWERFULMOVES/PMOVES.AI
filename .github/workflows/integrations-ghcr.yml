@@ -25,27 +25,18 @@ on:
         required: true
         default: false
         type: boolean
-  # TEMPORARY: automatic triggers are disabled while self-hosted runners are
-  # intermittently offline, to prevent queued-run buildup.
-  #
-  # Re-enable after runner lanes are stable:
-  # - self-hosted,vps
-  # - self-hosted,ai-lab,gpu
-  #
-  # push:
-  #   branches: [main, PMOVES.AI-Edition-Hardened]
-  # pull_request:
-  #   branches: [main, PMOVES.AI-Edition-Hardened]
-  #   paths:
-  #     # Rebuild images when submodules are updated
-  #     - 'PMOVES-Open-Notebook'
-  #     - 'PMOVES-Agent-Zero'
-  #     - 'PMOVES-Archon'
-  #     - 'PMOVES.YT'
-  #     - 'PMOVES-Jellyfin'
-  #     - 'PMOVES-Supaserch'
-  #     # Also rebuild when this workflow changes
-  #     - '.github/workflows/integrations-ghcr.yml'
+  push:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - 'PMOVES-Open-Notebook'
+      - 'PMOVES-Agent-Zero'
+      - 'PMOVES-Archon'
+      - 'PMOVES.YT'
+      - 'PMOVES-Jellyfin'
+      - 'PMOVES-Supaserch'
+      - '.github/workflows/integrations-ghcr.yml'
   # schedule:
   #   - cron: '17 7 * * *'
 

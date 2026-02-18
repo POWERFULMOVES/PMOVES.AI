@@ -143,7 +143,7 @@ make -C pmoves secrets-audit
 
 | Check | Description |
 |-------|-------------|
-| Legacy paths | Detect `pmoves/pmoves/data/chit/env.cgp.json` |
+| Legacy paths | Detect legacy double-pmoves CGP path |
 | Placeholders | Find `change_me`, `placeholder`, `${}` |
 | CHIT paths | Validate CGP bundle locations |
 | Env isolation | Verify no cross-tier leaks |

@@ -346,10 +346,10 @@ grep "env_file" pmoves/docker-compose.yml
 **Solution:**
 ```bash
 # Check CGP file format
-cat pmoves/pmoves/data/chit/env.cgp.json | python3 -m json.tool
+cat pmoves/data/chit/env.cgp.json | python3 -m json.tool
 
 # Verify version
-grep '"version"' pmoves/pmoves/data/chit/env.cgp.json
+grep '"version"' pmoves/data/chit/env.cgp.json
 
 # Re-encode from source if needed
 pmoves secrets encode --env-file pmoves/env.shared

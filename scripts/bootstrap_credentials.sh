@@ -237,6 +237,8 @@ load_from_parent() {
 load_from_chit() {
     local output_file="${1:-.env.bootstrap}"
     local cgp_paths=(
+        # User config directory (XDG-compliant)
+        "${XDG_CONFIG_HOME:-$HOME/.config}/pmoves/chit/env.cgp.json"
         # Current submodule data directory
         "$(pwd)/data/chit/env.cgp.json"
         "$(pwd)/pmoves/data/chit/env.cgp.json"

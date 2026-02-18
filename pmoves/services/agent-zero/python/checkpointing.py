@@ -40,6 +40,8 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
 
+from services.common.env import get_secret
+
 logger = logging.getLogger(__name__)
 
 # Supabase integration
@@ -150,7 +152,7 @@ class CheckpointManager:
                 supabase_url = get_service_url_sync("supabase", default_port=3010)
 
         self._supabase_url = supabase_url.rstrip("/")
-        self._supabase_key = supabase_key or os.getenv("SUPABASE_ANON_KEY", "")
+        self._supabase_key = supabase_key or get_secret("SUPABASE_ANON_KEY", "")
         self._checkpoint_interval = checkpoint_interval
         self._max_checkpoints = max_checkpoints
 

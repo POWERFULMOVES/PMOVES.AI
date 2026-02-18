@@ -4,9 +4,11 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 
+from services.common.env import get_secret
+
 
 def enabled() -> bool:
-    return os.getenv("SUPABASE_ENABLED", "false").lower() == "true" and bool(os.getenv("SUPABASE_URL")) and bool(os.getenv("SUPABASE_KEY"))
+    return os.getenv("SUPABASE_ENABLED", "false").lower() == "true" and bool(os.getenv("SUPABASE_URL")) and bool(get_secret("SUPABASE_KEY"))
 
 
 def _headers(*, prefer: Optional[Sequence[str]] = None) -> Dict[str, str]:
