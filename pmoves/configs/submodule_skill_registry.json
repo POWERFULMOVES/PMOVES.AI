@@ -22,7 +22,9 @@
     "training": [],
     "monitoring": ["observability/*", "health/*"],
     "messaging": ["nats/*", "discord/*"],
-    "storage": ["minio/*", "db/*"]
+    "storage": ["minio/*", "db/*"],
+    "agents": ["agents/*", "deploy:services"],
+    "mcp": ["agents/*", "deploy:services"]
   },
   "submodules": {
     "PMOVES-Agent-Zero": {
