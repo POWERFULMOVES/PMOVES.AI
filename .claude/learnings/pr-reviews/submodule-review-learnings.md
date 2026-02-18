@@ -139,7 +139,7 @@ git submodule update --remote --checkout
 
 1. **Fix detached HEAD submodules:**
    - PMOVES-Archon
-   - PMOVES-E2B-Danger-Room-Deskdesktop
+   - ~~PMOVES-E2B-Danger-Room-Deskdesktop~~ **RESOLVED** (2026-02-17): The "Deskdesktop" typo is NOT in `.gitmodules` — it's correctly listed as `PMOVES-E2B-Danger-Room-Desktop`. The typo exists only in `known_path_typos` in `submodule_layer_validation_manifest.json` for detection purposes.
 
 2. **Verify feature branch submodules:**
    - PMOVES-Jellyfin (fix/hardened-network-architecture)
