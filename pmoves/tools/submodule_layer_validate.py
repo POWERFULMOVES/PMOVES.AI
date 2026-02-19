@@ -216,8 +216,18 @@ def nested_gitmodules_health(module_root: Path, known_path_typos: list[str]) -> 
 def python_compile_check(module_root: Path, max_files: int) -> tuple[str, str]:
     py_files: list[Path] = []
     skip_parts = {".git", ".venv", "node_modules", "__pycache__"}
+    # Build set of nested submodule roots to skip (dirs with .git file/dir
+    # that are NOT module_root itself). This avoids compiling upstream code
+    # inside nested submodules that we don't control.
+    nested_sub_roots: set[Path] = set()
+    for git_marker in module_root.rglob(".git"):
+        parent = git_marker.parent
+        if parent != module_root:
+            nested_sub_roots.add(parent)
     for path in sorted(module_root.rglob("*.py")):
         if any(part in skip_parts for part in path.parts):
+            continue
+        if any(path.is_relative_to(sr) for sr in nested_sub_roots):
             continue
         py_files.append(path)
     if not py_files:
