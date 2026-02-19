@@ -30,6 +30,10 @@ env:
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
   GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || github.token }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
   packages: write
