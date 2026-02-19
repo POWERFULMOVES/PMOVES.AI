@@ -1,6 +1,6 @@
 # Cataclysm Studios Platform Vision & Brand Identity
 
-_Status review: December 11 2025 (repo branch `feature/youtube-pipeline-config`)_
+_Status review: February 18 2026 (repo branch `PMOVES.AI-Edition-Hardened`)_
 
 This document aligns the Cataclysm Studios brand platform with the current PMOVES.AI codebase so product, engineering, and creative teams can work from a single, verifiable blueprint.
 
@@ -13,8 +13,8 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 ### 1.2 PMOVES.AI (Powerful Moves AI)
 - Primary technical product—a 60+ microservice orchestration platform featuring Agent Zero, Archon, Hi-RAG v2, TensorZero LLM gateway, and EvoSwarm evolutionary optimization (`README.md`, `docs/PMOVES_ARC.md`, `pmoves/docs/context/PMOVES_COMPLETE_ARCHITECTURE.md`).
-- Centralized LLM observability via TensorZero [Port 3030] with ClickHouse metrics storage and UI dashboard [Port 4000]; structured multimodal data exchange via CHIT Geometry Bus.
-- Code, compose profiles, and runbooks live under `pmoves/`; developer context for Claude Code CLI is maintained in `.claude/CLAUDE.md` with 43+ slash commands across 12 categories.
+- Centralized LLM observability via TensorZero [Port 3030] with ClickHouse metrics storage and UI dashboard [Port 4000]; structured multimodal data exchange via CHIT Geometry Bus with CGP v1.0 runtime (MACA consensus and point attribution).
+- Code, compose profiles, and runbooks live under `pmoves/`; developer context for Claude Code CLI is maintained in `.claude/CLAUDE.md` with 101 slash commands across 30 categories.
 - Brand promise: "Local-first autonomy, reproducible provisioning, and self-improving research loops."
 
 ### 1.3 DARKXSIDE
@@ -31,16 +31,17 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 | Pillar | Description | Primary Evidence |
 | --- | --- | --- |
 | Orchestration Mesh | Agent Zero [8080] + Archon [8091] + Hi-RAG v2 [8086/8087] + TensorZero [3030] + EvoSwarm [8113] + BoTZ Gateway [8054] + Mesh Agent coordinate across Supabase, Neo4j, Qdrant, Meili. | `README.md`, `.claude/CLAUDE.md`, `.claude/context/services-catalog.md` |
-| Knowledge & Data Plane | Hi-RAG v2 with cross-encoder reranking, CHIT Geometry Bus for structured multimodal exchange, Supabase CLI stack, retrieval-eval harness. | `.claude/context/chit-geometry-bus.md`, `pmoves/README.md`, `pmoves/docs/services/supabase/README.md` |
+| Knowledge & Data Plane | Hi-RAG v2 with cross-encoder reranking, CHIT Geometry Bus (CGP v1.0) for structured multimodal exchange, Cipher Memory agent knowledge graph (Neo4j), Supabase CLI stack, retrieval-eval harness. | `.claude/context/chit-geometry-bus.md`, `pmoves/README.md`, `pmoves/docs/services/supabase/README.md` |
 | Creative & Media Stack | ComfyUI pipelines, PMOVES.YT [8077] with 10 slash commands, Channel Monitor [8097], FFmpeg-Whisper [8078], media analyzers, Jellyfin Bridge [8093]. | `pmoves/creator/README.md`, `.claude/commands/yt/`, `pmoves/services/pmoves-yt/` |
 | LLM Observability Fabric | TensorZero Gateway [3030] for unified LLM API, ClickHouse [8123] metrics storage, TensorZero UI [4000] dashboard, token usage and latency tracking. | `.claude/context/tensorzero.md`, `pmoves/tensorzero/config/tensorzero.toml` |
-| Developer Experience Layer | `.claude/` directory with 43+ slash commands across 12 categories, TAC (Tactical Agentic Coding) git worktree patterns, security hooks with NATS observability. | `.claude/CLAUDE.md`, `.claude/README.md`, `.claude/context/git-worktrees.md` |
+| Voice & Speech Services | Flute-Gateway [8055/8056] prosodic synthesis with Pipecat integration, Ultimate-TTS-Studio [7861] multi-engine TTS (7 engines: Kokoro, F5-TTS, KittenTTS, VoxCPM, etc.), real-time WebSocket audio streaming. | `.claude/context/flute-gateway.md`, `.claude/context/voice-personas.md` |
+| Developer Experience Layer | `.claude/` directory with 101 slash commands across 30 categories, TAC (Tactical Agentic Coding) git worktree patterns, security hooks with NATS observability. | `.claude/CLAUDE.md`, `.claude/README.md`, `.claude/context/git-worktrees.md` |
 | Multi-Platform Communications | Messaging Gateway [8101] for Discord/Telegram/WhatsApp, Publisher-Discord [8094] for ingestion notifications, NATS event-driven coordination. | `.claude/context/nats-subjects.md`, `pmoves/services/messaging-gateway/` |
 | Health & Finance Integrations | Branded Wger and Firefly stacks with smoke tests and env guidance. | `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`, `pmoves/docs/services/wger/README.md`, `pmoves/docs/services/firefly-iii/README.md` |
 | Research & Deep Search | SupaSerch [8099] holographic deep research, DeepResearch [8098] LLM-based planner, Open Notebook sync, notebook-sync bridge. | `.claude/commands/search/`, `pmoves/docs/services/open-notebook/README.md` |
 | Governance & Reliability | 5-tier network architecture (api/app/bus/data/monitoring), CI parity, reproducible make targets, Prometheus/Grafana/Loki monitoring. | `docs/LOCAL_CI_CHECKS.md`, `pmoves/docs/MAKE_TARGETS.md`, `.claude/context/services-catalog.md` |
 
-## 3. Implementation Snapshot (as of December 11 2025)
+## 3. Implementation Snapshot (as of February 18 2026)
 
 ### 3.1 Infrastructure Evolution
 - **60+ Microservices** – Platform expanded from initial Agent Zero/Archon core to comprehensive orchestration ecosystem with Docker Compose profiles: `agents`, `workers`, `orchestration`, `yt`, `gpu`, `monitoring`, `tensorzero`.
@@ -52,12 +53,13 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 - **SupaSerch** [8099] – Multimodal holographic deep research orchestrator coordinating DeepResearch, Agent Zero MCP tools, and Hi-RAG.
 - **DeepResearch** [8098] – LLM-based research planner (Alibaba Tongyi DeepResearch) with auto-publishing to Open Notebook.
 - **EvoSwarm Controller** [8113] – Evolutionary test-time optimization for CHIT Geometry parameters using genetic algorithms.
-- **CHIT Geometry Bus** – Production-ready structured multimodal data exchange format across services.
+- **CHIT Geometry Bus (CGP v1.0)** – Production-ready structured multimodal data exchange format across services; upgraded to CGP v1.0 runtime with MACA consensus engine and point attribution system.
 
 ### 3.3 Agent Coordination
 - **Agent Zero** [8080/8081] – Central orchestrator with MCP API at `/mcp/*`, NATS JetStream integration for task coordination.
 - **Archon** [8091/3737] – Supabase-driven agent service with prompt/form management, optional Work Orders service [8053].
 - **BoTZ Gateway** [8054] – Agent orchestration gateway with heartbeat-based health tracking.
+- **Cipher Memory** [8096] – Knowledge-graph memory for Claude Code and agents with Neo4j backend; MCP bridge for persistent reasoning traces and pattern storage.
 - **Mesh Agent** – Distributed node announcer publishing host capabilities every 15 seconds via NATS.
 
 ### 3.4 Media & Communications
@@ -67,19 +69,24 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 - **Publisher-Discord** [8094] – Ingestion event notifications via NATS subjects.
 - **FFmpeg-Whisper** [8078] – GPU-accelerated transcription with Faster-Whisper backend.
 
-### 3.5 Developer Experience
-- **Claude Code CLI Integration** – `.claude/` directory with 43+ slash commands across 12 categories (agents, botz, crush, db, deploy, github, health, k8s, search, workitems, worktree, yt).
+### 3.5 Voice & Speech Services
+- **Flute-Gateway** [8055/8056] – Multimodal voice communication layer with Pipecat integration; prosodic synthesis with natural pauses and emphasis; WebSocket streaming for real-time audio.
+- **Ultimate-TTS-Studio** [7861] – Multi-engine TTS with 7 engines (Kokoro, F5-TTS, KittenTTS, VoxCPM, etc.); Gradio web interface; GPU-accelerated (CUDA 12.4).
+- **Pipecat Integration** – Real-time voice session management coordinated through Flute-Gateway; 2 dedicated slash commands (`/pipecat:connect`, `/pipecat:status`).
+
+### 3.6 Developer Experience
+- **Claude Code CLI Integration** – `.claude/` directory with 101 slash commands across 30 categories (agent-sdk, agents, botz, chit, cipher, crush, db, deploy, discord, github, gpu, health, hyperdim, jellyfin, k8s, langextract, minio, model, n8n, nats, notebook, observability, pipecat, search, tensorzero, test, tts, workitems, worktree, yt).
 - **TAC Patterns** – Tactical Agentic Coding via git worktrees enabling multiple Claude instances working simultaneously.
 - **Security Hooks** – `pre-tool.sh` blocks dangerous operations; `post-tool.sh` publishes tool executions to NATS `claude.code.tool.executed.v1`.
-- **Context Documentation** – 7 reference files in `.claude/context/` covering services, TensorZero, EvoSwarm, CHIT, NATS, MCP, git worktrees.
+- **Context Documentation** – 20 reference files in `.claude/context/` covering services, TensorZero, EvoSwarm, CHIT, NATS, MCP, git worktrees, voice personas, flute-gateway, hardware profiles, testing strategy, submodules, and more.
 
-### 3.6 Monitoring & Observability
+### 3.7 Monitoring & Observability
 - **Prometheus** [9090] – Metrics scraping from all service `/metrics` endpoints.
 - **Grafana** [3000] – Dashboard visualization with pre-configured "Services Overview" dashboard.
 - **Loki** [3100] – Centralized log aggregation with Promtail collector.
 - **cAdvisor** – Container metrics for Prometheus integration.
 
-### 3.7 Retained from Previous Snapshot
+### 3.8 Retained from Previous Snapshot
 - **UI platform** – `pmoves/ui` on Next 16 + React 19 with Supabase auth gating and Playwright/Jest harnesses.
 - **External services** – Wger and Firefly stacks with branding defaults and smoke targets.
 - **Security posture** – Supabase RLS, Django Axes rate limiting, Redis cache expectations documented.
@@ -103,19 +110,26 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 ## 5. Blueprint Backlog (cross-reference with ROADMAP & NEXT_STEPS)
 
-### 5.1 Now (December 2025 Sprint)
-1. **EvoSwarm → CHIT calibration loop** – Complete integration of evolutionary optimization with CHIT Geometry parameters; validate production telemetry feedback.
-2. **BoTZ Gateway work item distribution** – Finalize work item claiming and completion flow for multi-instance Claude Code CLI coordination.
-3. **WhatsApp Business API integration** – Extend Messaging Gateway [8101] with WhatsApp webhook handlers and template messaging.
-4. **YouTube pipeline configuration** – Complete Channel Monitor trigger rules and PMOVES.YT batch processing optimizations.
+### 5.1 Completed (Q4 2025 – Q1 2026)
+1. **YouTube pipeline configuration** – Channel Monitor trigger rules and PMOVES.YT batch processing operational; 10 dedicated `/yt:*` slash commands deployed.
+2. **BoTZ Gateway work item distribution** – Work item claiming and completion flow live with `/workitems:claim`, `/workitems:complete`, `/workitems:list` slash commands.
+3. **WhatsApp Business API integration** – Messaging Gateway [8101] extended with Discord, Telegram, and WhatsApp support.
+4. **CGP v1.0 runtime** – CHIT Geometry Bus upgraded from v0.2 to v1.0 with MACA consensus engine and point attribution system.
+5. **Voice & Speech stack** – Flute-Gateway [8055/8056] and Ultimate-TTS-Studio [7861] deployed with 7 TTS engines and Pipecat integration.
+6. **Cipher Memory** – Agent knowledge-graph memory [8096] with Neo4j backend and MCP bridge operational.
 
-### 5.2 Next
+### 5.2 Now (February 2026 Sprint)
+1. **EvoSwarm → CHIT calibration loop** – Complete integration of evolutionary optimization with CGP v1.0 parameters; validate production telemetry feedback.
+2. **Edition Hardened stabilization** – Finalize security hardening, secrets pipeline, and CI gates for the `PMOVES.AI-Edition-Hardened` branch merge to main.
+3. **Slash command coverage expansion** – Continue expanding from 101 commands across 30 categories; fill gaps in observability and GPU management workflows.
+
+### 5.3 Next
 1. **Multi-population EvoSwarm evolution** – Implement island model for diverse parameter exploration across GPU clusters.
 2. **GAN Sidecar validation** – Deploy adversarial quality validation for Hi-RAG v2 retrieval results in production.
 3. **Kubernetes deployment automation** – Operationalize `/k8s:deploy` slash command with Kustomize overlays for cloud deployment.
 4. **Playwright scenarios expansion** – Add authenticated upload + presign E2E tests (`pmoves/ui/e2e/`) covering TensorZero API flows.
 
-### 5.3 Later
+### 5.4 Later
 1. **DAO / Tokenomics implementation** – Move conceptual token suite (Food-USD, GroToken, Fame/$WORK) from research into actionable specs: generate contracts, define Supabase schemas, and author enforcement docs.
 2. **Design system & brand kit** – Build shared component library for `pmoves/ui`, Figma token export, and printable brand book referencing this document.
 3. **Community pilot playbook** – Translate Fordham Hill prototype steps into a repeatable guide under `docs/PMOVES_COMMUNITY_PILOT.md` (new file).
@@ -149,6 +163,7 @@ This document aligns the Cataclysm Studios brand platform with the current PMOVE
 
 ## 8. Change Log
 
+- **2026-02-18:** February 2026 platform status update — 101 slash commands across 30 categories (up from 43/12). Added Voice & Speech pillar (Flute-Gateway, Ultimate-TTS-Studio, Pipecat). Added Cipher Memory agent knowledge graph. CHIT Geometry Bus upgraded to CGP v1.0 with MACA consensus and point attribution. Updated blueprint backlog to reflect Q4 2025 completions. Refreshed `.claude/` directory documentation (20 context files, up from 7).
 - **2025-12-11:** Major platform evolution update—expanded from 6 to 9 platform pillars reflecting 60+ microservices. Added TensorZero LLM gateway stack, CHIT Geometry Bus, EvoSwarm evolutionary optimization, Messaging Gateway, BoTZ Gateway, and comprehensive `.claude/` directory documentation. Updated all platform pillars, implementation snapshot, blueprint backlog, and reference map to reflect current architecture. Added new Section 9 documenting Claude Code CLI integration with 43+ slash commands.
 - **2025-10-26:** Rebuilt document to match repository state, removed external-only references, and established blueprint backlog linked to `pmoves/docs/`.
 
@@ -160,50 +175,64 @@ The `.claude/` directory provides always-on context for Claude Code CLI when wor
 
 ```
 .claude/
-├── CLAUDE.md                     # Always-on context (12KB) - loaded automatically
+├── CLAUDE.md                     # Always-on context - loaded automatically
 ├── README.md                     # Guide to .claude/ directory
-├── settings.local.json           # 131 allowed bash command patterns
+├── settings.local.json           # Allowed bash command patterns
 ├── test-self-hosting.sh          # NATS + Hi-RAG integration test
 │
-├── commands/                     # 43 custom slash commands
+├── commands/                     # 101 custom slash commands across 30 categories
+│   ├── agent-sdk/ (4)            # Agent SDK (create, handoff, resume, run)
 │   ├── agents/ (2)               # Agent Zero orchestration
-│   │   ├── status.md             # /agents:status - service health
-│   │   └── mcp-query.md          # /agents:mcp-query - MCP API calls
 │   ├── botz/ (4)                 # Bot configuration & CHIT
-│   │   ├── init.md               # /botz:init - initialize bot
-│   │   ├── profile.md            # /botz:profile - CHIT profiles
-│   │   ├── secrets.md            # /botz:secrets - secret management
-│   │   └── mcp.md                # /botz:mcp - MCP integration
+│   ├── chit/ (4)                 # CHIT Geometry Bus (bus, decode, encode, visualize)
+│   ├── cipher/ (3)               # Cipher Memory (reasoning, search, store)
 │   ├── crush/ (2)                # Compression utilities
 │   ├── db/ (3)                   # Database operations (backup, migrate, query)
-│   ├── deploy/ (3)               # Service deployment (up, services, smoke)
+│   ├── deploy/ (7)               # Service deployment (up, services, smoke, secrets-funnel, preflight, audit-layers, bootstrap-env)
+│   ├── discord/ (2)              # Discord integration (notify, status)
 │   ├── github/ (4)               # GitHub integration (actions, issues, PR, security)
-│   ├── health/ (2)               # Health monitoring (check-all, metrics)
+│   ├── gpu/ (3)                  # GPU management (models, optimize, status)
+│   ├── health/ (3)               # Health monitoring (check-all, metrics, quick)
+│   ├── hyperdim/ (3)             # Hyperdimensional rendering (animate, export, render)
+│   ├── jellyfin/ (2)             # Jellyfin media (status, sync)
 │   ├── k8s/ (3)                  # Kubernetes operations (deploy, logs, status)
-│   ├── search/ (3)               # Knowledge retrieval
-│   │   ├── hirag.md              # /search:hirag - Hi-RAG v2 queries
-│   │   ├── supaserch.md          # /search:supaserch - holographic research
-│   │   └── deepresearch.md       # /search:deepresearch - LLM planner
+│   ├── langextract/ (4)          # Language extraction (extract, process, provider, status)
+│   ├── minio/ (3)                # MinIO storage (presign, status, upload)
+│   ├── model/ (2)                # Model management (load, unload)
+│   ├── n8n/ (4)                  # n8n workflows (execute, nodes, suggest, workflows)
+│   ├── nats/ (4)                 # NATS messaging (monitor, publish, status, streams)
+│   ├── notebook/ (3)             # Open Notebook (query, status, sync)
+│   ├── observability/ (3)        # Monitoring (alerts, dashboard, query)
+│   ├── pipecat/ (2)              # Voice sessions (connect, status)
+│   ├── search/ (3)               # Knowledge retrieval (hirag, supaserch, deepresearch)
+│   ├── tensorzero/ (1)           # TensorZero gateway (models)
+│   ├── test/ (2)                 # Testing (pr, smoke)
+│   ├── tts/ (4)                  # Text-to-speech (status, synthesize, test-all, voices)
 │   ├── workitems/ (3)            # BoTZ work tracking (claim, complete, list)
 │   ├── worktree/ (4)             # Git worktree / TAC patterns
-│   │   ├── create.md             # /worktree:create - new worktree
-│   │   ├── switch.md             # /worktree:switch - change context
-│   │   ├── list.md               # /worktree:list - show all
-│   │   └── cleanup.md            # /worktree:cleanup - remove stale
 │   └── yt/ (10)                  # YouTube pipeline
-│       ├── ingest.md             # /yt:ingest - download + transcript
-│       ├── status.md             # /yt:status - pipeline health
-│       ├── channels.md           # /yt:channels - monitored channels
-│       └── ... (7 more)          # Additional YT operations
 │
-├── context/                      # Reference documentation (7 files)
+├── context/                      # Reference documentation (20 files)
 │   ├── services-catalog.md       # Complete service listing with ports
 │   ├── tensorzero.md             # TensorZero LLM gateway deep dive
 │   ├── evoswarm.md               # Evolutionary optimization system
 │   ├── chit-geometry-bus.md      # Structured multimodal data format
 │   ├── nats-subjects.md          # NATS event subject catalog
+│   ├── geometry-nats-subjects.md # GEOMETRY BUS NATS subjects
 │   ├── mcp-api.md                # Agent Zero MCP API reference
-│   └── git-worktrees.md          # TAC (Tactical Agentic Coding) workflows
+│   ├── git-worktrees.md          # TAC (Tactical Agentic Coding) workflows
+│   ├── flute-gateway.md          # Voice synthesis API reference
+│   ├── voice-personas.md         # Voice persona configurations
+│   ├── submodules.md             # Complete submodules catalog (20 submodules)
+│   ├── submodule-workflow.md     # Submodule development workflow
+│   ├── testing-strategy.md       # Testing workflow and PR requirements
+│   ├── tier-architecture.md      # 5-tier network architecture
+│   ├── hardware-profiles.md      # Hardware profile configurations
+│   ├── modular-architecture.md   # Modular architecture patterns
+│   ├── python-patterns.md        # Python development patterns
+│   ├── ui-patterns.md            # UI development patterns
+│   ├── ci-runners.md             # CI runner configurations
+│   └── documentation-index.md    # Documentation cross-reference index
 │
 └── hooks/                        # Security & observability (4 files)
     ├── pre-tool.sh               # Security validation gate
@@ -242,18 +271,40 @@ Git worktrees enable multiple Claude Code CLI instances working simultaneously:
 
 Reference: `.claude/context/git-worktrees.md`
 
-### 9.4 Slash Command Categories
+### 9.4 Slash Command Categories (30 categories, 101 commands)
 
 | Category | Commands | Primary Use |
 | --- | --- | --- |
+| `/agent-sdk:*` | 4 | Agent SDK lifecycle (create, handoff, resume, run) |
 | `/agents:*` | 2 | Agent Zero health and MCP queries |
 | `/botz:*` | 4 | CHIT profile management, secrets |
-| `/search:*` | 3 | Hi-RAG, SupaSerch, DeepResearch |
-| `/yt:*` | 10 | YouTube ingestion pipeline |
-| `/deploy:*` | 3 | Service deployment and smoke tests |
-| `/worktree:*` | 4 | TAC parallel development |
-| `/health:*` | 2 | Platform-wide health checks |
+| `/chit:*` | 4 | CHIT Geometry Bus encoding/decoding |
+| `/cipher:*` | 3 | Cipher Memory reasoning and search |
+| `/crush:*` | 2 | Compression utilities |
+| `/db:*` | 3 | Database operations (backup, migrate, query) |
+| `/deploy:*` | 7 | Service deployment, secrets funnel, preflight gates |
+| `/discord:*` | 2 | Discord notification management |
+| `/github:*` | 4 | GitHub integration (actions, issues, PR, security) |
+| `/gpu:*` | 3 | GPU model management and optimization |
+| `/health:*` | 3 | Platform-wide health checks |
+| `/hyperdim:*` | 3 | Hyperdimensional rendering |
+| `/jellyfin:*` | 2 | Jellyfin media sync |
 | `/k8s:*` | 3 | Kubernetes operations |
+| `/langextract:*` | 4 | Language extraction and NLP |
+| `/minio:*` | 3 | MinIO object storage operations |
+| `/model:*` | 2 | Model loading and management |
+| `/n8n:*` | 4 | n8n workflow automation |
+| `/nats:*` | 4 | NATS messaging and streams |
+| `/notebook:*` | 3 | Open Notebook queries and sync |
+| `/observability:*` | 3 | Monitoring alerts and dashboards |
+| `/pipecat:*` | 2 | Voice session management |
+| `/search:*` | 3 | Hi-RAG, SupaSerch, DeepResearch |
+| `/tensorzero:*` | 1 | TensorZero LLM gateway models |
+| `/test:*` | 2 | PR testing and smoke tests |
+| `/tts:*` | 4 | Text-to-speech synthesis and voices |
+| `/workitems:*` | 3 | BoTZ work tracking |
+| `/worktree:*` | 4 | TAC parallel development |
+| `/yt:*` | 10 | YouTube ingestion pipeline |
 
 ---
 
