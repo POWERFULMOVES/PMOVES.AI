@@ -76,7 +76,7 @@ def geometry_decode_text(
 
 
 def geometry_calibration_report(data: Dict[str, Any]) -> Dict[str, Any]:
-    r = requests.post(f"{GATEWAY_URL}/geometry/calibration/report", json={"data": data}, timeout=20)
+    r = requests.post(f"{GATEWAY_URL}/geometry/calibration/report", json={"cgp": data}, timeout=20)
     r.raise_for_status(); return r.json()
 
 
@@ -522,7 +522,7 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
         shape_id = payload.get("shape_id")
         return geometry_decode_text(mode, constellation_id, k, shape_id=shape_id)
     if cmd == "geometry.calibration.report":
-        return geometry_calibration_report(payload.get("data") or {})
+        return geometry_calibration_report(payload.get("cgp") or payload.get("data") or {})
     if cmd == "ingest.youtube":
         url = payload.get("url")
         if not url:

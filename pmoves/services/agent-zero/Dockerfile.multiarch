@@ -1,34 +1,87 @@
-# Multi-arch Dockerfile for Agent Zero (desktop RTX + Jetson)
-# Build with buildx for linux/amd64 and linux/arm64
+# Multi-arch Dockerfile for Agent Zero (amd64 + arm64)
+# Build with: docker buildx build --platform linux/amd64,linux/arm64 \
+#   -f services/agent-zero/Dockerfile.multiarch -t pmoves-agent-zero:latest .
+#
+# The upstream base image agent0ai/agent-zero-base:latest already supports
+# both architectures.  GPU support is provided by the NVIDIA container runtime
+# at deploy time (--gpus all), not baked into the base image.
 
-ARG TARGETARCH
+# ── Stage 1: Build upstream Agent Zero ──────────────────────────
+FROM agent0ai/agent-zero-base:latest AS upstream
 
-# Desktop x86_64 (CUDA 12.8, Ubuntu 24.04)
-FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04 AS base_amd64
+ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
+ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
 
-# Jetson ARM64 (JetPack r36.4, Ubuntu 24.04, CUDA 12.8, PyTorch 2.8)
-FROM dustynv/pytorch:2.8-r36.4-cu128-24.04 AS base_arm64
+# Clone PMOVES fork of Agent Zero (matches submodule branch)
+RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
+      ${AGENT_ZERO_REPO} /git/agent-zero
 
-# Select base by architecture
-FROM base_${TARGETARCH} AS app
+# Install upstream deps into the pre-existing /opt/venv-a0
+RUN . /opt/venv-a0/bin/activate \
+    && uv pip install --no-cache-dir -r /git/agent-zero/requirements.txt \
+    && uv pip install --no-cache-dir -r /git/agent-zero/requirements2.txt \
+    && python /git/agent-zero/preload.py --dockerized=true
+
+# ── Stage 2: PMOVES overlay ────────────────────────────────────
+FROM agent0ai/agent-zero-base:latest AS app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/app" \
+    AGENT_ZERO_HOME=/a0 \
+    AGENT_ZERO_ROOT=/a0 \
+    PATH="/opt/venv-a0/bin:${PATH}"
 
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+# Bring in upstream runtime from builder stage
+COPY --from=upstream /opt/venv-a0 /opt/venv-a0
+COPY --from=upstream /git/agent-zero /git/agent-zero
+
+# System deps that the regular Dockerfile adds
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl && rm -rf /var/lib/apt/lists/*
+      build-essential python3-dev ffmpeg tesseract-ocr poppler-utils \
+      libgl1 libglib2.0-0 libsm6 libxext6 \
+    && rm -rf /var/lib/apt/lists/*
 
+# PMOVES Python requirements
 COPY services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+RUN . /opt/venv-a0/bin/activate \
+    && uv pip install --no-cache-dir \
+       --constraint requirements.lock -r requirements.txt
 
+# Init script (replaces upstream /ins/copy_A0.sh)
+RUN mkdir -p /a0 \
+    && printf '#!/bin/bash\nset -e\nif [ ! -f "/a0/run_ui.py" ]; then\n  cp -rn --no-preserve=ownership,mode "/git/agent-zero/." "/a0"\nfi\n' \
+       > /usr/local/bin/init-a0.sh \
+    && chmod +x /usr/local/bin/init-a0.sh
+
+# PMOVES runtime assets
+COPY services/agent-zero/runtime ${AGENT_ZERO_HOME}/runtime
+
+# PMOVES Python namespace package (for `from pmoves.chit import ...`)
+# Generate a minimal __init__.py instead of copying the repo's version,
+# which imports pmoves.services — a path that doesn't exist in the Docker layout.
+RUN mkdir -p /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+COPY chit /app/pmoves/chit
+
+# PMOVES contract schemas + agent forms
+COPY contracts /app/contracts
+COPY configs /app/configs
+
+# PMOVES services (includes services/common, services/agent_zero, etc.)
 COPY services /app/services
 
-# Security: Run as non-root user (PMOVES standard: UID/GID 65532)
-RUN groupadd -r pmoves --gid=65532 && \
-    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
-    chown -R pmoves:pmoves /app
+# Security: non-root user (PMOVES standard)
+RUN groupadd -r pmoves --gid=65532 \
+    && useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves \
+    && chown -R pmoves:pmoves /app /a0 /git/agent-zero \
+    && if [ -d /opt/venv-a0 ]; then chown -R pmoves:pmoves /opt/venv-a0; fi \
+    && if [ -d /opt/pyenv ]; then chown -R pmoves:pmoves /opt/pyenv; fi
 
 USER pmoves:pmoves
 
 EXPOSE 8080
-CMD ["python","services/agent-zero/main.py"]
+ENTRYPOINT ["/bin/bash", "-lc", \
+  "/usr/local/bin/init-a0.sh 2>/dev/null || true && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true && exec /opt/venv-a0/bin/python services/agent-zero/main.py"]
