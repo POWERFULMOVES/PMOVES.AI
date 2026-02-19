@@ -2454,7 +2454,7 @@ services:
     - LLAMA_SERVER_HOST=127.0.0.1
     - LLAMA_RESULTS_DIR=/results
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - CIPHER_MEMORY_URL=http://cipher-memory:8096
+    - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8096}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
     volumes:
