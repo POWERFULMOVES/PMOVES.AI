@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-02-19 07:47 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-Remote-View",
+      "path": "PMOVES-Remote-View",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-Remote-View.git",
+      "status_prefix": " ",
+      "commit": "0e350c19cd9e38e1c8f77d28bcc57f8754770fa5",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": []
+    }
+  ]
+}

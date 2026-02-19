@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-02-19 07:47 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-surf",
+      "path": "PMOVES-surf",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-surf.git",
+      "status_prefix": " ",
+      "commit": "135748a4fd428d3c1a23b345776e13e2c7ec6f31",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
+    }
+  ]
+}
