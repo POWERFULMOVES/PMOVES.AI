@@ -20,9 +20,5 @@
       "PMOVES-Pipecat"
     ]
   },
-  "overrides": {
-    "PMOVES-supabase": {
-      "top_level_required_files": []
-    }
-  }
+  "overrides": {}
 }
