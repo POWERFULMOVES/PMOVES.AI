@@ -24,6 +24,27 @@
       "host": "ai-lab",
       "runner_name": "pmoves-ai-lab-runner",
       "registration_script": "integrations/github-runners/compose/register-runner.sh"
+    },
+    "self-hosted,cloudstartup,staging": {
+      "host": "cloudstartup",
+      "runner_name": "pmoves-cloudstartup-staging",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh",
+      "status": "planned",
+      "notes": "Staging deploy runner — not yet provisioned"
+    },
+    "self-hosted,kvm4,production": {
+      "host": "kvm4",
+      "runner_name": "pmoves-kvm4-production",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh",
+      "status": "planned",
+      "notes": "Production deploy runner — not yet provisioned"
+    },
+    "self-hosted,kvm4": {
+      "host": "kvm4",
+      "runner_name": "pmoves-kvm4-runner",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh",
+      "status": "planned",
+      "notes": "Gateway deploy runner — not yet provisioned"
     }
   }
 }

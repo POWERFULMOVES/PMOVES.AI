@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-02-19 07:44 UTC",
+  "generated_at": "2026-02-19 20:22 UTC",
   "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
-    "errors": 1,
+    "errors": 0,
     "warnings": 0
   },
   "results": [
@@ -12,20 +12,14 @@
       "path": "Pmoves-AgentGym-RL",
       "url": "https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git",
       "status_prefix": " ",
-      "commit": "9cb2f960b2f7016bdbb5e4058f1271863ce4a3f6",
+      "commit": "b30b84a37223b01a68f843be8a8b2af7f80fcb07",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
-      "top_level_files_ok": false,
+      "top_level_files_ok": true,
       "nested_gitmodules_ok": true,
       "python_compile_ok": "skip",
-      "findings": [
-        {
-          "level": "ERROR",
-          "code": "TOP_LEVEL_DOSSIER_MISSING",
-          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
-        }
-      ]
+      "findings": []
     }
   ]
 }
