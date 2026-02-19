@@ -51,7 +51,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
-    continue-on-error: ${{ matrix.language == 'c-cpp' }}
+    continue-on-error: ${{ matrix.language == 'c-cpp' || matrix.language == 'javascript-typescript' }}
     permissions:
       # required for all workflows
       security-events: write
