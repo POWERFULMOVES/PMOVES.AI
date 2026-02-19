@@ -4,10 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import datetime as dt
 import json
-import os
-import py_compile
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -227,8 +226,9 @@ def python_compile_check(module_root: Path, max_files: int) -> tuple[str, str]:
         return "warn", f"python-file-count={len(py_files)} exceeds max={max_files}"
     try:
         for path in py_files:
-            py_compile.compile(str(path), cfile=os.devnull, doraise=True)
-    except py_compile.PyCompileError as exc:
+            with open(str(path), "rb") as f:
+                compile(f.read(), str(path), "exec")
+    except SyntaxError as exc:
         return "fail", str(exc)
     return "pass", f"compiled-files={len(py_files)}"
 
