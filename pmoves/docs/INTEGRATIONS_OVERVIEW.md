@@ -1,10 +1,10 @@
 # PMOVES.AI Integration Layer
 
-> **Symbiotic Enhancement** --- PMOVES.AI connects to and enhances any repository through five integration systems: a Skill Registry maps submodules to CLI skills, CHIT tools encode/decode geometric packets and secrets, a secrets pipeline ensures credentials flow safely through tiers, GPU orchestration manages VRAM and models, and damage-control hooks protect the developer workflow.
+> **Symbiotic Enhancement** --- PMOVES.AI connects to and enhances any repository through six integration systems: a Skill Registry maps submodules to CLI skills, CHIT tools encode/decode geometric packets and secrets, a secrets pipeline ensures credentials flow safely through tiers, GPU orchestration manages VRAM and models, damage-control hooks protect the developer workflow, and a documentation infrastructure organizes living docs via CHIT's 5-layer taxonomy.
 
 ---
 
-## The Five Integration Systems
+## The Six Integration Systems
 
 ### 1. Skill Registry & Context Tags
 
@@ -112,6 +112,26 @@
 **Deep dive:**
 - [Hooks README](../../.claude/hooks/README.md) --- installation, event format, NATS integration
 - [Known Roads table](../../.claude/CLAUDE.md) --- dangerous ops mapped to canonical make targets
+
+---
+
+### 6. Documentation Infrastructure
+
+**What:** CHIT-organized living documentation system with 5-layer taxonomy (Protocol, Conceptual, Applied, Vision, Operations), cellular namespace topology model, and automated change tracking.
+
+| Asset | Path |
+|-------|------|
+| Documentation Map | `pmoves/docs/DOCUMENTATION_MAP.md` |
+| Service Docs Matrix | `pmoves/docs/SERVICE_DOCS_MATRIX.md` |
+| CHIT Change Tracker | `pmoves/docs/CHIT_CHANGE_TRACKER.md` |
+| Submodule Docs Audit | `pmoves/docs/evidence/SUBMODULE_DOCS_AUDIT.md` |
+| CHIT Documentation Suite | `pmoves/docs/PMOVESCHIT/README.md` |
+
+**Cellular topology:** Services have namespaces (publish/subscribe identity), inside/outside container boundaries (cellular membrane), dynamic port allocation with CHIT-signed announcements, and cross-container validation via CGP signatures.
+
+**Deep dives:**
+- [Documentation Map](DOCUMENTATION_MAP.md) --- master index with L1-L5 layer classification
+- [CHIT Change Tracker](CHIT_CHANGE_TRACKER.md) --- CGP-style change audit trail
 
 ---
 
