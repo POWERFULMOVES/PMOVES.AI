@@ -83,31 +83,66 @@ def docker_rm(container_name: str) -> None:
     run_cmd(["docker", "rm", "-f", container_name], check=False)
 
 
+LOKI_URL = os.getenv("LOKI_URL", "http://localhost:3100/loki/api/v1/push")
+
+# Default resource limits per lane (overridable via env)
+LANE_RESOURCES: dict[str, dict[str, str]] = {
+    "ai-lab": {
+        "cpus": os.getenv("RUNNER_AI_LAB_CPUS", "4"),
+        "memory": os.getenv("RUNNER_AI_LAB_MEMORY", "8g"),
+        "gpus": "all",
+    },
+    "vps": {
+        "cpus": os.getenv("RUNNER_VPS_CPUS", "2"),
+        "memory": os.getenv("RUNNER_VPS_MEMORY", "4g"),
+        "gpus": "",
+    },
+}
+
+
 def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
-    run_cmd(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            lane.container_name,
-            "--restart",
-            "unless-stopped",
-            "-e",
-            f"REPO_URL=https://github.com/{repo}",
-            "-e",
-            f"RUNNER_NAME={lane.runner_name}",
-            "-e",
-            f"RUNNER_TOKEN={token}",
-            "-e",
-            f"LABELS={lane.labels}",
-            "-e",
-            "RUNNER_WORKDIR=/tmp/runner/_work",
-            "-v",
-            "/var/run/docker.sock:/var/run/docker.sock",
-            image,
-        ]
-    )
+    resources = LANE_RESOURCES.get(lane.lane, {"cpus": "4", "memory": "8g"})
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        lane.container_name,
+        "--restart",
+        "unless-stopped",
+        "--cpus",
+        resources["cpus"],
+        "--memory",
+        resources["memory"],
+        "--log-driver",
+        "loki",
+        "--log-opt",
+        f"loki-url={LOKI_URL}",
+        "--log-opt",
+        f"loki-external-labels=job=gha-runner,lane={lane.lane},runner={lane.runner_name}",
+    ]
+    # GPU passthrough for ai-lab lane only
+    gpus = resources.get("gpus", "")
+    if gpus:
+        cmd.extend(["--gpus", gpus])
+        cmd.extend(["-e", "NVIDIA_VISIBLE_DEVICES=all"])
+        cmd.extend(["-e", "NVIDIA_DRIVER_CAPABILITIES=compute,utility"])
+    cmd.extend([
+        "-e",
+        f"REPO_URL=https://github.com/{repo}",
+        "-e",
+        f"RUNNER_NAME={lane.runner_name}",
+        "-e",
+        f"RUNNER_TOKEN={token}",
+        "-e",
+        f"LABELS={lane.labels}",
+        "-e",
+        "RUNNER_WORKDIR=/tmp/runner/_work",
+        "-v",
+        "/var/run/docker.sock:/var/run/docker.sock",
+        image,
+    ])
+    run_cmd(cmd)
 
 
 def cmd_up(repo: str, image: str) -> int:
