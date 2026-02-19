@@ -141,7 +141,7 @@ Compute calibration metrics (KL divergence, JS divergence, coverage) for a CGP a
 | `codebook_path` | string | no | Codebook filename (basename only) |
 | `sig` | object | no | HMAC signature (required when `codebook_path` is set and `CHIT_REQUIRE_SIGNATURE=true`) |
 
-**Request body:** A full CGP object. The first constellation of the first super node is used for calibration.
+**Request body:** A `GeometryCalibrationRequest` wrapping a CGP object. The first constellation of the first super node is used for calibration.
 
 **Response:**
 
@@ -166,17 +166,19 @@ Returns `{"KL": null, "JS": null, "coverage": 0.0}` if the codebook is empty or 
 curl -X POST http://localhost:8086/geometry/calibration/report \
   -H "Content-Type: application/json" \
   -d '{
-    "spec": "chit.cgp.v1.0",
-    "meta": {},
-    "super_nodes": [{
-      "id": "s0",
-      "constellations": [{
-        "id": "c0",
-        "anchor": [0.5, 0.5, 0.5],
-        "radial_minmax": [0.0, 1.0],
-        "spectrum": [0.25, 0.25, 0.25, 0.25]
+    "cgp": {
+      "spec": "chit.cgp.v1.0",
+      "meta": {},
+      "super_nodes": [{
+        "id": "s0",
+        "constellations": [{
+          "id": "c0",
+          "anchor": [0.5, 0.5, 0.5],
+          "radial_minmax": [0.0, 1.0],
+          "spectrum": [0.25, 0.25, 0.25, 0.25]
+        }]
       }]
-    }]
+    }
   }'
 ```
 

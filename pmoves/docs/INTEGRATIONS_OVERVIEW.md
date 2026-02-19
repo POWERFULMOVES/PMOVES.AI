@@ -43,7 +43,7 @@
 **Deep dives:**
 - [CHIT Tools Catalog](CHIT_TOOLS_CATALOG.md) --- full catalog of all 13+ tools with usage examples
 - [CHIT Documentation Suite](PMOVESCHIT/README.md) --- 5-layer protocol/conceptual/applied/vision/reference iceberg
-- [CHIT Integration Status](CHIT_INTEGRATION_STATUS.md) --- service-by-service CGP adoption
+- [CHIT Integration Status](audit/CHIT_INTEGRATION_STATUS.md) --- service-by-service CGP adoption
 
 ---
 
@@ -147,7 +147,7 @@ All integration-related documentation organized by domain.
 |----------|-------------|
 | [CHIT Tools Catalog](CHIT_TOOLS_CATALOG.md) | All 13+ Python tools with usage |
 | [CHIT Documentation Suite](PMOVESCHIT/README.md) | 5-layer iceberg index |
-| [CHIT Integration Status](CHIT_INTEGRATION_STATUS.md) | Service-by-service adoption |
+| [CHIT Integration Status](audit/CHIT_INTEGRATION_STATUS.md) | Service-by-service adoption |
 | [CHIT User Guide](CHIT_USER_GUIDE.md) | Encoding/decoding user guide |
 
 ### GPU & Hardware

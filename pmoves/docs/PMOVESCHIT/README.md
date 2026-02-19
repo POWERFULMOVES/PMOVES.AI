@@ -109,7 +109,7 @@ Documents outside this directory that reference CHIT:
 |-------------------|-------------|
 | [docs/subsystems/CHIT_GEOMETRY_BUS.md](../../../docs/subsystems/CHIT_GEOMETRY_BUS.md) | Complete CHIT & Geometry Bus reference |
 | [docs/PLAN_Geometric_Intelligence.md](../../../docs/PLAN_Geometric_Intelligence.md) | Integration planning for geometric intelligence |
-| [pmoves/docs/CHIT_INTEGRATION_STATUS.md](../CHIT_INTEGRATION_STATUS.md) | Service-by-service CHIT integration status |
-| [pmoves/docs/CHIT_USER_GUIDE.md](../CHIT_USER_GUIDE.md) | CHIT encoding/decoding user guide (secrets focus) |
-| [pmoves/docs/CHIT_AUDIT_TRACKING.md](../CHIT_AUDIT_TRACKING.md) | Code presence audit across branches |
-| [pmoves/docs/FLUTE_PROSODIC_ARCHITECTURE.md](../FLUTE_PROSODIC_ARCHITECTURE.md) | Flute voice layer — uses GEOMETRY BUS for transport |
+| [pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md](../audit/CHIT_INTEGRATION_STATUS.md) | Service-by-service CHIT integration status |
+| [pmoves/docs/PMOVESCHIT/CHIT_USER_GUIDE.md](CHIT_USER_GUIDE.md) | CHIT encoding/decoding user guide (secrets focus) |
+| [pmoves/docs/audit/CHIT_AUDIT_TRACKING.md](../audit/CHIT_AUDIT_TRACKING.md) | Code presence audit across branches |
+| [pmoves/docs/infrastructure/FLUTE_PROSODIC_ARCHITECTURE.md](../infrastructure/FLUTE_PROSODIC_ARCHITECTURE.md) | Flute voice layer — uses GEOMETRY BUS for transport |
