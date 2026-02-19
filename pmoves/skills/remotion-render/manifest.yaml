@@ -1,0 +1,63 @@
+# Remotion Rendering Skill
+# Thread 4.2: Calls A2UI renderer service to produce animated content
+
+name: remotion-render
+version: "1.0.0"
+description: "Render A2UI animation specs into MP4/GIF/WebM via the Remotion renderer service"
+author: PMOVES.AI
+
+# Skill configuration
+ultrathink: true
+category: visualization
+tier: agent
+
+# Input schema
+input:
+  type: object
+  required: [a2ui_spec]
+  properties:
+    a2ui_spec:
+      type: object
+      description: "A2UI animation JSON spec (see a2ui-animation-schema.json)"
+    format:
+      type: string
+      enum: [mp4, gif, webm]
+      default: mp4
+    quality:
+      type: string
+      enum: [draft, standard, high]
+      default: standard
+
+# Output schema
+output:
+  type: object
+  properties:
+    url:
+      type: string
+      description: "URL to rendered video (MinIO presigned)"
+    format:
+      type: string
+    duration_ms:
+      type: integer
+    scenes:
+      type: integer
+
+# Service endpoint
+service:
+  url: "http://localhost:8100/render"
+  method: POST
+  timeout_ms: 120000
+
+# Dependencies
+dependencies:
+  services:
+    - a2ui-renderer  # Port 8100
+    - minio          # Asset storage
+    - presign        # URL generation
+  nats_subjects:
+    - skills.pipeline.research-render.v1
+    - skills.pipeline.model-benchmark-viz.v1
+
+# Agent binding
+agent: creator
+theme: megaman/dr-wily
