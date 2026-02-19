@@ -2192,3 +2192,23 @@ structure-enforce: ## Enforce structural best practices
 .PHONY: structure-enforce-strict
 structure-enforce-strict: ## Enforce structural best practices (strict mode, fails on P1/P2)
 	@$(PYTHON) tools/structure_enforcer.py --strict
+
+# =============================================================================
+# Vision Threads: HuggingFace Pipeline
+# =============================================================================
+
+.PHONY: hf-onboard
+hf-onboard: ## Onboard a HuggingFace model (MODEL=org/name)
+	@$(PYTHON) tools/hf_model_onboard.py $(MODEL)
+
+.PHONY: hf-onboard-dry
+hf-onboard-dry: ## Dry-run HF model onboarding (MODEL=org/name)
+	@$(PYTHON) tools/hf_model_onboard.py $(MODEL) --dry-run --json
+
+.PHONY: hf-benchmark
+hf-benchmark: ## Run model benchmarks via TensorZero (MODEL=name)
+	@$(PYTHON) tools/hf_benchmark_runner.py $(MODEL)
+
+.PHONY: hf-benchmark-a2ui
+hf-benchmark-a2ui: ## Run benchmarks and output A2UI chart spec (MODEL=name)
+	@$(PYTHON) tools/hf_benchmark_runner.py $(MODEL) --a2ui
