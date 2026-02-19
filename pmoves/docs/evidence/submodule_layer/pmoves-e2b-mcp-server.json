@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-02-19 07:45 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "pmoves-e2b-mcp-server",
+      "path": "pmoves-e2b-mcp-server",
+      "url": "https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git",
+      "status_prefix": " ",
+      "commit": "05d7db470a2824fbfb3d5e3e8f9ab4dd0f3bbab3",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": []
+    }
+  ]
+}

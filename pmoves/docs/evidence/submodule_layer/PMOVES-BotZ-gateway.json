@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-02-19 07:44 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-BotZ-gateway",
+      "path": "PMOVES-BotZ-gateway",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git",
+      "status_prefix": " ",
+      "commit": "5dbe5d6f6bbad1d6b20c553fa1c7c94150a97228",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
+    }
+  ]
+}

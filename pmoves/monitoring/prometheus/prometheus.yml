@@ -115,6 +115,18 @@ scrape_configs:
     static_configs:
       - targets: ["messaging-gateway:8101"]
 
+  # === GitHub Runner Controller metrics ===
+  # Exposes github_runner_* metrics matching the github-runners Grafana dashboard
+  - job_name: github-runner-ctl
+    static_configs:
+      - targets: ["github-runner-ctl:8104"]
+
+  # === Benchmark Lab metrics ===
+
+  - job_name: llama-throughput-lab
+    static_configs:
+      - targets: ["llama-throughput-lab:8201"]
+
   # === Blackbox HTTP probes ===
   # Health check probes for services without /metrics
 

@@ -18,11 +18,11 @@ Run this command when:
 
 ### Encode Options
 - `--env-file, -e <path>` - Source env file (default: `pmoves/env.shared`)
-- `--out, -o <path>` - Output CGP path (default: `pmoves/pmoves/data/chit/env.cgp.json`)
+- `--out, -o <path>` - Output CGP path (default: `pmoves/data/chit/env.cgp.json`)
 - `--no-cleartext` - Store secrets as base64 only (no plaintext)
 
 ### Decode Options
-- `--cgp, -c <path>` - Input CGP file (default: `pmoves/pmoves/data/chit/env.cgp.json`)
+- `--cgp, -c <path>` - Input CGP file (default: `pmoves/data/chit/env.cgp.json`)
 - `--out, -o <path>` - Output decoded env file (default: `pmoves/pmoves/data/chit/env.decoded`)
 
 ## Implementation

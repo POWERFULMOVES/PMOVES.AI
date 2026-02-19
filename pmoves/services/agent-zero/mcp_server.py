@@ -11,6 +11,7 @@ import requests
 import yaml
 
 from pmoves.chit import CGP_SPEC_VERSION
+from services.common.env import get_secret
 from services.common.forms import (
     DEFAULT_AGENT_FORM,
     DEFAULT_AGENT_FORMS_DIR,
@@ -35,7 +36,7 @@ NOTEBOOK_WORKSPACE = os.environ.get(
 
 # E2B Configuration
 E2B_MCP_SERVER_URL = os.environ.get("E2B_MCP_SERVER_URL", "http://e2b-mcp-server:7073")
-E2B_API_KEY = os.environ.get("E2B_API_KEY", "")
+E2B_API_KEY = get_secret("E2B_API_KEY", "")
 E2B_SANDBOX_URL = os.environ.get("E2B_SANDBOX_URL", "http://e2b-sandbox:7070")
 E2B_DESKTOP_URL = os.environ.get("E2B_DESKTOP_URL", "http://e2b-desktop:6080")
 
@@ -75,7 +76,7 @@ def geometry_decode_text(
 
 
 def geometry_calibration_report(data: Dict[str, Any]) -> Dict[str, Any]:
-    r = requests.post(f"{GATEWAY_URL}/geometry/calibration/report", json={"data": data}, timeout=20)
+    r = requests.post(f"{GATEWAY_URL}/geometry/calibration/report", json={"cgp": data}, timeout=20)
     r.raise_for_status(); return r.json()
 
 
@@ -521,7 +522,7 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
         shape_id = payload.get("shape_id")
         return geometry_decode_text(mode, constellation_id, k, shape_id=shape_id)
     if cmd == "geometry.calibration.report":
-        return geometry_calibration_report(payload.get("data") or {})
+        return geometry_calibration_report(payload.get("cgp") or payload.get("data") or {})
     if cmd == "ingest.youtube":
         url = payload.get("url")
         if not url:

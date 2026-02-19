@@ -27,6 +27,16 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
+  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || github.token }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   # ============================================================================
@@ -61,8 +71,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_PASSWORD }}
 
       - name: Build Ollama CUDA
         uses: docker/build-push-action@v6
@@ -108,7 +118,7 @@ jobs:
   # ============================================================================
   build-cpu:
     name: CPU Services
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       packages: write
@@ -137,8 +147,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_PASSWORD }}
 
       - name: Build ${{ matrix.service.name }}
         uses: docker/build-push-action@v6
@@ -157,7 +167,7 @@ jobs:
   # ============================================================================
   validate-contracts:
     name: Validate NATS Contracts
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
 
@@ -208,6 +218,16 @@ jobs:
     environment: staging
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: false
+          allowed-endpoints: |
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -269,7 +289,7 @@ jobs:
   # ============================================================================
   functional-tests:
     name: Functional Tests
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
     needs: [deploy-staging]

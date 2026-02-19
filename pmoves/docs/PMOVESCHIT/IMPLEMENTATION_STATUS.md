@@ -1,6 +1,8 @@
+> For the full CHIT documentation suite, see [README.md](README.md).
+
 # PMOVESCHIT Implementation Status
 
-**Last Updated:** February 8, 2026
+**Last Updated:** February 18, 2026
 **Related PR:** #343 (GEOMETRY BUS Integration)
 
 ---
@@ -28,7 +30,13 @@ This document tracks the implementation status of PMOVESCHIT (Cymatic-Holographi
 | **Decoder v0.1** | Python | ✅ Complete | `pmoves/tools/chit/chit_decoder.py` | Basic text decoder |
 | **Security Layer** | Python | ✅ Complete | `pmoves/tools/chit_security.py` | HMAC + AES-GCM |
 | **Multi-Decoder v0.1** | Python | ✅ Complete | `pmoves/tools/chit/chit_decoder_mm.py` | CLIP/CLAP decoder |
-| **Shape Store** | - | ❓ TBD | Supabase + Qdrant | Location under discussion |
+| **Shape Store** | Python | ✅ Complete | `pmoves/services/common/shape_store.py` | LRU cache (10k capacity) + Supabase warm loading |
+| **Gateway CHIT Router** | Python | ✅ Complete | `pmoves/services/gateway/gateway/api/chit.py` | 4 HTTP endpoints: event, decode, calibration, jump |
+| **Gateway Viz Router** | Python | ✅ Complete | `pmoves/services/gateway/gateway/api/viz.py` | 8 visualization endpoints (SVG, decode, mix, calibration) |
+| **GeometryCalibrationRequest** | Python | ✅ Complete | `pmoves/services/gateway/gateway/api/chit.py` | KL/JS divergence calibration with codebook sandboxing |
+| **Web Client** | HTML/JS | ✅ Complete | `pmoves/services/gateway/web/client.html` | Browser-based publish/decode/calibration with XSS protection |
+| **CHIT Signer** | Python | ✅ Complete | `pmoves/services/gateway/scripts/chit_sign.py` | HMAC-SHA256 signing + AES-GCM anchor encryption CLI |
+| **CHIT Smoke Client** | Python | ✅ Complete | `pmoves/services/gateway/scripts/chit_client.py` | End-to-end smoke test (publish, decode, calibrate) |
 
 ---
 
@@ -161,6 +169,7 @@ The CHIT system is built on five mathematical foundations:
 | `PMOVESSHIFTEST.md` | Shape Harmonic Intelligence Framework | ⚠️ Conceptual |
 | `GEOMETRY_BUS_INTEGRATION.md` | NATS integration guide | ✅ Active |
 | `geometry-nats-subjects.md` | NATS subject catalog | ✅ Active |
+| `CHIT_GATEWAY_API.md` | Gateway HTTP API reference | ✅ Complete |
 
 ---
 
@@ -187,7 +196,7 @@ Available via Claude Code CLI:
 1. ~~**Python Decoder v0.1****:~~ ✅ **Implemented** - `pmoves/tools/chit/chit_decoder.py`
 2. ~~**`chit_security.py`**:~~ ✅ **Implemented** - `pmoves/tools/chit_security.py`
 3. ~~**`chit_decoder_mm.py`**:~~ ✅ **Implemented** - `pmoves/tools/chit/chit_decoder_mm.py`
-4. **Shape Store**: Persistent geometry storage location undefined
+4. ~~**Shape Store**:~~ ✅ **Implemented** - `pmoves/services/common/shape_store.py` (LRU cache + Supabase warm loading)
 5. **T5 Generator (v0.2)**: Learning-based decoder with fine-tuning (future enhancement)
 
 ### Documentation Gaps
@@ -231,12 +240,27 @@ curl -X POST http://localhost:8086/geometry/event \
 - [x] ~~Multi-modal decoder (DECODER_MULTI)~~ ✅ **Complete** (2026-02-08)
 - [x] ~~Security layer (`chit_security.py`)~~ ✅ **Complete** (pre-existing)
 - [x] ~~CGP v1.0 specification~~ ✅ **Complete** (2026-02-08)
-- [ ] Define Shape Store location (Supabase + Qdrant)
+- [x] ~~Define Shape Store location~~ ✅ **Complete** (2026-02-18) — `pmoves/services/common/shape_store.py` (LRU + Supabase)
 - [ ] Complete Hyperdimensions visualizer integration
 
 ### Q2 2026
 - [ ] T5 Generator (v0.2): Learning-based decoder with fine-tuning
 - [ ] Audio decode via CLAP (full implementation)
+
+---
+
+## Gateway Security Hardening
+
+| Feature | Status | Location | Notes |
+|---------|--------|----------|-------|
+| HMAC-SHA256 Signing | ✅ Complete | `gateway/api/chit.py` `verify_hmac()` | Opt-in via `CHIT_REQUIRE_SIGNATURE=true` |
+| AES-GCM Anchor Encryption | ✅ Complete | `gateway/api/chit.py` `decrypt_anchor()` | scrypt key derivation, AAD bound to constellation ID |
+| XSS Protection (Web Client) | ✅ Complete | `gateway/web/client.html` `safeBase()` | Rejects non-http/https protocols |
+| Codebook Path Sandboxing | ✅ Complete | `gateway/api/chit.py` `_load_codebook()` | Basename-only resolution prevents traversal |
+| JSONDecodeError Handling | ✅ Complete | `gateway/api/chit.py` `_load_codebook()` | Malformed codebook lines logged and skipped |
+| GeometryCalibrationRequest Model | ✅ Complete | `gateway/api/chit.py` | Pydantic wrapper prevents raw CGP injection |
+
+See [`CHIT_GATEWAY_API.md`](./CHIT_GATEWAY_API.md) for full security configuration guide.
 
 ---
 

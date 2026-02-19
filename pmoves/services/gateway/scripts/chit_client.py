@@ -78,7 +78,7 @@ def main():
         print("-", it.get("text"))
 
     # 3) calibration
-    r = s.post(f"{args.base}/geometry/calibration/report", json=cgp, timeout=20)
+    r = s.post(f"{args.base}/geometry/calibration/report", json={"cgp": cgp}, timeout=20)
     r.raise_for_status()
     print("Calibration:", r.json())
 

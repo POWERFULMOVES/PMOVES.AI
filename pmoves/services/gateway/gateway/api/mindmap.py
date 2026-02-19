@@ -9,13 +9,15 @@ from fastapi import APIRouter, HTTPException, Query
 from neo4j import GraphDatabase
 from pydantic import BaseModel
 
+from services.common.env import get_secret
+
 router = APIRouter(tags=["MindMap"])
 
 logger = logging.getLogger("pmoves.gateway.mindmap")
 
 NEO4J_URL = os.getenv("NEO4J_URL") or os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD") or os.getenv("NEO4J_PASS", "neo4j")
+NEO4J_PASSWORD = get_secret("NEO4J_PASSWORD") or get_secret("NEO4J_PASS", "neo4j")
 
 driver = None
 if NEO4J_URL:

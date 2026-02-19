@@ -2,17 +2,18 @@ import os, json, base64, hashlib, logging
 from typing import Any, Dict, List, Optional, Sequence
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
+from services.common.env import get_secret
 
 router = APIRouter(tags=["CHIT"])
 logger = logging.getLogger(__name__)
 
 CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="true"
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
-CHIT_PASSPHRASE = os.getenv("CHIT_PASSPHRASE","change-me")
+CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE","change-me")
 CHIT_CODEBOOK_PATH = os.getenv("CHIT_CODEBOOK_PATH","tests/data/codebook.jsonl")
 CHIT_LEARNED_TEXT = os.getenv("CHIT_LEARNED_TEXT","false").lower()=="true"
 CHIT_T5_MODEL = os.getenv("CHIT_T5_MODEL")  # optional HF model path/name
@@ -118,11 +119,26 @@ class GeometryEventEnvelope(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class GeometryCalibrationRequest(BaseModel):
+    cgp: CGP
+    codebook_path: Optional[str] = None
+    sig: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_raw_cgp(cls, data: Any) -> Any:
+        """Backward compat: accept raw CGP payload without 'cgp' wrapper key."""
+        if isinstance(data, dict) and "super_nodes" in data and "cgp" not in data:
+            return {"cgp": data}
+        return data
+
+
 class GeometryDecodeTextRequest(BaseModel):
     shape_id: Optional[str] = None
     constellation_ids: List[str] = Field(default_factory=list)
     per_constellation: int = 10
     codebook_path: Optional[str] = None
+    sig: Optional[Dict[str, Any]] = None
 
 
 def ingest_cgp(cgp: Dict[str, Any]) -> str:
@@ -205,14 +221,37 @@ def shape_point_jump(pid: str):
         raise HTTPException(status_code=404, detail="point not found")
     return {"ok": True, "locator": loc}
 
-def _load_codebook(path: str):
-    items=[]; 
-    if not os.path.exists(path): path="tests/data/codebook.jsonl"
-    if not os.path.exists(path): return items
-    with open(path,"r",encoding="utf-8") as f:
+import re as _re
+
+_SAFE_FILENAME = _re.compile(r"^[a-zA-Z0-9_\-]+\.jsonl?$")
+
+
+def _load_codebook(codebook_path: Optional[str] = None):
+    if codebook_path:
+        safe_name = os.path.basename(codebook_path)
+        if not safe_name:
+            safe_name = os.path.basename(CHIT_CODEBOOK_PATH or "codebook.jsonl")
+        if not _SAFE_FILENAME.match(safe_name):
+            raise HTTPException(status_code=400, detail="Invalid codebook filename")
+        codebook_dir = os.path.dirname(CHIT_CODEBOOK_PATH or "tests/data/codebook.jsonl") or "."
+        path = os.path.normpath(os.path.join(codebook_dir, safe_name))
+        # Ensure resolved path stays within the codebook directory
+        if not path.startswith(os.path.normpath(codebook_dir)):
+            raise HTTPException(status_code=400, detail="Invalid codebook path")
+    else:
+        path = CHIT_CODEBOOK_PATH or "tests/data/codebook.jsonl"
+    items = []
+    if not os.path.exists(path):
+        return items
+    with open(path, "r", encoding="utf-8") as f:
         for ln in f:
-            ln=ln.strip(); 
-            if ln: items.append(json.loads(ln))
+            ln = ln.strip()
+            if ln:
+                try:
+                    items.append(json.loads(ln))
+                except json.JSONDecodeError:
+                    logger.warning("Skipping malformed codebook line in %s", path)
+                    continue
     return items
 
 def decode_constellations(
@@ -220,7 +259,7 @@ def decode_constellations(
     per_constellation: int = 10,
     codebook_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    items = _load_codebook(codebook_path or CHIT_CODEBOOK_PATH)
+    items = _load_codebook(codebook_path)
     if not items:
         return {"items": []}
     out: List[Dict[str, Any]] = []
@@ -269,6 +308,9 @@ def decode_constellations(
 
 @router.post("/geometry/decode/text")
 def geometry_decode_text(body: GeometryDecodeTextRequest):
+    if body.codebook_path and CHIT_REQUIRE_SIGNATURE:
+        if not verify_hmac(body.model_dump()):
+            raise HTTPException(status_code=403, detail="codebook_path requires CHIT-signed request")
     if shape_store is None:
         raise HTTPException(status_code=503, detail="ShapeStore unavailable")
 
@@ -307,10 +349,16 @@ def geometry_decode_text(body: GeometryDecodeTextRequest):
     return resp
 
 @router.post("/geometry/calibration/report")
-def geometry_calibration_report(cgp: CGP, codebook_path: Optional[str] = None):
-    items = _load_codebook(codebook_path or CHIT_CODEBOOK_PATH)
+def geometry_calibration_report(body: GeometryCalibrationRequest):
+    if body.codebook_path and CHIT_REQUIRE_SIGNATURE:
+        payload = {"codebook_path": body.codebook_path, "cgp": body.cgp.model_dump()}
+        if body.sig:
+            payload["sig"] = body.sig
+        if not verify_hmac(payload):
+            raise HTTPException(status_code=403, detail="codebook_path requires CHIT-signed request")
+    items = _load_codebook(body.codebook_path)
     if not items: return {"KL": None, "JS": None, "coverage": 0.0}
-    const = cgp.super_nodes[0].constellations[0]
+    const = body.cgp.super_nodes[0].constellations[0]
     anchor = const.anchor or []
     if not anchor and const.anchor_enc:
         d = const.model_dump(); decrypt_anchor(d); anchor = d.get("anchor") or []

@@ -75,7 +75,7 @@ class CGPMapper:
                 - subcategory: Taxonomy subcategory
 
         Returns:
-            CGP v0.2 format packet (chit.cgp.v0.2) with geometric coordinates and metadata
+            CGP v1.0 format packet (chit.cgp.v1.0) with geometric coordinates and metadata
         """
         name = theory.get("name", "Unknown Theory")
         proponents = theory.get("proponents", [])
@@ -266,7 +266,7 @@ class CGPMapper:
         Publish CGP packet to Hi-RAG v2 geometry event endpoint.
 
         Args:
-            packet: CGP v0.2 format packet (chit.cgp.v0.2)
+            packet: CGP v1.0 format packet (chit.cgp.v1.0)
 
         Returns:
             Response from Hi-RAG v2 API

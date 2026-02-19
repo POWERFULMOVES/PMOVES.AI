@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-02-19 07:44 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-Agent-Zero",
+      "path": "PMOVES-Agent-Zero",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git",
+      "status_prefix": " ",
+      "commit": "4bc9b9ab78ea1daf02ee186a28b0580f1cafc19e",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "pass",
+      "findings": []
+    }
+  ]
+}

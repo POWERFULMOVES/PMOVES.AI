@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # CHIT CGP Spec Version — canonical reference:
 # PMOVES-ToKenism-Multi/integrations/contracts/chit/cgp-generator.ts
-CGP_SPEC_VERSION = "chit.cgp.v0.2"
+CGP_SPEC_VERSION = "chit.cgp.v1.0"
 
 # Backward-compat alias
 CHIT_CGP_VERSION = CGP_SPEC_VERSION

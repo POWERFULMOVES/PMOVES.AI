@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 5: Reference & Operations
+>
+> Local model deployment guide for running PMOVES.AI with on-device models. Covers Ollama integration, VRAM sizing, and TensorZero role mapping.
+
 # Local Model Setup Guide for PMOVES.AI
 
 This guide covers setting up and running PMOVES.AI entirely with local models using Hugging Face integration.

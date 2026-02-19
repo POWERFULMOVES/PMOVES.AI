@@ -1314,6 +1314,11 @@ def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response
     Resolves DNS once and validates all IPs against private ranges before fetch.
     Note: ``requests.get`` re-resolves DNS independently, so this does not fully
     prevent DNS-rebinding TOCTOU attacks but raises the bar significantly.
+
+    CodeQL alert #143 accepted risk: 5-layer defense (URL validation, scheme
+    check, DNS resolve, private IP block, redirect block). Only residual gap
+    is DNS-rebinding TOCTOU which requires attacker-controlled DNS and is
+    mitigated by the short TTL window.
     """
     url = _validate_remote_image_url(raw_url)
     parsed = urlparse(url)

@@ -40,7 +40,7 @@ PMOVES.AI uses a multi-layered secrets management system that supports:
            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  env.cgp.json (CHIT Geometry Packet)                            │
-│  Location: pmoves/pmoves/data/chit/env.cgp.json                │
+│  Location: pmoves/data/chit/env.cgp.json                │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -77,7 +77,7 @@ cat .env.bootstrap >> pmoves/env.shared
 
 ```bash
 pmoves secrets encode
-# Creates: pmoves/pmoves/data/chit/env.cgp.json
+# Creates: pmoves/data/chit/env.cgp.json
 ```
 
 ### 3. Initialize Tier Files
@@ -174,7 +174,7 @@ GITHUB_PAT=ghp_xxxx \
 
 1. **Active Fetcher** - Python module calling GitHub/Docker APIs
 2. **GitHub Secrets** - Environment variables in GitHub Actions/Codespaces
-3. **CHIT CGP** - Encoded secrets in `pmoves/pmoves/data/chit/env.cgp.json`
+3. **CHIT CGP** - Encoded secrets in `pmoves/data/chit/env.cgp.json`
 4. **git-crypt** - GPG-encrypted `.env.enc` files
 5. **Docker Secrets** - Container-standard `/run/secrets/` directory
 6. **Parent PMOVES.AI** - Fallback to parent repo in docked mode
@@ -186,7 +186,7 @@ GITHUB_PAT=ghp_xxxx \
 ```bash
 pmoves secrets encode \
   --env-file pmoves/env.shared \
-  --out pmoves/pmoves/data/chit/env.cgp.json
+  --out pmoves/data/chit/env.cgp.json
 ```
 
 **Options:**
@@ -196,7 +196,7 @@ pmoves secrets encode \
 
 ```bash
 pmoves secrets decode \
-  --cgp pmoves/pmoves/data/chit/env.cgp.json \
+  --cgp pmoves/data/chit/env.cgp.json \
   --out pmoves/pmoves/data/chit/env.decoded
 ```
 
@@ -206,7 +206,7 @@ pmoves secrets decode \
 
 ```bash
 pmoves env init \
-  --cgp pmoves/pmoves/data/chit/env.cgp.json \
+  --cgp pmoves/data/chit/env.cgp.json \
   --manifest pmoves/chit/secrets_manifest_v2.yaml
 ```
 
@@ -331,7 +331,7 @@ entries:
 
 ```bash
 # Check if CGP exists
-ls -la pmoves/pmoves/data/chit/env.cgp.json
+ls -la pmoves/data/chit/env.cgp.json
 
 # Create from env.shared
 pmoves secrets encode

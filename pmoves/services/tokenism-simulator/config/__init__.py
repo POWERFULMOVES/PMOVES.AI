@@ -75,7 +75,7 @@ class CHITConfig:
     """CHIT/Geometry Bus configuration."""
     enabled: bool = os.getenv('CHIT_ENABLED', 'true').lower() == 'true'
     geometry_bus_url: str = os.getenv('GEOMETRY_BUS_URL', 'nats://localhost:4222')
-    cgp_version: str = os.getenv('CGP_VERSION', '0.2')
+    cgp_version: str = os.getenv('CGP_VERSION', '1.0')
 
 
 @dataclass(frozen=True)

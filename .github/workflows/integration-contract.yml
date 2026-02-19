@@ -6,7 +6,7 @@ on:
     paths:
       - "pmoves/integrations/**"
       - "pmoves/tools/integration_contract_check.py"
-      - "pmoves/docs/SUBMODULE_INTEGRATION_CONTRACT.md"
+      - "pmoves/docs/submodules/SUBMODULE_INTEGRATION_CONTRACT.md"
       - "pmoves/Makefile"
       - ".github/workflows/integration-contract.yml"
   pull_request:
@@ -14,10 +14,14 @@ on:
     paths:
       - "pmoves/integrations/**"
       - "pmoves/tools/integration_contract_check.py"
-      - "pmoves/docs/SUBMODULE_INTEGRATION_CONTRACT.md"
+      - "pmoves/docs/submodules/SUBMODULE_INTEGRATION_CONTRACT.md"
       - "pmoves/Makefile"
       - ".github/workflows/integration-contract.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

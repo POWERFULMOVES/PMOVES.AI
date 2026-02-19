@@ -1,3 +1,7 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 5: Reference & Operations
+>
+> Point-in-time audit of CHIT/GEOMETRY BUS implementation completeness. For current status, see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
+
 # CHIT/GEOMETRY BUS Implementation Audit Report
 
 **Date:** 2026-02-08

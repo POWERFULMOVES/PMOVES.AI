@@ -1,6 +1,10 @@
+> **Part of the [CHIT Documentation Suite](README.md)** | Layer 3: Applied Systems
+>
+> Demonstrates how the PMOVES Agent Class Taxonomy maps through all five CHIT mathematical pillars. Agents are encoded as CGP packets ("Agent Cards") flowing through the GEOMETRY BUS.
+
 # Living Template: Agent Taxonomy in CHIT
 
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-18 — v1.4.0 (59 agents)_
 
 This living template demonstrates how the PMOVES Agent Class Taxonomy maps through all five CHIT mathematical pillars, with concrete examples, CGP packet samples, and expanded use cases. It serves as both documentation and validation artifact — a working example of PMOVES in action.
 
@@ -26,10 +30,11 @@ An agent card encodes a single agent's position in the taxonomy as a CGP packet.
   "meta": {
     "source": "agent_taxonomy",
     "units_mode": "agents",
-    "K": 8,
+    "K": 59,
     "bins": 7,
     "mhep": 85.2,
-    "backend": "pmoves/config/agent_registry.yaml"
+    "backend": "pmoves/config/agent_registry.yaml",
+    "taxonomy_version": "1.4.0"
   },
   "super_nodes": [
     {
@@ -446,11 +451,11 @@ This is the canonical sample showing a full agent network topology encoded in CG
   "meta": {
     "source": "agent_taxonomy",
     "units_mode": "agents",
-    "K": 7,
+    "K": 59,
     "bins": 7,
     "mhep": 85.2,
     "backend": "pmoves/config/agent_registry.yaml",
-    "taxonomy_version": "1.0.0"
+    "taxonomy_version": "1.4.0"
   },
   "super_nodes": [
     {
@@ -540,9 +545,20 @@ This is the canonical sample showing a full agent network topology encoded in CG
           "radial_minmax": [0.10, 0.30],
           "spectrum": [0.05, 0.10, 0.05, 0.05, 0.05, 0.10, 0.60],
           "points": [
-            {"id": "mai_ui", "magnitude": 0.70, "modality": "ui"}
+            {"id": "mai_ui", "magnitude": 0.70, "modality": "ui"},
+            {"id": "a2ui", "magnitude": 0.65, "modality": "ui"},
+            {"id": "e2b_desktop", "magnitude": 0.55, "modality": "ui"}
           ]
         }
+      ]
+    },
+    {
+      "id": "class_standard_v140",
+      "comment": "v1.4.0 additions to Standard class",
+      "new_agents": [
+        {"id": "agentgym", "magnitude": 0.72, "modality": "agent", "type": "agent"},
+        {"id": "creator", "magnitude": 0.68, "modality": "media", "type": "media"},
+        {"id": "e2b_danger_room", "magnitude": 0.70, "modality": "agent", "type": "agent"}
       ]
     },
     {
@@ -562,7 +578,11 @@ This is the canonical sample showing a full agent network topology encoded in CG
             {"id": "cipher_memory", "magnitude": 0.72, "modality": "data"},
             {"id": "hyperdimensions", "magnitude": 0.80, "modality": "ui"},
             {"id": "jellyfin_bridge", "magnitude": 0.50, "modality": "media"},
-            {"id": "health_wger", "magnitude": 0.45, "modality": "data"}
+            {"id": "health_wger", "magnitude": 0.45, "modality": "data"},
+            {"id": "agentgym_rl", "magnitude": 0.62, "modality": "agent"},
+            {"id": "llama_lab", "magnitude": 0.58, "modality": "llm"},
+            {"id": "transcribe_and_fetch", "magnitude": 0.55, "modality": "media"},
+            {"id": "jellyfin_ai", "magnitude": 0.52, "modality": "media"}
           ]
         }
       ]
@@ -586,7 +606,10 @@ This is the canonical sample showing a full agent network topology encoded in CG
             {"id": "qdrant", "magnitude": 0.80, "modality": "data"},
             {"id": "neo4j", "magnitude": 0.80, "modality": "data"},
             {"id": "meilisearch", "magnitude": 0.75, "modality": "data"},
-            {"id": "minio", "magnitude": 0.85, "modality": "data"}
+            {"id": "minio", "magnitude": 0.85, "modality": "data"},
+            {"id": "surf", "magnitude": 0.60, "modality": "agent"},
+            {"id": "danger_infra", "magnitude": 0.55, "modality": "worker"},
+            {"id": "e2b_spells", "magnitude": 0.50, "modality": "agent"}
           ]
         }
       ]
@@ -619,16 +642,101 @@ Save surface: `Pmoves-hyperdimensions/saves/agent_topology.json`
 
 ---
 
-## 6. Validation
+## 6. v1.4.0 Agent Card Examples
+
+Three representative agents added in v1.4.0, one per class:
+
+### Standard Class: Creator
+
+```json
+{
+  "id": "creator",
+  "magnitude": 0.68,
+  "modality": "media",
+  "text_b64": "Q3JlYXRvcjogbWVkaWEgY29udGVudCBnZW5lcmF0aW9uLCBTdGFnZSAxLCA0IGxheWVycw==",
+  "layers": ["L0", "L2", "L4", "L5"],
+  "evolution_stage": "stage_1",
+  "chit_toggles": {
+    "delta_sensitive": true,
+    "kappa_sensitive": false,
+    "hz_sensitive": true,
+    "swarm_participant": false,
+    "attribution_gated": true
+  },
+  "health_endpoint": null,
+  "submodule": "PMOVES-Creator"
+}
+```
+
+### Specialized Class: Jellyfin AI
+
+```json
+{
+  "id": "jellyfin_ai",
+  "magnitude": 0.52,
+  "modality": "media",
+  "text_b64": "SmVsbHlmaW4gQUk6IG1lZGlhIHN0YWNrIG1hbmFnZW1lbnQsIFN0YWdlIDEsIDMgbGF5ZXJz",
+  "layers": ["L0", "L4", "L5"],
+  "evolution_stage": "stage_1",
+  "chit_toggles": {
+    "delta_sensitive": true,
+    "kappa_sensitive": false,
+    "hz_sensitive": false,
+    "swarm_participant": false,
+    "attribution_gated": false
+  },
+  "health_endpoint": null,
+  "submodule": "Pmoves-Jellyfin-AI-Media-Stack"
+}
+```
+
+### Utility Class: Surf
+
+```json
+{
+  "id": "surf",
+  "magnitude": 0.60,
+  "modality": "agent",
+  "text_b64": "U3VyZjogd2ViIGJyb3dzaW5nIGFnZW50LCBCYXNlLCAyIGxheWVycw==",
+  "layers": ["L0", "L5"],
+  "evolution_stage": "base",
+  "chit_toggles": {
+    "delta_sensitive": false,
+    "kappa_sensitive": false,
+    "hz_sensitive": false,
+    "swarm_participant": false,
+    "attribution_gated": false
+  },
+  "health_endpoint": null,
+  "submodule": "pmoves-surf"
+}
+```
+
+---
+
+## 7. Known Discrepancies
+
+| Item | Status | Note |
+|------|--------|------|
+| ToKenism-Multi CGP sample at `integrations/contracts/chit/samples/agent-taxonomy-cgp.json` | Needs regeneration | Sample was generated at v1.0.0 with K=7; needs re-export at v1.4.0 with K=59 |
+| Section 1 agent card (CGP v0.2) | Updated | `meta.K` bumped to 59, `taxonomy_version` added as `"1.4.0"` |
+| Section 4 CGP sample | Updated | `meta.K` bumped to 59, `taxonomy_version` updated to `"1.4.0"`, new agents added to constellations |
+| Hyperbolic embedding (Section 2, Pillar 2) | Approximate | Ring descriptions reference original agents only; v1.4.0 agents not yet placed on Poincare disk |
+
+---
+
+## 8. Validation
 
 This living template is valid when:
 
 1. All 5 CHIT pillars are demonstrated with agent taxonomy examples
 2. CGP sample packet conforms to `chit.cgp.v0.2` spec
-3. Agent names match `pmoves/config/agent_registry.yaml`
+3. Agent names match `pmoves/config/agent_registry.yaml` (59 agents at v1.4.0)
 4. NATS subjects match `.claude/context/nats-subjects.md` and `geometry-nats-subjects.md`
 5. Layer assignments match `PMOVES_UNIFIED_AGENT_TAXONOMY.md`
 6. Control mappings match `PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
+7. `meta.K` = 59 in all CGP sample blocks
+8. `taxonomy_version` = `"1.4.0"` in all CGP meta blocks
 
 Update this template whenever the agent registry or CHIT pillars change.
 
