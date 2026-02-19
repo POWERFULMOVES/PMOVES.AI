@@ -5,7 +5,7 @@ Param(
 
 $Image = "agent-zero"
 $Dockerfile = "services/agent-zero/Dockerfile.multiarch"
-$Context = "services/agent-zero"
+$Context = "."
 
 if (-not (docker buildx inspect pmoves-builder 2>$null)) {
   docker buildx create --name pmoves-builder --use | Out-Null

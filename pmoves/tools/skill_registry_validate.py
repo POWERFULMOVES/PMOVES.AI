@@ -46,7 +46,12 @@ def validate() -> list[str]:
             errors.append(f"FAIL: Submodule '{path}' in .gitmodules has no registry entry")
 
     # 2. Every registry entry should correspond to a .gitmodules entry
+    #    Skip entries that have a "canonical" field (alias/vendor dual-mount paths
+    #    that reference another entry's .gitmodules path).
     for name in sorted(submodules):
+        entry = submodules[name]
+        if entry.get("canonical"):
+            continue
         if name not in gitmodule_paths:
             errors.append(f"FAIL: Registry entry '{name}' not found in .gitmodules")
 
