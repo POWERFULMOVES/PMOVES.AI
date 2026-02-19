@@ -2,7 +2,7 @@ import os, json, base64, hashlib, logging
 from typing import Any, Dict, List, Optional, Sequence
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
@@ -124,6 +124,14 @@ class GeometryCalibrationRequest(BaseModel):
     codebook_path: Optional[str] = None
     sig: Optional[Dict[str, Any]] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def wrap_raw_cgp(cls, data: Any) -> Any:
+        """Backward compat: accept raw CGP payload without 'cgp' wrapper key."""
+        if isinstance(data, dict) and "super_nodes" in data and "cgp" not in data:
+            return {"cgp": data}
+        return data
+
 
 class GeometryDecodeTextRequest(BaseModel):
     shape_id: Optional[str] = None
@@ -213,13 +221,23 @@ def shape_point_jump(pid: str):
         raise HTTPException(status_code=404, detail="point not found")
     return {"ok": True, "locator": loc}
 
+import re as _re
+
+_SAFE_FILENAME = _re.compile(r"^[a-zA-Z0-9_\-]+\.jsonl?$")
+
+
 def _load_codebook(codebook_path: Optional[str] = None):
     if codebook_path:
         safe_name = os.path.basename(codebook_path)
         if not safe_name:
             safe_name = os.path.basename(CHIT_CODEBOOK_PATH or "codebook.jsonl")
+        if not _SAFE_FILENAME.match(safe_name):
+            raise HTTPException(status_code=400, detail="Invalid codebook filename")
         codebook_dir = os.path.dirname(CHIT_CODEBOOK_PATH or "tests/data/codebook.jsonl") or "."
-        path = os.path.join(codebook_dir, safe_name)
+        path = os.path.normpath(os.path.join(codebook_dir, safe_name))
+        # Ensure resolved path stays within the codebook directory
+        if not path.startswith(os.path.normpath(codebook_dir)):
+            raise HTTPException(status_code=400, detail="Invalid codebook path")
     else:
         path = CHIT_CODEBOOK_PATH or "tests/data/codebook.jsonl"
     items = []
