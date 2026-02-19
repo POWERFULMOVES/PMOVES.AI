@@ -1,3 +1,5 @@
+# Build context: repo root (pmoves/)
+# Usage: docker build -f services/agent-zero/Dockerfile .
 FROM agent0ai/agent-zero:latest
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
