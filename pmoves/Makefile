@@ -1246,7 +1246,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu >/dev/null 2>&1 || true
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
-.PHONY: up down clean smoke smoke-prod smoke-gpu smoke-qwen-rerank manifest-audit
+.PHONY: up down clean smoke smoke-prod smoke-gpu smoke-qwen-rerank llama-throughput-smoke manifest-audit
 .PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: up down clean up-cloudflare down-cloudflare logs-cloudflare cloudflare-url restart-cloudflare up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
@@ -1349,6 +1349,10 @@ smoke-prod: ## Production smoke: core smoke + production monitoring/profile asse
 
 smoke-gpu: ## Validate Hi-RAG v2 GPU rerank path (strict by default; set GPU_SMOKE_STRICT=false to relax)
 	@$(PYTHON) tools/smoke_gpu.py $(ARGS) || python tools/smoke_gpu.py $(ARGS) || py -3 tools/smoke_gpu.py $(ARGS)
+
+llama-throughput-smoke: ## Quick llama throughput validation (single request test)
+	docker compose --profile benchmarks run --rm llama-throughput-lab \
+		python -m pytest tests/test_llama_server_single.py -v
 
 smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict GPU smoke
 	@$(PYTHON) tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || python tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || py -3 tools/smoke_gpu.py --require-qwen --stats-only $(ARGS)

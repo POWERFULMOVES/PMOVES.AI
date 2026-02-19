@@ -2442,6 +2442,45 @@ services:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+  # Llama.cpp throughput benchmarking toolkit (GPU, on-demand)
+  llama-throughput-lab:
+    build:
+      context: ../PMOVES-llama-throughput-lab
+      dockerfile: Dockerfile
+    image: ${LLAMA_THROUGHPUT_LAB_IMAGE:-ghcr.io/powerfulmoves/pmoves-llama-throughput-lab:latest}
+    restart: "no"
+    environment:
+    - LLAMA_MODEL_PATH=/models/${LLAMA_MODEL:-model.gguf}
+    - LLAMA_SERVER_HOST=127.0.0.1
+    - LLAMA_RESULTS_DIR=/results
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - CIPHER_MEMORY_URL=http://cipher-memory:8096
+    - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
+    - METRICS_PORT=8201
+    volumes:
+    - ${LLAMA_MODELS_PATH:-./models}:/models:ro
+    - llama-results:/results
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - benchmarks
+    - gpu
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    ports:
+    - 8201:8201
+
 volumes:
   neo4j-data: {}
   qdrant-data: {}
@@ -2459,6 +2498,7 @@ volumes:
   pmoves-ollama-models: {}
   comfy-watcher-output: {}
   comfy-watcher-state: {}
+  llama-results: {}
 networks:
   pmoves_data:
     name: pmoves_data
