@@ -127,7 +127,7 @@ jobs:
           PY
       - name: Run all service tests
         run: |
-          pytest -q --tb=short \
+          pytest -q --tb=short --rootdir=. \
             pmoves/tests/ \
             pmoves/services/publisher/tests \
             pmoves/services/pmoves-yt/tests \
