@@ -10,6 +10,7 @@
 !.env.shared.sh
 !.env.template
 !.env.tier-*
+env.tier-*
 secrets/
 !pmoves/integrations/**/secrets/
 !pmoves/integrations/**/secrets/labels.yaml
@@ -115,4 +116,7 @@ pmoves-cipher-mcp/uv.lock
 # =============================================================================
 # Orphaned submodule directories (gitlink removed, physical dir remains)
 # =============================================================================
-pmoves-e2b-mcp-server/
+# pmoves-e2b-mcp-server/ moved to submodule
+pmoves/vendor/
+research/A2UI/
+

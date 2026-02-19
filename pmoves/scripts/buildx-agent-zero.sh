@@ -8,7 +8,7 @@ REGISTRY=${REGISTRY:-}
 VERSION=${VERSION:-}
 IMAGE=agent-zero
 DOCKERFILE=services/agent-zero/Dockerfile.multiarch
-CONTEXT=services/agent-zero
+CONTEXT=.
 
 if [[ -z "$REGISTRY" ]]; then
   echo "Set REGISTRY (e.g., docker.io/yourorg or ghcr.io/yourorg)" >&2

@@ -24,6 +24,8 @@ import httpx
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
+from services.common.env import get_secret
+
 logger = logging.getLogger("evo-controller")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
@@ -99,10 +101,10 @@ class EvoConfig:
 
     rest_url: Optional[str] = field(default_factory=lambda: os.getenv("SUPA_REST_URL") or os.getenv("SUPABASE_REST_URL"))
     service_key: Optional[str] = field(
-        default_factory=lambda: os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        or os.getenv("SUPABASE_SERVICE_KEY")
-        or os.getenv("SUPABASE_KEY")
-        or os.getenv("SUPABASE_ANON_KEY")
+        default_factory=lambda: get_secret("SUPABASE_SERVICE_ROLE_KEY")
+        or get_secret("SUPABASE_SERVICE_KEY")
+        or get_secret("SUPABASE_KEY")
+        or get_secret("SUPABASE_ANON_KEY")
     )
     poll_seconds: float = float(os.getenv("EVOSWARM_POLL_SECONDS", "300"))
     sample_limit: int = int(os.getenv("EVOSWARM_SAMPLE_LIMIT", "25"))

@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-02-19 07:45 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-E2B-Danger-Room",
+      "path": "PMOVES-E2B-Danger-Room",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git",
+      "status_prefix": " ",
+      "commit": "65a7e9b14a71925baeeb4971948f87c9dac63d88",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "TOP_LEVEL_DOSSIER_MISSING",
+          "message": "Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']"
+        }
+      ]
+    }
+  ]
+}

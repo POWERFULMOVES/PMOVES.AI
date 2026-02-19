@@ -34,6 +34,8 @@ from uuid import UUID
 import httpx
 from nats.aio.client import Client as NATS
 
+from services.common.env import get_secret
+
 logger = logging.getLogger(__name__)
 
 # NATS subjects for persona optimization
@@ -167,9 +169,9 @@ class PersonaOptimizer:
             "SUPA_REST_URL",
             os.getenv("SUPABASE_REST_URL", "http://postgrest:3000")
         )
-        self.supabase_key = supabase_key or os.getenv(
+        self.supabase_key = supabase_key or get_secret(
             "SUPABASE_SERVICE_ROLE_KEY",
-            os.getenv("SUPABASE_SERVICE_KEY")
+            get_secret("SUPABASE_SERVICE_KEY")
         )
         self.nats_url = nats_url or os.getenv("NATS_URL", "nats://nats:4222")
 

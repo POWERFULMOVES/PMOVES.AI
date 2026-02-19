@@ -18,6 +18,8 @@ from fastapi.responses import FileResponse
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel, Field, HttpUrl
 
+from services.common.env import get_secret
+
 # NATS service announcement integration
 try:
     from services.common.nats_service_listener import announce_service, ServiceTier
@@ -67,11 +69,11 @@ def _ensure_supabase_env() -> None:
     # else: leave SUPABASE_URL unchanged if already set
 
     # Ensure downstream clients find the service role key under expected aliases.
-    srv = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    srv = get_secret("SUPABASE_SERVICE_ROLE_KEY")
     if srv:
-        if not os.environ.get("SUPABASE_KEY"):
+        if not get_secret("SUPABASE_KEY"):
             os.environ["SUPABASE_KEY"] = srv
-        if not os.environ.get("SUPABASE_SERVICE_KEY"):
+        if not get_secret("SUPABASE_SERVICE_KEY"):
             os.environ["SUPABASE_SERVICE_KEY"] = srv
 
     os.environ["POSTGRES_HOST"] = os.environ.get("PGHOST", "postgres")
@@ -212,9 +214,9 @@ def _sync_openai_compat_env() -> None:
             logger.info("OpenAI-compatible base resolved to %s", resolved_base)
         else:
             logger.debug("OpenAI-compatible base already set to %s", resolved_base)
-    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    key = (get_secret("OPENAI_API_KEY") or "").strip()
     if not key:
-        tz_key = (os.environ.get("TENSORZERO_API_KEY") or "").strip()
+        tz_key = (get_secret("TENSORZERO_API_KEY") or "").strip()
         if tz_key:
             os.environ["OPENAI_API_KEY"] = tz_key
             os.putenv("OPENAI_API_KEY", tz_key)

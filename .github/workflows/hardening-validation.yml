@@ -15,6 +15,10 @@ on:
       - '.github/workflows/hardening-validation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
   security-events: write
@@ -26,7 +30,7 @@ jobs:
   # ============================================================================
   validate-hardening:
     name: Validate Hardening Patterns
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Harden Runner
@@ -83,7 +87,7 @@ jobs:
   # ============================================================================
   validate-dockerfiles:
     name: Validate Dockerfiles
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     strategy:
       fail-fast: false
       matrix:
@@ -159,7 +163,7 @@ jobs:
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Harden Runner
@@ -193,7 +197,7 @@ jobs:
   # ============================================================================
   validate-compose:
     name: Validate Compose Files
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Harden Runner
@@ -266,7 +270,7 @@ jobs:
   # ============================================================================
   summary:
     name: Validation Summary
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     needs: [validate-hardening, validate-dockerfiles, validate-compose]
     if: always()
 
@@ -299,3 +303,4 @@ jobs:
           name: validation-summary
           path: summary.md
           retention-days: 90
+

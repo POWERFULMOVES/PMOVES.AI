@@ -1,3 +1,6 @@
+> For a conceptual introduction to the GEOMETRY BUS, see [02_GEOMETRY_BUS.md](02_GEOMETRY_BUS.md).
+> For the documentation entry point, see [README.md](README.md).
+
 # GEOMETRY BUS Integration Guide
 
 **Comprehensive guide for integrating PMOVES.AI services with the GEOMETRY BUS - the universal data fabric for multimodal AI communication using geometric representations.**

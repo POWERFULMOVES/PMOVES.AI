@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-02-19 07:44 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 1
+  },
+  "results": [
+    {
+      "name": "PMOVES-Archon",
+      "path": "PMOVES-Archon",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-Archon.git",
+      "status_prefix": " ",
+      "commit": "03150daa95c77afc72c7e5afc4b8c140002e6b52",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "warn",
+      "findings": [
+        {
+          "level": "WARN",
+          "code": "PYTHON_COMPILE_SKIPPED",
+          "message": "python-file-count=1438 exceeds max=600"
+        }
+      ]
+    }
+  ]
+}

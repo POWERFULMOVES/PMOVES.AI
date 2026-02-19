@@ -105,7 +105,7 @@ Other profiles will mirror this structure (`laptop-4090`, `intel-265kf-3090ti`, 
 Reuse existing encode/decode modules with friendlier names:
 
 ```
-pmoves mini secrets encode --out pmoves/pmoves/data/chit/env.cgp.json
+pmoves mini secrets encode --out pmoves/data/chit/env.cgp.json
 pmoves mini secrets decode --out /tmp/env.decoded
 pmoves mini secrets diff --bundle other.cgp.json
 pmoves mini secrets rotate --label SUPABASE_SERVICE_ROLE_KEY

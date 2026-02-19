@@ -2,22 +2,29 @@ name: SQL Policy Lint
 
 on:
   push:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/supabase/sql/**'
       - 'pmoves/supabase/migrations/**'
       - '.github/workflows/sql-policy-lint.yml'
   pull_request:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/supabase/sql/**'
       - 'pmoves/supabase/migrations/**'
       - '.github/workflows/sql-policy-lint.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
 jobs:
   lint:
     # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, vps]
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
     steps:
@@ -56,6 +63,8 @@ jobs:
             "pmoves/supabase/migrations/20250115000000_service_catalog.sql"
             "pmoves/supabase/migrations/20251230000000_tokenism_simulator.sql"
             "pmoves/supabase/migrations/20260115_model_registry.sql"
+            "pmoves/supabase/migrations/20250204000000_channel_monitor_tables.sql"
+            "pmoves/supabase/migrations/20260218_model_spotlight.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev

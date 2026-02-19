@@ -1,6 +1,6 @@
 # PMOVES Agent Class Taxonomy
 
-_Last updated: 2026-02-17_
+_Last updated: 2026-02-18 — v1.4.0 (60 agents)_
 
 This document formalizes the PMOVES agent naming and classification system as a **type system** — composable, collectible agents with classes, types, evolutions, and connections. Think Pokemon and Transformers: no matter how small, every agent has a type, a place in the hierarchy, and connections through all the layers it can touch.
 
@@ -19,6 +19,7 @@ This taxonomy is grounded in and cross-references:
 - [`../PMOVESCHIT/IMPLEMENTATION_STATUS.md`](../PMOVESCHIT/IMPLEMENTATION_STATUS.md) — CHIT 5 pillars status
 - [`../PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md`](../PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md) — CGP format, producers
 - [`./agnotes2.md`](./agnotes2.md) — Original vision statement
+- [`PMOVES_AGENT_TOPOLOGY.md`](./PMOVES_AGENT_TOPOLOGY.md) — Visual topology (5 Mermaid diagrams + TAC tree)
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference hub
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
 - `pmoves/config/agent_registry.yaml` — Single source of truth (machine-readable)
@@ -51,16 +52,26 @@ Agent classes are named by prefix convention. Each class maps to a role scope an
 - `PMOVES-DoX` — document processing
 - `PMOVES-Headscale` — network coordination
 - `PMOVES.YT` — media ingestion
+- `PMOVES-A2UI` — research UI surface _(v1.4.0)_
+- `PMOVES-AgentGym` — agent training gymnasium _(v1.4.0)_
+- `PMOVES-Creator` — media creation pipeline _(v1.4.0)_
+- `PMOVES-E2B-Danger-Room` — sandboxed code execution _(v1.4.0)_
+- `PMOVES-E2B-Danger-Room-Desktop` — desktop sandbox _(v1.4.0)_
 
 **Specialized (`Pmoves-`):**
 - `Pmoves-hyperdimensions` — geometry visualization (L2.5)
 - `Pmoves-cipher` — knowledge-graph memory (L5)
-- `Pmoves-Jellyfin-AI-Media-Stack` — media intelligence
+- `Pmoves-Jellyfin-AI-Media-Stack` — AI-enhanced media management _(v1.4.0)_
 - `Pmoves-Health-wger` — health domain agent
+- `Pmoves-AgentGym-RL` — reinforcement learning extension _(v1.4.0)_
+- `PMOVES-llama-throughput-lab` — LLM benchmarking lab _(v1.4.0)_
+- `PMOVES-transcribe-and-fetch` — transcription utility _(v1.4.0)_
 
 **Utility (`pmoves-`):**
-- `pmoves-surf` — web browsing tool
+- `pmoves-surf` — web browsing tool _(v1.4.0)_
 - `pmoves-e2b-mcp-server` — sandbox execution
+- `PMOVES-Danger-infra` — E2B infrastructure provisioning _(v1.4.0)_
+- `PMOVES-E2b-Spells` — sandbox templates _(v1.4.0)_
 - `pmoves/tools/*` — CLI utilities
 
 ---
@@ -108,16 +119,41 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | Render Webhook | Utility | API | Worker | 2 |
 | Publisher-Discord | Standard | Worker | API | 4 |
 | Jellyfin Bridge | Specialized | Media | Data | 5 |
-| Mesh Agent | Standard | Agent | — | 6 |
+| Mesh Agent | Standard | Agent | Data | 6 |
 | NATS | Utility | Data | API | 1 |
 | Supabase | Utility | Data | API | 1 |
-| Qdrant | Utility | Data | — | 1 |
+| Qdrant | Utility | Data | Worker | 1 |
 | Neo4j | Utility | Data | — | 1 |
 | Meilisearch | Utility | Data | API | 1 |
 | MinIO | Utility | Data | API | 1 |
 | Prometheus | Utility | Data | UI | 1 |
 | Grafana | Utility | UI | Data | 7 |
 | Loki | Utility | Data | — | 1 |
+| A2UI | Standard | UI | Agent | 7 |
+| AgentGym | Standard | Agent | Worker | 6 |
+| AgentGym RL | Specialized | Agent | Worker | 6 |
+| Creator | Standard | Media | UI | 5 |
+| Llama Throughput Lab | Specialized | LLM | Worker | 3 |
+| Surf | Utility | Agent | UI | 6 |
+| E2B Danger Room | Standard | Agent | Worker | 6 |
+| E2B Desktop | Standard | UI | Agent | 7 |
+| Danger Infra | Utility | Worker | Agent | 4 |
+| E2B Spells | Utility | Agent | Worker | 6 |
+| Transcribe and Fetch | Specialized | Media | Worker | 5 |
+| Jellyfin AI Media Stack | Specialized | Media | LLM | 5 |
+| LangExtract | Standard | Worker | LLM | 4 |
+| Crush | Standard | UI | Agent | 7 |
+| DoX | Standard | Worker | Data | 4 |
+| Open Notebook | Standard | Data | UI | 1 |
+| Consciousness Service | Specialized | Agent | LLM | 6 |
+| n8n | Utility | Worker | Agent | 4 |
+| Headscale | Utility | Data | API | 1 |
+| RustDesk | Utility | UI | API | 7 |
+| Invidious | Utility | UI | Media | 7 |
+| Wealth | Specialized | UI | Data | 7 |
+| Health | Specialized | UI | Data | 7 |
+| EvoSwarm Controller | Standard | Worker | Agent | 4 |
+| Swarm Attribution | Specialized | Worker | Data | 4 |
 
 ### Dual-Type Interactions (Type Effectiveness)
 
@@ -236,6 +272,8 @@ Stage 2: extract-worker + CHIT
 All agent interactions flow through defined channels. The primary connection bus is NATS with JetStream.
 
 ### Connection Topology
+
+> **Full visual topology:** See [`PMOVES_AGENT_TOPOLOGY.md`](./PMOVES_AGENT_TOPOLOGY.md) for comprehensive Mermaid diagrams covering all 60 agents, NATS nervous system, data flow, and evolution paths. Generate from registry with `python -m pmoves.tools.agent_taxonomy_helper mermaid --style topology`.
 
 ```
                               ┌─────────────┐
@@ -447,9 +485,10 @@ The invocation discipline mirrors the naming principle: every agent name carries
 
 ## Related Documents
 
+- [`PMOVES_AGENT_TOPOLOGY.md`](./PMOVES_AGENT_TOPOLOGY.md) — Agent topology Mermaid diagrams and TAC tree
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference
 - [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) — Resilience protocol and patterns
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
 - `pmoves/config/agent_registry.yaml` — Machine-readable registry
-- `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool
+- `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool (`mermaid` subcommand for diagram generation)
 - [`../MODEL_SOURCE_OF_TRUTH.md`](../MODEL_SOURCE_OF_TRUTH.md) — Model-agnostic role names (no concrete model IDs in architecture docs)

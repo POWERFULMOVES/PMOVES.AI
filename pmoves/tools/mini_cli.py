@@ -864,7 +864,7 @@ def secrets_encode(
         help="Source env file to encode.",
     ),
     out: Path = typer.Option(
-        Path("pmoves/pmoves/data/chit/env.cgp.json"),
+        Path("pmoves/data/chit/env.cgp.json"),
         "--out",
         "-o",
         help="Output CGP path.",
@@ -885,7 +885,7 @@ def secrets_encode(
 @secrets_app.command("decode", help="Decode CHIT bundle to env format.")
 def secrets_decode(
     cgp: Path = typer.Option(
-        Path("pmoves/pmoves/data/chit/env.cgp.json"),
+        Path("pmoves/data/chit/env.cgp.json"),
         "--cgp",
         "-c",
         help="Input CGP file.",
@@ -1263,7 +1263,7 @@ def env_init(
         help="Deployment profile (dev, prod, hybrid).",
     ),
     cgp_file: Path = typer.Option(
-        Path("pmoves/pmoves/data/chit/env.cgp.json"),
+        Path("pmoves/data/chit/env.cgp.json"),
         "--cgp",
         "-c",
         help="CHIT CGP file to decode.",

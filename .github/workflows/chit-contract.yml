@@ -12,7 +12,7 @@ on:
       - 'pmoves/supabase/**/*.sql'
       - 'pmoves/supabase/initdb/**'
       - 'pmoves/services/**'
-      - 'pmoves/docs/SUPABASE_*.md'
+      - 'pmoves/docs/**/SUPABASE_*.md'
       - '.github/workflows/chit-contract.yml'
   pull_request:
     branches:
@@ -23,8 +23,12 @@ on:
       - 'pmoves/supabase/**/*.sql'
       - 'pmoves/supabase/initdb/**'
       - 'pmoves/services/**'
-      - 'pmoves/docs/SUPABASE_*.md'
+      - 'pmoves/docs/**/SUPABASE_*.md'
       - '.github/workflows/chit-contract.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

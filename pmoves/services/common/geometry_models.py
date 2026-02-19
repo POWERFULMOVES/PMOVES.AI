@@ -1,10 +1,17 @@
 """Pydantic models for CHIT Geometry Packets (CGP).
 
-Provides type-safe models for CGP v0.1 and v0.2 structures. These models
+Provides type-safe models for CGP v0.1, v0.2, and v1.0 structures. These models
 are shared across services for consistent CGP handling.
+
+v1.0 additions (all optional, backward compatible with v0.2):
+- Point: contributor_id, merkle_proof, weight
+- Constellation: spectrum_zeta, maca_consensus
+- SuperNode: x, y, r, hyperbolic encoding
+- CGP: nats metadata
 
 See Also:
     - geometry_decoder.py: Unified CGP decoder using these models
+    - pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md: v1.0 spec
     - pmoves/docs/PMOVESCHIT/PMOVESCHIT.md: Core CHIT specification
 """
 
@@ -20,11 +27,46 @@ from pydantic import BaseModel, Field, ConfigDict, ValidationError, field_valida
 
 CGP_VERSION_V01 = "chit.cgp.v0.1"
 CGP_VERSION_V02 = "chit.cgp.v0.2"
-SUPPORTED_VERSIONS = {CGP_VERSION_V01, CGP_VERSION_V02}
+CGP_VERSION_V10 = "chit.cgp.v1.0"
+SUPPORTED_VERSIONS = {CGP_VERSION_V01, CGP_VERSION_V02, CGP_VERSION_V10}
 
 
 # ============================================================================
-# Core CGP Models (v0.1 structure with v0.2 extensions)
+# v1.0 Extension Models
+# ============================================================================
+
+class HyperbolicEncoding(BaseModel):
+    """Poincare disk encoding for a super node (v1.0)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    poincare: List[float] = Field(description="Poincare disk coordinates [x, y]")
+    curvature: float = Field(default=-1.0)
+
+
+class MACAConsensus(BaseModel):
+    """MACA consensus result for a constellation (v1.0)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    entropy_delta: float
+    votes: List[int] = Field(default_factory=list)
+    confidence: float
+
+
+class NATSMetadata(BaseModel):
+    """NATS publishing metadata attached to CGP root (v1.0)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    subject: Optional[str] = None
+    timestamp: Optional[str] = None
+    publisher_id: Optional[str] = None
+    stream: Optional[str] = None
+
+
+# ============================================================================
+# Core CGP Models (v0.1 structure with v0.2/v1.0 extensions)
 # ============================================================================
 
 class Point(BaseModel):
@@ -49,6 +91,10 @@ class Point(BaseModel):
     source_ref: Optional[str] = Field(default=None, alias="source_ref")
     magnitude: float = 1.0
     anchor: Optional[List[float]] = Field(default=None, description="3D anchor vector")
+    # v1.0 fields
+    contributor_id: Optional[str] = Field(default=None, description="Point attribution (v1.0)")
+    merkle_proof: Optional[List[str]] = Field(default=None, description="Per-point Merkle proof (v1.0)")
+    weight: Optional[float] = Field(default=None, description="Contribution weight (v1.0)")
 
 
 class Constellation(BaseModel):
@@ -72,6 +118,9 @@ class Constellation(BaseModel):
     radial_minmax: List[float] = Field(default_factory=lambda: [0.0, 1.0])
     spectrum: List[float] = Field(default_factory=lambda: [1.0])
     points: List[Point] = Field(default_factory=list)
+    # v1.0 fields
+    spectrum_zeta: Optional[List[float]] = Field(default=None, description="Zeta-filtered spectrum (v1.0)")
+    maca_consensus: Optional[MACAConsensus] = Field(default=None, description="MACA consensus result (v1.0)")
 
     @field_validator("radial_minmax")
     @classmethod
@@ -109,6 +158,11 @@ class SuperNode(BaseModel):
     label: Optional[str] = None
     summary: Optional[str] = None
     constellations: List[Constellation] = Field(default_factory=list)
+    # v1.0 fields
+    x: Optional[float] = Field(default=None, description="Poincare x coordinate (v1.0)")
+    y: Optional[float] = Field(default=None, description="Poincare y coordinate (v1.0)")
+    r: Optional[float] = Field(default=None, description="Poincare radius (v1.0)")
+    hyperbolic: Optional[HyperbolicEncoding] = Field(default=None, description="Hyperbolic encoding (v1.0)")
 
 
 class Attribution(BaseModel):
@@ -157,11 +211,13 @@ class CGP(BaseModel):
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    spec: str = Field(default=CGP_VERSION_V01, description="CGP spec version")
+    spec: str = Field(default=CGP_VERSION_V10, description="CGP spec version")
     meta: Dict[str, Any] = Field(default_factory=dict)
     super_nodes: List[SuperNode] = Field(default_factory=list)
     sig: Optional[CGPSignature] = Field(default=None, alias="sig")
     attribution: Optional[Attribution] = None
+    # v1.0 field
+    nats: Optional[NATSMetadata] = Field(default=None, description="NATS publishing metadata (v1.0)")
 
     @field_validator("spec")
     @classmethod
@@ -187,6 +243,8 @@ class GeometryData(BaseModel):
     num_points: int
     has_attribution: bool
     has_signature: bool
+    has_maca_consensus: bool = False
+    has_hyperbolic: bool = False
     anchors: List[List[float]] = Field(default_factory=list)
     spectrum_summary: Dict[str, List[float]] = Field(default_factory=dict)
 
@@ -216,6 +274,9 @@ class TextFragment(BaseModel):
     constellation_id: Optional[str] = None
     point_id: Optional[str] = None
     coordinates: Optional[Dict[str, float]] = None
+    # v1.0 fields
+    contributor_id: Optional[str] = None
+    weight: Optional[float] = None
 
 
 class DecodedGeometry(BaseModel):
@@ -304,7 +365,11 @@ def cgp_dict_to_model(cgp: Dict[str, Any]) -> CGP:
 __all__ = [
     "CGP_VERSION_V01",
     "CGP_VERSION_V02",
+    "CGP_VERSION_V10",
     "SUPPORTED_VERSIONS",
+    "HyperbolicEncoding",
+    "MACAConsensus",
+    "NATSMetadata",
     "Point",
     "Constellation",
     "SuperNode",

@@ -12,6 +12,8 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import json
 
+from .env import get_secret
+
 from pmoves.chit import CGP_SPEC_VERSION
 
 logger = logging.getLogger(__name__)
@@ -319,10 +321,10 @@ class ShapeStore:
 
         api_key = (
             service_key
-            or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            or os.getenv("SUPABASE_SERVICE_KEY")
-            or os.getenv("SUPABASE_KEY")
-            or os.getenv("SUPABASE_ANON_KEY")
+            or get_secret("SUPABASE_SERVICE_ROLE_KEY")
+            or get_secret("SUPABASE_SERVICE_KEY")
+            or get_secret("SUPABASE_KEY")
+            or get_secret("SUPABASE_ANON_KEY")
         )
 
         headers = {"Accept": "application/json"}

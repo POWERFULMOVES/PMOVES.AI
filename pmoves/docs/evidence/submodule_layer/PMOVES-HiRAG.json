@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-02-19 07:46 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-HiRAG",
+      "path": "PMOVES-HiRAG",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-HiRAG.git",
+      "status_prefix": " ",
+      "commit": "400a4489c423e3207c7d3da742b9706991686513",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "pass",
+      "findings": []
+    }
+  ]
+}

@@ -50,7 +50,7 @@ def verify_cgp(cgp: Dict[str, Any], passphrase: str) -> bool:
 def _derive_key(passphrase: str, salt: bytes, length: int = 32) -> bytes:
     if not _CRYPTO_OK:
         raise RuntimeError("cryptography not installed")
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=length, salt=salt, iterations=100_000)
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=length, salt=salt, iterations=600_000)
     return kdf.derive(passphrase.encode("utf-8"))
 
 
