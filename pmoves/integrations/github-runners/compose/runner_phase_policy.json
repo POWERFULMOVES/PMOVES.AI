@@ -1,4 +1,10 @@
 {
-  "default_phase": "",
-  "phases": {}
+  "default_phase": "local-certification",
+  "phases": {
+    "local-certification": {
+      "description": "Both runners on local Docker containers for development/CI",
+      "required_online": ["self-hosted,Linux,X64", "self-hosted,ai-lab,gpu"],
+      "required_offline": []
+    }
+  }
 }
