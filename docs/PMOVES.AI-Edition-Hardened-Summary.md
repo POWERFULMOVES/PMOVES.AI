@@ -308,5 +308,5 @@ See `docs/submodules-audit-final-summary.md` for complete inventory.
 - Services catalog: `docs/PMOVES.AI Services and Integrations.md`
 - Implementation plan: `docs/PMOVES.AI-Edition-Hardened-Full-Implementation-Plan.md`
 - Makefile refactor plan: `pmoves/docs/HARDENED_MAKEFILE_REFACTOR_PLAN.md`
-- CHIT integration status: `pmoves/docs/CHIT_INTEGRATION_STATUS.md`
+- CHIT integration status: `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md`
 - Security policy: `SECURITY.md`
