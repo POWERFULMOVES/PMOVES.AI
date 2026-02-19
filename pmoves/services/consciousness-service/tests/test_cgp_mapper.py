@@ -42,8 +42,8 @@ class TestCGPMapper:
 
         packet = mapper.theory_to_constellation(theory)
 
-        # Check packet structure (chit.cgp.v0.2 format)
-        assert packet["spec"] == "chit.cgp.v0.2"
+        # Check packet structure (chit.cgp.v1.0 format)
+        assert packet["spec"] == "chit.cgp.v1.0"
         assert "created_at" in packet
         assert "super_nodes" in packet
         assert "meta" in packet
@@ -65,7 +65,7 @@ class TestCGPMapper:
 
         packet = mapper.theory_to_constellation(theory)
 
-        assert packet["spec"] == "chit.cgp.v0.2"
+        assert packet["spec"] == "chit.cgp.v1.0"
         assert packet["super_nodes"] is not None
 
     def test_theory_id_generation(self, mapper):
@@ -243,7 +243,7 @@ class TestPublishToHirag:
     async def test_publish_success(self, mapper):
         """Successful publish returns result."""
         packet = {
-            "spec": "chit.cgp.v0.2",
+            "spec": "chit.cgp.v1.0",
             "super_nodes": [{"constellations": [{"id": "test:theory"}]}],
             "meta": {}
         }
@@ -264,7 +264,7 @@ class TestPublishToHirag:
         """Failed publish raises exception."""
         import httpx
 
-        packet = {"spec": "chit.cgp.v0.2", "super_nodes": [{"constellations": [{"id": "test"}]}], "meta": {}}
+        packet = {"spec": "chit.cgp.v1.0", "super_nodes": [{"constellations": [{"id": "test"}]}], "meta": {}}
 
         with mock.patch.object(mapper.client, 'post') as mock_post:
             mock_post.side_effect = httpx.HTTPError("Connection failed")
