@@ -2140,6 +2140,7 @@ down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@echo "✔ Jellyfin AI overlay down"
 
 # =============================================================================
+<<<<<<< HEAD
 # Vision Threads: CHIT Production Tooling
 # =============================================================================
 
@@ -2212,3 +2213,15 @@ hf-benchmark: ## Run model benchmarks via TensorZero (MODEL=name)
 .PHONY: hf-benchmark-a2ui
 hf-benchmark-a2ui: ## Run benchmarks and output A2UI chart spec (MODEL=name)
 	@$(PYTHON) tools/hf_benchmark_runner.py $(MODEL) --a2ui
+
+# =============================================================================
+# Vision Threads: Swarm Potential
+# =============================================================================
+
+.PHONY: swarm-potential
+swarm-potential: ## Calculate and display swarm potential metric
+	@$(PYTHON) tools/swarm_potential.py
+
+.PHONY: swarm-potential-prometheus
+swarm-potential-prometheus: ## Output swarm potential as Prometheus metrics
+	@$(PYTHON) tools/swarm_potential.py --prometheus
