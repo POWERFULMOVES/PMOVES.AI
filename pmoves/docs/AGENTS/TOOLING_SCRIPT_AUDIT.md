@@ -1,10 +1,10 @@
 # PMOVES Tooling Overlay Audit
-_Generated: 2026-02-16_
+_Generated: 2026-02-19_
 
 ## Summary
-- PMOVES scripts/tools scanned: **176**
-- PMOVES auth/user/login-focused entries: **29**
-- Submodule keyword-matched scripts/tools: **99**
+- PMOVES scripts/tools scanned: **192**
+- PMOVES auth/user/login-focused entries: **31**
+- Submodule keyword-matched scripts/tools: **98**
 - Potential overlap rows: **107**
 - Keywords with overlap: **auth, bootstrap, credential, profile, secret, token, user**
 - Findings: **0 error(s)**, **0 warning(s)**
@@ -28,14 +28,12 @@ _Generated: 2026-02-16_
 | --- | --- | --- | --- | --- | --- |
 | `auth` | 0.57 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, bootstrap, pmoves, py |
 | `auth` | 0.38 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.sh` | auth, pmoves, sh |
-| `auth` | 0.38 | `pmoves/scripts/integration-auth-setup.sh` | `pmoves/integrations/archon` | `pmoves/integrations/archon/pmoves-integrations/auth/bootstrap.sh` | auth, pmoves, sh |
 | `auth` | 0.38 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.sh` | auth, bootstrap, pmoves |
-| `auth` | 0.38 | `pmoves/tools/auth_bootstrap_check.py` | `pmoves/integrations/archon` | `pmoves/integrations/archon/pmoves-integrations/auth/bootstrap.sh` | auth, bootstrap, pmoves |
 | `auth` | 0.33 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/auth.py` | auth, pmoves, py |
-| `auth` | 0.25 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/routers/auth.py` | auth, py |
 | `auth` | 0.25 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-ottomator-agents/tweet-generator-agent/twitter_auth.py` | auth, pmoves, py |
+| `auth` | 0.25 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/routers/auth.py` | auth, py |
+| `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, pmoves |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-supabase/scripts/authorizeVercelDeploys.ts` | pmoves, scripts |
-| `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-supabase` | `PMOVES-supabase/scripts/authorizeVercelDeploys.ts` | pmoves, scripts |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/mkdeb.sh` | auth, sh |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/deb/postinst.sh` | auth, sh |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/deb/postrm.sh` | auth, sh |
@@ -43,9 +41,11 @@ _Generated: 2026-02-16_
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/rpm/postinst.sh` | auth, sh |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/rpm/postrm.sh` | auth, sh |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/rpm/prerm.sh` | auth, sh |
-| `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, pmoves |
+| `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-supabase` | `PMOVES-supabase/scripts/authorizeVercelDeploys.ts` | pmoves, scripts |
 | `auth` | 0.22 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-BoTZ` | `PMOVES-BoTZ/features/mcp_bridge/auth.py` | auth, py |
 | `auth` | 0.20 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/auth.py` | auth, pmoves |
+| `auth` | 0.17 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-BoTZ/.claude/skills/hf-tool-builder/references/hf_model_papers_auth.sh` | auth, sh |
+| `auth` | 0.17 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-BoTZ/features/skills/repos/huggingface-skills/hf-tool-builder/skills/hf-tool-builder/references/hf_model_papers_auth.sh` | auth, sh |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-BoTZ` | `PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-DoX` | `PMOVES-DoX/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
@@ -87,9 +87,9 @@ _Generated: 2026-02-16_
 | `credential` | 0.20 | `pmoves/tools/credential_setup.sh` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | pmoves, sh |
 | `credential` | 0.20 | `pmoves/tools/credential_setup.sh` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | pmoves, sh |
 | `profile` | 0.18 | `pmoves/tools/profile_loader.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/episode_profiles_service.py` | pmoves, py |
+| `profile` | 0.11 | `pmoves/tools/profile_loader.py` | `PMOVES.YT` | `PMOVES.YT/yt_dlp/extractor/eroprofile.py` | py |
 | `profile` | 0.11 | `pmoves/tools/profile_loader.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/routers/episode_profiles.py` | py |
 | `profile` | 0.11 | `pmoves/tools/profile_loader.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/routers/speaker_profiles.py` | py |
-| `profile` | 0.11 | `pmoves/tools/profile_loader.py` | `PMOVES.YT` | `PMOVES.YT/yt_dlp/extractor/eroprofile.py` | py |
 | `secret` | 0.29 | `pmoves/tools/secrets_sync.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/secrets.py` | py, secrets |
 | `secret` | 0.25 | `pmoves/tools/check_required_secrets.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/secrets.py` | py, secrets |
 | `secret` | 0.25 | `pmoves/tools/chit_decode_secrets.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/secrets.py` | py, secrets |
@@ -111,8 +111,8 @@ _Generated: 2026-02-16_
 | `secret` | 0.17 | `pmoves/tools/chit_decode_secrets.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
 | `secret` | 0.17 | `pmoves/tools/chit_decode_secrets.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/api/csrf_token.py` | py, token |
-| `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `Pmoves-Health-wger` | `Pmoves-Health-wger/wger/utils/api_token.py` | py, token |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/open_notebook/utils/token_utils.py` | py, token |
+| `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `Pmoves-Health-wger` | `Pmoves-Health-wger/wger/utils/api_token.py` | py, token |
 | `token` | 0.18 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-HiRAG` | `PMOVES-HiRAG/eval/cal_tokens.py` | pmoves, py |
 | `token` | 0.15 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Ultimate-TTS-Studio` | `PMOVES-Ultimate-TTS-Studio/fish_speech/tokenizer.py` | pmoves, py |
 | `token` | 0.10 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/tokens.py` | py |
@@ -135,8 +135,7 @@ _Generated: 2026-02-16_
 | `user` | 0.08 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/pmoves-nextjs/lighthouserc.js` | pmoves |
 
 ## Findings
-- **transcribe-and-fetch security audit (2026-02-16):** `supabase-agent/.env.example` contained a real Supabase JWT and production URL. Remediated by replacing with placeholder values. Damage-control hooks were updated to use `ask` pattern (user confirmation) for template env files (`.example`, `.sample`, `.template`, `.defaults`) instead of hard-blocking, following the Known Roads model.
-- Auth bootstrap scripts (`pmoves-integrations/auth/bootstrap.py`, `bootstrap.sh`) overlap with PMOVES canonical `auth_bootstrap_check.py` and `integration-auth-setup.sh`. Secrets labels in submodule env files should defer to PMOVES tier env pipeline.
+- No findings.
 
 ## Operator Guidance
 1. Prefer PMOVES can-openers for auth/user/login flows before adding new submodule-specific wrappers.

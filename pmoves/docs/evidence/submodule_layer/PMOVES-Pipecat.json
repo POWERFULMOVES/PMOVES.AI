@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-02-19 07:46 UTC",
+  "generated_at": "2026-02-19 20:24 UTC",
   "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
-    "warnings": 1
+    "warnings": 0
   },
   "results": [
     {
@@ -18,14 +18,8 @@
       "required_files_any_ok": true,
       "top_level_files_ok": true,
       "nested_gitmodules_ok": true,
-      "python_compile_ok": "warn",
-      "findings": [
-        {
-          "level": "WARN",
-          "code": "PYTHON_COMPILE_SKIPPED",
-          "message": "python-file-count=735 exceeds max=600"
-        }
-      ]
+      "python_compile_ok": "pass",
+      "findings": []
     }
   ]
 }
