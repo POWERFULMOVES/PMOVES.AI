@@ -40,6 +40,10 @@ on:
   # schedule:
   #   - cron: '17 7 * * *'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 env:
   REGISTRY: ghcr.io
   # Prefer workflow token first; optional PAT fallback uses GHCR_USERNAME + GHCR_PAT.

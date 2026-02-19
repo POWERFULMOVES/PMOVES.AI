@@ -14,6 +14,10 @@ on:
       - 'pmoves/supabase/migrations/**'
       - '.github/workflows/sql-policy-lint.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
 

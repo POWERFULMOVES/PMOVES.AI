@@ -23,6 +23,10 @@ on:
       - '.github/workflows/python-tests.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   tests:
     # PMOVES.AI: Use self-hosted runners for production CI

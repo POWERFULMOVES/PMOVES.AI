@@ -26,6 +26,10 @@ on:
       - 'pmoves/docs/**/SUPABASE_*.md'
       - '.github/workflows/chit-contract.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
 
