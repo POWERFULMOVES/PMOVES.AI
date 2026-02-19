@@ -1,6 +1,6 @@
 """Unified CHIT Geometry Packet (CGP) decoder.
 
-Provides a unified decoder API supporting both CGP v0.1 and v0.2 with:
+Provides a unified decoder API supporting CGP v0.1, v0.2, and v1.0 with:
 - Version auto-detection
 - HMAC signature verification
 - AES-GCM anchor encryption/decryption
@@ -8,6 +8,7 @@ Provides a unified decoder API supporting both CGP v0.1 and v0.2 with:
 - Geometry parsing and validation
 - Spectral analysis (KL, JS divergence, Wasserstein-1D)
 - Codebook-based text decoding
+- v1.0: MACA consensus, hyperbolic encoding, point attribution, NATS metadata
 
 This decoder is ORTHOGONAL to the secrets codec in pmoves/chit/codec.py.
 The secrets codec is for encoding API keys and credentials only.
@@ -15,7 +16,8 @@ This decoder handles general geometric data for the Geometry Bus.
 
 See Also:
     - geometry_models.py: Pydantic models for CGP structures
-    - pmoves/docs/CHIT_INTEGRATION_STATUS.md: Service integration guide
+    - pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md: Service integration guide
+    - pmoves/docs/PMOVESCHIT/CGP_v1.0_SPECIFICATION.md: v1.0 specification
     - pmoves/docs/PMOVESCHIT/PMOVESCHIT_DECODER_MULTIv0.1.md: Advanced features
 """
 
@@ -61,6 +63,7 @@ from pmoves.services.common.geometry_models import (
     CGP,
     CGP_VERSION_V01,
     CGP_VERSION_V02,
+    CGP_VERSION_V10,
     Constellation,
     DecodedGeometry,
     GeometryData,
@@ -541,7 +544,7 @@ def decrypt_anchors(
 # =============================================================================
 
 class GeometryDecoder:
-    """Unified CGP decoder supporting v0.1 and v0.2.
+    """Unified CGP decoder supporting v0.1, v0.2, and v1.0.
 
     Features:
     - Version auto-detection
@@ -657,7 +660,7 @@ class GeometryDecoder:
         warnings: List[str] = []
 
         # Check for required fields based on version
-        if version == CGP_VERSION_V01 or version == CGP_VERSION_V02:
+        if version in (CGP_VERSION_V01, CGP_VERSION_V02, CGP_VERSION_V10):
             if "super_nodes" not in cgp_data:
                 errors.append("Missing required field: super_nodes")
             elif not isinstance(cgp_data["super_nodes"], list):
@@ -732,10 +735,15 @@ class GeometryDecoder:
                             constellation_id=const_id or None,
                             point_id=point.get("id"),
                             coordinates={
-                                "x": point.get("x"),
-                                "y": point.get("y"),
-                                "proj": point.get("proj"),
-                            } if any(k in point for k in ("x", "y", "proj")) else None,
+                                k: v for k, v in [
+                                    ("x", point.get("x")),
+                                    ("y", point.get("y")),
+                                    ("proj", point.get("proj")),
+                                ] if v is not None
+                            } or None,
+                            # v1.0 point attribution
+                            contributor_id=point.get("contributor_id"),
+                            weight=point.get("weight"),
                         )
                         fragments.append(fragment)
 
@@ -766,8 +774,14 @@ class GeometryDecoder:
 
         anchors: List[List[float]] = []
         spectrum_summary: Dict[str, List[float]] = {}
+        has_maca_consensus = False
+        has_hyperbolic = False
 
         for sn_idx, super_node in enumerate(super_nodes):
+            # v1.0: check for hyperbolic encoding on super node
+            if super_node.get("hyperbolic") is not None:
+                has_hyperbolic = True
+
             for const in super_node.get("constellations", []):
                 cid = const.get("id", f"c_{sn_idx}")
 
@@ -781,6 +795,15 @@ class GeometryDecoder:
                 if spectrum:
                     spectrum_summary[cid] = spectrum
 
+                # v1.0: collect spectrum_zeta alongside spectrum
+                spectrum_zeta = const.get("spectrum_zeta")
+                if spectrum_zeta and isinstance(spectrum_zeta, list):
+                    spectrum_summary[f"{cid}:zeta"] = spectrum_zeta
+
+                # v1.0: check for MACA consensus
+                if const.get("maca_consensus") is not None:
+                    has_maca_consensus = True
+
         return GeometryData(
             version=version,
             num_super_nodes=num_super_nodes,
@@ -788,6 +811,8 @@ class GeometryDecoder:
             num_points=num_points,
             has_attribution=cgp_data.get("attribution") is not None,
             has_signature=cgp_data.get("sig") is not None,
+            has_maca_consensus=has_maca_consensus,
+            has_hyperbolic=has_hyperbolic,
             anchors=anchors,
             spectrum_summary=spectrum_summary,
         )

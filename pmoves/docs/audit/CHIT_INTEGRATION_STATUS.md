@@ -1,11 +1,11 @@
 # CHIT Integration Status by Service
 
-> **Part of the [PMOVES.AI Integration Layer](INTEGRATIONS_OVERVIEW.md)** | Category: CHIT & Geometry
+> **Part of the [PMOVES.AI Integration Layer](../INTEGRATIONS_OVERVIEW.md)** | Category: CHIT & Geometry
 >
-> **See also:** [CHIT Documentation Suite](PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](CHIT_TOOLS_CATALOG.md) for all Python tools.
+> **See also:** [CHIT Documentation Suite](../PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for all Python tools.
 
-**Last Updated:** December 30, 2025
-**CHIT Protocol Version:** v0.1 (legacy), v0.2 (current)
+**Last Updated:** February 18, 2026
+**CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence
 
 ---
@@ -34,7 +34,8 @@
 | Version | Status | Features |
 |---------|--------|----------|
 | v0.1 | Stable (legacy) | Basic super_nodes/constellations structure |
-| v0.2 | Stable (current) | Attribution weights, Merkle proofs, signatures |
+| v0.2 | Stable | Attribution weights, Merkle proofs, signatures |
+| v1.0 | Stable (current) | MACA consensus, hyperbolic encoding, point attribution, NATS metadata, spectrum zeta |
 
 ---
 
@@ -44,7 +45,7 @@
 **Port:** 8103
 **Role:** Economic simulation with geometric attribution
 **CGP Version:** v0.2
-**Key Files:** `pmoves/services/tokenism-simulator/chit_encoder.py`
+**Key Files:** `pmoves/services/tokenism-simulator/services/chit_encoder.py`
 
 **NATS Subjects:**
 - `tokenism.cgp.ready.v1` (publish)
@@ -71,7 +72,7 @@
 - Real-time geometry updates via Supabase
 
 **Capabilities:**
-- CHIT security verification (`verify_cgp`, `decrypt_anchors`)
+- CHIT security verification via common `geometry_decoder.py` (`verify_cgp`, `decrypt_anchors`)
 - Shape store integration for CGP ingestion
 - Geometry swarm meta handling (pack activation/deactivate)
 - Real-time geometry broadcasting
@@ -86,7 +87,7 @@
 
 **API Endpoints:**
 - `POST /geometry/event` - Ingest geometry events
-- `POST /geometry/calibrate` - Calibrate geometry parameters
+- `POST /geometry/calibration/report` - Calibration metrics report
 
 **Capabilities:**
 - Full CGP ingestion and validation
@@ -99,7 +100,25 @@
 
 ---
 
-### 4. Agent Zero
+### 4. Neo4j Mind Map
+**Port:** Gateway (via `/mindmap/{constellation_id}`)
+**Role:** Graph-based constellation drill-down and visualization
+**Key Files:** `pmoves/services/gateway/gateway/api/mindmap.py`
+
+**Neo4j Graph Model:**
+- `Anchor-[:FORMS]->Constellation-[:HAS]->Point-[:LOCATES]->MediaRef`
+
+**API Endpoints:**
+- `GET /mindmap/{constellation_id}` - Retrieve points and media for a constellation
+
+**Capabilities:**
+- Multi-modal point retrieval (text, video, audio, doc, image)
+- Projection and confidence filtering
+- Media reference resolution
+
+---
+
+### 5. Agent Zero
 **Port:** 8080 (API), 8081 (UI)
 **Role:** Agent orchestration with CHIT commands
 **CGP Version:** v0.1/v0.2
@@ -121,7 +140,7 @@
 
 ## Partial CHIT Integration Services
 
-### 5. A2UI NATS Bridge
+### 6. A2UI NATS Bridge
 **Port:** 9224
 **Role:** Bridge A2UI events to geometry bus
 **Key Files:** `pmoves/services/a2ui-nats-bridge/bridge.py`
@@ -133,7 +152,7 @@
 
 ---
 
-### 6. PMOVES.YT
+### 7. PMOVES.YT
 **Port:** 8077
 **Role:** YouTube ingestion with video CGP
 **Key Files:** `pmoves/services/pmoves-yt/yt.py`
@@ -145,7 +164,7 @@
 
 ---
 
-### 7. DeepResearch Worker
+### 8. DeepResearch Worker
 **Port:** 8098
 **Role:** LLM-based research planning
 **Key Files:** `pmoves/services/deepresearch/worker.py`
@@ -157,7 +176,7 @@
 
 ---
 
-### 8. SupaSerch
+### 9. SupaSerch
 **Port:** 8099
 **Role:** Multimodal search orchestration
 **Key Files:** `pmoves/services/supaserch/app.py`
@@ -169,7 +188,7 @@
 
 ---
 
-### 9. Consciousness Service
+### 10. Consciousness Service
 **Port:** 8096
 **Role:** Persona theory-to-geometry mapping
 **Key Files:**
@@ -186,7 +205,7 @@
 
 ---
 
-### 10. Evo Controller
+### 11. Evo Controller
 **Port:** 8113
 **Role:** Evolutionary optimization for parameters
 **Key Files:** `pmoves/services/evo-controller/app.py`
@@ -198,7 +217,7 @@
 
 ---
 
-### 11. AgentGym RL Coordinator
+### 12. AgentGym RL Coordinator
 **Port:** varies
 **Role:** Reinforcement learning trajectory analysis
 **Key Files:** `pmoves/services/agentgym-rl-coordinator/coordinator/trajectory.py`
@@ -207,7 +226,7 @@
 
 ---
 
-### 12. Flute Gateway
+### 13. Flute Gateway
 **Port:** 8055 (HTTP), 8056 (WebSocket)
 **Role:** Voice prosodic synthesis
 **Key Files:** `pmoves/services/flute-gateway/main.py`
@@ -248,14 +267,19 @@
 ```python
 import asyncio
 import nats
-from pmoves.services.common.cgp_mappers import map_data_to_cgp
+from pmoves.services.common.cgp_mappers import (
+    map_health_weekly_summary_to_cgp,   # health domain
+    map_finance_monthly_summary_to_cgp, # finance domain
+)
+# NOTE: There is no generic map_data_to_cgp. Use the domain-specific mapper
+# that matches your data, or write a new one following the existing patterns.
 
 async def publish_cgp(data: dict, subject: str = "geometry.cgp.v1"):
     """Publish CGP to NATS geometry bus"""
     nc = await nats.connect("nats://nats:4222")
 
-    # Create CGP from your data
-    cgp = map_data_to_cgp(data)  # or build custom CGP
+    # Create CGP from your data using the appropriate domain mapper
+    cgp = map_health_weekly_summary_to_cgp(data)  # or build custom CGP
 
     # Publish
     await nc.publish(subject, json.dumps(cgp).encode())
@@ -374,4 +398,4 @@ supaserch.*                  - Multimodal search
 ---
 
 **Document Owner:** PMOVES.AI Infrastructure Team
-**Last Updated:** 2025-12-30
+**Last Updated:** 2026-02-18
