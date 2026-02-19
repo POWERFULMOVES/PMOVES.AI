@@ -1,0 +1,368 @@
+{
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "modules_checked": 40,
+  "total_errors": 6,
+  "total_warnings": 2,
+  "runs": [
+    {
+      "name": "PMOVES-A2UI",
+      "path": "PMOVES-A2UI",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-A2UI.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-A2UI.md"
+    },
+    {
+      "name": "PMOVES-Agent-Zero",
+      "path": "PMOVES-Agent-Zero",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.md"
+    },
+    {
+      "name": "PMOVES-AgentGym",
+      "path": "PMOVES-AgentGym",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-AgentGym.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-AgentGym.md"
+    },
+    {
+      "name": "Pmoves-AgentGym-RL",
+      "path": "Pmoves-AgentGym-RL",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-AgentGym-RL.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-AgentGym-RL.md"
+    },
+    {
+      "name": "PMOVES-Archon",
+      "path": "PMOVES-Archon",
+      "returncode": 1,
+      "errors": 0,
+      "warnings": 1,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Archon.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Archon.md"
+    },
+    {
+      "name": "PMOVES-BoTZ",
+      "path": "PMOVES-BoTZ",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-BoTZ.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-BoTZ.md"
+    },
+    {
+      "name": "PMOVES-BotZ-gateway",
+      "path": "PMOVES-BotZ-gateway",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-BotZ-gateway.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-BotZ-gateway.md"
+    },
+    {
+      "name": "Pmoves-cipher",
+      "path": "Pmoves-cipher",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-cipher.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-cipher.md"
+    },
+    {
+      "name": "PMOVES-Creator",
+      "path": "PMOVES-Creator",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Creator.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Creator.md"
+    },
+    {
+      "name": "PMOVES-crush",
+      "path": "PMOVES-crush",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-crush.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-crush.md"
+    },
+    {
+      "name": "PMOVES-Danger-infra",
+      "path": "PMOVES-Danger-infra",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Danger-infra.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Danger-infra.md"
+    },
+    {
+      "name": "PMOVES-Deep-Serch",
+      "path": "PMOVES-Deep-Serch",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Deep-Serch.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Deep-Serch.md"
+    },
+    {
+      "name": "PMOVES-DoX",
+      "path": "PMOVES-DoX",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-DoX.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-DoX.md"
+    },
+    {
+      "name": "PMOVES-E2B-Danger-Room",
+      "path": "PMOVES-E2B-Danger-Room",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room.md"
+    },
+    {
+      "name": "PMOVES-E2B-Danger-Room-Desktop",
+      "path": "PMOVES-E2B-Danger-Room-Desktop",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room-Desktop.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2B-Danger-Room-Desktop.md"
+    },
+    {
+      "name": "pmoves-e2b-mcp-server",
+      "path": "pmoves-e2b-mcp-server",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/pmoves-e2b-mcp-server.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/pmoves-e2b-mcp-server.md"
+    },
+    {
+      "name": "PMOVES-E2b-Spells",
+      "path": "PMOVES-E2b-Spells",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2b-Spells.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-E2b-Spells.md"
+    },
+    {
+      "name": "PMOVES-Headscale",
+      "path": "PMOVES-Headscale",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Headscale.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Headscale.md"
+    },
+    {
+      "name": "Pmoves-Health-wger",
+      "path": "Pmoves-Health-wger",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-Health-wger.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-Health-wger.md"
+    },
+    {
+      "name": "PMOVES-HiRAG",
+      "path": "PMOVES-HiRAG",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-HiRAG.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-HiRAG.md"
+    },
+    {
+      "name": "Pmoves-hyperdimensions",
+      "path": "Pmoves-hyperdimensions",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-hyperdimensions.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-hyperdimensions.md"
+    },
+    {
+      "name": "PMOVES-Jellyfin",
+      "path": "PMOVES-Jellyfin",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Jellyfin.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Jellyfin.md"
+    },
+    {
+      "name": "Pmoves-Jellyfin-AI-Media-Stack",
+      "path": "Pmoves-Jellyfin-AI-Media-Stack",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-Jellyfin-AI-Media-Stack.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-Jellyfin-AI-Media-Stack.md"
+    },
+    {
+      "name": "PMOVES-llama-throughput-lab",
+      "path": "PMOVES-llama-throughput-lab",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.md"
+    },
+    {
+      "name": "PMOVES-MAI-UI",
+      "path": "PMOVES-MAI-UI",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-MAI-UI.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-MAI-UI.md"
+    },
+    {
+      "name": "PMOVES-n8n",
+      "path": "PMOVES-n8n",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-n8n.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-n8n.md"
+    },
+    {
+      "name": "PMOVES-Open-Notebook",
+      "path": "PMOVES-Open-Notebook",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Open-Notebook.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Open-Notebook.md"
+    },
+    {
+      "name": "PMOVES-Pinokio-Ultimate-TTS-Studio",
+      "path": "PMOVES-Pinokio-Ultimate-TTS-Studio",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Pinokio-Ultimate-TTS-Studio.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Pinokio-Ultimate-TTS-Studio.md"
+    },
+    {
+      "name": "PMOVES-Pipecat",
+      "path": "PMOVES-Pipecat",
+      "returncode": 1,
+      "errors": 0,
+      "warnings": 1,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Pipecat.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Pipecat.md"
+    },
+    {
+      "name": "PMOVES-Remote-View",
+      "path": "PMOVES-Remote-View",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Remote-View.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Remote-View.md"
+    },
+    {
+      "name": "PMOVES-supabase",
+      "path": "PMOVES-supabase",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-supabase.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-supabase.md"
+    },
+    {
+      "name": "PMOVES-surf",
+      "path": "PMOVES-surf",
+      "returncode": 1,
+      "errors": 1,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-surf.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-surf.md"
+    },
+    {
+      "name": "PMOVES-Tailscale",
+      "path": "PMOVES-Tailscale",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Tailscale.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Tailscale.md"
+    },
+    {
+      "name": "PMOVES-tensorzero",
+      "path": "PMOVES-tensorzero",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-tensorzero.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-tensorzero.md"
+    },
+    {
+      "name": "PMOVES-ToKenism-Multi",
+      "path": "PMOVES-ToKenism-Multi",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ToKenism-Multi.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ToKenism-Multi.md"
+    },
+    {
+      "name": "PMOVES-transcribe-and-fetch",
+      "path": "PMOVES-transcribe-and-fetch",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-transcribe-and-fetch.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-transcribe-and-fetch.md"
+    },
+    {
+      "name": "PMOVES-Ultimate-TTS-Studio",
+      "path": "PMOVES-Ultimate-TTS-Studio",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Ultimate-TTS-Studio.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Ultimate-TTS-Studio.md"
+    },
+    {
+      "name": "PMOVES-Wealth",
+      "path": "PMOVES-Wealth",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Wealth.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Wealth.md"
+    },
+    {
+      "name": "PMOVES.YT",
+      "path": "PMOVES.YT",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES.YT.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES.YT.md"
+    },
+    {
+      "name": "pmoves/integrations/archon",
+      "path": "pmoves/integrations/archon",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/pmoves__integrations__archon.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/pmoves__integrations__archon.md"
+    }
+  ]
+}
