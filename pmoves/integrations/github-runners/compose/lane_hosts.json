@@ -1,9 +1,29 @@
 {
   "lane_hosts": {
-    "self-hosted,Linux,X64": ["pmoves-vps-runner", "pmoves-ai-lab-runner"],
-    "self-hosted,ai-lab,gpu": ["pmoves-ai-lab-runner"],
-    "self-hosted,ai-lab": ["pmoves-ai-lab-runner"],
-    "self-hosted,vps,Linux,X64": ["pmoves-vps-runner"],
-    "self-hosted,gpu": ["pmoves-ai-lab-runner"]
+    "self-hosted,Linux,X64": {
+      "host": "vps / ai-lab",
+      "runner_name": "pmoves-vps-runner",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+    },
+    "self-hosted,ai-lab,gpu": {
+      "host": "ai-lab",
+      "runner_name": "pmoves-ai-lab-runner",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+    },
+    "self-hosted,ai-lab": {
+      "host": "ai-lab",
+      "runner_name": "pmoves-ai-lab-runner",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+    },
+    "self-hosted,vps,Linux,X64": {
+      "host": "vps",
+      "runner_name": "pmoves-vps-runner",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+    },
+    "self-hosted,gpu": {
+      "host": "ai-lab",
+      "runner_name": "pmoves-ai-lab-runner",
+      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+    }
   }
 }

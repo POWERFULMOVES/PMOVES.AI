@@ -4,7 +4,8 @@
     "local-certification": {
       "description": "Both runners on local Docker containers for development/CI",
       "required_online": ["self-hosted,Linux,X64", "self-hosted,ai-lab,gpu"],
-      "required_offline": []
+      "required_offline": [],
+      "min_runners": 2
     }
   }
 }

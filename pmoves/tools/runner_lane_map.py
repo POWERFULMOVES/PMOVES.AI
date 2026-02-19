@@ -208,6 +208,15 @@ def evaluate_phase(
         else:
             notes.append(f"[{phase_name}] cannot validate offline state without --check-gh: {lane}")
 
+    min_runners = int(phase_cfg.get("min_runners", 0))
+    if min_runners > 0 and check_gh:
+        distinct_names = {r.name for r in runners if r.online}
+        if len(distinct_names) < min_runners:
+            failures.append(
+                f"[{phase_name}] min_runners={min_runners} requires {min_runners} distinct "
+                f"online runners, found {len(distinct_names)}: {sorted(distinct_names)}"
+            )
+
     return failures, notes
 
 
