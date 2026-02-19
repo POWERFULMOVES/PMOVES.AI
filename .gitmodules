@@ -280,3 +280,7 @@
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves/integrations/archon"]
+	path = pmoves/integrations/archon
+	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
+	branch = PMOVES.AI-Edition-Hardened
