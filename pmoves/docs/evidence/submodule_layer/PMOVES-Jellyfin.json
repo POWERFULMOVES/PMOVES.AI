@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-02-19 07:46 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-Jellyfin",
+      "path": "PMOVES-Jellyfin",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-Jellyfin.git",
+      "status_prefix": " ",
+      "commit": "ecdfad9e36d6a7c9552200574c4c6cb6aad685ea",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": []
+    }
+  ]
+}

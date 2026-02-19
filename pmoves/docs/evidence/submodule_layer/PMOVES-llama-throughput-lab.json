@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-02-19 07:46 UTC",
+  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 0,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-llama-throughput-lab",
+      "path": "PMOVES-llama-throughput-lab",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-llama-throughput-lab.git",
+      "status_prefix": " ",
+      "commit": "9ada7462714492178bba856180313cbc1ffc441d",
+      "initialized": true,
+      "remote_commit_reachable": "local",
+      "required_files_any_ok": true,
+      "top_level_files_ok": true,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": []
+    }
+  ]
+}
