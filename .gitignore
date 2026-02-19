@@ -117,4 +117,6 @@ pmoves-cipher-mcp/uv.lock
 # Orphaned submodule directories (gitlink removed, physical dir remains)
 # =============================================================================
 # pmoves-e2b-mcp-server/ moved to submodule
+pmoves/vendor/
+research/A2UI/
 
