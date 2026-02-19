@@ -2221,7 +2221,7 @@ services:
     environment:
       - PORT=8110
       - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
-      - CIPHER_URL=${CIPHER_URL:-http://pmoves-botz-cipher:8000}
+      - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
