@@ -8,6 +8,7 @@ Windows/WSL/Linux without manual shell sequences.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -114,13 +115,8 @@ def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
         resources["cpus"],
         "--memory",
         resources["memory"],
-        "--log-driver",
-        "loki",
-        "--log-opt",
-        f"loki-url={LOKI_URL}",
-        "--log-opt",
-        f"loki-external-labels=job=gha-runner,lane={lane.lane},runner={lane.runner_name}",
     ]
+    cmd.extend(_runner_log_args(lane))
     # GPU passthrough for ai-lab lane only
     gpus = resources.get("gpus", "")
     if gpus:
@@ -145,10 +141,45 @@ def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
     run_cmd(cmd)
 
 
-def cmd_up(repo: str, image: str) -> int:
+def _runner_log_args(lane: RunnerLane) -> list[str]:
+    info = run_cmd(
+        ["docker", "info", "--format", "{{json .Plugins.Log}}"],
+        check=False,
+    )
+    if info.returncode == 0:
+        payload = (info.stdout or "").strip()
+        if payload:
+            try:
+                drivers = json.loads(payload)
+                if isinstance(drivers, list) and "loki" in drivers:
+                    return [
+                        "--log-driver",
+                        "loki",
+                        "--log-opt",
+                        f"loki-url={LOKI_URL}",
+                        "--log-opt",
+                        f"loki-external-labels=job=gha-runner,lane={lane.lane},runner={lane.runner_name}",
+                    ]
+            except json.JSONDecodeError:
+                pass
+    return ["--log-driver", "json-file"]
+
+
+def _selected_lanes(names: list[str] | None) -> tuple[RunnerLane, ...]:
+    if not names:
+        return LANES
+    wanted = {name.strip().lower() for name in names if name.strip()}
+    selected = tuple(lane for lane in LANES if lane.lane in wanted)
+    missing = sorted(wanted - {lane.lane for lane in selected})
+    if missing:
+        raise RuntimeError(f"unknown runner lane(s): {', '.join(missing)}")
+    return selected
+
+
+def cmd_up(repo: str, image: str, lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
     require_tool("gh")
-    for lane in LANES:
+    for lane in lanes:
         token = registration_token(repo, lane.lane)
         docker_rm(lane.container_name)
         docker_run(repo, image, lane, token)
@@ -156,15 +187,15 @@ def cmd_up(repo: str, image: str) -> int:
     return 0
 
 
-def cmd_down() -> int:
+def cmd_down(lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
-    for lane in LANES:
+    for lane in lanes:
         docker_rm(lane.container_name)
         print(f"removed {lane.container_name}")
     return 0
 
 
-def cmd_status(repo: str) -> int:
+def cmd_status(repo: str, lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
     require_tool("gh")
 
@@ -174,7 +205,7 @@ def cmd_status(repo: str) -> int:
     )
     print("local containers:")
     names = {line.split("\t", 1)[0]: line for line in ps.stdout.splitlines() if line}
-    for lane in LANES:
+    for lane in lanes:
         line = names.get(lane.container_name)
         if line:
             print(f"  - {line}")
@@ -194,7 +225,7 @@ def cmd_status(repo: str) -> int:
     )
     print("github runners:")
     rows = [ln for ln in gh.stdout.splitlines() if ln]
-    for lane in LANES:
+    for lane in lanes:
         match = next((r for r in rows if r.startswith(f"{lane.runner_name}\t")), None)
         if match:
             print(f"  - {match}")
@@ -222,17 +253,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=os.getenv("RUNNER_IMAGE", "myoung34/github-runner:latest"),
         help="Docker image used for runner containers.",
     )
+    parser.add_argument(
+        "--lane",
+        action="append",
+        choices=tuple(lane.lane for lane in LANES),
+        help="Runner lane to target. Repeat to target multiple lanes. Default: all lanes.",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    lanes = _selected_lanes(args.lane)
     try:
         if args.action == "up":
-            return cmd_up(args.repo, args.image)
+            return cmd_up(args.repo, args.image, lanes)
         if args.action == "down":
-            return cmd_down()
-        return cmd_status(args.repo)
+            return cmd_down(lanes)
+        return cmd_status(args.repo, lanes)
     except Exception as exc:  # pragma: no cover - operator-facing guard
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -240,4 +278,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
