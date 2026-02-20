@@ -96,7 +96,7 @@ jobs:
                   requirements.append(req_path)
 
           # Skip heavy/problematic packages for CI (GPU deps, large ML models)
-          skip = {"supabase", "torch", "torchaudio", "torchvision", "whisperx",
+          skip = {"torch", "torchaudio", "torchvision", "whisperx",
                   "pyannote.audio", "faster-whisper", "ultralytics", "timm",
                   "accelerate", "sentence-transformers", "transformers",
                   "FlagEmbedding", "openai-whisper", "onnxruntime",
@@ -108,7 +108,7 @@ jobs:
 
           # Collect unique package names (strip versions to let pip resolve)
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer", "yt-dlp", "boto3", "tenacity"]
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer", "yt-dlp", "boto3", "tenacity", "supabase"]
 
           import re
           for path in requirements:
