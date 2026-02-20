@@ -108,7 +108,7 @@ jobs:
 
           # Collect unique package names (strip versions to let pip resolve)
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer"]
 
           import re
           for path in requirements:
