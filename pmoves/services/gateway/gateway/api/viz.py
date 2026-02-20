@@ -7,7 +7,13 @@ import json, os, math, re
 _SAFE_SHAPE_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 DATA_DIR = Path("data").resolve()
 
-from gateway.api.chit import Constellation, CGP, decode_constellations, geometry_calibration_report, GeometryCalibrationRequest
+from .chit import (
+    Constellation,
+    CGP,
+    decode_constellations,
+    geometry_calibration_report,
+    GeometryCalibrationRequest,
+)
 
 router = APIRouter(tags=["Viz"], prefix="/viz")
 

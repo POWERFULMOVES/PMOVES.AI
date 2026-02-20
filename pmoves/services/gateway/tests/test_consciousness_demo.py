@@ -14,7 +14,6 @@ from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from pmoves.chit import CGP_SPEC_VERSION
 
 # Stub heavy dependencies that chit.py might import
@@ -23,14 +22,27 @@ if "neo4j" not in sys.modules:
     neo4j_stub.GraphDatabase = MagicMock()
     sys.modules["neo4j"] = neo4j_stub
 
-# Now import our module functions
-from services.gateway.gateway.api.consciousness import (
-    _load_taxonomy,
-    _extract_theories,
-    _theory_to_cgp,
-    _spectrum_for_category,
-    TheoryInfo,
-)
+# Mock the chit module's ingest_cgp function
+_mock_chit = ModuleType("services.gateway.gateway.api.chit")
+_mock_chit.ingest_cgp = MagicMock(return_value="mock_shape_id")
+_chit_key = "services.gateway.gateway.api.chit"
+_original_chit = sys.modules.get(_chit_key)
+sys.modules[_chit_key] = _mock_chit
+
+try:
+    # Now import our module functions
+    from services.gateway.gateway.api.consciousness import (
+        _load_taxonomy,
+        _extract_theories,
+        _theory_to_cgp,
+        _spectrum_for_category,
+        TheoryInfo,
+    )
+finally:
+    if _original_chit is not None:
+        sys.modules[_chit_key] = _original_chit
+    else:
+        sys.modules.pop(_chit_key, None)
 
 
 class TestLoadTaxonomy:
