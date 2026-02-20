@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,8 +38,8 @@ def _prepare_agent_zero(module, monkeypatch):
     monkeypatch.setattr(module.event_controller, "stop", _fake_controller_stop)
     module.event_controller._started = False
     module.event_controller._nc = None
-    module._controller_ready.clear()
-    module._controller_shutdown.clear()
+    module._controller_ready = asyncio.Event()
+    module._controller_shutdown = asyncio.Event()
     return module
 
 
@@ -56,7 +57,7 @@ def test_environment_endpoint_reflects_env_overrides(monkeypatch, load_service_m
     monkeypatch.setenv("AGENT_KNOWLEDGE_BASE_DIR", "runtime/custom-knowledge")
     monkeypatch.setenv("AGENT_MCP_RUNTIME_DIR", "runtime/custom-mcp")
 
-    module = load_service_module("agent_zero_main_env", "services/agent-zero/main.py")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module = _prepare_agent_zero(module, monkeypatch)
 
     with TestClient(module.app) as client:
@@ -79,7 +80,7 @@ def test_environment_endpoint_reflects_env_overrides(monkeypatch, load_service_m
 
 
 def test_mcp_endpoints_expose_registry(monkeypatch, load_service_module):
-    module = load_service_module("agent_zero_main_mcp", "services/agent-zero/main.py")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module = _prepare_agent_zero(module, monkeypatch)
 
     fake_commands = {"demo.cmd": {"summary": "Demo command"}}
@@ -116,7 +117,7 @@ def test_mcp_endpoints_expose_registry(monkeypatch, load_service_module):
 
 
 def test_geometry_decode_text_uses_new_payload(monkeypatch, load_service_module):
-    module = load_service_module("agent_zero_geometry", "services/agent-zero/main.py")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module = _prepare_agent_zero(module, monkeypatch)
 
     captured: dict[str, dict[str, object]] = {}
