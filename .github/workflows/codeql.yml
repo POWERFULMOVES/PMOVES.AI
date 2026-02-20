@@ -85,11 +85,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
 
-    # Add any setup steps before running the `github/codeql-action/init` action.
-    # This includes steps like installing compilers or runtimes (`actions/setup-node`
-    # or others). This is typically only required for manual builds.
-    # - name: Setup runtime (example)
-    #   uses: actions/setup-example@v1
+    # Self-hosted runners may have older system Node.js builds (v10.x).
+    # CodeQL's TypeScript extractor requires modern syntax support.
+    - name: Setup Node.js for CodeQL TypeScript analysis
+      if: matrix.language == 'javascript-typescript'
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
