@@ -95,19 +95,19 @@ jobs:
                   requirements.append(req_path)
 
           # Skip heavy/problematic packages for CI (GPU deps, large ML models)
-          skip = {"supabase", "torch", "torchaudio", "torchvision", "whisperx",
+          skip = {"torch", "torchaudio", "torchvision", "whisperx",
                   "pyannote.audio", "faster-whisper", "ultralytics", "timm",
                   "accelerate", "sentence-transformers", "transformers",
                   "FlagEmbedding", "openai-whisper", "onnxruntime",
                   "langchain-unstructured", "unstructured", "unstructured-client",
                   "browser-use", "playwright", "faiss-cpu", "faiss-gpu",
-                  "librosa", "numba", "kokoro", "newspaper3k", "boto3",
+                  "librosa", "numba", "kokoro", "newspaper3k",
                   "langchain", "langchain-community", "langchain-core",
                   "litellm", "pymupdf", "qdrant-client"}
 
           # Collect unique package names (strip versions to let pip resolve)
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer", "yt-dlp", "boto3", "tenacity", "supabase"]
 
           import re
           for path in requirements:
@@ -128,36 +128,28 @@ jobs:
           PY
       - name: Run all service tests
         run: |
-          test_dirs=(
-            pmoves/tests
-            pmoves/services/publisher/tests
-            pmoves/services/pmoves-yt/tests
-            pmoves/services/publisher-discord/tests
-            pmoves/services/agent-zero/tests
-            pmoves/services/channel-monitor/tests
-            pmoves/services/chat-relay/tests
-            pmoves/services/common/tests
-            pmoves/services/gateway/tests
-            pmoves/services/hi-rag-gateway/tests
-            pmoves/services/hi-rag-gateway-v2/tests
-            pmoves/services/jellyfin-bridge/tests
+          test_targets=(
+            "pmoves/services/publisher/tests"
+            "pmoves/services/pmoves-yt/tests"
+            "pmoves/services/publisher-discord/tests"
+            "pmoves/services/agent-zero/tests"
+            "pmoves/services/channel-monitor/tests"
+            "pmoves/services/chat-relay/tests"
+            "pmoves/services/common/tests"
+            "pmoves/services/gateway/tests"
+            "pmoves/services/flute-gateway/tests"
+            "pmoves/services/hi-rag-gateway/tests"
+            "pmoves/services/hi-rag-gateway-v2/tests"
+            "pmoves/services/jellyfin-bridge/tests"
           )
 
-          existing_dirs=()
-          for dir in "${test_dirs[@]}"; do
-            if [ -d "$dir" ]; then
-              existing_dirs+=("$dir")
-            else
-              echo "Skipping missing test dir: $dir"
+          for target in "${test_targets[@]}"; do
+            if [ ! -d "$target" ]; then
+              echo "Skipping missing test dir: $target"
+              continue
             fi
+
+            echo "::group::pytest ${target}"
+            pytest -q --tb=short --import-mode=importlib --rootdir=. "${target}"
+            echo "::endgroup::"
           done
-
-          pytest -q --tb=short --import-mode=importlib --rootdir=. \
-            "${existing_dirs[@]}" \
-            --ignore=pmoves/services/media-audio/tests \
-            --ignore=pmoves/services/media-video/tests
-
-          # Run flute-gateway in a separate process to avoid conftest namespace
-          # collisions with other hyphenated service test directories.
-          pytest -q --tb=short --import-mode=importlib --rootdir=. \
-            pmoves/services/flute-gateway/tests
