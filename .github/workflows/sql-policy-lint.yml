@@ -23,8 +23,8 @@ permissions:
 
 jobs:
   lint:
-    # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, Linux, X64]
+    # PRs use hosted runners for deterministic feedback; push/main keeps self-hosted lanes.
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
     permissions:
       contents: read
     steps:
