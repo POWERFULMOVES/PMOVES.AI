@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone, timedelta
@@ -128,6 +129,39 @@ def _extract_channel_handle(channel: Dict[str, Any]) -> Optional[str]:
     if isinstance(resolved, str) and resolved.startswith("@") and len(resolved) > 1:
         return resolved
     return None
+
+
+def _extract_youtube_video_id(url: str) -> Optional[str]:
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+
+    host = parsed.netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path_parts = [segment for segment in parsed.path.split("/") if segment]
+
+    if host == "youtu.be" and path_parts:
+        return path_parts[0]
+
+    if "youtube.com" in host:
+        query_video_ids = parse_qs(parsed.query).get("v")
+        if query_video_ids:
+            candidate = query_video_ids[0]
+            if isinstance(candidate, str) and candidate:
+                return candidate
+        if len(path_parts) >= 2 and path_parts[0].lower() in {"shorts", "live", "embed", "v"}:
+            return path_parts[1]
+
+    return None
+
+
+def _stable_video_id_from_url(url: str) -> str:
+    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()
+    return f"manual-{digest[:16]}"
 
 
 class ChannelMonitor:
@@ -473,6 +507,7 @@ class ChannelMonitor:
         yt_options = self._build_yt_options(channel)
         format_override = channel.get("format")
         media_type = channel.get("media_type") or "video"
+        ingest_source = channel.get("ingest_source") or "channel_monitor"
         channel_label = (
             channel.get("channel_name")
             or channel.get("source_url")
@@ -489,7 +524,7 @@ class ChannelMonitor:
             video_context = (
                 monitor_metadata.get("video") if isinstance(monitor_metadata.get("video"), dict) else {}
             )
-            payload_metadata = _compact(
+            base_payload_metadata = _compact(
                 {
                     "platform": channel.get("platform", "youtube"),
                     "source_type": channel.get("source_type", "channel"),
@@ -506,12 +541,25 @@ class ChannelMonitor:
                     "channel_monitor": monitor_metadata,
                 }
             ) or {}
+            extra_payload_metadata: Dict[str, Any] = {}
+            channel_payload_metadata = channel.get("payload_metadata")
+            if isinstance(channel_payload_metadata, dict):
+                extra_payload_metadata.update(channel_payload_metadata)
+            video_payload_metadata = video.get("payload_metadata")
+            if isinstance(video_payload_metadata, dict):
+                extra_payload_metadata.update(video_payload_metadata)
+            payload_metadata = _compact(
+                {
+                    **base_payload_metadata,
+                    **extra_payload_metadata,
+                }
+            ) or {}
             payloads.append(
                 {
                     "url": video["url"],
                     "namespace": namespace,
                     "auto_emit": False,
-                    "source": "channel_monitor",
+                    "source": ingest_source,
                     "tags": channel.get("tags", []),
                     "media_type": media_type,
                     "format": format_override,
@@ -1330,6 +1378,263 @@ class ChannelMonitor:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
         return await self._update_status(video_id, status, error=error, extra_metadata=metadata)
+
+    async def ingest_manual_urls(
+        self,
+        *,
+        urls: List[str],
+        namespace: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        source: str = "manual_drop",
+        channel_id: Optional[str] = None,
+        channel_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        yt_options: Optional[Dict[str, Any]] = None,
+        media_type: str = "video",
+        format_override: Optional[str] = None,
+        queue_immediately: bool = True,
+    ) -> Dict[str, Any]:
+        unique_urls: List[str] = []
+        seen: Set[str] = set()
+        for value in urls:
+            if not isinstance(value, str):
+                continue
+            normalized = value.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            unique_urls.append(normalized)
+        if not unique_urls:
+            raise ValueError("at least one valid URL is required")
+
+        resolved_namespace = namespace or self.namespace_default
+        normalized_source = source.strip().lower().replace(" ", "_") if source else "manual_drop"
+        resolved_tags = [str(tag).strip() for tag in (tags or []) if str(tag).strip()]
+        if "discord" in normalized_source and "discord" not in resolved_tags:
+            resolved_tags.append("discord")
+
+        context_metadata = metadata if isinstance(metadata, dict) else {}
+        synthetic_channel_id = channel_id or f"{normalized_source}:{resolved_namespace}"
+        synthetic_channel_name = channel_name or normalized_source.replace("_", " ").title()
+        channel_payload_metadata: Dict[str, Any] = {"ingest_source": normalized_source}
+        if context_metadata:
+            channel_payload_metadata["source_context"] = context_metadata
+
+        channel: Dict[str, Any] = {
+            "channel_id": synthetic_channel_id,
+            "channel_name": synthetic_channel_name,
+            "namespace": resolved_namespace,
+            "tags": resolved_tags,
+            "priority": 0,
+            "platform": "discord" if "discord" in normalized_source else "manual",
+            "source_type": normalized_source,
+            "ingest_source": normalized_source,
+            "media_type": media_type or "video",
+            "payload_metadata": channel_payload_metadata,
+        }
+        if isinstance(yt_options, dict) and yt_options:
+            channel["yt_options"] = yt_options
+        if format_override:
+            channel["format"] = format_override
+
+        videos: List[Dict[str, Any]] = []
+        accepted: List[Dict[str, str]] = []
+        skipped: List[Dict[str, str]] = []
+        for url in unique_urls:
+            video_id = _extract_youtube_video_id(url) or _stable_video_id_from_url(url)
+            if video_id in self._processed_video_ids:
+                skipped.append({"url": url, "video_id": video_id, "reason": "already_processed"})
+                continue
+            videos.append(
+                {
+                    "video_id": video_id,
+                    "url": url,
+                    "title": url,
+                    "published": utcnow(),
+                    "payload_metadata": {
+                        "manual_drop_url": url,
+                        "manual_drop_source": normalized_source,
+                    },
+                }
+            )
+            accepted.append({"url": url, "video_id": video_id})
+
+        if videos:
+            await self._persist(channel, videos)
+            if queue_immediately:
+                await self._queue_videos(channel, videos)
+
+        return {
+            "queued": len(videos) if queue_immediately else 0,
+            "pending": len(videos) if not queue_immediately else 0,
+            "accepted": accepted,
+            "skipped": skipped,
+            "namespace": resolved_namespace,
+            "channel_id": synthetic_channel_id,
+            "source": normalized_source,
+            "approval_state": "queued" if queue_immediately else "pending_review",
+        }
+
+    async def list_pending_manual_urls(
+        self,
+        *,
+        source: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        assert self._pool
+        capped_limit = max(1, min(limit, 500))
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT channel_id, channel_name, video_id, video_title, video_url, namespace, tags, discovered_at, metadata
+                FROM pmoves.channel_monitoring
+                WHERE processing_status = 'pending'
+                ORDER BY discovered_at ASC
+                LIMIT $1
+                """,
+                capped_limit,
+            )
+
+        pending: List[Dict[str, Any]] = []
+        source_key = source.strip().lower().replace(" ", "_") if source else None
+        for row in rows:
+            row_metadata = row.get("metadata")
+            metadata_dict = row_metadata if isinstance(row_metadata, dict) else {}
+            manual_source = metadata_dict.get("manual_drop_source")
+            if source_key and manual_source != source_key:
+                continue
+            pending.append(
+                {
+                    "channel_id": row.get("channel_id"),
+                    "channel_name": row.get("channel_name"),
+                    "video_id": row.get("video_id"),
+                    "video_title": row.get("video_title"),
+                    "video_url": row.get("video_url"),
+                    "namespace": row.get("namespace") or self.namespace_default,
+                    "tags": row.get("tags") or [],
+                    "discovered_at": _to_iso(row.get("discovered_at")),
+                    "source": manual_source,
+                    "metadata": metadata_dict,
+                }
+            )
+        return pending
+
+    async def queue_pending_manual_urls(
+        self,
+        *,
+        video_ids: List[str],
+        source: Optional[str] = None,
+        approved_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        assert self._pool
+        wanted_ids = [value.strip() for value in video_ids if isinstance(value, str) and value.strip()]
+        if not wanted_ids:
+            raise ValueError("video_ids is required")
+        source_key = source.strip().lower().replace(" ", "_") if source else None
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT channel_id, channel_name, video_id, video_title, video_url, namespace, tags, metadata, published_at
+                FROM pmoves.channel_monitoring
+                WHERE processing_status = 'pending'
+                  AND video_id = ANY($1::text[])
+                """,
+                wanted_ids,
+            )
+
+        grouped: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            row_metadata = row.get("metadata")
+            metadata_dict = row_metadata if isinstance(row_metadata, dict) else {}
+            manual_source = metadata_dict.get("manual_drop_source")
+            if source_key and manual_source != source_key:
+                continue
+            key = f"{row.get('channel_id')}::{row.get('namespace') or self.namespace_default}"
+            bucket = grouped.setdefault(
+                key,
+                {
+                    "channel": {
+                        "channel_id": row.get("channel_id"),
+                        "channel_name": row.get("channel_name") or row.get("channel_id"),
+                        "namespace": row.get("namespace") or self.namespace_default,
+                        "tags": row.get("tags") or [],
+                        "platform": "discord" if (manual_source or "").startswith("discord") else "manual",
+                        "source_type": manual_source or "manual_drop",
+                        "ingest_source": manual_source or source_key or "manual_drop",
+                        "payload_metadata": {
+                            "ingest_source": manual_source or source_key or "manual_drop",
+                            "approval": _compact(
+                                {
+                                    "approved_by": approved_by,
+                                    "approved_at": utcnow().isoformat(),
+                                }
+                            ),
+                            "source_context": metadata_dict.get("source_context"),
+                        },
+                    },
+                    "videos": [],
+                },
+            )
+            bucket["videos"].append(
+                {
+                    "video_id": row.get("video_id"),
+                    "url": row.get("video_url"),
+                    "title": row.get("video_title") or row.get("video_url") or row.get("video_id"),
+                    "published": self._ensure_datetime(row.get("published_at") or utcnow()),
+                    "payload_metadata": _compact(
+                        {
+                            "manual_drop_source": manual_source or source_key or "manual_drop",
+                            "approved_by": approved_by,
+                            "approved_at": utcnow().isoformat(),
+                        }
+                    ),
+                }
+            )
+
+        queued_video_ids: List[str] = []
+        for item in grouped.values():
+            channel = item["channel"]
+            videos = item["videos"]
+            await self._queue_videos(channel, videos)
+            for video in videos:
+                queued_video_ids.append(video["video_id"])
+
+        missing_ids = sorted(set(wanted_ids) - set(queued_video_ids))
+        return {
+            "queued": len(queued_video_ids),
+            "queued_video_ids": queued_video_ids,
+            "missing_video_ids": missing_ids,
+        }
+
+    async def reject_pending_manual_urls(
+        self,
+        *,
+        video_ids: List[str],
+        reason: Optional[str] = None,
+        rejected_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        wanted_ids = [value.strip() for value in video_ids if isinstance(value, str) and value.strip()]
+        if not wanted_ids:
+            raise ValueError("video_ids is required")
+        rejected = 0
+        for video_id in wanted_ids:
+            changed = await self._update_status(
+                video_id,
+                "failed",
+                error=reason or "rejected",
+                extra_metadata=_compact(
+                    {
+                        "manual_drop_rejected": True,
+                        "manual_drop_rejected_reason": reason,
+                        "manual_drop_rejected_by": rejected_by,
+                        "manual_drop_rejected_at": utcnow().isoformat(),
+                    }
+                ),
+            )
+            if changed:
+                rejected += 1
+        return {"rejected": rejected, "requested": len(wanted_ids)}
 
     async def get_stats(self) -> Dict[str, Any]:
         assert self._pool
