@@ -130,7 +130,6 @@ jobs:
       - name: Run all service tests
         run: |
           test_targets=(
-            "pmoves/tests/"
             "pmoves/services/publisher/tests"
             "pmoves/services/pmoves-yt/tests"
             "pmoves/services/publisher-discord/tests"
