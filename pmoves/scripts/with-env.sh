@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Unified env loader for PMOVES scripts.
-# Loads, in order: tier env files → env.shared.generated → env.shared → .env.generated → .env.local
+# Loads, in order: env.shared* → tier env files → .env* overlays.
+# This mirrors compose layering so tier/runtime values override shared defaults.
 # Existing exported vars are preserved unless files set them explicitly.
 set -euo pipefail
 # Get to the repo root from pmoves/scripts/with-env.sh
@@ -48,7 +49,11 @@ load_env_file() {
   set -H 2>/dev/null || true
 }
 
-# Hardened 6-tier architecture: load tier env files first
+# Base/shared defaults first.
+load_env_file "$ROOT_DIR/env.shared.generated"
+load_env_file "$ROOT_DIR/env.shared"
+
+# Hardened 6-tier architecture overlays.
 load_env_file "$ROOT_DIR/env.tier-data"
 load_env_file "$ROOT_DIR/env.tier-supabase"
 load_env_file "$ROOT_DIR/env.tier-api"
@@ -58,11 +63,10 @@ load_env_file "$ROOT_DIR/env.tier-agent"
 load_env_file "$ROOT_DIR/env.tier-worker"
 load_env_file "$ROOT_DIR/env.tier-ui"
 
-# Legacy env files (loaded after tiers for backward compatibility)
-load_env_file "$ROOT_DIR/env.shared.generated"
-load_env_file "$ROOT_DIR/env.shared"
+# Local/runtime overlays last.
 load_env_file "$ROOT_DIR/.env.generated"
 load_env_file "$ROOT_DIR/.env.local"
+load_env_file "$ROOT_DIR/env.supa.runtime"
 
 # Back-compat: some docs/manifests use MINIO_USER/MINIO_PASSWORD. Services use MINIO_ACCESS_KEY/MINIO_SECRET_KEY.
 if [ -z "${MINIO_ACCESS_KEY:-}" ] && [ -n "${MINIO_USER:-}" ]; then
