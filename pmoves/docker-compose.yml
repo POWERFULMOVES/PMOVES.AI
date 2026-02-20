@@ -1504,6 +1504,7 @@ services:
     - orchestration
     - agents
     - botz
+    - gpu
   agent-zero:
     <<: *tier-agent-hardened
     build:
