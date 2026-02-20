@@ -14,6 +14,7 @@ from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pmoves.chit import CGP_SPEC_VERSION
 
 # Stub heavy dependencies that chit.py might import
 if "neo4j" not in sys.modules:
@@ -24,16 +25,24 @@ if "neo4j" not in sys.modules:
 # Mock the chit module's ingest_cgp function
 _mock_chit = ModuleType("services.gateway.gateway.api.chit")
 _mock_chit.ingest_cgp = MagicMock(return_value="mock_shape_id")
-sys.modules["services.gateway.gateway.api.chit"] = _mock_chit
+_chit_key = "services.gateway.gateway.api.chit"
+_original_chit = sys.modules.get(_chit_key)
+sys.modules[_chit_key] = _mock_chit
 
-# Now import our module functions
-from services.gateway.gateway.api.consciousness import (
-    _load_taxonomy,
-    _extract_theories,
-    _theory_to_cgp,
-    _spectrum_for_category,
-    TheoryInfo,
-)
+try:
+    # Now import our module functions
+    from services.gateway.gateway.api.consciousness import (
+        _load_taxonomy,
+        _extract_theories,
+        _theory_to_cgp,
+        _spectrum_for_category,
+        TheoryInfo,
+    )
+finally:
+    if _original_chit is not None:
+        sys.modules[_chit_key] = _original_chit
+    else:
+        sys.modules.pop(_chit_key, None)
 
 
 class TestLoadTaxonomy:
@@ -102,7 +111,7 @@ class TestTheoryToCgp:
             subcategory="1.1_Test"
         )
         cgp = _theory_to_cgp(theory, idx=0)
-        assert cgp["spec"] == "chit.cgp.v0.1"
+        assert cgp["spec"] == CGP_SPEC_VERSION
 
     def test_cgp_has_super_nodes(self):
         """Test CGP packet contains super_nodes."""
