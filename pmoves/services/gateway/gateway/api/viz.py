@@ -7,7 +7,7 @@ import json, os, math, re
 _SAFE_SHAPE_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 DATA_DIR = Path("data").resolve()
 
-from gateway.api.chit import Constellation, CGP, decode_constellations
+from gateway.api.chit import Constellation, CGP, decode_constellations, geometry_calibration_report, GeometryCalibrationRequest
 
 router = APIRouter(tags=["Viz"], prefix="/viz")
 
@@ -220,8 +220,7 @@ def shape_constellations(shape_id: str):
 @router.post("/preview/calibration")
 def preview_calibration(const: Constellation, codebook_path: Optional[str] = Query(None)):
     cgp = CGP(spec="chit.cgp.v0.1", meta={}, super_nodes=[{"id": "s0", "constellations": [json.loads(const.model_dump_json())]}])
-    from gateway.api.chit import geometry_calibration_report
-    return geometry_calibration_report(cgp=cgp, codebook_path=codebook_path)
+    return geometry_calibration_report(body=GeometryCalibrationRequest(cgp=cgp, codebook_path=codebook_path))
 
 
 @router.post("/mix/calibration")
@@ -248,5 +247,4 @@ def mix_calibration(payload: Dict[str, Any], codebook_path: Optional[str] = Quer
         "spectrum": spec,
         "points": []
     }]}])
-    from gateway.api.chit import geometry_calibration_report
-    return geometry_calibration_report(cgp=mixed, codebook_path=codebook_path)
+    return geometry_calibration_report(body=GeometryCalibrationRequest(cgp=mixed, codebook_path=codebook_path))
