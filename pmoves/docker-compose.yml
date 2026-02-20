@@ -1561,6 +1561,8 @@ services:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
       # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - PORT=8091
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - ARCHON_ENV=${ARCHON_ENV:-production}
       - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
       - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
