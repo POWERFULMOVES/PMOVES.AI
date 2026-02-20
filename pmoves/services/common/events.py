@@ -30,7 +30,7 @@ def envelope(topic: str, payload: dict, correlation_id: str|None=None, parent_id
     env = {
         "id": str(uuid.uuid4()),
         "topic": topic,
-        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
+        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
         "version": "v1",
         "source": source,
         "payload": payload
