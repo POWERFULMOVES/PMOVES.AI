@@ -1499,11 +1499,6 @@ services:
       nats:
         condition: service_healthy
     restart: "no"
-    profiles:
-    - data
-    - orchestration
-    - agents
-    - botz
   agent-zero:
     <<: *tier-agent-hardened
     build:
@@ -1538,7 +1533,11 @@ services:
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1565,6 +1564,8 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - ARCHON_ENV=${ARCHON_ENV:-production}
       # Prefer runtime-resolved Supabase URLs (CLI or compose) instead of hardcoding postgrest.
       - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}}
       - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-http://host.docker.internal:65421}
@@ -1572,7 +1573,7 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-postgrest:3000/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}
     depends_on:
       nats:
         condition: service_healthy
