@@ -432,6 +432,12 @@ async def main():
 # pytest integration
 import pytest
 
+RUN_FUNCTIONAL_AUDIO_TESTS = os.getenv("RUN_FUNCTIONAL_AUDIO_TESTS", "").strip().lower() in {"1", "true", "yes", "on"}
+pytestmark = pytest.mark.skipif(
+    not RUN_FUNCTIONAL_AUDIO_TESTS,
+    reason="requires live Ultimate-TTS and Flute-Gateway services (set RUN_FUNCTIONAL_AUDIO_TESTS=1)",
+)
+
 
 @pytest.mark.functional
 @pytest.mark.asyncio
