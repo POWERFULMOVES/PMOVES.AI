@@ -751,11 +751,10 @@ async def _pmoves_healthcheck():
             parsed = urlparse(base)
             host = (parsed.hostname or "").lower()
             port = parsed.port or (443 if parsed.scheme == "https" else 80)
-            # Supabase CLI default REST gateway OR internal Kong gateway:
-            # hit a known table so 404 on `/` or bare `/rest/v1` does not
-            # falsely mark the stack unhealthy.
-            is_supabase_cli = host in {"host.docker.internal", "127.0.0.1", "localhost"} and port == 65421
-            is_kong_gateway = host == "supabase_kong_pmoves.ai" and port == 8000
+            # Supabase gateway endpoints often return 404 at `/`.
+            # Probe a known REST table path for both CLI host mappings and Kong.
+            is_supabase_cli = host in {"host.docker.internal", "127.0.0.1", "localhost"} and port in {54321, 65421}
+            is_kong_gateway = host in {"supabase_kong_pmoves.ai", "supabase-kong"} and port == 8000
             if is_supabase_cli or is_kong_gateway:
                 target = f"{base}/rest/v1/archon_settings?select=*"
         except Exception:
