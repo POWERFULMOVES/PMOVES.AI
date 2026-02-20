@@ -128,19 +128,36 @@ jobs:
           PY
       - name: Run all service tests
         run: |
+          test_dirs=(
+            pmoves/tests
+            pmoves/services/publisher/tests
+            pmoves/services/pmoves-yt/tests
+            pmoves/services/publisher-discord/tests
+            pmoves/services/agent-zero/tests
+            pmoves/services/channel-monitor/tests
+            pmoves/services/chat-relay/tests
+            pmoves/services/common/tests
+            pmoves/services/gateway/tests
+            pmoves/services/hi-rag-gateway/tests
+            pmoves/services/hi-rag-gateway-v2/tests
+            pmoves/services/jellyfin-bridge/tests
+          )
+
+          existing_dirs=()
+          for dir in "${test_dirs[@]}"; do
+            if [ -d "$dir" ]; then
+              existing_dirs+=("$dir")
+            else
+              echo "Skipping missing test dir: $dir"
+            fi
+          done
+
           pytest -q --tb=short --import-mode=importlib --rootdir=. \
-            pmoves/tests/ \
-            pmoves/services/publisher/tests \
-            pmoves/services/pmoves-yt/tests \
-            pmoves/services/publisher-discord/tests \
-            pmoves/services/agent-zero/tests \
-            pmoves/services/channel-monitor/tests \
-            pmoves/services/chat-relay/tests \
-            pmoves/services/common/tests \
-            pmoves/services/gateway/tests \
-            pmoves/services/flute-gateway/tests \
-            pmoves/services/hi-rag-gateway/tests \
-            pmoves/services/hi-rag-gateway-v2/tests \
-            pmoves/services/jellyfin-bridge/tests \
+            "${existing_dirs[@]}" \
             --ignore=pmoves/services/media-audio/tests \
             --ignore=pmoves/services/media-video/tests
+
+          # Run flute-gateway in a separate process to avoid conftest namespace
+          # collisions with other hyphenated service test directories.
+          pytest -q --tb=short --import-mode=importlib --rootdir=. \
+            pmoves/services/flute-gateway/tests
