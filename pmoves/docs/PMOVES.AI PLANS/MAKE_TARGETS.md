@@ -26,6 +26,7 @@
 - `make restore` — see **LOCAL_DEV.md** for step-by-step restore instructions.
 - `make up-gpu` — start with `docker-compose.gpu.yml` overrides (GPU/VAAPI). See **LOCAL_DEV.md** for driver/toolkit notes.
 - `make showtime` — alias for `make bringup-showtime` (layered bring-up + live readiness watcher + retro diagnostics).
+- `make env-setup` — runs the unified registry-driven bootstrap (`scripts/bootstrap_env.py`) and then enforces `env_doctor --strict` plus quick Showtime diagnostics so setup output matches production operator checks.
 
 ### External-mode
 Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local infra services and point the stack at your existing instances.
@@ -37,6 +38,14 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 
 - `make up-yt`
   - Boots the YouTube ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
+- `make channel-monitor-up`
+  - Starts Channel Monitor with runtime-aware Supabase DB URL wiring (`.supabase.status.env` -> `CHANNEL_MONITOR_DATABASE_URL`) so CLI/compose port drift does not break production checks.
+- `make channel-monitor-smoke`
+  - Verifies Channel Monitor health endpoints (`/healthz`, `/api/monitor/status`, `/api/monitor/stats`).
+- `make channel-monitor-discord-drop-smoke`
+  - Exercises `POST /api/monitor/discord-drop` with a sample URL payload (automatically includes `x-channel-monitor-token` when `CHANNEL_MONITOR_SECRET` is set).
+- `make channel-monitor-discord-gate-smoke`
+  - Verifies ask-gated Discord intake end-to-end (`ask` -> pending review -> explicit approve).
 - `make vendor-httpx`
   - Rebuilds `pmoves/vendor/python/` using `uv` so the Jellyfin backfill helper keeps an offline `httpx` bundle. Run this after updating `services/pmoves-yt/requirements.txt`.
 
