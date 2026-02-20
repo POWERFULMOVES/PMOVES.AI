@@ -102,13 +102,13 @@ jobs:
                   "FlagEmbedding", "openai-whisper", "onnxruntime",
                   "langchain-unstructured", "unstructured", "unstructured-client",
                   "browser-use", "playwright", "faiss-cpu", "faiss-gpu",
-                  "librosa", "numba", "kokoro", "newspaper3k", "boto3",
+                  "librosa", "numba", "kokoro", "newspaper3k",
                   "langchain", "langchain-community", "langchain-core",
                   "litellm", "pymupdf", "qdrant-client"}
 
           # Collect unique package names (strip versions to let pip resolve)
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer"]
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer", "yt-dlp", "boto3", "tenacity"]
 
           import re
           for path in requirements:
