@@ -115,6 +115,21 @@ def gateway_modules():
     flag_module.FlagReranker = _FlagReranker
     _install_stub("FlagEmbedding", flag_module, stubs)
 
+    # Torch stub to avoid GPU dependency during module import.
+    torch_module = types.ModuleType("torch")
+    torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
+    _install_stub("torch", torch_module, stubs)
+
+    # HRM sidecar stub prevents heavy torch-dependent module import paths.
+    hrm_sidecar_module = types.ModuleType("services.common.hrm_sidecar")
+
+    class _HrmDecoderController:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    hrm_sidecar_module.HrmDecoderController = _HrmDecoderController
+    _install_stub("services.common.hrm_sidecar", hrm_sidecar_module, stubs)
+
     # Misc optional dependencies
     nats_module = types.ModuleType("nats")
     _install_stub("nats", nats_module, stubs)
