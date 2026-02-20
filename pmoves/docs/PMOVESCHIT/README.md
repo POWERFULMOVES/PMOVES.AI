@@ -64,6 +64,7 @@ Glossary, status tracking, audits, legacy specs, and deployment guides.
 | [00_GLOSSARY.md](00_GLOSSARY.md) | Everyone | 35+ terms defined: anchor, spectrum, CGP, Shape ID, Three-Body, CONCH, and more |
 | [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Developer | Implementation matrix, known gaps, roadmap |
 | [CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md](CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md) | Developer | Point-in-time audit of CHIT/GEOMETRY BUS completeness |
+| [CI_RECOVERY_FLOW_PYTEST_IMPORTS.md](CI_RECOVERY_FLOW_PYTEST_IMPORTS.md) | DevOps / Developer | Reusable CI recovery flow for pytest import/collection failures across repos |
 | [PMOVESCHIT_DECODERv0.1.md](PMOVESCHIT_DECODERv0.1.md) | Developer | Decoder spec (v0.1) — exact and geometry-only decode modes. Implemented: `chit_decoder.py` |
 | [PMOVESCHIT_DECODER_MULTIv0.1.md](PMOVESCHIT_DECODER_MULTIv0.1.md) | Developer | Multi-modal decoder — CLIP/CLAP implemented (`chit_decoder_mm.py`), T5 generator future |
 | [PMOVES-CONCHexecution_guideb.md](PMOVES-CONCHexecution_guideb.md) | — | Legacy pointer to canonical execution guide |
