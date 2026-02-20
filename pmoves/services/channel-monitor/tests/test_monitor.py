@@ -83,7 +83,7 @@ if "yt_dlp" not in sys.modules:
     yt_dlp_stub.YoutubeDL = _YoutubeDL  # type: ignore[attr-defined]
     sys.modules["yt_dlp"] = yt_dlp_stub
 
-from channel_monitor.monitor import ChannelMonitor
+from channel_monitor.monitor import ChannelMonitor, _extract_youtube_video_id
 
 
 def _build_monitor(tmp_path, config_name: str = "channel.json") -> ChannelMonitor:
@@ -448,3 +448,28 @@ def test_ingest_manual_urls_ask_mode_stores_pending(tmp_path):
     assert result["accepted"][0]["video_id"] == "pending12345a"
     monitor._persist.assert_awaited_once()
     monitor._queue_videos.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://www.youtube.com/watch?v=abc123xyz00", "abc123xyz00"),
+        ("https://m.youtube.com/watch?v=abc123xyz00", "abc123xyz00"),
+        ("https://music.youtube.com/watch?v=abc123xyz00", "abc123xyz00"),
+        ("https://youtu.be/abc123xyz00", "abc123xyz00"),
+    ],
+)
+def test_extract_youtube_video_id_allows_valid_hosts(url, expected):
+    assert _extract_youtube_video_id(url) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://youtube.com.evil.example/watch?v=abc123xyz00",
+        "https://notyoutube.com/watch?v=abc123xyz00",
+        "https://www.youtube.com.evil.example/watch?v=abc123xyz00",
+    ],
+)
+def test_extract_youtube_video_id_rejects_spoofed_hosts(url):
+    assert _extract_youtube_video_id(url) is None

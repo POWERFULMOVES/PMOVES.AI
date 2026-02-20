@@ -139,15 +139,13 @@ def _extract_youtube_video_id(url: str) -> Optional[str]:
     except Exception:
         return None
 
-    host = parsed.netloc.lower()
-    if host.startswith("www."):
-        host = host[4:]
+    host = (parsed.hostname or "").lower()
     path_parts = [segment for segment in parsed.path.split("/") if segment]
 
     if host == "youtu.be" and path_parts:
         return path_parts[0]
 
-    if "youtube.com" in host:
+    if host == "youtube.com" or host.endswith(".youtube.com"):
         query_video_ids = parse_qs(parsed.query).get("v")
         if query_video_ids:
             candidate = query_video_ids[0]
