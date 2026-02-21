@@ -60,6 +60,17 @@ Required handoff fields:
 
 ## Active Claim Register
 - `2026-02-20T12:12:35.7340973-05:00` CLAIM `CODEX-GPT5` scope: PR convergence + runner/cache/app strategy review.
+- `2026-02-21T10:35:03.6791631-05:00` CLAIM `CODEX-GPT5` scope: Phase 5 CHIT flaw verification + Graphiti signature audit + lane-safe traversal note.
+
+## Graphiti Review Log
+- `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
+  - Verified six top-level submodule `CLAUDE.md` files are clean (no `TODO`, `FIXME`, placeholder, or artifact markers).
+  - Verified `pmoves/integrations/archon/env.shared` is Docker `env_file` safe (no `export`) and uses authenticated NATS default.
+  - Verified PR #669 owner triage lists four actionable CodeRabbit items queued for follow-up.
+  - Drift note: current repository scan shows `111` references to unauthenticated `nats://nats:4222` under `pmoves/` (not `93`).
+  - Saved review for team traversal: `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md`.
+
+- `2026-02-21T10:35:03.6791631-05:00` RELEASE `CODEX-GPT5` scope: Phase 5 review lane complete; handoff ready for Claude/team confirmation.
 
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
@@ -67,3 +78,8 @@ Required handoff fields:
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1`
 - Timestamp: `2026-02-20T12:12:35.7340973-05:00`
 
+## Agent ACK (Signed, Phase 5 Review)
+- Agent: `CODEX-GPT5`
+- Ack: `I completed Phase 5 verification and recorded Graphiti-safe traversal notes for cross-agent movement.`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::PHASE5-CHIT-REVIEW`
+- Timestamp: `2026-02-21T10:35:03.6791631-05:00`
