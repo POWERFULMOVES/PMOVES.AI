@@ -98,7 +98,7 @@ def compute_hyperbolic_coords(
     """
     # Hash-based angle if not provided
     if semantic_angle is None:
-        text_hash = hashlib.md5(text[:200].encode("utf-8")).hexdigest()
+        text_hash = hashlib.sha256(text[:200].encode("utf-8")).hexdigest()
         semantic_angle = (int(text_hash[:8], 16) / 0xFFFFFFFF) * 2 * math.pi
 
     # Depth [0, 1] maps to Poincare radius [0, 0.95]
