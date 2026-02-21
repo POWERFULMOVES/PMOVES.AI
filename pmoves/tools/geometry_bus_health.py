@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -126,7 +127,9 @@ async def check_bus_health(nats_url: str = "", verbose: bool = False) -> BusHeal
         nc = nats.NATS()
         await nc.connect(url)
         health.connected = True
-        health.server_id = nc.connected_url
+        # Redact userinfo (user:pass@) from connected URL to avoid leaking credentials
+        raw_url = nc.connected_url or ""
+        health.server_id = re.sub(r"://[^@]+@", "://***@", raw_url) if raw_url else None
 
         # Check JetStream
         try:
