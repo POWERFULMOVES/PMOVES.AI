@@ -150,6 +150,11 @@ jobs:
               continue
             fi
 
+            if ! find "$target" -type f -name 'test_*.py' | grep -q .; then
+              echo "Skipping empty test dir: $target"
+              continue
+            fi
+
             echo "::group::pytest ${target}"
             pytest -q --tb=short --import-mode=importlib --rootdir=. "${target}"
             echo "::endgroup::"
