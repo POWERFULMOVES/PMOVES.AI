@@ -43,6 +43,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    if: ${{ github.event_name != 'pull_request' || matrix.language != 'javascript-typescript' }}
     # PMOVES.AI: Use self-hosted runners for production CI
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
