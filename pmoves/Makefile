@@ -46,7 +46,7 @@ ifeq ($(EXTERNAL_SUPABASE),true)
   supa_profile :=
 		else
 supa_profile := ,supabase-local
-SUPABASE_RUNTIME ?= compose
+SUPABASE_RUNTIME ?= cli
 SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 endif
 COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_profile)$(supa_profile)
