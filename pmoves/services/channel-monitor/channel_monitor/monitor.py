@@ -145,7 +145,8 @@ def _extract_youtube_video_id(url: str) -> Optional[str]:
     if host == "youtu.be" and path_parts:
         return path_parts[0]
 
-    if host == "youtube.com" or host.endswith(".youtube.com"):
+    _YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
+    if host in _YOUTUBE_HOSTS:
         query_video_ids = parse_qs(parsed.query).get("v")
         if query_video_ids:
             candidate = query_video_ids[0]
