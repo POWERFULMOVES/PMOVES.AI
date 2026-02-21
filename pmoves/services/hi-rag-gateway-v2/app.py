@@ -370,14 +370,18 @@ def _qdrant_search(
 ):
     """Handle qdrant-client API drift (`search` vs `query_points`)."""
     if hasattr(qdrant, "search"):
-        return qdrant.search(
-            collection_name=collection_name,
-            query_vector=query_vector,
-            limit=limit,
-            query_filter=query_filter,
-            with_payload=with_payload,
-            with_vectors=with_vectors,
-        )
+        try:
+            return qdrant.search(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                limit=limit,
+                query_filter=query_filter,
+                with_payload=with_payload,
+                with_vectors=with_vectors,
+            )
+        except AttributeError:
+            # Some client builds expose the symbol but fail at runtime.
+            pass
 
     if hasattr(qdrant, "query_points"):
         kwargs = {
@@ -392,6 +396,10 @@ def _qdrant_search(
         except TypeError:
             # Older signatures may still use `vector=...`.
             resp = qdrant.query_points(vector=query_vector, **kwargs)
+        except AttributeError:
+            resp = None
+        if resp is None:
+            pass
         if isinstance(resp, list):
             return resp
         points = getattr(resp, "points", None)
@@ -410,14 +418,19 @@ def _qdrant_search(
         return []
 
     if hasattr(qdrant, "search_points"):
-        resp = qdrant.search_points(
-            collection_name=collection_name,
-            query_vector=query_vector,
-            limit=limit,
-            query_filter=query_filter,
-            with_payload=with_payload,
-            with_vectors=with_vectors,
-        )
+        try:
+            resp = qdrant.search_points(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                limit=limit,
+                query_filter=query_filter,
+                with_payload=with_payload,
+                with_vectors=with_vectors,
+            )
+        except AttributeError:
+            resp = None
+        if resp is None:
+            raise AttributeError("qdrant client has no compatible search/query API")
         if isinstance(resp, list):
             return resp
         result = getattr(resp, "result", None)
