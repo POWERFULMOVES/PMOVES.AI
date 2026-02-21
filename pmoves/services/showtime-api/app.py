@@ -179,6 +179,9 @@ async def sse_events():
         try:
             async for event in nats_event_generator():
                 yield event
+        except Exception:
+            logger.exception("SSE stream error")
+            yield 'event: error\ndata: {"error": "stream interrupted"}\n\n'
         finally:
             SSE_CONNECTIONS.dec()
 
