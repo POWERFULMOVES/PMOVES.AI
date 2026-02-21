@@ -188,16 +188,23 @@ jobs:
       - name: Checkout (stub)
         uses: actions/checkout@v4
 
-      - name: Clone integration repo
+      - name: Prepare integration source
         run: |
           set -euo pipefail
-          url="${{ matrix.git_url }}"
-          if [ -n "${CI_GIT_CLONE_TOKEN:-}" ]; then
-            url="${url/https:\/\/github.com\//https:\/\/x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/}"
-          fi
-          if ! git clone --depth=1 --branch "${{ matrix.ref }}" "$url" integration-src; then
-            echo "::error::Failed to clone ${url} (ref=${{ matrix.ref }}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
-            exit 1
+          if [ "${{ matrix.git_url }}" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
+            echo "Using checked-out PMOVES.AI workspace as integration source"
+            rm -rf integration-src
+            mkdir -p integration-src
+            git archive --format=tar HEAD | tar -x -C integration-src
+          else
+            url="${{ matrix.git_url }}"
+            if [ -n "${CI_GIT_CLONE_TOKEN:-}" ]; then
+              url="${url/https:\/\/github.com\//https:\/\/x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/}"
+            fi
+            if ! git clone --depth=1 --branch "${{ matrix.ref }}" "$url" integration-src; then
+              echo "::error::Failed to clone ${url} (ref=${{ matrix.ref }}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
+              exit 1
+            fi
           fi
 
       - name: Free disk space (runner)
