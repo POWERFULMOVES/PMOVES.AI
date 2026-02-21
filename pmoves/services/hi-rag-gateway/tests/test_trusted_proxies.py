@@ -6,12 +6,29 @@ import types
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
+from fastapi import HTTPException, Request
 
 
 def _install_stub(name: str, module: types.ModuleType, registry):
     registry[name] = sys.modules.get(name)
     sys.modules[name] = module
+
+
+def _make_request(peer_ip: str, forwarded_for: str) -> Request:
+    headers = [(b"x-forwarded-for", forwarded_for.encode("utf-8"))] if forwarded_for else []
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/hirag/admin/stats",
+        "root_path": "",
+        "query_string": b"",
+        "headers": headers,
+        "client": (peer_ip, 50000),
+        "server": ("testserver", 80),
+    }
+    return Request(scope)
 
 
 @pytest.fixture(scope="module")
@@ -115,6 +132,21 @@ def gateway_modules():
     flag_module.FlagReranker = _FlagReranker
     _install_stub("FlagEmbedding", flag_module, stubs)
 
+    # Torch stub for cuda capability checks in hi-rag v2 startup.
+    torch_module = types.ModuleType("torch")
+    torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
+    _install_stub("torch", torch_module, stubs)
+
+    # HRM sidecar stub to avoid torch-heavy model classes during module import.
+    hrm_sidecar_module = types.ModuleType("services.common.hrm_sidecar")
+
+    class _HrmDecoderController:  # pragma: no cover - import shim only
+        def __init__(self, *args, **kwargs):
+            pass
+
+    hrm_sidecar_module.HrmDecoderController = _HrmDecoderController
+    _install_stub("services.common.hrm_sidecar", hrm_sidecar_module, stubs)
+
     # Misc optional dependencies
     nats_module = types.ModuleType("nats")
     _install_stub("nats", nats_module, stubs)
@@ -167,14 +199,10 @@ def test_v1_rejects_spoofed_forwarded_for(gateway_modules, monkeypatch):
     gateway_v1, _ = gateway_modules
     monkeypatch.setattr(gateway_v1, "TAILSCALE_ONLY", True)
     monkeypatch.setattr(gateway_v1, "_TRUSTED_PROXY_NETWORKS", [], raising=False)
-    client = TestClient(gateway_v1.app, client=("198.51.100.10", 50000))
-
-    response = client.get(
-        "/hirag/admin/stats",
-        headers={"X-Forwarded-For": "100.64.1.25"},
-    )
-
-    assert response.status_code == 403
+    request = _make_request("198.51.100.10", "100.64.1.25")
+    with pytest.raises(HTTPException) as exc:
+        gateway_v1.require_admin_tailscale(request)
+    assert exc.value.status_code == 403
 
 
 def test_v1_allows_trusted_proxy_forwarded_for(gateway_modules, monkeypatch):
@@ -182,14 +210,8 @@ def test_v1_allows_trusted_proxy_forwarded_for(gateway_modules, monkeypatch):
     network = ipaddress.ip_network("10.10.0.1/32")
     monkeypatch.setattr(gateway_v1, "TAILSCALE_ONLY", True)
     monkeypatch.setattr(gateway_v1, "_TRUSTED_PROXY_NETWORKS", [network], raising=False)
-    client = TestClient(gateway_v1.app, client=("10.10.0.1", 50000))
-
-    response = client.get(
-        "/hirag/admin/stats",
-        headers={"X-Forwarded-For": "100.64.2.1"},
-    )
-
-    assert response.status_code == 200
+    request = _make_request("10.10.0.1", "100.64.2.1")
+    gateway_v1.require_admin_tailscale(request)
 
 
 def test_v2_rejects_spoofed_forwarded_for(gateway_modules, monkeypatch):
@@ -197,14 +219,10 @@ def test_v2_rejects_spoofed_forwarded_for(gateway_modules, monkeypatch):
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ONLY", False)
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ADMIN_ONLY", True)
     monkeypatch.setattr(gateway_v2, "_TRUSTED_PROXY_NETWORKS", [], raising=False)
-    client = TestClient(gateway_v2.app, client=("198.51.100.20", 50000))
-
-    response = client.get(
-        "/hirag/admin/stats",
-        headers={"X-Forwarded-For": "100.64.5.10"},
-    )
-
-    assert response.status_code == 403
+    request = _make_request("198.51.100.20", "100.64.5.10")
+    with pytest.raises(HTTPException) as exc:
+        gateway_v2.require_admin_tailscale(request)
+    assert exc.value.status_code == 403
 
 
 def test_v2_allows_trusted_proxy_forwarded_for(gateway_modules, monkeypatch):
@@ -213,11 +231,5 @@ def test_v2_allows_trusted_proxy_forwarded_for(gateway_modules, monkeypatch):
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ONLY", False)
     monkeypatch.setattr(gateway_v2, "TAILSCALE_ADMIN_ONLY", True)
     monkeypatch.setattr(gateway_v2, "_TRUSTED_PROXY_NETWORKS", [network], raising=False)
-    client = TestClient(gateway_v2.app, client=("10.20.0.5", 50000))
-
-    response = client.get(
-        "/hirag/admin/stats",
-        headers={"X-Forwarded-For": "100.64.6.10"},
-    )
-
-    assert response.status_code == 200
+    request = _make_request("10.20.0.5", "100.64.6.10")
+    gateway_v2.require_admin_tailscale(request)
