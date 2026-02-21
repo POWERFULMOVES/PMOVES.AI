@@ -12,6 +12,12 @@ from fastapi.testclient import TestClient
 def _prepare_agent_zero(module, monkeypatch):
     monkeypatch.setattr(module.runtime_config, "entrypoint", str(Path(module.__file__)))
 
+    async def _fake_announce_service(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(module, "NATS_ANNOUNCE_AVAILABLE", False, raising=False)
+    monkeypatch.setattr(module, "announce_service", _fake_announce_service, raising=False)
+
     async def _fake_start():
         return None
 

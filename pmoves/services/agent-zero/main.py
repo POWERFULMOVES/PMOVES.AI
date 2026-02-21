@@ -686,15 +686,57 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
 
 # Prometheus metrics
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    Counter,
+    Histogram,
+    generate_latest,
+)
 
-http_requests_total = Counter('agent_zero_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-http_request_duration = Histogram('agent_zero_http_request_duration_seconds', 'HTTP request duration')
-mcp_commands_total = Counter('agent_zero_mcp_commands_total', 'MCP commands executed', ['command', 'status'])
-mcp_execute_duration = Histogram('agent_zero_mcp_execute_duration_seconds', 'MCP command execution duration')
-tasks_created_total = Counter('agent_zero_tasks_created_total', 'Agent tasks created')
-tasks_completed_total = Counter('agent_zero_tasks_completed_total', 'Agent tasks completed')
-memory_operations_total = Counter('agent_zero_memory_operations_total', 'Memory operations', ['operation'])
+
+def _get_or_create_counter(
+    name: str, description: str, labelnames: Optional[List[str]] = None
+) -> Counter:
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    if labelnames:
+        return Counter(name, description, labelnames=labelnames)
+    return Counter(name, description)
+
+
+def _get_or_create_histogram(name: str, description: str) -> Histogram:
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    return Histogram(name, description)
+
+http_requests_total = _get_or_create_counter(
+    "agent_zero_http_requests_total",
+    "Total HTTP requests",
+    labelnames=["method", "endpoint", "status"],
+)
+http_request_duration = _get_or_create_histogram(
+    "agent_zero_http_request_duration_seconds", "HTTP request duration"
+)
+mcp_commands_total = _get_or_create_counter(
+    "agent_zero_mcp_commands_total",
+    "MCP commands executed",
+    labelnames=["command", "status"],
+)
+mcp_execute_duration = _get_or_create_histogram(
+    "agent_zero_mcp_execute_duration_seconds", "MCP command execution duration"
+)
+tasks_created_total = _get_or_create_counter(
+    "agent_zero_tasks_created_total", "Agent tasks created"
+)
+tasks_completed_total = _get_or_create_counter(
+    "agent_zero_tasks_completed_total", "Agent tasks completed"
+)
+memory_operations_total = _get_or_create_counter(
+    "agent_zero_memory_operations_total",
+    "Memory operations",
+    labelnames=["operation"],
+)
 
 controller_settings = ControllerSettings(nats_url=service_config.nats_url)
 event_controller = AgentZeroController(controller_settings)
