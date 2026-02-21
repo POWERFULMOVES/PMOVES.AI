@@ -40,7 +40,7 @@ jobs:
       matrix:
         python-version: ['3.11']
     env:
-      PYTHONPATH: .:pmoves
+      PYTHONPATH: .:pmoves:pmoves/services/gateway
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
