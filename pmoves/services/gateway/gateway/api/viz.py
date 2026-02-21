@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, HTMLResponse
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 import json, os, math, re
 
 _SAFE_SHAPE_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+DATA_DIR = Path("data").resolve()
 
-from gateway.api.chit import Constellation, CGP, decode_constellations
+from gateway.api.chit import Constellation, CGP, decode_constellations, geometry_calibration_report, GeometryCalibrationRequest
 
 router = APIRouter(tags=["Viz"], prefix="/viz")
 
@@ -107,10 +109,12 @@ def shape_svg(shape_id: str, super_idx: int = Query(0, ge=0), const_idx: int = Q
     safe_id = os.path.basename(shape_id)
     if not safe_id or safe_id != shape_id or not _SAFE_SHAPE_RE.match(safe_id):
         raise HTTPException(status_code=400, detail="invalid shape_id")
-    path = os.path.join("data", f"{safe_id}.json")
-    if not os.path.exists(path):
+    resolved = (DATA_DIR / f"{safe_id}.json").resolve()
+    if not resolved.is_relative_to(DATA_DIR):
+        raise HTTPException(status_code=400, detail="invalid shape_id")
+    if not resolved.exists():
         raise HTTPException(status_code=404, detail="shape not found")
-    with open(path, "r", encoding="utf-8") as f:
+    with open(resolved, "r", encoding="utf-8") as f:
         obj = json.load(f)
     try:
         cgp = CGP.model_validate(obj)
@@ -194,10 +198,12 @@ def shape_constellations(shape_id: str):
     safe_id = os.path.basename(shape_id)
     if not safe_id or safe_id != shape_id or not _SAFE_SHAPE_RE.match(safe_id):
         raise HTTPException(status_code=400, detail="invalid shape_id")
-    path = os.path.join("data", f"{safe_id}.json")
-    if not os.path.exists(path):
+    resolved = (DATA_DIR / f"{safe_id}.json").resolve()
+    if not resolved.is_relative_to(DATA_DIR):
+        raise HTTPException(status_code=400, detail="invalid shape_id")
+    if not resolved.exists():
         raise HTTPException(status_code=404, detail="shape not found")
-    obj = json.loads(open(path, "r", encoding="utf-8").read())
+    obj = json.loads(resolved.read_text(encoding="utf-8"))
     cgp = CGP.model_validate(obj)
     out = []
     for si, s in enumerate(cgp.super_nodes):
@@ -214,8 +220,7 @@ def shape_constellations(shape_id: str):
 @router.post("/preview/calibration")
 def preview_calibration(const: Constellation, codebook_path: Optional[str] = Query(None)):
     cgp = CGP(spec="chit.cgp.v0.1", meta={}, super_nodes=[{"id": "s0", "constellations": [json.loads(const.model_dump_json())]}])
-    from gateway.api.chit import geometry_calibration_report
-    return geometry_calibration_report(cgp=cgp, codebook_path=codebook_path)
+    return geometry_calibration_report(body=GeometryCalibrationRequest(cgp=cgp, codebook_path=codebook_path))
 
 
 @router.post("/mix/calibration")
@@ -242,5 +247,4 @@ def mix_calibration(payload: Dict[str, Any], codebook_path: Optional[str] = Quer
         "spectrum": spec,
         "points": []
     }]}])
-    from gateway.api.chit import geometry_calibration_report
-    return geometry_calibration_report(cgp=mixed, codebook_path=codebook_path)
+    return geometry_calibration_report(body=GeometryCalibrationRequest(cgp=mixed, codebook_path=codebook_path))
