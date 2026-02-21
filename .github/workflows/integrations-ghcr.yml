@@ -154,7 +154,7 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: supaserch
