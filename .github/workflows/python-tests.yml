@@ -154,4 +154,3 @@ jobs:
             pytest -q --tb=short --import-mode=importlib --rootdir=. "${target}"
             echo "::endgroup::"
           done
-
