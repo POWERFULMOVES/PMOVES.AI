@@ -315,6 +315,7 @@ jobs:
           echo -e "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      # PRs validate Dockerfile/build correctness without publishing artifacts.
       - name: Build (PR validation, no push)
         if: ${{ github.event_name == 'pull_request' }}
         uses: docker/build-push-action@v6

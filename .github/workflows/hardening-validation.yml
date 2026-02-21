@@ -229,6 +229,7 @@ jobs:
           echo "Validating docker-compose files..."
 
           # Validate main compose file
+          # Use --no-consistency because some dependencies are profile-scoped.
           docker compose -f pmoves/docker-compose.yml config --quiet --no-consistency
           echo "✓ pmoves/docker-compose.yml syntax is valid"
 
