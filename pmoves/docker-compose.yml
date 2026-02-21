@@ -1502,11 +1502,6 @@ services:
       nats:
         condition: service_healthy
     restart: "no"
-    profiles:
-    - data
-    - orchestration
-    - agents
-    - botz
   agent-zero:
     <<: *tier-agent-hardened
     build:
