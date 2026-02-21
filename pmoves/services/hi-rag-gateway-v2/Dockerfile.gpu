@@ -7,6 +7,8 @@ ARG TORCHAUDIO_VERSION=2.9.0
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app:/app/libs \
+    HF_HOME=/app/.cache/hf \
+    SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers \
     PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
     LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}"
 
@@ -26,6 +28,17 @@ RUN python3 -m pip install --index-url https://download.pytorch.org/whl/${TORCH_
 # Base requirements
 COPY services/hi-rag-gateway-v2/requirements.txt /app/requirements.txt
 RUN python3 -m pip install -r /app/requirements.txt
+
+# Preload default embedding model so runtime does not wait on external model downloads.
+RUN python3 - <<'PY'
+import os
+from sentence_transformers import SentenceTransformer
+
+model = os.environ.get("SENTENCE_MODEL_PRELOAD", "all-MiniLM-L6-v2")
+cache = os.environ.get("SENTENCE_TRANSFORMERS_HOME")
+SentenceTransformer(model, cache_folder=cache)
+print(f"Preloaded sentence-transformer model: {model}")
+PY
 
 # CLAP (uses torch)
 RUN python3 -m pip install laion-clap==1.1.4
@@ -51,7 +64,10 @@ RUN groupadd -r pmoves --gid=65532 && \
 
 USER pmoves:pmoves
 
+# Keep runtime online-capable by default so reranker can resolve from hub
+# if RERANK_MODEL_PATH is not mounted. Offline mode can be set via env.
 ENV HIRAG_HTTP_PORT=8086
+
 EXPOSE 8086
 
 ENTRYPOINT ["/app/entrypoint-wrapper.sh"]
