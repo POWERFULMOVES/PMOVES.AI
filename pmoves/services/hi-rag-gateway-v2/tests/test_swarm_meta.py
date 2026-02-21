@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import importlib.util
 import sys
 import types
@@ -19,6 +20,7 @@ def gateway_v2_module():
     if str(root_path) not in sys.path:
         sys.path.insert(0, str(root_path))
         added_root = True
+    sys.modules.setdefault("services", importlib.import_module("pmoves.services"))
 
     stubs: dict[str, types.ModuleType | None] = {}
 
@@ -157,6 +159,7 @@ def gateway_v2_module():
 
         requests_module.get = _request  # type: ignore[attr-defined]
         requests_module.post = _request  # type: ignore[attr-defined]
+        requests_module.Response = _Response
         _install_stub("requests", requests_module, stubs)
 
         providers_module = types.ModuleType("libs.providers")
@@ -245,6 +248,25 @@ def gateway_v2_module():
 
         flag_module.FlagReranker = _FlagReranker
         _install_stub("FlagEmbedding", flag_module, stubs)
+
+        torch_module = types.ModuleType("torch")
+        torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
+        _install_stub("torch", torch_module, stubs)
+
+        hrm_sidecar_module = types.ModuleType("services.common.hrm_sidecar")
+
+        class _HrmDecoderController:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def clear_cache(self):
+                return None
+
+            def status(self, namespace):  # pragma: no cover - stub only
+                return {"enabled": False, "steps": 0, "namespace": namespace}
+
+        hrm_sidecar_module.HrmDecoderController = _HrmDecoderController
+        _install_stub("services.common.hrm_sidecar", hrm_sidecar_module, stubs)
 
         # rapidfuzz stub
         rapidfuzz_module = types.ModuleType("rapidfuzz")
