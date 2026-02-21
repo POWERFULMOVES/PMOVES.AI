@@ -2162,5 +2162,5 @@ chit-terminal-viz: ## Render CHIT visualization in terminal
 .PHONY: chit-mindmap-seed
 chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
 	@echo "→ Seeding Neo4j with CHIT mindmap..."
-	@cat tools/chit_mindmap_seed.cypher | docker exec -i pmoves-neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
+	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
 	@echo "✔ CHIT mindmap seeded"
