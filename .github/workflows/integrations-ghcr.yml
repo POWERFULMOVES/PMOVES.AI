@@ -154,7 +154,7 @@ jobs:
             dockerfile: pmoves/services/deepresearch/Dockerfile
             image_name: pmoves-deepresearch
             build_args: ''
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
             generate_sbom: false
             trivy_ignorefile: ''
           - name: supaserch
@@ -236,7 +236,7 @@ jobs:
           password: ${{ env.GHCR_PAT }}
 
       - name: Require GHCR authentication
-        if: ${{ steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ github.event_name != 'pull_request' && steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
         run: |
           echo "::error::Unable to authenticate to GHCR. Ensure repo Actions has packages:write and/or set GHCR_USERNAME + GHCR_TOKEN (or GH_PAT_PUBLISH)."
           exit 1
@@ -258,6 +258,16 @@ jobs:
           USE_GHCR: ${{ steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' }}
         run: |
           set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "use_ghcr=false" >> $GITHUB_OUTPUT
+            echo "has_tags=false" >> $GITHUB_OUTPUT
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "::notice::Pull request build detected; registry publish/sign/scan steps are skipped."
+            exit 0
+          fi
+
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
           echo "date_tag=${DATE_TAG}" >> $GITHUB_OUTPUT
@@ -305,8 +315,22 @@ jobs:
           echo -e "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Build (PR validation, no push)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: integration-src/${{ matrix.context }}
+          file: integration-src/${{ matrix.dockerfile }}
+          push: false
+          build-args: |
+            PIP_CONSTRAINT=requirements.lock
+            ${{ matrix.build_args }}
+          platforms: ${{ matrix.platforms }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Build and push (multi-arch)
-        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
         id: build
         uses: docker/build-push-action@v6
         with:
