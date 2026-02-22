@@ -1,0 +1,66 @@
+# Three.js Rendering Skill
+# Thread 4.1: Wraps parametric surface renderer from Pmoves-hyperdimensions
+
+name: threejs-render
+version: "1.0.0"
+description: "Render CHIT geometry (constellations, orbits, parametric surfaces) via Three.js"
+author: PMOVES.AI
+
+# Skill configuration
+ultrathink: true
+category: visualization
+tier: agent
+
+# Input schema
+input:
+  type: object
+  required: [geometry_type]
+  properties:
+    geometry_type:
+      type: string
+      enum: [constellation, poincare_disk, parametric_surface, orbit]
+      description: "Type of 3D geometry to render"
+    cgp_packet:
+      type: object
+      description: "CGP v2 packet containing geometry data"
+    points:
+      type: array
+      items:
+        type: object
+        properties:
+          x: { type: number }
+          y: { type: number }
+          z: { type: number }
+          label: { type: string }
+    params:
+      type: object
+      description: "Parametric surface parameters (u_range, v_range, resolution)"
+    output_format:
+      type: string
+      enum: [png, webm, gltf, html]
+      default: png
+
+# Output schema
+output:
+  type: object
+  properties:
+    url:
+      type: string
+      description: "URL to rendered output (MinIO presigned)"
+    format:
+      type: string
+    metadata:
+      type: object
+
+# Dependencies
+dependencies:
+  services:
+    - hyperdimensions  # Pmoves-hyperdimensions renderer
+    - minio           # Asset storage
+    - presign         # URL generation
+  nats_subjects:
+    - skills.pipeline.chit-3d-viz.v1
+
+# Agent binding
+agent: hyperdimensions
+theme: fft/calculator

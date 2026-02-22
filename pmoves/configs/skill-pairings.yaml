@@ -1,0 +1,141 @@
+# PMOVES.AI Skill Pairing & Handoff Schema
+# Thread 4.3: Defines how skills chain together
+
+# Each pairing defines a pipeline of skills that work together
+# Respects Agent Zero MCP handoff protocol
+
+pairings:
+  # HF Model → Benchmark → Visualize
+  model-benchmark-viz:
+    name: "Model Benchmark Visualization"
+    description: "Train/evaluate model, benchmark it, render animated comparison"
+    chain:
+      - skill: huggingface-skills/model-trainer
+        output: model_id
+        agent: agent-zero
+      - skill: hf-benchmark
+        input: model_id
+        output: benchmark_results
+        agent: agent-zero
+      - skill: a2ui-chart
+        input: benchmark_results
+        output: a2ui_spec
+        agent: archon
+      - skill: remotion-render
+        input: a2ui_spec
+        output: video_url
+        agent: creator
+    ultrathink: true
+    nats_subject: "skills.pipeline.model-benchmark-viz.v1"
+
+  # Content Ingest → CHIT Encode → Index
+  ingest-chit-index:
+    name: "CHIT-Enhanced Ingestion"
+    description: "Ingest content, apply CHIT encoding, index to knowledge stores"
+    chain:
+      - skill: extract-worker
+        output: content_chunks
+        agent: extract-worker
+      - skill: chit-encode
+        input: content_chunks
+        output: cgp_packets
+        agent: tokenism
+      - skill: hirag-index
+        input: cgp_packets
+        output: index_result
+        agent: hirag
+    nats_subject: "skills.pipeline.ingest-chit-index.v1"
+
+  # Research → Summarize → Render
+  research-summarize-render:
+    name: "Research to Visual"
+    description: "Deep research, summarize findings, render as animated presentation"
+    chain:
+      - skill: deepresearch
+        output: research_results
+        agent: deepresearch
+      - skill: a2ui-chart
+        input: research_results
+        output: a2ui_spec
+        agent: archon
+      - skill: remotion-render
+        input: a2ui_spec
+        output: video_url
+        agent: creator
+    ultrathink: true
+    nats_subject: "skills.pipeline.research-render.v1"
+
+  # 3D Visualization of CHIT Geometry
+  chit-3d-viz:
+    name: "CHIT 3D Visualization"
+    description: "Render CHIT constellation geometry in 3D via Three.js"
+    chain:
+      - skill: chit-encode
+        output: cgp_packets
+        agent: tokenism
+      - skill: threejs-render
+        input: cgp_packets
+        output: render_url
+        agent: hyperdimensions
+    nats_subject: "skills.pipeline.chit-3d-viz.v1"
+
+  # Voice Synthesis Pipeline
+  voice-synthesis:
+    name: "Text to Prosodic Voice"
+    description: "Generate text, apply prosodic analysis, synthesize speech"
+    chain:
+      - skill: text-generate
+        output: text_content
+        agent: agent-zero
+      - skill: prosodic-analyze
+        input: text_content
+        output: prosodic_markers
+        agent: flute-gateway
+      - skill: tts-synthesize
+        input: prosodic_markers
+        output: audio_url
+        agent: ultimate-tts
+    nats_subject: "skills.pipeline.voice-synthesis.v1"
+
+  # Agent Card Generation
+  agent-card-gen:
+    name: "Agent Card Art Generation"
+    description: "Generate themed character art for agent cards"
+    chain:
+      - skill: theme-lookup
+        output: character_spec
+        agent: archon
+      - skill: comfyui-generate
+        input: character_spec
+        output: image_url
+        agent: creator
+      - skill: a2ui-card
+        input: [character_spec, image_url]
+        output: agent_card
+        agent: archon
+    nats_subject: "skills.pipeline.agent-card-gen.v1"
+
+# Handoff protocol configuration
+handoff:
+  # How agents pass work between each other
+  protocol: "mcp"
+  # Agent Zero MCP endpoint for orchestration
+  mcp_endpoint: "http://localhost:8080/mcp/command"
+  # NATS for async handoffs
+  nats_url: "nats://nats:pmoves@nats:4222"
+  # Timeout for each skill step (seconds)
+  step_timeout: 300
+  # Retry policy
+  retry:
+    max_attempts: 3
+    backoff_ms: 1000
+    backoff_multiplier: 2
+
+# Skill registry references
+skill_sources:
+  huggingface-skills: "PMOVES-BoTZ/features/skills/repos/huggingface-skills/"
+  threejs-render: "pmoves/skills/threejs-render/"
+  remotion-render: "pmoves/skills/remotion-render/"
+  chit-encode: ".claude/commands/chit/encode.md"
+  a2ui-chart: "pmoves/services/a2ui-renderer/"
+  extract-worker: "pmoves/services/extract-worker/"
