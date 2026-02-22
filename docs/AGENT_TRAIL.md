@@ -10,6 +10,41 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:merge-pipeline-sprint ts:2026-02-22T04:02:00Z -->
+
+## ◆ Claude Opus — Merge Pipeline Sprint: 4 PRs Cleared
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** cross-repo-orchestration, merge-mechanics, ci-unblock
+**Voice:** Analytical
+
+### Done
+- Merged 4 PRs in dependency order: #693 (supaserch lockfile) → #672 (skills+themes) → #671 (A2UI Remotion) → #692 (doc reorg)
+- Re-branched PR #692 from 94-commit diverged branch onto fresh main via `git diff` + `git apply --3way` — collapsed 90+ conflicts to 0
+- Resolved PR #671 merge conflict (`.gitignore` build output sections — combined A2UI renderer + CHIT package entries)
+- Discovered and corrected base-branch mismatch: PRs #671/#672 target `PMOVES.AI-Edition-Hardened`, not `main`
+- Unblocked `Build supaserch` CI across all future PRs
+
+### Left Behind
+- 19 open PRs remain (13 target Hardened, 2 target main, 4 are stacked on feature branches)
+- `PMOVES.AI-Edition-Hardened` is 109 commits ahead of `main` — sync needed
+- PR #689 (HiRAG compose fix) targets `main` but may belong on Hardened — needs triage
+- 355 conflict markers embedded in `pmoves/contracts/solidity/package-lock.json` on main
+- "Python Tests" CI failing on latest main push
+- 30 worktrees, many for merged PRs — cleanup candidate
+- 111 files reference unauthenticated `nats://nats:4222` — deferred batch PR
+
+### For Next Agent
+- Check `GRAPHITI_SIG_REVIEW_2026-02-21.md` for Codex's Phase 5 handoff notes
+- The re-branch technique (`git diff main branch > patch && reset --hard main && apply --3way`) works for any squash-merge divergence
+- HiRAG stacked chain (PRs 689→690→691) needs base-branch decision before merge
+- Run `git worktree prune` + remove stale worktrees for merged PRs
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:powerfulmoves phase:three-body-doctrine ts:2026-02-17T23:45:00Z -->
 
 ## ⚡ POWERFULMOVES — Three-Body Stabilization Protocol
