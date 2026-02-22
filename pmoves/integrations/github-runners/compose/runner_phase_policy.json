@@ -6,6 +6,18 @@
       "required_online": ["self-hosted,Linux,X64", "self-hosted,ai-lab,gpu"],
       "required_offline": [],
       "min_runners": 2
+    },
+    "staging": {
+      "description": "Staging deployment on cloudstartup host",
+      "required_online": ["self-hosted,cloudstartup,staging"],
+      "required_offline": [],
+      "min_runners": 1
+    },
+    "production": {
+      "description": "Production deployment on kvm4 host",
+      "required_online": ["self-hosted,kvm4,production", "self-hosted,kvm4"],
+      "required_offline": [],
+      "min_runners": 1
     }
   }
 }

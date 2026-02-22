@@ -1,20 +1,20 @@
 # Submodule Layer Validation
-_Generated: 2026-02-19 07:45 UTC_
+_Generated: 2026-02-19 20:23 UTC_
 
 ## Summary
 - Manifest: `pmoves/configs/submodule_layer_validation_manifest.json`
 - Submodules declared: **1**
 - Initialized: **1/1**
 - Top-level modules: **1**
-- Findings: **1 error(s)**, **0 warning(s)**
+- Findings: **0 error(s)**, **0 warning(s)**
 
 ## Matrix
 | Submodule | Initialized | Status | Remote Commit | Docs(any) | Top-level Dossier | Nested .gitmodules | Python Compile |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `PMOVES-E2B-Danger-Room` | yes | ` ` | `local` | yes | no | ok | `skip` |
+| `PMOVES-E2B-Danger-Room` | yes | ` ` | `local` | yes | yes | ok | `skip` |
 
 ## Findings
-- [ERROR] `TOP_LEVEL_DOSSIER_MISSING` `PMOVES-E2B-Danger-Room`: Missing top-level required files: ['PMOVES.AI_INTEGRATION.md']
+- No findings.
 
 ## Layering Guidance
 1. Run `make -C pmoves submodule-layer-validate-strict` until this report is clean.
