@@ -2138,3 +2138,29 @@ up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j
 down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(DC) --profile jellyfin-ai down
 	@echo "✔ Jellyfin AI overlay down"
+
+# =============================================================================
+# Vision Threads: CHIT Production Tooling
+# =============================================================================
+
+.PHONY: geometry-bus-status
+geometry-bus-status: ## Check GEOMETRY BUS NATS subject health
+	@$(PYTHON) tools/geometry_bus_health.py
+
+.PHONY: geometry-bus-status-json
+geometry-bus-status-json: ## Check GEOMETRY BUS health (JSON output)
+	@$(PYTHON) tools/geometry_bus_health.py --json
+
+.PHONY: chit-encode
+chit-encode: ## CHIT-encode content from stdin
+	@$(PYTHON) tools/chit_encode_hook.py --pretty
+
+.PHONY: chit-terminal-viz
+chit-terminal-viz: ## Render CHIT visualization in terminal
+	@$(PYTHON) tools/chit_terminal_viz.py
+
+.PHONY: chit-mindmap-seed
+chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
+	@echo "→ Seeding Neo4j with CHIT mindmap..."
+	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
+	@echo "✔ CHIT mindmap seeded"
