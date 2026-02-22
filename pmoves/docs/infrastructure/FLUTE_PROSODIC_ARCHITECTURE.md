@@ -1,6 +1,10 @@
 # Flute Prosodic Sidecar Architecture
 
+> **Convenience copy also at:** [`pmoves/docs/FLUTE_PROSODIC_ARCHITECTURE.md`](../FLUTE_PROSODIC_ARCHITECTURE.md) (includes BPM-Prosodic Bridge section)
+>
 > **See also:** [02_GEOMETRY_BUS.md](PMOVESCHIT/02_GEOMETRY_BUS.md) — Flute uses the GEOMETRY BUS for shape-encoded voice transport.
+>
+> **TAC tree:** [`pmoves/docs/TAC/TAC_FLUTE.md`](../TAC/TAC_FLUTE.md)
 
 **Version:** 1.0
 **Last Updated:** December 2025

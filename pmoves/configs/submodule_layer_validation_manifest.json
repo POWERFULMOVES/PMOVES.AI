@@ -10,7 +10,7 @@
   "known_path_typos": [],
   "python_compile": {
     "enabled": true,
-    "max_files": 600,
+    "max_files": 1500,
     "include_paths": [
       "PMOVES-Agent-Zero",
       "PMOVES-Archon",
@@ -20,9 +20,5 @@
       "PMOVES-Pipecat"
     ]
   },
-  "overrides": {
-    "PMOVES-supabase": {
-      "top_level_required_files": []
-    }
-  }
+  "overrides": {}
 }

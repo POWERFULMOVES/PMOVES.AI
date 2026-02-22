@@ -1,4 +1,5 @@
 import os, json, base64, hashlib, logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from fastapi import APIRouter, HTTPException
@@ -233,11 +234,13 @@ def _load_codebook(codebook_path: Optional[str] = None):
             safe_name = os.path.basename(CHIT_CODEBOOK_PATH or "codebook.jsonl")
         if not _SAFE_FILENAME.match(safe_name):
             raise HTTPException(status_code=400, detail="Invalid codebook filename")
-        codebook_dir = os.path.dirname(CHIT_CODEBOOK_PATH or "tests/data/codebook.jsonl") or "."
-        path = os.path.normpath(os.path.join(codebook_dir, safe_name))
-        # Ensure resolved path stays within the codebook directory
-        if not path.startswith(os.path.normpath(codebook_dir)):
+        codebook_dir = Path(CHIT_CODEBOOK_PATH or "tests/data/codebook.jsonl").parent
+        if not codebook_dir.exists():
+            codebook_dir = Path(".")
+        resolved = (codebook_dir / safe_name).resolve()
+        if not resolved.is_relative_to(codebook_dir.resolve()):
             raise HTTPException(status_code=400, detail="Invalid codebook path")
+        path = str(resolved)
     else:
         path = CHIT_CODEBOOK_PATH or "tests/data/codebook.jsonl"
     items = []

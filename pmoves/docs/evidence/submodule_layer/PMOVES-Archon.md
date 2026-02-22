@@ -1,20 +1,20 @@
 # Submodule Layer Validation
-_Generated: 2026-02-19 07:44 UTC_
+_Generated: 2026-02-19 20:22 UTC_
 
 ## Summary
 - Manifest: `pmoves/configs/submodule_layer_validation_manifest.json`
 - Submodules declared: **1**
 - Initialized: **1/1**
 - Top-level modules: **1**
-- Findings: **0 error(s)**, **1 warning(s)**
+- Findings: **0 error(s)**, **0 warning(s)**
 
 ## Matrix
 | Submodule | Initialized | Status | Remote Commit | Docs(any) | Top-level Dossier | Nested .gitmodules | Python Compile |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `PMOVES-Archon` | yes | ` ` | `local` | yes | yes | ok | `warn` |
+| `PMOVES-Archon` | yes | ` ` | `local` | yes | yes | ok | `pass` |
 
 ## Findings
-- [WARN] `PYTHON_COMPILE_SKIPPED` `PMOVES-Archon`: python-file-count=1438 exceeds max=600
+- No findings.
 
 ## Layering Guidance
 1. Run `make -C pmoves submodule-layer-validate-strict` until this report is clean.

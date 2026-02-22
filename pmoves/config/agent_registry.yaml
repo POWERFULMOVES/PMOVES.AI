@@ -287,7 +287,7 @@ agents:
     layers: [L0, L2, L2.5, L4]
     evolution_stage: stage_1
     nats:
-      publishes: ["tokenism.geometry.event.v1"]
+      publishes: ["tokenism.geometry.event.v1", "tokenism.prosodic.bpm.v1"]
       subscribes: ["geometry.packet.decoded.v1"]
     chit_toggles:
       delta_sensitive: false
@@ -295,6 +295,10 @@ agents:
       hz_sensitive: true
       swarm_participant: false
       attribution_gated: true
+    chit_integration:
+      bpm_capable: true
+      geometry_bus_subjects: ["tokenism.prosodic.bpm.v1"]
+      tac_tree: "pmoves/docs/TAC/TAC_FLUTE.md"
     description: "Multimodal voice communication layer with Pipecat"
 
   pmoves_yt:
@@ -934,7 +938,10 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
+      publishes:
+        - "finance.transactions.ingested.v1"    # planned
+        - "finance.budget.alert.v1"             # planned
+        - "finance.monthly.summary.v1"          # planned
       subscribes: []
     chit_toggles:
       delta_sensitive: false
@@ -942,6 +949,10 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    chit_integration:
+      bpm_capable: false
+      geometry_bus_subjects: []
+      tac_tree: "pmoves/docs/TAC/TAC_WEALTH.md"
     submodule: "PMOVES-Wealth"
     description: "Finance management — tongue-in-cheek wealth tracking"
 
@@ -955,7 +966,10 @@ agents:
     layers: [L0]
     evolution_stage: base
     nats:
-      publishes: []
+      publishes:
+        - "health.metrics.updated.v1"           # planned
+        - "health.workout.completed.v1"         # planned
+        - "health.weekly.summary.v1"            # planned
       subscribes: []
     chit_toggles:
       delta_sensitive: false
@@ -963,6 +977,10 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    chit_integration:
+      bpm_capable: false
+      geometry_bus_subjects: []
+      tac_tree: "pmoves/docs/TAC/TAC_HEALTH.md"
     submodule: "Pmoves-Health-wger"
     description: "Fitness tracking — the body is a system too"
 

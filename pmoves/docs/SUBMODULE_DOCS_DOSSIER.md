@@ -1,11 +1,11 @@
 # Submodule Docs Dossier
-_Generated: 2026-02-18 21:44 UTC_
+_Generated: 2026-02-19 20:25 UTC_
 
 ## Summary
-- Total submodules declared: **39**
-- Initialized in workspace: **39/39**
-- With at least one docs entry point: **39/39**
-- Top-level modules with `PMOVES.AI_INTEGRATION.md`: **33/39**
+- Total submodules declared: **40**
+- Initialized in workspace: **40/40**
+- With at least one docs entry point: **40/40**
+- Top-level modules with `PMOVES.AI_INTEGRATION.md`: **39/39**
 
 ## Coverage Matrix
 | Submodule | Path | Initialized | PMOVES Integration Dossier | Local Docs Entry Points |
@@ -13,18 +13,18 @@ _Generated: 2026-02-18 21:44 UTC_
 | `PMOVES-A2UI` | `PMOVES-A2UI` | yes | yes | `PMOVES-A2UI/PMOVES.AI_INTEGRATION.md`, `PMOVES-A2UI/docs/index.md`, `PMOVES-A2UI/README.md` |
 | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero` | yes | yes | `PMOVES-Agent-Zero/PMOVES.AI_INTEGRATION.md`, `PMOVES-Agent-Zero/docs/README.md`, `PMOVES-Agent-Zero/README.md` |
 | `PMOVES-AgentGym` | `PMOVES-AgentGym` | yes | yes | `PMOVES-AgentGym/PMOVES.AI_INTEGRATION.md`, `PMOVES-AgentGym/README.md` |
-| `Pmoves-AgentGym-RL` | `Pmoves-AgentGym-RL` | yes | no | `Pmoves-AgentGym-RL/README.md` |
+| `Pmoves-AgentGym-RL` | `Pmoves-AgentGym-RL` | yes | yes | `Pmoves-AgentGym-RL/PMOVES.AI_INTEGRATION.md`, `Pmoves-AgentGym-RL/README.md` |
 | `PMOVES-Archon` | `PMOVES-Archon` | yes | yes | `PMOVES-Archon/PMOVES.AI_INTEGRATION.md`, `PMOVES-Archon/README.md` |
 | `PMOVES-BoTZ` | `PMOVES-BoTZ` | yes | yes | `PMOVES-BoTZ/PMOVES.AI_INTEGRATION.md`, `PMOVES-BoTZ/README.md` |
-| `PMOVES-BotZ-gateway` | `PMOVES-BotZ-gateway` | yes | no | `PMOVES-BotZ-gateway/README.md` |
+| `PMOVES-BotZ-gateway` | `PMOVES-BotZ-gateway` | yes | yes | `PMOVES-BotZ-gateway/PMOVES.AI_INTEGRATION.md`, `PMOVES-BotZ-gateway/README.md` |
 | `Pmoves-cipher` | `Pmoves-cipher` | yes | yes | `Pmoves-cipher/PMOVES.AI_INTEGRATION.md`, `Pmoves-cipher/README.md` |
 | `PMOVES-Creator` | `PMOVES-Creator` | yes | yes | `PMOVES-Creator/PMOVES.AI_INTEGRATION.md`, `PMOVES-Creator/README.md` |
 | `PMOVES-crush` | `PMOVES-crush` | yes | yes | `PMOVES-crush/PMOVES.AI_INTEGRATION.md`, `PMOVES-crush/README.md` |
 | `PMOVES-Danger-infra` | `PMOVES-Danger-infra` | yes | yes | `PMOVES-Danger-infra/PMOVES.AI_INTEGRATION.md`, `PMOVES-Danger-infra/README.md` |
 | `PMOVES-Deep-Serch` | `PMOVES-Deep-Serch` | yes | yes | `PMOVES-Deep-Serch/PMOVES.AI_INTEGRATION.md`, `PMOVES-Deep-Serch/README.md` |
 | `PMOVES-DoX` | `PMOVES-DoX` | yes | yes | `PMOVES-DoX/PMOVES.AI_INTEGRATION.md`, `PMOVES-DoX/README.md` |
-| `PMOVES-E2B-Danger-Room` | `PMOVES-E2B-Danger-Room` | yes | no | `PMOVES-E2B-Danger-Room/README.md` |
-| `PMOVES-E2B-Danger-Room-Desktop` | `PMOVES-E2B-Danger-Room-Desktop` | yes | no | `PMOVES-E2B-Danger-Room-Desktop/README.md` |
+| `PMOVES-E2B-Danger-Room` | `PMOVES-E2B-Danger-Room` | yes | yes | `PMOVES-E2B-Danger-Room/PMOVES.AI_INTEGRATION.md`, `PMOVES-E2B-Danger-Room/README.md` |
+| `PMOVES-E2B-Danger-Room-Desktop` | `PMOVES-E2B-Danger-Room-Desktop` | yes | yes | `PMOVES-E2B-Danger-Room-Desktop/PMOVES.AI_INTEGRATION.md`, `PMOVES-E2B-Danger-Room-Desktop/README.md` |
 | `pmoves-e2b-mcp-server` | `pmoves-e2b-mcp-server` | yes | yes | `pmoves-e2b-mcp-server/PMOVES.AI_INTEGRATION.md`, `pmoves-e2b-mcp-server/README.md` |
 | `PMOVES-E2b-Spells` | `PMOVES-E2b-Spells` | yes | yes | `PMOVES-E2b-Spells/PMOVES.AI_INTEGRATION.md`, `PMOVES-E2b-Spells/README.md` |
 | `PMOVES-Headscale` | `PMOVES-Headscale` | yes | yes | `PMOVES-Headscale/PMOVES.AI_INTEGRATION.md`, `PMOVES-Headscale/docs/index.md`, `PMOVES-Headscale/README.md` |
@@ -40,8 +40,8 @@ _Generated: 2026-02-18 21:44 UTC_
 | `PMOVES-Pinokio-Ultimate-TTS-Studio` | `PMOVES-Pinokio-Ultimate-TTS-Studio` | yes | yes | `PMOVES-Pinokio-Ultimate-TTS-Studio/PMOVES.AI_INTEGRATION.md`, `PMOVES-Pinokio-Ultimate-TTS-Studio/README.md` |
 | `PMOVES-Pipecat` | `PMOVES-Pipecat` | yes | yes | `PMOVES-Pipecat/PMOVES.AI_INTEGRATION.md`, `PMOVES-Pipecat/README.md` |
 | `PMOVES-Remote-View` | `PMOVES-Remote-View` | yes | yes | `PMOVES-Remote-View/PMOVES.AI_INTEGRATION.md`, `PMOVES-Remote-View/README.md` |
-| `PMOVES-supabase` | `PMOVES-supabase` | yes | no | `PMOVES-supabase/README.md` |
-| `PMOVES-surf` | `PMOVES-surf` | yes | no | `PMOVES-surf/README.md` |
+| `PMOVES-supabase` | `PMOVES-supabase` | yes | yes | `PMOVES-supabase/PMOVES.AI_INTEGRATION.md`, `PMOVES-supabase/README.md` |
+| `PMOVES-surf` | `PMOVES-surf` | yes | yes | `PMOVES-surf/PMOVES.AI_INTEGRATION.md`, `PMOVES-surf/README.md` |
 | `PMOVES-Tailscale` | `PMOVES-Tailscale` | yes | yes | `PMOVES-Tailscale/PMOVES.AI_INTEGRATION.md`, `PMOVES-Tailscale/README.md` |
 | `PMOVES-tensorzero` | `PMOVES-tensorzero` | yes | yes | `PMOVES-tensorzero/PMOVES.AI_INTEGRATION.md`, `PMOVES-tensorzero/docs/README.md`, `PMOVES-tensorzero/README.md` |
 | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi` | yes | yes | `PMOVES-ToKenism-Multi/PMOVES.AI_INTEGRATION.md`, `PMOVES-ToKenism-Multi/README.md` |
@@ -49,16 +49,11 @@ _Generated: 2026-02-18 21:44 UTC_
 | `PMOVES-Ultimate-TTS-Studio` | `PMOVES-Ultimate-TTS-Studio` | yes | yes | `PMOVES-Ultimate-TTS-Studio/PMOVES.AI_INTEGRATION.md`, `PMOVES-Ultimate-TTS-Studio/README.md` |
 | `PMOVES-Wealth` | `PMOVES-Wealth` | yes | yes | `PMOVES-Wealth/PMOVES.AI_INTEGRATION.md`, `PMOVES-Wealth/README.md` |
 | `PMOVES.YT` | `PMOVES.YT` | yes | yes | `PMOVES.YT/PMOVES.AI_INTEGRATION.md`, `PMOVES.YT/README.md` |
+| `pmoves/integrations/archon` | `pmoves/integrations/archon` | yes | yes | `pmoves/integrations/archon/PMOVES.AI_INTEGRATION.md`, `pmoves/integrations/archon/README.md` |
 
 ## Action Queue
 - Missing local docs entry points: **0**
-- Missing `PMOVES.AI_INTEGRATION.md` dossier: **6**
-  - `Pmoves-AgentGym-RL`
-  - `PMOVES-BotZ-gateway`
-  - `PMOVES-E2B-Danger-Room`
-  - `PMOVES-E2B-Danger-Room-Desktop`
-  - `PMOVES-supabase`
-  - `PMOVES-surf`
+- Missing `PMOVES.AI_INTEGRATION.md` dossier: **0**
 - Not initialized in current workspace: **0**
 
 ## Maintainer Notes

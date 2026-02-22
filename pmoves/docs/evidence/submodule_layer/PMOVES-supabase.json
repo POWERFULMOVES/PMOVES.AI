@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-02-19 07:47 UTC",
+  "generated_at": "2026-02-19 20:24 UTC",
   "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-supabase",
       "url": "https://github.com/POWERFULMOVES/PMOVES-supabase.git",
       "status_prefix": " ",
-      "commit": "3c935c7ce4fe8f851afffb76c8fe9a4388eff39b",
+      "commit": "a7ba2625a0c5d85d5f7b58b70cb5a91dc2f8daaa",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
