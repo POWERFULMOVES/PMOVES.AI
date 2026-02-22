@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-02-18 (audit validation pass)
+**Last Updated:** 2026-02-20 (production runtime remediation pass)
 **Branch:** `PMOVES.AI-Edition-Hardened`
 **Commit:** `80d06daa`
 **Consolidated From:** 27 audit documents
@@ -37,6 +37,21 @@
 | `manifest-audit` | FAIL (env dependency: `pmoves` package not installed in shell) |
 | `observability-audit` | PASS (static: 25 jobs parsed, 20 dashboard selectors) |
 | `supa-runtime-guard` | PASS (no conflicting runtimes) |
+
+### Runtime Evidence (2026-02-20)
+
+| Check | Result |
+|-------|--------|
+| `make -C pmoves smoke` | PASS (production path: `tools/smoke_prod.py`) |
+| `make -C pmoves agents-headless-smoke` | PASS |
+| `make -C pmoves archon-smoke` | PASS |
+| `make -C pmoves monitoring-smoke` | PASS (`active=36`, `healthy=21`) |
+| Supabase storage migrator | RECOVERED (`supabase_storage_pmoves` healthy) |
+| Supabase DB collation warning | CLEARED (no new `collation version mismatch` log entries after refresh) |
+| `make -C pmoves submodule-integrity` | PASS (40 gitlinks, 0 drifted, 0 conflicts) |
+| `make -C pmoves supa-env-doctor-strict` | PASS |
+
+Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
 ---
 
@@ -232,6 +247,7 @@ make -C pmoves supa-runtime-guard
 
 | Date | Change |
 |------|--------|
+| 2026-02-20 | **Production runtime remediation pass**: restored `supabase_storage_pmoves` (migration table/schema privilege repair for `supabase_storage_admin`), ran production smoke/agents/archon/monitoring checks (all pass), and verified no new collation mismatch warnings after collation refresh. Updated production diagnostics to use valid Agent Zero endpoints (`codex_health_quick.py`). |
 | 2026-02-18 | **Blocker resolution pass**: AB-1 RESOLVED (orphaned Deskdesktop gitlink removed from A2UI, recursive submodule status exits 0). AB-3 RESOLVED (GHCR push/PR triggers uncommented). AB-7 RESOLVED (credential_service.py PBKDF2 bumped to 600k). Blockers reduced 6 → 3. Docs #5, #6 superseded, #8 resolved. |
 | 2026-02-18 | **Audit validation pass**: AB-2 RESOLVED (DoX aligned), AB-8 RESOLVED (0 open PRs). AB-7 updated to PARTIAL. Added CodeQL triage (29 alerts in 7 groups), Dependabot triage (2 alerts), static audit layer results (5/6 PASS). Blockers reduced 8 → 6. Updated doc index statuses. |
 | 2026-02-18 | Added 10 missed audit docs (#18-27), AB-8 conflicting PRs blocker |

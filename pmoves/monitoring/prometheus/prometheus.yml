@@ -72,12 +72,32 @@ scrape_configs:
       - targets: ["pmoves-yt:8077"]
 
   - job_name: agent-zero
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
     static_configs:
-      - targets: ["agent-zero:8080"]
+      - targets: ["http://agent-zero:80/"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
 
   - job_name: archon
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
     static_configs:
-      - targets: ["archon:8091"]
+      - targets: ["http://archon:8091/healthz"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
 
   # === Tier 3 Services (Added 2025-12-24) ===
 
@@ -136,7 +156,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://agent-zero:8080/healthz                 # agent-zero
+          - http://agent-zero:80/                          # agent-zero
           - http://hi-rag-gateway-v2:8086/hirag/admin/stats # hi-rag v2 CPU
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://presign:8080/healthz                    # presign

@@ -1,20 +1,20 @@
 # Submodule Layer Validation
-_Generated: 2026-02-19 07:44 UTC_
+_Generated: 2026-02-19 20:22 UTC_
 
 ## Summary
 - Manifest: `pmoves/configs/submodule_layer_validation_manifest.json`
 - Submodules declared: **1**
 - Initialized: **1/1**
 - Top-level modules: **1**
-- Findings: **1 error(s)**, **0 warning(s)**
+- Findings: **0 error(s)**, **0 warning(s)**
 
 ## Matrix
 | Submodule | Initialized | Status | Remote Commit | Docs(any) | Top-level Dossier | Nested .gitmodules | Python Compile |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `PMOVES-BoTZ` | yes | ` ` | `local` | yes | yes | ok | `fail` |
+| `PMOVES-BoTZ` | yes | ` ` | `local` | yes | yes | ok | `pass` |
 
 ## Findings
-- [ERROR] `PYTHON_COMPILE_FAIL` `PMOVES-BoTZ`: '(' was never closed (train_sft_example.py, line 58)
+- No findings.
 
 ## Layering Guidance
 1. Run `make -C pmoves submodule-layer-validate-strict` until this report is clean.

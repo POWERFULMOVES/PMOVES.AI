@@ -49,8 +49,8 @@ def _pick_first_ok(urls: Iterable[str]) -> tuple[str | None, bool, int]:
 def main() -> int:
     targets = {
         "agent-zero": [
-            os.getenv("CODEX_HEALTH_AGENT_ZERO_URL", "http://localhost:8081/healthz"),
-            "http://localhost:8098/healthz",
+            os.getenv("CODEX_HEALTH_AGENT_ZERO_URL", "http://localhost:8080/healthz"),
+            "http://localhost:8081/",
         ],
         "archon": [
             os.getenv("CODEX_HEALTH_ARCHON_URL", "http://localhost:8091/healthz"),
