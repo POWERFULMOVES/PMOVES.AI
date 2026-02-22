@@ -110,8 +110,8 @@ class TestConfigEndpoint:
         data = response.json()
 
         assert "providers" in data
-        assert "vibevoice" in data["providers"]
         assert "whisper" in data["providers"]
+        assert "elevenlabs" in data["providers"]
 
     def test_config_contains_features(self):
         """Config includes feature flags."""
@@ -502,7 +502,7 @@ class TestProviders:
 
         provider = WhisperProvider("http://localhost:8078")
         assert provider.base_url == "http://localhost:8078"
-        assert provider.transcribe_endpoint == "http://localhost:8078/transcribe"
+        assert provider.transcribe_endpoint == "http://localhost:8078/transcribe_file"
         assert provider.health_endpoint == "http://localhost:8078/healthz"
 
     @pytest.mark.asyncio

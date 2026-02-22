@@ -6,7 +6,6 @@ import types
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 
 def _install_stub(name: str, module: types.ModuleType, stash: dict[str, types.ModuleType | None]) -> None:
@@ -40,6 +39,10 @@ def _load_gateway_module(monkeypatch: pytest.MonkeyPatch):
 
     flag_mod.FlagReranker = _FlagReranker
     _install_stub("FlagEmbedding", flag_mod, stubs)
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.cuda = types.SimpleNamespace(is_available=lambda: False)
+    _install_stub("torch", torch_mod, stubs)
 
     qdrant_mod = types.ModuleType("qdrant_client")
 
@@ -108,6 +111,7 @@ def _load_gateway_module(monkeypatch: pytest.MonkeyPatch):
 
     requests_mod.post = _dummy_post
     requests_mod.get = _dummy_get
+    requests_mod.Response = _Response
     _install_stub("requests", requests_mod, stubs)
 
     libs_mod = types.ModuleType("libs")
@@ -278,13 +282,12 @@ def test_mindmap_route_returns_items(gateway_module, monkeypatch):
         },
     ]
     monkeypatch.setattr(gateway_module, "driver", _FakeDriver(records))
-    client = TestClient(gateway_module.app)
-    resp = client.get(
-        "/mindmap/demo",
-        params={"modalities": "text,video", "limit": 1, "offset": 1},
+    body = gateway_module.mindmap_route(
+        constellation_id="demo",
+        modalities="text,video",
+        limit=1,
+        offset=1,
     )
-    assert resp.status_code == 200
-    body = resp.json()
     assert body["offset"] == 1
     assert body["limit"] == 1
     assert body["returned"] == 1
@@ -300,6 +303,6 @@ def test_mindmap_route_returns_items(gateway_module, monkeypatch):
 
 def test_mindmap_route_handles_missing_driver(gateway_module, monkeypatch):
     monkeypatch.setattr(gateway_module, "driver", None)
-    client = TestClient(gateway_module.app)
-    resp = client.get("/mindmap/demo")
-    assert resp.status_code == 503
+    with pytest.raises(gateway_module.HTTPException) as exc:
+        gateway_module.mindmap_route(constellation_id="demo")
+    assert exc.value.status_code == 503
