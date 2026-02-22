@@ -1,0 +1,248 @@
+# PMOVES.AI Agent Theme Registry
+# Thread 5.1: Creative branding for agent cards
+# Mix-and-match: agents can draw from multiple theme packs
+
+theme_packs:
+  transformers-1986:
+    name: "Transformers: The Movie (1986)"
+    description: "Classic Transformers G1 movie characters and voice actors"
+    characters:
+      optimus-prime:
+        name: Optimus Prime
+        faction: Autobot
+        voice_actor: Peter Cullen
+        traits: [leader, selfless, tactical, inspiring]
+        color_palette: ["#FF0000", "#0000FF", "#C0C0C0"]
+        icon: truck
+      megatron:
+        name: Megatron
+        faction: Decepticon
+        voice_actor: Frank Welker
+        traits: [ruthless, strategic, powerful, commanding]
+        color_palette: ["#808080", "#6B0000", "#000000"]
+        icon: cannon
+      starscream:
+        name: Starscream
+        faction: Decepticon
+        voice_actor: Chris Latta
+        traits: [ambitious, cunning, fast, unreliable]
+        color_palette: ["#FF4500", "#1E90FF", "#FFD700"]
+        icon: jet
+      soundwave:
+        name: Soundwave
+        faction: Decepticon
+        voice_actor: Frank Welker
+        traits: [loyal, surveillance, data-collection, monotone]
+        color_palette: ["#00008B", "#FFD700", "#C0C0C0"]
+        icon: cassette
+      hot-rod:
+        name: Hot Rod / Rodimus Prime
+        faction: Autobot
+        voice_actor: Judd Nelson
+        traits: [young, impulsive, destined, brave]
+        color_palette: ["#FF4500", "#FFD700", "#8B0000"]
+        icon: flame
+      ultra-magnus:
+        name: Ultra Magnus
+        faction: Autobot
+        voice_actor: Robert Stack
+        traits: [disciplined, rigid, reliable, carry-the-matrix]
+        color_palette: ["#0000FF", "#FF0000", "#FFFFFF"]
+        icon: carrier
+      grimlock:
+        name: Grimlock
+        faction: Autobot (Dinobot)
+        voice_actor: Gregg Berger
+        traits: [strong, simple, fierce, loyal]
+        color_palette: ["#C0C0C0", "#FFD700", "#FF0000"]
+        icon: trex
+      arcee:
+        name: Arcee
+        faction: Autobot
+        voice_actor: Susan Blu
+        traits: [skilled, compassionate, warrior, pink]
+        color_palette: ["#FF69B4", "#FFFFFF", "#87CEEB"]
+        icon: motorcycle
+
+  thundercats:
+    name: ThunderCats
+    description: "ThunderCats animated series characters"
+    characters:
+      lion-o:
+        name: Lion-O
+        faction: ThunderCat
+        voice_actor: Larry Kenney
+        traits: [leader, sword-of-omens, brave, young-in-old-body]
+        color_palette: ["#FF8C00", "#0000CD", "#FFD700"]
+        icon: sword
+      cheetara:
+        name: Cheetara
+        faction: ThunderCat
+        voice_actor: Lynne Lipton
+        traits: [fast, psychic, wise, staff-wielder]
+        color_palette: ["#FFD700", "#FF8C00", "#FFFFFF"]
+        icon: staff
+      panthro:
+        name: Panthro
+        faction: ThunderCat
+        voice_actor: Earle Hyman
+        traits: [strong, engineer, nunchucks, builder]
+        color_palette: ["#4169E1", "#808080", "#000000"]
+        icon: nunchucks
+      mumm-ra:
+        name: Mumm-Ra
+        faction: Evil
+        voice_actor: Earl Hammond
+        traits: [ancient, sorcerer, ever-living, shape-shifting]
+        color_palette: ["#800080", "#8B0000", "#000000"]
+        icon: pyramid
+
+  megaman:
+    name: "Mega Man"
+    description: "Mega Man / Rockman series characters"
+    characters:
+      megaman:
+        name: Mega Man
+        faction: Light Labs
+        traits: [adaptable, copy-ability, hero, blue-bomber]
+        color_palette: ["#0066FF", "#00BFFF", "#FFFFFF"]
+        icon: buster
+      proto-man:
+        name: Proto Man
+        faction: Independent
+        traits: [mysterious, shield, whistle, lone-wolf]
+        color_palette: ["#FF0000", "#808080", "#FFD700"]
+        icon: shield
+      bass:
+        name: Bass
+        faction: Wily
+        traits: [rival, powerful, treble, competitive]
+        color_palette: ["#000000", "#800080", "#FFD700"]
+        icon: cannon
+      dr-wily:
+        name: Dr. Wily
+        faction: Evil
+        traits: [genius, persistent, robot-masters, schemes]
+        color_palette: ["#FFFFFF", "#0000FF", "#FFD700"]
+        icon: skull
+
+  fft:
+    name: "Final Fantasy Tactics"
+    description: "FFT character classes and notable characters"
+    characters:
+      ramza:
+        name: Ramza Beoulve
+        class: Squire / Holy Knight
+        traits: [noble, justice, versatile, protagonist]
+        color_palette: ["#FFD700", "#0000CD", "#8B4513"]
+        icon: sword
+      delita:
+        name: Delita Heiral
+        class: Holy Knight
+        traits: [ambitious, strategic, complex, anti-hero]
+        color_palette: ["#000000", "#8B0000", "#C0C0C0"]
+        icon: crown
+      agrias:
+        name: Agrias Oaks
+        class: Holy Knight
+        traits: [loyal, honor, holy-sword, protector]
+        color_palette: ["#FFD700", "#FFFFFF", "#0000CD"]
+        icon: holy-sword
+      orlandu:
+        name: Cidolfus Orlandu (Thunder God Cid)
+        class: Sword Saint
+        traits: [legendary, overpowered, tactical-genius, mentor]
+        color_palette: ["#FFD700", "#800080", "#000000"]
+        icon: excalibur
+      calculator:
+        name: Calculator (Arithmetician)
+        class: Calculator
+        traits: [math-based, analytical, precise, powerful-late-game]
+        color_palette: ["#FFFFFF", "#00CED1", "#4B0082"]
+        icon: abacus
+      mime:
+        name: Mime
+        class: Mime
+        traits: [copycat, adaptive, unpredictable, versatile]
+        color_palette: ["#FF69B4", "#9370DB", "#FFFFFF"]
+        icon: mask
+
+# Agent-to-Character mappings (Thread 5.2)
+# Maps the 59 CGP agents to themed characters
+agent_theme_map:
+  # Core orchestrators → Leaders
+  agent-zero:
+    primary: transformers-1986/optimus-prime
+    secondary: fft/orlandu
+    rationale: "Master orchestrator = Autobot leader + Thunder God tactical genius"
+
+  archon:
+    primary: thundercats/lion-o
+    secondary: fft/ramza
+    rationale: "Knowledge manager with Sword of Omens (insight) + noble quest for truth"
+
+  # RAG & Knowledge → Analysts
+  hirag:
+    primary: fft/calculator
+    secondary: megaman/megaman
+    rationale: "Math-based retrieval + adaptive copy-ability (hybrid search modes)"
+
+  deepresearch:
+    primary: transformers-1986/soundwave
+    secondary: thundercats/cheetara
+    rationale: "Data collection specialist + psychic intuition for deep research"
+
+  supaserch:
+    primary: megaman/proto-man
+    secondary: fft/mime
+    rationale: "Lone wolf search orchestrator + mirrors multiple search strategies"
+
+  # Media & Voice → Performers
+  flute-gateway:
+    primary: transformers-1986/arcee
+    secondary: thundercats/cheetara
+    rationale: "Voice synthesis warrior + speed of prosodic delivery"
+
+  ultimate-tts:
+    primary: transformers-1986/soundwave
+    secondary: megaman/bass
+    rationale: "7 voice engines = 7 cassettes + powerful vocal output"
+
+  # Security & Monitoring → Guardians
+  cipher-memory:
+    primary: fft/agrias
+    secondary: transformers-1986/ultra-magnus
+    rationale: "Knowledge guardian with holy encryption + disciplined memory carrier"
+
+  # Builders & Workers → Engineers
+  extract-worker:
+    primary: thundercats/panthro
+    secondary: megaman/megaman
+    rationale: "Builder/engineer for embeddings + adaptive indexing"
+
+  creator:
+    primary: megaman/dr-wily
+    secondary: fft/delita
+    rationale: "Creative genius building robot masters (workflows) + strategic vision"
+
+  # Adversarial & Testing → Challengers
+  botz:
+    primary: transformers-1986/starscream
+    secondary: fft/delita
+    rationale: "Ambitious skills marketplace + strategic skill orchestration"
+
+  tokenism:
+    primary: transformers-1986/megatron
+    secondary: thundercats/mumm-ra
+    rationale: "Economic power + ancient wisdom of CHIT geometry"
+
+  # Youth & Evolution → Rising Stars
+  mesh-agent:
+    primary: transformers-1986/hot-rod
+    secondary: fft/ramza
+    rationale: "Young distributed announcer destined for greatness"
+
+  hyperdimensions:
+    primary: fft/calculator
+    secondary: transformers-1986/grimlock
+    rationale: "Mathematical precision of parametric surfaces + raw rendering power"
