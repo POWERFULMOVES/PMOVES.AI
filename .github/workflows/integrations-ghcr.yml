@@ -188,16 +188,23 @@ jobs:
       - name: Checkout (stub)
         uses: actions/checkout@v4
 
-      - name: Clone integration repo
+      - name: Prepare integration source
         run: |
           set -euo pipefail
-          url="${{ matrix.git_url }}"
-          if [ -n "${CI_GIT_CLONE_TOKEN:-}" ]; then
-            url="${url/https:\/\/github.com\//https:\/\/x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/}"
-          fi
-          if ! git clone --depth=1 --branch "${{ matrix.ref }}" "$url" integration-src; then
-            echo "::error::Failed to clone ${url} (ref=${{ matrix.ref }}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
-            exit 1
+          if [ "${{ matrix.git_url }}" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
+            echo "Using checked-out PMOVES.AI workspace as integration source"
+            rm -rf integration-src
+            mkdir -p integration-src
+            git archive --format=tar HEAD | tar -x -C integration-src
+          else
+            url="${{ matrix.git_url }}"
+            if [ -n "${CI_GIT_CLONE_TOKEN:-}" ]; then
+              url="${url/https:\/\/github.com\//https:\/\/x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/}"
+            fi
+            if ! git clone --depth=1 --branch "${{ matrix.ref }}" "$url" integration-src; then
+              echo "::error::Failed to clone ${url} (ref=${{ matrix.ref }}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
+              exit 1
+            fi
           fi
 
       - name: Free disk space (runner)
@@ -218,6 +225,7 @@ jobs:
 
       - name: Log in to GHCR (workflow token)
         id: login_ghcr_actions
+        if: ${{ github.event_name != 'pull_request' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -227,7 +235,7 @@ jobs:
 
       - name: Log in to GHCR (PAT fallback)
         id: login_ghcr_pat
-        if: ${{ steps.login_ghcr_actions.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
+        if: ${{ github.event_name != 'pull_request' && steps.login_ghcr_actions.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -241,8 +249,24 @@ jobs:
           echo "::error::Unable to authenticate to GHCR. Ensure repo Actions has packages:write and/or set GHCR_USERNAME + GHCR_TOKEN (or GH_PAT_PUBLISH)."
           exit 1
 
+      - name: Verify GHCR authentication
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.login_ghcr_actions.outcome }}" = "success" ]; then
+            echo "::notice::GHCR login succeeded via workflow token (GITHUB_TOKEN)"
+          elif [ "${{ steps.login_ghcr_pat.outcome }}" = "success" ]; then
+            echo "::notice::GHCR login succeeded via PAT fallback"
+          fi
+          # Validate registry connectivity with a lightweight HEAD request
+          if ! docker manifest inspect ghcr.io/powerfulmoves/pmoves-firefly-iii:pmoves-latest > /dev/null 2>&1; then
+            echo "::warning::Could not inspect existing GHCR image (expected on first push or if package ACLs restrict access). If pushes fail with 403, add this repository to each package's Manage Actions Access settings."
+          else
+            echo "GHCR pull validation: OK"
+          fi
+
       - name: Optional login to Docker Hub
-        if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+        if: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
         uses: docker/login-action@v3
         with:
           registry: docker.io
@@ -254,8 +278,8 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
-          INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-          USE_GHCR: ${{ steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' }}
+          INCLUDE_DOCKERHUB: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+          USE_GHCR: ${{ github.event_name != 'pull_request' && (steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success') }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -282,6 +306,12 @@ jobs:
 
           TAGS=""
           PRIMARY_TAG=""
+
+          # Pull requests validate builds only; do not push/sign/scan registry images.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PRIMARY_TAG="${{ matrix.image_name }}:pr-${DATE_TAG}-${SHA_SHORT}"
+            TAGS="${PRIMARY_TAG}"
+          fi
 
           # Only add GHCR tags if login succeeded.
           if [ "$USE_GHCR" = "true" ]; then
@@ -337,7 +367,7 @@ jobs:
         with:
           context: integration-src/${{ matrix.context }}
           file: integration-src/${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ matrix.build_args }}
@@ -347,7 +377,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Cosign sign GHCR digest (keyless)
-        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
@@ -356,19 +386,19 @@ jobs:
           cosign sign --yes "$IMAGE_DIGEST_REF"
 
       - name: Install Syft (SBOM)
-        if: ${{ matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
         uses: anchore/sbom-action/download-syft@v0.22.2
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
-        if: ${{ matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
           syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
-        if: ${{ matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && matrix.generate_sbom && steps.meta.outputs.has_tags == 'true' }}
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}-sbom
@@ -384,13 +414,13 @@ jobs:
           df -h
 
       - name: Pull image for Trivy (private GHCR)
-        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
           docker pull "${{ steps.meta.outputs.primary_tag }}"
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
-        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
         uses: aquasecurity/trivy-action@0.34.0
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
@@ -406,7 +436,7 @@ jobs:
           scanners: 'vuln'
 
       - name: Trivy vulnerability scan report (includes unfixed)
-        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
         uses: aquasecurity/trivy-action@0.34.0
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
@@ -421,14 +451,14 @@ jobs:
           scanners: 'vuln'
 
       - name: Upload Trivy report artifact
-        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
 
       - name: Cosign verify GHCR digest (keyless)
-        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
+        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
