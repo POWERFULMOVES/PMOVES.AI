@@ -29,8 +29,8 @@ concurrency:
 
 jobs:
   tests:
-    # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, Linux, X64]
+    # PRs use hosted runners for determinism; push/main retains self-hosted labels.
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
     permissions:
       contents: read
       actions: read
@@ -96,19 +96,19 @@ jobs:
                   requirements.append(req_path)
 
           # Skip heavy/problematic packages for CI (GPU deps, large ML models)
-          skip = {"supabase", "torch", "torchaudio", "torchvision", "whisperx",
+          skip = {"torch", "torchaudio", "torchvision", "whisperx",
                   "pyannote.audio", "faster-whisper", "ultralytics", "timm",
                   "accelerate", "sentence-transformers", "transformers",
                   "FlagEmbedding", "openai-whisper", "onnxruntime",
                   "langchain-unstructured", "unstructured", "unstructured-client",
                   "browser-use", "playwright", "faiss-cpu", "faiss-gpu",
-                  "librosa", "numba", "kokoro", "newspaper3k", "boto3",
+                  "librosa", "numba", "kokoro", "newspaper3k",
                   "langchain", "langchain-community", "langchain-core",
                   "litellm", "pymupdf", "qdrant-client"}
 
           # Collect unique package names (strip versions to let pip resolve)
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer", "yt-dlp", "boto3", "tenacity", "supabase"]
 
           import re
           for path in requirements:

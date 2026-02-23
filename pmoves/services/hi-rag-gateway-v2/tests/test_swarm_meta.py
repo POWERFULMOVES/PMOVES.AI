@@ -157,10 +157,27 @@ def gateway_v2_module():
         def _request(*args, **kwargs):  # pragma: no cover - structure only
             return _Response()
 
+        requests_module.Response = _Response
         requests_module.get = _request  # type: ignore[attr-defined]
         requests_module.post = _request  # type: ignore[attr-defined]
         requests_module.Response = _Response
         _install_stub("requests", requests_module, stubs)
+
+        torch_module = types.ModuleType("torch")
+        torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
+        _install_stub("torch", torch_module, stubs)
+
+        hrm_sidecar_module = types.ModuleType("services.common.hrm_sidecar")
+
+        class _HrmDecoderController:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def status(self, *_args, **_kwargs):
+                return {"enabled": False}
+
+        hrm_sidecar_module.HrmDecoderController = _HrmDecoderController
+        _install_stub("services.common.hrm_sidecar", hrm_sidecar_module, stubs)
 
         providers_module = types.ModuleType("libs.providers")
         embedding_module = types.ModuleType("libs.providers.embedding")

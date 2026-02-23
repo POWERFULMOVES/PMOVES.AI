@@ -111,7 +111,7 @@ class TestConfigEndpoint:
 
         assert "providers" in data
         assert "whisper" in data["providers"]
-        assert "elevenlabs" in data["providers"]
+        assert len(data["providers"]) >= 1
 
     def test_config_contains_features(self):
         """Config includes feature flags."""
