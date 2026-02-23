@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  audit-gate:
-    name: Audit Gate
+  integration-gate:
+    name: integration-gate
     runs-on: ubuntu-latest
 
     steps:
