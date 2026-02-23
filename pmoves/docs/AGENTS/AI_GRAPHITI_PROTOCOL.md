@@ -101,6 +101,38 @@ Write your trail entry in your assigned voice:
 - **Directive** (POWERFULMOVES): Decision statements, priority calls, scope definitions. "Ship Phase H. KiloCode starts Monday. No P2s until onboarding completes."
 - **Companion** (Crush): Warm, interactive, pair-programming energy. "Let's figure this out together. Here's what I found, here's what I think we should try."
 
+## KRISS KROSS Accord (Collision -> Overlay)
+
+When two agents enter the same lane, they do not collide. They KRISS KROSS by
+switching from direct overlap to a controlled overlay handoff.
+
+### Role split when Codex is on the 1s and 2s
+
+- `Codex` (`DJ/Lead`): owns implementation lane, writes Codex command mappings,
+  and is final parity authority for `CODEX_CLAUDE_PARITY_MAP.md`.
+- `Claude` (`Counterpoint/Scout`): runs review sweeps, surfaces risks, proposes
+  alternative diffs in a separate integration lane, and feeds evidence.
+- Merge rule: one lane owner signs release for merge readiness. During Codex-led
+  windows, Codex signs parity release.
+
+### Overlay handshake
+
+1. `CLAIM`: both agents publish scope and target branch.
+2. `KRISS_KROSS`: convert overlap into overlay mode with one owner and one scout.
+3. `WEAVE`: scout posts evidence/diffs; owner performs final weave in target lane.
+4. `RELEASE`: owner signs release; scout signs ack.
+
+### Required overlay fields
+
+- `overlay_id` (for example `KK-2026-02-23-codex-claude-01`)
+- `lane_owner`
+- `scout_agent`
+- `source_branch`
+- `target_branch`
+- `scope`
+- `parity_report_path`
+- `agent_signature`
+
 ## How Signatures Connect to CGP
 
 CGP v2 attribution records use `contributor.address` to identify who contributed to a geometry packet. The AI Graphiti `agent_id` maps directly to this field:
@@ -177,6 +209,7 @@ When an agent completes significant work, it emits an `agent.graphiti.signed.v1`
 - **CGP v2 Schema:** `pmoves/contracts/schemas/geometry/cgp.v2.schema.json` — `attribution.contributors[].address`
 - **NATS Handoff:** `agent.handoff.request.v1` — `from` field corresponds to `agent_id`
 - **KiloCode Onboarding:** `plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md`
+- **KRISS KROSS Accord:** `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md`
 - **Trajectory Schema:** `pmoves/contracts/schemas/agent-rl/trajectory.v1.schema.json` — `agent_id` field
 
 ## Broader Context: Three-Body Stabilization
