@@ -39,3 +39,20 @@ This file is the operator list of active CHIT-adjacent flows, ordered for produc
   - `pmoves/docs/PMOVESCHIT/03_EVO_SWARM.md`
   - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md`
 - Output: channel monitor and downstream ingestion events visible in audit trails.
+
+## CHIT-FLOW-005: GHCR Targeted Matrix + Auth Hardening
+- Scope: fix GHCR push authorization failures and validate one integration image at a time.
+- Entry commands:
+  - `gh workflow run integrations-ghcr.yml --ref <branch> -f integration=supaserch -f push_to_dockerhub=false`
+  - `gh run view <run_id> --json status,conclusion,jobs`
+  - `gh run view <run_id> --log-failed`
+- Operator pattern:
+  - Prefer PAT-first GHCR login (`GHCR_TOKEN` or `GH_PAT_PUBLISH`) with workflow-token fallback.
+  - Keep matrix selection output minimal (`["supaserch"]` style names only); resolve metadata inside the build job.
+  - Use resolve/build split (`resolve-matrix` -> `build-publish`) so dispatch selectors can run one image instead of full matrix.
+  - If GitHub annotates `Skip output ... may contain secret`, treat as a matrix-output redaction issue and reduce output payload.
+- Reference docs:
+  - https://docs.github.com/actions/using-jobs/using-a-matrix-for-your-jobs
+  - https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idoutputs
+  - https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstrategy
+- Output: deterministic single-image validation path for GHCR ACL/ownership troubleshooting.
