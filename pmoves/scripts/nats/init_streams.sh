@@ -92,4 +92,4 @@ if [ "$FAIL_COUNT" -gt 0 ]; then
 fi
 
 echo "NATS stream init complete"
-nats -s "$NATS_URL" stream ls
+nats -s "$NATS_URL" stream ls || true

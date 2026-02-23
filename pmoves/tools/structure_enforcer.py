@@ -14,7 +14,6 @@ Usage:
 
 import argparse
 import json
-import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -72,6 +71,12 @@ def check_submodule_integration_md(report: EnforcementReport) -> None:
         report.checks_run += 1
         sub_dir = REPO_ROOT / sub_path
         if not sub_dir.exists():
+            report.findings.append(Finding(
+                severity="P3",
+                category="submodule-integration",
+                path=sub_path,
+                message=f"Submodule directory does not exist (uninitialized?)",
+            ))
             continue
 
         integration_md = sub_dir / "PMOVES.AI_INTEGRATION.md"

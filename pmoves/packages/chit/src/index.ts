@@ -20,6 +20,10 @@
 // Re-export everything from the canonical CHIT source
 // The source modules live in the ToKenism-Multi submodule.
 // This package provides a clean workspace import path: @pmoves/chit
+//
+// IMPORTANT: Requires `git submodule update --init PMOVES-ToKenism-Multi`
+// before building. The import path resolves to the submodule source.
+// Most re-exports are type-only (erased at compile time).
 
 export {
   // Dirichlet Weights
