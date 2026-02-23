@@ -46,8 +46,9 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  # Prefer PAT first for package ownership/ACL edge-cases; fallback to workflow token.
-  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.repository_owner }}
+  # Prefer PAT first for package ownership/ACL edge-cases.
+  # GHCR_USERNAME is optional; if unset, workflow attempts PAT auth with repository owner.
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || '' }}
   GHCR_PAT: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
@@ -323,9 +324,9 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
 
-      - name: Log in to GHCR (PAT preferred)
-        id: login_ghcr_pat
-        if: ${{ env.GHCR_PAT != '' }}
+      - name: Log in to GHCR (PAT using GHCR_USERNAME)
+        id: login_ghcr_pat_named
+        if: ${{ env.GHCR_PAT != '' && env.GHCR_USERNAME != '' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -333,9 +334,25 @@ jobs:
           username: ${{ env.GHCR_USERNAME }}
           password: ${{ env.GHCR_PAT }}
 
+      - name: Log in to GHCR (PAT using repository owner)
+        id: login_ghcr_pat_owner
+        if: ${{ env.GHCR_PAT != '' && steps.login_ghcr_pat_named.outcome != 'success' }}
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ env.GHCR_PAT }}
+
+      - name: Require valid GHCR PAT when provided
+        if: ${{ env.GHCR_PAT != '' && steps.login_ghcr_pat_named.outcome != 'success' && steps.login_ghcr_pat_owner.outcome != 'success' }}
+        run: |
+          echo "::error::GHCR PAT authentication failed. Check GHCR_TOKEN/GH_PAT_PUBLISH scopes (packages:write) and GHCR_USERNAME (if set)."
+          exit 1
+
       - name: Log in to GHCR (workflow token fallback)
         id: login_ghcr_actions
-        if: ${{ steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ env.GHCR_PAT == '' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -344,7 +361,7 @@ jobs:
           password: ${{ github.token }}
 
       - name: Require GHCR authentication
-        if: ${{ steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat_named.outcome != 'success' && steps.login_ghcr_pat_owner.outcome != 'success' }}
         run: |
           echo "::error::Unable to authenticate to GHCR. Ensure repo Actions has packages:write and/or set GHCR_USERNAME + GHCR_TOKEN (or GH_PAT_PUBLISH)."
           exit 1
@@ -363,7 +380,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-          USE_GHCR: ${{ steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' }}
+          USE_GHCR: ${{ steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat_named.outcome == 'success' || steps.login_ghcr_pat_owner.outcome == 'success' }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
