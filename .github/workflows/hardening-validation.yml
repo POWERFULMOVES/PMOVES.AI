@@ -30,7 +30,8 @@ jobs:
   # ============================================================================
   validate-hardening:
     name: Validate Hardening Patterns
-    runs-on: [self-hosted, Linux, X64]
+    # PRs use hosted runners for deterministic feedback; push/main keeps self-hosted lanes.
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
 
     steps:
       - name: Harden Runner
@@ -87,7 +88,7 @@ jobs:
   # ============================================================================
   validate-dockerfiles:
     name: Validate Dockerfiles
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
     strategy:
       fail-fast: false
       matrix:
@@ -163,6 +164,7 @@ jobs:
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
+    if: github.event_name != 'pull_request'
     runs-on: [self-hosted, Linux, X64]
 
     steps:
@@ -197,7 +199,7 @@ jobs:
   # ============================================================================
   validate-compose:
     name: Validate Compose Files
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
 
     steps:
       - name: Harden Runner
@@ -271,7 +273,7 @@ jobs:
   # ============================================================================
   summary:
     name: Validation Summary
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
     needs: [validate-hardening, validate-dockerfiles, validate-compose]
     if: always()
 

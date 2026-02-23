@@ -44,12 +44,12 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # PMOVES.AI: Use self-hosted runners for production CI
+    # PRs use hosted runners for determinism; push/main retains self-hosted labels.
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
     continue-on-error: ${{ matrix.language == 'c-cpp' || matrix.language == 'javascript-typescript' }}

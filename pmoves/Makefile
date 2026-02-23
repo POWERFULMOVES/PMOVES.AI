@@ -1288,7 +1288,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean smoke smoke-prod smoke-gpu smoke-qwen-rerank llama-throughput-smoke manifest-audit
-.PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
+.PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke channel-monitor-discord-drop-smoke channel-monitor-discord-gate-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: up down clean up-cloudflare down-cloudflare logs-cloudflare cloudflare-url restart-cloudflare up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 .PHONY: notebook-up notebook-down notebook-logs notebook-seed-models
@@ -1513,6 +1513,95 @@ up-yt-hardened: ## Start YT stack with hardened security options (published imag
 # Optional media analyzers (video+audio)
 up-media:
 	@$(DC) --profile data --profile workers up -d media-video media-audio
+
+.PHONY: channel-monitor-up channel-monitor-smoke channel-monitor-discord-drop-smoke channel-monitor-discord-gate-smoke
+channel-monitor-up: ensure-env-shared ## Start Channel Monitor with runtime-aware Supabase DB URL
+	@$(LOAD_ENV_SHARED); \
+	  db_url="$${CHANNEL_MONITOR_DATABASE_URL:-}"; \
+	  runtime_db=""; \
+	  if [ -f .supabase.status.env ]; then \
+	    runtime_db=$$(grep -m1 "^DB_URL=" .supabase.status.env | cut -d= -f2-); \
+	    runtime_db="$${runtime_db%\"}"; runtime_db="$${runtime_db#\"}"; \
+	    runtime_db="$${runtime_db%\'}"; runtime_db="$${runtime_db#\'}"; \
+	    runtime_db="$${runtime_db/127.0.0.1/host.docker.internal}"; \
+	    runtime_db="$${runtime_db/localhost/host.docker.internal}"; \
+	  fi; \
+	  if [ -z "$$db_url" ] || echo "$$db_url" | grep -Eq "host\.docker\.internal:65432"; then \
+	    if [ -n "$$runtime_db" ]; then \
+	      db_url="$$runtime_db"; \
+	    else \
+	      db_url="postgresql://postgres:postgres@supabase-db:5432/postgres"; \
+	    fi; \
+	  fi; \
+	  echo "→ Channel Monitor DB URL: $$db_url"; \
+	  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' MSYS2_ENV_CONV_EXCL=CHANNEL_MONITOR_CONFIG_PATH \
+	  CHANNEL_MONITOR_CONFIG_PATH=/app/config/channel_monitor.json \
+	  CHANNEL_MONITOR_DATABASE_URL="$$db_url" \
+	  $(DC) --profile orchestration up -d channel-monitor
+
+channel-monitor-smoke: ## Verify Channel Monitor health/status endpoints
+	@for endpoint in /healthz /api/monitor/status /api/monitor/stats; do \
+	  code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}$$endpoint" || true); \
+	  if [ "$$code" != "200" ]; then \
+	    echo "✖ channel-monitor $$endpoint => $$code"; \
+	    exit 1; \
+	  fi; \
+	  echo "✔ channel-monitor $$endpoint (200)"; \
+	done
+
+channel-monitor-discord-drop-smoke: ## Queue a Discord-style URL drop through channel-monitor
+	@set -eu; \
+	  payload='{"content":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","source":"discord_agent","approval_mode":"auto","tags":["discord","smoke"]}'; \
+	  if [ -n "$${CHANNEL_MONITOR_SECRET:-}" ]; then \
+	    body=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
+	      -H "content-type: application/json" \
+	      -H "x-channel-monitor-token: $${CHANNEL_MONITOR_SECRET}" \
+	      -d "$$payload"); \
+	  else \
+	    body=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
+	      -H "content-type: application/json" \
+	      -d "$$payload"); \
+	  fi; \
+	  if ! echo "$$body" | grep -q '"status":"ok"'; then \
+	    echo "✖ channel-monitor discord-drop smoke failed: $$body"; \
+	    exit 1; \
+	  fi; \
+	  echo "✔ channel-monitor discord-drop queued"
+
+channel-monitor-discord-gate-smoke: ## Verify ask->pending->approve flow for Discord drops
+	@set -eu; \
+	  payload='{"content":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","source":"discord_agent","approval_mode":"ask","tags":["discord","gate-smoke"]}'; \
+	  if [ -n "$${CHANNEL_MONITOR_SECRET:-}" ]; then \
+	    create=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
+	      -H "content-type: application/json" \
+	      -H "x-channel-monitor-token: $${CHANNEL_MONITOR_SECRET}" \
+	      -d "$$payload"); \
+	  else \
+	    create=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
+	      -H "content-type: application/json" \
+	      -d "$$payload"); \
+	  fi; \
+	  echo "$$create" | grep -q '"approval_state":"pending_review"' || { echo "✖ expected pending_review: $$create"; exit 1; }; \
+	  if command -v jq >/dev/null 2>&1; then \
+	    vid=$$(printf '%s' "$$create" | jq -r '.accepted[0].video_id // empty'); \
+	  else \
+	    vid=$$(echo "$$create" | sed -n 's/.*"video_id":"\([^"]*\)".*/\1/p' | head -1); \
+	  fi; \
+	  [ -n "$$vid" ] || { echo "✖ could not parse pending video_id from response: $$create"; exit 1; }; \
+	  review_payload=$$(printf '{"video_ids":["%s"],"approve":true,"actor":"gate-smoke"}' "$$vid"); \
+	  if [ -n "$${CHANNEL_MONITOR_SECRET:-}" ]; then \
+	    approve=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop/approve" \
+	      -H "content-type: application/json" \
+	      -H "x-channel-monitor-token: $${CHANNEL_MONITOR_SECRET}" \
+	      -d "$$review_payload"); \
+	  else \
+	    approve=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop/approve" \
+	      -H "content-type: application/json" \
+	      -d "$$review_payload"); \
+	  fi; \
+	  echo "$$approve" | grep -q '"status":"ok"' || { echo "✖ approval status not ok: $$approve"; exit 1; }; \
+	  echo "$$approve" | grep -q '"approved":true' || { echo "✖ approval failed: $$approve"; exit 1; }; \
+	  echo "✔ channel-monitor discord gate flow passed"
 
 .PHONY: up-invidious
 up-invidious:

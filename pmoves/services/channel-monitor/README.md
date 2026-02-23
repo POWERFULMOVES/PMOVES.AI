@@ -10,7 +10,8 @@ Automates discovery of new YouTube videos from configured channels and queues th
 | `CHANNEL_MONITOR_QUEUE_URL` | Endpoint that receives discovered URLs (typically pmoves-yt `/yt/ingest`). | `http://pmoves-yt:8077/yt/ingest` |
 | `CHANNEL_MONITOR_DATABASE_URL` | Postgres connection string used for persistence. | `postgresql://pmoves:pmoves@postgres:5432/pmoves` |
 | `CHANNEL_MONITOR_NAMESPACE` | Default namespace applied when queuing videos. | `pmoves` |
-| `CHANNEL_MONITOR_SECRET` | Optional shared secret required by `/api/monitor/status` updates. | _(unset)_ |
+| `CHANNEL_MONITOR_SECRET` | Optional shared secret required by protected write endpoints (`/api/monitor/status`, `/api/monitor/discord-drop`). | _(unset)_ |
+| `CHANNEL_MONITOR_DISCORD_APPROVAL_MODE` | Default Discord intake mode (`ask` or `auto`). | `ask` |
 
 ### Commands
 
@@ -91,6 +92,48 @@ curl -X POST http://localhost:8097/api/monitor/status \
 ```
 
 Accepted statuses: `pending`, `processing`, `queued`, `completed`, `failed`.
+
+### Discord Video Drop Intake
+
+Use this endpoint when a Discord bot/agent sees message links and should push
+them into PMOVES.YT immediately:
+
+```bash
+curl -X POST http://localhost:8097/api/monitor/discord-drop \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+    "content": "check this https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "approval_mode": "ask",
+    "guild_id": "1234567890",
+    "channel_id": "9876543210",
+    "message_id": "1122334455",
+    "author_id": "9988776655",
+    "namespace": "pmoves",
+    "tags": ["discord", "drop", "review"],
+    "source": "discord_agent"
+  }'
+```
+
+The monitor will:
+- extract and deduplicate URLs from `urls[]` and/or `content`
+- persist synthetic tracking rows in `pmoves.channel_monitoring`
+- in `auto` mode: queue each URL to `CHANNEL_MONITOR_QUEUE_URL` (`/yt/ingest` by default)
+- in `ask` mode: store rows as `pending` and wait for explicit review
+- propagate Discord context metadata so downstream events can fan out to
+  `publisher-discord` and Open Notebook flows
+
+Approve/reject pending rows (gated review):
+
+```bash
+curl -X GET "http://localhost:8097/api/monitor/discord-drop/pending?source=discord_agent" \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET'
+
+curl -X POST http://localhost:8097/api/monitor/discord-drop/approve \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{"video_ids":["dQw4w9WgXcQ"],"approve":true,"actor":"discord-agent"}'
+```
 
 ### Observability
 
