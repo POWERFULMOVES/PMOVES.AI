@@ -2164,3 +2164,31 @@ chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
 	@echo "→ Seeding Neo4j with CHIT mindmap..."
 	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
 	@echo "✔ CHIT mindmap seeded"
+
+# =============================================================================
+# Vision Threads: Documentation Audit & Structure Enforcement
+# =============================================================================
+
+.PHONY: docs-audit
+docs-audit: ## Run documentation content audit (broken links, stale ports, coverage)
+	@$(PYTHON) tools/docs_content_audit.py
+
+.PHONY: docs-audit-json
+docs-audit-json: ## Run documentation content audit (JSON output)
+	@$(PYTHON) tools/docs_content_audit.py --json
+
+.PHONY: cross-ref-validate
+cross-ref-validate: ## Run cross-reference coverage validation
+	@$(PYTHON) tools/cross_reference_validator.py
+
+.PHONY: cross-ref-validate-json
+cross-ref-validate-json: ## Cross-reference validation (JSON output)
+	@$(PYTHON) tools/cross_reference_validator.py --json
+
+.PHONY: structure-enforce
+structure-enforce: ## Enforce structural best practices
+	@$(PYTHON) tools/structure_enforcer.py
+
+.PHONY: structure-enforce-strict
+structure-enforce-strict: ## Enforce structural best practices (strict mode, fails on P1/P2)
+	@$(PYTHON) tools/structure_enforcer.py --strict
