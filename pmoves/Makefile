@@ -46,7 +46,7 @@ ifeq ($(EXTERNAL_SUPABASE),true)
   supa_profile :=
 		else
 supa_profile := ,supabase-local
-SUPABASE_RUNTIME ?= compose
+SUPABASE_RUNTIME ?= cli
 SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 endif
 COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_profile)$(supa_profile)
@@ -220,9 +220,13 @@ check-tools: ## Check required tools and versions
 
 SUPABASE_NETWORK ?= pmoves-net
 SUPABASE_CONFIG ?= supabase/config.toml
-SUPABASE_LOCAL_REST_URL ?= http://127.0.0.1:65421/rest/v1
-SUPABASE_LOCAL_AUTH_HEALTH_URL ?= http://127.0.0.1:65421/auth/v1/health
-SUPABASE_LOCAL_STUDIO_URL ?= http://127.0.0.1:65433
+SUPABASE_CLI_API_URL ?= http://127.0.0.1:54321
+SUPABASE_CLI_REST_URL ?= $(SUPABASE_CLI_API_URL)/rest/v1
+SUPABASE_CLI_AUTH_HEALTH_URL ?= $(SUPABASE_CLI_API_URL)/auth/v1/health
+SUPABASE_CLI_STUDIO_URL ?= http://127.0.0.1:54323
+SUPABASE_LOCAL_REST_URL ?= $(SUPABASE_CLI_REST_URL)
+SUPABASE_LOCAL_AUTH_HEALTH_URL ?= $(SUPABASE_CLI_AUTH_HEALTH_URL)
+SUPABASE_LOCAL_STUDIO_URL ?= $(SUPABASE_CLI_STUDIO_URL)
 SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 
 .PHONY: up-supabase
@@ -331,11 +335,26 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 				grep -E '^(SUPABASE_URL|SUPA_REST_URL|SUPABASE_SERVICE_ROLE_KEY)=' env.supa.runtime || true; \
 			fi; \
 		fi; \
+		rest_url="$(SUPABASE_LOCAL_REST_URL)"; \
+		auth_url="$(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
+		studio_url="$(SUPABASE_LOCAL_STUDIO_URL)"; \
+		if [ -s ".supabase.status.env" ]; then \
+			api_url=$$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			studio_from_status=$$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			if [ -n "$$api_url" ]; then \
+				api_url=$${api_url%/}; \
+				rest_url="$$api_url/rest/v1"; \
+				auth_url="$$api_url/auth/v1/health"; \
+			fi; \
+			if [ -n "$$studio_from_status" ]; then \
+				studio_url="$$studio_from_status"; \
+			fi; \
+		fi; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
-		echo "  REST:   $(SUPABASE_LOCAL_REST_URL)"; \
-		echo "  Auth:   $(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
-		echo "  Studio: $(SUPABASE_LOCAL_STUDIO_URL)"; \
+		echo "  REST:   $$rest_url"; \
+		echo "  Auth:   $$auth_url"; \
+		echo "  Studio: $$studio_url"; \
 	else \
 		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true; \
 		echo ""; \
@@ -371,6 +390,9 @@ supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a 
 supa-health: ## Health checks for selected runtime + active DB container readiness
 	@echo "🏥 Supabase health check:"
 	@db=$$(bash "$(SUPABASE_DB_HELPER)" running 2>/dev/null || true); \
+	if [ -z "$$db" ] && [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
+		db=$$(docker ps --format '{{.Names}}' | grep -m1 '^supabase_db_' || true); \
+	fi; \
 	if [ -n "$$db" ] && docker exec "$$db" pg_isready -U postgres -d postgres >/dev/null 2>&1; then \
 		echo "  ✅ Database ($$db)"; \
 	elif [ -n "$$db" ]; then \
@@ -382,17 +404,36 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 		rest_url="$(SUPABASE_LOCAL_REST_URL)"; \
 		auth_url="$(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
 		studio_url="$(SUPABASE_LOCAL_STUDIO_URL)"; \
+		if [ -s ".supabase.status.env" ]; then \
+			api_url=$$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			studio_from_status=$$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			if [ -n "$$api_url" ]; then \
+				api_url=$${api_url%/}; \
+				rest_url="$$api_url/rest/v1"; \
+				auth_url="$$api_url/auth/v1/health"; \
+			fi; \
+			if [ -n "$$studio_from_status" ]; then \
+				studio_url="$$studio_from_status"; \
+			fi; \
+		fi; \
 	else \
 		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
 		auth_url="http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
 		studio_url="http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
 	fi; \
 	rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$rest_url" || true); \
+	if [ "$$rest_code" = "404" ]; then \
+		rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$${rest_url%/}/" || true); \
+	fi; \
 	auth_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$auth_url" || true); \
 	studio_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$studio_url" || true); \
 	if [ "$$rest_code" = "200" ]; then echo "  ✅ REST ($$rest_url)"; else echo "  ❌ REST ($$rest_url) -> $$rest_code"; fi; \
 	if [ "$$auth_code" = "200" ]; then echo "  ✅ Auth ($$auth_url)"; else echo "  ❌ Auth ($$auth_url) -> $$auth_code"; fi; \
-	if [ "$$studio_code" = "200" ]; then echo "  ✅ Studio ($$studio_url)"; else echo "  ❌ Studio ($$studio_url) -> $$studio_code"; fi
+	if [ "$$studio_code" = "200" ] || [ "$$studio_code" = "301" ] || [ "$$studio_code" = "302" ] || [ "$$studio_code" = "307" ] || [ "$$studio_code" = "308" ]; then \
+		echo "  ✅ Studio ($$studio_url)"; \
+	else \
+		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
+	fi
 
 supa-use-local: ## Write .env.local from local Supabase template and merge keys from current supa-status
 	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env
