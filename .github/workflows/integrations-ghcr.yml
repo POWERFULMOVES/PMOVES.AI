@@ -290,12 +290,6 @@ jobs:
           TAGS=""
           PRIMARY_TAG=""
 
-          # Pull requests validate builds only; do not push/sign/scan registry images.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            PRIMARY_TAG="${{ matrix.image_name }}:pr-${DATE_TAG}-${SHA_SHORT}"
-            TAGS="${PRIMARY_TAG}"
-          fi
-
           # Only add GHCR tags if login succeeded.
           if [ "$USE_GHCR" = "true" ]; then
             GHCR_LATEST="${{ env.REGISTRY }}/$GHCR_NS/${{ matrix.image_name }}:pmoves-latest"

@@ -14,6 +14,7 @@ RUN groupadd -r pmoves && useradd -r -g pmoves -d /app -s /sbin/nologin pmoves
 # Chromium dependencies for Remotion rendering
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
+    curl \
     fonts-noto-color-emoji \
     fonts-liberation \
     && rm -rf /var/lib/apt/lists/*

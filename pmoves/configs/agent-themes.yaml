@@ -168,9 +168,12 @@ theme_packs:
         icon: mask
 
 # Agent-to-Character mappings (Thread 5.2)
-# Maps the 59 CGP agents to themed characters
+# Maps the 60 registry agents + tokenism CHIT component to themed characters
+# Characters may be reused — the mapping reflects functional role, not 1:1 exclusivity
 agent_theme_map:
-  # Core orchestrators → Leaders
+  # ============================================================
+  # Standard Class — Core Orchestrators & Leaders
+  # ============================================================
   agent-zero:
     primary: transformers-1986/optimus-prime
     secondary: fft/orlandu
@@ -181,68 +184,321 @@ agent_theme_map:
     secondary: fft/ramza
     rationale: "Knowledge manager with Sword of Omens (insight) + noble quest for truth"
 
-  # RAG & Knowledge → Analysts
-  hirag:
-    primary: fft/calculator
-    secondary: megaman/megaman
-    rationale: "Math-based retrieval + adaptive copy-ability (hybrid search modes)"
-
-  deepresearch:
-    primary: transformers-1986/soundwave
-    secondary: thundercats/cheetara
-    rationale: "Data collection specialist + psychic intuition for deep research"
-
   supaserch:
     primary: megaman/proto-man
     secondary: fft/mime
     rationale: "Lone wolf search orchestrator + mirrors multiple search strategies"
 
-  # Media & Voice → Performers
+  botz-gateway:
+    primary: transformers-1986/starscream
+    secondary: fft/delita
+    rationale: "Ambitious skills marketplace + strategic skill orchestration"
+
+  gateway-agent:
+    primary: transformers-1986/ultra-magnus
+    secondary: fft/orlandu
+    rationale: "MCP orchestration carrier + tactical command routing"
+
+  # ============================================================
+  # Standard Class — RAG & Knowledge
+  # ============================================================
+  hirag-v2:
+    primary: fft/calculator
+    secondary: megaman/megaman
+    rationale: "Math-based retrieval + adaptive copy-ability (hybrid search modes)"
+
+  deep-research:
+    primary: transformers-1986/soundwave
+    secondary: thundercats/cheetara
+    rationale: "Data collection specialist + psychic intuition for deep research"
+
+  tensorzero:
+    primary: fft/orlandu
+    secondary: transformers-1986/megatron
+    rationale: "Legendary gateway power + commanding all model providers"
+
+  # ============================================================
+  # Standard Class — Media & Voice
+  # ============================================================
   flute-gateway:
     primary: transformers-1986/arcee
     secondary: thundercats/cheetara
     rationale: "Voice synthesis warrior + speed of prosodic delivery"
+
+  pmoves-yt:
+    primary: transformers-1986/soundwave
+    secondary: megaman/proto-man
+    rationale: "Media ingestion surveillance + lone wolf video processing"
+
+  ffmpeg-whisper:
+    primary: thundercats/panthro
+    secondary: megaman/megaman
+    rationale: "Audio engineering muscle + adaptive transcription"
+
+  media-video:
+    primary: transformers-1986/grimlock
+    secondary: thundercats/panthro
+    rationale: "Raw frame analysis power + engineering precision"
+
+  media-audio:
+    primary: megaman/bass
+    secondary: transformers-1986/soundwave
+    rationale: "Powerful vocal analysis + data collection from audio"
 
   ultimate-tts:
     primary: transformers-1986/soundwave
     secondary: megaman/bass
     rationale: "7 voice engines = 7 cassettes + powerful vocal output"
 
-  # Security & Monitoring → Guardians
-  cipher-memory:
-    primary: fft/agrias
-    secondary: transformers-1986/ultra-magnus
-    rationale: "Knowledge guardian with holy encryption + disciplined memory carrier"
-
-  # Builders & Workers → Engineers
+  # ============================================================
+  # Standard Class — Workers & Processors
+  # ============================================================
   extract-worker:
     primary: thundercats/panthro
     secondary: megaman/megaman
     rationale: "Builder/engineer for embeddings + adaptive indexing"
+
+  channel-monitor:
+    primary: thundercats/cheetara
+    secondary: transformers-1986/soundwave
+    rationale: "Fast content detection + persistent surveillance"
+
+  notebook-sync:
+    primary: fft/mime
+    secondary: megaman/megaman
+    rationale: "Mirrors knowledge between systems + adaptive sync"
+
+  pdf-ingest:
+    primary: megaman/megaman
+    secondary: thundercats/panthro
+    rationale: "Document adaptation + engineering extraction"
+
+  publisher-discord:
+    primary: transformers-1986/hot-rod
+    secondary: fft/ramza
+    rationale: "Young messenger delivering news + noble notification duty"
+
+  langextract:
+    primary: fft/calculator
+    secondary: thundercats/cheetara
+    rationale: "Analytical NLP precision + intuitive language detection"
+
+  # ============================================================
+  # Standard Class — UI & Research
+  # ============================================================
+  mai-ui:
+    primary: transformers-1986/hot-rod
+    secondary: fft/ramza
+    rationale: "Young evolving interface destined for greatness"
+
+  crush:
+    primary: megaman/proto-man
+    secondary: fft/delita
+    rationale: "Lone wolf terminal assistant + strategic command execution"
+
+  dox:
+    primary: fft/agrias
+    secondary: transformers-1986/ultra-magnus
+    rationale: "Document guardian with path traversal defense + disciplined security"
+
+  open-notebook:
+    primary: thundercats/lion-o
+    secondary: fft/ramza
+    rationale: "Knowledge leadership + noble quest for organized wisdom"
+
+  a2ui:
+    primary: megaman/dr-wily
+    secondary: transformers-1986/hot-rod
+    rationale: "Creative research rendering + youthful UI innovation"
+
+  # ============================================================
+  # Standard Class — Agents & Training
+  # ============================================================
+  agentgym:
+    primary: transformers-1986/grimlock
+    secondary: fft/ramza
+    rationale: "Raw training power + versatile combat (evaluation) forms"
 
   creator:
     primary: megaman/dr-wily
     secondary: fft/delita
     rationale: "Creative genius building robot masters (workflows) + strategic vision"
 
-  # Adversarial & Testing → Challengers
-  botz:
-    primary: transformers-1986/starscream
-    secondary: fft/delita
-    rationale: "Ambitious skills marketplace + strategic skill orchestration"
+  e2b-danger-room:
+    primary: thundercats/mumm-ra
+    secondary: transformers-1986/megatron
+    rationale: "Ancient sandboxed power + commanding isolated environments"
 
-  tokenism:
-    primary: transformers-1986/megatron
-    secondary: thundercats/mumm-ra
-    rationale: "Economic power + ancient wisdom of CHIT geometry"
-
-  # Youth & Evolution → Rising Stars
-  mesh-agent:
+  e2b-desktop:
     primary: transformers-1986/hot-rod
-    secondary: fft/ramza
-    rationale: "Young distributed announcer destined for greatness"
+    secondary: megaman/megaman
+    rationale: "Desktop sandbox interface + adaptive desktop automation"
+
+  evoswarm-controller:
+    primary: transformers-1986/megatron
+    secondary: fft/calculator
+    rationale: "Commanding evolutionary optimization + mathematical fitness"
+
+  # ============================================================
+  # Specialized Class — Domain Services
+  # ============================================================
+  jellyfin-bridge:
+    primary: megaman/megaman
+    secondary: thundercats/panthro
+    rationale: "Adaptive media metadata bridging + engineering integration"
+
+  cipher-memory:
+    primary: fft/agrias
+    secondary: transformers-1986/ultra-magnus
+    rationale: "Knowledge guardian with holy encryption + disciplined memory carrier"
 
   hyperdimensions:
     primary: fft/calculator
     secondary: transformers-1986/grimlock
     rationale: "Mathematical precision of parametric surfaces + raw rendering power"
+
+  consciousness-service:
+    primary: thundercats/mumm-ra
+    secondary: fft/orlandu
+    rationale: "Ancient CGP mapping wisdom + legendary tactical insight"
+
+  agentgym-rl:
+    primary: transformers-1986/grimlock
+    secondary: fft/calculator
+    rationale: "Raw reinforcement learning power + analytical reward shaping"
+
+  llama-lab:
+    primary: fft/orlandu
+    secondary: transformers-1986/megatron
+    rationale: "Legendary benchmarking authority + commanding throughput"
+
+  swarm-attribution:
+    primary: fft/calculator
+    secondary: transformers-1986/megatron
+    rationale: "Mathematical shape attribution + commanding swarm optimization"
+
+  wealth:
+    primary: fft/delita
+    secondary: thundercats/mumm-ra
+    rationale: "Strategic financial ambition + ancient ledger wisdom"
+
+  health:
+    primary: thundercats/lion-o
+    secondary: fft/agrias
+    rationale: "Physical vitality leadership + disciplined fitness tracking"
+
+  transcribe-and-fetch:
+    primary: thundercats/panthro
+    secondary: megaman/megaman
+    rationale: "Engineering transcription muscle + adaptive fetching"
+
+  jellyfin-ai:
+    primary: transformers-1986/soundwave
+    secondary: megaman/bass
+    rationale: "AI media surveillance + powerful content analysis"
+
+  # ============================================================
+  # Specialized Class — CHIT & Tokenism
+  # ============================================================
+  tokenism:
+    primary: transformers-1986/megatron
+    secondary: thundercats/mumm-ra
+    rationale: "Economic power + ancient wisdom of CHIT geometry"
+
+  # ============================================================
+  # Utility Class — Infrastructure
+  # ============================================================
+  mesh-agent:
+    primary: transformers-1986/hot-rod
+    secondary: fft/ramza
+    rationale: "Young distributed announcer destined for greatness"
+
+  presign:
+    primary: fft/mime
+    secondary: megaman/proto-man
+    rationale: "Mirrors S3 signatures + lone wolf URL generation"
+
+  render-webhook:
+    primary: megaman/megaman
+    secondary: thundercats/panthro
+    rationale: "Adaptive render callbacks + engineering webhook routing"
+
+  nats:
+    primary: transformers-1986/soundwave
+    secondary: fft/orlandu
+    rationale: "Central communications hub + legendary message routing"
+
+  supabase:
+    primary: fft/orlandu
+    secondary: thundercats/lion-o
+    rationale: "Legendary database authority + leadership data governance"
+
+  qdrant:
+    primary: fft/calculator
+    secondary: megaman/megaman
+    rationale: "Mathematical vector precision + adaptive similarity search"
+
+  neo4j:
+    primary: thundercats/mumm-ra
+    secondary: fft/calculator
+    rationale: "Ancient graph knowledge + analytical traversal"
+
+  meilisearch:
+    primary: thundercats/cheetara
+    secondary: fft/calculator
+    rationale: "Fast typo-tolerant search + analytical precision"
+
+  minio:
+    primary: thundercats/panthro
+    secondary: transformers-1986/grimlock
+    rationale: "Engineering object storage + raw storage power"
+
+  prometheus:
+    primary: transformers-1986/soundwave
+    secondary: fft/calculator
+    rationale: "Metrics surveillance + analytical monitoring"
+
+  grafana:
+    primary: transformers-1986/arcee
+    secondary: fft/mime
+    rationale: "Visual dashboard warrior + mirrors data from many sources"
+
+  loki:
+    primary: transformers-1986/soundwave
+    secondary: thundercats/mumm-ra
+    rationale: "Log collection surveillance + ancient aggregation wisdom"
+
+  n8n:
+    primary: megaman/dr-wily
+    secondary: fft/delita
+    rationale: "Workflow automation genius + strategic process orchestration"
+
+  headscale:
+    primary: transformers-1986/ultra-magnus
+    secondary: fft/agrias
+    rationale: "Disciplined mesh VPN carrier + network security guardian"
+
+  rustdesk:
+    primary: megaman/proto-man
+    secondary: transformers-1986/hot-rod
+    rationale: "Remote access lone wolf + youthful desktop interface"
+
+  invidious:
+    primary: megaman/proto-man
+    secondary: thundercats/cheetara
+    rationale: "Independent video frontend + fast content serving"
+
+  surf:
+    primary: transformers-1986/hot-rod
+    secondary: megaman/megaman
+    rationale: "Browser automation explorer + adaptive web interaction"
+
+  danger-infra:
+    primary: thundercats/mumm-ra
+    secondary: transformers-1986/megatron
+    rationale: "Ancient sandbox orchestration + commanding isolated infra"
+
+  e2b-spells:
+    primary: fft/mime
+    secondary: megaman/dr-wily
+    rationale: "Template mimicry for sandbox spells + creative template design"

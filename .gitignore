@@ -6,11 +6,13 @@
 .env
 .env.*
 !.env.example
-!.env.shared
+!.env.shared.example
 !.env.shared.sh
 !.env.template
 !.env.tier-*
 env.tier-*
+# Runtime-populated credential files (never commit populated values)
+pmoves/env.shared
 secrets/
 !pmoves/integrations/**/secrets/
 !pmoves/integrations/**/secrets/labels.yaml

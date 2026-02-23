@@ -1,5 +1,5 @@
 // CHIT Mindmap Seed - Neo4j Graph
-// Thread 7.2: Nodes for 5 CHIT pillars, GEOMETRY BUS subjects, CGP elements, 59 agents
+// Thread 7.2: Nodes for 5 CHIT pillars, GEOMETRY BUS subjects, CGP elements, 60 agents
 // Edges: encodes, publishes_to, consumes, transforms
 // Idempotent: uses MERGE + uniqueness constraints so seed can be re-run safely.
 
@@ -85,72 +85,73 @@ MERGE (m7:CHITModule {module: "chit-nats-publisher"}) SET m7.name = "chit-nats-p
 
 // ============================================================
 // Relationships: CHIT Pillars <-> Modules
+// Variables do NOT survive across semicolons — use full property patterns.
 // ============================================================
-MERGE (p1)-[:IMPLEMENTED_BY]->(m1);
-MERGE (p2)-[:IMPLEMENTED_BY]->(m2);
-MERGE (p3)-[:IMPLEMENTED_BY]->(m3);
-MERGE (p4)-[:IMPLEMENTED_BY]->(m4);
-MERGE (p5)-[:IMPLEMENTED_BY]->(m5);
+MATCH (p:CHITPillar {id: "dirichlet"}), (m:CHITModule {module: "dirichlet-weights"}) MERGE (p)-[:IMPLEMENTED_BY]->(m);
+MATCH (p:CHITPillar {id: "hyperbolic"}), (m:CHITModule {module: "hyperbolic-encoder"}) MERGE (p)-[:IMPLEMENTED_BY]->(m);
+MATCH (p:CHITPillar {id: "shape"}), (m:CHITModule {module: "shape-attribution"}) MERGE (p)-[:IMPLEMENTED_BY]->(m);
+MATCH (p:CHITPillar {id: "cgp"}), (m:CHITModule {module: "cgp-generator"}) MERGE (p)-[:IMPLEMENTED_BY]->(m);
+MATCH (p:CHITPillar {id: "swarm"}), (m:CHITModule {module: "swarm-attribution"}) MERGE (p)-[:IMPLEMENTED_BY]->(m);
 
 // ============================================================
 // Relationships: Modules <-> NATS Subjects (publishes_to)
 // ============================================================
-MERGE (m7)-[:PUBLISHES_TO]->(s1);
-MERGE (m7)-[:PUBLISHES_TO]->(s2);
-MERGE (m7)-[:PUBLISHES_TO]->(s3);
-MERGE (m7)-[:PUBLISHES_TO]->(s5);
-MERGE (m7)-[:PUBLISHES_TO]->(s6);
+MATCH (m:CHITModule {module: "chit-nats-publisher"}), (s:NATSSubject {name: "tokenism.attribution.recorded.v1"}) MERGE (m)-[:PUBLISHES_TO]->(s);
+MATCH (m:CHITModule {module: "chit-nats-publisher"}), (s:NATSSubject {name: "tokenism.cgp.weekly.v1"}) MERGE (m)-[:PUBLISHES_TO]->(s);
+MATCH (m:CHITModule {module: "chit-nats-publisher"}), (s:NATSSubject {name: "tokenism.cgp.ready.v1"}) MERGE (m)-[:PUBLISHES_TO]->(s);
+MATCH (m:CHITModule {module: "chit-nats-publisher"}), (s:NATSSubject {name: "tokenism.swarm.population.v1"}) MERGE (m)-[:PUBLISHES_TO]->(s);
+MATCH (m:CHITModule {module: "chit-nats-publisher"}), (s:NATSSubject {name: "tokenism.credential.rotated.v1"}) MERGE (m)-[:PUBLISHES_TO]->(s);
 
 // ============================================================
 // Relationships: Agents <-> NATS Subjects
 // ============================================================
-MERGE (a4)-[:PUBLISHES_TO]->(s10);
-MERGE (a4)-[:CONSUMES]->(s11);
-MERGE (a5)-[:PUBLISHES_TO]->(s12);
-MERGE (a5)-[:CONSUMES]->(s13);
-MERGE (a6)-[:CONSUMES]->(s14);
-MERGE (a9)-[:PUBLISHES_TO]->(s14);
-MERGE (a9)-[:PUBLISHES_TO]->(s15);
-MERGE (a16)-[:PUBLISHES_TO]->(s8);
-MERGE (a16)-[:PUBLISHES_TO]->(s9);
+MATCH (a:Agent {id: "deepresearch"}), (s:NATSSubject {name: "research.deepresearch.request.v1"}) MERGE (a)-[:PUBLISHES_TO]->(s);
+MATCH (a:Agent {id: "deepresearch"}), (s:NATSSubject {name: "research.deepresearch.result.v1"}) MERGE (a)-[:CONSUMES]->(s);
+MATCH (a:Agent {id: "supaserch"}), (s:NATSSubject {name: "supaserch.request.v1"}) MERGE (a)-[:PUBLISHES_TO]->(s);
+MATCH (a:Agent {id: "supaserch"}), (s:NATSSubject {name: "supaserch.result.v1"}) MERGE (a)-[:CONSUMES]->(s);
+MATCH (a:Agent {id: "extract-worker"}), (s:NATSSubject {name: "ingest.file.added.v1"}) MERGE (a)-[:CONSUMES]->(s);
+MATCH (a:Agent {id: "pmoves-yt"}), (s:NATSSubject {name: "ingest.file.added.v1"}) MERGE (a)-[:PUBLISHES_TO]->(s);
+MATCH (a:Agent {id: "pmoves-yt"}), (s:NATSSubject {name: "ingest.transcript.ready.v1"}) MERGE (a)-[:PUBLISHES_TO]->(s);
+MATCH (a:Agent {id: "hf-mcp"}), (s:NATSSubject {name: "hf.model.downloaded.v1"}) MERGE (a)-[:PUBLISHES_TO]->(s);
+MATCH (a:Agent {id: "hf-mcp"}), (s:NATSSubject {name: "hf.model.onboarded.v1"}) MERGE (a)-[:PUBLISHES_TO]->(s);
 
 // ============================================================
 // Relationships: Agents <-> CGP Elements (encodes/transforms)
 // ============================================================
-MERGE (a12)-[:ENCODES]->(c1);
-MERGE (a6)-[:TRANSFORMS]->(c4);
-MERGE (a3)-[:CONSUMES]->(c1);
-MERGE (a7)-[:STORES]->(c1);
+MATCH (a:Agent {id: "tokenism"}), (c:CGPElement {name: "CGP Document"}) MERGE (a)-[:ENCODES]->(c);
+MATCH (a:Agent {id: "extract-worker"}), (c:CGPElement {name: "PoincarePoint"}) MERGE (a)-[:TRANSFORMS]->(c);
+MATCH (a:Agent {id: "hirag"}), (c:CGPElement {name: "CGP Document"}) MERGE (a)-[:CONSUMES]->(c);
+MATCH (a:Agent {id: "cipher-memory"}), (c:CGPElement {name: "CGP Document"}) MERGE (a)-[:STORES]->(c);
 
 // ============================================================
 // Relationships: Agents <-> CHIT Pillars (uses)
 // ============================================================
-MERGE (a12)-[:USES]->(p1);
-MERGE (a12)-[:USES]->(p2);
-MERGE (a12)-[:USES]->(p3);
-MERGE (a12)-[:USES]->(p4);
-MERGE (a12)-[:USES]->(p5);
-MERGE (a3)-[:USES]->(p2);
-MERGE (a5)-[:USES]->(p4);
-MERGE (a14)-[:USES]->(p2);
+MATCH (a:Agent {id: "tokenism"}), (p:CHITPillar {id: "dirichlet"}) MERGE (a)-[:USES]->(p);
+MATCH (a:Agent {id: "tokenism"}), (p:CHITPillar {id: "hyperbolic"}) MERGE (a)-[:USES]->(p);
+MATCH (a:Agent {id: "tokenism"}), (p:CHITPillar {id: "shape"}) MERGE (a)-[:USES]->(p);
+MATCH (a:Agent {id: "tokenism"}), (p:CHITPillar {id: "cgp"}) MERGE (a)-[:USES]->(p);
+MATCH (a:Agent {id: "tokenism"}), (p:CHITPillar {id: "swarm"}) MERGE (a)-[:USES]->(p);
+MATCH (a:Agent {id: "hirag"}), (p:CHITPillar {id: "hyperbolic"}) MERGE (a)-[:USES]->(p);
+MATCH (a:Agent {id: "supaserch"}), (p:CHITPillar {id: "cgp"}) MERGE (a)-[:USES]->(p);
+MATCH (a:Agent {id: "hyperdimensions"}), (p:CHITPillar {id: "hyperbolic"}) MERGE (a)-[:USES]->(p);
 
 // ============================================================
 // Relationships: CGP hierarchy
 // ============================================================
-MERGE (c1)-[:CONTAINS]->(c2);
-MERGE (c2)-[:CONTAINS]->(c3);
-MERGE (c3)-[:CONTAINS]->(c4);
-MERGE (c1)-[:HAS_PROOF]->(c5);
-MERGE (c1)-[:HAS_SIGNATURE]->(c6);
-MERGE (c1)-[:HAS_BOUNDARY]->(c7);
+MATCH (c1:CGPElement {name: "CGP Document"}), (c2:CGPElement {name: "SuperNode"}) MERGE (c1)-[:CONTAINS]->(c2);
+MATCH (c2:CGPElement {name: "SuperNode"}), (c3:CGPElement {name: "Constellation"}) MERGE (c2)-[:CONTAINS]->(c3);
+MATCH (c3:CGPElement {name: "Constellation"}), (c4:CGPElement {name: "PoincarePoint"}) MERGE (c3)-[:CONTAINS]->(c4);
+MATCH (c1:CGPElement {name: "CGP Document"}), (c5:CGPElement {name: "MerkleProof"}) MERGE (c1)-[:HAS_PROOF]->(c5);
+MATCH (c1:CGPElement {name: "CGP Document"}), (c6:CGPElement {name: "SpectralSignature"}) MERGE (c1)-[:HAS_SIGNATURE]->(c6);
+MATCH (c1:CGPElement {name: "CGP Document"}), (c7:CGPElement {name: "HolographicBoundary"}) MERGE (c1)-[:HAS_BOUNDARY]->(c7);
 
 // ============================================================
 // Relationships: Agent orchestration
 // ============================================================
-MERGE (a1)-[:ORCHESTRATES]->(a2);
-MERGE (a1)-[:ORCHESTRATES]->(a4);
-MERGE (a1)-[:ORCHESTRATES]->(a5);
-MERGE (a1)-[:ORCHESTRATES]->(a6);
-MERGE (a2)-[:COORDINATES]->(a11);
-MERGE (a11)-[:REGISTERS]->(a13);
-MERGE (a15)-[:ANNOUNCES]->(a1);
+MATCH (a1:Agent {id: "agent-zero"}), (a2:Agent {id: "archon"}) MERGE (a1)-[:ORCHESTRATES]->(a2);
+MATCH (a1:Agent {id: "agent-zero"}), (a4:Agent {id: "deepresearch"}) MERGE (a1)-[:ORCHESTRATES]->(a4);
+MATCH (a1:Agent {id: "agent-zero"}), (a5:Agent {id: "supaserch"}) MERGE (a1)-[:ORCHESTRATES]->(a5);
+MATCH (a1:Agent {id: "agent-zero"}), (a6:Agent {id: "extract-worker"}) MERGE (a1)-[:ORCHESTRATES]->(a6);
+MATCH (a2:Agent {id: "archon"}), (a11:Agent {id: "botz"}) MERGE (a2)-[:COORDINATES]->(a11);
+MATCH (a11:Agent {id: "botz"}), (a13:Agent {id: "creator"}) MERGE (a11)-[:REGISTERS]->(a13);
+MATCH (a15:Agent {id: "mesh-agent"}), (a1:Agent {id: "agent-zero"}) MERGE (a15)-[:ANNOUNCES]->(a1);

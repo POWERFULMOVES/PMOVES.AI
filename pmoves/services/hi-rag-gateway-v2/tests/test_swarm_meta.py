@@ -7,6 +7,17 @@ from pathlib import Path
 
 import pytest
 
+# Module-level torch availability guard — GPU-dependent tests are skipped when
+# torch is not installed or CUDA is unavailable.  The fixture also installs a
+# stub so tests can run without torch, but this flag provides an explicit
+# skipif marker for any future GPU-only tests.
+try:
+    import torch as _torch
+
+    TORCH_AVAILABLE = _torch.cuda.is_available()
+except ImportError:
+    TORCH_AVAILABLE = False
+
 
 def _install_stub(name: str, module: types.ModuleType, registry: dict[str, types.ModuleType | None]) -> None:
     registry[name] = sys.modules.get(name)

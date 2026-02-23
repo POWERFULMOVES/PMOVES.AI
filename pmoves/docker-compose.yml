@@ -1569,8 +1569,6 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - ARCHON_ENV=${ARCHON_ENV:-production}
       # Prefer runtime-resolved Supabase URLs (CLI or compose) instead of hardcoding postgrest.
       - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}}
       - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-http://host.docker.internal:65421}
