@@ -133,7 +133,12 @@ jobs:
         id: cfg
         run: |
           set -euo pipefail
-          python - <<'PY'
+          pybin="$(command -v python3 || command -v python || true)"
+          if [ -z "$pybin" ]; then
+            echo "::error::python3/python is required on runner for matrix config resolution."
+            exit 1
+          fi
+          "$pybin" - <<'PY'
           import json
           import os
           import pathlib
