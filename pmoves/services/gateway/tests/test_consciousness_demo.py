@@ -15,16 +15,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pmoves.chit import CGP_SPEC_VERSION
+
 # Stub heavy dependencies that chit.py might import
 if "neo4j" not in sys.modules:
     neo4j_stub = ModuleType("neo4j")
     neo4j_stub.GraphDatabase = MagicMock()
     sys.modules["neo4j"] = neo4j_stub
-
-# Mock the chit module's ingest_cgp function
-_mock_chit = ModuleType("services.gateway.gateway.api.chit")
-_mock_chit.ingest_cgp = MagicMock(return_value="mock_shape_id")
-sys.modules["services.gateway.gateway.api.chit"] = _mock_chit
 
 # Now import our module functions
 from services.gateway.gateway.api.consciousness import (
@@ -102,7 +99,7 @@ class TestTheoryToCgp:
             subcategory="1.1_Test"
         )
         cgp = _theory_to_cgp(theory, idx=0)
-        assert cgp["spec"] == "chit.cgp.v0.1"
+        assert cgp["spec"] == CGP_SPEC_VERSION
 
     def test_cgp_has_super_nodes(self):
         """Test CGP packet contains super_nodes."""

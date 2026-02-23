@@ -10,7 +10,7 @@ from difflib import SequenceMatcher
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 import httpx
 from urllib.parse import urlencode
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -20,67 +20,37 @@ from starlette.responses import Response
 # ─────────────────────────────────────────────────────────────────────────────
 # Lifecycle Management
 # ─────────────────────────────────────────────────────────────────────────────
+_autolink_task = None
+
+
+def _on_autolink_done(task: asyncio.Task) -> None:
+    """Log if the autolink background task dies unexpectedly."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        LOGGER.error("Autolink background task died: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan for Jellyfin Bridge."""
+    global _autolink_task
     # Startup
     if AUTOLINK and JELLYFIN_URL and JELLYFIN_API_KEY and JELLYFIN_USER_ID:
-        asyncio.create_task(_autolink_loop())
+        _autolink_task = asyncio.create_task(_autolink_loop())
+        _autolink_task.add_done_callback(_on_autolink_done)
 
     yield
 
-    # Shutdown - no cleanup needed
+    # Shutdown
+    if _autolink_task and not _autolink_task.done():
+        _autolink_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await _autolink_task
 
 
 app = FastAPI(title="Jellyfin Bridge", version="0.1.0", lifespan=lifespan)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Prometheus Metrics
-# ─────────────────────────────────────────────────────────────────────────────
-JELLYFIN_REQUESTS = Counter(
-    "jellyfin_bridge_requests_total",
-    "Total Jellyfin Bridge requests",
-    ["endpoint", "status"]
-)
-JELLYFIN_SEARCH_LATENCY = Histogram(
-    "jellyfin_bridge_search_latency_seconds",
-    "Jellyfin search latency in seconds",
-    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
-)
-JELLYFIN_LINKS = Counter(
-    "jellyfin_bridge_links_total",
-    "Total Jellyfin video link operations",
-    ["result"]
-)
-JELLYFIN_NOTEBOOK_PUBLISHES = Counter(
-    "jellyfin_bridge_notebook_publishes_total",
-    "Total Open Notebook publish attempts",
-    ["status"]
-)
-
-LOGGER = logging.getLogger("jellyfin_bridge")
-
-# ---------------------------------------------------------------------------
-# Open Notebook Publishing Configuration
-# ---------------------------------------------------------------------------
-OPEN_NOTEBOOK_API_URL = os.environ.get("OPEN_NOTEBOOK_API_URL", "")
-OPEN_NOTEBOOK_API_TOKEN = os.environ.get("OPEN_NOTEBOOK_API_TOKEN", "")
-OPEN_NOTEBOOK_NOTEBOOK_ID = os.environ.get("OPEN_NOTEBOOK_NOTEBOOK_ID", "") or os.environ.get("DEEPRESEARCH_NOTEBOOK_ID", "")
-JELLYFIN_NOTEBOOK_PUBLISH = os.environ.get("JELLYFIN_NOTEBOOK_PUBLISH", "true").lower() in {"1", "true", "yes", "on"}
-
-# Initialize notebook publisher if available
-_notebook_publisher = None
-try:
-    from libs.notebook_publisher import NotebookPublisher
-    if OPEN_NOTEBOOK_API_URL and OPEN_NOTEBOOK_API_TOKEN and JELLYFIN_NOTEBOOK_PUBLISH:
-        _notebook_publisher = NotebookPublisher(
-            base_url=OPEN_NOTEBOOK_API_URL,
-            api_token=OPEN_NOTEBOOK_API_TOKEN,
-            notebook_id=OPEN_NOTEBOOK_NOTEBOOK_ID,
-        )
-        LOGGER.info("Open Notebook publisher initialized for Jellyfin bridge")
-except ImportError:
-    LOGGER.info("notebook_publisher library not available")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prometheus Metrics
@@ -290,13 +260,17 @@ def _supa_upsert(table: str, rows: List[Dict[str, Any]]):
     return r.json()
 
 
-def _load_branding_from_supa() -> Dict[str, Any]:
+_BRANDING_LOAD_FAILED = object()
+
+
+def _load_branding_from_supa() -> Dict[str, Any] | object:
     if not BRANDING_TABLE:
         return {}
     try:
         rows = _supa_get(BRANDING_TABLE, {BRANDING_KEY_COLUMN: BRANDING_KEY})
-    except Exception:
-        return {}
+    except Exception as exc:
+        LOGGER.error("Branding load from Supabase failed: %s", exc)
+        return _BRANDING_LOAD_FAILED
     if not rows:
         return {}
     raw = rows[0].get(BRANDING_VALUE_COLUMN)
@@ -321,9 +295,8 @@ def _persist_branding_state(state: Dict[str, str]) -> None:
     }
     try:
         _supa_upsert(BRANDING_TABLE, [payload])
-    except Exception:
-        # Persisting branding data is best-effort; ignore storage errors.
-        pass
+    except Exception as exc:
+        LOGGER.error("Branding persistence failed: %s", exc)
 
 
 def _ensure_branding_loaded() -> None:
@@ -334,7 +307,10 @@ def _ensure_branding_loaded() -> None:
         _BRANDING_LOADED = True
         return
     data = _load_branding_from_supa()
-    if data:
+    if data is _BRANDING_LOAD_FAILED:
+        # Supabase failed — do NOT set flag, retry next call
+        return
+    if isinstance(data, dict) and data:
         with _BRANDING_LOCK:
             for key, value in data.items():
                 if key in _BRANDING_STATE and value is not None:
@@ -581,11 +557,13 @@ def _publish_to_notebook_sync(
             entry_id, error = asyncio.run(_async_publish())
 
         if error:
+            JELLYFIN_NOTEBOOK_PUBLISHES.labels(status="error").inc()
             LOGGER.warning("Notebook publish failed for '%s': %s", title, error)
         elif entry_id:
             LOGGER.info("Published to Open Notebook: %s (id=%s)", title, entry_id)
         return entry_id
     except Exception as e:
+        JELLYFIN_NOTEBOOK_PUBLISHES.labels(status="error").inc()
         LOGGER.warning("Notebook publish error for '%s': %s", title, e)
         return None
 
@@ -814,6 +792,172 @@ def jellyfin_config():
         "branding_fields": _branding_fields_schema(),
     }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# YouTube Station Management
+# ─────────────────────────────────────────────────────────────────────────────
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+
+STATION_REQUESTS = Counter(
+    "jellyfin_bridge_station_requests_total",
+    "Total station management requests",
+    ["endpoint", "status"],
+)
+
+
+STATION_SECRET = os.environ.get("STATION_MGMT_SECRET", "")
+_CHANNEL_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
+
+
+def _supa_headers():
+    svc_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+    return {
+        "apikey": svc_key,
+        "Authorization": f"Bearer {svc_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+
+def _check_station_auth(request: Request) -> None:
+    """Validate bearer token for station management endpoints."""
+    if not STATION_SECRET:
+        raise HTTPException(status_code=503, detail="Station management not configured")
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer ") or auth[7:] != STATION_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _validate_channel_id(channel_id: str) -> str:
+    if not _CHANNEL_ID_RE.match(channel_id):
+        raise HTTPException(status_code=400, detail="Invalid channel_id format")
+    return channel_id
+
+
+@app.get("/yt/channels")
+def yt_channels(request: Request):
+    """List subscribed YouTube channels from Supabase."""
+    if STATION_SECRET:
+        _check_station_auth(request)
+    try:
+        url = f"{SUPA}/yt_stations?select=*&order=channel_title.asc"
+        r = httpx.get(url, headers=_supa_headers(), timeout=10)
+        r.raise_for_status()
+        STATION_REQUESTS.labels(endpoint="list_channels", status="ok").inc()
+        return {"ok": True, "channels": r.json()}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        STATION_REQUESTS.labels(endpoint="list_channels", status="error").inc()
+        raise HTTPException(status_code=502, detail="Failed to list channels")
+
+
+@app.post("/yt/channels/{channel_id}/station")
+async def yt_create_station(
+    channel_id: str,
+    request: Request,
+    body: dict = Body(...),
+):
+    """Create an auto-ingest station for a YouTube channel."""
+    _check_station_auth(request)
+    _validate_channel_id(channel_id)
+    try:
+        row = {
+            "channel_id": channel_id,
+            "channel_title": body.get("channel_title", ""),
+            "platform": body.get("platform", "youtube"),
+            "extractor_key": body.get("extractor_key", ""),
+            "active": True,
+            "docked": body.get("docked", True),
+            "node_id": body.get("node_id"),
+        }
+        url = f"{SUPA}/yt_stations"
+        r = httpx.post(url, headers=_supa_headers(), json=row, timeout=10)
+        r.raise_for_status()
+        station = r.json()[0] if isinstance(r.json(), list) else r.json()
+
+        await _publish_station_event(channel_id, "station_created", station)
+
+        STATION_REQUESTS.labels(endpoint="create_station", status="ok").inc()
+        return {"ok": True, "station": station}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        STATION_REQUESTS.labels(endpoint="create_station", status="error").inc()
+        raise HTTPException(status_code=502, detail="Station creation failed")
+
+
+@app.delete("/yt/channels/{channel_id}/station")
+async def yt_delete_station(channel_id: str, request: Request):
+    """Remove an auto-ingest station."""
+    _check_station_auth(request)
+    _validate_channel_id(channel_id)
+    try:
+        from urllib.parse import quote
+        url = f"{SUPA}/yt_stations?channel_id=eq.{quote(channel_id, safe='')}"
+        r = httpx.delete(url, headers=_supa_headers(), timeout=10)
+        r.raise_for_status()
+
+        await _publish_station_event(channel_id, "station_removed", {})
+
+        STATION_REQUESTS.labels(endpoint="delete_station", status="ok").inc()
+        return {"ok": True, "channel_id": channel_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        STATION_REQUESTS.labels(endpoint="delete_station", status="error").inc()
+        raise HTTPException(status_code=502, detail="Station deletion failed")
+
+
+@app.get("/yt/stations")
+def yt_stations(request: Request):
+    """List active stations with last-ingested timestamp."""
+    if STATION_SECRET:
+        _check_station_auth(request)
+    try:
+        url = f"{SUPA}/yt_stations?active=eq.true&select=*&order=last_ingested_at.desc.nullsfirst"
+        r = httpx.get(url, headers=_supa_headers(), timeout=10)
+        r.raise_for_status()
+        STATION_REQUESTS.labels(endpoint="list_stations", status="ok").inc()
+        return {"ok": True, "stations": r.json()}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        STATION_REQUESTS.labels(endpoint="list_stations", status="error").inc()
+        raise HTTPException(status_code=502, detail="Failed to list stations")
+
+
+NATS_STATION_PUBLISH_FAILURES = Counter(
+    "jellyfin_bridge_nats_station_publish_failures_total",
+    "NATS publish failures for station events",
+)
+
+
+async def _publish_station_event(channel_id: str, action: str, data: dict) -> None:
+    """Publish station change to CHIT geometry bus via NATS."""
+    import json as _json
+    from nats.aio.client import Client as NATS
+    payload = {
+        "namespace": "pmoves.media",
+        "modality": "station_sync",
+        "channel_id": channel_id,
+        "action": action,
+        "data": data,
+    }
+    nc = NATS()
+    try:
+        await nc.connect(servers=[NATS_URL])
+        await nc.publish("tokenism.geometry.event.v1", _json.dumps(payload).encode())
+        await nc.flush()
+    except Exception as exc:
+        NATS_STATION_PUBLISH_FAILURES.inc()
+        LOGGER.error("NATS publish failed for station event: %s", exc)
+    finally:
+        await nc.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Auto-link Loop
+# ─────────────────────────────────────────────────────────────────────────────
 def _list_recent_unmapped(limit: int = 25):
     # Fetch recent videos and filter locally for those without jellyfin map
     r = httpx.get(f"{SUPA}/videos?order=id.desc&limit={limit}", timeout=10)
@@ -837,8 +981,11 @@ async def _autolink_loop():
                         jellyfin_map_by_title,
                         {"video_id": it.get('video_id'), "title": it.get('title')},
                     )
+                except HTTPException:
+                    # Expected: 404 when no match found, 412 when creds missing
+                    LOGGER.debug("Autolink skip video_id=%s: %s", it.get('video_id'), "no match or creds missing")
                 except Exception:
-                    continue
+                    LOGGER.exception("Autolink failed for video_id=%s", it.get('video_id'))
         except Exception:
-            pass
+            LOGGER.exception("Autolink loop iteration failed")
         await asyncio.sleep(AUTOLINK_SEC)

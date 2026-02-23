@@ -15,7 +15,7 @@
     "sandbox": ["botz/*"],
     "workflows": ["n8n/*"],
     "ui": [],
-    "finance": [],
+    "finance": ["chit/floos"],
     "health": [],
     "networking": [],
     "research": ["search/*"],
@@ -46,7 +46,12 @@
       "agents_docs": [
         "PMOVES_UNIFIED_AGENT_TAXONOMY.md",
         "PMOVES.AI Agentic Architecture Deep Dive.md"
-      ]
+      ],
+      "floos_hooks": {
+        "publishes": ["skills.step.model-trainer.done.v1", "skills.step.text-generate.done.v1"],
+        "subscribes": ["skills.pipeline.*.v1"],
+        "depends_on": ["nats", "tensorzero"]
+      }
     },
     "PMOVES-Archon": {
       "context_tier": 2,
@@ -89,7 +94,12 @@
         "BOTZ_GATEWAY_AGENT_INTEGRATION.md",
         "PmovesSKillZ.md",
         "PMOVES_UNIFIED_AGENT_TAXONOMY.md"
-      ]
+      ],
+      "floos_hooks": {
+        "publishes": ["skills.step.model-trainer.done.v1", "skills.step.hf-benchmark.done.v1"],
+        "subscribes": ["skills.pipeline.model-benchmark-viz.v1"],
+        "depends_on": ["PMOVES-Agent-Zero", "nats"]
+      }
     },
     "PMOVES-BotZ-gateway": {
       "context_tier": 3,
@@ -146,7 +156,12 @@
         "services-catalog.md",
         "geometry-nats-subjects.md"
       ],
-      "agents_docs": []
+      "agents_docs": [],
+      "floos_hooks": {
+        "publishes": ["skills.pipeline.ingest-chit-index.done.v1"],
+        "subscribes": ["geometry.packet.encoded.v1"],
+        "depends_on": ["PMOVES-ToKenism-Multi", "nats", "qdrant", "neo4j", "meilisearch"]
+      }
     },
     "Pmoves-hyperdimensions": {
       "context_tier": 3,
@@ -481,7 +496,8 @@
         "chit/encode",
         "chit/decode",
         "chit/visualize",
-        "chit/bus"
+        "chit/bus",
+        "chit/floos"
       ],
       "context_files": [
         "chit-geometry-bus.md",
@@ -489,7 +505,12 @@
       ],
       "agents_docs": [
         "TBE_IMPLEMENTATION_CROSS_REFERENCE.md"
-      ]
+      ],
+      "floos_hooks": {
+        "publishes": ["tokenism.cgp.ready.v1", "tokenism.cgp.weekly.v1", "geometry.packet.encoded.v1"],
+        "subscribes": ["skills.step.extract-worker.done.v1"],
+        "depends_on": ["PMOVES-HiRAG", "nats", "tensorzero"]
+      }
     },
     "PMOVES-MAI-UI": {
       "context_tier": 3,

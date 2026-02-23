@@ -111,6 +111,7 @@ def _install_stub_modules():
 
     requests_mod.post = _dummy_post
     requests_mod.get = _dummy_get
+    requests_mod.Response = _Response
     sys.modules["requests"] = requests_mod
 
     # transformers pipeline stub

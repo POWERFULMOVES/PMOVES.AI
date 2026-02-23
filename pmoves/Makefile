@@ -2138,3 +2138,57 @@ up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j
 down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(DC) --profile jellyfin-ai down
 	@echo "✔ Jellyfin AI overlay down"
+
+# =============================================================================
+# Vision Threads: CHIT Production Tooling
+# =============================================================================
+
+.PHONY: geometry-bus-status
+geometry-bus-status: ## Check GEOMETRY BUS NATS subject health
+	@$(PYTHON) tools/geometry_bus_health.py
+
+.PHONY: geometry-bus-status-json
+geometry-bus-status-json: ## Check GEOMETRY BUS health (JSON output)
+	@$(PYTHON) tools/geometry_bus_health.py --json
+
+.PHONY: chit-encode
+chit-encode: ## CHIT-encode content from stdin
+	@$(PYTHON) tools/chit_encode_hook.py --pretty
+
+.PHONY: chit-terminal-viz
+chit-terminal-viz: ## Render CHIT visualization in terminal
+	@$(PYTHON) tools/chit_terminal_viz.py
+
+.PHONY: chit-mindmap-seed
+chit-mindmap-seed: ## Seed Neo4j with CHIT mindmap graph
+	@echo "→ Seeding Neo4j with CHIT mindmap..."
+	@cat tools/chit_mindmap_seed.cypher | $(DC) exec -T neo4j cypher-shell -u neo4j -p "$${NEO4J_AUTH_PASSWORD:-neo4j}"
+	@echo "✔ CHIT mindmap seeded"
+
+# =============================================================================
+# Vision Threads: Documentation Audit & Structure Enforcement
+# =============================================================================
+
+.PHONY: docs-audit
+docs-audit: ## Run documentation content audit (broken links, stale ports, coverage)
+	@$(PYTHON) tools/docs_content_audit.py
+
+.PHONY: docs-audit-json
+docs-audit-json: ## Run documentation content audit (JSON output)
+	@$(PYTHON) tools/docs_content_audit.py --json
+
+.PHONY: cross-ref-validate
+cross-ref-validate: ## Run cross-reference coverage validation
+	@$(PYTHON) tools/cross_reference_validator.py
+
+.PHONY: cross-ref-validate-json
+cross-ref-validate-json: ## Cross-reference validation (JSON output)
+	@$(PYTHON) tools/cross_reference_validator.py --json
+
+.PHONY: structure-enforce
+structure-enforce: ## Enforce structural best practices
+	@$(PYTHON) tools/structure_enforcer.py
+
+.PHONY: structure-enforce-strict
+structure-enforce-strict: ## Enforce structural best practices (strict mode, fails on P1/P2)
+	@$(PYTHON) tools/structure_enforcer.py --strict
