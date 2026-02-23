@@ -166,6 +166,18 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-runners-check-strict`
   - Same check in strict mode; exits non-zero if any required lane is offline/missing.
   - Use before dispatching heavy GHCR workflows to avoid queued runs when runners are down.
+- `make ghcr-bootstrap-secrets`
+  - Pushes GHCR auth secrets to GitHub Actions from local `env.shared` credentials.
+  - Uses `tools/push-gh-secrets.sh --ghcr-bootstrap` to reuse `GHCR_TOKEN` (or fallback `GH_PAT_PUBLISH`) and set `GHCR_USERNAME`/`GHCR_TOKEN`.
+  - Override destination with `GH_REPO=owner/repo` and `GH_SECRET_ENV=Dev|Prod`.
+- `make build-local-supaserch`
+  - Builds `pmoves-supaserch:local-smoke` locally (`linux/amd64`, no push) using the same Dockerfile/context contract as CI.
+  - Use as the first gate before publishing.
+- `make ghcr-prepublish-supaserch`
+  - Local-first wrapper around `build-local-supaserch`; fail here before spending self-hosted runner/GHCR cycles.
+- `make ghcr-dispatch-supaserch`
+  - Dispatches `.github/workflows/integrations-ghcr.yml` for `integration=supaserch` after local validation.
+  - Respects `GHCR_DISPATCH_REF` (defaults to current branch) and requires runner lane checks to pass.
 - `make ci-runners-map`
   - Maps discovered workflow lanes to explicit host assignments using `pmoves/integrations/github-runners/compose/lane_hosts.json`.
   - With `--check-gh`, also reports live online/offline status for each lane.

@@ -1,7 +1,17 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-20_
+_Last updated: 2026-02-23_
+
+### Latest changes (Feb 23, 2026)
+- Added local-first GHCR prepublish lane for SupaSerch:
+  - `make -C pmoves build-local-supaserch`
+  - `make -C pmoves ghcr-prepublish-supaserch`
+  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch>`
+- Added GHCR secret bootstrap helper target:
+  - `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=POWERFULMOVES/PMOVES.AI`
+- `pmoves/tools/push-gh-secrets.sh` now supports `--ghcr-bootstrap` and credential source overrides (`--ghcr-token-from`, `--ghcr-fallback-token-from`, `--ghcr-username-from`) so existing credentials can be reused for rotation.
+- Updated local CI/operator docs to require local build validation before targeted GHCR matrix dispatch, keeping local and self-hosted paths in parity.
 
 ### Latest changes (Feb 20, 2026)
 - Channel Monitor gained an authenticated Discord intake endpoint: `POST /api/monitor/discord-drop` with `approval_mode` (`ask`/`auto`) for gated agentic review.
