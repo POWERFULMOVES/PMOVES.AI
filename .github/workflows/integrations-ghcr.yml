@@ -56,8 +56,170 @@ env:
   DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
 
 jobs:
+  resolve-matrix:
+    name: Resolve build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - name: Resolve selected integrations
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected="all"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            selected="${{ github.event.inputs.integration }}"
+          fi
+
+          cat > matrix.json <<'JSON'
+          {
+            "include": [
+              {
+                "name": "agent-zero",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+                "ref": "main",
+                "context": "pmoves",
+                "dockerfile": "pmoves/services/agent-zero/Dockerfile.multiarch",
+                "image_name": "pmoves-agent-zero",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ".github/trivy/agent-zero.trivyignore"
+              },
+              {
+                "name": "archon",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+                "ref": "main",
+                "context": "pmoves",
+                "dockerfile": "pmoves/services/archon/Dockerfile",
+                "image_name": "pmoves-archon",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": false,
+                "trivy_ignorefile": ""
+              },
+              {
+                "name": "archon-ui",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES-Archon.git",
+                "ref": "PMOVES.AI-Edition-Hardened",
+                "context": "archon-ui-main",
+                "dockerfile": "archon-ui-main/Dockerfile",
+                "image_name": "pmoves-archon-ui",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ".github/trivy/archon-ui.trivyignore"
+              },
+              {
+                "name": "open-notebook",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git",
+                "ref": "PMOVES.AI-Edition-Hardened",
+                "context": ".",
+                "dockerfile": "Dockerfile",
+                "image_name": "pmoves-open-notebook",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ".github/trivy/open-notebook.trivyignore"
+              },
+              {
+                "name": "wger",
+                "git_url": "https://github.com/POWERFULMOVES/Pmoves-Health-wger.git",
+                "ref": "PMOVES.AI-Edition-Hardened",
+                "context": ".",
+                "dockerfile": "extras/docker/production/Dockerfile",
+                "image_name": "pmoves-health-wger",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ""
+              },
+              {
+                "name": "firefly-iii",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+                "ref": "main",
+                "context": "pmoves/images/firefly-iii",
+                "dockerfile": "pmoves/images/firefly-iii/Dockerfile",
+                "image_name": "pmoves-firefly-iii",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ""
+              },
+              {
+                "name": "jellyfin",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+                "ref": "main",
+                "context": "pmoves/images/jellyfin",
+                "dockerfile": "pmoves/images/jellyfin/Dockerfile",
+                "image_name": "pmoves-jellyfin",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ".github/trivy/jellyfin.trivyignore"
+              },
+              {
+                "name": "pmoves-yt",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+                "ref": "main",
+                "context": "pmoves/services/pmoves-yt",
+                "dockerfile": "pmoves/services/pmoves-yt/Dockerfile",
+                "image_name": "pmoves-yt",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ""
+              },
+              {
+                "name": "deepresearch",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+                "ref": "main",
+                "context": "pmoves",
+                "dockerfile": "pmoves/services/deepresearch/Dockerfile",
+                "image_name": "pmoves-deepresearch",
+                "build_args": "",
+                "platforms": "linux/amd64",
+                "generate_sbom": false,
+                "trivy_ignorefile": ""
+              },
+              {
+                "name": "supaserch",
+                "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+                "ref": "main",
+                "context": "pmoves/services",
+                "dockerfile": "pmoves/services/supaserch/Dockerfile",
+                "image_name": "pmoves-supaserch",
+                "build_args": "",
+                "platforms": "linux/amd64,linux/arm64",
+                "generate_sbom": true,
+                "trivy_ignorefile": ""
+              }
+            ]
+          }
+          JSON
+
+          if [ "$selected" = "all" ]; then
+            cp matrix.json selected-matrix.json
+          else
+            jq --arg selected "$selected" \
+              '{ include: [ .include[] | select(.name == $selected) ] }' \
+              matrix.json > selected-matrix.json
+          fi
+
+          selected_count="$(jq '.include | length' selected-matrix.json)"
+          if [ "$selected_count" -eq 0 ]; then
+            echo "::error::No integration matched selector: $selected"
+            exit 1
+          fi
+
+          echo "Selected integration input: $selected"
+          echo "Selected jobs: $selected_count"
+          echo "matrix=$(jq -c . selected-matrix.json)" >> "$GITHUB_OUTPUT"
+
   build-publish:
     name: Build ${{ matrix.name }}
+    needs: resolve-matrix
     runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
@@ -65,108 +227,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: agent-zero
-            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
-            ref: main
-            context: pmoves
-            dockerfile: pmoves/services/agent-zero/Dockerfile.multiarch
-            image_name: pmoves-agent-zero
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/agent-zero.trivyignore
-          - name: archon
-            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
-            ref: main
-            context: pmoves
-            dockerfile: pmoves/services/archon/Dockerfile
-            image_name: pmoves-archon
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: false
-            trivy_ignorefile: ''
-          - name: archon-ui
-            git_url: https://github.com/POWERFULMOVES/PMOVES-Archon.git
-            ref: PMOVES.AI-Edition-Hardened
-            context: archon-ui-main
-            dockerfile: archon-ui-main/Dockerfile
-            image_name: pmoves-archon-ui
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/archon-ui.trivyignore
-          - name: open-notebook
-            git_url: https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
-            ref: PMOVES.AI-Edition-Hardened
-            context: .
-            dockerfile: Dockerfile
-            image_name: pmoves-open-notebook
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/open-notebook.trivyignore
-          - name: wger
-            git_url: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
-            ref: PMOVES.AI-Edition-Hardened
-            context: .
-            dockerfile: extras/docker/production/Dockerfile
-            image_name: pmoves-health-wger
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
-          - name: firefly-iii
-            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
-            ref: main
-            context: pmoves/images/firefly-iii
-            dockerfile: pmoves/images/firefly-iii/Dockerfile
-            image_name: pmoves-firefly-iii
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
-          - name: jellyfin
-            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
-            ref: main
-            context: pmoves/images/jellyfin
-            dockerfile: pmoves/images/jellyfin/Dockerfile
-            image_name: pmoves-jellyfin
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: .github/trivy/jellyfin.trivyignore
-          - name: pmoves-yt
-            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
-            ref: main
-            context: pmoves/services/pmoves-yt
-            dockerfile: pmoves/services/pmoves-yt/Dockerfile
-            image_name: pmoves-yt
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
-          - name: deepresearch
-            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
-            ref: main
-            context: pmoves
-            dockerfile: pmoves/services/deepresearch/Dockerfile
-            image_name: pmoves-deepresearch
-            build_args: ''
-            platforms: linux/amd64
-            generate_sbom: false
-            trivy_ignorefile: ''
-          - name: supaserch
-            git_url: https://github.com/POWERFULMOVES/PMOVES.AI.git
-            ref: main
-            context: pmoves/services
-            dockerfile: pmoves/services/supaserch/Dockerfile
-            image_name: pmoves-supaserch
-            build_args: ''
-            platforms: linux/amd64,linux/arm64
-            generate_sbom: true
-            trivy_ignorefile: ''
+      matrix: ${{ fromJson(needs.resolve-matrix.outputs.matrix) }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
