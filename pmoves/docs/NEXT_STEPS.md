@@ -7,7 +7,7 @@ _Last updated: 2026-02-23_
 - Added local-first GHCR prepublish lane for SupaSerch:
   - `make -C pmoves build-local-supaserch`
   - `make -C pmoves ghcr-prepublish-supaserch`
-  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch>`
+  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=<org-namespace>`
 - Refactored GHCR workflow matrix selection:
   - Added `.github/workflows/integrations-ghcr.matrix.json` as the integration matrix source of truth.
   - Added `resolve-matrix` workflow job so `workflow_dispatch` with `integration=<name>` creates only the targeted build lane.

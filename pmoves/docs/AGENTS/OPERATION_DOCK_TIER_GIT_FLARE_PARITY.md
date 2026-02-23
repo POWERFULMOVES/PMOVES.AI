@@ -15,7 +15,7 @@ This runbook defines the local-to-cloud release lane for PMOVES integrations wit
 | 1. Local Runtime Bring-up | Branch ready for validation | Codex | Agent Zero | `SUPABASE_RUNTIME=cli make -C pmoves up` | Core services healthy (`make -C pmoves smoke`) |
 | 2. Local Build Gate | Before any publish dispatch | Codex | SupaSerch worker | `make -C pmoves ghcr-prepublish-supaserch` | Local SupaSerch image builds successfully |
 | 3. Runner Lane Gate | Before workflow dispatch | Codex | Archon | `make -C pmoves ci-runners-check-strict` | Required self-hosted lanes online |
-| 4. Targeted Matrix Dispatch | Local gate + runner gate pass | Codex | GitHub Actions | `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch>` | Selected integration workflow started successfully |
+| 4. Targeted Matrix Dispatch | Local gate + runner gate pass | Codex | GitHub Actions | `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=cataclysmstudios-inc` | Selected integration workflow started successfully |
 | 5. Release Audit Closeout | Workflow complete | Claude | Codex, Archon | PR comment + `docs/AGENT_TRAIL.md` graphiti entry | Checks green and handoff documented |
 
 ## Agent Availability and Responsibilities
