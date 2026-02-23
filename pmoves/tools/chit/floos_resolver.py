@@ -7,28 +7,36 @@ Runtime engine that makes skill-pairings.yaml executable:
   - Detects circular dependencies
   - Validates service health before execution
   - Resolves execution order (topological sort)
-  - Publishes NATS events on skill completion
+  - Executes skill pipelines end-to-end via MCP
+  - Publishes NATS hook events on step/pipeline completion
 
 Usage:
     python -m pmoves.tools.chit.floos_resolver validate <pairing>
     python -m pmoves.tools.chit.floos_resolver resolve <pairing>
     python -m pmoves.tools.chit.floos_resolver status
     python -m pmoves.tools.chit.floos_resolver hooks
+    python -m pmoves.tools.chit.floos_resolver run <pairing> [--dry-run] [--context k=v ...]
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
+import os
 import sys
+import time
+import uuid
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import yaml
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 # Default paths (relative to repo root)
 DEFAULT_PAIRINGS_PATH = "pmoves/configs/skill-pairings.yaml"
@@ -211,6 +219,322 @@ def build_dag(data: dict, pairing_name: str) -> SkillDAG:
     """Build a SkillDAG from a named pairing."""
     pairing = get_pairing(data, pairing_name)
     return SkillDAG(pairing_name, pairing["chain"])
+
+
+# ── Runtime Types ─────────────────────────────────────────────────
+
+
+@dataclass
+class StepResult:
+    """Result of executing a single pipeline step."""
+
+    skill: str
+    success: bool
+    output: Any = None
+    duration_s: float = 0.0
+    error: str | None = None
+    mcp_response: dict | None = None
+
+
+@dataclass
+class PipelineResult:
+    """Result of executing a full pipeline."""
+
+    pairing: str
+    success: bool
+    steps: list[StepResult] = field(default_factory=list)
+    total_duration_s: float = 0.0
+    context: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+
+
+# ── NATS Hook Publisher ───────────────────────────────────────────
+
+
+async def publish_hook(
+    subject: str,
+    payload: dict,
+    *,
+    correlation_id: str | None = None,
+    source: str = "floos",
+    nats_url: str | None = None,
+) -> dict:
+    """Publish a hook event to NATS without contract schema validation.
+
+    Builds a lightweight envelope compatible with the PMOVES envelope
+    wire format but skips topics.json lookup (hook subjects are
+    convention-based, not contract-registered).
+    """
+    env = {
+        "id": str(uuid.uuid4()),
+        "topic": subject,
+        "ts": datetime.now(timezone.utc).isoformat() + "Z",
+        "version": "v1",
+        "source": source,
+        "payload": payload,
+    }
+    if correlation_id:
+        env["correlation_id"] = correlation_id
+
+    url = nats_url or os.environ.get(
+        "NATS_URL", "nats://nats:pmoves@nats:4222"
+    )
+
+    try:
+        from nats.aio.client import Client as NATS
+
+        nc = NATS()
+        await nc.connect(servers=[url])
+        await nc.publish(subject, json.dumps(env).encode())
+        await nc.close()
+    except Exception:
+        # Hook publishing is best-effort — don't break the pipeline
+        pass
+
+    return env
+
+
+# ── Step & Pipeline Execution ─────────────────────────────────────
+
+
+def _resolve_step_input(step: dict, context: dict[str, Any]) -> dict:
+    """Build the arguments dict for a step from the pipeline context."""
+    input_ref = step.get("input")
+    if not input_ref:
+        return {}
+
+    if isinstance(input_ref, str):
+        keys = [input_ref]
+    elif isinstance(input_ref, list):
+        keys = input_ref
+    else:
+        return {}
+
+    args: dict[str, Any] = {}
+    for key in keys:
+        if key in context:
+            args[key] = context[key]
+    return args
+
+
+def _mcp_call(
+    endpoint: str, skill: str, arguments: dict, timeout: int = 300
+) -> dict:
+    """Synchronous HTTP POST to MCP endpoint. Returns parsed JSON response."""
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError, URLError
+
+    body = json.dumps({"cmd": skill, "arguments": arguments}).encode()
+    req = Request(
+        endpoint,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    resp = urlopen(req, timeout=timeout)
+    return json.loads(resp.read().decode())
+
+
+async def execute_step(
+    step: dict,
+    context: dict[str, Any],
+    handoff: dict,
+    *,
+    correlation_id: str | None = None,
+) -> StepResult:
+    """Execute a single pipeline step via MCP and publish hook events.
+
+    1. Resolves input from context dict
+    2. POSTs to MCP endpoint with retry/backoff
+    3. On success: publishes on_complete hook, stores output in context
+    4. On failure: publishes on_error hook, returns failed StepResult
+    """
+    skill = step["skill"]
+    start = time.monotonic()
+
+    arguments = _resolve_step_input(step, context)
+    endpoint = handoff.get("mcp_endpoint", "http://localhost:8080/mcp/command")
+    timeout = handoff.get("step_timeout", 300)
+
+    retry_cfg = handoff.get("retry", {})
+    max_attempts = retry_cfg.get("max_attempts", 3)
+    backoff_ms = retry_cfg.get("backoff_ms", 1000)
+    backoff_mult = retry_cfg.get("backoff_multiplier", 2)
+
+    nats_url = handoff.get("nats_url")
+    hooks = step.get("hooks", {})
+    pairing_name = context.get("__pipeline__", "unknown")
+
+    last_error = ""
+    mcp_resp: dict | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            mcp_resp = _mcp_call(endpoint, skill, arguments, timeout=timeout)
+            # Success
+            duration = time.monotonic() - start
+            output_key = step.get("output")
+            output_val = mcp_resp.get("result", mcp_resp)
+
+            if output_key:
+                context[output_key] = output_val
+
+            # Publish on_complete hook (best-effort)
+            if hooks.get("on_complete"):
+                await publish_hook(
+                    hooks["on_complete"],
+                    {
+                        "step": skill,
+                        "pipeline": pairing_name,
+                        "status": "completed",
+                        "duration_s": round(duration, 2),
+                        "output_keys": [output_key] if output_key else [],
+                        "correlation_id": correlation_id or "",
+                    },
+                    correlation_id=correlation_id,
+                    nats_url=nats_url,
+                )
+
+            return StepResult(
+                skill=skill,
+                success=True,
+                output=output_val,
+                duration_s=round(duration, 2),
+                mcp_response=mcp_resp,
+            )
+
+        except Exception as exc:
+            last_error = str(exc)
+            if attempt < max_attempts:
+                wait_s = (backoff_ms / 1000) * (backoff_mult ** (attempt - 1))
+                await asyncio.sleep(wait_s)
+
+    # All attempts exhausted
+    duration = time.monotonic() - start
+
+    if hooks.get("on_error"):
+        await publish_hook(
+            hooks["on_error"],
+            {
+                "step": skill,
+                "pipeline": pairing_name,
+                "status": "failed",
+                "duration_s": round(duration, 2),
+                "error": last_error,
+                "correlation_id": correlation_id or "",
+            },
+            correlation_id=correlation_id,
+            nats_url=nats_url,
+        )
+
+    return StepResult(
+        skill=skill,
+        success=False,
+        duration_s=round(duration, 2),
+        error=last_error,
+        mcp_response=mcp_resp,
+    )
+
+
+async def execute_pipeline(
+    data: dict,
+    pairing_name: str,
+    *,
+    initial_context: dict[str, Any] | None = None,
+    check_health: bool = True,
+) -> PipelineResult:
+    """Execute a full skill pipeline end-to-end.
+
+    1. Builds DAG, validates structure
+    2. Optionally checks service health
+    3. Executes steps in topological order
+    4. Chains step outputs via in-memory context dict
+    5. Publishes pipeline completion event on success
+    """
+    pipeline_start = time.monotonic()
+    correlation_id = str(uuid.uuid4())
+
+    # Build and validate
+    dag = build_dag(data, pairing_name)
+    errors = dag.validate()
+    if errors:
+        return PipelineResult(
+            pairing=pairing_name,
+            success=False,
+            error=f"DAG validation failed: {'; '.join(errors)}",
+        )
+
+    pairing = get_pairing(data, pairing_name)
+    handoff = data.get("handoff", {})
+
+    # Health check gate
+    if check_health:
+        report = validate_deps(dag, check_services=True)
+        if not report["valid"]:
+            failures = []
+            for svc, info in report.get("service_status", {}).items():
+                if not info["healthy"]:
+                    failures.append(f"{svc}: {info['message']}")
+            for skill, info in report.get("health_status", {}).items():
+                if not info["healthy"]:
+                    failures.append(f"{skill}: {info['message']}")
+            return PipelineResult(
+                pairing=pairing_name,
+                success=False,
+                error=f"Health check failed: {'; '.join(failures)}",
+            )
+
+    # Execute in topological order
+    order = dag.topological_sort()
+    context: dict[str, Any] = {"__pipeline__": pairing_name}
+    if initial_context:
+        context.update(initial_context)
+
+    results: list[StepResult] = []
+
+    for skill_name in order:
+        step = dag.nodes[skill_name]
+        result = await execute_step(
+            step, context, handoff, correlation_id=correlation_id
+        )
+        results.append(result)
+
+        if not result.success:
+            total = time.monotonic() - pipeline_start
+            return PipelineResult(
+                pairing=pairing_name,
+                success=False,
+                steps=results,
+                total_duration_s=round(total, 2),
+                context=context,
+                error=f"Step '{skill_name}' failed: {result.error}",
+            )
+
+    total = time.monotonic() - pipeline_start
+
+    # Publish pipeline completion (best-effort)
+    nats_subject = pairing.get("nats_subject")
+    if nats_subject:
+        await publish_hook(
+            nats_subject,
+            {
+                "pipeline": pairing_name,
+                "status": "completed",
+                "steps": len(results),
+                "duration_s": round(total, 2),
+                "correlation_id": correlation_id,
+            },
+            correlation_id=correlation_id,
+            nats_url=handoff.get("nats_url"),
+        )
+
+    return PipelineResult(
+        pairing=pairing_name,
+        success=True,
+        steps=results,
+        total_duration_s=round(total, 2),
+        context=context,
+    )
 
 
 # ── Health Validation ─────────────────────────────────────────────
@@ -500,6 +824,95 @@ def cli_hooks(args: argparse.Namespace) -> int:
     return 0
 
 
+def cli_run(args: argparse.Namespace) -> int:
+    """Execute a pipeline (or show execution plan with --dry-run)."""
+    data = load_pairings(args.config)
+
+    # Parse --context key=value pairs into a dict
+    initial_ctx: dict[str, Any] = {}
+    for item in args.context or []:
+        if "=" not in item:
+            print(f"ERROR: Invalid context format '{item}' (expected key=value)")
+            return 1
+        k, v = item.split("=", 1)
+        initial_ctx[k] = v
+
+    if args.dry_run:
+        # Dry run: validate, show execution plan, no MCP calls
+        dag = build_dag(data, args.pairing)
+        errors = dag.validate()
+        if errors:
+            print(f"FlOO$ Dry Run: {args.pairing} [INVALID]")
+            for err in errors:
+                print(f"  ERROR: {err}")
+            return 1
+
+        order = dag.topological_sort()
+        handoff = data.get("handoff", {})
+        pairing = get_pairing(data, args.pairing)
+
+        print(f"FlOO$ Dry Run: {args.pairing}")
+        print("=" * 50)
+        print(f"Pipeline: {pairing.get('name', args.pairing)}")
+        print(f"MCP endpoint: {handoff.get('mcp_endpoint', 'http://localhost:8080/mcp/command')}")
+        print(f"Step timeout: {handoff.get('step_timeout', 300)}s")
+        retry = handoff.get("retry", {})
+        print(f"Retry: {retry.get('max_attempts', 3)} attempts, {retry.get('backoff_ms', 1000)}ms backoff")
+        if initial_ctx:
+            print(f"Initial context: {initial_ctx}")
+        print(f"\nExecution Plan ({len(order)} steps):")
+
+        for i, skill in enumerate(order, 1):
+            step = dag.nodes[skill]
+            print(f"\n  {i}. {skill}")
+            print(f"     agent: {step.get('agent', 'unknown')}")
+            inp = step.get("input")
+            if inp:
+                src = f"context[{inp}]" if isinstance(inp, str) else f"context[{inp}]"
+                print(f"     input: {src}")
+            out = step.get("output")
+            if out:
+                print(f"     output -> context[{out}]")
+            hooks = step.get("hooks", {})
+            if hooks.get("on_complete"):
+                print(f"     hook(on_complete): {hooks['on_complete']}")
+            if hooks.get("on_error"):
+                print(f"     hook(on_error): {hooks['on_error']}")
+
+        nats_subj = pairing.get("nats_subject")
+        if nats_subj:
+            print(f"\nCompletion event: {nats_subj}")
+        print("\n[DRY RUN — no MCP calls made]")
+        return 0
+
+    # Live execution
+    result = asyncio.run(
+        execute_pipeline(
+            data,
+            args.pairing,
+            initial_context=initial_ctx or None,
+            check_health=not args.skip_health,
+        )
+    )
+
+    # Format output
+    status = "SUCCESS" if result.success else "FAILED"
+    print(f"FlOO$ Run: {args.pairing} [{status}]")
+    print("=" * 50)
+
+    for sr in result.steps:
+        icon = "OK" if sr.success else "FAIL"
+        print(f"  [{icon}] {sr.skill} ({sr.duration_s}s)")
+        if sr.error:
+            print(f"         error: {sr.error}")
+
+    print(f"\nTotal: {result.total_duration_s}s")
+    if result.error:
+        print(f"Error: {result.error}")
+
+    return 0 if result.success else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="floos",
@@ -535,6 +948,22 @@ def main(argv: list[str] | None = None) -> int:
 
     p_hooks = sub.add_parser("hooks", help="List all registered hooks")
     p_hooks.set_defaults(func=cli_hooks)
+
+    p_run = sub.add_parser("run", help="Execute a pipeline")
+    p_run.add_argument("pairing", help="Pairing name")
+    p_run.add_argument(
+        "--dry-run", action="store_true",
+        help="Show execution plan without making MCP calls",
+    )
+    p_run.add_argument(
+        "--skip-health", action="store_true",
+        help="Skip service health checks before execution",
+    )
+    p_run.add_argument(
+        "--context", nargs="*", metavar="KEY=VALUE",
+        help="Initial context values (e.g., --context model_id=bert-base)",
+    )
+    p_run.set_defaults(func=cli_run)
 
     args = parser.parse_args(argv)
     return args.func(args)
