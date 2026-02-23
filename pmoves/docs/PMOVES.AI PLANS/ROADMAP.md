@@ -1,15 +1,17 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-02-16
+Last updated: 2026-02-23
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-02-16)
+## Audit Snapshot (2026-02-23)
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - PR queue: 0 open PRs on `POWERFULMOVES/PMOVES.AI` (targeted hardened cleanup merges complete for this pass).
 - Dependency/code scanning backlog: Dependabot open `14` (3 high, 9 medium, 2 low); Code Scanning open (first 100) `3 critical`, `64 high`, `33 medium`.
 - Active remediation focus: SSRF hardening landed for CHIT image decode paths in Hi‑RAG gateways and URL safety guards are being completed in SupaSerch HTTP fallback.
+- GHCR publish stabilization lane is active: targeted matrix dispatch is wired, PAT auth now fails fast with explicit diagnostics, and local-first prepublish gates (`build-local-supaserch`, `ghcr-prepublish-supaserch`) are in place.
+- Secrets ops lane now includes GHCR bootstrap from existing credentials (`ghcr-bootstrap-secrets`) to reduce rotation friction for local/hybrid operators.
 
 ## Milestones
 

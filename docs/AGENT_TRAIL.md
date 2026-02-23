@@ -10,6 +10,48 @@
 
 ---
 
+<!-- graphiti:codex phase:operation-dock-tier-git-flare-parity ts:2026-02-23T18:23:01Z -->
+
+## ■ Codex — Operation Dock.Tier Git.Flare Parity
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** local-first-release, credential-ops, workflow-gating
+**Voice:** Terse
+
+### Done
+- Implemented GHCR credential bootstrap path in `pmoves/tools/push-gh-secrets.sh`:
+  - `--ghcr-bootstrap`
+  - `--ghcr-token-from`
+  - `--ghcr-fallback-token-from`
+  - `--ghcr-username-from`
+- Added local prepublish + targeted dispatch targets in `pmoves/Makefile`:
+  - `ghcr-bootstrap-secrets`
+  - `build-local-supaserch`
+  - `ghcr-prepublish-supaserch`
+  - `ghcr-dispatch-supaserch`
+- Added operator docs and CHIT flow links:
+  - `pmoves/docs/PMOVESCHIT/CHIT_FLOW_INDEX.md` (`CHIT-FLOW-006`)
+  - `pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md`
+  - `docs/LOCAL_CI_CHECKS.md`
+  - `docs/SECRETS_ONBOARDING.md`
+  - `pmoves/docs/operations/MAKE_TARGETS.md`
+
+### Left Behind
+- GHCR PAT is currently invalid for package auth; workflow now fails fast with explicit `Require valid GHCR PAT when provided`.
+- Package ACL/ownership fix remains repo-side (token scope + package/repo linkage).
+
+### For Next Agent
+- Rotate GHCR PAT and rerun:
+  - `make -C pmoves ghcr-bootstrap-secrets GH_REPO=POWERFULMOVES/PMOVES.AI GH_SECRET_ENV=Dev`
+  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=fix/ghcr-auth-priority`
+- If run still fails, inspect:
+  - `gh run view <run_id> --log-failed`
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:kriss-kross-weave ts:2026-02-23T14:43:36Z -->
 
 ## ■ Codex — KRISS KROSS Weave: Trail + Parity Authority Bridge

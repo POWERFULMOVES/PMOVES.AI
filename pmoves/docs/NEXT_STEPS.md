@@ -1,7 +1,18 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-20_
+_Last updated: 2026-02-23_
+
+### Latest changes (Feb 23, 2026)
+- GHCR workflow dispatch now supports deterministic single-integration selection via resolved matrix names (targeted `supaserch` dispatch no longer queues full matrix).
+- GHCR auth hardening now fails fast when PAT credentials are invalid, with explicit operator diagnostics before expensive build/push stages.
+- Added local-first release gates for no-VPS/hybrid operators:
+  - `make -C pmoves build-local-supaserch`
+  - `make -C pmoves ghcr-prepublish-supaserch`
+  - `make -C pmoves ghcr-dispatch-supaserch`
+- Added secrets rotation shortcut that reuses existing credentials:
+  - `make -C pmoves ghcr-bootstrap-secrets` (maps `GHCR_TOKEN` fallback `GH_PAT_PUBLISH` to GitHub Actions GHCR secrets).
+- Added CHIT runbook lane `CHIT-FLOW-006` (`OPERATION DOCK.TIER GIT.FLARE PARITY`) and AGNOTE handoff `pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md`.
 
 ### Latest changes (Feb 20, 2026)
 - Channel Monitor gained an authenticated Discord intake endpoint: `POST /api/monitor/discord-drop` with `approval_mode` (`ask`/`auto`) for gated agentic review.

@@ -62,6 +62,7 @@ Required handoff fields:
 - `2026-02-20T12:12:35.7340973-05:00` CLAIM `CODEX-GPT5` scope: PR convergence + runner/cache/app strategy review.
 - `2026-02-21T10:35:03.6791631-05:00` CLAIM `CODEX-GPT5` scope: Phase 5 CHIT flaw verification + Graphiti signature audit + lane-safe traversal note.
 - `2026-02-23T08:43:22.5310868-05:00` CLAIM `CODEX-GPT5` scope: KRISS KROSS protocol addendum + Codex command parity authority tooling.
+- `2026-02-23T13:23:01.5398158-05:00` CLAIM `CODEX-GPT5` scope: OPERATION DOCK.TIER GIT.FLARE PARITY (local-first build gates + GHCR credential bootstrap + agent fan-out spec).
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -79,6 +80,13 @@ Required handoff fields:
   - Fixed unresolved merge marker in `pmoves/Makefile` blocking make target parsing.
 
 - `2026-02-23T08:43:22.5310868-05:00` RELEASE `CODEX-GPT5` scope: Codex DJ lane staged with parity enforcement and KRISS KROSS handoff rules.
+- `2026-02-23T13:23:01.5398158-05:00` REVIEW `CODEX-GPT5`
+  - Added GHCR credential bootstrap mode to `pmoves/tools/push-gh-secrets.sh` with existing-credential fallback (`GHCR_TOKEN -> GH_PAT_PUBLISH`).
+  - Added local-first GHCR publish gates to `pmoves/Makefile` (`build-local-supaserch`, `ghcr-prepublish-supaserch`, `ghcr-dispatch-supaserch`, `ghcr-bootstrap-secrets`).
+  - Added `CHIT-FLOW-006` (`OPERATION DOCK.TIER GIT.FLARE PARITY`) and authored `pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md` with lifecycle agent scheduling and handoff steps.
+  - Confirmed targeted GHCR selector works; remaining blocker is invalid GHCR PAT (fails fast before publish).
+
+- `2026-02-23T13:23:01.5398158-05:00` RELEASE `CODEX-GPT5` scope: Dock.Tier Git.Flare parity lane documented and executable for local/hybrid/cloud operators.
 
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
@@ -97,3 +105,9 @@ Required handoff fields:
 - Ack: `I established Codex-led parity authority and KRISS KROSS overlay protocol for cross-agent weave lanes.`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1::KRISS-KROSS-CODEX-WEAVE`
 - Timestamp: `2026-02-23T08:43:22.5310868-05:00`
+
+## Agent ACK (Signed, Dock.Tier Git.Flare Parity)
+- Agent: `CODEX-GPT5`
+- Ack: `I wired local-first GHCR prepublish gates, credential bootstrap from existing secrets, and lifecycle fan-out documentation for unified local-cloud hybrid operations.`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::DOCK-TIER-GIT-FLARE-PARITY`
+- Timestamp: `2026-02-23T13:23:01.5398158-05:00`

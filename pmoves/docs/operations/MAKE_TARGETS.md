@@ -263,6 +263,17 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Default mode is non-destructive (`SECRETS_ALLOW_MISSING=1`) and reports missing required labels.
 - `make secrets-funnel`
   - One command for runtime hydration + CHIT export + manifest sync + `secrets-audit` + `tooling-audit` (optional `SECRETS_FUNNEL_BOOT_USER=1`).
+- `make ghcr-bootstrap-secrets GH_REPO=POWERFULMOVES/PMOVES.AI [GH_SECRET_ENV=Dev]`
+  - Sets `GHCR_USERNAME` and `GHCR_TOKEN` GitHub Actions secrets from local env values.
+  - Reuses existing credentials by default (`GHCR_TOKEN`, fallback `GH_PAT_PUBLISH`) so operators can rotate without manual copy/paste.
+- `make build-local-supaserch`
+  - Local-only pre-publish image gate: builds SupaSerch (`linux/amd64`, no push) to validate Dockerfile/build context before CI dispatch.
+- `make ghcr-prepublish-supaserch`
+  - Local pre-publish lane: runs `build-local-supaserch` and then `supaserch-smoke` when runtime is already up.
+  - If runtime is offline, smoke is skipped with an explicit operator message; build gate still enforces local compile validity.
+- `make ghcr-dispatch-supaserch [GHCR_DISPATCH_REF=<branch>]`
+  - Dispatches `.github/workflows/integrations-ghcr.yml` with `integration=supaserch` after local pre-publish checks.
+  - Default ref is current git branch.
 - `make models-registry-snapshot`
   - Exports the active Supabase model registry state to `pmoves/models/registry.snapshot.json` for audit/review.
 - `make models-seed-ollama`

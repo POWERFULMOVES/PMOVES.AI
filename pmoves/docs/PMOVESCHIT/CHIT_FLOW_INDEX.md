@@ -56,3 +56,20 @@ This file is the operator list of active CHIT-adjacent flows, ordered for produc
   - https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idoutputs
   - https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstrategy
 - Output: deterministic single-image validation path for GHCR ACL/ownership troubleshooting.
+
+## CHIT-FLOW-006: OPERATION DOCK.TIER GIT.FLARE PARITY
+- Scope: unify local-first and cloud publish paths (credential rotation, local build gates, targeted GHCR dispatch).
+- Entry commands:
+  - `make -C pmoves ghcr-bootstrap-secrets GH_REPO=POWERFULMOVES/PMOVES.AI GH_SECRET_ENV=Dev`
+  - `make -C pmoves ghcr-prepublish-supaserch`
+  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch>`
+- Operator pattern:
+  - Reuse existing credentials first (`GHCR_TOKEN` or `GH_PAT_PUBLISH`) and push GHCR secrets via `push-gh-secrets.sh --ghcr-bootstrap`.
+  - Enforce local build-first policy (`build-local-supaserch`) before any publish dispatch.
+  - Treat runtime smoke as conditional: run when local service is up, skip with explicit log when offline.
+  - Keep dispatch targeted (`integration=supaserch`) to avoid full matrix queue pressure.
+- Agent fan-out:
+  - Delivery body: local build gate + workflow dispatch.
+  - Control body: workflow/PR gate checks and merge order.
+  - Memory body: CHIT flow updates + secret-rotation provenance.
+- Output: reproducible local-to-cloud release lane for operators without VPS dependency.

@@ -7,6 +7,7 @@ Primary convergence record lives at:
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 - `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
+- `pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md` (Operation Dock.Tier Git.Flare parity lane: local-first publish + credential rotation)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
 
