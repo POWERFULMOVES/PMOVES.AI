@@ -8,6 +8,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$Script:ProjectRoot = Split-Path -Parent $PSScriptRoot
+$Script:ComposeProject = if ([string]::IsNullOrWhiteSpace($env:COMPOSE_PROJECT_NAME)) { 'pmoves' } else { $env:COMPOSE_PROJECT_NAME }
+$Script:ProbeService = $null
+$Script:ProbeContainer = $null
 
 function Write-Step($msg) { Write-Host $msg -ForegroundColor Cyan }
 function Write-OK($msg='OK') { Write-Host $msg -ForegroundColor Green }
@@ -45,6 +49,147 @@ function Test-Http200 {
   return $true
 }
 
+function Get-EnvFileValue {
+  param(
+    [Parameter(Mandatory)][string]$Path,
+    [Parameter(Mandatory)][string]$Key
+  )
+  if (-not (Test-Path $Path)) { return $null }
+  $match = Get-Content -Path $Path | Where-Object { $_ -match "^$Key=" } | Select-Object -First 1
+  if (-not $match) { return $null }
+  $value = $match.Substring($Key.Length + 1).Trim()
+  if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2) {
+    $value = $value.Substring(1, $value.Length - 2)
+  }
+  return $value
+}
+
+function Resolve-SupabaseRestUrl {
+  $direct = $env:SUPA_REST_URL
+  if ([string]::IsNullOrWhiteSpace($direct)) { $direct = $env:SUPABASE_REST_URL }
+  if (-not [string]::IsNullOrWhiteSpace($direct)) {
+    return $direct.TrimEnd('/')
+  }
+
+  $runtimeOverlay = Join-Path $Script:ProjectRoot 'env.supa.runtime'
+  $overlayRest = Get-EnvFileValue -Path $runtimeOverlay -Key 'SUPA_REST_URL'
+  if (-not [string]::IsNullOrWhiteSpace($overlayRest)) {
+    return $overlayRest.TrimEnd('/')
+  }
+
+  $statusFile = Join-Path $Script:ProjectRoot '.supabase.status.env'
+  $apiUrl = Get-EnvFileValue -Path $statusFile -Key 'API_URL'
+  if (-not [string]::IsNullOrWhiteSpace($apiUrl)) {
+    return ("{0}/rest/v1" -f $apiUrl.TrimEnd('/'))
+  }
+
+  return 'http://localhost:3010'
+}
+
+function Escape-ShSingleQuotes {
+  param([Parameter(Mandatory)][string]$Value)
+  $replacement = "'" + '"' + "'" + '"' + "'"
+  return $Value.Replace("'", $replacement)
+}
+
+function Resolve-ContainerName {
+  param([Parameter(Mandatory)][string]$Service)
+  $names = (& docker ps --format '{{.Names}}')
+  $project = [regex]::Escape($Script:ComposeProject)
+  $svc = [regex]::Escape($Service)
+  foreach ($name in $names) {
+    if ($name -match "^$project[-_]$svc[-_]\d+$") { return $name }
+  }
+  foreach ($name in $names) {
+    if ($name -eq $Service) { return $name }
+  }
+  throw "No running container found for service '$Service' in project '$($Script:ComposeProject)'"
+}
+
+function Invoke-ContainerExec {
+  param(
+    [Parameter(Mandatory)][string]$Container,
+    [Parameter(Mandatory)][string]$Command
+  )
+  $output = & docker exec $Container sh -lc $Command
+  if ($LASTEXITCODE -ne 0) {
+    throw "docker exec failed for container '$Container'"
+  }
+  return $output
+}
+
+function Resolve-ProbeService {
+  if (-not [string]::IsNullOrWhiteSpace($Script:ProbeService)) {
+    return $Script:ProbeService
+  }
+  foreach ($candidate in @('hi-rag-gateway-v2', 'agent-zero', 'archon')) {
+    try {
+      $container = Resolve-ContainerName -Service $candidate
+      Invoke-ContainerExec -Container $container -Command "command -v curl >/dev/null" | Out-Null
+      $Script:ProbeService = $candidate
+      $Script:ProbeContainer = $container
+      return $Script:ProbeService
+    } catch {}
+  }
+  throw "No running probe service with curl found (tried: hi-rag-gateway-v2, agent-zero, archon)"
+}
+
+function Invoke-ProbeStatus {
+  param(
+    [Parameter(Mandatory)][string]$Url,
+    [ValidateSet('GET','POST','PATCH')][string]$Method = 'GET',
+    [string]$BodyJson,
+    [hashtable]$Headers
+  )
+  Resolve-ProbeService | Out-Null
+  $probe = $Script:ProbeService
+  $probeContainer = $Script:ProbeContainer
+  $parts = @(
+    "curl",
+    "-sS",
+    "-o /dev/null",
+    "-w '%{http_code}'",
+    "-X $Method"
+  )
+  $parts += "-H 'Accept: application/json'"
+  if ($Headers) {
+    foreach ($entry in $Headers.GetEnumerator()) {
+      $headerValue = "{0}: {1}" -f $entry.Key, $entry.Value
+      $parts += "-H '{0}'" -f (Escape-ShSingleQuotes -Value $headerValue)
+    }
+  }
+  if (-not [string]::IsNullOrWhiteSpace($BodyJson)) {
+    $parts += "-H 'Content-Type: application/json'"
+    $parts += "-d '{0}'" -f (Escape-ShSingleQuotes -Value $BodyJson)
+  }
+  $parts += "'{0}'" -f (Escape-ShSingleQuotes -Value $Url)
+  $statusRaw = Invoke-ContainerExec -Container $probeContainer -Command ($parts -join ' ')
+  $statusText = "$statusRaw".Trim()
+  if ($statusText -notmatch '^\d{3}$') {
+    throw "Invalid probe HTTP status from $probe for ${Url}: '$statusText'"
+  }
+  return [int]$statusText
+}
+
+function Test-Http200WithFallback {
+  param(
+    [Parameter(Mandatory)][string]$PrimaryUrl,
+    [string]$ProbeUrl,
+    [hashtable]$Headers
+  )
+  try {
+    Test-Http200 -Url $PrimaryUrl -Headers $Headers | Out-Null
+    return $true
+  } catch {
+    if ([string]::IsNullOrWhiteSpace($ProbeUrl)) { throw }
+    $status = Invoke-ProbeStatus -Url $ProbeUrl -Method 'GET' -Headers $Headers
+    if ($status -lt 200 -or $status -ge 300) {
+      throw "Probe URL '$ProbeUrl' returned HTTP $status"
+    }
+    return $true
+  }
+}
+
 function Invoke-PostJson {
   param(
     [Parameter(Mandatory)][string]$Url,
@@ -57,6 +202,25 @@ function Invoke-PostJson {
   return $resp
 }
 
+function Invoke-PostJsonWithFallback {
+  param(
+    [Parameter(Mandatory)][string]$PrimaryUrl,
+    [Parameter(Mandatory)][string]$BodyJson,
+    [hashtable]$Headers,
+    [string]$ProbeUrl
+  )
+  try {
+    return Invoke-PostJson -Url $PrimaryUrl -BodyJson $BodyJson -Headers $Headers
+  } catch {
+    if ([string]::IsNullOrWhiteSpace($ProbeUrl)) { throw }
+    $status = Invoke-ProbeStatus -Url $ProbeUrl -Method 'POST' -BodyJson $BodyJson -Headers $Headers
+    if ($status -lt 200 -or $status -ge 300) {
+      throw "Probe POST '$ProbeUrl' returned HTTP $status"
+    }
+    return @{ ok = $true; via = 'probe' }
+  }
+}
+
 function Invoke-GetJson {
   param(
     [Parameter(Mandatory)][string]$Url,
@@ -67,16 +231,24 @@ function Invoke-GetJson {
 }
 
 function Test-QdrantReady {
-  try { Test-Http200 -Url 'http://localhost:6333/ready' | Out-Null; return $true } catch {}
-  try { Test-Http200 -Url 'http://localhost:6333/readyz' | Out-Null; return $true } catch {}
-  try {
-    $resp = Invoke-RestMethod -Uri 'http://localhost:6333/collections' -Method GET -UseBasicParsing
-    if ($resp) { return $true }
-  } catch {}
+  $base = ($env:QDRANT_URL -as [string])
+  if ([string]::IsNullOrWhiteSpace($base)) { $base = 'http://localhost:6333' }
+  $base = $base.TrimEnd('/')
+  foreach ($endpoint in @("$base/ready", "$base/readyz", "$base/collections")) {
+    try { Test-Http200 -Url $endpoint | Out-Null; return $true } catch {}
+  }
+  foreach ($endpoint in @('http://qdrant:6333/ready', 'http://qdrant:6333/readyz', 'http://qdrant:6333/collections')) {
+    try {
+      $status = Invoke-ProbeStatus -Url $endpoint
+      if ($status -ge 200 -and $status -lt 300) { return $true }
+    } catch {}
+  }
   throw 'Qdrant not ready yet'
 }
 
 try {
+  $supaRestBase = Resolve-SupabaseRestUrl
+
   # 1. Qdrant ready
   Write-Step "[1/12] Qdrant ready..."
   Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-QdrantReady } | Out-Null
@@ -98,17 +270,17 @@ try {
 
   # 4. presign health
   Write-Step "[4/12] presign health..."
-  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200 -Url 'http://localhost:8088/healthz' } | Out-Null
+  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200WithFallback -PrimaryUrl 'http://localhost:8088/healthz' -ProbeUrl 'http://presign:8080/healthz' } | Out-Null
   Write-OK
 
   # 5. render-webhook health
   Write-Step "[5/12] render-webhook health..."
-  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200 -Url 'http://localhost:8085/healthz' } | Out-Null
+  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200WithFallback -PrimaryUrl 'http://localhost:8085/healthz' -ProbeUrl 'http://render-webhook:8085/healthz' } | Out-Null
   Write-OK
 
   # 6. PostgREST reachable
   Write-Step "[6/12] PostgREST reachable..."
-  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200 -Url 'http://localhost:3010' } | Out-Null
+  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200 -Url "$supaRestBase/" } | Out-Null
   Write-OK
 
   # 7. Insert via render-webhook
@@ -117,12 +289,12 @@ try {
   if ([string]::IsNullOrWhiteSpace($renderSecret)) { $renderSecret = 'change_me' }
   $headers = @{ 'Authorization' = "Bearer $renderSecret" }
   $payload = '{"bucket":"outputs","key":"demo.png","s3_uri":"s3://outputs/demo.png","presigned_get":null,"title":"Demo","namespace":"pmoves","author":"local","tags":["demo"],"auto_approve":false}'
-  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8085/comfy/webhook' -BodyJson $payload -Headers $headers } | Out-Null
+  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJsonWithFallback -PrimaryUrl 'http://localhost:8085/comfy/webhook' -ProbeUrl 'http://render-webhook:8085/comfy/webhook' -BodyJson $payload -Headers $headers } | Out-Null
   Write-OK
 
   # 8. Verify studio_board row
   Write-Step "[8/12] Verify studio_board row..."
-  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJson -Url 'http://localhost:3010/studio_board?order=id.desc&limit=1' }
+  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJson -Url "$supaRestBase/studio_board?order=id.desc&limit=1" }
   if ($null -eq $rows -or $rows.Count -lt 1 -or $null -eq $rows[0].title) { throw 'No row with title found' }
   Write-OK
 

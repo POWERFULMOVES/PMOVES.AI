@@ -109,10 +109,15 @@ def _load_gateway_module(monkeypatch: pytest.MonkeyPatch):
     def _dummy_get(*args, **kwargs):
         return _Response()
 
+    requests_mod.Response = _Response
     requests_mod.post = _dummy_post
     requests_mod.get = _dummy_get
     requests_mod.Response = _Response
     _install_stub("requests", requests_mod, stubs)
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.cuda = types.SimpleNamespace(is_available=lambda: False)
+    _install_stub("torch", torch_mod, stubs)
 
     libs_mod = types.ModuleType("libs")
     providers_mod = types.ModuleType("libs.providers")
