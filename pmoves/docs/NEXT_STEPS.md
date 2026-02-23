@@ -11,6 +11,7 @@ _Last updated: 2026-02-23_
 - Refactored GHCR workflow matrix selection:
   - Added `.github/workflows/integrations-ghcr.matrix.json` as the integration matrix source of truth.
   - Added `resolve-matrix` workflow job so `workflow_dispatch` with `integration=<name>` creates only the targeted build lane.
+- GHCR auth flow now prefers PAT (`GHCR_TOKEN`/`GH_PAT_PUBLISH`) when present, then falls back to `github.token`, to reduce package ACL/ownership 403 failures.
 - Added GHCR secret bootstrap helper target:
   - `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI`
 - `pmoves/tools/push-gh-secrets.sh` now supports `--ghcr-bootstrap` and credential source overrides (`--ghcr-token-from`, `--ghcr-fallback-token-from`, `--ghcr-username-from`) so existing credentials can be reused for rotation.
