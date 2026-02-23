@@ -398,7 +398,7 @@ jobs:
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@0.34.1
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -414,7 +414,7 @@ jobs:
 
       - name: Trivy vulnerability scan report (includes unfixed)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@0.34.1
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table
