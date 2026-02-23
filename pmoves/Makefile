@@ -1947,6 +1947,10 @@ IMAGE_NAMESPACE ?= powerfulmoves
 IMAGE_TAG ?= pmoves-latest
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 BUILDX_BUILDER ?= pmoves-multiarch
+GHCR_WORKFLOW ?= integrations-ghcr.yml
+GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+GH_SECRET_ENV ?= Dev
+GH_REPO ?= POWERFULMOVES/PMOVES.AI
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -1967,11 +1971,32 @@ docker-login: ensure-env-shared ## Login to GHCR using env.shared or shell env c
 	printf "%s" "$$token" | docker login ghcr.io -u "$$user" --password-stdin >/dev/null && echo "✔ GHCR login ok as $$user"
 
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
-	@ctx=$$(pwd); \
-	 df=$$ctx/services/supaserch/Dockerfile; \
+	@ctx=$$(pwd)/services; \
+	 df=$$ctx/supaserch/Dockerfile; \
 	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-supaserch:$(IMAGE_TAG); \
 	 echo "→ Building $$img"; \
 	 docker buildx build --platform $(TARGET_PLATFORMS) -f "$$df" -t "$$img" "$$ctx" --push
+
+.PHONY: ghcr-bootstrap-secrets
+ghcr-bootstrap-secrets: ensure-env-shared ## Bootstrap GHCR_USERNAME/GHCR_TOKEN GitHub secrets from env.shared creds
+	@bash tools/push-gh-secrets.sh --file env.shared --repo "$(GH_REPO)" --env "$(GH_SECRET_ENV)" --only GHCR_TOKEN,GHCR_USERNAME,GH_PAT_PUBLISH --ghcr-bootstrap
+
+.PHONY: build-local-supaserch
+build-local-supaserch: buildx-setup ## Build SupaSerch locally (amd64, no push) before GHCR publish
+	@ctx=$$(pwd)/services; \
+	 df=$$ctx/supaserch/Dockerfile; \
+	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-supaserch:local-smoke; \
+	 echo "→ Building local validation image $$img"; \
+	 docker buildx build --platform linux/amd64 -f "$$df" -t "$$img" "$$ctx" --load
+
+.PHONY: ghcr-prepublish-supaserch
+ghcr-prepublish-supaserch: build-local-supaserch ## Local-first gate before GHCR workflow dispatch
+	@echo "✔ SupaSerch local prepublish gate passed"
+
+.PHONY: ghcr-dispatch-supaserch
+ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for SupaSerch after local prepublish gate
+	@gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" -f integration=supaserch -f push_to_dockerhub=false
+	@echo "✔ Dispatched $(GHCR_WORKFLOW) for supaserch on ref $(GHCR_DISPATCH_REF)"
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
