@@ -6,19 +6,20 @@ _Generated: 2026-02-23_
 - Parity map: `C:\Users\russe\Documents\GitHub\PMOVES.AI-pr-kriss-kross\pmoves\docs\AGENTS\CODEX_CLAUDE_PARITY_MAP.md`
 
 ## Summary
-- Claude command tokens: **104**
+- Claude command tokens: **113**
 - Parity map tokens: **35**
 - Mapped tokens: **35**
-- Missing tokens: **69**
-- Coverage: **33.7%**
+- Missing tokens: **78**
+- Coverage: **31.0%**
 
 ## Prefix Coverage
 | Prefix | Claude Tokens | Mapped Tokens | Missing Tokens |
 | --- | ---: | ---: | ---: |
 | `agent-sdk` | 4 | 0 | 4 |
-| `agents` | 2 | 2 | 0 |
+| `agents` | 5 | 2 | 3 |
+| `archon` | 3 | 0 | 3 |
 | `botz` | 4 | 1 | 3 |
-| `chit` | 5 | 3 | 2 |
+| `chit` | 6 | 3 | 3 |
 | `cipher` | 3 | 0 | 3 |
 | `crush` | 2 | 0 | 2 |
 | `db` | 3 | 0 | 3 |
@@ -43,6 +44,7 @@ _Generated: 2026-02-23_
 | `tensorzero` | 1 | 0 | 1 |
 | `test` | 2 | 2 | 0 |
 | `tts` | 4 | 2 | 2 |
+| `voice` | 2 | 0 | 2 |
 | `workitems` | 3 | 0 | 3 |
 | `worktree` | 4 | 4 | 0 |
 | `yt` | 10 | 2 | 8 |
@@ -53,11 +55,20 @@ _Generated: 2026-02-23_
   - `agent-sdk:handoff`
   - `agent-sdk:resume`
   - `agent-sdk:run`
+- `agents`
+  - `agents:execute`
+  - `agents:subordinate`
+  - `agents:task-status`
+- `archon`
+  - `archon:forms`
+  - `archon:prompts`
+  - `archon:status`
 - `botz`
   - `botz:init`
   - `botz:profile`
   - `botz:secrets`
 - `chit`
+  - `chit:bpm`
   - `chit:bus`
   - `chit:floos`
 - `cipher`
@@ -130,6 +141,9 @@ _Generated: 2026-02-23_
 - `tts`
   - `tts:test-all`
   - `tts:voices`
+- `voice`
+  - `voice:status`
+  - `voice:synthesize`
 - `workitems`
   - `workitems:claim`
   - `workitems:complete`
