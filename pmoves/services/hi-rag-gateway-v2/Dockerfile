@@ -1,6 +1,10 @@
 FROM python:3.11-slim
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app:/app/libs
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app:/app/libs \
+    HF_HOME=/app/.cache/hf \
+    SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers
 
 # Install curl for health checks in wait-for-deps.sh
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
@@ -12,6 +16,18 @@ COPY libs /app/libs
 COPY services/common /app/services/common
 COPY services/hi-rag-gateway-v2/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Preload default embedding model so offline runtime does not hard-fail on first request.
+RUN python - <<'PY'
+import os
+from sentence_transformers import SentenceTransformer
+
+model = os.environ.get("SENTENCE_MODEL_PRELOAD", "all-MiniLM-L6-v2")
+cache = os.environ.get("SENTENCE_TRANSFORMERS_HOME")
+SentenceTransformer(model, cache_folder=cache)
+print(f"Preloaded sentence-transformer model: {model}")
+PY
+
 COPY services/hi-rag-gateway-v2/ ./
 # Include local scripts for seeding and startup
 COPY services/hi-rag-gateway-v2/scripts /app/scripts
@@ -26,6 +42,10 @@ RUN groupadd -r pmoves --gid=65532 && \
     chown -R pmoves:pmoves /app
 
 USER pmoves:pmoves
+
+# Runtime stays online-capable by default so reranker can resolve from hub
+# when a local RERANK_MODEL_PATH is not mounted. Set these to 1 in env for
+# fully offline deployments that preload all required artifacts.
 
 EXPOSE 8086
 
