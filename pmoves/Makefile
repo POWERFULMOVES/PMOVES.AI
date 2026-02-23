@@ -1950,7 +1950,7 @@ BUILDX_BUILDER ?= pmoves-multiarch
 GHCR_WORKFLOW ?= integrations-ghcr.yml
 GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
 GH_SECRET_ENV ?= Dev
-GH_REPO ?= POWERFULMOVES/PMOVES.AI
+GH_REPO ?= $(shell gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo POWERFULMOVES/PMOVES.AI)
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
