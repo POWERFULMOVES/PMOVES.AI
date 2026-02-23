@@ -26,10 +26,10 @@
 - Added `floos_hooks` metadata to 4 submodule registry entries (Agent-Zero, BoTZ, HiRAG, ToKenism-Multi) with publishes/subscribes/depends_on
 - Cleaned 3 dirty submodules (BoTZ nested huggingface-skills, Archon cascade, ToKenism-Multi context tags)
 - Initialized 2 untracked submodules (A2UI, Pipecat)
-- Merged 9 PRs: #666, #674, #679, #682, #685, #686, #689, #690, #691
+- Merged 16 PRs total: #666, #667, #668, #670, #673, #674, #679, #680, #682, #685, #686, #687, #688, #689, #690, #691
+- Resolved merge conflicts in 7 PRs (#667, #668, #670, #673, #680, #687, #688) via worktree rebase strategy — 0 open PRs remain
 
 ### Left Behind
-- 7 PRs with merge conflicts: #667, #668, #670, #673, #680, #687, #688
 - main→Hardened branch sync has merge conflicts (409 from API merge)
 - `floos_resolver.py` has `execute_step()` and `publish_hook()` stubbed in the plan but not implemented — current version is validation/inspection only, not a runtime executor
 - No NATS event emitted for this work (`agent.graphiti.signed.v1`)
