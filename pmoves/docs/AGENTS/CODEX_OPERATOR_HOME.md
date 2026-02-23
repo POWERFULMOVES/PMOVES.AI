@@ -100,6 +100,8 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
   - `pmoves/docs/AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`
 - Runtime protocol (focus + scout):
   - `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`
+- Operation lane (local/cloud GHCR parity):
+  - `pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md`
 - Unified taxonomy:
   - `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md`
 - Codex + Cipher implementation map:
