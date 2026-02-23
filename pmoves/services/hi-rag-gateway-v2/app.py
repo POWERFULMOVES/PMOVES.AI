@@ -89,7 +89,7 @@ if _rerank_model_path_raw:
         RERANK_MODEL_PATH = str(_rerank_model_path)
     else:
         RERANK_MODEL_PATH = None
-        _RERANK_CONFIG_ERRORS.append(
+        _RERANK_CONFIG_WARNINGS.append(
             f"RERANK_MODEL_PATH {_rerank_model_path_raw!r} not found; falling back to hub id"
         )
 else:
@@ -1308,7 +1308,7 @@ def _validate_remote_image_url(raw_url: Any) -> str:
     return url
 
 
-def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response:
+def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> "requests.Response":
     """Validate URL for SSRF and fetch with DNS-resolved IP check.
 
     Resolves DNS once and validates all IPs against private ranges before fetch.

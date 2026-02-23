@@ -973,6 +973,7 @@ services:
     - workers
     networks:
     - pmoves_api
+    - pmoves_external
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -1453,7 +1454,9 @@ services:
         required: false
     networks:
     - pmoves_api
+    - pmoves_data
     - pmoves_bus
+    - pmoves_external  # Required for hub fallback and host-gateway Supabase routes
     extra_hosts:
     - host.docker.internal:host-gateway
   nats:
