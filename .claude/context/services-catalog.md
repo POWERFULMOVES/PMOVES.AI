@@ -278,6 +278,46 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Features:** Syncs Jellyfin events to Supabase
 - **Compose Profile:** `health` (optional)
 
+## Health & Wellness Services (Planned)
+
+### Health (wger)
+- **Ports:** TBD (default Django 8000)
+- **Purpose:** Fitness tracking and body metrics (wger self-hosted)
+- **Framework:** Django / wger
+- **Key APIs (planned):**
+  - `GET /api/v2/workout/` - List workouts
+  - `GET /api/v2/weightentry/` - Body weight entries
+  - `POST /api/v2/workoutsession/` - Log workout session
+- **NATS Topics (Publish, planned):**
+  - `health.metrics.updated.v1`
+  - `health.workout.completed.v1`
+  - `health.weekly.summary.v1`
+- **Health Endpoint:** Planned (`/healthz`)
+- **Metrics:** Planned (`/metrics`)
+- **Maturity:** Pre-stage — no healthz, metrics, NATS, CHIT, or Docker hardening yet
+- **TAC Tree:** `pmoves/docs/TAC/TAC_HEALTH.md`
+- **Submodule:** `Pmoves-Health-wger`
+- **Compose Profile:** `health`
+
+### Wealth (Firefly III)
+- **Ports:** TBD (default Laravel 8080)
+- **Purpose:** Personal finance management (Firefly III self-hosted)
+- **Framework:** Laravel / Firefly III
+- **Key APIs (planned):**
+  - `GET /api/v1/transactions` - List transactions
+  - `GET /api/v1/budgets` - Budget tracking
+  - `POST /api/v1/transactions` - Create transaction
+- **NATS Topics (Publish, planned):**
+  - `finance.transactions.ingested.v1`
+  - `finance.budget.alert.v1`
+  - `finance.monthly.summary.v1`
+- **Health Endpoint:** Planned (`/healthz`)
+- **Metrics:** Planned (`/metrics`)
+- **Maturity:** Pre-stage — no healthz, metrics, NATS, CHIT, or Docker hardening yet
+- **TAC Tree:** `pmoves/docs/TAC/TAC_WEALTH.md`
+- **Submodule:** `PMOVES-Wealth`
+- **Compose Profile:** `wealth`
+
 ## Remote Access Services
 
 ### Headscale (Self-hosted Tailscale Control Server)

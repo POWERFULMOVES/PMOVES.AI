@@ -268,7 +268,7 @@ async def publish_hook(
     env = {
         "id": str(uuid.uuid4()),
         "topic": subject,
-        "ts": datetime.now(timezone.utc).isoformat() + "Z",
+        "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "version": "v1",
         "source": source,
         "payload": payload,
@@ -285,11 +285,18 @@ async def publish_hook(
 
         nc = NATS()
         await nc.connect(servers=[url])
-        await nc.publish(subject, json.dumps(env).encode())
-        await nc.close()
-    except Exception:
-        # Hook publishing is best-effort — don't break the pipeline
-        pass
+        try:
+            await nc.publish(subject, json.dumps(env).encode())
+        finally:
+            await nc.close()
+    except ImportError:
+        pass  # nats-py not installed, hooks disabled
+    except Exception as exc:
+        print(
+            f"WARNING: hook '{subject}' publish failed: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
 
     return env
 
@@ -314,6 +321,11 @@ def _resolve_step_input(step: dict, context: dict[str, Any]) -> dict:
     for key in keys:
         if key in context:
             args[key] = context[key]
+        else:
+            print(
+                f"WARNING: step input '{key}' not found in pipeline context",
+                file=sys.stderr,
+            )
     return args
 
 
@@ -324,6 +336,10 @@ def _mcp_call(
     from urllib.request import Request, urlopen
     from urllib.error import HTTPError, URLError
 
+    parsed = urlparse(endpoint)
+    if parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+        raise ValueError(f"MCP endpoint must be localhost, got: {parsed.hostname}")
+
     body = json.dumps({"cmd": skill, "arguments": arguments}).encode()
     req = Request(
         endpoint,
@@ -331,8 +347,29 @@ def _mcp_call(
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    resp = urlopen(req, timeout=timeout)
-    return json.loads(resp.read().decode())
+    try:
+        resp = urlopen(req, timeout=timeout)
+    except HTTPError as exc:
+        error_body = ""
+        try:
+            error_body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"MCP '{skill}' returned HTTP {exc.code}: {error_body}"
+        ) from exc
+    except URLError as exc:
+        raise RuntimeError(
+            f"MCP '{skill}' connection failed: {exc.reason}"
+        ) from exc
+
+    raw = resp.read().decode()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"MCP '{skill}' returned non-JSON: {raw[:200]}"
+        ) from exc
 
 
 async def execute_step(
@@ -371,56 +408,57 @@ async def execute_step(
     for attempt in range(1, max_attempts + 1):
         try:
             mcp_resp = _mcp_call(endpoint, skill, arguments, timeout=timeout)
-            # Success
-            duration = time.monotonic() - start
-            output_key = step.get("output")
-            output_val = mcp_resp.get("result", mcp_resp)
-
-            if output_key:
-                context[output_key] = output_val
-
-            # Publish on_complete hook (best-effort)
-            if hooks.get("on_complete"):
-                await publish_hook(
-                    hooks["on_complete"],
-                    {
-                        "step": skill,
-                        "pipeline": pairing_name,
-                        "status": "completed",
-                        "duration_s": round(duration, 2),
-                        "output_keys": [output_key] if output_key else [],
-                        "correlation_id": correlation_id or "",
-                    },
-                    correlation_id=correlation_id,
-                    nats_url=nats_url,
-                )
-
-            return StepResult(
-                skill=skill,
-                success=True,
-                output=output_val,
-                duration_s=round(duration, 2),
-                mcp_response=mcp_resp,
-            )
-
+            break  # success — exit retry loop
         except Exception as exc:
             last_error = str(exc)
             if attempt < max_attempts:
                 wait_s = (backoff_ms / 1000) * (backoff_mult ** (attempt - 1))
                 await asyncio.sleep(wait_s)
+    else:
+        # All attempts exhausted
+        duration = time.monotonic() - start
 
-    # All attempts exhausted
+        if hooks.get("on_error"):
+            await publish_hook(
+                hooks["on_error"],
+                {
+                    "step": skill,
+                    "pipeline": pairing_name,
+                    "status": "failed",
+                    "duration_s": round(duration, 2),
+                    "error": last_error,
+                    "correlation_id": correlation_id or "",
+                },
+                correlation_id=correlation_id,
+                nats_url=nats_url,
+            )
+
+        return StepResult(
+            skill=skill,
+            success=False,
+            duration_s=round(duration, 2),
+            error=last_error,
+            mcp_response=mcp_resp,
+        )
+
+    # Success processing (outside retry loop)
     duration = time.monotonic() - start
+    output_key = step.get("output")
+    output_val = mcp_resp.get("result", mcp_resp)
 
-    if hooks.get("on_error"):
+    if output_key:
+        context[output_key] = output_val
+
+    # Publish on_complete hook (best-effort)
+    if hooks.get("on_complete"):
         await publish_hook(
-            hooks["on_error"],
+            hooks["on_complete"],
             {
                 "step": skill,
                 "pipeline": pairing_name,
-                "status": "failed",
+                "status": "completed",
                 "duration_s": round(duration, 2),
-                "error": last_error,
+                "output_keys": [output_key] if output_key else [],
                 "correlation_id": correlation_id or "",
             },
             correlation_id=correlation_id,
@@ -429,9 +467,9 @@ async def execute_step(
 
     return StepResult(
         skill=skill,
-        success=False,
+        success=True,
+        output=output_val,
         duration_s=round(duration, 2),
-        error=last_error,
         mcp_response=mcp_resp,
     )
 
@@ -656,7 +694,7 @@ def format_dag(dag: SkillDAG) -> str:
     order = dag.topological_sort()
     for i, skill in enumerate(order):
         step = dag.nodes[skill]
-        prefix = "  " if i < len(order) - 1 else "  "
+        prefix = "| " if i < len(order) - 1 else "  "
         connector = "|-> " if i < len(order) - 1 else "\\-> "
 
         deps = step.get("depends", {})

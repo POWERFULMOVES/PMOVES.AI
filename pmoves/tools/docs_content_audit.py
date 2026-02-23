@@ -10,7 +10,7 @@ Checks documentation for:
 - Cross-reference coverage (services, NATS subjects, agents)
 
 Usage:
-    python pmoves/tools/docs_content_audit.py [--fix] [--json]
+    python pmoves/tools/docs_content_audit.py [--json] [--fail-on-p1]
 
 Make target:
     make -C pmoves docs-audit
@@ -18,12 +18,11 @@ Make target:
 
 import argparse
 import json
-import os
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 
 @dataclass
@@ -236,8 +235,8 @@ def check_service_coverage(root: Path, scanned_files: List[Path]) -> List[AuditF
     for f in scanned_files:
         try:
             all_content += f.read_text(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
+        except OSError as exc:
+            print(f"WARNING: Could not read {f}: {exc}", file=sys.stderr)
 
     # Check each service has at least one mention
     for service_name in KNOWN_PORTS:
@@ -288,7 +287,8 @@ def run_audit(root: Path) -> AuditReport:
     for doc_path in doc_files:
         try:
             content = doc_path.read_text(encoding="utf-8", errors="replace")
-        except Exception:
+        except OSError as exc:
+            print(f"WARNING: Could not read {doc_path}: {exc}", file=sys.stderr)
             continue
 
         # Run checks

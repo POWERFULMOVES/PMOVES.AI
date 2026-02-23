@@ -129,33 +129,19 @@ jobs:
           PY
       - name: Run all service tests
         run: |
-          test_targets=(
-            "pmoves/services/publisher/tests"
-            "pmoves/services/pmoves-yt/tests"
-            "pmoves/services/publisher-discord/tests"
-            "pmoves/services/agent-zero/tests"
-            "pmoves/services/channel-monitor/tests"
-            "pmoves/services/chat-relay/tests"
-            "pmoves/services/common/tests"
-            "pmoves/services/gateway/tests"
-            "pmoves/services/flute-gateway/tests"
-            "pmoves/services/hi-rag-gateway/tests"
-            "pmoves/services/hi-rag-gateway-v2/tests"
-            "pmoves/services/jellyfin-bridge/tests"
-          )
-
-          for target in "${test_targets[@]}"; do
-            if [ ! -d "$target" ]; then
-              echo "Skipping missing test dir: $target"
-              continue
-            fi
-
-            if ! find "$target" -type f -name 'test_*.py' | grep -q .; then
-              echo "Skipping empty test dir: $target"
-              continue
-            fi
-
-            echo "::group::pytest ${target}"
-            pytest -q --tb=short --import-mode=importlib --rootdir=. "${target}"
-            echo "::endgroup::"
-          done
+          pytest -q --tb=short --rootdir=. \
+            pmoves/tests/ \
+            pmoves/services/publisher/tests \
+            pmoves/services/pmoves-yt/tests \
+            pmoves/services/publisher-discord/tests \
+            pmoves/services/agent-zero/tests \
+            pmoves/services/channel-monitor/tests \
+            pmoves/services/chat-relay/tests \
+            pmoves/services/common/tests \
+            pmoves/services/gateway/tests \
+            pmoves/services/flute-gateway/tests \
+            pmoves/services/hi-rag-gateway/tests \
+            pmoves/services/hi-rag-gateway-v2/tests \
+            pmoves/services/jellyfin-bridge/tests \
+            --ignore=pmoves/services/media-audio/tests \
+            --ignore=pmoves/services/media-video/tests
