@@ -26,6 +26,7 @@
   - `build-local-supaserch`
   - `ghcr-prepublish-supaserch`
   - `ghcr-dispatch-supaserch`
+- Fixed `.github/workflows/integrations-ghcr.yml` dispatch filtering so `workflow_dispatch` with `integration=<name>` does not fan out to the full matrix.
 - Corrected SupaSerch Docker build context in `pmoves/Makefile` to align with `pmoves/services/supaserch/Dockerfile`.
 - Updated operator docs for local-first GHCR flow and credential rotation:
   - `docs/LOCAL_CI_CHECKS.md`
@@ -37,7 +38,6 @@
 
 ### Left Behind
 - GHCR package ACL/ownership changes still require org/repo admin confirmation if 403 persists.
-- Workflow matrix optimization (`workflow_dispatch` single-target pruning) is not included in this patch.
 
 ### For Next Agent
 - If GHCR 403 remains after bootstrap, verify package ownership + Actions permissions in GHCR package settings.

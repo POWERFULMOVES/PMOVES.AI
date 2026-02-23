@@ -8,6 +8,7 @@ _Last updated: 2026-02-23_
   - `make -C pmoves build-local-supaserch`
   - `make -C pmoves ghcr-prepublish-supaserch`
   - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch>`
+- Fixed `.github/workflows/integrations-ghcr.yml` dispatch filtering so `workflow_dispatch` honors `integration=<name>` instead of running the full matrix.
 - Added GHCR secret bootstrap helper target:
   - `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=POWERFULMOVES/PMOVES.AI`
 - `pmoves/tools/push-gh-secrets.sh` now supports `--ghcr-bootstrap` and credential source overrides (`--ghcr-token-from`, `--ghcr-fallback-token-from`, `--ghcr-username-from`) so existing credentials can be reused for rotation.
