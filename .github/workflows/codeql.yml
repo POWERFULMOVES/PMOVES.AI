@@ -44,12 +44,12 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # PRs use hosted runners for determinism; push/main retains self-hosted labels.
+    # PMOVES.AI: Use self-hosted runners for production CI
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    runs-on: [self-hosted, Linux, X64]
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
     continue-on-error: ${{ matrix.language == 'c-cpp' || matrix.language == 'javascript-typescript' }}
@@ -90,13 +90,14 @@ jobs:
       if: ${{ github.event_name == 'pull_request' && matrix.language == 'javascript-typescript' }}
       run: echo "Skipping javascript-typescript CodeQL analysis on pull requests."
 
-    # Self-hosted runners may have older system Node.js builds (v10.x).
-    # CodeQL's TypeScript extractor requires modern syntax support.
-    - name: Setup Node.js for CodeQL TypeScript analysis
-      if: ${{ matrix.language == 'javascript-typescript' && github.event_name != 'pull_request' }}
+    # Add any setup steps before running the `github/codeql-action/init` action.
+    # This includes steps like installing compilers or runtimes (`actions/setup-node`
+    # or others). This is typically only required for manual builds.
+    - name: Setup Node.js
+      if: matrix.language == 'javascript-typescript'
       uses: actions/setup-node@v6
       with:
-        node-version: 20
+        node-version: '20'
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL

@@ -352,6 +352,137 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Agent Zero, Monitoring
 
+## Voice & Prosodic Subjects
+
+**`tokenism.prosodic.bpm.v1`**
+- **Direction:** Published by Flute-Gateway prosodic parser
+- **Purpose:** BPM-encoded prosodic timeline events for CHIT voice attribution
+- **Payload:**
+  ```json
+  {
+    "utterance_id": "utt-abc123",
+    "voice_persona_id": "persona-1",
+    "bpm_timeline": [60, 120, 90, 60],
+    "boundary_sequence": ["SENTENCE", "PHRASE", "CLAUSE", "SENTENCE"],
+    "total_syllables": 42,
+    "duration_estimate_ms": 6300,
+    "scale": "pentatonicMajor",
+    "timestamp": "2026-02-20T12:00:00Z"
+  }
+  ```
+- **Subscribers:** ToKenism-Multi (musicMapping.ts), Hyperdimensions (visualization)
+- **Related:** See `/chit:bpm` tool spec, `TAC_TOKENISM.md`, `FLUTE_PROSODIC_ARCHITECTURE.md`
+
+## Health & Fitness Subjects (Planned)
+
+> **Status:** Planned — Health (wger) integration is pre-stage maturity. These subjects define the target contract.
+
+**`health.metrics.updated.v1`**
+- **Direction:** Published by Health (wger) service
+- **Purpose:** Body metrics updated (weight, body fat, measurements)
+- **Payload:**
+  ```json
+  {
+    "user_id": "user-123",
+    "metric_type": "weight",
+    "value": 82.5,
+    "unit": "kg",
+    "recorded_at": "2026-02-20T08:00:00Z",
+    "timestamp": "2026-02-20T08:01:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, ToKenism-Multi, Wealth (correlation)
+
+**`health.workout.completed.v1`**
+- **Direction:** Published by Health (wger) service
+- **Purpose:** Workout session completed
+- **Payload:**
+  ```json
+  {
+    "user_id": "user-123",
+    "workout_id": "wkt-456",
+    "duration_min": 45,
+    "exercises": ["bench_press", "squat", "deadlift"],
+    "timestamp": "2026-02-20T09:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher
+
+**`health.weekly.summary.v1`**
+- **Direction:** Published by Health (wger) cron job
+- **Purpose:** Weekly fitness summary for dashboard and agent context
+- **Payload:**
+  ```json
+  {
+    "user_id": "user-123",
+    "week_start": "2026-02-17",
+    "workouts_count": 4,
+    "total_duration_min": 180,
+    "weight_change_kg": -0.3,
+    "timestamp": "2026-02-23T00:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, SupaSerch, Discord Publisher
+
+## Finance & Wealth Subjects (Planned)
+
+> **Status:** Planned — Wealth (Firefly III) integration is pre-stage maturity. These subjects define the target contract.
+
+**`finance.transactions.ingested.v1`**
+- **Direction:** Published by Wealth (Firefly III) service
+- **Purpose:** New financial transactions imported or created
+- **Payload:**
+  ```json
+  {
+    "user_id": "user-123",
+    "transaction_count": 5,
+    "source": "bank_import",
+    "categories": ["groceries", "utilities"],
+    "total_amount": 245.67,
+    "currency": "USD",
+    "timestamp": "2026-02-20T10:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, ToKenism-Multi (finance events)
+
+**`finance.budget.alert.v1`**
+- **Direction:** Published by Wealth (Firefly III) service
+- **Purpose:** Budget threshold exceeded alert
+- **Payload:**
+  ```json
+  {
+    "user_id": "user-123",
+    "budget_name": "dining_out",
+    "spent": 450.00,
+    "limit": 400.00,
+    "percentage": 112.5,
+    "currency": "USD",
+    "timestamp": "2026-02-20T11:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher
+
+**`finance.monthly.summary.v1`**
+- **Direction:** Published by Wealth (Firefly III) cron job
+- **Purpose:** Monthly financial summary for dashboard and agent context
+- **Payload:**
+  ```json
+  {
+    "user_id": "user-123",
+    "month": "2026-02",
+    "income": 5000.00,
+    "expenses": 3200.00,
+    "savings_rate": 36.0,
+    "top_categories": [
+      {"name": "housing", "amount": 1200.00},
+      {"name": "groceries", "amount": 600.00}
+    ],
+    "currency": "USD",
+    "timestamp": "2026-03-01T00:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, SupaSerch, Discord Publisher
+
 ## Testing & Development Subjects
 
 **`test.smoke.v1`**

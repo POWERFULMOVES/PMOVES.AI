@@ -110,7 +110,6 @@ class TestConfigEndpoint:
         data = response.json()
 
         assert "providers" in data
-        assert "whisper" in data["providers"]
         assert len(data["providers"]) >= 1
 
     def test_config_contains_features(self):

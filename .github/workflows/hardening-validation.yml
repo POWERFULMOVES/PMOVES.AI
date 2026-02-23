@@ -2,13 +2,13 @@ name: Docker Hardening Validation
 
 on:
   push:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
   pull_request:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
@@ -30,8 +30,7 @@ jobs:
   # ============================================================================
   validate-hardening:
     name: Validate Hardening Patterns
-    # PRs use hosted runners for deterministic feedback; push/main keeps self-hosted lanes.
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Harden Runner
@@ -88,7 +87,7 @@ jobs:
   # ============================================================================
   validate-dockerfiles:
     name: Validate Dockerfiles
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    runs-on: [self-hosted, Linux, X64]
     strategy:
       fail-fast: false
       matrix:
@@ -164,7 +163,6 @@ jobs:
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
-    if: github.event_name != 'pull_request'
     runs-on: [self-hosted, Linux, X64]
 
     steps:
@@ -199,7 +197,7 @@ jobs:
   # ============================================================================
   validate-compose:
     name: Validate Compose Files
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - name: Harden Runner
@@ -273,7 +271,7 @@ jobs:
   # ============================================================================
   summary:
     name: Validation Summary
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    runs-on: [self-hosted, Linux, X64]
     needs: [validate-hardening, validate-dockerfiles, validate-compose]
     if: always()
 
@@ -306,3 +304,4 @@ jobs:
           name: validation-summary
           path: summary.md
           retention-days: 90
+

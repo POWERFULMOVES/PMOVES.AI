@@ -1,11 +1,11 @@
 # Production Audit Dashboard
 
 > **Single source of truth** for PMOVES.AI production readiness.
-> Supersedes all individual audit documents accumulated Feb 7 -- Feb 20, 2026.
+> Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-02-20 (production runtime remediation + CI recovery + runtime parity pass)
+**Last Updated:** 2026-02-20 (production runtime remediation + CI recovery pass)
 **Branch:** `PMOVES.AI-Edition-Hardened`
-**Commit:** `cfc690cf`
+**Commit:** `80d06daa`
 **Consolidated From:** 27 audit documents
 **Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-18.log`
 
@@ -34,15 +34,6 @@
 | #681 | `fix/ci-self-hosted-hardening` | GHCR workflow adjusted to build-only behavior on pull requests (no push/sign/scan) to avoid 403 package push failures | In progress (checks re-running) |
 | #678 | `fix/ci-pytest-conftest-collision` | Python tests switched to importlib mode and CodeQL JS lane now pins Node 20 on self-hosted runners | In progress (checks re-running) |
 | #677 | `fix/silent-failure-hardening` | Same CI fix set as #678 plus compose fix to keep `nats-init` defined for default validation path | In progress (checks re-running) |
-
-### Live Runtime Findings (2026-02-20)
-
-| Area | Finding | Status | Action |
-|------|---------|--------|--------|
-| Supabase runtime parity | `make -C pmoves supa-status` and `supa-health` reported stale CLI expectations (`65421`) while active CLI runtime was `54321` | FIXED (code patch prepared) | Makefile now derives endpoint checks from `.supabase.status.env` and uses CLI defaults (`54321`/`54323`) |
-| Archon UI mode | `up-agents-ui` pulled in `docker-compose.archon-ui.submodule.yml` which hardcoded `npm run dev` (dev server) | FIXED (code patch prepared) | Archon UI submodule compose now defaults to production (`build + preview`), with opt-in `ARCHON_UI_MODE=development` |
-| Invidious startup | `pmoves-invidious-1` stayed unhealthy with `Config: 'hmac_key' is required/can't be empty` because blank `INVIDIOUS_HMAC_KEY` from `env.shared` leaked into container env | FIXED (code patch prepared) | Compose now forces non-empty `INVIDIOUS_HMAC_KEY` / `INVIDIOUS_COMPANION_KEY` defaults in service env |
-| Loki readiness | `http://localhost:3100/ready` returned `503` during this audit | OPEN | Keep as active blocker until Loki readiness config is fully corrected and validated with `make -C pmoves monitoring-report` |
 
 ### Static Audit Layer Results (2026-02-18)
 

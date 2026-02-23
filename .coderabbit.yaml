@@ -14,6 +14,7 @@ reviews:
   # Hardened/default delivery branches and active work prefixes.
   branches:
     - "PMOVES.AI-Edition-Hardened"
+    - "PMOVES.AI-Edition-Hardened-Integrations"
     - "PMOVES.AI-Edition-Hardened-v3-clean"
     - "pr/hirag-legacy-decoders-v3-clean"
     - "pr/*"

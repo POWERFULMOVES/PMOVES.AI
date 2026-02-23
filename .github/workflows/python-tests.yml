@@ -29,8 +29,8 @@ concurrency:
 
 jobs:
   tests:
-    # PRs use hosted runners for determinism; push/main retains self-hosted labels.
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    # PMOVES.AI: Use self-hosted runners for production CI
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       actions: read
@@ -54,7 +54,6 @@ jobs:
 
       - uses: actions/checkout@v4
       - name: Free Disk Space (Ubuntu)
-        continue-on-error: true
         uses: jlumbroso/free-disk-space@main
         continue-on-error: true          # Self-hosted runner: bash arithmetic fails on large disks (scientific notation)
         with:
@@ -96,19 +95,19 @@ jobs:
                   requirements.append(req_path)
 
           # Skip heavy/problematic packages for CI (GPU deps, large ML models)
-          skip = {"torch", "torchaudio", "torchvision", "whisperx",
+          skip = {"supabase", "torch", "torchaudio", "torchvision", "whisperx",
                   "pyannote.audio", "faster-whisper", "ultralytics", "timm",
                   "accelerate", "sentence-transformers", "transformers",
                   "FlagEmbedding", "openai-whisper", "onnxruntime",
                   "langchain-unstructured", "unstructured", "unstructured-client",
                   "browser-use", "playwright", "faiss-cpu", "faiss-gpu",
-                  "librosa", "numba", "kokoro", "newspaper3k",
+                  "librosa", "numba", "kokoro", "newspaper3k", "boto3",
                   "langchain", "langchain-community", "langchain-core",
                   "litellm", "pymupdf", "qdrant-client"}
 
           # Collect unique package names (strip versions to let pip resolve)
           packages = set()
-          base_packages = ["pytest", "pytest-asyncio", "pytest-cov", "typer", "yt-dlp", "boto3", "tenacity", "supabase"]
+          base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
 
           import re
           for path in requirements:
@@ -129,33 +128,19 @@ jobs:
           PY
       - name: Run all service tests
         run: |
-          test_targets=(
-            "pmoves/services/publisher/tests"
-            "pmoves/services/pmoves-yt/tests"
-            "pmoves/services/publisher-discord/tests"
-            "pmoves/services/agent-zero/tests"
-            "pmoves/services/channel-monitor/tests"
-            "pmoves/services/chat-relay/tests"
-            "pmoves/services/common/tests"
-            "pmoves/services/gateway/tests"
-            "pmoves/services/flute-gateway/tests"
-            "pmoves/services/hi-rag-gateway/tests"
-            "pmoves/services/hi-rag-gateway-v2/tests"
-            "pmoves/services/jellyfin-bridge/tests"
-          )
-
-          for target in "${test_targets[@]}"; do
-            if [ ! -d "$target" ]; then
-              echo "Skipping missing test dir: $target"
-              continue
-            fi
-
-            if ! find "$target" -type f -name 'test_*.py' | grep -q .; then
-              echo "Skipping empty test dir: $target"
-              continue
-            fi
-
-            echo "::group::pytest ${target}"
-            pytest -q --tb=short --import-mode=importlib --rootdir=. "${target}"
-            echo "::endgroup::"
-          done
+          pytest -q --tb=short --rootdir=. \
+            pmoves/tests/ \
+            pmoves/services/publisher/tests \
+            pmoves/services/pmoves-yt/tests \
+            pmoves/services/publisher-discord/tests \
+            pmoves/services/agent-zero/tests \
+            pmoves/services/channel-monitor/tests \
+            pmoves/services/chat-relay/tests \
+            pmoves/services/common/tests \
+            pmoves/services/gateway/tests \
+            pmoves/services/flute-gateway/tests \
+            pmoves/services/hi-rag-gateway/tests \
+            pmoves/services/hi-rag-gateway-v2/tests \
+            pmoves/services/jellyfin-bridge/tests \
+            --ignore=pmoves/services/media-audio/tests \
+            --ignore=pmoves/services/media-video/tests

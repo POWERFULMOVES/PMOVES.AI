@@ -462,6 +462,9 @@ See `.claude/context/` for detailed documentation:
 - `geometry-nats-subjects.md` - GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` - Agent Zero MCP API reference
 - `testing-strategy.md` - Testing workflow and PR requirements
+- `security-patterns.md` - Cross-cutting security patterns (auth, secrets, hardening)
+- `observability-patterns.md` - Prometheus, Grafana, Loki, TensorZero metrics
+- `agent-zero-orchestration.md` - MCP API reference, task flow, subordinate model
 
 **GEOMETRY BUS & CHIT Integration:**
 - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide

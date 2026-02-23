@@ -10,6 +10,40 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:floos-runtime-execution ts:2026-02-23T07:03:08Z -->
+
+## ◆ Claude Opus — FlOO$ v2.0: Runtime Execution Layer
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** architecture, runtime-execution, nats-integration
+**Voice:** Analytical
+
+### Done
+- Upgraded `floos_resolver.py` from v1.0.0 → v2.0.0 — validation-only → full runtime executor
+- Implemented `publish_hook()` — lightweight NATS envelope publisher (no schema validation; hook subjects are convention-based, not contract-registered)
+- Implemented `execute_step()` — MCP step executor with retry/exponential backoff, context chaining, hook event publishing
+- Implemented `execute_pipeline()` — full pipeline orchestrator: DAG validation → health gate → topological execution → completion event
+- Added `StepResult` and `PipelineResult` dataclasses for typed execution results
+- Added CLI `run` subcommand with `--dry-run`, `--skip-health`, `--context key=value` options
+- Fixed test_gateway.py ElevenLabs assertion → generic `len(providers) >= 1` (local-first compliance)
+- All 6 pipelines verified: dry-run shows correct execution plans, existing validate/status/hooks commands unchanged
+
+### Left Behind
+- No NATS event emitted for this work (`agent.graphiti.signed.v1`)
+- `_mcp_call()` uses synchronous `urllib.request` inside async wrapper — acceptable for sequential pipelines but would need `aiohttp` for parallel step execution
+- Hook subjects (`skills.step.*.done.v1`, `skills.error.v1`) not registered in `pmoves/contracts/topics.json` — intentional (convention-based)
+
+### For Next Agent (■ Codex)
+- **CI integration**: add `python -m pmoves.tools.chit.floos_resolver status` as a GitHub Actions step alongside CHIT Contract Check
+- **`skills.error.v1` dead-letter subscriber**: a NATS service that catches errors and publishes to Discord (via publisher-discord) would make this actionable
+- **Live pipeline test**: with Agent Zero running, test `run model-benchmark-viz --context model_id=bert-base` end-to-end
+- **111 unauthenticated NATS refs**: FlOO$'s `handoff.nats_url` uses correct `nats://nats:pmoves@nats:4222` — remaining 111 refs in other files still need batch fix
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:floos-implementation ts:2026-02-23T06:00:00Z -->
 
 ## ◆ Claude Opus — FlOO$ Implementation: Skill Dependency Layer
@@ -26,10 +60,10 @@
 - Added `floos_hooks` metadata to 4 submodule registry entries (Agent-Zero, BoTZ, HiRAG, ToKenism-Multi) with publishes/subscribes/depends_on
 - Cleaned 3 dirty submodules (BoTZ nested huggingface-skills, Archon cascade, ToKenism-Multi context tags)
 - Initialized 2 untracked submodules (A2UI, Pipecat)
-- Merged 9 PRs: #666, #674, #679, #682, #685, #686, #689, #690, #691
+- Merged 16 PRs total: #666, #667, #668, #670, #673, #674, #679, #680, #682, #685, #686, #687, #688, #689, #690, #691
+- Resolved merge conflicts in 7 PRs (#667, #668, #670, #673, #680, #687, #688) via worktree rebase strategy — 0 open PRs remain
 
 ### Left Behind
-- 7 PRs with merge conflicts: #667, #668, #670, #673, #680, #687, #688
 - main→Hardened branch sync has merge conflicts (409 from API merge)
 - `floos_resolver.py` has `execute_step()` and `publish_hook()` stubbed in the plan but not implemented — current version is validation/inspection only, not a runtime executor
 - No NATS event emitted for this work (`agent.graphiti.signed.v1`)

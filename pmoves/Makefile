@@ -46,7 +46,7 @@ ifeq ($(EXTERNAL_SUPABASE),true)
   supa_profile :=
 		else
 supa_profile := ,supabase-local
-SUPABASE_RUNTIME ?= cli
+SUPABASE_RUNTIME ?= compose
 SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 endif
 COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_profile)$(supa_profile)
@@ -220,13 +220,9 @@ check-tools: ## Check required tools and versions
 
 SUPABASE_NETWORK ?= pmoves-net
 SUPABASE_CONFIG ?= supabase/config.toml
-SUPABASE_CLI_API_URL ?= http://127.0.0.1:54321
-SUPABASE_CLI_REST_URL ?= $(SUPABASE_CLI_API_URL)/rest/v1
-SUPABASE_CLI_AUTH_HEALTH_URL ?= $(SUPABASE_CLI_API_URL)/auth/v1/health
-SUPABASE_CLI_STUDIO_URL ?= http://127.0.0.1:54323
-SUPABASE_LOCAL_REST_URL ?= $(SUPABASE_CLI_REST_URL)
-SUPABASE_LOCAL_AUTH_HEALTH_URL ?= $(SUPABASE_CLI_AUTH_HEALTH_URL)
-SUPABASE_LOCAL_STUDIO_URL ?= $(SUPABASE_CLI_STUDIO_URL)
+SUPABASE_LOCAL_REST_URL ?= http://127.0.0.1:65421/rest/v1
+SUPABASE_LOCAL_AUTH_HEALTH_URL ?= http://127.0.0.1:65421/auth/v1/health
+SUPABASE_LOCAL_STUDIO_URL ?= http://127.0.0.1:65433
 SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 
 .PHONY: up-supabase
@@ -335,26 +331,11 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 				grep -E '^(SUPABASE_URL|SUPA_REST_URL|SUPABASE_SERVICE_ROLE_KEY)=' env.supa.runtime || true; \
 			fi; \
 		fi; \
-		rest_url="$(SUPABASE_LOCAL_REST_URL)"; \
-		auth_url="$(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
-		studio_url="$(SUPABASE_LOCAL_STUDIO_URL)"; \
-		if [ -s ".supabase.status.env" ]; then \
-			api_url=$$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
-			studio_from_status=$$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
-			if [ -n "$$api_url" ]; then \
-				api_url=$${api_url%/}; \
-				rest_url="$$api_url/rest/v1"; \
-				auth_url="$$api_url/auth/v1/health"; \
-			fi; \
-			if [ -n "$$studio_from_status" ]; then \
-				studio_url="$$studio_from_status"; \
-			fi; \
-		fi; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
-		echo "  REST:   $$rest_url"; \
-		echo "  Auth:   $$auth_url"; \
-		echo "  Studio: $$studio_url"; \
+		echo "  REST:   $(SUPABASE_LOCAL_REST_URL)"; \
+		echo "  Auth:   $(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
+		echo "  Studio: $(SUPABASE_LOCAL_STUDIO_URL)"; \
 	else \
 		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true; \
 		echo ""; \
@@ -390,9 +371,6 @@ supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a 
 supa-health: ## Health checks for selected runtime + active DB container readiness
 	@echo "🏥 Supabase health check:"
 	@db=$$(bash "$(SUPABASE_DB_HELPER)" running 2>/dev/null || true); \
-	if [ -z "$$db" ] && [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
-		db=$$(docker ps --format '{{.Names}}' | grep -m1 '^supabase_db_' || true); \
-	fi; \
 	if [ -n "$$db" ] && docker exec "$$db" pg_isready -U postgres -d postgres >/dev/null 2>&1; then \
 		echo "  ✅ Database ($$db)"; \
 	elif [ -n "$$db" ]; then \
@@ -404,36 +382,17 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 		rest_url="$(SUPABASE_LOCAL_REST_URL)"; \
 		auth_url="$(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
 		studio_url="$(SUPABASE_LOCAL_STUDIO_URL)"; \
-		if [ -s ".supabase.status.env" ]; then \
-			api_url=$$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
-			studio_from_status=$$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
-			if [ -n "$$api_url" ]; then \
-				api_url=$${api_url%/}; \
-				rest_url="$$api_url/rest/v1"; \
-				auth_url="$$api_url/auth/v1/health"; \
-			fi; \
-			if [ -n "$$studio_from_status" ]; then \
-				studio_url="$$studio_from_status"; \
-			fi; \
-		fi; \
 	else \
 		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
 		auth_url="http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
 		studio_url="http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
 	fi; \
 	rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$rest_url" || true); \
-	if [ "$$rest_code" = "404" ]; then \
-		rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$${rest_url%/}/" || true); \
-	fi; \
 	auth_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$auth_url" || true); \
 	studio_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$studio_url" || true); \
 	if [ "$$rest_code" = "200" ]; then echo "  ✅ REST ($$rest_url)"; else echo "  ❌ REST ($$rest_url) -> $$rest_code"; fi; \
 	if [ "$$auth_code" = "200" ]; then echo "  ✅ Auth ($$auth_url)"; else echo "  ❌ Auth ($$auth_url) -> $$auth_code"; fi; \
-	if [ "$$studio_code" = "200" ] || [ "$$studio_code" = "301" ] || [ "$$studio_code" = "302" ] || [ "$$studio_code" = "307" ] || [ "$$studio_code" = "308" ]; then \
-		echo "  ✅ Studio ($$studio_url)"; \
-	else \
-		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
-	fi
+	if [ "$$studio_code" = "200" ]; then echo "  ✅ Studio ($$studio_url)"; else echo "  ❌ Studio ($$studio_url) -> $$studio_code"; fi
 
 supa-use-local: ## Write .env.local from local Supabase template and merge keys from current supa-status
 	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env
@@ -1288,7 +1247,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean smoke smoke-prod smoke-gpu smoke-qwen-rerank llama-throughput-smoke manifest-audit
-.PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke channel-monitor-discord-drop-smoke channel-monitor-discord-gate-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
+.PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
 .PHONY: up down clean up-cloudflare down-cloudflare logs-cloudflare cloudflare-url restart-cloudflare up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 .PHONY: notebook-up notebook-down notebook-logs notebook-seed-models
@@ -1513,95 +1472,6 @@ up-yt-hardened: ## Start YT stack with hardened security options (published imag
 # Optional media analyzers (video+audio)
 up-media:
 	@$(DC) --profile data --profile workers up -d media-video media-audio
-
-.PHONY: channel-monitor-up channel-monitor-smoke channel-monitor-discord-drop-smoke channel-monitor-discord-gate-smoke
-channel-monitor-up: ensure-env-shared ## Start Channel Monitor with runtime-aware Supabase DB URL
-	@$(LOAD_ENV_SHARED); \
-	  db_url="$${CHANNEL_MONITOR_DATABASE_URL:-}"; \
-	  runtime_db=""; \
-	  if [ -f .supabase.status.env ]; then \
-	    runtime_db=$$(grep -m1 "^DB_URL=" .supabase.status.env | cut -d= -f2-); \
-	    runtime_db="$${runtime_db%\"}"; runtime_db="$${runtime_db#\"}"; \
-	    runtime_db="$${runtime_db%\'}"; runtime_db="$${runtime_db#\'}"; \
-	    runtime_db="$${runtime_db/127.0.0.1/host.docker.internal}"; \
-	    runtime_db="$${runtime_db/localhost/host.docker.internal}"; \
-	  fi; \
-	  if [ -z "$$db_url" ] || echo "$$db_url" | grep -Eq "host\.docker\.internal:65432"; then \
-	    if [ -n "$$runtime_db" ]; then \
-	      db_url="$$runtime_db"; \
-	    else \
-	      db_url="postgresql://postgres:postgres@supabase-db:5432/postgres"; \
-	    fi; \
-	  fi; \
-	  echo "→ Channel Monitor DB URL: $$db_url"; \
-	  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' MSYS2_ENV_CONV_EXCL=CHANNEL_MONITOR_CONFIG_PATH \
-	  CHANNEL_MONITOR_CONFIG_PATH=/app/config/channel_monitor.json \
-	  CHANNEL_MONITOR_DATABASE_URL="$$db_url" \
-	  $(DC) --profile orchestration up -d channel-monitor
-
-channel-monitor-smoke: ## Verify Channel Monitor health/status endpoints
-	@for endpoint in /healthz /api/monitor/status /api/monitor/stats; do \
-	  code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}$$endpoint" || true); \
-	  if [ "$$code" != "200" ]; then \
-	    echo "✖ channel-monitor $$endpoint => $$code"; \
-	    exit 1; \
-	  fi; \
-	  echo "✔ channel-monitor $$endpoint (200)"; \
-	done
-
-channel-monitor-discord-drop-smoke: ## Queue a Discord-style URL drop through channel-monitor
-	@set -eu; \
-	  payload='{"content":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","source":"discord_agent","approval_mode":"auto","tags":["discord","smoke"]}'; \
-	  if [ -n "$${CHANNEL_MONITOR_SECRET:-}" ]; then \
-	    body=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
-	      -H "content-type: application/json" \
-	      -H "x-channel-monitor-token: $${CHANNEL_MONITOR_SECRET}" \
-	      -d "$$payload"); \
-	  else \
-	    body=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
-	      -H "content-type: application/json" \
-	      -d "$$payload"); \
-	  fi; \
-	  if ! echo "$$body" | grep -q '"status":"ok"'; then \
-	    echo "✖ channel-monitor discord-drop smoke failed: $$body"; \
-	    exit 1; \
-	  fi; \
-	  echo "✔ channel-monitor discord-drop queued"
-
-channel-monitor-discord-gate-smoke: ## Verify ask->pending->approve flow for Discord drops
-	@set -eu; \
-	  payload='{"content":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","source":"discord_agent","approval_mode":"ask","tags":["discord","gate-smoke"]}'; \
-	  if [ -n "$${CHANNEL_MONITOR_SECRET:-}" ]; then \
-	    create=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
-	      -H "content-type: application/json" \
-	      -H "x-channel-monitor-token: $${CHANNEL_MONITOR_SECRET}" \
-	      -d "$$payload"); \
-	  else \
-	    create=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop" \
-	      -H "content-type: application/json" \
-	      -d "$$payload"); \
-	  fi; \
-	  echo "$$create" | grep -q '"approval_state":"pending_review"' || { echo "✖ expected pending_review: $$create"; exit 1; }; \
-	  if command -v jq >/dev/null 2>&1; then \
-	    vid=$$(printf '%s' "$$create" | jq -r '.accepted[0].video_id // empty'); \
-	  else \
-	    vid=$$(echo "$$create" | sed -n 's/.*"video_id":"\([^"]*\)".*/\1/p' | head -1); \
-	  fi; \
-	  [ -n "$$vid" ] || { echo "✖ could not parse pending video_id from response: $$create"; exit 1; }; \
-	  review_payload=$$(printf '{"video_ids":["%s"],"approve":true,"actor":"gate-smoke"}' "$$vid"); \
-	  if [ -n "$${CHANNEL_MONITOR_SECRET:-}" ]; then \
-	    approve=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop/approve" \
-	      -H "content-type: application/json" \
-	      -H "x-channel-monitor-token: $${CHANNEL_MONITOR_SECRET}" \
-	      -d "$$review_payload"); \
-	  else \
-	    approve=$$(curl -s -X POST "http://localhost:$${CHANNEL_MONITOR_PORT:-8097}/api/monitor/discord-drop/approve" \
-	      -H "content-type: application/json" \
-	      -d "$$review_payload"); \
-	  fi; \
-	  echo "$$approve" | grep -q '"status":"ok"' || { echo "✖ approval status not ok: $$approve"; exit 1; }; \
-	  echo "$$approve" | grep -q '"approved":true' || { echo "✖ approval failed: $$approve"; exit 1; }; \
-	  echo "✔ channel-monitor discord gate flow passed"
 
 .PHONY: up-invidious
 up-invidious:
@@ -2270,7 +2140,6 @@ down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@echo "✔ Jellyfin AI overlay down"
 
 # =============================================================================
-<<<<<<< HEAD
 # Vision Threads: CHIT Production Tooling
 # =============================================================================
 
@@ -2323,35 +2192,3 @@ structure-enforce: ## Enforce structural best practices
 .PHONY: structure-enforce-strict
 structure-enforce-strict: ## Enforce structural best practices (strict mode, fails on P1/P2)
 	@$(PYTHON) tools/structure_enforcer.py --strict
-
-# =============================================================================
-# Vision Threads: HuggingFace Pipeline
-# =============================================================================
-
-.PHONY: hf-onboard
-hf-onboard: ## Onboard a HuggingFace model (MODEL=org/name)
-	@$(PYTHON) tools/hf_model_onboard.py $(MODEL)
-
-.PHONY: hf-onboard-dry
-hf-onboard-dry: ## Dry-run HF model onboarding (MODEL=org/name)
-	@$(PYTHON) tools/hf_model_onboard.py $(MODEL) --dry-run --json
-
-.PHONY: hf-benchmark
-hf-benchmark: ## Run model benchmarks via TensorZero (MODEL=name)
-	@$(PYTHON) tools/hf_benchmark_runner.py $(MODEL)
-
-.PHONY: hf-benchmark-a2ui
-hf-benchmark-a2ui: ## Run benchmarks and output A2UI chart spec (MODEL=name)
-	@$(PYTHON) tools/hf_benchmark_runner.py $(MODEL) --a2ui
-
-# =============================================================================
-# Vision Threads: Swarm Potential
-# =============================================================================
-
-.PHONY: swarm-potential
-swarm-potential: ## Calculate and display swarm potential metric
-	@$(PYTHON) tools/swarm_potential.py
-
-.PHONY: swarm-potential-prometheus
-swarm-potential-prometheus: ## Output swarm potential as Prometheus metrics
-	@$(PYTHON) tools/swarm_potential.py --prometheus

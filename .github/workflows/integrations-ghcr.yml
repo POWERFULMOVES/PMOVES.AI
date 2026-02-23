@@ -225,7 +225,6 @@ jobs:
 
       - name: Log in to GHCR (workflow token)
         id: login_ghcr_actions
-        if: ${{ github.event_name != 'pull_request' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -235,7 +234,7 @@ jobs:
 
       - name: Log in to GHCR (PAT fallback)
         id: login_ghcr_pat
-        if: ${{ github.event_name != 'pull_request' && steps.login_ghcr_actions.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
+        if: ${{ steps.login_ghcr_actions.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -244,26 +243,10 @@ jobs:
           password: ${{ env.GHCR_PAT }}
 
       - name: Require GHCR authentication
-        if: ${{ github.event_name != 'pull_request' && steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
         run: |
           echo "::error::Unable to authenticate to GHCR. Ensure repo Actions has packages:write and/or set GHCR_USERNAME + GHCR_TOKEN (or GH_PAT_PUBLISH)."
           exit 1
-
-      - name: Verify GHCR authentication
-        if: ${{ github.event_name != 'pull_request' }}
-        run: |
-          set -euo pipefail
-          if [ "${{ steps.login_ghcr_actions.outcome }}" = "success" ]; then
-            echo "::notice::GHCR login succeeded via workflow token (GITHUB_TOKEN)"
-          elif [ "${{ steps.login_ghcr_pat.outcome }}" = "success" ]; then
-            echo "::notice::GHCR login succeeded via PAT fallback"
-          fi
-          # Validate registry connectivity with a lightweight HEAD request
-          if ! docker manifest inspect ghcr.io/powerfulmoves/pmoves-firefly-iii:pmoves-latest > /dev/null 2>&1; then
-            echo "::warning::Could not inspect existing GHCR image (expected on first push or if package ACLs restrict access). If pushes fail with 403, add this repository to each package's Manage Actions Access settings."
-          else
-            echo "GHCR pull validation: OK"
-          fi
 
       - name: Optional login to Docker Hub
         if: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
@@ -278,8 +261,8 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
-          INCLUDE_DOCKERHUB: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-          USE_GHCR: ${{ github.event_name != 'pull_request' && (steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success') }}
+          INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+          USE_GHCR: ${{ steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -306,12 +289,6 @@ jobs:
 
           TAGS=""
           PRIMARY_TAG=""
-
-          # Pull requests validate builds only; do not push/sign/scan registry images.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            PRIMARY_TAG="${{ matrix.image_name }}:pr-${DATE_TAG}-${SHA_SHORT}"
-            TAGS="${PRIMARY_TAG}"
-          fi
 
           # Only add GHCR tags if login succeeded.
           if [ "$USE_GHCR" = "true" ]; then

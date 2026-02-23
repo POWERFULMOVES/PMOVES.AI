@@ -8,10 +8,10 @@
 ## Branch Model
 
 ```
-feature/* ──► integration ──► PMOVES.AI-Edition-Hardened ──► main
-   │               │                    │                      │
-   │          CI gate runs         Full audit gate         Release tag
-   │          (fast feedback)      (security + contract)   (production)
+feature/* ──► PMOVES.AI-Edition-Hardened-Integrations ──► PMOVES.AI-Edition-Hardened ──► main
+   │                        │                                     │                      │
+   │                   CI gate runs                          Full audit gate         Release tag
+   │                   (fast feedback)                       (security + contract)   (production)
    └── TTL: 14 days
 ```
 
@@ -20,8 +20,8 @@ feature/* ──► integration ──► PMOVES.AI-Edition-Hardened ──► m
 | Branch | Purpose | Protection | Merge From |
 |--------|---------|------------|------------|
 | `main` | Production release | Required reviews, CI pass | Hardened only |
-| `PMOVES.AI-Edition-Hardened` | Security-hardened staging | Required reviews, audit gate | integration only |
-| `integration` | Feature aggregation & CI | CI must pass | feature/* branches |
+| `PMOVES.AI-Edition-Hardened` | Security-hardened staging | Required reviews, audit gate | Integrations only |
+| `PMOVES.AI-Edition-Hardened-Integrations` | Feature aggregation & CI | CI must pass | feature/* branches |
 
 ### Feature Branch Conventions
 
@@ -96,7 +96,7 @@ make -C pmoves submodule-sync-all
 - Require up-to-date branches before merging
 - No force pushes
 
-### `integration` Branch
+### `PMOVES.AI-Edition-Hardened-Integrations` Branch
 
 - Require status checks: `integration-gate`
 - Allow direct pushes from automation (CI bots)
@@ -109,8 +109,8 @@ make -C pmoves submodule-sync-all
 ### Feature to Integration
 
 ```bash
-# Create PR targeting integration
-gh pr create --base integration --title "feat: new capability"
+# Create PR targeting integrations branch
+gh pr create --base PMOVES.AI-Edition-Hardened-Integrations --title "feat: new capability"
 
 # CI runs integration-gate workflow
 # On pass, merge via GitHub UI or:
