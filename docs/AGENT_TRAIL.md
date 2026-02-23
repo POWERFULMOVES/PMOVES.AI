@@ -29,6 +29,7 @@
 - Refactored GHCR integration matrix routing:
   - Added `.github/workflows/integrations-ghcr.matrix.json` as the matrix source file.
   - Added `resolve-matrix` in `.github/workflows/integrations-ghcr.yml` so `workflow_dispatch integration=<name>` creates only the targeted job.
+- Updated GHCR login order in `.github/workflows/integrations-ghcr.yml` to prefer PAT credentials when provided, with `github.token` fallback, for package ACL edge cases.
 - Corrected SupaSerch Docker build context in `pmoves/Makefile` to align with `pmoves/services/supaserch/Dockerfile`.
 - Updated operator docs for local-first GHCR flow and credential rotation:
   - `docs/LOCAL_CI_CHECKS.md`
