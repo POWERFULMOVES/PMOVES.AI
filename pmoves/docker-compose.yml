@@ -1569,6 +1569,8 @@ services:
       - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
       - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - ARCHON_ENV=${ARCHON_ENV:-production}
       # Prefer runtime-resolved Supabase URLs (CLI or compose) instead of hardcoding postgrest.
       - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}}
       - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-http://host.docker.internal:65421}
@@ -2323,10 +2325,12 @@ services:
     env_file:
     - env.shared
     environment:
+    - INVIDIOUS_HMAC_KEY=${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}
+    - INVIDIOUS_COMPANION_KEY=${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}
     - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n\
-      \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
-      \ 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port:\
-      \ ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\n\
+        \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
+        \ 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port:\
+        \ ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\n\
       hmac_key: \"${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}\"\ninvidious_companion:\n\
       \  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\
       \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
