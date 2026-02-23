@@ -1,8 +1,10 @@
 # PMOVES.AI Skill Pairing & Handoff Schema
 # Thread 4.3: Defines how skills chain together
+# FlOO$ (Linked Skills with Hooks & Dependencies) — dependency resolution layer
 
 # Each pairing defines a pipeline of skills that work together
 # Respects Agent Zero MCP handoff protocol
+# FlOO$ fields: depends (services, skills, health), hooks (on_complete, on_error)
 
 pairings:
   # HF Model → Benchmark → Visualize
@@ -13,18 +15,43 @@ pairings:
       - skill: huggingface-skills/model-trainer
         output: model_id
         agent: agent-zero
+        depends:
+          services: ["nats:4222"]
+          health: "http://localhost:8080/healthz"
+        hooks:
+          on_complete: "skills.step.model-trainer.done.v1"
+          on_error: "skills.error.v1"
       - skill: hf-benchmark
         input: model_id
         output: benchmark_results
         agent: agent-zero
+        depends:
+          services: ["nats:4222"]
+          skills: ["huggingface-skills/model-trainer"]
+        hooks:
+          on_complete: "skills.step.hf-benchmark.done.v1"
+          on_error: "skills.error.v1"
       - skill: a2ui-chart
         input: benchmark_results
         output: a2ui_spec
         agent: archon
+        depends:
+          services: ["nats:4222"]
+          skills: ["hf-benchmark"]
+          health: "http://localhost:8091/healthz"
+        hooks:
+          on_complete: "skills.step.a2ui-chart.done.v1"
+          on_error: "skills.error.v1"
       - skill: remotion-render
         input: a2ui_spec
         output: video_url
         agent: creator
+        depends:
+          services: ["nats:4222"]
+          skills: ["a2ui-chart"]
+        hooks:
+          on_complete: "skills.pipeline.model-benchmark-viz.done.v1"
+          on_error: "skills.error.v1"
     ultrathink: true
     nats_subject: "skills.pipeline.model-benchmark-viz.v1"
 
@@ -36,14 +63,33 @@ pairings:
       - skill: extract-worker
         output: content_chunks
         agent: extract-worker
+        depends:
+          services: ["nats:4222"]
+          health: "http://localhost:8083/healthz"
+        hooks:
+          on_complete: "skills.step.extract-worker.done.v1"
+          on_error: "skills.error.v1"
       - skill: chit-encode
         input: content_chunks
         output: cgp_packets
         agent: tokenism
+        depends:
+          services: ["nats:4222", "tensorzero:3030"]
+          skills: ["extract-worker"]
+        hooks:
+          on_complete: "geometry.packet.encoded.v1"
+          on_error: "skills.error.v1"
       - skill: hirag-index
         input: cgp_packets
         output: index_result
         agent: hirag
+        depends:
+          services: ["nats:4222", "qdrant:6333", "neo4j:7687", "meilisearch:7700"]
+          skills: ["chit-encode"]
+          health: "http://localhost:8086/healthz"
+        hooks:
+          on_complete: "skills.pipeline.ingest-chit-index.done.v1"
+          on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.ingest-chit-index.v1"
 
   # Research → Summarize → Render
@@ -54,14 +100,33 @@ pairings:
       - skill: deepresearch
         output: research_results
         agent: deepresearch
+        depends:
+          services: ["nats:4222"]
+          health: "http://localhost:8098/healthz"
+        hooks:
+          on_complete: "research.deepresearch.result.v1"
+          on_error: "skills.error.v1"
       - skill: a2ui-chart
         input: research_results
         output: a2ui_spec
         agent: archon
+        depends:
+          services: ["nats:4222"]
+          skills: ["deepresearch"]
+          health: "http://localhost:8091/healthz"
+        hooks:
+          on_complete: "skills.step.a2ui-chart.done.v1"
+          on_error: "skills.error.v1"
       - skill: remotion-render
         input: a2ui_spec
         output: video_url
         agent: creator
+        depends:
+          services: ["nats:4222"]
+          skills: ["a2ui-chart"]
+        hooks:
+          on_complete: "skills.pipeline.research-render.done.v1"
+          on_error: "skills.error.v1"
     ultrathink: true
     nats_subject: "skills.pipeline.research-render.v1"
 
@@ -73,10 +138,21 @@ pairings:
       - skill: chit-encode
         output: cgp_packets
         agent: tokenism
+        depends:
+          services: ["nats:4222", "tensorzero:3030"]
+        hooks:
+          on_complete: "geometry.packet.encoded.v1"
+          on_error: "skills.error.v1"
       - skill: threejs-render
         input: cgp_packets
         output: render_url
         agent: hyperdimensions
+        depends:
+          services: ["nats:4222"]
+          skills: ["chit-encode"]
+        hooks:
+          on_complete: "skills.pipeline.chit-3d-viz.done.v1"
+          on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.chit-3d-viz.v1"
 
   # Voice Synthesis Pipeline
@@ -87,14 +163,34 @@ pairings:
       - skill: text-generate
         output: text_content
         agent: agent-zero
+        depends:
+          services: ["nats:4222", "tensorzero:3030"]
+          health: "http://localhost:8080/healthz"
+        hooks:
+          on_complete: "skills.step.text-generate.done.v1"
+          on_error: "skills.error.v1"
       - skill: prosodic-analyze
         input: text_content
         output: prosodic_markers
         agent: flute-gateway
+        depends:
+          services: ["nats:4222"]
+          skills: ["text-generate"]
+          health: "http://localhost:8055/healthz"
+        hooks:
+          on_complete: "skills.step.prosodic-analyze.done.v1"
+          on_error: "skills.error.v1"
       - skill: tts-synthesize
         input: prosodic_markers
         output: audio_url
         agent: ultimate-tts
+        depends:
+          services: ["nats:4222"]
+          skills: ["prosodic-analyze"]
+          health: "http://localhost:7861/gradio_api/info"
+        hooks:
+          on_complete: "skills.pipeline.voice-synthesis.done.v1"
+          on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.voice-synthesis.v1"
 
   # Agent Card Generation
@@ -105,14 +201,33 @@ pairings:
       - skill: theme-lookup
         output: character_spec
         agent: archon
+        depends:
+          services: ["nats:4222"]
+          health: "http://localhost:8091/healthz"
+        hooks:
+          on_complete: "skills.step.theme-lookup.done.v1"
+          on_error: "skills.error.v1"
       - skill: comfyui-generate
         input: character_spec
         output: image_url
         agent: creator
+        depends:
+          services: ["nats:4222"]
+          skills: ["theme-lookup"]
+        hooks:
+          on_complete: "skills.step.comfyui-generate.done.v1"
+          on_error: "skills.error.v1"
       - skill: a2ui-card
         input: [character_spec, image_url]
         output: agent_card
         agent: archon
+        depends:
+          services: ["nats:4222"]
+          skills: ["comfyui-generate"]
+          health: "http://localhost:8091/healthz"
+        hooks:
+          on_complete: "skills.pipeline.agent-card-gen.done.v1"
+          on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.agent-card-gen.v1"
 
 # Handoff protocol configuration
@@ -139,3 +254,14 @@ skill_sources:
   chit-encode: ".claude/commands/chit/encode.md"
   a2ui-chart: "pmoves/services/a2ui-renderer/"
   extract-worker: "pmoves/services/extract-worker/"
+
+# FlOO$ configuration
+floos:
+  # Version of the FlOO$ resolver schema
+  version: "1.0.0"
+  # Default NATS error subject for all pipelines
+  default_error_subject: "skills.error.v1"
+  # Health check timeout (seconds)
+  health_timeout: 5
+  # Whether to validate all service deps before starting a pipeline
+  pre_validate: true
