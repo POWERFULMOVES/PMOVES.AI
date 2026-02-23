@@ -101,6 +101,19 @@ Pick the path that matches your goal:
 - **CLI commands:** `/chit:encode`, `/chit:decode`, `/chit:visualize`, `/chit:bus`
 - **Integration Layer:** [PMOVES.AI Integration Overview](../INTEGRATIONS_OVERVIEW.md) --- master entry point for all integration docs
 
+## Documentation Infrastructure
+
+These living documents organize and track the entire PMOVES.AI documentation corpus using CHIT's 5-layer taxonomy:
+
+| Document | Purpose |
+|----------|---------|
+| [Documentation Map](../DOCUMENTATION_MAP.md) | Master crosslinked index (L1-L5 taxonomy) |
+| [Service Docs Matrix](../SERVICE_DOCS_MATRIX.md) | Service-to-documentation cross-reference |
+| [CHIT Change Tracker](../CHIT_CHANGE_TRACKER.md) | Living change audit trail with CGP metadata |
+| [Submodule Docs Audit](../evidence/SUBMODULE_DOCS_AUDIT.md) | Submodule documentation completeness |
+
+---
+
 ## Cross-References
 
 Documents outside this directory that reference CHIT:
