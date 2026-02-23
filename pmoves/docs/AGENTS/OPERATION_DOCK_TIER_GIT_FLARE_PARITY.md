@@ -11,7 +11,7 @@ This runbook defines the local-to-cloud release lane for PMOVES integrations wit
 
 | Phase | Trigger | Primary Agent | Supporting Agents | Commands | Exit Criteria |
 | --- | --- | --- | --- | --- | --- |
-| 0. Credential Bootstrap | New runner/repo env or auth failure (401/403) | Codex | Archon (ops), Claude (review) | `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=POWERFULMOVES/PMOVES.AI` | `GHCR_USERNAME` + `GHCR_TOKEN` present in target GitHub environment |
+| 0. Credential Bootstrap | New runner/repo env or auth failure (401/403) | Codex | Archon (ops), Claude (review) | `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI` | `GHCR_USERNAME` + `GHCR_TOKEN` present in target GitHub environment |
 | 1. Local Runtime Bring-up | Branch ready for validation | Codex | Agent Zero | `SUPABASE_RUNTIME=cli make -C pmoves up` | Core services healthy (`make -C pmoves smoke`) |
 | 2. Local Build Gate | Before any publish dispatch | Codex | SupaSerch worker | `make -C pmoves ghcr-prepublish-supaserch` | Local SupaSerch image builds successfully |
 | 3. Runner Lane Gate | Before workflow dispatch | Codex | Archon | `make -C pmoves ci-runners-check-strict` | Required self-hosted lanes online |

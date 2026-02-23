@@ -155,7 +155,7 @@ If GHCR auth secrets need rotation/bootstrap from existing credentials in `env.s
 
 ```bash
 cd pmoves
-make ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=POWERFULMOVES/PMOVES.AI
+make ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI
 ```
 
 Then dispatch the targeted matrix build:
