@@ -46,7 +46,7 @@ This file is the operator list of active CHIT-adjacent flows, ordered for produc
   - `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI`
   - `make -C pmoves ghcr-prepublish-supaserch`
   - `make -C pmoves ci-runners-check-strict`
-  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch>`
+  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=cataclysmstudios-inc`
 - Output: targeted GHCR matrix runs only after local proof, plus auditable credential/bootstrap pathway.
 - Related runbook:
   - `pmoves/docs/AGENTS/OPERATION_DOCK_TIER_GIT_FLARE_PARITY.md`

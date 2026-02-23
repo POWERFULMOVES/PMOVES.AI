@@ -162,7 +162,7 @@ Then dispatch the targeted matrix build:
 
 ```bash
 cd pmoves
-make ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch>
+make ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=<org-namespace>
 ```
 
 ## Checklists

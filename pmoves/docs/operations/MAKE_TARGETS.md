@@ -177,7 +177,7 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Local-first wrapper around `build-local-supaserch`; fail here before spending self-hosted runner/GHCR cycles.
 - `make ghcr-dispatch-supaserch`
   - Dispatches `.github/workflows/integrations-ghcr.yml` for `integration=supaserch` after local validation.
-  - Respects `GHCR_DISPATCH_REF` (defaults to current branch) and requires runner lane checks to pass.
+  - Respects `GHCR_DISPATCH_REF` (defaults to current branch), optional `GHCR_NAMESPACE=<org>`, and requires runner lane checks to pass.
 - `make ci-runners-map`
   - Maps discovered workflow lanes to explicit host assignments using `pmoves/integrations/github-runners/compose/lane_hosts.json`.
   - With `--check-gh`, also reports live online/offline status for each lane.
