@@ -33,6 +33,7 @@ on:
       - '**/node_modules/**'
       - '**/site-packages/**'
       - '**/.eggs/**'
+  workflow_dispatch:
   schedule:
     - cron: '16 20 * * 5'
 
@@ -93,7 +94,7 @@ jobs:
     # CodeQL's TypeScript extractor requires modern syntax support.
     - name: Setup Node.js for CodeQL TypeScript analysis
       if: ${{ matrix.language == 'javascript-typescript' && github.event_name != 'pull_request' }}
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: 20
 
