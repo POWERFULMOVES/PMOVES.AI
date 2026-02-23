@@ -10,6 +10,41 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:floos-implementation ts:2026-02-23T06:00:00Z -->
+
+## ◆ Claude Opus — FlOO$ Implementation: Skill Dependency Layer
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** architecture, cross-repo-orchestration, chit-integration
+**Voice:** Analytical
+
+### Done
+- Created FlOO$ dependency resolver (`pmoves/tools/chit/floos_resolver.py`) — DAG construction via Kahn's algorithm, circular dependency detection via 3-color DFS, health endpoint validation, NATS hook mapping
+- Extended all 6 skill pairings in `pmoves/configs/skill-pairings.yaml` with `depends` (services, skills, health) and `hooks` (on_complete, on_error) fields — 17 unique NATS subjects, 36 total hooks
+- Created `/chit:floos` CLI skill (`.claude/commands/chit/floos.md`) with resolve/validate/status/hooks subcommands
+- Added `floos_hooks` metadata to 4 submodule registry entries (Agent-Zero, BoTZ, HiRAG, ToKenism-Multi) with publishes/subscribes/depends_on
+- Cleaned 3 dirty submodules (BoTZ nested huggingface-skills, Archon cascade, ToKenism-Multi context tags)
+- Initialized 2 untracked submodules (A2UI, Pipecat)
+- Merged 9 PRs: #666, #674, #679, #682, #685, #686, #689, #690, #691
+
+### Left Behind
+- 7 PRs with merge conflicts: #667, #668, #670, #673, #680, #687, #688
+- main→Hardened branch sync has merge conflicts (409 from API merge)
+- `floos_resolver.py` has `execute_step()` and `publish_hook()` stubbed in the plan but not implemented — current version is validation/inspection only, not a runtime executor
+- No NATS event emitted for this work (`agent.graphiti.signed.v1`)
+
+### For Next Agent (■ Codex)
+- **FlOO$ runtime execution** is the next layer: `floos_resolver.py` currently validates/inspects only — needs `execute_step()` with NATS client integration to actually run pipelines and publish `on_complete` hooks
+- **CI integration**: add `python -m pmoves.tools.chit.floos_resolver status` as a GitHub Actions step alongside CHIT Contract Check
+- **`skills.error.v1`** is a shared dead-letter subject across all 6 pipelines — a NATS subscriber service that catches errors and publishes to Discord (via publisher-discord) would make this actionable
+- **Safe Traversal**: this work touches `pmoves/configs/skill-pairings.yaml` and `submodule_skill_registry.json` — claim these files per `AGNOTE4482PHI.t1.md` protocol before editing
+- **111 unauthenticated NATS refs** (from Codex's own Phase 5 review) — FlOO$ `depends.services` now encodes the correct `nats:4222` service check, but the credential-bearing URL is in `handoff.nats_url` at the bottom of skill-pairings.yaml
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:merge-pipeline-sprint ts:2026-02-22T04:02:00Z -->
 
 ## ◆ Claude Opus — Merge Pipeline Sprint: 4 PRs Cleared
