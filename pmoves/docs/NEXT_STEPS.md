@@ -1,7 +1,15 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-20_
+
+### Latest changes (Feb 20, 2026)
+- Channel Monitor gained an authenticated Discord intake endpoint: `POST /api/monitor/discord-drop` with `approval_mode` (`ask`/`auto`) for gated agentic review.
+- Added gated review APIs: `GET /api/monitor/discord-drop/pending` and `POST /api/monitor/discord-drop/approve` for approve/reject control.
+- Added operator smoke target: `make -C pmoves channel-monitor-discord-drop-smoke` (respects `CHANNEL_MONITOR_SECRET` when configured).
+- Added operator gate smoke: `make -C pmoves channel-monitor-discord-gate-smoke` (verifies pending -> approve flow).
+- Discord drop payload metadata now carries guild/channel/message context into ingestion metadata for downstream `publisher-discord` and Open Notebook flows.
+- `make -C pmoves env-setup` now uses a unified registry-driven setup path (`tools/env_setup_unified.py` + `scripts/bootstrap_env.py`) and automatically runs strict Supabase env drift checks with quick Showtime diagnostics.
 
 ## Stabilization Sprint — Running Baseline (Nov 7, 2025)
 - Supabase REST exposes `public, pmoves_core, pmoves_kb` (CLI stack up).
@@ -63,6 +71,16 @@ _Last updated: 2026-02-16_
 - Added Lane D baseline gate `make -C pmoves integration-contract-check-baseline` (template + health-wger + firefly-iii) and mirrored the same strict checks in `.github/workflows/integration-contract.yml`.
 - Added nested `pmoves-integrations` root detection to `tools/integration_contract_check.py` so submodule-native overlays validate without root pollution; prepared Archon scaffold under `pmoves/integrations/archon/pmoves-integrations/` for upstream PMOVES-Archon promotion.
 - `pmoves/integrations/pr-kits` is now explicitly documented as non-runtime packaging assets.
+
+### Latest changes (Feb 19, 2026)
+- Showtime Phase 1 complete: 10 BoTZ agent cards (`pmoves/docs/AGENTS/botz-cards/*.yaml`) + `showtime-api` service (port 9225).
+  - Agent cards encode persona themes (Transformers/ThunderCats/Mega Man), CHIT toggles, evolution stages, and card styling metadata.
+  - Showtime API: FastAPI backend with parallel health probing, NATS-to-SSE bridge (6 subjects), agent registry REST, CGP validation, Open Notebook polling.
+  - Makefile targets: `showtime-up`, `showtime-smoke`, `showtime-cards`.
+- CHIT Masked convention established (`pmoves/docs/PMOVESCHIT/CHIT_MASKED_CONVENTION.md`) for deprecation via YAML frontmatter.
+  - Applied to 5 docs: `AGNOTE4482FLUTE.md`, `PMOVESCHIT.md`, `PMOVES-CONCHexecution_guideb.md`, `IMPLEMENTATION_GAP_ANALYSIS.md`, `ALIGNED_IMPLEMENTATION_ROADMAP.md`.
+- CGP archival packet created at `pmoves/data/chit/showtime-phase1-archived.cgp.json` (chit.cgp.v0.2 format, 2 super_nodes, 16 points).
+- Cross-references updated: `AGENT_TAXONOMY_CROSS_REFERENCE.md` entries #19/#20, services catalog, NATS subjects, agent registry.
 
 ## Immediate
 
@@ -338,4 +356,3 @@ Next 48 hours
 ---
 
 > Archived snapshot (2025-09-08): [NEXT_STEPS_2025-09-08](archive/NEXT_STEPS_2025-09-08.md)
-
