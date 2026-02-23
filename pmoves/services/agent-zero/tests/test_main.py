@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+from typing import Callable, Dict
 
 import pytest
 
@@ -9,8 +12,36 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(scope="module")
+def load_service_module() -> Callable[[str, str], ModuleType]:
+    """Import a service module from the pmoves tree by relative path."""
+    cache: Dict[str, ModuleType] = {}
+    base = Path(__file__).resolve().parents[3]
+
+    def _load(name: str, relative_path: str) -> ModuleType:
+        if name in cache:
+            return cache[name]
+        module_path = base / relative_path
+        spec = importlib.util.spec_from_file_location(name, module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load module {name} from {module_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        cache[name] = module
+        return module
+
+    return _load
+
+
 def _prepare_agent_zero(module, monkeypatch):
+    monkeypatch.setattr(module, "NATS_ANNOUNCE_AVAILABLE", False)
     monkeypatch.setattr(module.runtime_config, "entrypoint", str(Path(module.__file__)))
+
+    async def _fake_announce_service(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(module, "NATS_ANNOUNCE_AVAILABLE", False, raising=False)
+    monkeypatch.setattr(module, "announce_service", _fake_announce_service, raising=False)
 
     async def _fake_start():
         return None
@@ -37,8 +68,8 @@ def _prepare_agent_zero(module, monkeypatch):
     monkeypatch.setattr(module.event_controller, "stop", _fake_controller_stop)
     module.event_controller._started = False
     module.event_controller._nc = None
-    module._controller_ready.clear()
-    module._controller_shutdown.clear()
+    module._controller_ready = asyncio.Event()
+    module._controller_shutdown = asyncio.Event()
     return module
 
 
@@ -56,7 +87,8 @@ def test_environment_endpoint_reflects_env_overrides(monkeypatch, load_service_m
     monkeypatch.setenv("AGENT_KNOWLEDGE_BASE_DIR", "runtime/custom-knowledge")
     monkeypatch.setenv("AGENT_MCP_RUNTIME_DIR", "runtime/custom-mcp")
 
-    module = load_service_module("agent_zero_main_env", "services/agent-zero/main.py")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
+    module.service_config = module.load_service_config()
     module = _prepare_agent_zero(module, monkeypatch)
 
     with TestClient(module.app) as client:
@@ -79,7 +111,7 @@ def test_environment_endpoint_reflects_env_overrides(monkeypatch, load_service_m
 
 
 def test_mcp_endpoints_expose_registry(monkeypatch, load_service_module):
-    module = load_service_module("agent_zero_main_mcp", "services/agent-zero/main.py")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module = _prepare_agent_zero(module, monkeypatch)
 
     fake_commands = {"demo.cmd": {"summary": "Demo command"}}
@@ -116,7 +148,7 @@ def test_mcp_endpoints_expose_registry(monkeypatch, load_service_module):
 
 
 def test_geometry_decode_text_uses_new_payload(monkeypatch, load_service_module):
-    module = load_service_module("agent_zero_geometry", "services/agent-zero/main.py")
+    module = load_service_module("agent_zero_main", "services/agent-zero/main.py")
     module = _prepare_agent_zero(module, monkeypatch)
 
     captured: dict[str, dict[str, object]] = {}

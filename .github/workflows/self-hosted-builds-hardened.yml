@@ -178,13 +178,13 @@ jobs:
       matrix:
         service:
           - name: pmoves-yt
-            context: ./services/pmoves-yt
+            context: ./pmoves/services/pmoves-yt
           - name: agent-zero
-            context: ./services/agent-zero
+            context: ./pmoves/services/agent-zero
           - name: hirag-gateway
-            context: ./services/hirag-gateway
+            context: ./pmoves/services/hi-rag-gateway
           - name: extract-worker
-            context: ./services/extract-worker
+            context: ./pmoves/services/extract-worker
           - name: publisher-discord
             context: ./pmoves/services/publisher-discord
           - name: publisher
@@ -197,8 +197,6 @@ jobs:
             context: ./pmoves/services/archon-ui
           - name: ffmpeg-whisper
             context: ./pmoves/services/ffmpeg-whisper
-          - name: hirag-gateway
-            context: ./pmoves/services/hi-rag-gateway
           - name: hirag-gateway-v2
             context: ./pmoves/services/hi-rag-gateway-v2
 

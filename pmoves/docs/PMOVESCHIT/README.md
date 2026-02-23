@@ -63,6 +63,7 @@ Glossary, status tracking, audits, legacy specs, and deployment guides.
 |------|----------|-------------|
 | [00_GLOSSARY.md](00_GLOSSARY.md) | Everyone | 35+ terms defined: anchor, spectrum, CGP, Shape ID, Three-Body, CONCH, and more |
 | [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Developer | Implementation matrix, known gaps, roadmap |
+| [CHIT_FLOW_INDEX.md](CHIT_FLOW_INDEX.md) | Operator / Developer | Ordered execution flows for CI recovery, production audit, secrets portability, and Geometry Bus intake |
 | [CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md](CHIT_IMPLEMENTATION_AUDIT_2026-02-08.md) | Developer | Point-in-time audit of CHIT/GEOMETRY BUS completeness |
 | [PMOVESCHIT_DECODERv0.1.md](PMOVESCHIT_DECODERv0.1.md) | Developer | Decoder spec (v0.1) — exact and geometry-only decode modes. Implemented: `chit_decoder.py` |
 | [PMOVESCHIT_DECODER_MULTIv0.1.md](PMOVESCHIT_DECODER_MULTIv0.1.md) | Developer | Multi-modal decoder — CLIP/CLAP implemented (`chit_decoder_mm.py`), T5 generator future |
@@ -100,6 +101,19 @@ Pick the path that matches your goal:
 - **Python tools:** `pmoves/tools/chit/` --- see [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for full documentation
 - **CLI commands:** `/chit:encode`, `/chit:decode`, `/chit:visualize`, `/chit:bus`
 - **Integration Layer:** [PMOVES.AI Integration Overview](../INTEGRATIONS_OVERVIEW.md) --- master entry point for all integration docs
+
+## Documentation Infrastructure
+
+These living documents organize and track the entire PMOVES.AI documentation corpus using CHIT's 5-layer taxonomy:
+
+| Document | Purpose |
+|----------|---------|
+| [Documentation Map](../DOCUMENTATION_MAP.md) | Master crosslinked index (L1-L5 taxonomy) |
+| [Service Docs Matrix](../SERVICE_DOCS_MATRIX.md) | Service-to-documentation cross-reference |
+| [CHIT Change Tracker](../CHIT_CHANGE_TRACKER.md) | Living change audit trail with CGP metadata |
+| [Submodule Docs Audit](../evidence/SUBMODULE_DOCS_AUDIT.md) | Submodule documentation completeness |
+
+---
 
 ## Cross-References
 

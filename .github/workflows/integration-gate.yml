@@ -2,7 +2,7 @@ name: Integration Gate
 
 on:
   pull_request:
-    branches: [integration, PMOVES.AI-Edition-Hardened]
+    branches: [PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
   workflow_dispatch:
 
 concurrency:
@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  audit-gate:
-    name: Audit Gate
+  integration-gate:
+    name: integration-gate
     runs-on: ubuntu-latest
 
     steps:

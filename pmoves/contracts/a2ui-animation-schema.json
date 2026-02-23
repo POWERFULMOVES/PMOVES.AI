@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pmoves.ai/schemas/a2ui-animation-v1.json",
+  "title": "A2UI Animation Schema",
+  "description": "Animation extension for A2UI declarative UI specs. Defines how A2UI components animate via Remotion, Three.js, or CSS.",
+  "version": "1.0.0",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "a2ui.animation.v1",
+      "description": "Schema version identifier"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "theme": { "type": "string", "description": "Agent theme pack reference" }
+      }
+    },
+    "canvas": {
+      "type": "object",
+      "description": "Output canvas configuration",
+      "properties": {
+        "width": { "type": "integer", "default": 1920 },
+        "height": { "type": "integer", "default": 1080 },
+        "fps": { "type": "integer", "default": 30 },
+        "background": { "type": "string", "default": "#000000" }
+      }
+    },
+    "animation": {
+      "type": "object",
+      "description": "Animation timing and engine configuration",
+      "required": ["engine", "duration_ms"],
+      "properties": {
+        "engine": {
+          "type": "string",
+          "enum": ["remotion", "threejs", "css", "lottie"],
+          "description": "Rendering engine to use"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 600000,
+          "description": "Total animation duration in milliseconds"
+        },
+        "bpm": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 10,
+          "description": "Beats per minute for timing grid. BPM 10 = 1 beat per 6 seconds."
+        },
+        "easing": {
+          "type": "string",
+          "enum": ["linear", "ease-in", "ease-out", "ease-in-out", "spring", "bounce"],
+          "default": "ease-in-out"
+        },
+        "loop": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "description": "Ordered list of animation scenes",
+      "items": {
+        "type": "object",
+        "required": ["id", "duration_ms"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "duration_ms": { "type": "integer", "minimum": 100 },
+          "transition_in": { "$ref": "#/$defs/transition" },
+          "transition_out": { "$ref": "#/$defs/transition" },
+          "elements": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/element" }
+          }
+        }
+      }
+    },
+    "data_bindings": {
+      "type": "object",
+      "description": "Data sources for dynamic content (benchmark results, metrics, etc.)",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["inline", "url", "nats", "supabase"],
+          "default": "inline"
+        },
+        "url": { "type": "string", "format": "uri" },
+        "nats_subject": { "type": "string" },
+        "supabase_table": { "type": "string" },
+        "inline_data": { "type": "object" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "description": "Output format configuration",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["mp4", "gif", "webm", "png_sequence"],
+          "default": "mp4"
+        },
+        "quality": {
+          "type": "string",
+          "enum": ["draft", "standard", "high", "lossless"],
+          "default": "standard"
+        },
+        "codec": {
+          "type": "string",
+          "default": "h264"
+        }
+      }
+    }
+  },
+  "required": ["version", "animation", "scenes"],
+  "$defs": {
+    "transition": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["fade", "slide", "scale", "wipe", "dissolve", "none"],
+          "default": "fade"
+        },
+        "duration_ms": { "type": "integer", "default": 500 },
+        "direction": {
+          "type": "string",
+          "enum": ["left", "right", "up", "down"],
+          "default": "right"
+        },
+        "easing": { "type": "string", "default": "ease-in-out" }
+      }
+    },
+    "element": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "text", "heading", "image", "chart",
+            "bar_chart", "line_chart", "pie_chart", "radar_chart",
+            "metric_card", "comparison", "agent_card",
+            "3d_surface", "constellation", "poincare_disk",
+            "video", "audio_waveform", "code_block",
+            "progress_bar", "timeline", "grid"
+          ]
+        },
+        "id": { "type": "string" },
+        "content": { "type": ["string", "object", "array"] },
+        "position": {
+          "type": "object",
+          "properties": {
+            "x": { "type": ["number", "string"] },
+            "y": { "type": ["number", "string"] },
+            "z": { "type": "number", "default": 0 }
+          }
+        },
+        "size": {
+          "type": "object",
+          "properties": {
+            "width": { "type": ["number", "string"] },
+            "height": { "type": ["number", "string"] }
+          }
+        },
+        "style": { "type": "object" },
+        "enter_at_ms": { "type": "integer", "default": 0 },
+        "exit_at_ms": { "type": "integer" },
+        "animation": {
+          "type": "object",
+          "properties": {
+            "keyframes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "at_ms": { "type": "integer" },
+                  "properties": { "type": "object" },
+                  "easing": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "data_key": {
+          "type": "string",
+          "description": "Key into data_bindings for dynamic content"
+        }
+      }
+    }
+  }
+}

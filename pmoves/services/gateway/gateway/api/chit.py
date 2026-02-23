@@ -86,10 +86,20 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
 
 class Point(BaseModel):
     id: Optional[str] = None
+    modality: Optional[str] = None
+    ref_id: Optional[str] = None
+    video_id: Optional[str] = None
+    doc_id: Optional[str] = None
     x: Optional[float] = None
     y: Optional[float] = None
     proj: Optional[float] = None
     conf: Optional[float] = None
+    t_start: Optional[float] = None
+    t_end: Optional[float] = None
+    frame_idx: Optional[int] = None
+    token_start: Optional[int] = None
+    token_end: Optional[int] = None
+    meta: Optional[Dict[str, Any]] = None
     text: Optional[str] = None
     source_ref: Optional[str] = None
 
