@@ -1,0 +1,34 @@
+{
+  "name": "@pmoves/a2ui-renderer",
+  "version": "1.0.0",
+  "description": "A2UI Animation Renderer — converts A2UI JSON specs into MP4/GIF/WebM via Remotion",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && remotion bundle src/remotion/index.ts",
+    "start": "node dist/index.js",
+    "render": "remotion render src/remotion/index.ts",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/renderer": "^4.0.0",
+    "remotion": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@tanstack/react-query": "^5.0.0",
+    "express": "^4.21.0",
+    "prom-client": "^15.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/react": "^19.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

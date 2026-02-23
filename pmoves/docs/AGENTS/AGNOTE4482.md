@@ -5,6 +5,7 @@ GRAPHITI_MARK: `PHI-4482-GATEWAY::PMOVES`
 ## Canonical Pointer
 Primary convergence record lives at:
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+- `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
 
@@ -21,6 +22,11 @@ No agent operates alone in production validation:
 - memory/security agents
 
 Elder-context support is always available to reduce drift and collision across parallel work.
+
+## Agent ACK (Gateway)
+- Agent: `CODEX-GPT5`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-GATEWAY`
+- Timestamp: `2026-02-20T12:12:35.7340973-05:00`
 
 ## Topology Audit Record (2026-02-20)
 

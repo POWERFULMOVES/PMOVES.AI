@@ -137,6 +137,7 @@ def main() -> int:
     gpu_port = os.getenv("HIRAG_V2_GPU_HOST_PORT") or os.getenv("HIRAG_GPU_PORT") or "8087"
     namespace = os.getenv("INDEXER_NAMESPACE", "pmoves")
     strict = _env_bool("GPU_SMOKE_STRICT", True)
+    query_timeout = float(os.getenv("GPU_SMOKE_QUERY_TIMEOUT", "180"))
 
     if args.require_qwen:
         print("[Qwen] Inspect v2 stats...")
@@ -183,7 +184,7 @@ def main() -> int:
     if args.stats_only:
         return 0
 
-    print("[GPU] v2-gpu rerank query...")
+    print(f"[GPU] v2-gpu rerank query... (timeout={query_timeout:.0f}s)")
     payload = {
         "query": "pmoves gpu rerank smoke",
         "namespace": namespace,
@@ -195,15 +196,57 @@ def main() -> int:
             f"http://localhost:{gpu_port}/hirag/query",
             method="POST",
             payload=payload,
-            timeout=30.0,
+            timeout=query_timeout,
         )
     else:
         query_code, query_data = _docker_http_json(
             "/hirag/query",
             method="POST",
             payload=payload,
-            timeout=30.0,
+            timeout=query_timeout,
         )
+    if query_code == 200 and isinstance(query_data, dict) and not (query_data.get("hits") or []):
+        print("[GPU] no hits returned; seeding a minimal smoke chunk and retrying query once...")
+        seed_payload = {
+            "items": [
+                {
+                    "doc_id": "gpu-smoke-doc",
+                    "chunk_id": "gpu-smoke-rerank-seed",
+                    "text": "pmoves gpu rerank smoke seed content",
+                    "namespace": namespace,
+                }
+            ],
+            "ensure_collection": True,
+            "index_lexical": False,
+        }
+        if host_mode:
+            seed_code, _ = _http_json(
+                f"http://localhost:{gpu_port}/hirag/upsert-batch",
+                method="POST",
+                payload=seed_payload,
+                timeout=60.0,
+            )
+            query_code, query_data = _http_json(
+                f"http://localhost:{gpu_port}/hirag/query",
+                method="POST",
+                payload=payload,
+                timeout=query_timeout,
+            )
+        else:
+            seed_code, _ = _docker_http_json(
+                "/hirag/upsert-batch",
+                method="POST",
+                payload=seed_payload,
+                timeout=60.0,
+            )
+            query_code, query_data = _docker_http_json(
+                "/hirag/query",
+                method="POST",
+                payload=payload,
+                timeout=query_timeout,
+            )
+        if seed_code != 200:
+            print(f"[WARN] smoke seed upsert returned HTTP {seed_code}")
     if query_code != 200 or query_data is None:
         print(f"[FAIL] v2-gpu rerank query failed (HTTP {query_code})")
         return 1

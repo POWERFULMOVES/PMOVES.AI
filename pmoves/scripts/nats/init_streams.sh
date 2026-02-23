@@ -18,7 +18,10 @@ NATS_URL="${NATS_URL:-nats://nats:4222}"
 # Wait for NATS to be reachable (healthcheck may pass before JetStream is ready)
 MAX_RETRIES=30
 RETRY=0
-until nats -s "$NATS_URL" server ping --count 1 >/dev/null 2>&1; do
+# NOTE: nats-box v0.14.5 does not support `server ping --count` and
+# may require system account privileges for server ping. `rtt` verifies
+# authenticated connectivity for regular clients.
+until nats -s "$NATS_URL" rtt >/dev/null 2>&1; do
   RETRY=$((RETRY + 1))
   if [ "$RETRY" -ge "$MAX_RETRIES" ]; then
     echo "ERROR: NATS not reachable at $NATS_URL after $MAX_RETRIES attempts"
@@ -89,4 +92,4 @@ if [ "$FAIL_COUNT" -gt 0 ]; then
 fi
 
 echo "NATS stream init complete"
-nats -s "$NATS_URL" stream ls
+nats -s "$NATS_URL" stream ls || true

@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 from pathlib import Path
 import sys
 from typing import List
@@ -11,7 +12,21 @@ for p in (str(ROOT), str(PM)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from services.pmoves_yt import yt as ytmod  # noqa: E402
+
+def _load_yt_module():
+    module_name = "pmoves_yt_service"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    yt_path = Path(__file__).resolve().parents[1] / "yt.py"
+    spec = importlib.util.spec_from_file_location(module_name, yt_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+ytmod = _load_yt_module()
 
 
 @pytest.mark.asyncio

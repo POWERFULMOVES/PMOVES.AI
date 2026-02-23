@@ -15,12 +15,8 @@ endif
 env-bootstrap-lite: ensure-env-shared ## Bootstrap lightweight runtime env (uv-first) and check core host tools
 	@$(PRECHECK_PY) tools/bootstrap_light_env.py $(ARGS)
 
-env-setup: ensure-env-shared ## Generate and merge environment files for local development
-ifeq ($(OS),Windows_NT)
-	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/env_setup.ps1 $(ARGS)
-else
-	@bash scripts/env_setup.sh $(ARGS)
-endif
+env-setup: ensure-env-shared ## Unified env bootstrap (registry-driven + strict env drift checks + showtime quick diagnostics)
+	@$(PRECHECK_PY) tools/env_setup_unified.py $(ARGS)
 
 env-check: ## Run cross-platform environment preflight checks
 ifeq ($(OS),Windows_NT)
