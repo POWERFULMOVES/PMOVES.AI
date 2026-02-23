@@ -11,6 +11,8 @@
 !.env.template
 !.env.tier-*
 env.tier-*
+pmoves/.supabase.status.env
+pmoves/env.supa.runtime
 secrets/
 !pmoves/integrations/**/secrets/
 !pmoves/integrations/**/secrets/labels.yaml
