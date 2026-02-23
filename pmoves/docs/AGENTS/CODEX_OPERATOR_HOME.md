@@ -1,5 +1,5 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-23_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
@@ -93,6 +93,8 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
   - `pmoves/docs/AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`
 - Runtime protocol (focus + scout):
   - `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`
+- Operation Dock.Tier Git.Flare parity runbook:
+  - `pmoves/docs/AGENTS/OPERATION_DOCK_TIER_GIT_FLARE_PARITY.md`
 - Unified taxonomy:
   - `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md`
 - Codex + Cipher implementation map:

@@ -10,6 +10,44 @@
 
 ---
 
+<!-- graphiti:codex phase:operation-dock-tier-git-flare-parity ts:2026-02-23T18:20:00Z -->
+
+## ■ Codex — Operation Dock.Tier Git.Flare Parity
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** integration, local-first-gates, release-readiness  
+**Voice:** terse
+
+### Done
+- Added GHCR bootstrap support to `pmoves/tools/push-gh-secrets.sh` (`--ghcr-bootstrap` + credential source overrides).
+- Added local-first SupaSerch publish lane targets in `pmoves/Makefile`:
+  - `ghcr-bootstrap-secrets`
+  - `build-local-supaserch`
+  - `ghcr-prepublish-supaserch`
+  - `ghcr-dispatch-supaserch`
+- Corrected SupaSerch Docker build context in `pmoves/Makefile` to align with `pmoves/services/supaserch/Dockerfile`.
+- Updated operator docs for local-first GHCR flow and credential rotation:
+  - `docs/LOCAL_CI_CHECKS.md`
+  - `docs/SECRETS_ONBOARDING.md`
+  - `pmoves/docs/operations/MAKE_TARGETS.md`
+  - `pmoves/docs/NEXT_STEPS.md`
+  - `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`
+- Added lifecycle schedule runbook: `pmoves/docs/AGENTS/OPERATION_DOCK_TIER_GIT_FLARE_PARITY.md`.
+
+### Left Behind
+- GHCR package ACL/ownership changes still require org/repo admin confirmation if 403 persists.
+- Workflow matrix optimization (`workflow_dispatch` single-target pruning) is not included in this patch.
+
+### For Next Agent
+- If GHCR 403 remains after bootstrap, verify package ownership + Actions permissions in GHCR package settings.
+- Run one targeted GHCR dispatch for SupaSerch and capture run id + outcome in release notes.
+- Extend local-first prepublish pattern to `deepresearch`, `agent-zero`, and `archon` images.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:review-remediation-promotion ts:2026-02-23T14:31:00Z -->
 
 ## ◆ Claude Opus — PR #694 Review Remediation + Branch Promotion
