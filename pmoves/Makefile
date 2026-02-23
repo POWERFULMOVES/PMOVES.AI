@@ -1941,12 +1941,15 @@ supaserch-smoke: ## Publish SupaSerch request via NATS and verify HTTP fallback 
 	@echo "→ Publishing SupaSerch smoke request on supaserch.request.v1"
 	@bash -lc $'$(LOAD_ENV_SHARED) python3 - <<"PY"\nimport asyncio\nimport json\nimport os\nimport sys\nimport uuid\nimport urllib.request\nfrom urllib.error import URLError, HTTPError\n\nfrom nats.aio.client import Client as NATS\n\n\nasync def publish_and_wait() -> dict[str, object]:\n    request_id = f"supaserch-smoke-{uuid.uuid4().hex[:8]}"\n    nc = NATS()\n    url = os.getenv("NATS_URL", "nats://localhost:4222")\n    await nc.connect(url)\n    loop = asyncio.get_running_loop()\n    future: asyncio.Future | None = loop.create_future()\n\n    async def handler(msg):\n        nonlocal future\n        try:\n            data = json.loads(msg.data.decode("utf-8"))\n        except json.JSONDecodeError:\n            return\n        if data.get("request_id") != request_id:\n            return\n        if future and not future.done():\n            future.set_result(data)\n\n    sid = await nc.subscribe("supaserch.result.v1", cb=handler)\n    payload = {\n        "request_id": request_id,\n        "query": "supaserch smoke verification",\n        "correlation_id": request_id,\n        "trigger": "make supaserch-smoke",\n    }\n    await nc.publish("supaserch.request.v1", json.dumps(payload).encode("utf-8"))\n    await nc.flush()\n    try:\n        result = await asyncio.wait_for(future, timeout=10)\n    except asyncio.TimeoutError:\n        print("✖ Did not receive supaserch.result.v1 within 10s")\n        await nc.unsubscribe(sid)\n        await nc.drain()\n        sys.exit(1)\n    await nc.unsubscribe(sid)\n    await nc.drain()\n    fallback = result.get("fallback", {}) if isinstance(result, dict) else {}\n    if fallback.get("status") != "ok":\n        print("✖ NATS fallback status not ok:", json.dumps(fallback))\n        sys.exit(1)\n    via = fallback.get("via", "unknown")\n    latency = fallback.get("latency_ms", 0)\n    print(f"✔ NATS round-trip complete (via {via}, latency {latency} ms)")\n    return result\n\n\nresult = asyncio.run(publish_and_wait())\nhost_port = os.getenv("SUPASERCH_HOST_PORT", os.getenv("SUPASERCH_PORT", "8099"))\nhttp_url = f"http://localhost:{host_port}/v1/search?q=supaserch+smoke+http"\ntry:\n    with urllib.request.urlopen(http_url, timeout=8) as resp:\n        body = json.loads(resp.read().decode("utf-8"))\nexcept (HTTPError, URLError, TimeoutError) as exc:\n    print(f"✖ HTTP fallback request failed: {exc}")\n    sys.exit(1)\n\nfallback = body.get("fallback", {}) if isinstance(body, dict) else {}\nif fallback.get("status") != "ok":\n    print("✖ HTTP fallback status not ok:", json.dumps(fallback))\n    sys.exit(1)\n\nvia = fallback.get("via", "unknown")\nlatency = fallback.get("latency_ms", 0)\nprint(f"✔ HTTP fallback responded (via {via}, latency {latency} ms)")\nPY'
 
-.PHONY: build-push-supaserch
+.PHONY: build-push-supaserch build-local-supaserch ghcr-prepublish-supaserch ghcr-dispatch-supaserch ghcr-bootstrap-secrets
 REGISTRY ?= ghcr.io
 IMAGE_NAMESPACE ?= powerfulmoves
 IMAGE_TAG ?= pmoves-latest
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 BUILDX_BUILDER ?= pmoves-multiarch
+GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+GH_SECRET_ENV ?=
+GH_REPO ?=
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -1972,6 +1975,33 @@ build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-ar
 	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-supaserch:$(IMAGE_TAG); \
 	 echo "→ Building $$img"; \
 	 docker buildx build --platform $(TARGET_PLATFORMS) -f "$$df" -t "$$img" "$$ctx" --push
+
+build-local-supaserch: buildx-setup ## Build SupaSerch locally (amd64 only, no push) as pre-publish gate
+	@ctx=$$(pwd); \
+	 df=$$ctx/services/supaserch/Dockerfile; \
+	 img=local/pmoves-supaserch:prepublish; \
+	 echo "→ Local pre-publish build $$img"; \
+	 docker buildx build --platform linux/amd64 -f "$$df" -t "$$img" "$$ctx" --load
+
+ghcr-prepublish-supaserch: build-local-supaserch ## Local pre-publish gate: local build + optional runtime smoke
+	@if curl -fsS "http://localhost:$${SUPASERCH_HOST_PORT:-8099}/healthz" >/dev/null 2>&1; then \
+	  echo "→ SupaSerch runtime detected; running smoke"; \
+	  $(MAKE) --no-print-directory supaserch-smoke; \
+	else \
+	  echo "↷ SupaSerch runtime not detected; skipped supaserch-smoke (build gate already passed)"; \
+	fi
+
+ghcr-dispatch-supaserch: ghcr-prepublish-supaserch ## Dispatch GHCR workflow after local pre-publish gates
+	@which gh >/dev/null 2>&1 || (echo "gh CLI is required" && exit 1)
+	@ref="$(GHCR_DISPATCH_REF)"; \
+	echo "→ Dispatching integrations-ghcr.yml for supaserch (ref=$$ref)"; \
+	gh workflow run integrations-ghcr.yml --ref "$$ref" -f integration=supaserch -f push_to_dockerhub=false
+
+ghcr-bootstrap-secrets: ensure-env-shared ## Set GHCR_USERNAME + GHCR_TOKEN in GitHub Secrets from env.shared (GH_PAT_PUBLISH fallback)
+	@args="--file env.shared --ghcr-bootstrap"; \
+	if [ -n "$(GH_REPO)" ]; then args="$$args --repo $(GH_REPO)"; fi; \
+	if [ -n "$(GH_SECRET_ENV)" ]; then args="$$args --env $(GH_SECRET_ENV)"; fi; \
+	bash tools/push-gh-secrets.sh $$args
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)

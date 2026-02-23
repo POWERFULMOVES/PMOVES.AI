@@ -6,7 +6,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-push-gh-secrets.sh [-f env_file] [-r owner/repo] [--env ENV] [--only key1,key2] [--all] [--manifest path] [--dry-run]
+push-gh-secrets.sh [-f env_file] [-r owner/repo] [--env ENV] [--only key1,key2] [--all] [--manifest path] [--dry-run] [--ghcr-bootstrap]
 
 Options:
   -f, --file     Path to env file (default: pmoves/env.shared)
@@ -16,10 +16,20 @@ Options:
       --all      Push all keys (ignore manifest whitelist)
       --manifest Path to secrets manifest (default: pmoves/chit/secrets_manifest.yaml)
       --dry-run  Print actions instead of calling gh
+      --ghcr-bootstrap
+                  Reuse existing env credentials to set GHCR_USERNAME + GHCR_TOKEN secrets.
+                  GHCR_TOKEN falls back to GH_PAT_PUBLISH if missing.
+      --ghcr-token-from KEY
+                  Primary env key for GHCR token value (default: GHCR_TOKEN)
+      --ghcr-fallback-token-from KEY
+                  Fallback env key for GHCR token value (default: GH_PAT_PUBLISH)
+      --ghcr-username-from KEY
+                  Env key for GHCR username value (default: GHCR_USERNAME)
 
 Examples:
   ./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev
   ./pmoves/tools/push-gh-secrets.sh --only SUPABASE_SERVICE_ROLE_KEY,SUPABASE_JWT_SECRET
+  ./pmoves/tools/push-gh-secrets.sh --repo POWERFULMOVES/PMOVES.AI --env Dev --ghcr-bootstrap
 EOF
 }
 
@@ -30,6 +40,10 @@ ONLY_KEYS=""
 DRY_RUN=0
 PUSH_ALL=0
 MANIFEST="pmoves/chit/secrets_manifest.yaml"
+GHCR_BOOTSTRAP=0
+GHCR_TOKEN_FROM="GHCR_TOKEN"
+GHCR_FALLBACK_TOKEN_FROM="GH_PAT_PUBLISH"
+GHCR_USERNAME_FROM="GHCR_USERNAME"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +54,10 @@ while [[ $# -gt 0 ]]; do
     --manifest) MANIFEST="$2"; shift 2;;
     --all) PUSH_ALL=1; shift;;
     --dry-run) DRY_RUN=1; shift;;
+    --ghcr-bootstrap) GHCR_BOOTSTRAP=1; shift;;
+    --ghcr-token-from) GHCR_TOKEN_FROM="$2"; shift 2;;
+    --ghcr-fallback-token-from) GHCR_FALLBACK_TOKEN_FROM="$2"; shift 2;;
+    --ghcr-username-from) GHCR_USERNAME_FROM="$2"; shift 2;;
     -h|--help) usage; exit 0;;
     *) echo "Unknown option: $1" >&2; usage; exit 1;;
   esac
@@ -73,6 +91,7 @@ fi
 
 # Initialize empty array to avoid unbound variable errors under set -u
 MANIFEST_KEYS=()
+declare -A ENV_VALUES=()
 
 if [[ $PUSH_ALL -eq 0 && -z "$ONLY_KEYS" && -f "$MANIFEST" ]]; then
   mapfile -t MANIFEST_KEYS < <(grep -E '^[[:space:]]+key:' "$MANIFEST" | awk '{print $2}' | sort -u)
@@ -95,6 +114,30 @@ should_include() {
   return 1
 }
 
+set_secret() {
+  local key="$1"
+  local val="$2"
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "DRY-RUN: would set $key in $GH_REPO${GH_ENV:+ (env $GH_ENV)}"
+    return 0
+  fi
+  if [[ -n "$GH_ENV" ]]; then
+    printf '%s' "$val" | gh secret set "$key" --repo "$GH_REPO" --app actions --env "$GH_ENV" >/dev/null
+  else
+    printf '%s' "$val" | gh secret set "$key" --repo "$GH_REPO" --app actions >/dev/null
+  fi
+  echo "Set $key in $GH_REPO${GH_ENV:+ (env $GH_ENV)}"
+}
+
+lookup_value() {
+  local key="$1"
+  local val="${ENV_VALUES[$key]-}"
+  if [[ -z "$val" ]]; then
+    val="${!key-}"
+  fi
+  printf '%s' "$val"
+}
+
 while IFS= read -r line; do
   [[ -z "$line" ]] && continue
   [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -105,13 +148,30 @@ while IFS= read -r line; do
   val=${line#*=}
   key=${key//[$'\t ']/}
   [[ -z "$key" ]] && continue
+  ENV_VALUES["$key"]="$val"
   if ! should_include "$key"; then
     continue
   fi
-  if [[ $DRY_RUN -eq 1 ]]; then
-    echo "DRY-RUN: would set $key in $GH_REPO${GH_ENV:+ (env $GH_ENV)}"
-  else
-    printf '%s' "$val" | gh secret set "$key" --repo "$GH_REPO" --app actions ${GH_ENV:+--env "$GH_ENV"} >/dev/null
-    echo "Set $key in $GH_REPO${GH_ENV:+ (env $GH_ENV)}"
-  fi
+  set_secret "$key" "$val"
 done < "$ENV_FILE"
+
+if [[ $GHCR_BOOTSTRAP -eq 1 ]]; then
+  repo_owner="${GH_REPO%%/*}"
+  ghcr_user="$(lookup_value "$GHCR_USERNAME_FROM")"
+  ghcr_token="$(lookup_value "$GHCR_TOKEN_FROM")"
+  if [[ -z "$ghcr_token" ]]; then
+    ghcr_token="$(lookup_value "$GHCR_FALLBACK_TOKEN_FROM")"
+  fi
+  if [[ -z "$ghcr_user" ]]; then
+    ghcr_user="$repo_owner"
+  fi
+
+  if [[ -z "$ghcr_token" ]]; then
+    echo "✖ GHCR bootstrap requested, but no token found in $GHCR_TOKEN_FROM or $GHCR_FALLBACK_TOKEN_FROM." >&2
+    exit 1
+  fi
+
+  set_secret "GHCR_USERNAME" "$ghcr_user"
+  set_secret "GHCR_TOKEN" "$ghcr_token"
+  echo "✔ GHCR bootstrap complete (username source: ${GHCR_USERNAME_FROM:-repo owner}, token source: $GHCR_TOKEN_FROM/$GHCR_FALLBACK_TOKEN_FROM)"
+fi
