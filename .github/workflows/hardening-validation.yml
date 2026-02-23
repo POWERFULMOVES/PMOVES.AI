@@ -2,13 +2,13 @@ name: Docker Hardening Validation
 
 on:
   push:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
   pull_request:
-    branches: [main, integration, PMOVES.AI-Edition-Hardened]
+    branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
