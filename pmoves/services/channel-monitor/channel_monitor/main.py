@@ -32,12 +32,13 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
 
-from fastapi import Depends, FastAPI, HTTPException, Header, Request
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, Request
 from fastapi.responses import PlainTextResponse
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field, validator
@@ -66,6 +67,15 @@ def _parse_scopes(value: str | None) -> list[str]:
     tokens = value.replace(",", " ").split()
     return [token for token in tokens if token]
 
+
+URL_PATTERN = re.compile(r"https?://[^\s<>()]+", re.IGNORECASE)
+
+
+def _extract_urls_from_text(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [match.group(0).rstrip(".,;:") for match in URL_PATTERN.finditer(value)]
+
 logging.basicConfig(level=os.getenv("CHANNEL_MONITOR_LOG_LEVEL", "INFO"))
 LOGGER = logging.getLogger("channel_monitor")
 
@@ -78,6 +88,7 @@ DATABASE_URL = os.getenv(
 )
 DEFAULT_NAMESPACE = os.getenv("CHANNEL_MONITOR_NAMESPACE", "pmoves")
 STATUS_SECRET = os.getenv("CHANNEL_MONITOR_SECRET")
+DISCORD_APPROVAL_MODE_DEFAULT = os.getenv("CHANNEL_MONITOR_DISCORD_APPROVAL_MODE", "ask").strip().lower()
 GOOGLE_CLIENT_ID = os.getenv("CHANNEL_MONITOR_GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("CHANNEL_MONITOR_GOOGLE_REDIRECT_URI")
@@ -103,6 +114,8 @@ async def lifespan(app: FastAPI):
     # Ensure metrics counters exist
     _ = CHANNEL_CHECKS_TOTAL.labels(kind="startup").inc(0)
     _ = STATUS_UPDATES_TOTAL.labels(result="noop").inc(0)
+    _ = DISCORD_DROPS_TOTAL.labels(result="noop").inc(0)
+    _ = DISCORD_DROP_REVIEWS_TOTAL.labels(action="noop").inc(0)
     yield
     # Shutdown
     await monitor.shutdown()
@@ -268,6 +281,42 @@ class UserSourceRequest(BaseModel):
     yt_options: Dict[str, Any] | None = None
     token_id: str | None = Field(None, description="Linked OAuth token ID")
     status: str = Field("active", description="Source status")
+
+
+class DiscordDropRequest(BaseModel):
+    """Request model for URLs dropped via Discord agent/bot flows."""
+
+    urls: List[str] | None = Field(None, description="Explicit URLs from the Discord message")
+    content: str | None = Field(
+        None,
+        description="Raw message content to scan for URLs when `urls` is omitted",
+    )
+    namespace: str | None = Field(None, description="Target namespace for ingestion")
+    tags: List[str] | None = Field(None, description="Tags to attach to queued payloads")
+    source: str = Field("discord_drop", description="Logical source label for tracking")
+    approval_mode: str | None = Field(
+        None,
+        description="`auto` queues immediately, `ask` stores as pending for explicit approval",
+    )
+    channel_id: str | None = Field(None, description="Discord channel ID for traceability")
+    channel_name: str | None = Field(None, description="Discord channel name for traceability")
+    guild_id: str | None = Field(None, description="Discord guild/server ID")
+    message_id: str | None = Field(None, description="Discord message ID")
+    author_id: str | None = Field(None, description="Discord author/user ID")
+    metadata: Dict[str, Any] | None = Field(None, description="Additional source metadata")
+    yt_options: Dict[str, Any] | None = Field(None, description="Optional yt-dlp overrides")
+    media_type: str = Field("video", description="Media type forwarded to PMOVES.YT")
+    format: str | None = Field(None, description="Optional format override")
+
+
+class DiscordDropApprovalRequest(BaseModel):
+    """Request model for approving/rejecting pending Discord drops."""
+
+    video_ids: List[str] = Field(..., description="Pending video IDs to approve/reject")
+    approve: bool = Field(True, description="When true queue for ingest, otherwise reject")
+    source: str | None = Field(None, description="Optional source filter (e.g. discord_agent)")
+    actor: str | None = Field(None, description="Reviewer/agent id performing the action")
+    reason: str | None = Field(None, description="Optional rejection reason")
 
 
 async def require_secret(token: str | None = Header(default=None, alias="X-Channel-Monitor-Token")) -> None:
@@ -439,6 +488,121 @@ async def add_channel(payload: AddChannelRequest, monitor: ChannelMonitor = Depe
     return {"status": "ok", "channel": new_channel}
 
 
+@app.post("/api/monitor/discord-drop")
+async def ingest_discord_drop(
+    payload: DiscordDropRequest,
+    _: None = Depends(require_secret),
+    monitor: ChannelMonitor = Depends(get_monitor),
+):
+    """Queue video links dropped into Discord for PMOVES ingestion."""
+
+    candidates: List[str] = []
+    if payload.urls:
+        candidates.extend(payload.urls)
+    candidates.extend(_extract_urls_from_text(payload.content))
+
+    urls: List[str] = []
+    seen: set[str] = set()
+    for value in candidates:
+        if not isinstance(value, str):
+            continue
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        urls.append(normalized)
+
+    if not urls:
+        DISCORD_DROPS_TOTAL.labels(result="error").inc()
+        raise HTTPException(status_code=400, detail="no URLs found in payload")
+
+    mode = (payload.approval_mode or DISCORD_APPROVAL_MODE_DEFAULT or "ask").strip().lower()
+    if mode not in {"auto", "ask"}:
+        DISCORD_DROPS_TOTAL.labels(result="error").inc()
+        raise HTTPException(status_code=400, detail="approval_mode must be 'auto' or 'ask'")
+
+    discord_context = {
+        key: val
+        for key, val in {
+            "guild_id": payload.guild_id,
+            "channel_id": payload.channel_id,
+            "channel_name": payload.channel_name,
+            "message_id": payload.message_id,
+            "author_id": payload.author_id,
+        }.items()
+        if val not in (None, "")
+    }
+    metadata: Dict[str, Any] = {}
+    if isinstance(payload.metadata, dict):
+        metadata.update(payload.metadata)
+    if discord_context:
+        metadata["discord"] = discord_context
+
+    try:
+        result = await monitor.ingest_manual_urls(
+            urls=urls,
+            namespace=payload.namespace,
+            tags=payload.tags,
+            source=payload.source,
+            channel_id=payload.channel_id,
+            channel_name=payload.channel_name,
+            metadata=metadata or None,
+            yt_options=payload.yt_options,
+            media_type=payload.media_type,
+            format_override=payload.format,
+            queue_immediately=(mode == "auto"),
+        )
+    except ValueError as exc:
+        DISCORD_DROPS_TOTAL.labels(result="error").inc()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    DISCORD_DROPS_TOTAL.labels(result="success").inc()
+    return {
+        "status": "ok",
+        "approval_mode": mode,
+        "next_action": None if mode == "auto" else "POST /api/monitor/discord-drop/approve",
+        **result,
+    }
+
+
+@app.get("/api/monitor/discord-drop/pending")
+async def list_pending_discord_drops(
+    _: None = Depends(require_secret),
+    monitor: ChannelMonitor = Depends(get_monitor),
+    source: str | None = Query(default=None, description="Optional source filter"),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum pending rows to return"),
+):
+    pending = await monitor.list_pending_manual_urls(source=source, limit=limit)
+    return {"status": "ok", "count": len(pending), "pending": pending}
+
+
+@app.post("/api/monitor/discord-drop/approve")
+async def review_discord_drop(
+    payload: DiscordDropApprovalRequest,
+    _: None = Depends(require_secret),
+    monitor: ChannelMonitor = Depends(get_monitor),
+):
+    try:
+        if payload.approve:
+            result = await monitor.queue_pending_manual_urls(
+                video_ids=payload.video_ids,
+                source=payload.source,
+                approved_by=payload.actor,
+            )
+            DISCORD_DROP_REVIEWS_TOTAL.labels(action="approved").inc()
+            return {"status": "ok", "approved": True, **result}
+        result = await monitor.reject_pending_manual_urls(
+            video_ids=payload.video_ids,
+            reason=payload.reason,
+            rejected_by=payload.actor,
+        )
+        DISCORD_DROP_REVIEWS_TOTAL.labels(action="rejected").inc()
+        return {"status": "ok", "approved": False, **result}
+    except ValueError as exc:
+        DISCORD_DROP_REVIEWS_TOTAL.labels(action="error").inc()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/monitor/status")
 async def update_status(
     payload: UpdateStatusRequest,
@@ -528,6 +692,18 @@ STATUS_UPDATES_TOTAL = Counter(
     labelnames=("result",),
 )
 
+DISCORD_DROPS_TOTAL = Counter(
+    "channel_monitor_discord_drops_total",
+    "Total number of Discord URL drop requests received",
+    labelnames=("result",),
+)
+
+DISCORD_DROP_REVIEWS_TOTAL = Counter(
+    "channel_monitor_discord_drop_reviews_total",
+    "Total number of Discord drop review actions",
+    labelnames=("action",),
+)
+
 
 @app.get("/metrics")
 async def metrics() -> PlainTextResponse:
@@ -546,6 +722,8 @@ async def metrics() -> PlainTextResponse:
         Metrics include:
         - channel_monitor_checks_total: Total channel checks by kind (startup, manual, scheduled)
         - channel_monitor_status_updates_total: Total status updates by result (success, error)
+        - channel_monitor_discord_drops_total: Discord URL drop requests by result
+        - channel_monitor_discord_drop_reviews_total: Discord drop approvals/rejections
         Standard Python runtime metrics are also included.
     """
     data = generate_latest()  # type: ignore[arg-type]

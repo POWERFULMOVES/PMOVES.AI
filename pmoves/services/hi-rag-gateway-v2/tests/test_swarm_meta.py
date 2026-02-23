@@ -1,10 +1,22 @@
 import asyncio
+import importlib
 import importlib.util
 import sys
 import types
 from pathlib import Path
 
 import pytest
+
+# Module-level torch availability guard — GPU-dependent tests are skipped when
+# torch is not installed or CUDA is unavailable.  The fixture also installs a
+# stub so tests can run without torch, but this flag provides an explicit
+# skipif marker for any future GPU-only tests.
+try:
+    import torch as _torch
+
+    TORCH_AVAILABLE = _torch.cuda.is_available()
+except ImportError:
+    TORCH_AVAILABLE = False
 
 
 def _install_stub(name: str, module: types.ModuleType, registry: dict[str, types.ModuleType | None]) -> None:
@@ -19,6 +31,7 @@ def gateway_v2_module():
     if str(root_path) not in sys.path:
         sys.path.insert(0, str(root_path))
         added_root = True
+    sys.modules.setdefault("services", importlib.import_module("pmoves.services"))
 
     stubs: dict[str, types.ModuleType | None] = {}
 
@@ -155,9 +168,27 @@ def gateway_v2_module():
         def _request(*args, **kwargs):  # pragma: no cover - structure only
             return _Response()
 
+        requests_module.Response = _Response
         requests_module.get = _request  # type: ignore[attr-defined]
         requests_module.post = _request  # type: ignore[attr-defined]
+        requests_module.Response = _Response
         _install_stub("requests", requests_module, stubs)
+
+        torch_module = types.ModuleType("torch")
+        torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
+        _install_stub("torch", torch_module, stubs)
+
+        hrm_sidecar_module = types.ModuleType("services.common.hrm_sidecar")
+
+        class _HrmDecoderController:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def status(self, *_args, **_kwargs):
+                return {"enabled": False}
+
+        hrm_sidecar_module.HrmDecoderController = _HrmDecoderController
+        _install_stub("services.common.hrm_sidecar", hrm_sidecar_module, stubs)
 
         providers_module = types.ModuleType("libs.providers")
         embedding_module = types.ModuleType("libs.providers.embedding")
@@ -245,6 +276,25 @@ def gateway_v2_module():
 
         flag_module.FlagReranker = _FlagReranker
         _install_stub("FlagEmbedding", flag_module, stubs)
+
+        torch_module = types.ModuleType("torch")
+        torch_module.cuda = types.SimpleNamespace(is_available=lambda: False)
+        _install_stub("torch", torch_module, stubs)
+
+        hrm_sidecar_module = types.ModuleType("services.common.hrm_sidecar")
+
+        class _HrmDecoderController:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def clear_cache(self):
+                return None
+
+            def status(self, namespace):  # pragma: no cover - stub only
+                return {"enabled": False, "steps": 0, "namespace": namespace}
+
+        hrm_sidecar_module.HrmDecoderController = _HrmDecoderController
+        _install_stub("services.common.hrm_sidecar", hrm_sidecar_module, stubs)
 
         # rapidfuzz stub
         rapidfuzz_module = types.ModuleType("rapidfuzz")

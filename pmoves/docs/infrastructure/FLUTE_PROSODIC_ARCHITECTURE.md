@@ -93,6 +93,108 @@ class ProsodicChunk:
 
 ---
 
+## BPM-Prosodic Bridge
+
+> **OPEN ITEM from TAC_FLUTE.md — now resolved.**
+>
+> This section connects the prosodic boundary system to BPM encoding for CHIT attribution.
+> Reference: [`AGNOTE4482.BEATS.md`](AGENTS/AGNOTE4482.BEATS.md) for `buildTimeline()` and `musicMapping.ts`.
+
+### Boundary --> BPM Mapping
+
+Each prosodic boundary type maps to a musical tempo value, creating an attributable rhythm signature:
+
+| Boundary | BPM | Musical Feel | Rationale |
+|----------|-----|-------------|-----------|
+| `SENTENCE` | 60 | Largo/Slow | Full pause — breath, reflection |
+| `CLAUSE` | 90 | Andante/Walking | Comma pause — moderate separation |
+| `PHRASE` | 120 | Allegro/Uptempo | Quick connector pause |
+| `BREATH` | 80 | Adagio/Breath | Forced breath — slightly slower than clause |
+| `NONE` | 150 | Presto/Continuous | No pause — rapid flow |
+
+### ProsodicChunk --> BPM Timeline Conversion
+
+Using `buildTimeline()` from `musicMapping.ts`:
+
+```typescript
+import { buildTimeline, type BuildTimelineOpts } from './musicMapping';
+
+function prosodicChunksToBpmTimeline(chunks: ProsodicChunk[]): TimelinePoint[] {
+  // Each chunk becomes a timeline segment at its boundary BPM
+  const segments = chunks.map((chunk, i) => {
+    const boundaryBpm = BOUNDARY_BPM_MAP[chunk.boundary_after];
+    const durationSec = chunk.estimated_syllables * 0.15; // ~150ms per syllable
+
+    return buildTimeline({
+      durationSec,
+      slices: chunk.estimated_syllables,
+      bpm: boundaryBpm,
+      rootMidi: 60 + Math.floor(chunk.position_ratio * 12), // pitch rises with position
+      scale: 'pentatonicMajor',
+      notesPerBeat: 1,
+      mode: 'step',
+      plotHeightPx: 240,
+    });
+  });
+
+  return segments.flat();
+}
+```
+
+### Voice Pitch Contour Mapping
+
+The `freqToY()` function from `musicMapping.ts` maps directly to voice pitch contours:
+
+| Prosodic Position | MIDI Range | Frequency Range | Voice Effect |
+|-------------------|-----------|-----------------|-------------|
+| Start (0.0) | 60-64 (C4-E4) | 262-330 Hz | Neutral/rising |
+| Mid (0.5) | 64-67 (E4-G4) | 330-392 Hz | Peak energy |
+| End (1.0) | 67-72 (G4-C5) | 392-523 Hz | Falling/conclusive |
+
+### NATS Integration
+
+BPM-encoded prosodic events publish to:
+
+**`tokenism.prosodic.bpm.v1`**
+```json
+{
+  "spec": "chit.cgp.v0.2",
+  "summary": "Prosodic BPM timeline for voice attribution",
+  "created_at": "2026-02-20T12:00:00Z",
+  "super_nodes": [{
+    "id": "flute:prosodic:<utterance_id>",
+    "label": "voice_prosodic",
+    "constellations": [{
+      "id": "prosodic.bpm.<utterance_id>",
+      "summary": "BPM-encoded prosodic timeline",
+      "spectrum": [0.8, 0.6, 0.4],
+      "points": [
+        {
+          "id": "chunk:0",
+          "modality": "voice",
+          "proj": 1.0,
+          "conf": 0.95,
+          "summary": "SENTENCE boundary @ 60 BPM",
+          "ref_id": "voice_persona_id"
+        }
+      ],
+      "meta": {
+        "namespace": "pmoves.voice.prosodic",
+        "bpm_timeline": [60, 120, 90, 60],
+        "boundary_sequence": ["SENTENCE", "PHRASE", "CLAUSE", "SENTENCE"]
+      }
+    }]
+  }],
+  "meta": {
+    "source": "tokenism.prosodic.bpm.v1",
+    "voice_persona_id": "af_sky",
+    "tags": ["prosodic", "bpm", "voice-attribution"]
+  }
+}
+```
+
+---
+
 ## Parsing Algorithm
 
 ### Step 1: First Chunk (Ultra-low TTFS)
@@ -146,9 +248,9 @@ def estimate_syllables(word: str) -> int:
     3. Minimum 1 syllable per word
 
     Examples:
-        "hello" → 2 (he-llo)
-        "beautiful" → 4 (beau-ti-ful)
-        "the" → 1 (minimum)
+        "hello" -> 2 (he-llo)
+        "beautiful" -> 4 (beau-ti-ful)
+        "the" -> 1 (minimum)
     """
 ```
 
@@ -187,25 +289,25 @@ Breath probability is highest at forced breath points (90%) and moderate at sent
 ### Target: <160ms Time-To-First-Speech
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Timeline (0ms → 500ms)                   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  [0ms] Text arrives                                         │
-│   │                                                         │
-│  [10ms] Prosodic parsing → First chunk (2 words)           │
-│   │                                                         │
-│  [30ms] TTS request sent for first chunk                   │
-│   │                                                         │
-│  [120ms] First audio chunk returned                        │
-│   │                                                         │
-│  [160ms] Audio playback begins ← TTFS TARGET               │
-│   │                                                         │
-│  [200ms] Second chunk TTS completes (overlapped)           │
-│   │                                                         │
-│  [350ms] First pause ends, second audio plays              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                    Timeline (0ms -> 500ms)                   |
++-------------------------------------------------------------+
+|                                                             |
+|  [0ms] Text arrives                                         |
+|   |                                                         |
+|  [10ms] Prosodic parsing -> First chunk (2 words)           |
+|   |                                                         |
+|  [30ms] TTS request sent for first chunk                   |
+|   |                                                         |
+|  [120ms] First audio chunk returned                        |
+|   |                                                         |
+|  [160ms] Audio playback begins <- TTFS TARGET               |
+|   |                                                         |
+|  [200ms] Second chunk TTS completes (overlapped)           |
+|   |                                                         |
+|  [350ms] First pause ends, second audio plays              |
+|                                                             |
++-------------------------------------------------------------+
 ```
 
 ### Optimization Techniques
@@ -226,6 +328,10 @@ Breath probability is highest at forced breath points (90%) and moderate at sent
 PROSODIC_FIRST_CHUNK_WORDS=2     # Words in first chunk (TTFS optimization)
 PROSODIC_MAX_SYLLABLES=10        # Max syllables before forced breath
 PROSODIC_MIN_WORDS_PER_CHUNK=2   # Minimum words before natural break
+
+# BPM encoding
+PROSODIC_BPM_PUBLISH=false       # Enable BPM timeline publishing
+PROSODIC_BPM_SCALE=pentatonicMajor  # Musical scale for encoding
 
 # Audio stitching
 BREATH_SOUND_PATH=/assets/breath.wav
@@ -265,6 +371,8 @@ Text Input → Prosodic Parser → CGP Geometry Event
         Audio Output + NATS Event
                 ↓
         tokenism.geometry.event.v1
+                ↓ (BPM-enriched)
+        tokenism.prosodic.bpm.v1
 ```
 
 Each synthesized audio segment can be attributed via:
@@ -272,6 +380,7 @@ Each synthesized audio segment can be attributed via:
 - `chunk_position`: Where in the utterance
 - `boundary_type`: What kind of pause followed
 - `cgp_packet_id`: Link to CHIT geometry packet
+- `bpm_value`: Tempo encoding for the boundary (NEW)
 
 ---
 
@@ -292,10 +401,10 @@ Input: `"Hello, world! This is a test of the prosodic parser."`
 
 ```
 Prosodic Analysis (4 chunks):
-  [1] "Hello, world!" → SENTENCE (350ms) [FIRST]
-  [2] "This is" → NONE (0ms)
-  [3] "a test of" → PHRASE (100ms)
-  [4] "the prosodic parser." → SENTENCE (350ms) [FINAL]
+  [1] "Hello, world!" -> SENTENCE (350ms) [FIRST]
+  [2] "This is" -> NONE (0ms)
+  [3] "a test of" -> PHRASE (100ms)
+  [4] "the prosodic parser." -> SENTENCE (350ms) [FINAL]
 ```
 
 Audio timeline:
@@ -317,6 +426,10 @@ Audio timeline:
 - `pmoves/docs/context/PMOVES Multimodal Communication Layer (Flute) – Architecture & Roadmap.md` - Full architecture
 - `.claude/context/nats-subjects.md` - Voice NATS subjects (`voice.tts.*`)
 - `.claude/context/voice-personas.md` - Voice persona system
+- `.claude/context/geometry-nats-subjects.md` - GEOMETRY BUS subjects
+- `pmoves/docs/AGENTS/AGNOTE4482.BEATS.md` - BPM/frequency math and `musicMapping.ts`
+- `pmoves/docs/TAC/TAC_FLUTE.md` - TAC tree for Flute Gateway
+- `.claude/commands/chit/bpm.md` - `/chit:bpm` tool specification
 
 ---
 
@@ -329,8 +442,11 @@ pmoves/services/flute-gateway/prosodic/
 ├── boundary_detector.py  # detect_boundary(), find_chunk_points()
 ├── syllable_counter.py   # estimate_syllables()
 ├── prosodic_parser.py    # parse_prosodic() main function
-└── audio_processor.py    # Audio stitching and breath insertion
+├── audio_processor.py    # Audio stitching and breath insertion
+└── bpm_encoder.py        # BPM timeline encoding (NEW)
 ```
+
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->
 
 ---
 

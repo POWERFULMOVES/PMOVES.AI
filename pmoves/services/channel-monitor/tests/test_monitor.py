@@ -83,7 +83,7 @@ if "yt_dlp" not in sys.modules:
     yt_dlp_stub.YoutubeDL = _YoutubeDL  # type: ignore[attr-defined]
     sys.modules["yt_dlp"] = yt_dlp_stub
 
-from channel_monitor.monitor import ChannelMonitor
+from channel_monitor.monitor import ChannelMonitor, _extract_youtube_video_id
 
 
 def _build_monitor(tmp_path, config_name: str = "channel.json") -> ChannelMonitor:
@@ -325,3 +325,151 @@ def test_build_yt_options_merges_global_and_channel(tmp_path):
     assert merged["download_archive"] == "/custom/archive.txt"
     assert merged["write_info_json"] is False
     assert "write_info_json" in merged
+
+
+def test_queue_videos_uses_custom_ingest_source(tmp_path, monkeypatch):
+    monitor = _build_monitor(tmp_path, config_name="channel_custom_source.json")
+
+    statuses: list[tuple[str, str, str | None]] = []
+
+    async def record_status(
+        video_id: str,
+        status: str,
+        *,
+        error: str | None = None,
+        extra_metadata: dict | None = None,
+    ) -> None:
+        statuses.append((video_id, status, error, extra_metadata))
+
+    monitor._update_status = AsyncMock(side_effect=record_status)  # type: ignore[assignment]
+
+    requests_made: list[tuple[str, dict]] = []
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - no cleanup required
+            return False
+
+        async def post(self, url, json):
+            requests_made.append((url, json))
+            return SimpleNamespace(raise_for_status=lambda: None, status_code=202)
+
+    monkeypatch.setattr(
+        "channel_monitor.monitor.httpx.AsyncClient",
+        DummyAsyncClient,
+    )
+
+    channel = {
+        "channel_id": "discord:feed",
+        "namespace": "pmoves",
+        "ingest_source": "discord_agent",
+        "platform": "discord",
+        "source_type": "discord_drop",
+    }
+    videos = [
+        {
+            "video_id": "custom-source-1",
+            "url": "https://www.youtube.com/watch?v=custom-source-1",
+            "title": "Custom source",
+        }
+    ]
+
+    asyncio.run(monitor._queue_videos(channel, videos))
+
+    assert requests_made, "Expected POST request to be issued"
+    _, payload = requests_made[0]
+    assert payload["source"] == "discord_agent"
+    assert payload["metadata"]["platform"] == "discord"
+    assert payload["metadata"]["source_type"] == "discord_drop"
+    assert statuses[0][0:3] == ("custom-source-1", "processing", None)
+    assert statuses[1][0:3] == ("custom-source-1", "queued", None)
+
+
+def test_ingest_manual_urls_queues_discord_drop(tmp_path):
+    monitor = _build_monitor(tmp_path, config_name="channel_manual_drop.json")
+    monitor._persist = AsyncMock()  # type: ignore[assignment]
+    monitor._queue_videos = AsyncMock()  # type: ignore[assignment]
+
+    result = asyncio.run(
+        monitor.ingest_manual_urls(
+            urls=[
+                "https://youtu.be/abc123xyz00",
+                "https://youtu.be/abc123xyz00",
+                "https://example.com/video/standalone.mp4",
+            ],
+            namespace="pmoves.discord",
+            tags=["review"],
+            source="discord_agent",
+            channel_id="discord:ops",
+            channel_name="ops-drops",
+            metadata={"guild_id": "guild-1"},
+        )
+    )
+
+    assert result["queued"] == 2
+    assert result["source"] == "discord_agent"
+    assert result["channel_id"] == "discord:ops"
+    assert result["accepted"][0]["video_id"] == "abc123xyz00"
+    assert result["accepted"][1]["video_id"].startswith("manual-")
+    assert result["skipped"] == []
+
+    persist_args = monitor._persist.await_args.args
+    channel_payload = persist_args[0]
+    queued_videos = persist_args[1]
+    assert channel_payload["platform"] == "discord"
+    assert channel_payload["ingest_source"] == "discord_agent"
+    assert channel_payload["payload_metadata"]["source_context"] == {"guild_id": "guild-1"}
+    assert channel_payload["tags"] == ["review", "discord"]
+    assert queued_videos[0]["payload_metadata"]["manual_drop_source"] == "discord_agent"
+
+
+def test_ingest_manual_urls_ask_mode_stores_pending(tmp_path):
+    monitor = _build_monitor(tmp_path, config_name="channel_manual_pending.json")
+    monitor._persist = AsyncMock()  # type: ignore[assignment]
+    monitor._queue_videos = AsyncMock()  # type: ignore[assignment]
+
+    result = asyncio.run(
+        monitor.ingest_manual_urls(
+            urls=["https://www.youtube.com/watch?v=pending12345a"],
+            namespace="pmoves.discord",
+            source="discord_agent",
+            queue_immediately=False,
+        )
+    )
+
+    assert result["queued"] == 0
+    assert result["pending"] == 1
+    assert result["approval_state"] == "pending_review"
+    assert result["accepted"][0]["video_id"] == "pending12345a"
+    monitor._persist.assert_awaited_once()
+    monitor._queue_videos.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://www.youtube.com/watch?v=abc123xyz00", "abc123xyz00"),
+        ("https://m.youtube.com/watch?v=abc123xyz00", "abc123xyz00"),
+        ("https://music.youtube.com/watch?v=abc123xyz00", "abc123xyz00"),
+        ("https://youtu.be/abc123xyz00", "abc123xyz00"),
+    ],
+)
+def test_extract_youtube_video_id_allows_valid_hosts(url, expected):
+    assert _extract_youtube_video_id(url) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://youtube.com.evil.example/watch?v=abc123xyz00",
+        "https://notyoutube.com/watch?v=abc123xyz00",
+        "https://www.youtube.com.evil.example/watch?v=abc123xyz00",
+    ],
+)
+def test_extract_youtube_video_id_rejects_spoofed_hosts(url):
+    assert _extract_youtube_video_id(url) is None

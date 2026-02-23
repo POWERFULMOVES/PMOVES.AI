@@ -33,6 +33,7 @@ on:
       - '**/node_modules/**'
       - '**/site-packages/**'
       - '**/.eggs/**'
+  workflow_dispatch:
   schedule:
     - cron: '16 20 * * 5'
 

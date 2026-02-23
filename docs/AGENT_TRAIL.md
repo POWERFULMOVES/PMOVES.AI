@@ -10,6 +10,145 @@
 
 ---
 
+<!-- graphiti:codex phase:kriss-kross-weave ts:2026-02-23T14:43:36Z -->
+
+## ■ Codex — KRISS KROSS Weave: Trail + Parity Authority Bridge
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** integration, code-gen, cross-repo-orchestration
+**Voice:** Terse
+
+### Done
+- Verified upstream promotion chain from Claude state:
+  - PR #694 merged to `PMOVES.AI-Edition-Hardened-Integrations` at `2026-02-23T14:25:56Z`
+  - PR #697 merged to `PMOVES.AI-Edition-Hardened` at `2026-02-23T14:31:12Z`
+- Connected protocol-to-trail handoff surfaces:
+  - added KRISS KROSS overlay contract (`pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md`)
+  - added Codex parity authority workflow + checker (`pmoves/scripts/codex_parity_check.py`)
+  - logged signed lane ack in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+- Updated this trail lane so merge/promotion state and next owner actions are machine-parseable in one place.
+
+### Left Behind
+- `agent.graphiti.signed.v1` event emission path is still defined but not wired to publish automatically from merge/trail actions.
+- Parity coverage baseline is partial (`35/104`, `33.7%`), and strict parity gate still fails by design until mapping backlog is closed.
+- Batch auth cleanup remains: unauthenticated `nats://nats:4222` references are still pending follow-up.
+
+### For Next Agent
+- Keep Claude as scout/counterpoint in Codex-led overlay lanes; keep Codex as parity owner for mapping releases.
+- Drive parity coverage using:
+  - `make -C pmoves codex-parity-check`
+  - `make -C pmoves codex-parity-check-strict`
+- When parity and NATS auth cleanup land, emit `agent.graphiti.signed.v1` as part of release handoff automation.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:claude-opus phase:floos-runtime-execution ts:2026-02-23T07:03:08Z -->
+
+## ◆ Claude Opus — FlOO$ v2.0: Runtime Execution Layer
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** architecture, runtime-execution, nats-integration
+**Voice:** Analytical
+
+### Done
+- Upgraded `floos_resolver.py` from v1.0.0 → v2.0.0 — validation-only → full runtime executor
+- Implemented `publish_hook()` — lightweight NATS envelope publisher (no schema validation; hook subjects are convention-based, not contract-registered)
+- Implemented `execute_step()` — MCP step executor with retry/exponential backoff, context chaining, hook event publishing
+- Implemented `execute_pipeline()` — full pipeline orchestrator: DAG validation → health gate → topological execution → completion event
+- Added `StepResult` and `PipelineResult` dataclasses for typed execution results
+- Added CLI `run` subcommand with `--dry-run`, `--skip-health`, `--context key=value` options
+- Fixed test_gateway.py ElevenLabs assertion → generic `len(providers) >= 1` (local-first compliance)
+- All 6 pipelines verified: dry-run shows correct execution plans, existing validate/status/hooks commands unchanged
+
+### Left Behind
+- No NATS event emitted for this work (`agent.graphiti.signed.v1`)
+- `_mcp_call()` uses synchronous `urllib.request` inside async wrapper — acceptable for sequential pipelines but would need `aiohttp` for parallel step execution
+- Hook subjects (`skills.step.*.done.v1`, `skills.error.v1`) not registered in `pmoves/contracts/topics.json` — intentional (convention-based)
+
+### For Next Agent (■ Codex)
+- **CI integration**: add `python -m pmoves.tools.chit.floos_resolver status` as a GitHub Actions step alongside CHIT Contract Check
+- **`skills.error.v1` dead-letter subscriber**: a NATS service that catches errors and publishes to Discord (via publisher-discord) would make this actionable
+- **Live pipeline test**: with Agent Zero running, test `run model-benchmark-viz --context model_id=bert-base` end-to-end
+- **111 unauthenticated NATS refs**: FlOO$'s `handoff.nats_url` uses correct `nats://nats:pmoves@nats:4222` — remaining 111 refs in other files still need batch fix
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:claude-opus phase:floos-implementation ts:2026-02-23T06:00:00Z -->
+
+## ◆ Claude Opus — FlOO$ Implementation: Skill Dependency Layer
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** architecture, cross-repo-orchestration, chit-integration
+**Voice:** Analytical
+
+### Done
+- Created FlOO$ dependency resolver (`pmoves/tools/chit/floos_resolver.py`) — DAG construction via Kahn's algorithm, circular dependency detection via 3-color DFS, health endpoint validation, NATS hook mapping
+- Extended all 6 skill pairings in `pmoves/configs/skill-pairings.yaml` with `depends` (services, skills, health) and `hooks` (on_complete, on_error) fields — 17 unique NATS subjects, 36 total hooks
+- Created `/chit:floos` CLI skill (`.claude/commands/chit/floos.md`) with resolve/validate/status/hooks subcommands
+- Added `floos_hooks` metadata to 4 submodule registry entries (Agent-Zero, BoTZ, HiRAG, ToKenism-Multi) with publishes/subscribes/depends_on
+- Cleaned 3 dirty submodules (BoTZ nested huggingface-skills, Archon cascade, ToKenism-Multi context tags)
+- Initialized 2 untracked submodules (A2UI, Pipecat)
+- Merged 16 PRs total: #666, #667, #668, #670, #673, #674, #679, #680, #682, #685, #686, #687, #688, #689, #690, #691
+- Resolved merge conflicts in 7 PRs (#667, #668, #670, #673, #680, #687, #688) via worktree rebase strategy — 0 open PRs remain
+
+### Left Behind
+- main→Hardened branch sync has merge conflicts (409 from API merge)
+- `floos_resolver.py` has `execute_step()` and `publish_hook()` stubbed in the plan but not implemented — current version is validation/inspection only, not a runtime executor
+- No NATS event emitted for this work (`agent.graphiti.signed.v1`)
+
+### For Next Agent (■ Codex)
+- **FlOO$ runtime execution** is the next layer: `floos_resolver.py` currently validates/inspects only — needs `execute_step()` with NATS client integration to actually run pipelines and publish `on_complete` hooks
+- **CI integration**: add `python -m pmoves.tools.chit.floos_resolver status` as a GitHub Actions step alongside CHIT Contract Check
+- **`skills.error.v1`** is a shared dead-letter subject across all 6 pipelines — a NATS subscriber service that catches errors and publishes to Discord (via publisher-discord) would make this actionable
+- **Safe Traversal**: this work touches `pmoves/configs/skill-pairings.yaml` and `submodule_skill_registry.json` — claim these files per `AGNOTE4482PHI.t1.md` protocol before editing
+- **111 unauthenticated NATS refs** (from Codex's own Phase 5 review) — FlOO$ `depends.services` now encodes the correct `nats:4222` service check, but the credential-bearing URL is in `handoff.nats_url` at the bottom of skill-pairings.yaml
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:claude-opus phase:merge-pipeline-sprint ts:2026-02-22T04:02:00Z -->
+
+## ◆ Claude Opus — Merge Pipeline Sprint: 4 PRs Cleared
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** cross-repo-orchestration, merge-mechanics, ci-unblock
+**Voice:** Analytical
+
+### Done
+- Merged 4 PRs in dependency order: #693 (supaserch lockfile) → #672 (skills+themes) → #671 (A2UI Remotion) → #692 (doc reorg)
+- Re-branched PR #692 from 94-commit diverged branch onto fresh main via `git diff` + `git apply --3way` — collapsed 90+ conflicts to 0
+- Resolved PR #671 merge conflict (`.gitignore` build output sections — combined A2UI renderer + CHIT package entries)
+- Discovered and corrected base-branch mismatch: PRs #671/#672 target `PMOVES.AI-Edition-Hardened`, not `main`
+- Unblocked `Build supaserch` CI across all future PRs
+
+### Left Behind
+- 19 open PRs remain (13 target Hardened, 2 target main, 4 are stacked on feature branches)
+- `PMOVES.AI-Edition-Hardened` is 109 commits ahead of `main` — sync needed
+- PR #689 (HiRAG compose fix) targets `main` but may belong on Hardened — needs triage
+- 355 conflict markers embedded in `pmoves/contracts/solidity/package-lock.json` on main
+- "Python Tests" CI failing on latest main push
+- 30 worktrees, many for merged PRs — cleanup candidate
+- 111 files reference unauthenticated `nats://nats:4222` — deferred batch PR
+
+### For Next Agent
+- Check `GRAPHITI_SIG_REVIEW_2026-02-21.md` for Codex's Phase 5 handoff notes
+- The re-branch technique (`git diff main branch > patch && reset --hard main && apply --3way`) works for any squash-merge divergence
+- HiRAG stacked chain (PRs 689→690→691) needs base-branch decision before merge
+- Run `git worktree prune` + remove stale worktrees for merged PRs
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:powerfulmoves phase:three-body-doctrine ts:2026-02-17T23:45:00Z -->
 
 ## ⚡ POWERFULMOVES — Three-Body Stabilization Protocol

@@ -30,13 +30,20 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-runtime-hydrate secrets-funnel-sync secrets-funnel
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-runtime-hydrate secrets-funnel-sync secrets-funnel
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
 codex-audit: ## Generate Codex/Claude parity audit across submodules
 	@$(CODEX_PY) scripts/codex_submodule_audit.py
 	@echo Wrote pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md
+
+codex-parity-check: ## Measure Claude command coverage in Codex parity map and write report
+	@$(CODEX_PY) scripts/codex_parity_check.py
+	@echo Wrote pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_GAPS.md
+
+codex-parity-check-strict: ## Fail when any Claude command token is missing from Codex parity map
+	@$(CODEX_PY) scripts/codex_parity_check.py --strict
 
 codex-home: ## Show Codex operator docs for PMOVES agent workflows
 	@echo Codex operator home:

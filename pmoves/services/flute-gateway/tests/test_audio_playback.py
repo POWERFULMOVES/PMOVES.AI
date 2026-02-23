@@ -38,6 +38,7 @@ if _parent_dir not in sys.path:
 
 # Output directory for test audio files
 TEST_OUTPUT_DIR = Path("/tmp/pmoves-tts-test")
+RUN_AUDIO_FUNCTIONAL = os.getenv("FLUTE_RUN_AUDIO_TESTS", "false").lower() in {"1", "true", "yes", "on"}
 
 
 class AudioProperties(NamedTuple):
@@ -432,9 +433,19 @@ async def main():
 # pytest integration
 import pytest
 
+RUN_FUNCTIONAL_AUDIO_TESTS = os.getenv("RUN_FUNCTIONAL_AUDIO_TESTS", "").strip().lower() in {"1", "true", "yes", "on"}
+pytestmark = pytest.mark.skipif(
+    not RUN_FUNCTIONAL_AUDIO_TESTS,
+    reason="requires live Ultimate-TTS and Flute-Gateway services (set RUN_FUNCTIONAL_AUDIO_TESTS=1)",
+)
+
 
 @pytest.mark.functional
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    not RUN_AUDIO_FUNCTIONAL,
+    reason="Live audio playback tests require external TTS services (set FLUTE_RUN_AUDIO_TESTS=true).",
+)
 async def test_ultimate_tts_produces_audible_audio():
     """Verify Ultimate-TTS produces non-silent audio."""
     result = await test_ultimate_tts_direct()
@@ -443,6 +454,10 @@ async def test_ultimate_tts_produces_audible_audio():
 
 @pytest.mark.functional
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    not RUN_AUDIO_FUNCTIONAL,
+    reason="Live audio playback tests require external TTS services (set FLUTE_RUN_AUDIO_TESTS=true).",
+)
 async def test_flute_gateway_produces_audible_audio():
     """Verify Flute-Gateway produces non-silent audio."""
     result = await test_flute_gateway_prosodic()

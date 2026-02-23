@@ -40,7 +40,7 @@ jobs:
       matrix:
         python-version: ['3.11']
     env:
-      PYTHONPATH: pmoves
+      PYTHONPATH: .:pmoves:pmoves/services/gateway
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
@@ -55,6 +55,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
+        continue-on-error: true          # Self-hosted runner: bash arithmetic fails on large disks (scientific notation)
         with:
           tool-cache: false
           android: true
