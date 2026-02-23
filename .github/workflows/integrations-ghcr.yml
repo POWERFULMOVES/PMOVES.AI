@@ -25,6 +25,11 @@ on:
         required: true
         default: false
         type: boolean
+      ghcr_namespace:
+        description: 'Optional GHCR namespace override (for org transitions, e.g. cataclysmstudios-inc)'
+        required: false
+        default: ''
+        type: string
   push:
     branches: [main, PMOVES.AI-Edition-Hardened]
   pull_request:
@@ -255,7 +260,8 @@ jobs:
           SHA_SHORT=${GITHUB_SHA::7}
           echo "date_tag=${DATE_TAG}" >> $GITHUB_OUTPUT
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
-          GHCR_NS_RAW="${{ secrets.CI_GHCR_NAMESPACE }}"
+          GHCR_NS_RAW="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ghcr_namespace || '' }}"
+          if [ -z "$GHCR_NS_RAW" ]; then GHCR_NS_RAW="${{ secrets.CI_GHCR_NAMESPACE }}"; fi
           if [ -z "$GHCR_NS_RAW" ]; then GHCR_NS_RAW="${{ secrets.GHCR_NAMESPACE }}"; fi
           if [ -z "$GHCR_NS_RAW" ]; then GHCR_NS_RAW="${{ github.repository_owner }}"; fi
           # Docker tag validation requires the repository namespace be lowercase.
