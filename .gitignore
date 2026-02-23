@@ -113,6 +113,8 @@ pmoves/services/a2ui-renderer/dist/
 pmoves/services/a2ui-renderer/node_modules/
 pmoves/packages/chit/dist/
 pmoves/packages/chit/node_modules/
+pmoves/packages/ui/dist/
+pmoves/packages/ui/node_modules/
 
 # =============================================================================
 # Cipher MCP Bridge
