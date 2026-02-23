@@ -1949,6 +1949,7 @@ TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 BUILDX_BUILDER ?= pmoves-multiarch
 GHCR_WORKFLOW ?= integrations-ghcr.yml
 GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+GHCR_NAMESPACE ?=
 GH_SECRET_ENV ?= Dev
 GH_REPO ?= $(shell gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo POWERFULMOVES/PMOVES.AI)
 
@@ -1995,7 +1996,9 @@ ghcr-prepublish-supaserch: build-local-supaserch ## Local-first gate before GHCR
 
 .PHONY: ghcr-dispatch-supaserch
 ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for SupaSerch after local prepublish gate
-	@gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" -f integration=supaserch -f push_to_dockerhub=false
+	@args="-f integration=supaserch -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
 	@echo "✔ Dispatched $(GHCR_WORKFLOW) for supaserch on ref $(GHCR_DISPATCH_REF)"
 
 .PHONY: deepresearch-smoke
