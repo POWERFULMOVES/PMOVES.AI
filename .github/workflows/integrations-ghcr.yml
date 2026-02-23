@@ -167,8 +167,6 @@ jobs:
             platforms: linux/amd64,linux/arm64
             generate_sbom: true
             trivy_ignorefile: ''
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.integration == 'all' || github.event.inputs.integration == matrix.name }}
-
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@v2
