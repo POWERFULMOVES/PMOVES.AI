@@ -21,7 +21,7 @@
 
 ## Integration Layer
 
-The [PMOVES.AI Integration Layer Overview](../../pmoves/docs/INTEGRATIONS_OVERVIEW.md) is the master entry point for all integration documentation, organized by five systems: Skill Registry, CHIT Tools, Secrets Pipeline, GPU Orchestration, and Damage Control Hooks.
+The [PMOVES.AI Integration Layer Overview](../../pmoves/docs/INTEGRATIONS_OVERVIEW.md) is the master entry point for all integration documentation, organized by six systems: Skill Registry, CHIT Tools, Secrets Pipeline, GPU Orchestration, Damage Control Hooks, and Documentation Infrastructure.
 
 | Document | Path | Purpose |
 |----------|------|---------|
@@ -310,6 +310,21 @@ Machine-readable JSON mapping every submodule to relevant skills, context files,
 | Submodule SITREP | `pmoves/docs/SUBMODULE_ALIGNMENT_SITREP_2026-02-14.md` | Diagnostic snapshot |
 
 All 27 audit documents have navigation headers pointing to the dashboard.
+
+---
+
+## Living Documentation Infrastructure
+
+CHIT-organized living documents that track, crosslink, and audit the entire documentation corpus.
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| Documentation Map | `pmoves/docs/DOCUMENTATION_MAP.md` | Master crosslinked index (L1-L5 CHIT taxonomy) |
+| Service Docs Matrix | `pmoves/docs/SERVICE_DOCS_MATRIX.md` | Service-to-documentation cross-reference |
+| CHIT Change Tracker | `pmoves/docs/CHIT_CHANGE_TRACKER.md` | Living change audit trail with CGP metadata |
+| Submodule Docs Audit | `pmoves/docs/evidence/SUBMODULE_DOCS_AUDIT.md` | Submodule documentation completeness |
+
+**Layer taxonomy:** L1 Protocol, L2 Conceptual, L3 Applied, L4 Vision, L5 Operations
 
 ---
 
