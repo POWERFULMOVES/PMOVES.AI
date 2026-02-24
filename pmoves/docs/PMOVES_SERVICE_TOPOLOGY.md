@@ -117,7 +117,7 @@ Voice ──► Flute-Gateway ──► Pipecat Pipeline ──► Ultimate-TTS 
 ### Flow 4: Document Intelligence (PDF → Extract → Graph → Visualize)
 
 ```
-PDF ──► DoX ──► PDF Ingest ──► Extract Worker ──► Qdrant + Meilisearch
+PDF ──► DoX (PDF Ingest lane) ──► Extract Worker ──► Qdrant + Meilisearch
                                      │
                               Neo4j (entities)
                                      │
@@ -125,7 +125,7 @@ PDF ──► DoX ──► PDF Ingest ──► Extract Worker ──► Qdrant
 ```
 
 1. Document uploaded or discovered by **DoX** document intelligence
-2. **PDF Ingest** (port 8092) orchestrates processing from MinIO
+2. **DoX Document Intelligence (PDF Ingest lane)** (port 8092) orchestrates processing from MinIO
 3. **Extract Worker** generates embeddings and entity extractions
 4. Vectors go to Qdrant, full-text to Meilisearch, entities to Neo4j
 5. **Hyperdimensions** visualizes the knowledge graph on a Poincare disk
@@ -161,8 +161,8 @@ This table shows which services communicate with which, and via what protocol.
 | Hi-RAG v2 | Meilisearch | HTTP | Full-text search |
 | Notebook Sync | Open Notebook | HTTP | SurrealDB polling |
 | Notebook Sync | Extract Worker | HTTP | Re-indexing |
-| PDF Ingest | MinIO | S3 | Document storage |
-| PDF Ingest | Extract Worker | HTTP | Indexing |
+| DoX Document Intelligence (PDF Ingest lane) | MinIO | S3 | Document storage |
+| DoX Document Intelligence (PDF Ingest lane) | Extract Worker | HTTP | Indexing |
 | PMOVES.YT | MinIO | S3 | Video storage |
 | PMOVES.YT | NATS | NATS | `ingest.file.added.v1` |
 | Publisher-Discord | NATS | NATS | `ingest.*.v1` subjects |
