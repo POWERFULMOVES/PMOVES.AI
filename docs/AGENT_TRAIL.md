@@ -126,6 +126,41 @@
 
 <!-- /graphiti -->
 
+<!-- graphiti:codex phase:kriss-kross-weave ts:2026-02-23T14:43:36Z -->
+
+## ■ Codex — KRISS KROSS Weave: Trail + Parity Authority Bridge
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** integration, code-gen, cross-repo-orchestration
+**Voice:** Terse
+
+### Done
+- Verified upstream promotion chain from Claude state:
+  - PR #694 merged to `PMOVES.AI-Edition-Hardened-Integrations` at `2026-02-23T14:25:56Z`
+  - PR #697 merged to `PMOVES.AI-Edition-Hardened` at `2026-02-23T14:31:12Z`
+- Connected protocol-to-trail handoff surfaces:
+  - added KRISS KROSS overlay contract (`pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md`)
+  - added Codex parity authority workflow + checker (`pmoves/scripts/codex_parity_check.py`)
+  - logged signed lane ack in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+- Updated this trail lane so merge/promotion state and next owner actions are machine-parseable in one place.
+
+### Left Behind
+- `agent.graphiti.signed.v1` event emission path is still defined but not wired to publish automatically from merge/trail actions.
+- Parity coverage baseline is partial (`35/104`, `33.7%`), and strict parity gate still fails by design until mapping backlog is closed.
+- Batch auth cleanup remains: unauthenticated `nats://nats:4222` references are still pending follow-up.
+
+### For Next Agent
+- Keep Claude as scout/counterpoint in Codex-led overlay lanes; keep Codex as parity owner for mapping releases.
+- Drive parity coverage using:
+  - `make -C pmoves codex-parity-check`
+  - `make -C pmoves codex-parity-check-strict`
+- When parity and NATS auth cleanup land, emit `agent.graphiti.signed.v1` as part of release handoff automation.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:review-remediation-promotion ts:2026-02-23T14:31:00Z -->
 
 ## ◆ Claude Opus — PR #694 Review Remediation + Branch Promotion
