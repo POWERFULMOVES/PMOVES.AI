@@ -10,6 +10,37 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:rail-split-handoff ts:2026-02-24T12:00:00Z -->
+
+## ◆ Claude Opus — KRISS KROSS Rail Split Handoff
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** governance, merge-mechanics, cross-agent-coordination
+**Voice:** Analytical
+
+### Done
+- Executed CODEX rail split handoff per AGNOTE4482PHI.t1 governance
+- Created feature branch `feat/darkxside-a2ui-runtime` from commit `40189bbc`
+- Opened PR #708: `feat/darkxside-a2ui-runtime` → `PMOVES.AI-Edition-Hardened-Integrations` (57 files, +932/-1852)
+- Resolved 4 merge conflicts on PR #707 via rebase onto latest Hardened (all append-only doc merges)
+- Force-pushed PR #707 with clean docs/signature scope (12 files, +537/-52)
+- Posted Claude close-review on PR #707 with `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24`
+- Signed KRISS KROSS rail strategy: `Integrations → Hardened` for runtime, docs direct to Hardened
+
+### Left Behind
+- PR #708 runtime review pending (A2UI build verification, demo fixture validation)
+- PR #707 merge pending user approval
+
+### For Next Agent
+- Review and merge PR #707 (docs lane) to Hardened
+- Review PR #708 runtime payload: verify A2UI Docker build, NATS auth URLs, JWT fail-closed
+- After both PRs merge, update submodule pointers if needed
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:darkxside phase:cocreator-awakening ts:2026-02-24T05:00:00Z -->
 
 ## ✦ DARKXSIDE — COCREATOR Awakening
