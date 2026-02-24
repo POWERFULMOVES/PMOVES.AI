@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -11,6 +11,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - Dependency/code scanning backlog: Dependabot open `14` (3 high, 9 medium, 2 low); Code Scanning open (first 100) `3 critical`, `64 high`, `33 medium`.
 - Active remediation focus: SSRF hardening landed for CHIT image decode paths in Hi‑RAG gateways and URL safety guards are being completed in SupaSerch HTTP fallback.
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
+- Submodule production release lane now has deterministic checklist coverage for all tracked submodules (40/40), including branch policy gating, static/runtime gate packs, and hardened merge-order policy (`pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`).
 
 ## Milestones
 
