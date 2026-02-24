@@ -1364,7 +1364,7 @@ manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visi
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
-.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict submodule-branch-policy-check integration-contract-check integration-contract-check-strict integration-contract-check-baseline
 submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
