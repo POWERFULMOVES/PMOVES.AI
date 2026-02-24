@@ -6,6 +6,7 @@ GRAPHITI_MARK: `PHI-4482-GATEWAY::PMOVES`
 Primary convergence record lives at:
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 - `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
+- `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
 
