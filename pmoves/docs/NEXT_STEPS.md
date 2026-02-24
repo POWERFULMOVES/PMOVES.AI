@@ -1,7 +1,18 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-23_
+_Last updated: 2026-02-24_
+
+### Latest changes (Feb 24, 2026)
+- Added deterministic submodule production release runbook:
+  - `pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
+  - Includes per-submodule profile/dependency matrix (40 tracked submodules), required gate packs, and merge-order policy.
+- Added hardened branch policy checker for submodule pins:
+  - `make -C pmoves submodule-branch-policy-check`
+  - Backed by `pmoves/tools/submodule_branch_policy_check.py`
+- Updated static certification pipeline ordering:
+  - `audit-layers-static` now includes `submodule-branch-policy-check` between layer validation and integrity/docs gates.
+- Updated local CI/operator docs to include the full deterministic submodule production gate chain before final promotion PRs.
 
 ### Latest changes (Feb 23, 2026)
 - Added local-first GHCR prepublish lane for SupaSerch:

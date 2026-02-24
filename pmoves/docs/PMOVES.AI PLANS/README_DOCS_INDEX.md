@@ -45,6 +45,7 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Docs Consolidation + Archival Policy** — `../DOCS_CONSOLIDATION_ARCHIVAL_POLICY.md`
 - **Model Source Of Truth (Registry + Profiles + Tooling)** — `../MODEL_SOURCE_OF_TRUTH.md`
 - **Submodule Integration Contract** — `../submodules/SUBMODULE_INTEGRATION_CONTRACT.md`
+- **Submodule Production Release Checklist (deterministic gates + merge order)** — `../integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
 - **First-Run Bootstrap** — `FIRST_RUN.md`
 - **Auth + Boot Order Runbook** — `../AUTH_BOOT_ORDER_RUNBOOK.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
