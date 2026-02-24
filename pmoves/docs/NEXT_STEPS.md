@@ -1,7 +1,43 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-20_
+_Last updated: 2026-02-24_
+
+### Latest changes (Feb 24, 2026)
+- Added deterministic submodule production release runbook:
+  - `pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
+  - Includes per-submodule profile/dependency matrix (40 tracked submodules), required gate packs, and merge-order policy.
+- Added hardened branch policy checker for submodule pins:
+  - `make -C pmoves submodule-branch-policy-check`
+  - Backed by `pmoves/tools/submodule_branch_policy_check.py`
+- Updated static certification pipeline ordering:
+  - `audit-layers-static` now includes `submodule-branch-policy-check` between layer validation and integrity/docs gates.
+- Updated local CI/operator docs to include the full deterministic submodule production gate chain before final promotion PRs.
+- Added production Jellyfin stack can-openers that include TensorZero + GPU Orchestrator + unified auth precheck:
+  - `make -C pmoves jellyfin-stack-prod`
+  - `make -C pmoves jellyfin-stack-prod-verify`
+- Added production parity audit tooling for Creator/Jellyfin lanes:
+  - `make -C pmoves jellyfin-parity-audit`
+  - `make -C pmoves jellyfin-parity-audit-strict`
+  - checks now cover runtime (`8093/8077/9096/8300/8400`) plus TensorZero (`3030`) and GPU Orchestrator (`8200`), and validates unified auth env parity (`AUTH_BOOTSTRAP_MODE`, `SUPABASE_JWT_SECRET`, credentialed `NATS_URL`).
+- PMOVES.YT metadata probe hardened: `/yt/info` now avoids format-forced extraction and ignores external yt-dlp config to reduce false 500s during production smokes.
+- Jellyfin bridge host reachability hardened: `jellyfin-bridge` now joins `pmoves_external` so `http://localhost:8093/healthz` and `jellyfin-verify` are reliable in production bring-up.
+- Added worktree team runbook:
+  - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+
+### Latest changes (Feb 23, 2026)
+- Added local-first GHCR prepublish lane for SupaSerch:
+  - `make -C pmoves build-local-supaserch`
+  - `make -C pmoves ghcr-prepublish-supaserch`
+  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=<org-namespace>`
+- Refactored GHCR workflow matrix selection:
+  - Added `.github/workflows/integrations-ghcr.matrix.json` as the integration matrix source of truth.
+  - Added `resolve-matrix` workflow job so `workflow_dispatch` with `integration=<name>` creates only the targeted build lane.
+- GHCR auth flow now prefers PAT (`GHCR_TOKEN`/`GH_PAT_PUBLISH`) when present, then falls back to `github.token`, to reduce package ACL/ownership 403 failures.
+- Added GHCR secret bootstrap helper target:
+  - `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI`
+- `pmoves/tools/push-gh-secrets.sh` now supports `--ghcr-bootstrap` and credential source overrides (`--ghcr-token-from`, `--ghcr-fallback-token-from`, `--ghcr-username-from`) so existing credentials can be reused for rotation.
+- Updated local CI/operator docs to require local build validation before targeted GHCR matrix dispatch, keeping local and self-hosted paths in parity.
 
 ### Latest changes (Feb 20, 2026)
 - Channel Monitor gained an authenticated Discord intake endpoint: `POST /api/monitor/discord-drop` with `approval_mode` (`ask`/`auto`) for gated agentic review.

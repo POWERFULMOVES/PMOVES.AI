@@ -47,6 +47,21 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** PMOVES.YT, Supabase
 - **Compose Profile:** `orchestration`
 
+### BoTZ MCP Gateway
+- **Ports:** 2091
+- **Purpose:** Multi-server MCP gateway + A2A task bridge for BoTZ orchestration
+- **Key APIs:**
+  - `GET /healthz` - Primary health endpoint
+  - `GET /health` - Compatibility health endpoint
+  - `GET /metrics` - Prometheus metrics
+  - `GET /servers`, `GET /tools` - MCP server/tool catalog
+  - `POST /call`, `POST /mcp`, `POST /a2a/v1/tasks` - Protected execution/task routes
+- **Authentication:** JWT Bearer token validated via `SUPABASE_JWT_SECRET` (fail-closed)
+- **NATS Topics:**
+  - Publish: `botz.mcp.tool.executed.v1`, `botz.gateway.task.dispatched.v1`, `agent.graphiti.signed.v1`
+- **Dependencies:** NATS, Supabase
+- **Compose Profile:** `agents` (submodule lane)
+
 ## Retrieval & Knowledge Services
 
 ### Hi-RAG Gateway v2 (PREFERRED)
