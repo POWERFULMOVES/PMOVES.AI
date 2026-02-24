@@ -7,6 +7,7 @@
 
 import { registerRoot } from 'remotion';
 import { A2UIComposition } from './A2UIComposition';
+import React from 'react';
 
 const RemotionRoot: React.FC = () => {
   return <A2UIComposition />;

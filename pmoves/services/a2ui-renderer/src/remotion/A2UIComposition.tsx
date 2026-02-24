@@ -19,7 +19,7 @@ interface A2UISpec {
     duration_ms: number;
     elements: Array<{
       type: string;
-      content?: Record<string, unknown>;
+      content?: unknown;
       enter_at_ms?: number;
     }>;
   }>;

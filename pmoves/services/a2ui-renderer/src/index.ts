@@ -73,10 +73,15 @@ let bundleLocation: string | null = null;
 
 async function ensureBundle(): Promise<string> {
   if (bundleLocation) return bundleLocation;
-
-  const entryPoint = path.resolve(__dirname, 'remotion', 'index.ts');
-  if (!fs.existsSync(entryPoint)) {
-    throw new Error(`Remotion entry point not found: ${entryPoint}`);
+  const entryCandidates = [
+    path.resolve(__dirname, 'remotion', 'index.js'),
+    path.resolve(__dirname, 'remotion', 'index.tsx'),
+    path.resolve(process.cwd(), 'dist', 'remotion', 'index.js'),
+    path.resolve(process.cwd(), 'src', 'remotion', 'index.tsx'),
+  ];
+  const entryPoint = entryCandidates.find((candidate) => fs.existsSync(candidate));
+  if (!entryPoint) {
+    throw new Error(`Remotion entry point not found. Checked: ${entryCandidates.join(', ')}`);
   }
 
   console.log('Bundling Remotion project...');
@@ -101,6 +106,8 @@ const renderDuration = new Histogram({
   buckets: [0.5, 1, 2, 5, 10, 30, 60, 120],
 });
 
+type AuthenticatedRequest = Request & { user?: Record<string, unknown> };
+
 // --- JWT Auth Middleware (fail-closed) ---
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   if (!SUPABASE_JWT_SECRET) {
@@ -123,7 +130,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
     }
 
     // Attach decoded token to request
-    (req as Record<string, unknown>).user = decoded;
+    (req as AuthenticatedRequest).user = decoded;
 
     // CHIT Safe Passage attestation header
     const attestation = Buffer.from(JSON.stringify({
@@ -149,6 +156,12 @@ async function uploadToMinIO(filePath: string, key: string, contentType: string)
     ContentType: contentType,
   }));
   return `${MINIO_ENDPOINT}/${MINIO_BUCKET}/${key}`;
+}
+
+function inferIngestKind(format: string): 'audio' | 'video' | 'image' | 'document' | 'other' {
+  if (format === 'gif') return 'image';
+  if (format === 'mp4' || format === 'webm') return 'video';
+  return 'other';
 }
 
 // --- Middleware ---
@@ -230,12 +243,16 @@ app.post('/render', requireAuth, async (req: Request, res: Response) => {
 
     // Publish NATS events
     publishNats('ingest.file.added.v1', {
-      path: renderKey,
-      bucket: MINIO_BUCKET,
-      format,
-      source: 'a2ui-renderer',
-      agent_id: 'darkxside',
-      timestamp: new Date().toISOString(),
+      file_id: renderKey,
+      uri: `s3://${MINIO_BUCKET}/${renderKey}`,
+      kind: inferIngestKind(format),
+      meta: {
+        bucket: MINIO_BUCKET,
+        format,
+        source: 'a2ui-renderer',
+        agent_id: 'darkxside',
+        timestamp: new Date().toISOString(),
+      },
     });
 
     publishNats('a2ui.render.completed.v1', {
@@ -345,12 +362,16 @@ app.post('/render/chart', requireAuth, async (req: Request, res: Response) => {
     const url = await uploadToMinIO(outputFile, renderKey, 'video/mp4');
 
     publishNats('ingest.file.added.v1', {
-      path: renderKey,
-      bucket: MINIO_BUCKET,
-      format: 'mp4',
-      source: 'a2ui-renderer',
-      agent_id: 'darkxside',
-      timestamp: new Date().toISOString(),
+      file_id: renderKey,
+      uri: `s3://${MINIO_BUCKET}/${renderKey}`,
+      kind: 'video',
+      meta: {
+        bucket: MINIO_BUCKET,
+        format: 'mp4',
+        source: 'a2ui-renderer',
+        agent_id: 'darkxside',
+        timestamp: new Date().toISOString(),
+      },
     });
 
     publishNats('a2ui.render.completed.v1', {
@@ -379,8 +400,8 @@ app.post('/render/chart', requireAuth, async (req: Request, res: Response) => {
 });
 
 // --- Startup ---
-app.listen(PORT, '127.0.0.1', async () => {
-  console.log(`A2UI Renderer listening on http://127.0.0.1:${PORT}`);
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`A2UI Renderer listening on http://0.0.0.0:${PORT}`);
   console.log(`Health: http://127.0.0.1:${PORT}/healthz`);
   console.log(`Metrics: http://127.0.0.1:${PORT}/metrics`);
 
