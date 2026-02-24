@@ -1,48 +1,77 @@
 # KRISS KROSS Accord
-_Last updated: 2026-02-23_
+_Last updated: 2026-02-24_
 
-Purpose: prevent agent collisions by converting overlap into a controlled
-overlay workflow.
+## Purpose
+Collision-safe agent traversal protocol for PMOVES.AI when multiple agents operate in parallel lanes and converge on shared release branches.
 
-## Roles (Codex-led window)
+This accord extends:
+- `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md`
+- `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 
-- `Codex` (`DJ/Lead`)
-  - owns implementation lane and merge-ready weave
-  - authors Codex command mappings
-  - decides parity completeness for release
-- `Claude` (`Counterpoint/Scout`)
-  - audits checks/comments/failures
-  - proposes focused diffs in integration branch
-  - supplies evidence packets for Codex weave
+## Core Rules
+1. One branch, one active owner at a time unless explicit overlay handoff is recorded.
+2. Every cross-agent lane transition requires:
+   - Graphiti trail entry
+   - claim/release update in `AGNOTE4482PHI.t1.md`
+   - PR comment with next command set and blockers
+3. No silent overlap on the same files without a KRISS KROSS handshake block.
 
-## KRISS KROSS handshake
-
-1. `CLAIM`
-   - each agent posts branch, scope, and TTL.
-2. `OVERLAY`
-   - owner/scout split is declared with one `overlay_id`.
-3. `WEAVE`
-   - scout sends candidate patches + evidence.
-   - owner performs final integration in target branch.
-4. `RELEASE`
-   - owner signs release.
-   - scout signs ack.
-
-## Required fields
-
-- `overlay_id`
-- `lane_owner`
-- `scout_agent`
-- `target_branch`
+## KRISS KROSS Handshake
+Required fields:
+- `from_agent`
+- `to_agent`
+- `branch`
 - `scope`
-- `evidence_paths`
-- `parity_report_path`
-- `agent_signature`
+- `collision_risk` (`low|medium|high`)
+- `fallback_mode` (`ff|overlay|three_way`)
+- `graphiti_ref`
+- `chit_ref` (if secret-bearing context exists)
 
-## CODEX WEAVE checklist
+Example:
 
-1. Resolve string/port/env drift against source-of-truth docs (`AGENTS.md` + compose).
-2. Run parity coverage check:
-   - `make -C pmoves codex-parity-check`
-3. Update command map and rerun report.
-4. Record release signature in AGNOTE lane.
+```text
+KRISS-KROSS-HANDSHAKE
+from_agent=codex-gpt5
+to_agent=claude-opus
+branch=PMOVES.AI-Edition-Hardened
+scope=dao-doc-recontext+ingestion-plan
+collision_risk=medium
+fallback_mode=three_way
+graphiti_ref=docs/AGENT_TRAIL.md
+chit_ref=pmoves/data/chit/...
+```
+
+## JOHNNY BLAZE Three-Way Fallback
+Use when both agents touched the same branch window and replay is non-trivial.
+
+1. `Fast-forward attempt`
+   - If clean, merge and emit graphiti handoff.
+2. `Overlay attempt`
+   - Keep non-overlapping commits in sequence.
+   - Resolve file ownership with explicit `Done/Left Behind/For Next Agent`.
+3. `Three-way merge`
+   - Merge base + lane A + lane B.
+   - Preserve both agent intent where non-conflicting.
+   - For conflicting strategy text, keep deterministic operator path and move alternatives to "For Next Agent".
+   - Append resolution summary to `docs/AGENT_TRAIL.md`.
+
+Merge evidence commands:
+
+```powershell
+git fetch origin --prune
+git log --oneline --left-right --cherry-pick <laneA>...<laneB>
+git merge <target>
+git status --short
+```
+
+## Graphiti Compliance
+Every completed collision resolution must emit:
+- One `graphiti:` block in `docs/AGENT_TRAIL.md`
+- One `REVIEW` + `RELEASE` line in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+- Optional NATS event: `agent.graphiti.signed.v1`
+
+## Signatures
+- `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`
+- `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::PENDING`
+
+`CLAUDE-OPUS` signature moves to `SIGNED` when that agent appends an ACK line to `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
