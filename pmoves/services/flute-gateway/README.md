@@ -30,7 +30,7 @@ Flute Gateway serves as the unified voice interface for PMOVES.AI, aggregating m
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
 | `SUPABASE_URL` | `http://localhost:3010` | Supabase REST API |
 | `SUPABASE_SERVICE_ROLE_KEY` | - | Service role key |
 | `DEFAULT_VOICE_PROVIDER` | `vibevoice` | Default TTS provider |
@@ -139,7 +139,7 @@ flute-gateway:
     - "8055:8055"
     - "8056:8056"
   environment:
-    - NATS_URL=nats://nats:4222
+    - NATS_URL=nats://nats:pmoves@nats:4222
     - VIBEVOICE_URL=${VIBEVOICE_URL}
     - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7860
     - WHISPER_URL=http://ffmpeg-whisper:8078
