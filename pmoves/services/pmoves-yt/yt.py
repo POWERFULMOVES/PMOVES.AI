@@ -1685,10 +1685,29 @@ def yt_info(body: Dict[str,Any] = Body(...)):
     url = body.get('url')
     if not url: raise HTTPException(400, 'url required')
     ydl_opts = _with_ytdlp_defaults({'quiet': True, 'noprogress': True, 'skip_download': True})
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        wanted = {k: info.get(k) for k in ('id','title','uploader','duration','webpage_url')}
-        return {'ok': True, 'info': wanted}
+    # Metadata probes must not force a playable/download format because
+    # upstream extractor availability can vary and cause false 500s.
+    ydl_opts.pop('format', None)
+    ydl_opts.pop('merge_output_format', None)
+    ydl_opts.setdefault('extract_flat', True)
+    # Ignore external yt-dlp config files to keep API behavior deterministic.
+    ydl_opts['ignoreconfig'] = True
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception:
+        # Conservative fallback that avoids hardened defaults entirely.
+        fallback_opts = {
+            'quiet': True,
+            'noprogress': True,
+            'skip_download': True,
+            'extract_flat': True,
+            'ignoreconfig': True,
+        }
+        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    wanted = {k: info.get(k) for k in ('id','title','uploader','duration','webpage_url')}
+    return {'ok': True, 'info': wanted}
 
 @app.post("/yt/download")
 def yt_download(body: Dict[str,Any] = Body(...)):
