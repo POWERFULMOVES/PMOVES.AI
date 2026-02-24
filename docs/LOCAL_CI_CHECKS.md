@@ -165,6 +165,30 @@ cd pmoves
 make ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=<org-namespace>
 ```
 
+## 9. Submodule Production Deterministic Gate
+
+Before final production promotion PRs, run the submodule-first deterministic chain:
+
+```bash
+cd pmoves
+make submodule-layer-validate-all-strict
+make submodule-layer-validate-strict
+make submodule-branch-policy-check
+make submodule-integrity-strict
+make submodule-docs-audit-strict
+make integration-contract-check-baseline
+make tooling-audit-strict
+make secrets-audit
+make ci-runners-lockdown-strict
+SUPABASE_RUNTIME=compose make supa-runtime-guard
+make smoke-prod
+GPU_SMOKE_STRICT=true make smoke-gpu
+```
+
+Use the per-submodule matrix in:
+
+`pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
+
 ## Checklists
 
 Copy these bullets into PR descriptions (or tick the template boxes) after each local run:
@@ -178,5 +202,6 @@ Copy these bullets into PR descriptions (or tick the template boxes) after each 
 - [ ] Discord embed smoke (`make demo-content-published`) when validating multimedia metadata
 - [ ] Self-hosted runner lane check (`make ci-runners-check-strict`) before GHCR/self-hosted dispatches
 - [ ] GHCR local-first prepublish gate (`make ghcr-prepublish-supaserch`) before targeted GHCR dispatch
+- [ ] Submodule deterministic gate (`make submodule-layer-validate-all-strict` through `make smoke-prod`, plus `make submodule-branch-policy-check`)
 
 If any check is intentionally skipped (e.g., doc-only change), note the reason in the PR “Testing” section.
