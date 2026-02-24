@@ -228,6 +228,32 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Observability systems, UI dashboards
 
+**`agent.graphiti.signed.v1`**
+- **Direction:** Published by BoTZ MCP Gateway and agent handoff services
+- **Purpose:** Emit graphiti-signed trail events for cross-agent handoff attribution
+- **Payload:**
+  ```json
+  {
+    "agent_id": "codex",
+    "display_name": "Codex",
+    "glyph": "■",
+    "color": "#2563EB",
+    "voice": "terse",
+    "phase": "phase-name",
+    "timestamp": "2026-02-24T00:40:00Z",
+    "summary": "short completion summary",
+    "resonance": ["domain-a", "domain-b"],
+    "handoff": {
+      "done": ["item-1"],
+      "remaining": ["item-2"],
+      "for_next_agent": ["item-3"]
+    }
+  }
+  ```
+- **Schema:** `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json`
+- **Subscribers:** Agent trail processors, observability dashboards, handoff automation
+- **Delivery:** Publish/subscribe (JetStream optional depending on deployment policy)
+
 ## Mesh Coordination Subjects
 
 ### Node Announcements

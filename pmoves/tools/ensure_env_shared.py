@@ -24,12 +24,12 @@ def main() -> int:
         return 0
 
     if template.exists():
-        print(f"→ Seeding {env_file} from {template}")
+        print(f"-> Seeding {env_file} from {template}")
         env_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(template, env_file)
         return 0
 
-    print(f"→ Creating empty {env_file} (no template found)")
+    print(f"-> Creating empty {env_file} (no template found)")
     env_file.parent.mkdir(parents=True, exist_ok=True)
     env_file.touch()
     return 0

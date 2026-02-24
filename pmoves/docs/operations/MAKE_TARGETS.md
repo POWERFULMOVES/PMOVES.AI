@@ -166,6 +166,18 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-runners-check-strict`
   - Same check in strict mode; exits non-zero if any required lane is offline/missing.
   - Use before dispatching heavy GHCR workflows to avoid queued runs when runners are down.
+- `make ghcr-bootstrap-secrets`
+  - Pushes GHCR auth secrets to GitHub Actions from local `env.shared` credentials.
+  - Uses `tools/push-gh-secrets.sh --ghcr-bootstrap` to reuse `GHCR_TOKEN` (or fallback `GH_PAT_PUBLISH`) and set `GHCR_USERNAME`/`GHCR_TOKEN`.
+  - Override destination with `GH_REPO=owner/repo` and `GH_SECRET_ENV=Dev|Prod`.
+- `make build-local-supaserch`
+  - Builds `pmoves-supaserch:local-smoke` locally (`linux/amd64`, no push) using the same Dockerfile/context contract as CI.
+  - Use as the first gate before publishing.
+- `make ghcr-prepublish-supaserch`
+  - Local-first wrapper around `build-local-supaserch`; fail here before spending self-hosted runner/GHCR cycles.
+- `make ghcr-dispatch-supaserch`
+  - Dispatches `.github/workflows/integrations-ghcr.yml` for `integration=supaserch` after local validation.
+  - Respects `GHCR_DISPATCH_REF` (defaults to current branch), optional `GHCR_NAMESPACE=<org>`, and requires runner lane checks to pass.
 - `make ci-runners-map`
   - Maps discovered workflow lanes to explicit host assignments using `pmoves/integrations/github-runners/compose/lane_hosts.json`.
   - With `--check-gh`, also reports live online/offline status for each lane.
@@ -233,8 +245,11 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Strict per-module validation lane (warnings fail) for deterministic one-by-one certification.
 - `make submodule-layer-validate-strict`
   - Strict mode for the same validator (warnings fail), intended as the first submodule gate before root-level checks.
+- `make submodule-branch-policy-check`
+  - Verifies `.gitmodules` branch pins follow hardened release policy.
+  - Default policy requires `PMOVES.AI-Edition-Hardened`; explicit DoX override is allowed for `PMOVES.AI-Edition-Hardened-DoX`.
 - `make audit-layers-static`
-  - Ordered static certification pipeline: `submodule-layer-validate-all-strict` -> `submodule-layer-validate-strict` -> `submodule-integrity-strict` -> `submodule-docs-audit-strict` -> integration/tooling/secrets/runner/runtime-guard checks.
+  - Ordered static certification pipeline: `submodule-layer-validate-all-strict` -> `submodule-layer-validate-strict` -> `submodule-branch-policy-check` -> `submodule-integrity-strict` -> `submodule-docs-audit-strict` -> integration/tooling/secrets/runner/runtime-guard checks.
 - `make audit-layers-runtime`
   - Extends static certification with runtime checks (`smoke`, `monitoring-smoke-prod`, optional `smoke-gpu` via `AUDIT_RUNTIME_GPU=1`).
 - `make audit-layers`
@@ -247,6 +262,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make integration-contract-check-baseline`
   - Runs strict contract checks for the baseline overlays: template + `integrations/health-wger` + `integrations/firefly-iii`.
   - Use this as the Lane D quick gate before PRs.
+  - For full production rollout sequencing, pair this with `pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`.
 - `make chit-export`
   - Exports `env.shared` to a user-scoped CHIT bundle (`~/.config/pmoves/chit/env.cgp.json`) using `--no-cleartext` by default.
 - `make chit-manifest-sync`

@@ -214,7 +214,7 @@ def _print_report(findings: Iterable[Finding], *, mode: str, strict: bool) -> in
     print("")
 
     for item in findings_list:
-        prefix = "✅" if item.level == "ok" else ("⚠️ " if item.level == "warn" else "❌")
+        prefix = "[OK]" if item.level == "ok" else ("[WARN]" if item.level == "warn" else "[FAIL]")
         print(f"{prefix} [{item.code}] {item.message}")
 
     print("")
@@ -248,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Auth Bootstrap Check")
         print("- mode: skip")
         print("")
-        print("⚠️  Auth checks skipped by mode.")
+        print("[WARN] Auth checks skipped by mode.")
         return 0
 
     env_file = args.env_file.expanduser().resolve()
