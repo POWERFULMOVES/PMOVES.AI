@@ -13,6 +13,17 @@ _Last updated: 2026-02-24_
 - Updated static certification pipeline ordering:
   - `audit-layers-static` now includes `submodule-branch-policy-check` between layer validation and integrity/docs gates.
 - Updated local CI/operator docs to include the full deterministic submodule production gate chain before final promotion PRs.
+- Added production Jellyfin stack can-openers that include TensorZero + GPU Orchestrator + unified auth precheck:
+  - `make -C pmoves jellyfin-stack-prod`
+  - `make -C pmoves jellyfin-stack-prod-verify`
+- Added production parity audit tooling for Creator/Jellyfin lanes:
+  - `make -C pmoves jellyfin-parity-audit`
+  - `make -C pmoves jellyfin-parity-audit-strict`
+  - checks now cover runtime (`8093/8077/9096/8300/8400`) plus TensorZero (`3030`) and GPU Orchestrator (`8200`), and validates unified auth env parity (`AUTH_BOOTSTRAP_MODE`, `SUPABASE_JWT_SECRET`, credentialed `NATS_URL`).
+- PMOVES.YT metadata probe hardened: `/yt/info` now avoids format-forced extraction and ignores external yt-dlp config to reduce false 500s during production smokes.
+- Jellyfin bridge host reachability hardened: `jellyfin-bridge` now joins `pmoves_external` so `http://localhost:8093/healthz` and `jellyfin-verify` are reliable in production bring-up.
+- Added worktree team runbook:
+  - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
 
 ### Latest changes (Feb 23, 2026)
 - Added local-first GHCR prepublish lane for SupaSerch:
