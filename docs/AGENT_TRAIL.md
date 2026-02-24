@@ -107,6 +107,45 @@ Canonical safe sequence for rail splits with uncommitted work:
 
 <!-- /graphiti -->
 
+<!-- graphiti:codex phase:jellyfin-creator-production-audit ts:2026-02-24T00:40:00Z -->
+
+## ■ Codex — Jellyfin Creator Production Audit
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** production-audit, gpu-orchestrator, tensorzero, auth-parity  
+**Voice:** terse
+
+### Done
+- Created isolated worktree lane (`review/jellyfin-creator-parity`) and kept main dirty state untouched.
+- Fixed Jellyfin production topology for host reachability and parity:
+  - `jellyfin-bridge` on `pmoves_external`
+  - Jellyfin AI services on external network where required
+  - TensorZero gateway/UI external network + startup env defaults.
+- Added production verification commands and scripts:
+  - `jellyfin-stack-prod`, `jellyfin-stack-prod-verify`, `jellyfin-verify`, `yt-jellyfin-smoke`, `jellyfin-parity-audit`, `jellyfin-parity-audit-strict`
+  - `pmoves/tools/jellyfin_verify.py`
+  - `pmoves/tools/yt_jellyfin_smoke.py`
+  - `pmoves/tools/jellyfin_creator_parity_audit.py`
+- Fixed PMOVES.YT metadata smoke path (`/yt/info`) to avoid format hard-fail and return stable title/id extraction.
+- Aligned jellyfin-bridge build inputs (`requirements.txt`) so container builds without missing lockfile.
+- Ran production checks and reached green:
+  - `make -C pmoves jellyfin-parity-audit-strict`
+  - `make -C pmoves jellyfin-stack-prod-verify`
+
+### Left Behind
+- BoTZ unified JWT + CHIT attestation implementation remains in Claude lane (`C:\Users\russe\.claude\plans\twinkly-roaming-star.md`).
+- External sibling doc `PMOVES-transcribe-and-fetch/PMOVES.AI_INTEGRATION.md` is treated as non-blocking in this workspace audit.
+
+### For Next Agent
+- Merge this lane first, then re-run strict parity + stack verify in CI-hosted runtime.
+- In BoTZ lane, emit `agent.graphiti.signed.v1` from gateway auth/attestation completion.
+- After both lanes are green, open release promotion PR with test logs attached (runtime + auth parity).
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:nats-auth-gateway-hardening ts:2026-02-23T22:30:00Z -->
 
 ## ◆ Claude Opus — NATS Auth Hardening + Unified Gateway Auth + Agent Trails
@@ -416,3 +455,4 @@ Welcome home, ◇.
 </td></tr></table>
 
 <!-- /graphiti -->
+

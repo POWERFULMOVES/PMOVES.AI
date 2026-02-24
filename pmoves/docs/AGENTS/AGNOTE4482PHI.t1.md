@@ -61,6 +61,7 @@ Required handoff fields:
 ## Active Claim Register
 - `2026-02-20T12:12:35.7340973-05:00` CLAIM `CODEX-GPT5` scope: PR convergence + runner/cache/app strategy review.
 - `2026-02-21T10:35:03.6791631-05:00` CLAIM `CODEX-GPT5` scope: Phase 5 CHIT flaw verification + Graphiti signature audit + lane-safe traversal note.
+- `2026-02-23T08:43:22.5310868-05:00` CLAIM `CODEX-GPT5` scope: KRISS KROSS protocol addendum + Codex command parity authority tooling.
 - `2026-02-23T13:20:00-05:00` CLAIM `CODEX-GPT5` scope: Dock.Tier Git.Flare parity lane (local-first GHCR + secrets bootstrap + agent schedule docs).
 - `2026-02-24T12:00:00Z` CLAIM `CLAUDE-OPUS` scope: Rail split handoff — runtime PR #708 + PR #707 close-review + KRISS KROSS accord ACK.
 

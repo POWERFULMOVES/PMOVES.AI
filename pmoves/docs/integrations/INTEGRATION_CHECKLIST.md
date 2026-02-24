@@ -24,7 +24,8 @@ Use this checklist when onboarding a new submodule or auditing an existing one.
 
 - [ ] **NATS_URL** defaults to authenticated URL: `nats://nats:pmoves@nats:4222`
   - Check: `docker-compose*.yml`, `.env*`, Python/JS code defaults
-  - Pattern: `os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")`
+  - Pattern (internal Docker-only): `os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")`
+  - Production/external deployments should inject `NATS_URL` via secrets (`os.getenv("NATS_URL")`) and avoid credential defaults in source.
 
 - [ ] **NATS subjects** documented in integration template
   - Publish subjects listed with schema examples
@@ -114,7 +115,7 @@ Use this checklist when onboarding a new submodule or auditing an existing one.
 
 - [ ] **Auth pattern** follows PMOVES.AI standards
   - JWT Bearer token validation using `SUPABASE_JWT_SECRET`
-  - OR shared secret via `MCP_SERVER_TOKEN` for service-to-service
+  - OR shared secret via `MCP_SERVER_TOKEN` for service-to-service (legacy; prefer JWT for new integrations)
   - Fail-closed: if secret not configured, return HTTP 500 (not bypass)
 
 - [ ] **Public endpoints** clearly defined
@@ -122,7 +123,7 @@ Use this checklist when onboarding a new submodule or auditing an existing one.
   - All other endpoints require authentication
 
 - [ ] **CORS headers** include `Authorization`
-  ```
+  ```http
   Access-Control-Allow-Headers: Content-Type, Authorization
   ```
 

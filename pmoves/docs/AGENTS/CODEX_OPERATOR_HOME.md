@@ -10,6 +10,12 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 - Use `mode=open-chat+scout` for context gathering while staying conversational.
 - See protocol details in `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`.
 
+## KRISS KROSS lane roles
+
+- `Codex` lead mode: implementation owner, command author, parity authority.
+- `Claude` in Codex-led windows: scout/reviewer lane for risk and alternative diffs.
+- Use overlay handoff rules from `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` when scopes intersect.
+
 ## Bootstrap
 
 1. Install pinned Codex config:
@@ -26,6 +32,7 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`
 - `make -C pmoves verify-all`
 - `make -C pmoves codex-audit`
+- `make -C pmoves codex-parity-check`
 
 ## CHIT Geometry Bus
 

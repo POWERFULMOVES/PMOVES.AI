@@ -81,6 +81,7 @@ jobs:
           import os
           import pathlib
           import sys
+          import uuid
 
           matrix_path = pathlib.Path(".github/workflows/integrations-ghcr.matrix.json")
           entries = json.loads(matrix_path.read_text(encoding="utf-8"))
@@ -160,10 +161,17 @@ jobs:
           output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
           with output.open("a", encoding="utf-8") as fh:
               for key, value in match.items():
+                  if value is None:
+                      value = ""
                   if isinstance(value, bool):
                       fh.write(f"{key}={'true' if value else 'false'}\n")
                   else:
-                      fh.write(f"{key}={value}\n")
+                      text = str(value)
+                      if "\n" in text:
+                          delim = f"EOF_{key}_{uuid.uuid4().hex}"
+                          fh.write(f"{key}<<{delim}\n{text}\n{delim}\n")
+                      else:
+                          fh.write(f"{key}={text}\n")
           PY
         env:
           MATRIX_NAME: ${{ matrix.name }}
@@ -171,18 +179,33 @@ jobs:
       - name: Prepare integration source
         run: |
           set -euo pipefail
-          if [ "${{ steps.cfg.outputs.git_url }}" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
+          cfg_url='${{ steps.cfg.outputs.git_url }}'
+          cfg_ref='${{ steps.cfg.outputs.ref }}'
+          case "$cfg_url" in
+            https://github.com/*) ;;
+            *)
+              echo "::error::Unsupported git_url '$cfg_url' (only https://github.com/* is allowed)."
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$cfg_ref" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::Unsupported git ref '$cfg_ref'."
+            exit 1
+          fi
+
+          if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
             echo "Using checked-out PMOVES.AI workspace as integration source"
             rm -rf integration-src
             mkdir -p integration-src
             git archive --format=tar HEAD | tar -x -C integration-src
           else
-            url="${{ steps.cfg.outputs.git_url }}"
+            url="$cfg_url"
             if [ -n "${CI_GIT_CLONE_TOKEN:-}" ]; then
-              url="${url/https:\/\/github.com\//https:\/\/x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/}"
+              trimmed="${url#https://github.com/}"
+              url="https://x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/${trimmed}"
             fi
-            if ! git clone --depth=1 --branch "${{ steps.cfg.outputs.ref }}" "$url" integration-src; then
-              echo "::error::Failed to clone ${url} (ref=${{ steps.cfg.outputs.ref }}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
+            if ! git clone --depth=1 --branch "$cfg_ref" "$url" integration-src; then
+              echo "::error::Failed to clone ${cfg_url} (ref=${cfg_ref}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
               exit 1
             fi
           fi
@@ -380,7 +403,7 @@ jobs:
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@0.34.1
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -396,7 +419,7 @@ jobs:
 
       - name: Trivy vulnerability scan report (includes unfixed)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@0.34.1
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table

@@ -223,12 +223,12 @@ The following submodules have been through security audit and integration review
 **Status:** NATS auth GREEN, MCP Gateway auth ADDED (2026-02-23)
 
 - **Connection Pattern:** Routes tool calls to 6 upstream MCP servers (Docling, Cipher, E2B, VL Sentinel, Postman, n8n)
-- **Auth:** Protected endpoints (`/call`, `/mcp`, `/a2a/v1/tasks`) require `Authorization: Bearer <MCP_SERVER_TOKEN>`
+- **Auth:** Protected endpoints (`/call`, `/mcp`, `/a2a/v1/tasks`) require `Authorization: Bearer <Supabase-JWT>` (validated via `SUPABASE_JWT_SECRET`; fail-closed if secret is missing)
 - **Public:** `/healthz`, `/health`, `/metrics`, `/servers`, `/tools`, `/.well-known/agent.json`
 - **NATS:** Publishes `botz.mcp.tool.executed.v1`, `botz.gateway.task.dispatched.v1`
 - **See:** `PMOVES-BoTZ/.claude/CLAUDE.md` for full MCP server catalog
 
-### DoX Document Intelligence [Port 8092]
+### DoX Document Intelligence (PDF Ingest lane) [Port 8092]
 
 **Status:** NATS auth GREEN, WebSocket TLS documented as accepted risk
 
@@ -394,7 +394,7 @@ make setup-flute-gateway
 
 **Dependencies:**
 - VibeVoice at `http://host.docker.internal:3000` (optional)
-- Ultimate-TTS at `http://ultimate-tts-studio:7860` (optional)
+- Ultimate-TTS at `http://ultimate-tts-studio:7861` (optional)
 - Whisper at `http://ffmpeg-whisper:8078`
 - Supabase for persona storage
 
@@ -723,7 +723,7 @@ curl http://localhost:9090/api/v1/query?query=up
 
 - **Service Topology:** [PMOVES_SERVICE_TOPOLOGY.md](../PMOVES_SERVICE_TOPOLOGY.md) — Architecture overview, data flows, tier map
 - **Integration Checklist:** [INTEGRATION_CHECKLIST.md](INTEGRATION_CHECKLIST.md) — Standard onboarding checklist for new submodules
-- **Phase C Audit Summary:** [submodules-audit-final-summary.md](../../docs/submodules-audit-final-summary.md)
+- **Phase C Audit Summary:** [submodules-audit-final-summary.md](../../../docs/submodules-audit-final-summary.md)
 - **PMOVES Dashboard:** http://localhost:4482
 - **Grafana:** http://localhost:3002
 - **Prometheus:** http://localhost:9090
