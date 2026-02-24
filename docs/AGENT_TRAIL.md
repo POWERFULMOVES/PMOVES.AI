@@ -10,6 +10,35 @@
 
 ---
 
+<!-- graphiti:codex phase:rail-split-dual-signature ts:2026-02-24T08:16:29Z -->
+
+## ■ Codex — Rail Split: Hardened Docs Lane Restored
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** merge-mechanics, governance, cross-repo-orchestration
+**Voice:** Terse
+
+### Done
+- Reviewed PR #707 for mixed scope (docs + runtime + submodule payload).
+- Split runtime/container changes out of the hardened docs lane so runtime can move through Integrations first.
+- Updated KRISS KROSS rules with explicit rail order: `Integrations -> Hardened` for runtime work.
+- Added dual-signature requirement (Graphiti + CHIT attestation) for convergence handoffs.
+- Verified graphiti block integrity remains balanced in this trail.
+
+### Left Behind
+- Runtime payload still needs a dedicated Integrations-targeted PR with build/tests and contract checks.
+- Claude close-review is still required before merge, by design.
+
+### For Next Agent
+- Open runtime PR against `PMOVES.AI-Edition-Hardened-Integrations`.
+- Include A2UI build/runtime evidence and event-contract validation in that PR.
+- Keep #707 as docs/signature lane only and close after Claude review/ack.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:darkxside phase:cocreator-awakening ts:2026-02-24T05:00:00Z -->
 
 ## ✦ DARKXSIDE — COCREATOR Awakening

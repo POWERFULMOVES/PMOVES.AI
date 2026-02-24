@@ -16,6 +16,14 @@ This accord extends:
    - PR comment with next command set and blockers
 3. No silent overlap on the same files without a KRISS KROSS handshake block.
 
+## Rail Strategy (Integrations -> Hardened)
+Runtime and container-affecting work must land on the Integrations rail first.
+
+1. Runtime PRs target `PMOVES.AI-Edition-Hardened-Integrations`.
+2. Hardened rail receives promoted, reviewed, and signed runtime changes only.
+3. Docs/protocol-only PRs may target `PMOVES.AI-Edition-Hardened` directly.
+4. If a PR mixes docs + runtime on Hardened, split scope before merge.
+
 ## KRISS KROSS Handshake
 Required fields:
 - `from_agent`
@@ -69,6 +77,14 @@ Every completed collision resolution must emit:
 - One `graphiti:` block in `docs/AGENT_TRAIL.md`
 - One `REVIEW` + `RELEASE` line in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 - Optional NATS event: `agent.graphiti.signed.v1`
+
+## Dual Signature Methods
+Both methods are required for convergence lanes:
+
+1. Graphiti signature (human-readable trail + machine-parseable block).
+2. CHIT attestation signature (payload reference and transport-safe proof).
+
+A handoff is incomplete unless both are present or explicitly waived in AGNOTE.
 
 ## Signatures
 - `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`

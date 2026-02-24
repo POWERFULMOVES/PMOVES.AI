@@ -64,6 +64,7 @@ Required handoff fields:
 - `2026-02-23T08:43:22.5310868-05:00` CLAIM `CODEX-GPT5` scope: KRISS KROSS protocol addendum + Codex command parity authority tooling.
 - `2026-02-23T13:20:00-05:00` CLAIM `CODEX-GPT5` scope: Dock.Tier Git.Flare parity lane (local-first GHCR + secrets bootstrap + agent schedule docs).
 - `2026-02-24T04:32:28Z` CLAIM `CODEX-GPT5` scope: hardened dao-recontext + roadmap/next-steps + production-audit dashboard convergence.
+- `2026-02-24T08:16:29Z` CLAIM `CODEX-GPT5` scope: PR #707 rail split (remove runtime payload from hardened docs lane) + dual-signature rule sync.
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -92,6 +93,13 @@ Required handoff fields:
   - Preserved KRISS KROSS accord as collision-safe handoff contract and linked it through docs index.
 
 - `2026-02-24T04:32:28Z` RELEASE `CODEX-GPT5` scope: hardened docs convergence complete; lane open for implementation follow-up.
+- `2026-02-24T08:16:29Z` REVIEW `CODEX-GPT5`
+  - Confirmed PR #707 had mixed docs/runtime scope and split runtime payload out of hardened lane.
+  - Reverted A2UI runtime/service/submodule deltas from #707 to enforce Integrations-first runtime rail.
+  - Updated `KRISS_KROSS_ACCORD.md` with explicit rail strategy (`Integrations -> Hardened`) and dual-signature requirement (Graphiti + CHIT attestation).
+  - Verified Graphiti block balance in `docs/AGENT_TRAIL.md` remains valid after lane updates.
+
+- `2026-02-24T08:16:29Z` RELEASE `CODEX-GPT5` scope: #707 returned to hardened docs/signature scope; ready for Claude close-review.
 
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
@@ -116,3 +124,9 @@ Required handoff fields:
 - Ack: `I normalized DAO planning inputs for hardened release context and linked production audit gates to deterministic command paths.`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1::HARDENED-DAO-CONVERGENCE`
 - Timestamp: `2026-02-24T04:32:28Z`
+
+## Agent ACK (Signed, Rail Split + Dual Signature)
+- Agent: `CODEX-GPT5`
+- Ack: `I enforced Integrations-first runtime rail strategy and restored #707 to docs/signature scope with Graphiti + CHIT dual-signature requirements.`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::RAIL-SPLIT-DUAL-SIG`
+- Timestamp: `2026-02-24T08:16:29Z`
