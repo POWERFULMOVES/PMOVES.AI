@@ -30,7 +30,9 @@ Flute Gateway serves as the unified voice interface for PMOVES.AI, aggregating m
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://${NATS_USER}:${NATS_PASSWORD}@nats:4222` | NATS server URL (preferred explicit DSN) |
+| `NATS_USER` | `nats` | NATS username (used when composing URL) |
+| `NATS_PASSWORD` | - | NATS password from env or `NATS_PASSWORD_FILE` |
 | `SUPABASE_URL` | `http://localhost:3010` | Supabase REST API |
 | `SUPABASE_SERVICE_ROLE_KEY` | - | Service role key |
 | `DEFAULT_VOICE_PROVIDER` | `vibevoice` | Default TTS provider |
@@ -41,7 +43,7 @@ Flute Gateway serves as the unified voice interface for PMOVES.AI, aggregating m
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VIBEVOICE_URL` | `http://host.docker.internal:3000` | VibeVoice endpoint |
-| `ULTIMATE_TTS_URL` | `http://ultimate-tts-studio:7860` | Ultimate TTS endpoint |
+| `ULTIMATE_TTS_URL` | `http://ultimate-tts-studio:7861` | Ultimate TTS endpoint |
 | `WHISPER_URL` | `http://ffmpeg-whisper:8078` | Whisper STT endpoint |
 
 ### CHIT Integration
@@ -79,7 +81,7 @@ Flute Gateway serves as the unified voice interface for PMOVES.AI, aggregating m
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/voice/transcribe` | POST | Transcribe audio file |
+| `/v1/voice/recognize` | POST | Transcribe audio file |
 
 ## Prosodic Synthesis
 
@@ -139,9 +141,11 @@ flute-gateway:
     - "8055:8055"
     - "8056:8056"
   environment:
-    - NATS_URL=nats://nats:pmoves@nats:4222
+    - NATS_URL=nats://${NATS_USER}:${NATS_PASSWORD}@nats:4222
+    - NATS_USER=${NATS_USER}
+    - NATS_PASSWORD=${NATS_PASSWORD}
     - VIBEVOICE_URL=${VIBEVOICE_URL}
-    - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7860
+    - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
     - WHISPER_URL=http://ffmpeg-whisper:8078
     - SUPABASE_URL=${SUPABASE_URL}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}

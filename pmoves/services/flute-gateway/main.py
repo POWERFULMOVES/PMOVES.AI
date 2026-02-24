@@ -24,6 +24,7 @@ import wave
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
 import httpx
@@ -81,14 +82,51 @@ logging.basicConfig(
 logger = logging.getLogger("flute-gateway")
 
 # Environment configuration
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+
+
+def _build_nats_url() -> str:
+    explicit = get_secret("NATS_URL", "") or os.getenv("NATS_URL", "")
+    if explicit:
+        return explicit
+
+    host = get_secret("NATS_HOST", os.getenv("NATS_HOST", "nats")) or "nats"
+    port = str(get_secret("NATS_PORT", os.getenv("NATS_PORT", "4222")) or "4222")
+    user = get_secret("NATS_USER", os.getenv("NATS_USER", "")) or ""
+    password = get_secret("NATS_PASSWORD", os.getenv("NATS_PASSWORD", "")) or ""
+
+    if user and password:
+        return f"nats://{user}:{password}@{host}:{port}"
+    if user:
+        return f"nats://{user}@{host}:{port}"
+    return f"nats://{host}:{port}"
+
+
+def _redact_url_password(url: str) -> str:
+    try:
+        split = urlsplit(url)
+    except Exception:
+        return url
+    if not split.netloc:
+        return url
+    host = split.hostname or ""
+    port = f":{split.port}" if split.port else ""
+    user = split.username
+    if user:
+        netloc = f"{user}:<redacted>@{host}{port}"
+    else:
+        netloc = f"{host}{port}"
+    return urlunsplit((split.scheme, netloc, split.path, split.query, split.fragment))
+
+
+NATS_URL = _build_nats_url()
+NATS_URL_REDACTED = _redact_url_password(NATS_URL)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://localhost:3010")
 SUPABASE_KEY = get_secret("SUPABASE_SERVICE_ROLE_KEY", "")
 # VibeVoice is now served by Ultimate-TTS-Studio (port 7861)
 # Default to the host-gateway URL so the Flute stack is voice-ready by default.
 VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:7861").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
-ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7860")
+ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7861")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = get_secret("FLUTE_API_KEY", "")
 
@@ -161,6 +199,11 @@ STT_DURATION = Histogram(
     "STT recognition duration in seconds",
     ["provider"]
 )
+CHIT_EVENTS_FAILED = Counter(
+    "flute_chit_events_failed_total",
+    "Total CHIT event publish failures",
+    ["reason"]
+)
 
 # Provider instances (initialized on startup)
 vibevoice_provider: Optional[VibeVoiceProvider] = None
@@ -199,8 +242,7 @@ async def _publish_chit_voice_event(
         logger.debug("chit_voice_event_published", extra={"subject": CHIT_GEOMETRY_SUBJECT})
     except Exception as exc:
         # Track failures in Prometheus for observability
-        reason = "nats_unavailable" if not nats_client else "publish_failed"
-        CHIT_EVENTS_FAILED.labels(reason=reason).inc()
+        CHIT_EVENTS_FAILED.labels(reason="publish_failed").inc()
         # If user explicitly enabled CHIT, they should know it's failing
         if CHIT_VOICE_ATTRIBUTION:
             logger.error(
@@ -281,7 +323,7 @@ class ConfigResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown with NATS service announcement."""
-    global vibevoice_provider, whisper_provider, ultimate_tts_provider, cloning_provider, nats_client
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, nats_client
 
     logger.info("Starting Flute Gateway...")
 
@@ -318,13 +360,13 @@ async def lifespan(app: FastAPI):
     try:
         import nats
         nats_client = await nats.connect(NATS_URL)
-        logger.info("Connected to NATS at %s", NATS_URL)
+        logger.info("Connected to NATS at %s", NATS_URL_REDACTED)
 
         # Announce service on NATS after connection is established
         if NATS_ANNOUNCE_AVAILABLE:
             try:
                 await announce_service(
-                    nats_url=NATS_URL,
+                    nats_url=NATS_URL_REDACTED,
                     slug=slug,
                     name=name,
                     url=url,
