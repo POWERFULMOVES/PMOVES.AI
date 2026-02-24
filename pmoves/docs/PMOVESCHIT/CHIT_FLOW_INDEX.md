@@ -39,3 +39,14 @@ This file is the operator list of active CHIT-adjacent flows, ordered for produc
   - `pmoves/docs/PMOVESCHIT/03_EVO_SWARM.md`
   - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md`
 - Output: channel monitor and downstream ingestion events visible in audit trails.
+
+## CHIT-FLOW-005: Operation Dock.Tier Git.Flare Parity
+- Scope: local-first image validation, GHCR credential reuse, and targeted workflow dispatch with runner gates.
+- Entry commands:
+  - `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI`
+  - `make -C pmoves ghcr-prepublish-supaserch`
+  - `make -C pmoves ci-runners-check-strict`
+  - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=cataclysmstudios-inc`
+- Output: targeted GHCR matrix runs only after local proof, plus auditable credential/bootstrap pathway.
+- Related runbook:
+  - `pmoves/docs/AGENTS/OPERATION_DOCK_TIER_GIT_FLARE_PARITY.md`

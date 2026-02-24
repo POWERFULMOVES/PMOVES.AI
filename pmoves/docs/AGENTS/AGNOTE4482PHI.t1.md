@@ -62,6 +62,7 @@ Required handoff fields:
 - `2026-02-20T12:12:35.7340973-05:00` CLAIM `CODEX-GPT5` scope: PR convergence + runner/cache/app strategy review.
 - `2026-02-21T10:35:03.6791631-05:00` CLAIM `CODEX-GPT5` scope: Phase 5 CHIT flaw verification + Graphiti signature audit + lane-safe traversal note.
 - `2026-02-23T08:43:22.5310868-05:00` CLAIM `CODEX-GPT5` scope: KRISS KROSS protocol addendum + Codex command parity authority tooling.
+- `2026-02-23T13:20:00-05:00` CLAIM `CODEX-GPT5` scope: Dock.Tier Git.Flare parity lane (local-first GHCR + secrets bootstrap + agent schedule docs).
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -72,13 +73,14 @@ Required handoff fields:
   - Saved review for team traversal: `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md`.
 
 - `2026-02-21T10:35:03.6791631-05:00` RELEASE `CODEX-GPT5` scope: Phase 5 review lane complete; handoff ready for Claude/team confirmation.
-- `2026-02-23T08:43:22.5310868-05:00` REVIEW `CODEX-GPT5`
-  - Added KRISS KROSS collision-to-overlay contract to Graphiti protocol.
-  - Added `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` and Codex persona playbook.
-  - Added Codex parity checker (`pmoves/scripts/codex_parity_check.py`) and Make targets.
-  - Fixed unresolved merge marker in `pmoves/Makefile` blocking make target parsing.
 
-- `2026-02-23T08:43:22.5310868-05:00` RELEASE `CODEX-GPT5` scope: Codex DJ lane staged with parity enforcement and KRISS KROSS handoff rules.
+- `2026-02-23T13:20:00-05:00` REVIEW `CODEX-GPT5`
+  - Added GHCR bootstrap support to `pmoves/tools/push-gh-secrets.sh` so existing credentials (`GHCR_TOKEN` or `GH_PAT_PUBLISH`) can rotate GHCR secrets without manual duplication.
+  - Added local-first SupaSerch prepublish and dispatch targets in `pmoves/Makefile`, including corrected Docker build context parity with service Dockerfile expectations.
+  - Added runbook `pmoves/docs/AGENTS/OPERATION_DOCK_TIER_GIT_FLARE_PARITY.md` to specify agent responsibilities and lifecycle scheduling from CLI to cloud.
+  - Updated operator docs and planning docs for parity: `docs/LOCAL_CI_CHECKS.md`, `docs/SECRETS_ONBOARDING.md`, `pmoves/docs/operations/MAKE_TARGETS.md`, `pmoves/docs/NEXT_STEPS.md`, `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`, `docs/AGENT_TRAIL.md`.
+
+- `2026-02-23T13:20:00-05:00` RELEASE `CODEX-GPT5` scope: Dock.Tier Git.Flare parity patch lane complete; ready for targeted GHCR run verification.
 
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
@@ -91,9 +93,3 @@ Required handoff fields:
 - Ack: `I completed Phase 5 verification and recorded Graphiti-safe traversal notes for cross-agent movement.`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1::PHASE5-CHIT-REVIEW`
 - Timestamp: `2026-02-21T10:35:03.6791631-05:00`
-
-## Agent ACK (Signed, KRISS KROSS Accord)
-- Agent: `CODEX-GPT5`
-- Ack: `I established Codex-led parity authority and KRISS KROSS overlay protocol for cross-agent weave lanes.`
-- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::KRISS-KROSS-CODEX-WEAVE`
-- Timestamp: `2026-02-23T08:43:22.5310868-05:00`
