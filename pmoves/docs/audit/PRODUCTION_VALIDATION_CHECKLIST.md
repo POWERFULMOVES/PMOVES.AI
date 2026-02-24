@@ -1,9 +1,54 @@
-> **Superseded by [Production Audit Dashboard](PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
+> **Superseded by [Production Audit Dashboard](../PRODUCTION_AUDIT_DASHBOARD.md)** — This document is retained for historical reference.
 
 # Production Validation Checklist
 **PMOVES.AI Edition - Hardened Branch**
 **Created:** 2026-02-07
 **Purpose:** Step-by-step production bring-up and validation
+**Last Reviewed:** 2026-02-24 (post-release addendum)
+
+---
+
+## 2026-02-24 Production Addendum (Current Lane)
+
+Use this addendum for current production readiness before falling back to the historical phase-by-phase notes below.
+
+### Release Wave Status
+- [x] Lock-step merge sequence completed: `#703 -> #704 -> #700 -> #701 -> #702 -> #699`
+- [x] Promotion landed to `main` at commit `1a21c0384a4ed3913bc2ce8a5f68544723ac79d4`
+- [ ] Runner queue deadlock still open for self-hosted hardening/GHCR lanes
+- [ ] Credentials/runtime closure still open (`AB-4`, `AB-5`, `AB-6`)
+
+### Deterministic Validation Sequence (Current)
+
+```bash
+# Credentials and runtime prerequisites
+make -C pmoves secrets-funnel
+make -C pmoves verify-all
+make -C pmoves supabase-bootstrap
+
+# Static deterministic gates
+make -C pmoves submodule-layer-validate-all-strict
+make -C pmoves submodule-layer-validate-strict
+make -C pmoves submodule-branch-policy-check
+make -C pmoves submodule-integrity-strict
+make -C pmoves submodule-docs-audit-strict
+make -C pmoves integration-contract-check-baseline
+make -C pmoves tooling-audit-strict
+make -C pmoves secrets-audit
+make -C pmoves ci-runners-lockdown-strict
+SUPABASE_RUNTIME=compose make -C pmoves supa-runtime-guard
+
+# Runtime evidence
+make -C pmoves smoke-prod
+GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu
+make -C pmoves jellyfin-stack-prod-verify
+make -C pmoves jellyfin-parity-audit-strict
+
+# Queue visibility (AB-9)
+gh run list --status queued --limit 20
+gh run list --status in_progress --limit 20
+gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
+```
 
 ---
 

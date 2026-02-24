@@ -3,11 +3,11 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-02-20 (production runtime remediation + CI recovery pass)
-**Branch:** `PMOVES.AI-Edition-Hardened`
-**Commit:** `80d06daa`
+**Last Updated:** 2026-02-24 (lock-step release closeout + remaining blocker refresh)
+**Branch:** `main`
+**Commit:** `1a21c038`
 **Consolidated From:** 27 audit documents
-**Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-18.log`
+**Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
 ---
 
@@ -17,15 +17,28 @@
 |--------|-------|
 | Total tracked items | 24 |
 | Resolved | 22 (+3 since last update) |
-| Active blockers | 3 (was 6) |
+| Active blockers | 4 (AB-4/5/6/9) |
 | Critical | 0 |
-| High | 1 |
+| High | 2 |
 | Medium | 2 |
 | Low | 0 |
-| CodeQL alerts (Hardened) | **29 open** (2 critical, 22 high, 5 medium) |
-| Dependabot alerts | **2 open** (1 high, 1 low) |
-| Open PRs | **0** |
-| CI (commit 80d06daa) | 2 passed, 16 queued (awaiting runners) |
+| CodeQL alerts (open sample) | **37 open** (34 `error`, 3 `warning`) |
+| Dependabot alerts | **7 open** (2 high, 1 medium, 4 low) |
+| Open PRs | **1** (#705 dependabot yt-dlp bump) |
+| CI (commit 1a21c038) | Hosted gates pass; self-hosted lanes still queue-blocked |
+
+### Release Closeout (2026-02-24)
+
+| PR | Scope | Status | Merge Commit |
+|----|-------|--------|--------------|
+| #703 | PR699 parity remediation | MERGED | `bd576cc5` |
+| #704 | deterministic submodule release gate/checklist | MERGED | `fbf1a06a` |
+| #700 | Jellyfin prod topology alignment | MERGED | `9d3d5fb6` |
+| #701 | Jellyfin prod verify/parity tools | MERGED | `979d4014` |
+| #702 | Creator audit trail/docs | MERGED | `f51312be` |
+| #699 | NATS auth + unified JWT + trails (promotion) | MERGED | `1a21c038` |
+
+Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#issuecomment-3948534322`
 
 ### Live CI Recovery (2026-02-20)
 
@@ -70,6 +83,7 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 | AB-4 | `env.tier-data` missing credentials | Env Tier Audit 2026-02-07 | **HIGH** | OPEN | Run `make -C pmoves secrets-funnel` with real credentials for Neo4j, PostgreSQL, admin user |
 | AB-5 | 18 service health checks not validated | Readiness Audit 2026-02-07 | **MEDIUM** | DEFERRED | Depends on AB-4; run `make -C pmoves verify-all` with full stack up |
 | AB-6 | DB migrations not validated | Readiness Audit 2026-02-07 | **MEDIUM** | DEFERRED | Depends on AB-4; validate Supabase, Neo4j, Qdrant migrations |
+| AB-9 | Self-hosted runner queue deadlock on hardening/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | OPEN | Drain/cancel stale queued runs, verify runner pickup, rerun targeted hardening lane (`#700`/`main`) and one GHCR integration build (`supaserch`) |
 
 ### Blocker Detail
 
@@ -79,12 +93,15 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 **AB-5 / AB-6: Runtime Validation**
 Health checks and DB migrations cannot be validated until the full stack is brought up with real credentials (depends on AB-4). Partial smoke runs show Qdrant, Meilisearch, Neo4j UI, and Presign passing, but `render-webhook` and several agent services failing.
 
+**AB-9: Runner Queue Deadlock**
+At release closeout, both self-hosted runners were online but long-lived queued lanes remained blocked (`Docker Hardening Validation`, `Build and publish integration images to GHCR`, `CodeQL Advanced`, `Python Tests`). Hosted checks completed, but self-hosted queue recovery still needs explicit operator action.
+
 **AB-7: CodeRabbit Fixes — RESOLVED**
 All PR #606 findings addressed. See Blocker Resolutions below.
 
 ---
 
-## CodeQL Alert Triage (29 Open)
+## CodeQL Alert Triage (2026-02-18 Baseline)
 
 | Group | Count | Severity | Rule | Files | Remediation |
 |-------|-------|----------|------|-------|-------------|
@@ -100,7 +117,7 @@ All PR #606 findings addressed. See Blocker Resolutions below.
 
 ---
 
-## Dependabot Alert Triage (2 Open)
+## Dependabot Alert Triage (2026-02-18 Baseline)
 
 | Alert | Severity | Package | Manifest | Assessment |
 |-------|----------|---------|----------|------------|
@@ -219,35 +236,36 @@ make -C pmoves secrets-funnel
 # AB-5: Service health (run with full stack up)
 make -C pmoves verify-all
 
-# AB-1: Submodule recursive status (will exit 128 until A2UI fixed)
-git submodule status --recursive
-
-# AB-3: Uncomment GHCR triggers then verify
-# Edit .github/workflows/integrations-ghcr.yml lines 36, 38
-
-# AB-7: Bump PBKDF2 iterations in credential_service.py
-# File: pmoves/integrations/archon/python/src/server/services/credential_service.py
-# Change iterations=100000 to iterations=600000
+# AB-6: Migration validation (Supabase + data plane)
+make -C pmoves supabase-bootstrap
+make -C pmoves submodule-integrity-strict
 
 # GPU smoke test
-make -C pmoves smoke-gpu
+GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu
 
-# Static audit layers (all passed except manifest-audit which needs venv)
-make -C pmoves submodule-integrity
-make -C pmoves submodule-docs-audit
+# Static deterministic gates
+make -C pmoves submodule-layer-validate-all-strict
+make -C pmoves submodule-layer-validate-strict
+make -C pmoves submodule-branch-policy-check
+make -C pmoves submodule-docs-audit-strict
 make -C pmoves integration-contract-check-baseline
-make -C pmoves observability-audit
+make -C pmoves tooling-audit-strict
+make -C pmoves secrets-audit
+make -C pmoves ci-runners-lockdown-strict
 make -C pmoves supa-runtime-guard
+
+# AB-9: Runner queue visibility/recovery evidence
+gh run list --status queued --limit 20
+gh run list --status in_progress --limit 20
+gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
 ```
 
 ### Resolution Sequence
 
-1. ~~**AB-7** (bump credential_service.py PBKDF2 to 600k)~~ -- **DONE**
-2. ~~**AB-3** (uncomment GHCR workflow triggers)~~ -- **DONE**
-3. ~~**AB-1** (fix A2UI nested gitlink)~~ -- **DONE**
-4. **AB-4** first (credentials) -- unblocks AB-5, AB-6
-5. **AB-5 + AB-6** together (bring up stack, validate health + migrations)
-6. **CodeQL remediation** (29 alerts) -- follow-up task, priority: Group A SSRF > B+C+D path injection > E+F+G
+1. **AB-4** first (credentials) -- unblocks AB-5, AB-6
+2. **AB-5 + AB-6** together (bring up stack, validate health + migrations)
+3. **AB-9** runner recovery (drain queued self-hosted lanes, confirm fresh pickup)
+4. **CodeQL remediation** (37 open sample) -- follow-up task, priority: SSRF + path injection + frontend/resource limits
 
 ---
 
@@ -255,6 +273,7 @@ make -C pmoves supa-runtime-guard
 
 | Date | Change |
 |------|--------|
+| 2026-02-24 | **Lock-step release closeout refresh**: merged PR sequence `#703 -> #704 -> #700 -> #701 -> #702 -> #699`, promoted to `main` at commit `1a21c038`, and updated dashboard blockers/metrics for remaining queue deadlock + credential/runtime validation. |
 | 2026-02-20 | **Production runtime remediation pass**: restored `supabase_storage_pmoves` (migration table/schema privilege repair for `supabase_storage_admin`), ran production smoke/agents/archon/monitoring checks (all pass), and verified no new collation mismatch warnings after collation refresh. Updated production diagnostics to use valid Agent Zero endpoints (`codex_health_quick.py`). |
 | 2026-02-20 | Added live CI recovery tracking for PRs #677/#678/#681 and aligned dashboard update timestamp to current production-audit pass. |
 | 2026-02-18 | **Blocker resolution pass**: AB-1 RESOLVED (orphaned Deskdesktop gitlink removed from A2UI, recursive submodule status exits 0). AB-3 RESOLVED (GHCR push/PR triggers uncommented). AB-7 RESOLVED (credential_service.py PBKDF2 bumped to 600k). Blockers reduced 6 → 3. Docs #5, #6 superseded, #8 resolved. |
