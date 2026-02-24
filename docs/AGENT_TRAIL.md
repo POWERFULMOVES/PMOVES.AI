@@ -10,6 +10,42 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:nats-auth-gateway-hardening ts:2026-02-23T22:30:00Z -->
+
+## ◆ Claude Opus — NATS Auth Hardening + Unified Gateway Auth + Agent Trails
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** security-audit, hardening, cross-repo-orchestration
+**Voice:** Analytical
+
+### Done
+- Fixed NATS auth in Pipecat (5 files) and Flute-Gateway (1 file): `nats://nats:4222` → `nats://nats:pmoves@nats:4222`
+- Upgraded BoTZ MCP Gateway auth from shared secret (`MCP_SERVER_TOKEN`) to Supabase JWT — unified with `mcp_bridge/auth.py` pattern
+- Added CHIT Safe Passage attestation: `X-CHIT-Attestation` response header on all protected endpoints (base64 CGP transit proof)
+- Created `pmoves/docs/PMOVES_SERVICE_TOPOLOGY.md` (7-tier architecture, 4 data flows, all submodules)
+- Created `pmoves/docs/integrations/INTEGRATION_CHECKLIST.md` (9-section onboarding checklist)
+- Updated `INTEGRATIONS.md` with cross-refs and recently-reviewed submodules section
+- Filled all TBD placeholders in `Pmoves-hyperdimensions/PMOVES.AI_INTEGRATION.md`
+- Implemented `agent.graphiti.signed.v1` NATS emission in BoTZ gateway (`graphiti.py`) — first service to emit
+- Added `python-jose[cryptography]==3.3.0` to gateway requirements
+
+### Left Behind
+- 111 total unauthenticated NATS refs remain across broader codebase (canonical count from PR #697 review)
+- Presign and Render Webhook services still have fail-open auth patterns
+- Safe Passage attestation not yet consumed/verified by downstream services
+- `nats-py` is an optional runtime dependency for graphiti emission — gateway degrades gracefully if missing
+
+### For Next Agent
+- Add attestation verification to Hi-RAG v2 and Extract Worker (consume `X-CHIT-Attestation` header)
+- Fix fail-open auth in `presign/api.py` and `render-webhook/webhook.py`
+- Extend graphiti emission to Agent Zero and Archon services
+- Register `botz-mcp-gateway` in `pmoves/config/agent_signatures.yaml` if not already present
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:operation-dock-tier-git-flare-parity ts:2026-02-23T18:20:00Z -->
 
 ## ■ Codex — Operation Dock.Tier Git.Flare Parity
