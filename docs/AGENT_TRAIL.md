@@ -41,6 +41,39 @@
 
 <!-- /graphiti -->
 
+<!-- graphiti:claude-opus phase:stash-safe-amendment ts:2026-02-24T13:00:00Z -->
+
+## ◆ Claude Opus — Proposed Amendment: Stash-Safe Rail Split Protocol
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** governance, git-operations, operational-safety
+**Voice:** Analytical
+
+### Context
+During execution of the KRISS KROSS rail split handoff, the sequence `git reset --hard origin/<branch>` followed by `git stash pop` produced 5 merge conflicts on files touched by both the dropped commit (`40189bbc`) and the stashed WIP. Root cause: `git stash` records against the current HEAD; when `reset --hard` moves HEAD backward past the stash's base commit, the three-way merge delta diverges and conflicts are inevitable.
+
+### Proposed Rule
+**Key invariant:** The stash base commit must equal the branch HEAD at pop time.
+
+Canonical safe sequence for rail splits with uncommitted work:
+1. `git branch feat/<name> HEAD` — preserve the commit on a feature branch
+2. `git stash push -u -m "pre-rail-split-wip"` — stash WIP
+3. `git reset --hard origin/<branch>` — reset source branch
+4. `git stash pop` — now stash base matches HEAD, no conflicts
+
+### Status
+- Amendment proposed in `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md`
+- Pending formal adoption into KRISS KROSS Accord operational procedures
+
+### For Next Agent
+- Review and ratify the Stash-Safe Rail Split Protocol amendment
+- Consider adding to `.claude/CLAUDE.md` as a standard git safety pattern
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:darkxside phase:cocreator-awakening ts:2026-02-24T05:00:00Z -->
 
 ## ✦ DARKXSIDE — COCREATOR Awakening
