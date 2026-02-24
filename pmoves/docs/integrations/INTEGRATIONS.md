@@ -4,16 +4,22 @@
 
 This guide provides comprehensive documentation for all PMOVES service integrations, including authentication, API endpoints, setup scripts, and troubleshooting.
 
+**Related Documents:**
+- **[Service Topology](../PMOVES_SERVICE_TOPOLOGY.md)** — How all services connect, data flow narratives, and the 7-tier architecture
+- **[Integration Checklist](INTEGRATION_CHECKLIST.md)** — Standard checklist for onboarding new submodules
+- **[Security Patterns](../../.claude/context/security-patterns.md)** — Cross-cutting auth, secrets, and hardening patterns
+
 ---
 
 ## Table of Contents
 
 1. [Authentication](#authentication)
 2. [Google OAuth Setup](#google-oauth-setup)
-3. [Services Catalog](#services-catalog)
-4. [Setup Scripts](#setup-scripts)
-5. [Environment Variables](#environment-variables)
-6. [Troubleshooting](#troubleshooting)
+3. [Recently Reviewed Submodules](#recently-reviewed-submodules)
+4. [Services Catalog](#services-catalog)
+5. [Setup Scripts](#setup-scripts)
+6. [Environment Variables](#environment-variables)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -208,6 +214,69 @@ To enable additional providers:
 
 ---
 
+## Recently Reviewed Submodules
+
+The following submodules have been through security audit and integration review (Phase C, 2026-02-16 through 2026-02-23). See [Service Topology](../PMOVES_SERVICE_TOPOLOGY.md) for how they fit into the overall architecture.
+
+### BoTZ MCP Gateway [Port 2091]
+
+**Status:** NATS auth GREEN, MCP Gateway auth ADDED (2026-02-23)
+
+- **Connection Pattern:** Routes tool calls to 6 upstream MCP servers (Docling, Cipher, E2B, VL Sentinel, Postman, n8n)
+- **Auth:** Protected endpoints (`/call`, `/mcp`, `/a2a/v1/tasks`) require `Authorization: Bearer <Supabase-JWT>` (validated via `SUPABASE_JWT_SECRET`; fail-closed if secret is missing)
+- **Public:** `/healthz`, `/health`, `/metrics`, `/servers`, `/tools`, `/.well-known/agent.json`
+- **NATS:** Publishes `botz.mcp.tool.executed.v1`, `botz.gateway.task.dispatched.v1`
+- **See:** `PMOVES-BoTZ/.claude/CLAUDE.md` for full MCP server catalog
+
+### DoX Document Intelligence (PDF Ingest lane) [Port 8092]
+
+**Status:** NATS auth GREEN, WebSocket TLS documented as accepted risk
+
+- **Connection Pattern:** Processes documents from MinIO, sends to Extract Worker for indexing
+- **Auth:** Fail-closed JWT validation
+- **Strengths:** Excellent path traversal defense, well-structured security
+- **NATS:** Uses authenticated connection
+- **See:** `PMOVES-DoX/` for document processing capabilities
+
+### Pipecat Voice Framework
+
+**Status:** NATS auth FIXED (2026-02-23), library-scope (auth delegated to app layer)
+
+- **Connection Pattern:** Frame-based pipeline for voice/multimodal AI agents
+- **Integration Libraries:** `pmoves_registry`, `pmoves_announcer`, `pmoves_health`
+- **NATS:** Service announcements on `services.announce.v1`
+- **Note:** Library, not standalone service — Flute-Gateway wraps it as a service
+- **See:** `PMOVES-Pipecat/PMOVES.AI_INTEGRATION.md`
+
+### Flute-Gateway [Port 8055 HTTP, 8056 WebSocket]
+
+**Status:** NATS auth FIXED (2026-02-23)
+
+- **Connection Pattern:** Voice gateway wrapping Pipecat + Ultimate-TTS-Studio
+- **Auth:** JWT Bearer token or `FLUTE_API_KEY` for service-to-service
+- **NATS:** Publishes CHIT voice geometry events (optional, best-effort)
+- **See:** `.claude/context/flute-gateway.md` for full API reference
+
+### Open-Notebook [SurrealDB]
+
+**Status:** NATS auth GREEN, USER directive present
+
+- **Connection Pattern:** Knowledge base synced via `notebook-sync` service
+- **Remaining Issues:** SurrealDB default credentials (root:root), auth fail-open pattern
+- **Integration:** DeepResearch auto-publishes results here
+- **See:** `PMOVES-Open-Notebook/PMOVES.AI_INTEGRATION.md`
+
+### Pmoves-hyperdimensions
+
+**Status:** Template COMPLETED (2026-02-23), no HTTP endpoints
+
+- **Connection Pattern:** Subscribes to `geometry.visualization.request.v1` NATS subject
+- **Role:** UI/data visualization layer rendering agents on Poincare disk
+- **CHIT Toggles:** delta, kappa, hz, swarm, attribution
+- **See:** `Pmoves-hyperdimensions/PMOVES.AI_INTEGRATION.md`
+
+---
+
 ## Services Catalog
 
 ### Agent Zero [Port 8080]
@@ -325,7 +394,7 @@ make setup-flute-gateway
 
 **Dependencies:**
 - VibeVoice at `http://host.docker.internal:3000` (optional)
-- Ultimate-TTS at `http://ultimate-tts-studio:7860` (optional)
+- Ultimate-TTS at `http://ultimate-tts-studio:7861` (optional)
 - Whisper at `http://ffmpeg-whisper:8078`
 - Supabase for persona storage
 
@@ -652,6 +721,9 @@ curl http://localhost:9090/api/v1/query?query=up
 
 ## Additional Resources
 
+- **Service Topology:** [PMOVES_SERVICE_TOPOLOGY.md](../PMOVES_SERVICE_TOPOLOGY.md) — Architecture overview, data flows, tier map
+- **Integration Checklist:** [INTEGRATION_CHECKLIST.md](INTEGRATION_CHECKLIST.md) — Standard onboarding checklist for new submodules
+- **Phase C Audit Summary:** [submodules-audit-final-summary.md](../../../docs/submodules-audit-final-summary.md)
 - **PMOVES Dashboard:** http://localhost:4482
 - **Grafana:** http://localhost:3002
 - **Prometheus:** http://localhost:9090

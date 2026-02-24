@@ -1281,6 +1281,7 @@ STACK_FILES ?= \
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
 DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
+JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
 INTEGRATIONS_COMPOSE_WATCHER := compose/docker-compose.flows-watcher.yml
@@ -1364,7 +1365,7 @@ manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visi
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
-.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict submodule-branch-policy-check integration-contract-check integration-contract-check-strict integration-contract-check-baseline
 submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
@@ -1947,6 +1948,11 @@ IMAGE_NAMESPACE ?= powerfulmoves
 IMAGE_TAG ?= pmoves-latest
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 BUILDX_BUILDER ?= pmoves-multiarch
+GHCR_WORKFLOW ?= integrations-ghcr.yml
+GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+GHCR_NAMESPACE ?=
+GH_SECRET_ENV ?= Dev
+GH_REPO ?= $(shell gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo POWERFULMOVES/PMOVES.AI)
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -1967,11 +1973,34 @@ docker-login: ensure-env-shared ## Login to GHCR using env.shared or shell env c
 	printf "%s" "$$token" | docker login ghcr.io -u "$$user" --password-stdin >/dev/null && echo "✔ GHCR login ok as $$user"
 
 build-push-supaserch: buildx-setup docker-login ## Build+push SupaSerch multi-arch image
-	@ctx=$$(pwd); \
-	 df=$$ctx/services/supaserch/Dockerfile; \
+	@ctx=$$(pwd)/services; \
+	 df=$$ctx/supaserch/Dockerfile; \
 	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-supaserch:$(IMAGE_TAG); \
 	 echo "→ Building $$img"; \
 	 docker buildx build --platform $(TARGET_PLATFORMS) -f "$$df" -t "$$img" "$$ctx" --push
+
+.PHONY: ghcr-bootstrap-secrets
+ghcr-bootstrap-secrets: ensure-env-shared ## Bootstrap GHCR_USERNAME/GHCR_TOKEN GitHub secrets from env.shared creds
+	@bash tools/push-gh-secrets.sh --file env.shared --repo "$(GH_REPO)" --env "$(GH_SECRET_ENV)" --only GHCR_TOKEN,GHCR_USERNAME,GH_PAT_PUBLISH --ghcr-bootstrap
+
+.PHONY: build-local-supaserch
+build-local-supaserch: buildx-setup ## Build SupaSerch locally (amd64, no push) before GHCR publish
+	@ctx=$$(pwd)/services; \
+	 df=$$ctx/supaserch/Dockerfile; \
+	 img=$(REGISTRY)/$(IMAGE_NAMESPACE)/pmoves-supaserch:local-smoke; \
+	 echo "→ Building local validation image $$img"; \
+	 docker buildx build --platform linux/amd64 -f "$$df" -t "$$img" "$$ctx" --load
+
+.PHONY: ghcr-prepublish-supaserch
+ghcr-prepublish-supaserch: build-local-supaserch ## Local-first gate before GHCR workflow dispatch
+	@echo "✔ SupaSerch local prepublish gate passed"
+
+.PHONY: ghcr-dispatch-supaserch
+ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for SupaSerch after local prepublish gate
+	@args="-f integration=supaserch -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
+	@echo "✔ Dispatched $(GHCR_WORKFLOW) for supaserch on ref $(GHCR_DISPATCH_REF)"
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
@@ -2126,18 +2155,53 @@ down-external: ## Stop external integration services
 
 .PHONY: up-jellyfin-ai
 up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
-	@echo "→ Starting Jellyfin AI overlay..."
+	@echo "-> Starting Jellyfin AI overlay..."
 	@if [ ! -f "env.jellyfin-ai" ]; then \
 	  echo "  Creating env.jellyfin-ai from example..."; \
 	  cp env.jellyfin-ai.example env.jellyfin-ai; \
 	fi
-	@$(DC) --profile jellyfin-ai up -d jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-audio-processor jellyfin-redis jellyfin-api-gateway jellyfin-dashboard
-	@echo "✔ Jellyfin AI overlay up (Jellyfin: http://localhost:8096, API: http://localhost:8300, Dashboard: http://localhost:8400)"
+	@$(JELLYFIN_AI_DC) --profile jellyfin-ai up -d jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-audio-processor jellyfin-redis jellyfin-api-gateway jellyfin-dashboard
+	@echo "-> Jellyfin AI overlay up (Jellyfin: http://localhost:8096, API: http://localhost:8300, Dashboard: http://localhost:8400)"
 
 .PHONY: down-jellyfin-ai
 down-jellyfin-ai: ## Stop Jellyfin AI overlay
-	@$(DC) --profile jellyfin-ai down
-	@echo "✔ Jellyfin AI overlay down"
+	@$(JELLYFIN_AI_DC) --profile jellyfin-ai down
+	@echo "-> Jellyfin AI overlay down"
+
+.PHONY: jellyfin-stack-prod
+jellyfin-stack-prod: ensure-env-shared ## Start production Jellyfin stack (TensorZero + GPU Orchestrator + Jellyfin overlay + bridge)
+	@echo "-> Running auth precheck (non-blocking, see jellyfin-parity-audit-strict for hard gate)..."
+	@$(MAKE) --no-print-directory auth-check || echo "-> auth-check reported findings (continuing bring-up)"
+	@echo "-> Starting TensorZero stack..."
+	@$(MAKE) --no-print-directory up-tensorzero-full
+	@echo "-> Starting GPU Orchestrator..."
+	@$(DC) --profile gpu up -d gpu-orchestrator
+	@echo "-> Starting Jellyfin AI overlay + bridge..."
+	@$(MAKE) --no-print-directory up-jellyfin-ai
+	@$(MAKE) --no-print-directory up-jellyfin
+	@echo "-> Jellyfin production stack up"
+
+.PHONY: jellyfin-stack-prod-verify
+jellyfin-stack-prod-verify: ## Verify production Jellyfin stack parity (runtime + ingest + auth/gpu/tensor checks)
+	@$(MAKE) --no-print-directory jellyfin-verify
+	@$(MAKE) --no-print-directory yt-jellyfin-smoke
+	@$(MAKE) --no-print-directory jellyfin-parity-audit-strict
+
+.PHONY: jellyfin-parity-audit jellyfin-parity-audit-strict
+jellyfin-parity-audit: ## Audit Jellyfin creator parity (docs/contracts/runtime/gpu/tensor/auth)
+	@$(PYTHON) tools/jellyfin_creator_parity_audit.py
+
+jellyfin-parity-audit-strict: ## Strict parity audit (fails on warn/fail)
+	@$(PYTHON) tools/jellyfin_creator_parity_audit.py --strict
+
+.PHONY: jellyfin-verify jellyfin-smoke yt-jellyfin-smoke
+jellyfin-verify: ## Verify Jellyfin bridge + overlay runtime health and refresh path
+	@$(PYTHON) tools/jellyfin_verify.py
+
+jellyfin-smoke: jellyfin-verify ## Alias smoke target for Jellyfin verification
+
+yt-jellyfin-smoke: ## Smoke PMOVES.YT and Jellyfin bridge integration (health + yt/info)
+	@$(PYTHON) tools/yt_jellyfin_smoke.py
 
 # =============================================================================
 # Vision Threads: CHIT Production Tooling

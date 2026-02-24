@@ -1,9 +1,11 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
 RUNNER_PHASE ?= local-certification
 SUBMODULE_LAYER_MANIFEST ?= configs/submodule_layer_validation_manifest.json
+SUBMODULE_BRANCH_DEFAULT ?= PMOVES.AI-Edition-Hardened
+SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX
 AUDIT_RUNTIME_GPU ?= 0
 
 ifeq ($(OS),Windows_NT)
@@ -77,12 +79,16 @@ submodule-layer-validate-all-strict: ## Strict per-module deterministic validati
 submodule-layer-validate-strict: ## Strict submodule-level validation (errors and warnings fail)
 	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" --strict $(ARGS)
 
+submodule-branch-policy-check: ## Ensure .gitmodules branch pins follow hardened branch policy
+	@$(PRECHECK_PY) tools/submodule_branch_policy_check.py --default "$(SUBMODULE_BRANCH_DEFAULT)" --allow "$(SUBMODULE_BRANCH_ALLOW)" $(ARGS)
+
 skill-registry-validate: ## Validate submodule-skill registry completeness
 	@$(PRECHECK_PY) tools/skill_registry_validate.py
 
 audit-layers-static: ## Submodule-first static certification pass before runtime smokes
 	@$(MAKE) --no-print-directory submodule-layer-validate-all-strict
 	@$(MAKE) --no-print-directory submodule-layer-validate-strict
+	@$(MAKE) --no-print-directory submodule-branch-policy-check
 	@$(MAKE) --no-print-directory submodule-integrity-strict
 	@$(MAKE) --no-print-directory submodule-docs-audit-strict
 	@$(MAKE) --no-print-directory integration-contract-check-baseline
