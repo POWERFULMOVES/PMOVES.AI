@@ -154,6 +154,10 @@ while IFS= read -r line; do
   if ! should_include "$key"; then
     continue
   fi
+  if [[ $GHCR_BOOTSTRAP -eq 1 && "$key" == GHCR_* ]]; then
+    # Avoid pushing placeholder GHCR_* values from env file before bootstrap resolution.
+    continue
+  fi
   set_secret "$key" "$val"
 done < "$ENV_FILE"
 

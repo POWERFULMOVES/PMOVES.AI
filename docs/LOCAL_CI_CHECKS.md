@@ -144,18 +144,20 @@ If strict mode fails, bring the runner(s) online first. Otherwise GHCR and harde
 
 ## 8. GHCR Local-First Prepublish Gate (SupaSerch)
 
-Before dispatching `integrations-ghcr.yml` for SupaSerch, run the local gate first so non-VPS operators can validate Dockerfile/context correctness locally:
-
-```bash
-cd pmoves
-make ghcr-prepublish-supaserch
-```
+Before dispatching `integrations-ghcr.yml` for SupaSerch, optionally bootstrap GHCR auth secrets (when rotation/refresh is needed), then run the local gate so non-VPS operators can validate Dockerfile/context correctness locally.
 
 If GHCR auth secrets need rotation/bootstrap from existing credentials in `env.shared`:
 
 ```bash
 cd pmoves
-make ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI
+make ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=<org>/<repo>
+```
+
+Then run the local prepublish gate:
+
+```bash
+cd pmoves
+make ghcr-prepublish-supaserch
 ```
 
 Then dispatch the targeted matrix build:
