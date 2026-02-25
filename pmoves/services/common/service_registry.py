@@ -29,9 +29,12 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from supabase import Client
+
+if TYPE_CHECKING:
+    from services.common.topology import TopologyContext
 
 
 class ServiceTier(str, Enum):
@@ -74,6 +77,10 @@ class ServiceInfo:
     tags: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     active: bool = True
+    # Topology-aware fields for hybrid/external service resolution
+    docker_host: str | None = None      # Docker DNS name (e.g., "supabase-db")
+    external_host: str | None = None    # External host (e.g., "host.docker.internal")
+    external_port: int | None = None    # Host-mapped port for external access
 
     @property
     def base_url(self) -> str:
@@ -359,6 +366,7 @@ async def get_service_url(
     *,
     default_port: int = 80,
     use_base_url: bool = True,
+    topology: "TopologyContext | None" = None,
 ) -> str:
     """
     Resolve service URL with fallback chain.
@@ -367,6 +375,8 @@ async def get_service_url(
         slug: Service slug to resolve
         default_port: Port for fallback URL construction
         use_base_url: Return base URL instead of health_check_url
+        topology: Optional TopologyContext for topology-aware resolution.
+                  When provided and the service is external, uses external_host/port.
 
     Returns:
         Resolved service URL
@@ -379,6 +389,13 @@ async def get_service_url(
         "http://custom-service:9000"
     """
     info = await get_service_info(slug, default_port=default_port)
+
+    # Topology-aware override: if service is external, use external host/port
+    if topology is not None and topology.is_external(slug):
+        host = info.external_host or "host.docker.internal"
+        port = info.external_port or info.default_port or default_port
+        return f"http://{host}:{port}"
+
     return info.base_url if use_base_url else info.health_check_url
 
 
