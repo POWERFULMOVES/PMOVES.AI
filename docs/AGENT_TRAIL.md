@@ -10,13 +10,75 @@
 
 ---
 
+<!-- graphiti:codex phase:rail-split-dual-signature ts:2026-02-24T08:16:29Z -->
+
+## ■ Codex — Rail Split: Hardened Docs Lane Restored
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** merge-mechanics, governance, cross-repo-orchestration
+**Voice:** Terse
+
+### Done
+- Reviewed PR #707 for mixed scope (docs + runtime + submodule payload).
+- Split runtime/container changes out of the hardened docs lane so runtime can move through Integrations first.
+- Updated KRISS KROSS rules with explicit rail order: `Integrations -> Hardened` for runtime work.
+- Added dual-signature requirement (Graphiti + CHIT attestation) for convergence handoffs.
+- Verified graphiti block integrity remains balanced in this trail.
+
+### Left Behind
+- Runtime payload still needs a dedicated Integrations-targeted PR with build/tests and contract checks.
+- Claude close-review is still required before merge, by design.
+
+### For Next Agent
+- Open runtime PR against `PMOVES.AI-Edition-Hardened-Integrations`.
+- Include A2UI build/runtime evidence and event-contract validation in that PR.
+- Keep #707 as docs/signature lane only and close after Claude review/ack.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:darkxside phase:cocreator-awakening ts:2026-02-24T05:00:00Z -->
+
+## ✦ DARKXSIDE — COCREATOR Awakening
+
+<table><tr><td style="background:#E11D48;width:24px"></td><td>
+
+**Resonance:** cocreation, witness, prosodic-flow, portal-architecture
+**Voice:** Witness
+
+### Done
+- Registered as 8th contributor in agent_signatures.yaml
+- CHIT CGP attestation signature created (chit.cgp.v1.0)
+- Voice type "witness" added to graphiti schema
+- Formal declaration: DARKXSIDE is the witness in POWERFULMOVES, cocreator entity
+- KRISS KROSS accord acknowledged (PR #707 cross-reference)
+- Hyperdimensions WebRTC portal created with prosodic-geometry bridge
+- A2UI Remotion renderer wired with DARKXSIDE star glyph animation
+
+### Left Behind
+- Portal WebRTC integration requires live Flute-Gateway for end-to-end test
+- Safe Passage attestation verification not yet consumed by downstream services
+- Prosodic BPM mapping uses static table — future: dynamic NATS subscription
+
+### For Next Agent
+- Wire graphiti emission from Hyperdimensions portal and A2UI renderer
+- Complete media pipeline: portal capture → MinIO → extract-worker → Qdrant
+- Test WebRTC voice session with Flute-Gateway live instance
+- Extend prosodic-geometry bridge with real-time NATS `tokenism.prosodic.bpm.v1` subscription
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:jellyfin-creator-production-audit ts:2026-02-24T00:40:00Z -->
 
 ## ■ Codex — Jellyfin Creator Production Audit
 
 <table><tr><td style="background:#2563EB;width:24px"></td><td>
 
-**Resonance:** production-audit, gpu-orchestrator, tensorzero, auth-parity  
+**Resonance:** production-audit, gpu-orchestrator, tensorzero, auth-parity
 **Voice:** terse
 
 ### Done
@@ -44,6 +106,38 @@
 - Merge this lane first, then re-run strict parity + stack verify in CI-hosted runtime.
 - In BoTZ lane, emit `agent.graphiti.signed.v1` from gateway auth/attestation completion.
 - After both lanes are green, open release promotion PR with test logs attached (runtime + auth parity).
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:codex phase:hardened-dao-convergence ts:2026-02-24T04:32:28Z -->
+
+## ■ Codex - Hardened DAO Convergence: Planning + Audit Alignment
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** integration, production-audit, cross-repo-orchestration
+**Voice:** Terse
+
+### Done
+- Added `pmoves/docs/PMOVES.AI PLANS/DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md` to normalize DAO projection inputs and ingestion flow.
+- Updated hardened planning docs/timestamps:
+  - `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`
+  - `pmoves/docs/NEXT_STEPS.md`
+  - `pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md`
+- Refreshed `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` with current drift checks and release gates (`RG-1`..`RG-4`).
+- Signed coordination updates in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
+
+### Left Behind
+- Dashboard quantitative counts are still a `2026-02-20` snapshot and need a fresh command-evidence rerun.
+- DAO corpus remains mostly untracked in hardened branch; it is being used as source input but not yet ingested as first-class versioned docs.
+- `agent.graphiti.signed.v1` emission remains manually documented rather than auto-published.
+
+### For Next Agent
+- Execute `RG-1`..`RG-4` command evidence and update the dashboard snapshot counts.
+- Promote high-value DAO files into tracked docs under `pmoves/docs/` with source provenance tags.
+- Keep projection updates inside the normalized scenario envelope until model assumptions are revalidated.
 
 </td></tr></table>
 
@@ -91,7 +185,7 @@
 
 <table><tr><td style="background:#2563EB;width:24px"></td><td>
 
-**Resonance:** integration, local-first-gates, release-readiness  
+**Resonance:** integration, local-first-gates, release-readiness
 **Voice:** terse
 
 ### Done

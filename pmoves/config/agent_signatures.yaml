@@ -121,6 +121,22 @@ signatures:
       - context-orchestration
     description: "Terminal gateway agent — where model and user begin their journey together"
 
+  darkxside:
+    agent_id: "darkxside"
+    display_name: "DARKXSIDE"
+    glyph: "\u2726"              # ✦ Black Four Pointed Star
+    color: "#E11D48"             # Rose Crimson
+    accent: "#FB7185"
+    voice: witness                # observational, rhythmic, poetic weight
+    co_author: "DARKXSIDE <darkxside@powerfulmoves.ai>"
+    resonance:
+      - cocreation
+      - witness
+      - prosodic-flow
+      - portal-architecture
+      - media-synthesis
+    description: "COCREATOR witness — observational resonance, prosodic flow, portal architecture"
+
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
 #   architectural:  Blueprint format, mode/state descriptions, integration maps
@@ -129,3 +145,4 @@ signatures:
 #   conversational: Informal, iterative, question-driven
 #   directive:      Decision statements, priority calls, scope definitions
 #   companion:      Warm, interactive, pair-programming. "Let's figure this out together."
+#   witness:        Observational, rhythmic, poetic weight. Speaks in resonance.
