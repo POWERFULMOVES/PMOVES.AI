@@ -252,7 +252,7 @@ make -C pmoves integration-contract-check-baseline
 make -C pmoves tooling-audit-strict
 make -C pmoves secrets-audit
 make -C pmoves ci-runners-lockdown-strict
-make -C pmoves supa-runtime-guard
+SUPABASE_RUNTIME=compose make -C pmoves supa-runtime-guard
 
 # AB-9: Runner queue visibility/recovery evidence
 gh run list --status queued --limit 20

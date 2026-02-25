@@ -6,7 +6,7 @@ _Last updated: 2026-02-24_
 ### Latest changes (Feb 24, 2026)
 - Completed lock-step production merge wave:
   - `#703 -> #704 -> #700 -> #701 -> #702 -> #699`
-  - final promotion landed on `main` at commit `1a21c0384a4ed3913bc2ce8a5f68544723ac79d4`
+  - final promotion landed on `main` at commit `1a21c038`
 - Remaining release blockers now narrowed to:
   - self-hosted runner queue deadlock recovery for hardening/GHCR lanes
   - runtime credential + health/migration closure (`AB-4`, `AB-5`, `AB-6`)
