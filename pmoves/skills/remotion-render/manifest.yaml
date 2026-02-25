@@ -44,14 +44,14 @@ output:
 
 # Service endpoint
 service:
-  url: "http://localhost:8100/render"
+  url: "http://localhost:8105/render"
   method: POST
   timeout_ms: 120000
 
 # Dependencies
 dependencies:
   services:
-    - a2ui-renderer  # Port 8100
+    - a2ui-renderer  # Port 8105
     - minio          # Asset storage
     - presign        # URL generation
   nats_subjects:
