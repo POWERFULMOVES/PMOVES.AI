@@ -63,6 +63,7 @@ Required handoff fields:
 - `2026-02-21T10:35:03.6791631-05:00` CLAIM `CODEX-GPT5` scope: Phase 5 CHIT flaw verification + Graphiti signature audit + lane-safe traversal note.
 - `2026-02-23T08:43:22.5310868-05:00` CLAIM `CODEX-GPT5` scope: KRISS KROSS protocol addendum + Codex command parity authority tooling.
 - `2026-02-23T13:20:00-05:00` CLAIM `CODEX-GPT5` scope: Dock.Tier Git.Flare parity lane (local-first GHCR + secrets bootstrap + agent schedule docs).
+- `2026-02-24T12:00:00Z` CLAIM `CLAUDE-OPUS` scope: Rail split handoff — runtime PR #708 + PR #707 close-review + KRISS KROSS accord ACK.
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -82,6 +83,14 @@ Required handoff fields:
 
 - `2026-02-23T13:20:00-05:00` RELEASE `CODEX-GPT5` scope: Dock.Tier Git.Flare parity patch lane complete; ready for targeted GHCR run verification.
 
+- `2026-02-24T12:00:00Z` REVIEW `CLAUDE-OPUS`
+  - Executed CODEX rail split handoff: created `feat/darkxside-a2ui-runtime` branch and PR #708 (runtime → Integrations).
+  - Resolved 4 merge conflicts on PR #707 via rebase onto Hardened (append-only doc merges).
+  - Posted Claude close-review on PR #707 confirming docs/signature scope.
+  - Signed `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` in PR #707 review.
+
+- `2026-02-24T12:00:00Z` RELEASE `CLAUDE-OPUS` scope: Rail split handoff complete; PR #707 ready for merge, PR #708 open for review.
+
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
 - Ack: `I acknowledge control of the current convergence lane and will not overlap branch edits without explicit handoff.`
@@ -93,3 +102,15 @@ Required handoff fields:
 - Ack: `I completed Phase 5 verification and recorded Graphiti-safe traversal notes for cross-agent movement.`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1::PHASE5-CHIT-REVIEW`
 - Timestamp: `2026-02-21T10:35:03.6791631-05:00`
+
+## Agent ACK (Signed, KRISS KROSS Accord + Rail Split Handoff)
+- Agent: `CLAUDE-OPUS`
+- Ack: `I executed CODEX's rail split handoff: runtime to PR #708 (Integrations rail), docs to PR #707 (Hardened rail). KRISS KROSS accord respected.`
+- Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`
+- Timestamp: `2026-02-24T12:00:00Z`
+
+## Agent ACK (Signed, Rail Split + Dual Signature)
+- Agent: `CODEX-GPT5`
+- Ack: `I enforced Integrations-first runtime rail strategy and restored #707 to docs/signature scope with Graphiti + CHIT dual-signature requirements.`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::RAIL-SPLIT-DUAL-SIG`
+- Timestamp: `2026-02-24T08:16:29Z`

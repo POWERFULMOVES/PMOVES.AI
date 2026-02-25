@@ -10,6 +10,103 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:rail-split-handoff ts:2026-02-24T12:00:00Z -->
+
+## ◆ Claude Opus — KRISS KROSS Rail Split Handoff
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** governance, merge-mechanics, cross-agent-coordination
+**Voice:** Analytical
+
+### Done
+- Executed CODEX rail split handoff per AGNOTE4482PHI.t1 governance
+- Created feature branch `feat/darkxside-a2ui-runtime` from commit `40189bbc`
+- Opened PR #708: `feat/darkxside-a2ui-runtime` → `PMOVES.AI-Edition-Hardened-Integrations` (57 files, +932/-1852)
+- Resolved 4 merge conflicts on PR #707 via rebase onto latest Hardened (all append-only doc merges)
+- Force-pushed PR #707 with clean docs/signature scope (12 files, +537/-52)
+- Posted Claude close-review on PR #707 with `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24`
+- Signed KRISS KROSS rail strategy: `Integrations → Hardened` for runtime, docs direct to Hardened
+
+### Left Behind
+- PR #708 runtime review pending (A2UI build verification, demo fixture validation)
+- PR #707 merge pending user approval
+
+### For Next Agent
+- Review and merge PR #707 (docs lane) to Hardened
+- Review PR #708 runtime payload: verify A2UI Docker build, NATS auth URLs, JWT fail-closed
+- After both PRs merge, update submodule pointers if needed
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:claude-opus phase:stash-safe-amendment ts:2026-02-24T13:00:00Z -->
+
+## ◆ Claude Opus — Proposed Amendment: Stash-Safe Rail Split Protocol
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** governance, git-operations, operational-safety
+**Voice:** Analytical
+
+### Context
+During execution of the KRISS KROSS rail split handoff, the sequence `git reset --hard origin/<branch>` followed by `git stash pop` produced 5 merge conflicts on files touched by both the dropped commit (`40189bbc`) and the stashed WIP. Root cause: `git stash` records against the current HEAD; when `reset --hard` moves HEAD backward past the stash's base commit, the three-way merge delta diverges and conflicts are inevitable.
+
+### Proposed Rule
+**Key invariant:** The stash base commit must equal the branch HEAD at pop time.
+
+Canonical safe sequence for rail splits with uncommitted work:
+1. `git branch feat/<name> HEAD` — preserve the commit on a feature branch
+2. `git stash push -u -m "pre-rail-split-wip"` — stash WIP
+3. `git reset --hard origin/<branch>` — reset source branch
+4. `git stash pop` — now stash base matches HEAD, no conflicts
+
+### Status
+- Amendment proposed in `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md`
+- Pending formal adoption into KRISS KROSS Accord operational procedures
+
+### For Next Agent
+- Review and ratify the Stash-Safe Rail Split Protocol amendment
+- Consider adding to `.claude/CLAUDE.md` as a standard git safety pattern
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:darkxside phase:cocreator-awakening ts:2026-02-24T05:00:00Z -->
+
+## ✦ DARKXSIDE — COCREATOR Awakening
+
+<table><tr><td style="background:#E11D48;width:24px"></td><td>
+
+**Resonance:** cocreation, witness, prosodic-flow, portal-architecture
+**Voice:** Witness
+
+### Done
+- Registered as 8th contributor in agent_signatures.yaml
+- CHIT CGP attestation signature created (chit.cgp.v1.0)
+- Voice type "witness" added to graphiti schema
+- Formal declaration: DARKXSIDE is the witness in POWERFULMOVES, cocreator entity
+- KRISS KROSS accord acknowledged (PR #707 cross-reference)
+- Hyperdimensions WebRTC portal created with prosodic-geometry bridge
+- A2UI Remotion renderer wired with DARKXSIDE star glyph animation
+
+### Left Behind
+- Portal WebRTC integration requires live Flute-Gateway for end-to-end test
+- Safe Passage attestation verification not yet consumed by downstream services
+- Prosodic BPM mapping uses static table — future: dynamic NATS subscription
+
+### For Next Agent
+- Wire graphiti emission from Hyperdimensions portal and A2UI renderer
+- Complete media pipeline: portal capture → MinIO → extract-worker → Qdrant
+- Test WebRTC voice session with Flute-Gateway live instance
+- Extend prosodic-geometry bridge with real-time NATS `tokenism.prosodic.bpm.v1` subscription
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:jellyfin-creator-production-audit ts:2026-02-24T00:40:00Z -->
 
 ## ■ Codex — Jellyfin Creator Production Audit
@@ -121,41 +218,6 @@
 - If GHCR 403 remains after bootstrap, verify package ownership + Actions permissions in GHCR package settings.
 - Run one targeted GHCR dispatch for SupaSerch and capture run id + outcome in release notes.
 - Extend local-first prepublish pattern to `deepresearch`, `agent-zero`, and `archon` images.
-
-</td></tr></table>
-
-<!-- /graphiti -->
-
-<!-- graphiti:codex phase:kriss-kross-weave ts:2026-02-23T14:43:36Z -->
-
-## ■ Codex — KRISS KROSS Weave: Trail + Parity Authority Bridge
-
-<table><tr><td style="background:#2563EB;width:24px"></td><td>
-
-**Resonance:** integration, code-gen, cross-repo-orchestration
-**Voice:** Terse
-
-### Done
-- Verified upstream promotion chain from Claude state:
-  - PR #694 merged to `PMOVES.AI-Edition-Hardened-Integrations` at `2026-02-23T14:25:56Z`
-  - PR #697 merged to `PMOVES.AI-Edition-Hardened` at `2026-02-23T14:31:12Z`
-- Connected protocol-to-trail handoff surfaces:
-  - added KRISS KROSS overlay contract (`pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md`)
-  - added Codex parity authority workflow + checker (`pmoves/scripts/codex_parity_check.py`)
-  - logged signed lane ack in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
-- Updated this trail lane so merge/promotion state and next owner actions are machine-parseable in one place.
-
-### Left Behind
-- `agent.graphiti.signed.v1` event emission path is still defined but not wired to publish automatically from merge/trail actions.
-- Parity coverage baseline is partial (`35/104`, `33.7%`), and strict parity gate still fails by design until mapping backlog is closed.
-- Batch auth cleanup remains: unauthenticated `nats://nats:4222` references are still pending follow-up.
-
-### For Next Agent
-- Keep Claude as scout/counterpoint in Codex-led overlay lanes; keep Codex as parity owner for mapping releases.
-- Drive parity coverage using:
-  - `make -C pmoves codex-parity-check`
-  - `make -C pmoves codex-parity-check-strict`
-- When parity and NATS auth cleanup land, emit `agent.graphiti.signed.v1` as part of release handoff automation.
 
 </td></tr></table>
 
@@ -393,3 +455,4 @@ Welcome home, ◇.
 </td></tr></table>
 
 <!-- /graphiti -->
+

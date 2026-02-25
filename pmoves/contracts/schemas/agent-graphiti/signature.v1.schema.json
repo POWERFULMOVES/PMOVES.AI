@@ -15,7 +15,7 @@
     "agent_id": {
       "type": "string",
       "description": "Contributor identifier — must match a key in agent_signatures.yaml",
-      "examples": ["claude-opus", "kilocode", "codex", "gemini", "cline", "powerfulmoves", "crush"]
+      "examples": ["claude-opus", "kilocode", "codex", "gemini", "cline", "powerfulmoves", "crush", "darkxside"]
     },
     "display_name": {
       "type": "string",
@@ -41,7 +41,7 @@
     },
     "voice": {
       "type": "string",
-      "enum": ["analytical", "architectural", "terse", "strategic", "conversational", "directive", "companion"],
+      "enum": ["analytical", "architectural", "terse", "strategic", "conversational", "directive", "companion", "witness"],
       "description": "Writing voice used in trail entries"
     },
     "phase": {
