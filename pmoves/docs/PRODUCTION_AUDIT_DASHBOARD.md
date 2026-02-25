@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-02-24 (lock-step release closeout + remaining blocker refresh)
-**Branch:** `main`
-**Commit:** `1a21c038`
+**Last Updated:** 2026-02-25 (lock-step release closeout + hardened runtime parity + DAO recontext convergence)
+**Branch:** `main` (synced from Hardened via #707)
+**Commit:** `1a21c038` (main), `0fa4a7d2` (hardened #707)
 **Consolidated From:** 27 audit documents
 **Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
@@ -15,6 +15,7 @@
 
 | Metric | Value |
 |--------|-------|
+| Quantitative snapshot timestamp | 2026-02-20 (rerun required for fresh counts) |
 | Total tracked items | 24 |
 | Resolved | 22 (+3 since last update) |
 | Active blockers | 4 (AB-4/5/6/9) |
@@ -39,6 +40,13 @@
 | #699 | NATS auth + unified JWT + trails (promotion) | MERGED | `1a21c038` |
 
 Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#issuecomment-3948534322`
+
+### Current Hardening Drift Checks (2026-02-24)
+
+- Production bring-up scripts still need a strict audit to ensure no `*-dev-*` targets are used in production lanes by default.
+- Dynamic port mapping and Docker namespace publishing must be re-validated against compose/env defaults to eliminate hard-coded host/port drift.
+- Supabase collation mismatch warnings must be treated as active watch items whenever base images or host locale packages change.
+- Runtime auth/credential paths are unified by design, but cross-service verification remains required after key rotation and fresh bootstrap.
 
 ### Live CI Recovery (2026-02-20)
 
@@ -98,6 +106,15 @@ At release closeout, both self-hosted runners were online but long-lived queued 
 
 **AB-7: CodeRabbit Fixes — RESOLVED**
 All PR #606 findings addressed. See Blocker Resolutions below.
+
+### Additional Release Gates (2026-02-24)
+
+These are tracked as release gates and should be closed with command evidence before final promotion:
+
+1. `RG-1` Production command parity: verify no production path invokes `ui-dev-*` or equivalent dev-only targets by default.
+2. `RG-2` Dynamic port and namespace parity: confirm compose services publish via configured env/namespace values, not hard-coded host assumptions.
+3. `RG-3` Supabase collation/version hygiene: re-check logs after full rebuild/bootstrap and document whether `ALTER DATABASE ... REFRESH COLLATION VERSION` is required.
+4. `RG-4` Auth unification regression pass: run JWT/key rotation flow and verify all core services re-auth without manual per-service patching.
 
 ---
 
@@ -240,6 +257,18 @@ make -C pmoves verify-all
 make -C pmoves supabase-bootstrap
 make -C pmoves submodule-integrity-strict
 
+# RG-1: ensure production lane is not calling dev helpers
+rg -n "ui-dev-start|ui-dev-stop|ui-dev-logs|dev-start" pmoves/tools pmoves/Makefile
+
+# RG-2: inspect hard-coded localhost/port assumptions in compose/env paths
+rg -n "localhost:[0-9]+|127\\.0\\.0\\.1:[0-9]+" pmoves/docker-compose*.yml pmoves/env.shared pmoves/tools
+
+# RG-3: inspect Supabase/Postgres collation mismatch warnings after rebuild
+docker compose logs --tail=200 supabase-db
+
+# RG-4: auth unification regression pass
+# Run JWT/key rotation flow and verify all core services re-auth
+
 # GPU smoke test
 GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu
 
@@ -273,7 +302,9 @@ gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
 
 | Date | Change |
 |------|--------|
+| 2026-02-25 | **Hardened→main sync** (#707): DAO recontext docs, DARKXSIDE registration, KRISS KROSS accord rewrite, release gates RG-1..RG-4, drift checks merged from Hardened. |
 | 2026-02-24 | **Lock-step release closeout refresh**: merged PR sequence `#703 -> #704 -> #700 -> #701 -> #702 -> #699`, promoted to `main` at commit `1a21c038`, and updated dashboard blockers/metrics for remaining queue deadlock + credential/runtime validation. |
+| 2026-02-24 | Hardened convergence update: marked quantitative metrics as `2026-02-20` snapshot values, added current hardening drift checks, and introduced release gates `RG-1`..`RG-4` for production command parity, dynamic port/namespace parity, collation hygiene, and auth-regression validation. |
 | 2026-02-20 | **Production runtime remediation pass**: restored `supabase_storage_pmoves` (migration table/schema privilege repair for `supabase_storage_admin`), ran production smoke/agents/archon/monitoring checks (all pass), and verified no new collation mismatch warnings after collation refresh. Updated production diagnostics to use valid Agent Zero endpoints (`codex_health_quick.py`). |
 | 2026-02-20 | Added live CI recovery tracking for PRs #677/#678/#681 and aligned dashboard update timestamp to current production-audit pass. |
 | 2026-02-18 | **Blocker resolution pass**: AB-1 RESOLVED (orphaned Deskdesktop gitlink removed from A2UI, recursive submodule status exits 0). AB-3 RESOLVED (GHCR push/PR triggers uncommented). AB-7 RESOLVED (credential_service.py PBKDF2 bumped to 600k). Blockers reduced 6 → 3. Docs #5, #6 superseded, #8 resolved. |
