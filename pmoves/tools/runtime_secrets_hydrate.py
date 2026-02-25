@@ -97,7 +97,7 @@ def _find_container_env_value(
         envs = _docker_env(container)
         for key in keys:
             value = envs.get(key, "").strip()
-            if value:
+            if value and not _looks_placeholder(value):
                 return value
     return ""
 
