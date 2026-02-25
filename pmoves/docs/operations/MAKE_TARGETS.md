@@ -162,6 +162,8 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make topology-chit-gate`
   - Unified topology + CHIT acknowledgement gate.
   - Audits all running `pmoves` containers for namespace/network drift, host publish collisions, external publish attachment, and critical loopback URL hardcoding.
+  - Enforces manifest-defined service policy from `pmoves/configs/topology_policy_manifest.json` (required networks, required published container ports, loopback/NATS exceptions).
+  - Optional override: `make -C pmoves topology-chit-gate ARGS="--policy pmoves/configs/topology_policy_manifest.json"`.
   - Confirms Archon UI/headless Archon topology (ports, shared network, health) and verifies CHIT manifest sync plus CHIT env propagation on CHIT-aware containers.
   - Warning mode (non-zero only on hard failures).
 - `make topology-chit-gate-strict`
