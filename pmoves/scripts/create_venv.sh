@@ -1,29 +1,65 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Create a local Python venv at .venv and install all service requirements.
+# Create a local Python venv at pmoves/.venv-pmoves and install all service requirements.
 # Usage:
 #   bash pmoves/scripts/create_venv.sh            # basic
 #   INCLUDE_DOCS=1 bash pmoves/scripts/create_venv.sh  # include docs/** requirements
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found. Please install Python 3.11+ and retry." >&2
+script_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+pmoves_root="$(cd -- "${script_dir}/.." && pwd)"
+venv_dir="${pmoves_root}/.venv-pmoves"
+installer="${script_dir}/install_all_requirements.sh"
+uv_cmd=""
+if command -v uv >/dev/null 2>&1; then
+  uv_cmd="uv"
+elif command -v uv.exe >/dev/null 2>&1; then
+  uv_cmd="uv.exe"
+fi
+py_cmd="python3"
+if ! command -v "${py_cmd}" >/dev/null 2>&1 && command -v python >/dev/null 2>&1; then
+  py_cmd="python"
+fi
+
+to_native_path() {
+  local p="$1"
+  if [[ "${uv_cmd}" == "uv.exe" ]] && command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$p"
+    return
+  fi
+  printf '%s\n' "$p"
+}
+
+if ! command -v "${py_cmd}" >/dev/null 2>&1; then
+  echo "python/python3 not found. Please install Python 3.11+ and retry." >&2
   exit 1
 fi
 
-if [[ ! -d .venv ]]; then
-  echo "Creating .venv (Python virtual environment)..."
-  python3 -m venv .venv
+if [[ ! -d "${venv_dir}" ]]; then
+  echo "Creating ${venv_dir} (Python virtual environment)..."
+  if [[ -n "${uv_cmd}" ]]; then
+    "${uv_cmd}" venv "$(to_native_path "${venv_dir}")"
+  else
+    "${py_cmd}" -m venv "${venv_dir}"
+  fi
 else
-  echo ".venv already exists; reusing."
+  echo "${venv_dir} already exists; reusing."
 fi
 
-echo "Activating venv and upgrading pip..."
-source .venv/bin/activate
-python -m pip install -U pip
+venv_python="${venv_dir}/bin/python"
+if [[ ! -x "${venv_python}" ]]; then
+  venv_python="${venv_dir}/Scripts/python.exe"
+fi
+if [[ ! -x "${venv_python}" ]]; then
+  echo "Unable to resolve venv python under ${venv_dir}" >&2
+  exit 1
+fi
 
 echo "Installing requirements across services/tools..."
-INCLUDE_DOCS=${INCLUDE_DOCS:-0} bash pmoves/scripts/install_all_requirements.sh || bash pmoves/scripts/install_all_requirements.sh
+(cd "${pmoves_root}" && INCLUDE_DOCS=${INCLUDE_DOCS:-0} bash "${installer}" "PMOVES.AI" "${venv_python}")
 
-echo "Done. Activate with: source .venv/bin/activate"
-
+activate_hint="${venv_dir}/bin/activate"
+if [[ ! -f "${activate_hint}" ]]; then
+  activate_hint="${venv_dir}/Scripts/activate"
+fi
+echo "Done. Activate with: source ${activate_hint}"
