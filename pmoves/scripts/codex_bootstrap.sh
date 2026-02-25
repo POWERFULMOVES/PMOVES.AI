@@ -1,54 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-env_name="${1:-PMOVES.AI}"
 include_docs="${INCLUDE_DOCS:-0}"
 
 script_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/.." && pwd)"
-env_file="${repo_root}/environment.yml"
+bootstrap_tool="${repo_root}/tools/bootstrap_light_env.py"
 install_script="${repo_root}/scripts/install_all_requirements.sh"
+venv_python="${repo_root}/.venv-pmoves/bin/python"
 
 echo "== PMOVES Codex Bootstrap =="
 echo "CWD: $(pwd)"
 echo "Repo root: ${repo_root}"
-echo "Environment file: ${env_file}"
+echo "Bootstrap tool: ${bootstrap_tool}"
 echo "Install script: ${install_script}"
 
 have(){ command -v "$1" >/dev/null 2>&1; }
+py_bin="python"
+if have python3; then py_bin="python3"; fi
 
-# 1) make (Linux/macOS assumed to have package manager)
-if ! have make; then
-  echo "GNU make not found. Please install via your package manager (apt/brew/etc.)." >&2
+# 1) Create/check pmoves/.venv-pmoves and install lite prerequisites (uv-first)
+if [[ ! -f "${bootstrap_tool}" ]]; then
+  echo "Bootstrap tool not found: ${bootstrap_tool}" >&2
+  exit 1
+fi
+(cd "${repo_root}" && "${py_bin}" tools/bootstrap_light_env.py --strict-tools)
+if [[ ! -x "${venv_python}" ]]; then
+  venv_python="${repo_root}/.venv-pmoves/Scripts/python.exe"
+fi
+if [[ ! -x "${venv_python}" ]]; then
+  echo "Unable to resolve venv python under ${repo_root}/.venv-pmoves" >&2
+  exit 1
 fi
 
-# 2) Ensure conda env exists
-if have conda; then
-  if ! conda env list | grep -qE "\b${env_name}\b"; then
-    if [[ -f "${env_file}" ]]; then
-      echo "Creating conda env '${env_name}' from ${env_file}..."
-      conda env create -f "${env_file}" -n "${env_name}" || true
-    else
-      echo "environment.yml not found at ${env_file}; skipping conda env creation" >&2
-    fi
-  else
-    echo "Conda env '${env_name}' exists."
-  fi
-else
-  echo "Conda not detected; using system Python for deps." >&2
-fi
-
-# 3) Install Python deps
+# 2) Install Python deps into the venv interpreter
 if [[ ! -f "${install_script}" ]]; then
   echo "Install script not found: ${install_script}" >&2
   exit 1
 fi
 
 if [[ "$include_docs" == "1" ]]; then
-  (cd "${repo_root}" && INCLUDE_DOCS=1 bash "${install_script}" "${env_name}")
+  (cd "${repo_root}" && INCLUDE_DOCS=1 bash "${install_script}" "PMOVES.AI" "${venv_python}")
 else
-  (cd "${repo_root}" && INCLUDE_DOCS=0 bash "${install_script}" "${env_name}")
+  (cd "${repo_root}" && INCLUDE_DOCS=0 bash "${install_script}" "PMOVES.AI" "${venv_python}")
 fi
 
 echo "Bootstrap complete."
-
