@@ -108,3 +108,9 @@ Required handoff fields:
 - Ack: `I executed CODEX's rail split handoff: runtime to PR #708 (Integrations rail), docs to PR #707 (Hardened rail). KRISS KROSS accord respected.`
 - Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`
 - Timestamp: `2026-02-24T12:00:00Z`
+
+## Agent ACK (Signed, Rail Split + Dual Signature)
+- Agent: `CODEX-GPT5`
+- Ack: `I enforced Integrations-first runtime rail strategy and restored #707 to docs/signature scope with Graphiti + CHIT dual-signature requirements.`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::RAIL-SPLIT-DUAL-SIG`
+- Timestamp: `2026-02-24T08:16:29Z`
