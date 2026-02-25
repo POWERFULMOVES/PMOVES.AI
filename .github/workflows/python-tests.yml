@@ -128,14 +128,22 @@ jobs:
           PY
       - name: Run all service tests
         run: |
-          pytest -q --tb=short --rootdir=. \
-            pmoves/tests/ \
+          # Run top-level PMOVES tests separately, then isolate hyphenated
+          # service test directories so each conftest resolves in its own context.
+          pytest -q --tb=short --rootdir=. --import-mode=importlib \
+            pmoves/tests/
+
+          PYTHONPATH=".:pmoves/services/agent-zero:pmoves" pytest -q --tb=short --rootdir=. --import-mode=importlib \
+            pmoves/services/agent-zero/tests
+
+          PYTHONPATH=".:pmoves/services/chat-relay:pmoves" pytest -q --tb=short --rootdir=. --import-mode=importlib \
+            pmoves/services/chat-relay/tests
+
+          pytest -q --tb=short --rootdir=. --import-mode=importlib \
             pmoves/services/publisher/tests \
             pmoves/services/pmoves-yt/tests \
             pmoves/services/publisher-discord/tests \
-            pmoves/services/agent-zero/tests \
             pmoves/services/channel-monitor/tests \
-            pmoves/services/chat-relay/tests \
             pmoves/services/common/tests \
             pmoves/services/gateway/tests \
             pmoves/services/flute-gateway/tests \
