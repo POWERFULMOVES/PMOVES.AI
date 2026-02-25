@@ -1,5 +1,5 @@
 # KRISS KROSS Accord
-_Last updated: 2026-02-24_
+_Last updated: 2026-02-25_
 
 ## Purpose
 Collision-safe agent traversal protocol for PMOVES.AI when multiple agents operate in parallel lanes and converge on shared release branches.
@@ -86,8 +86,11 @@ Both methods are required for convergence lanes:
 
 A handoff is incomplete unless both are present or explicitly waived in AGNOTE.
 
+## Amendment Queue
+- `Stash-Safe Rail Split Protocol` (proposed 2026-02-24) is recorded in `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md` and awaits formal ratification.
+
 ## Signatures
 - `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`
-- `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::PENDING`
+- `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` (SIGNED)
 
-`CLAUDE-OPUS` signature moves to `SIGNED` when that agent appends an ACK line to `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
+Claude signature evidence: `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (`ACK::CLAUDE-OPUS::PHI-4482-T1::KRISS-KROSS-RAIL-SPLIT`).
