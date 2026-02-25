@@ -159,6 +159,13 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Full animated diagnostics with theme support (`RETRO_THEME=green|amber|cb|neon|galaxy`).
 - `make preflight`
   - Combined operator preflight: env check + submodule integrity + CI runner lane check + quick flight check + Codex quick health.
+- `make topology-chit-gate`
+  - Unified topology + CHIT acknowledgement gate.
+  - Confirms Archon UI/headless Archon topology (ports, shared network, health) and verifies CHIT manifest sync plus CHIT env propagation on CHIT-aware containers.
+  - Warning mode (non-zero only on hard failures).
+- `make topology-chit-gate-strict`
+  - Strict topology + CHIT gate (warnings are treated as failures).
+  - Used by static production certification (`audit-layers-static`).
 - `make ci-runners-check`
   - Queries GitHub Actions runners for the repo and reports whether required self-hosted lanes are online (`self-hosted,vps` and `self-hosted,ai-lab,gpu`).
   - Non-strict mode always exits zero so local developer preflight remains usable.
