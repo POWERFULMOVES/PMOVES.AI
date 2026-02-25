@@ -115,6 +115,7 @@ def _looks_placeholder(value: str) -> bool:
     return (
         lowered.startswith("placeholder_")
         or lowered.startswith("your_")
+        or lowered.endswith("_here")
         or lowered in {"changeme", "change_me", "none", "null", "example.com"}
         or lowered.endswith("@example.com")
         or lowered.endswith(".example.com")
@@ -181,6 +182,16 @@ def hydrate_runtime_labels(
             containers, name_tokens=("agent-zero", "agent0"), keys=("AGENT_ZERO_EVENTS_TOKEN",)
         )
         or secrets.token_urlsafe(32),
+    )
+
+    # Invidious companion key: must be exactly 16 alphanumeric characters.
+    # The Invidious companion rejects keys that are not 16 hex chars.
+    set_if_missing(
+        "INVIDIOUS_COMPANION_KEY",
+        _find_container_env_value(
+            containers, name_tokens=("invidious",), keys=("INVIDIOUS_COMPANION_KEY", "SERVER_SECRET_KEY")
+        )
+        or secrets.token_hex(8),  # 8 bytes = 16 hex chars
     )
 
     return updates
