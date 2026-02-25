@@ -151,5 +151,14 @@
     "tensorzero-ui": [
       4000
     ]
-  }
+  },
+  "chit_required_services": [
+    "agent-zero",
+    "hi-rag-gateway",
+    "hi-rag-gateway-gpu",
+    "hi-rag-gateway-v2",
+    "hi-rag-gateway-v2-gpu",
+    "flute-gateway",
+    "evo-controller"
+  ]
 }

@@ -41,12 +41,12 @@ PMOVES_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY_PATH = PMOVES_ROOT / "configs" / "topology_policy_manifest.json"
 
 CHIT_REQUIRED_KEYS = ("CHIT_REQUIRE_SIGNATURE", "CHIT_DECRYPT_ANCHORS", "CHIT_PASSPHRASE")
-CHIT_CONTAINER_TOKENS = (
+DEFAULT_CHIT_REQUIRED_SERVICES = (
     "agent-zero",
-    "hi-rag-gateway-v2-gpu",
-    "hi-rag-gateway-v2",
     "hi-rag-gateway",
-    "gateway",
+    "hi-rag-gateway-gpu",
+    "hi-rag-gateway-v2",
+    "hi-rag-gateway-v2-gpu",
     "flute-gateway",
     "evo-controller",
 )
@@ -100,6 +100,7 @@ def _default_policy(project: str) -> Dict[str, object]:
         "nats_auth_exceptions": [],
         "required_networks_by_service": {},
         "required_published_ports_by_service": {},
+        "chit_required_services": sorted(DEFAULT_CHIT_REQUIRED_SERVICES),
     }
 
 
@@ -162,6 +163,7 @@ def _load_policy(path: Path, project: str, *, warnings: List[str]) -> Dict[str, 
         "published_external_exceptions",
         "critical_url_keys",
         "nats_auth_exceptions",
+        "chit_required_services",
     ):
         value = raw.get(list_key)
         if isinstance(value, list):
@@ -590,7 +592,11 @@ def _check_archon_topology(
 
 
 def _check_chit_sync(
-    inspections: Mapping[str, Mapping[str, object]], *, warnings: List[str], errors: List[str]
+    inspections: Mapping[str, Mapping[str, object]],
+    policy: Mapping[str, object],
+    *,
+    warnings: List[str],
+    errors: List[str],
 ) -> None:
     sync_ok, sync_message = _check_manifest_sync()
     if not sync_ok:
@@ -598,16 +604,23 @@ def _check_chit_sync(
         if sync_message:
             warnings.append(sync_message)
 
+    required_services = {
+        str(item).strip()
+        for item in (policy.get("chit_required_services") or [])
+        if str(item).strip()
+    }
+    if not required_services:
+        warnings.append("no chit_required_services configured in topology policy; skipping CHIT env checks")
+        return
+
     matched: List[str] = []
     for container_name, info in inspections.items():
         service = _compose_service_name(info) or ""
-        for token in CHIT_CONTAINER_TOKENS:
-            if token == service or f"-{token}-" in container_name:
-                matched.append(container_name)
-                break
+        if service in required_services:
+            matched.append(container_name)
 
     if not matched:
-        warnings.append("no CHIT-aware containers found for env propagation checks")
+        warnings.append("no CHIT-required containers found for env propagation checks")
         return
 
     for container_name in sorted(set(matched)):
@@ -663,7 +676,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _check_project_topology(args.project, inspections, policy, warnings=warnings, errors=errors)
     _check_archon_topology(inspections, warnings=warnings, errors=errors)
-    _check_chit_sync(inspections, warnings=warnings, errors=errors)
+    _check_chit_sync(inspections, policy, warnings=warnings, errors=errors)
 
     for message in errors:
         print(f"ERROR: {message}")
