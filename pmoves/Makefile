@@ -1371,7 +1371,7 @@ manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visi
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
-.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict submodule-branch-policy-check integration-contract-check integration-contract-check-strict integration-contract-check-baseline
 submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
@@ -2177,6 +2177,25 @@ up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j
 down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai down
 	@echo "✔ Jellyfin AI overlay down"
+
+.PHONY: jellyfin-stack-prod
+jellyfin-stack-prod: ensure-env-shared ## Start production Jellyfin stack (TensorZero + GPU Orchestrator + Jellyfin overlay + bridge)
+	@echo "→ Running auth precheck (non-blocking, see jellyfin-parity-audit-strict for hard gate)..."
+	@$(MAKE) --no-print-directory auth-check || echo "→ auth-check reported findings (continuing bring-up)"
+	@echo "→ Starting TensorZero stack..."
+	@$(MAKE) --no-print-directory up-tensorzero-full
+	@echo "→ Starting GPU Orchestrator..."
+	@$(DC) --profile gpu up -d gpu-orchestrator
+	@echo "→ Starting Jellyfin AI overlay + bridge..."
+	@$(MAKE) --no-print-directory up-jellyfin-ai
+	@$(MAKE) --no-print-directory up-jellyfin
+	@echo "✔ Jellyfin production stack up"
+
+.PHONY: jellyfin-stack-prod-verify
+jellyfin-stack-prod-verify: ## Verify production Jellyfin stack parity (runtime + ingest + auth/gpu/tensor checks)
+	@$(MAKE) --no-print-directory jellyfin-verify
+	@$(MAKE) --no-print-directory yt-jellyfin-smoke
+	@$(MAKE) --no-print-directory jellyfin-parity-audit-strict
 
 .PHONY: jellyfin-parity-audit jellyfin-parity-audit-strict
 jellyfin-parity-audit: ## Audit Creator pipeline parity across Jellyfin/YT/CHIT layers
