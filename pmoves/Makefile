@@ -27,6 +27,8 @@ endif
 # If EXTERNAL_* is true, we skip the corresponding local service profile.
 # Profiles are defined on services in docker-compose.yml.
 compose_profiles = data,workers,gateway
+SUPABASE_RUNTIME ?= compose
+SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 ifeq ($(EXTERNAL_NEO4J),true)
   neo4j_profile :=
 		else
@@ -44,10 +46,10 @@ ifeq ($(EXTERNAL_QDRANT),true)
 endif
 ifeq ($(EXTERNAL_SUPABASE),true)
   supa_profile :=
+else ifeq ($(SUPABASE_RUNTIME),cli)
+  supa_profile :=
 		else
 supa_profile := ,supabase-local
-SUPABASE_RUNTIME ?= compose
-SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 endif
 COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_profile)$(supa_profile)
 export COMPOSE_PROFILES
@@ -99,6 +101,9 @@ ifneq ("$(wildcard .env.local)","")
 endif
 ifneq ("$(wildcard env.supa.runtime)","")
   COMPOSE_ENV_FILES += --env-file env.supa.runtime
+endif
+ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
+  COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
 endif
 
 # -------- Service Discovery Helper ----------
@@ -1281,6 +1286,7 @@ STACK_FILES ?= \
 # should prefix with $(LOAD_ENV_SHARED); explicitly in the recipe.
 DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(STACK_FILES)
 N8N_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.n8n.yml $(N8N_DB_STACK_FILE)
+EXTERNAL_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.external.yml
 JELLYFIN_AI_DC := docker compose -p $(PROJECT)-jellyfin-ai --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) --env-file env.jellyfin-ai -f docker-compose.jellyfin-ai.yml
 
 INTEGRATIONS_COMPOSE_CORE := compose/docker-compose.core.yml
@@ -1365,7 +1371,7 @@ manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visi
 INTEGRATION_PATH ?= integrations/_template/pmoves-integrations
 INTEGRATION_CONTRACT_BASELINE ?= integrations/_template/pmoves-integrations integrations/health-wger integrations/firefly-iii
 
-.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict submodule-branch-policy-check integration-contract-check integration-contract-check-strict integration-contract-check-baseline
+.PHONY: submodule-sitrep submodule-integrity submodule-integrity-strict submodule-docs-audit submodule-docs-audit-strict integration-contract-check integration-contract-check-strict integration-contract-check-baseline
 submodule-sitrep: ## Generate submodule alignment SITREP markdown report
 	@$(PYTHON) tools/submodule_sitrep.py
 
@@ -2145,53 +2151,38 @@ ps:
 .PHONY: up-external
 up-external: ensure-env-shared ## Start external integration services (Wger, Firefly, Open Notebook, Jellyfin)
 	@echo "→ Starting external stacks (Wger, Firefly, Open Notebook, Jellyfin)..."
-	@$(DC) -f docker-compose.external.yml up -d
+	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 
 .PHONY: down-external
 down-external: ## Stop external integration services
-	@$(DC) -f docker-compose.external.yml down
+	@$(EXTERNAL_DC) down
 	@echo "✔ External stacks down"
 
 .PHONY: up-jellyfin-ai
 up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j + Qwen Audio + API Gateway)
-	@echo "-> Starting Jellyfin AI overlay..."
+	@echo "→ Starting Jellyfin AI overlay..."
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker network create pmoves_api >/dev/null 2>&1 || true
+	@docker network create pmoves_app >/dev/null 2>&1 || true
+	@docker network create pmoves_data >/dev/null 2>&1 || true
 	@if [ ! -f "env.jellyfin-ai" ]; then \
 	  echo "  Creating env.jellyfin-ai from example..."; \
 	  cp env.jellyfin-ai.example env.jellyfin-ai; \
 	fi
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai up -d jellyfin jellyfin-neo4j jellyfin-qwen-audio jellyfin-audio-processor jellyfin-redis jellyfin-api-gateway jellyfin-dashboard
-	@echo "-> Jellyfin AI overlay up (Jellyfin: http://localhost:8096, API: http://localhost:8300, Dashboard: http://localhost:8400)"
+	@echo "✔ Jellyfin AI overlay up (Jellyfin: http://localhost:$${JELLYFIN_HTTP_PORT:-9096}, API: http://localhost:$${JELLYFIN_API_PORT:-8300}, Dashboard: http://localhost:$${JELLYFIN_DASHBOARD_PORT:-8400})"
 
 .PHONY: down-jellyfin-ai
 down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai down
-	@echo "-> Jellyfin AI overlay down"
-
-.PHONY: jellyfin-stack-prod
-jellyfin-stack-prod: ensure-env-shared ## Start production Jellyfin stack (TensorZero + GPU Orchestrator + Jellyfin overlay + bridge)
-	@echo "-> Running auth precheck (non-blocking, see jellyfin-parity-audit-strict for hard gate)..."
-	@$(MAKE) --no-print-directory auth-check || echo "-> auth-check reported findings (continuing bring-up)"
-	@echo "-> Starting TensorZero stack..."
-	@$(MAKE) --no-print-directory up-tensorzero-full
-	@echo "-> Starting GPU Orchestrator..."
-	@$(DC) --profile gpu up -d gpu-orchestrator
-	@echo "-> Starting Jellyfin AI overlay + bridge..."
-	@$(MAKE) --no-print-directory up-jellyfin-ai
-	@$(MAKE) --no-print-directory up-jellyfin
-	@echo "-> Jellyfin production stack up"
-
-.PHONY: jellyfin-stack-prod-verify
-jellyfin-stack-prod-verify: ## Verify production Jellyfin stack parity (runtime + ingest + auth/gpu/tensor checks)
-	@$(MAKE) --no-print-directory jellyfin-verify
-	@$(MAKE) --no-print-directory yt-jellyfin-smoke
-	@$(MAKE) --no-print-directory jellyfin-parity-audit-strict
+	@echo "✔ Jellyfin AI overlay down"
 
 .PHONY: jellyfin-parity-audit jellyfin-parity-audit-strict
-jellyfin-parity-audit: ## Audit Jellyfin creator parity (docs/contracts/runtime/gpu/tensor/auth)
+jellyfin-parity-audit: ## Audit Creator pipeline parity across Jellyfin/YT/CHIT layers
 	@$(PYTHON) tools/jellyfin_creator_parity_audit.py
 
-jellyfin-parity-audit-strict: ## Strict parity audit (fails on warn/fail)
+jellyfin-parity-audit-strict: ## Strict parity audit (fails on WARN/FAIL)
 	@$(PYTHON) tools/jellyfin_creator_parity_audit.py --strict
 
 .PHONY: jellyfin-verify jellyfin-smoke yt-jellyfin-smoke
@@ -2199,6 +2190,7 @@ jellyfin-verify: ## Verify Jellyfin bridge + overlay runtime health and refresh 
 	@$(PYTHON) tools/jellyfin_verify.py
 
 jellyfin-smoke: jellyfin-verify ## Alias smoke target for Jellyfin verification
+	@true
 
 yt-jellyfin-smoke: ## Smoke PMOVES.YT and Jellyfin bridge integration (health + yt/info)
 	@$(PYTHON) tools/yt_jellyfin_smoke.py
