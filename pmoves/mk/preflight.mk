@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate auth-alignment auth-alignment-strict ports-resolve
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
@@ -110,6 +110,7 @@ audit-layers: audit-layers-static ## Alias for static layer certification
 
 preflight: ## Full preflight: env check + quick readiness + Codex health summary
 	@$(MAKE) --no-print-directory env-check
+	@$(MAKE) --no-print-directory auth-alignment
 	@$(MAKE) --no-print-directory submodule-integrity
 	@$(MAKE) --no-print-directory ci-runners-check
 	@$(MAKE) --no-print-directory ci-runners-lockdown
@@ -175,3 +176,12 @@ smoke-showtime: ## Run smoke tests with live Showtime watcher (core + monitoring
 	cleanup; \
 	trap - EXIT INT TERM; \
 	echo "✔ Showtime smoke complete."
+
+auth-alignment: ## Cross-tier credential consistency check (JWT, NATS, MinIO, URL-safety)
+	@$(PRECHECK_PY) tools/auth_alignment_check.py
+
+auth-alignment-strict: ## Strict auth alignment (warnings also fail)
+	@$(PRECHECK_PY) tools/auth_alignment_check.py --strict
+
+ports-resolve: ## Display topology-aware port resolution map for all services
+	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) services/common/port_resolver.py

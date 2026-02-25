@@ -4,6 +4,17 @@ _Last updated: 2026-02-24_
 ## Goal
 Deterministic release checklist for all tracked submodules before final production promotion (`PMOVES.AI-Edition-Hardened-Integrations` -> `PMOVES.AI-Edition-Hardened` -> `main`).
 
+## Current Release Wave Status (2026-02-24)
+- Completed merge sequence:
+  - `#703` parity remediation
+  - `#704` deterministic submodule branch gate + production checklist
+  - `#700 -> #701 -> #702` Jellyfin creator production lane
+  - `#699` final promotion merge to `main` (`1a21c038`)
+- Remaining before next promotion wave:
+  - Recover self-hosted runner queue deadlock and rerun one targeted hardening + GHCR lane for fresh evidence
+  - Close credentials/runtime blockers (`AB-4`, `AB-5`, `AB-6`) in production audit dashboard
+  - Re-run deterministic gate chain against next promotion head before opening new production PR stack
+
 ## Global Deterministic Gates (Run In Order)
 1. `make -C pmoves submodule-layer-validate-all-strict`
 2. `make -C pmoves submodule-layer-validate-strict`
@@ -107,4 +118,3 @@ For each submodule PR:
 5. `P7` tokenomics/geometry lanes
 6. `P6` sandbox/R&D lanes (if included in production scope)
 7. Promote `PMOVES.AI-Edition-Hardened-Integrations` -> `PMOVES.AI-Edition-Hardened` -> `main` only after all required checks are green
-

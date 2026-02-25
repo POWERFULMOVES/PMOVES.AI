@@ -37,3 +37,4 @@ env.tier-media
 env.tier-ui
 env.tier-vpn
 env.tier-worker
+env.tier-supabase.urlencoded

@@ -4,6 +4,13 @@ Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.m
 _Last updated: 2026-02-24_
 
 ### Latest changes (Feb 24, 2026)
+- Completed lock-step production merge wave:
+  - `#703 -> #704 -> #700 -> #701 -> #702 -> #699`
+  - final promotion landed on `main` at commit `1a21c038`
+- Remaining release blockers now narrowed to:
+  - self-hosted runner queue deadlock recovery for hardening/GHCR lanes
+  - runtime credential + health/migration closure (`AB-4`, `AB-5`, `AB-6`)
+  - open maintenance PR `#705` (dependabot yt-dlp docs-plan bump)
 - Added deterministic submodule production release runbook:
   - `pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
   - Includes per-submodule profile/dependency matrix (40 tracked submodules), required gate packs, and merge-order policy.
