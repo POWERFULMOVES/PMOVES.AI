@@ -31,6 +31,11 @@ _Last updated: 2026-02-24_
 - Jellyfin bridge host reachability hardened: `jellyfin-bridge` now joins `pmoves_external` so `http://localhost:8093/healthz` and `jellyfin-verify` are reliable in production bring-up.
 - Added worktree team runbook:
   - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+- Hardened-only planning pass completed: roadmap and production-audit docs now explicitly treat `PMOVES.AI-Edition-Hardened` as the active release lane.
+- Added DAO recontext planning doc: `pmoves/docs/PMOVES.AI PLANS/DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md`.
+- Defined normalized projection envelope and contradiction rules so PMOVES enterprise forecasts are not mixed with small-business tokenomics comparables.
+- Added shape-attribution vs predictive-market evaluation track (sandbox only) with explicit gate criteria before any mechanism promotion.
+- Updated production-audit dashboard to include current runtime drift checks (collation warning watch, dynamic port/namespace parity, and production-mode command enforcement).
 
 ### Latest changes (Feb 23, 2026)
 - Added local-first GHCR prepublish lane for SupaSerch:

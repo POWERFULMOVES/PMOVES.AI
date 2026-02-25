@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-02-18 — v2.3 with directory map_
+_Last updated: 2026-02-24 — hardened docs convergence pass_
 
 ## Directory Map
 
@@ -36,7 +36,10 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Smoke Tests** — `../operations/SMOKETESTS.md`
 - **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
 - **Production Audit Prep (latest runbook)** — `../audit/PRODUCTION_AUDIT_PREP_2026-02-14.md`
+- **Production Audit Dashboard (live status)** — `../PRODUCTION_AUDIT_DASHBOARD.md`
+- **DAO Recontext + Ingestion Plan (hardened)** — `DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md`
 - **Local Certification Lockdown (hard-stop policy)** — `../AGENTS/LOCAL_CERTIFICATION_LOCKDOWN.md`
+- **KRISS KROSS Accord (agent collision protocol)** — `../AGENTS/KRISS_KROSS_ACCORD.md`
 - **Pinokio + Docker + Cloudflare + GitHub launch strategy** — `PINOKIO_DOCKER_CLOUDFLARE_GITHUB_STRATEGY.md`
 - **Secrets + CHIT Portability Workflow** — `../SECRETS_CHIT_PORTABILITY_WORKFLOW.md`
 - **Tooling Overlay Audit (scripts/tools vs submodules)** — `../AGENTS/TOOLING_SCRIPT_AUDIT.md`
