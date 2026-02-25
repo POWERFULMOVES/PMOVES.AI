@@ -5,4 +5,4 @@ only the shared fixtures needed by service tests to avoid path-collision side
 effects from autouse helpers in the broader test conftest.
 """
 
-from tests.conftest import load_service_module, stub_external_modules  # noqa: F401
+from pmoves.tests.conftest import load_service_module, stub_external_modules  # noqa: F401
