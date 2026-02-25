@@ -38,6 +38,7 @@ from urllib.request import Request, urlopen
 
 
 PMOVES_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_POLICY_PATH = PMOVES_ROOT / "configs" / "topology_policy_manifest.json"
 
 CHIT_REQUIRED_KEYS = ("CHIT_REQUIRE_SIGNATURE", "CHIT_DECRYPT_ANCHORS", "CHIT_PASSPHRASE")
 CHIT_CONTAINER_TOKENS = (
@@ -58,9 +59,8 @@ PLACEHOLDER_VALUES = {
     "your_client_secret_here",
     "placeholder_db_password_here_generate_with_generate-keys.sh",
 }
-NAMESPACE_EXTRA_NETWORKS = {"bridge", "host", "none", "pmoves-net", "cataclysm-net"}
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
-CRITICAL_URL_KEYS = {
+DEFAULT_CRITICAL_URL_KEYS = {
     "NATS_URL",
     "SUPA_REST_URL",
     "SUPA_REST_INTERNAL_URL",
@@ -80,6 +80,112 @@ CRITICAL_URL_KEYS = {
     "DATABASE_URL",
     "POSTGRES_URL",
 }
+
+
+def _default_policy(project: str) -> Dict[str, object]:
+    return {
+        "project": project,
+        "namespace_prefix": f"{project}_",
+        "allowed_extra_networks": ["bridge", "host", "none", "pmoves-net", "cataclysm-net"],
+        "external_network_suffixes": ["_external"],
+        "external_network_names": [f"{project}_external", "pmoves-net", "cataclysm-net"],
+        "published_ports_require_external": True,
+        "published_external_exceptions": [],
+        "critical_url_keys": sorted(DEFAULT_CRITICAL_URL_KEYS),
+        "loopback_exception_keys_by_service": {
+            "agent-zero": ["AGENT_ZERO_API_BASE"],
+            "archon": ["ARCHON_SERVER_URL"],
+        },
+        "require_nats_auth": True,
+        "nats_auth_exceptions": [],
+        "required_networks_by_service": {},
+        "required_published_ports_by_service": {},
+    }
+
+
+def _normalize_service_str_map(raw: object) -> Dict[str, List[str]]:
+    if not isinstance(raw, Mapping):
+        return {}
+    out: Dict[str, List[str]] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            continue
+        if not isinstance(value, list):
+            continue
+        normalized = [str(item).strip() for item in value if str(item).strip()]
+        if normalized:
+            out[key.strip()] = normalized
+    return out
+
+
+def _normalize_service_int_map(raw: object) -> Dict[str, List[int]]:
+    if not isinstance(raw, Mapping):
+        return {}
+    out: Dict[str, List[int]] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            continue
+        if not isinstance(value, list):
+            continue
+        normalized: List[int] = []
+        for item in value:
+            try:
+                normalized.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        if normalized:
+            out[key.strip()] = normalized
+    return out
+
+
+def _load_policy(path: Path, project: str, *, warnings: List[str]) -> Dict[str, object]:
+    policy = _default_policy(project)
+    if not path.exists():
+        warnings.append(f"topology policy manifest not found at {path}; using built-in defaults")
+        return policy
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        warnings.append(f"unable to read topology policy manifest {path}: {exc}; using built-in defaults")
+        return policy
+    except json.JSONDecodeError as exc:
+        warnings.append(f"invalid JSON in topology policy manifest {path}: {exc}; using built-in defaults")
+        return policy
+    if not isinstance(raw, Mapping):
+        warnings.append(f"topology policy manifest {path} is not a JSON object; using built-in defaults")
+        return policy
+
+    for list_key in (
+        "allowed_extra_networks",
+        "external_network_suffixes",
+        "external_network_names",
+        "published_external_exceptions",
+        "critical_url_keys",
+        "nats_auth_exceptions",
+    ):
+        value = raw.get(list_key)
+        if isinstance(value, list):
+            normalized = [str(item).strip() for item in value if str(item).strip()]
+            policy[list_key] = normalized
+
+    for bool_key in ("published_ports_require_external", "require_nats_auth"):
+        value = raw.get(bool_key)
+        if isinstance(value, bool):
+            policy[bool_key] = value
+
+    for str_key in ("project", "namespace_prefix"):
+        value = raw.get(str_key)
+        if isinstance(value, str) and value.strip():
+            policy[str_key] = value.strip()
+
+    policy["loopback_exception_keys_by_service"] = _normalize_service_str_map(
+        raw.get("loopback_exception_keys_by_service")
+    )
+    policy["required_networks_by_service"] = _normalize_service_str_map(raw.get("required_networks_by_service"))
+    policy["required_published_ports_by_service"] = _normalize_service_int_map(
+        raw.get("required_published_ports_by_service")
+    )
+    return policy
 
 
 def _run(cmd: Sequence[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -261,16 +367,6 @@ def _url_has_auth(value: str) -> bool:
     return bool(parsed.username and parsed.password)
 
 
-def _is_loopback_exception(service: str | None, key: str, value: str) -> bool:
-    # agent-zero self-address (in-container API loopback)
-    if service == "agent-zero" and key == "AGENT_ZERO_API_BASE":
-        return True
-    # archon self-reference for its own API endpoint
-    if service == "archon" and key == "ARCHON_SERVER_URL":
-        return True
-    return False
-
-
 def _check_manifest_sync() -> tuple[bool, str]:
     result = _run([sys.executable, "tools/chit_manifest_sync.py", "--check"], cwd=PMOVES_ROOT)
     merged = (result.stdout + "\n" + result.stderr).strip()
@@ -280,6 +376,7 @@ def _check_manifest_sync() -> tuple[bool, str]:
 def _check_project_topology(
     project: str,
     inspections: Mapping[str, Mapping[str, object]],
+    policy: Mapping[str, object],
     *,
     warnings: List[str],
     errors: List[str],
@@ -288,7 +385,54 @@ def _check_project_topology(
         errors.append(f"no running containers found for compose project '{project}'")
         return
 
-    namespace_prefix = f"{project}_"
+    namespace_prefix = str(policy.get("namespace_prefix") or f"{project}_")
+    allowed_extra_networks = {
+        str(item).strip()
+        for item in (policy.get("allowed_extra_networks") or [])
+        if str(item).strip()
+    }
+    external_network_suffixes = tuple(
+        str(item).strip()
+        for item in (policy.get("external_network_suffixes") or [])
+        if str(item).strip()
+    )
+    external_network_names = {
+        str(item).strip()
+        for item in (policy.get("external_network_names") or [])
+        if str(item).strip()
+    }
+    published_requires_external = bool(policy.get("published_ports_require_external", True))
+    published_external_exceptions = {
+        str(item).strip()
+        for item in (policy.get("published_external_exceptions") or [])
+        if str(item).strip()
+    }
+    critical_url_keys = {
+        str(item).strip()
+        for item in (policy.get("critical_url_keys") or [])
+        if str(item).strip()
+    }
+    loopback_exception_keys_by_service = {
+        str(service).strip(): {
+            str(key).strip()
+            for key in keys
+            if str(key).strip()
+        }
+        for service, keys in _normalize_service_str_map(
+            policy.get("loopback_exception_keys_by_service")
+        ).items()
+    }
+    require_nats_auth = bool(policy.get("require_nats_auth", True))
+    nats_auth_exceptions = {
+        str(item).strip()
+        for item in (policy.get("nats_auth_exceptions") or [])
+        if str(item).strip()
+    }
+    required_networks_by_service = _normalize_service_str_map(policy.get("required_networks_by_service"))
+    required_published_ports_by_service = _normalize_service_int_map(
+        policy.get("required_published_ports_by_service")
+    )
+
     host_bindings: Dict[str, List[str]] = defaultdict(list)
     non_namespaced_networks: Dict[str, List[str]] = defaultdict(list)
     published_without_external: List[str] = []
@@ -305,7 +449,7 @@ def _check_project_topology(
         for network in networks:
             if network.startswith(namespace_prefix):
                 continue
-            if network in NAMESPACE_EXTRA_NETWORKS:
+            if network in allowed_extra_networks:
                 continue
             non_namespaced_networks[network].append(container_name)
 
@@ -313,19 +457,41 @@ def _check_project_topology(
         if bindings:
             for _, host_ip, host_port in bindings:
                 host_bindings[f"{host_ip}:{host_port}"].append(container_name)
-            if not any(
-                net.endswith("_external") or net in {"pmoves-net", "cataclysm-net"}
+            service_for_publish = service or ""
+            has_external = any(
+                any(net.endswith(suffix) for suffix in external_network_suffixes)
                 for net in networks
+            ) or any(net in external_network_names for net in networks)
+            if (
+                published_requires_external
+                and service_for_publish not in published_external_exceptions
+                and not has_external
             ):
                 published_without_external.append(container_name)
 
+        service_name = service or ""
+        required_networks = required_networks_by_service.get(service_name, [])
+        missing_networks = [network for network in required_networks if network not in networks]
+        if missing_networks:
+            errors.append(
+                f"{container_name} missing required networks from policy: {', '.join(missing_networks)}"
+            )
+
+        required_ports = required_published_ports_by_service.get(service_name, [])
+        missing_ports = [str(port) for port in required_ports if not _ports_published(info, port)]
+        if missing_ports:
+            errors.append(
+                f"{container_name} missing required published container ports from policy: {', '.join(missing_ports)}"
+            )
+
         env = _env_map(info)
-        for key in CRITICAL_URL_KEYS:
+        for key in critical_url_keys:
             value = env.get(key)
             if not value:
                 continue
             host = _extract_host(value)
-            if host in LOOPBACK_HOSTS and not _is_loopback_exception(service, key, value):
+            allowed_keys = loopback_exception_keys_by_service.get(service_name, set())
+            if host in LOOPBACK_HOSTS and key not in allowed_keys:
                 critical_loopback[(key, value)].append(container_name)
 
         nats_url = env.get("NATS_URL")
@@ -333,7 +499,7 @@ def _check_project_topology(
             host = _extract_host(nats_url)
             if host in LOOPBACK_HOSTS:
                 errors.append(f"{container_name} uses loopback NATS_URL ({nats_url})")
-            if not _url_has_auth(nats_url):
+            if require_nats_auth and service_name not in nats_auth_exceptions and not _url_has_auth(nats_url):
                 unauth_nats[nats_url].append(container_name)
 
     for network_name, containers in sorted(non_namespaced_networks.items()):
@@ -471,6 +637,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", default="pmoves", help="docker compose project name (default: pmoves)")
     parser.add_argument(
+        "--policy",
+        default=str(DEFAULT_POLICY_PATH),
+        help=f"topology policy manifest path (default: {DEFAULT_POLICY_PATH.as_posix()})",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="treat warnings as failures (recommended for production gates)",
@@ -479,11 +650,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     warnings: List[str] = []
     errors: List[str] = []
+    policy = _load_policy(Path(args.policy), args.project, warnings=warnings)
 
     container_names = _docker_ps(args.project)
     inspections = _docker_inspect_many(container_names)
 
-    _check_project_topology(args.project, inspections, warnings=warnings, errors=errors)
+    policy_project = str(policy.get("project") or args.project)
+    if policy_project != args.project:
+        warnings.append(
+            f"topology policy project '{policy_project}' differs from '--project {args.project}'"
+        )
+
+    _check_project_topology(args.project, inspections, policy, warnings=warnings, errors=errors)
     _check_archon_topology(inspections, warnings=warnings, errors=errors)
     _check_chit_sync(inspections, warnings=warnings, errors=errors)
 
