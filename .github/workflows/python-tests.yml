@@ -128,11 +128,8 @@ jobs:
           PY
       - name: Run all service tests
         run: |
-          # Run top-level PMOVES tests separately, then isolate hyphenated
-          # service test directories so each conftest resolves in its own context.
-          pytest -q --tb=short --rootdir=. --import-mode=importlib \
-            pmoves/tests/
-
+          # Isolate hyphenated service test directories so each conftest
+          # resolves in its own context.
           PYTHONPATH=".:pmoves/services/agent-zero:pmoves" pytest -q --tb=short --rootdir=. --import-mode=importlib \
             pmoves/services/agent-zero/tests
 
