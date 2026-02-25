@@ -131,8 +131,18 @@ async def announce_loop(nc):
         }
         await nc.publish("mesh.node.announce.v1", json.dumps(msg_v1).encode())
 
-        # v2 announcement with namespace identity
+        # v2 announcement with namespace identity and topology context
         peer_raw = os.environ.get("PEER_EXPECTATIONS", "")
+        # Compute external services from EXTERNAL_* flags
+        ext_svcs = [
+            s for s, k in [
+                ("neo4j", "EXTERNAL_NEO4J"),
+                ("meilisearch", "EXTERNAL_MEILI"),
+                ("qdrant", "EXTERNAL_QDRANT"),
+                ("supabase", "EXTERNAL_SUPABASE"),
+            ]
+            if os.environ.get(k, "").lower() in ("true", "1", "yes")
+        ]
         msg_v2 = {
             "type": "mesh.node.announce.v2",
             "node": NODE_NAME,
@@ -145,6 +155,11 @@ async def announce_loop(nc):
                 "project": os.environ.get("COMPOSE_PROJECT_NAME", "pmoves"),
                 "tier": os.environ.get("SERVICE_TIER", "unknown"),
                 "branch": os.environ.get("GIT_BRANCH", "unknown"),
+            },
+            "topology": {
+                "mode": os.environ.get("TOPOLOGY_MODE", "auto"),
+                "supabase_runtime": os.environ.get("SUPABASE_RUNTIME", "compose"),
+                "external_services": ext_svcs,
             },
             "slug": os.environ.get("SERVICE_SLUG", NODE_NAME),
             "peers": [p for p in peer_raw.split(",") if p],

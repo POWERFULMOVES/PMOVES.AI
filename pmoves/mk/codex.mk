@@ -84,6 +84,7 @@ secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env
 
 secrets-funnel: ## Portable secrets flow: CHIT export -> manifest sync -> audit gates (optional boot user)
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
+	@$(CODEX_PY) tools/credential_urlencoder.py
 	@$(MAKE) --no-print-directory secrets-funnel-sync
 	@$(MAKE) --no-print-directory secrets-audit
 	@$(MAKE) --no-print-directory tooling-audit
