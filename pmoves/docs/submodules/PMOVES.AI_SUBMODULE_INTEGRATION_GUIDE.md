@@ -406,7 +406,7 @@ x-env-tier-worker: &env-tier-worker
   environment:
     PMOVES_ENV: ${PMOVES_ENV:-production}
     TIER: worker
-    NATS_URL: ${NATS_URL:-nats://nats:4222}
+    NATS_URL: ${NATS_URL:-nats://nats:pmoves@nats:4222}
     TENSORZERO_URL: ${TENSORZERO_URL:-http://tensorzero-gateway:3030}
 ```
 

@@ -99,7 +99,7 @@ Notes
 Agents Profile
 - Run `make up-nats` first to ensure the broker and `.env.local` flags are ready.
 - Start: `docker compose --profile agents up -d nats agent-zero archon mesh-agent publisher-discord`
-- Defaults: agents read `NATS_URL=nats://nats:4222`; override via `.env`/`.env.local` if you are targeting an external broker.
+- Defaults: agents read `NATS_URL=nats://nats:pmoves@nats:4222`; override via `.env`/`.env.local` if you are targeting an external broker.
 - Explore architecture and workflows in `docs/PMOVES_Multi-Agent_System_Crush_CLI_Integration_and_Guidelines.md`.
 
 ## Dashboards & UIs
