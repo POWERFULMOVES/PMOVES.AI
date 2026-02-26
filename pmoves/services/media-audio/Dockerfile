@@ -19,8 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip
 # With build context at pmoves/ root
 COPY services/common /app/services/common
 COPY services/media-audio/requirements.txt ./
-COPY services/media-audio/requirements.lock ./
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 # services/common requires jsonschema (installed separately to avoid hash conflict)
 RUN pip install --no-cache-dir jsonschema>=4.0.0
 COPY services/media-audio/ ./

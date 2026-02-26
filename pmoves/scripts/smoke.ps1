@@ -86,6 +86,27 @@ function Resolve-SupabaseRestUrl {
   return 'http://localhost:3010'
 }
 
+function Resolve-SupabaseAnonKey {
+  $direct = $env:SUPABASE_ANON_KEY
+  if (-not [string]::IsNullOrWhiteSpace($direct)) {
+    return $direct.Trim()
+  }
+
+  $runtimeOverlay = Join-Path $Script:ProjectRoot 'env.supa.runtime'
+  $overlayAnon = Get-EnvFileValue -Path $runtimeOverlay -Key 'SUPABASE_ANON_KEY'
+  if (-not [string]::IsNullOrWhiteSpace($overlayAnon)) {
+    return $overlayAnon.Trim()
+  }
+
+  $tierSupabase = Join-Path $Script:ProjectRoot 'env.tier-supabase'
+  $tierAnon = Get-EnvFileValue -Path $tierSupabase -Key 'SUPABASE_ANON_KEY'
+  if (-not [string]::IsNullOrWhiteSpace($tierAnon)) {
+    return $tierAnon.Trim()
+  }
+
+  return $null
+}
+
 function Escape-ShSingleQuotes {
   param([Parameter(Mandatory)][string]$Value)
   $replacement = "'" + '"' + "'" + '"' + "'"
@@ -230,6 +251,32 @@ function Invoke-GetJson {
   return $resp
 }
 
+function Invoke-GetJsonWithFallback {
+  param(
+    [Parameter(Mandatory)][string]$PrimaryUrl,
+    [string]$ProbeUrl,
+    [hashtable]$Headers
+  )
+  try {
+    return Invoke-GetJson -Url $PrimaryUrl -Headers $Headers
+  } catch {
+    if ([string]::IsNullOrWhiteSpace($ProbeUrl)) { throw }
+    Resolve-ProbeService | Out-Null
+    $probeContainer = $Script:ProbeContainer
+    $parts = @("curl", "-fsS")
+    $parts += "-H 'Accept: application/json'"
+    if ($Headers) {
+      foreach ($entry in $Headers.GetEnumerator()) {
+        $headerValue = "{0}: {1}" -f $entry.Key, $entry.Value
+        $parts += "-H '{0}'" -f (Escape-ShSingleQuotes -Value $headerValue)
+      }
+    }
+    $parts += "'{0}'" -f (Escape-ShSingleQuotes -Value $ProbeUrl)
+    $jsonText = Invoke-ContainerExec -Container $probeContainer -Command ($parts -join ' ')
+    return ($jsonText | ConvertFrom-Json)
+  }
+}
+
 function Test-QdrantReady {
   $base = ($env:QDRANT_URL -as [string])
   if ([string]::IsNullOrWhiteSpace($base)) { $base = 'http://localhost:6333' }
@@ -248,6 +295,14 @@ function Test-QdrantReady {
 
 try {
   $supaRestBase = Resolve-SupabaseRestUrl
+  $supaAnonKey = Resolve-SupabaseAnonKey
+  $supaHeaders = $null
+  if (-not [string]::IsNullOrWhiteSpace($supaAnonKey)) {
+    $supaHeaders = @{
+      'apikey' = $supaAnonKey
+      'Authorization' = "Bearer $supaAnonKey"
+    }
+  }
 
   # 1. Qdrant ready
   Write-Step "[1/12] Qdrant ready..."
@@ -280,7 +335,16 @@ try {
 
   # 6. PostgREST reachable
   Write-Step "[6/12] PostgREST reachable..."
-  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Test-Http200 -Url "$supaRestBase/" } | Out-Null
+  Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
+    try {
+      Test-Http200WithFallback -PrimaryUrl "$supaRestBase/" -ProbeUrl 'http://supabase-postgrest:3000/' -Headers $supaHeaders | Out-Null
+      return $true
+    } catch {
+      $status = Invoke-ProbeStatus -Url 'http://supabase-postgrest:3000/' -Method 'GET' -Headers $supaHeaders
+      if ($status -eq 401) { return $true }
+      throw
+    }
+  } | Out-Null
   Write-OK
 
   # 7. Insert via render-webhook
@@ -294,7 +358,7 @@ try {
 
   # 8. Verify studio_board row
   Write-Step "[8/12] Verify studio_board row..."
-  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJson -Url "$supaRestBase/studio_board?order=id.desc&limit=1" }
+  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "http://supabase-postgrest:3000/studio_board?order=id.desc&limit=1" -Headers $supaHeaders }
   if ($null -eq $rows -or $rows.Count -lt 1 -or $null -eq $rows[0].title) { throw 'No row with title found' }
   Write-OK
 
