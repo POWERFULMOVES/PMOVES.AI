@@ -4,6 +4,13 @@ Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.m
 _Last updated: 2026-02-24_
 
 ### Latest changes (Feb 24, 2026)
+- Completed lock-step production merge wave:
+  - `#703 -> #704 -> #700 -> #701 -> #702 -> #699`
+  - final promotion landed on `main` at commit `1a21c038`
+- Remaining release blockers now narrowed to:
+  - self-hosted runner queue deadlock recovery for hardening/GHCR lanes
+  - runtime credential + health/migration closure (`AB-4`, `AB-5`, `AB-6`)
+  - open maintenance PR `#705` (dependabot yt-dlp docs-plan bump)
 - Added deterministic submodule production release runbook:
   - `pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
   - Includes per-submodule profile/dependency matrix (40 tracked submodules), required gate packs, and merge-order policy.
@@ -24,6 +31,11 @@ _Last updated: 2026-02-24_
 - Jellyfin bridge host reachability hardened: `jellyfin-bridge` now joins `pmoves_external` so `http://localhost:8093/healthz` and `jellyfin-verify` are reliable in production bring-up.
 - Added worktree team runbook:
   - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+- Hardened-only planning pass completed: roadmap and production-audit docs now explicitly treat `PMOVES.AI-Edition-Hardened` as the active release lane.
+- Added DAO recontext planning doc: `pmoves/docs/PMOVES.AI PLANS/DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md`.
+- Defined normalized projection envelope and contradiction rules so PMOVES enterprise forecasts are not mixed with small-business tokenomics comparables.
+- Added shape-attribution vs predictive-market evaluation track (sandbox only) with explicit gate criteria before any mechanism promotion.
+- Updated production-audit dashboard to include current runtime drift checks (collation warning watch, dynamic port/namespace parity, and production-mode command enforcement).
 
 ### Latest changes (Feb 23, 2026)
 - Added local-first GHCR prepublish lane for SupaSerch:

@@ -7,11 +7,24 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 ## Audit Snapshot (2026-02-23)
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
-- PR queue: 0 open PRs on `POWERFULMOVES/PMOVES.AI` (targeted hardened cleanup merges complete for this pass).
-- Dependency/code scanning backlog: Dependabot open `14` (3 high, 9 medium, 2 low); Code Scanning open (first 100) `3 critical`, `64 high`, `33 medium`.
-- Active remediation focus: SSRF hardening landed for CHIT image decode paths in Hi‑RAG gateways and URL safety guards are being completed in SupaSerch HTTP fallback.
+- PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
+- Dependency/code scanning backlog: Dependabot open `7` (2 high, 1 medium, 4 low); Code Scanning open sample `37` (34 error, 3 warning).
+- Active remediation focus: SSRF hardening landed for CHIT image decode paths in Hi‑RAG gateways and URL safety guards are being completed in SupaSerch HTTP fallback. Production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, and hardened runtime auth consistency across compose and submodules.
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
 - Creator lane now includes Jellyfin parity auditing (`make -C pmoves jellyfin-parity-audit[‑strict]`) plus a dedicated worktree review runbook for PMOVES.YT/Jellyfin/CHIT convergence.
+- Submodule production release lane now has deterministic checklist coverage for all tracked submodules (40/40), including branch policy gating, static/runtime gate packs, and hardened merge-order policy (`pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`).
+- Creator/Jellyfin production lane now has a strict parity gate (`jellyfin-parity-audit-strict`) and a single bring-up path (`jellyfin-stack-prod`) that includes TensorZero, GPU Orchestrator, Jellyfin AI overlay, and bridge verification.
+- PMOVES.YT metadata extraction path for `/yt/info` is now hardened for smoke stability (metadata-only + config-isolated fallback), reducing transient extractor failures that previously blocked Creator pipeline verification.
+- Lock-step production sequence completed and promoted to `main`: `#703 -> #704 -> #700 -> #701 -> #702 -> #699` (final merge commit `1a21c038`).
+- DAO recontext + ingestion planning is now tracked at `DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md` with a normalized projection envelope for operator-safe planning.
+
+## Current Sprint Overlay (Hardened)
+
+- Keep `M2 - Creator and Publishing` active, but gate all release promotion through production audit closure.
+- Treat all services as core in production bring-up; no optional-by-default shortcuts for audit paths.
+- Use one documented command path for operator reproducibility (`env-setup -> env-check -> supa-start -> supabase-bootstrap -> up -> smoke -> smoke-gpu`).
+- Resolve projection contradictions by separating PMOVES-native financial model assumptions from benchmark/comparables docs.
+- Compare `shape attribution` vs `predictive markets` in a non-monetary sandbox lane before any economic mechanism decisions.
 
 ## Milestones
 
