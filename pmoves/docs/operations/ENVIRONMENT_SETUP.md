@@ -181,6 +181,21 @@ Contains data processing worker configurations.
 
 CHIT (Cognitive Holographic Information Transfer) provides secure encoding/decoding of environment secrets with multi-target output.
 
+### CHIT_PROD_PASSPHRASE (Required for Production)
+
+Generate a 64-character passphrase and set it in `pmoves/env.shared` (gitignored):
+
+```bash
+# Generate
+openssl rand -base64 48 | tr -d '\n=' | cut -c1-64
+
+# Set both in env.shared
+CHIT_PASSPHRASE=<generated-value>
+CHIT_PROD_PASSPHRASE=<same-value>
+```
+
+Verify with `make -C pmoves topology-chit-gate-strict` — must show 0 warnings.
+
 ### Encoding Secrets
 
 ```bash
