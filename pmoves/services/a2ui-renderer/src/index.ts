@@ -203,6 +203,7 @@ app.post('/render', requireAuth, async (req: Request, res: Response) => {
   const spec = req.body;
   const end = renderDuration.startTimer({ format });
 
+  let tmpDir: string | undefined;
   try {
     if (!spec.version || !spec.animation || !spec.scenes) {
       renderCounter.inc({ format, status: 'error' });
@@ -223,7 +224,7 @@ app.post('/render', requireAuth, async (req: Request, res: Response) => {
       inputProps: { spec },
     });
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'a2ui-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'a2ui-'));
     const outputFile = path.join(tmpDir, `render.${format}`);
 
     const codec = format === 'gif' ? 'gif' as const : format === 'webm' ? 'vp8' as const : 'h264' as const;
@@ -289,6 +290,9 @@ app.post('/render', requireAuth, async (req: Request, res: Response) => {
       spec_version: spec.version,
     });
   } catch (err) {
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    }
     renderCounter.inc({ format, status: 'error' });
     end();
     res.status(500).json({
@@ -336,6 +340,7 @@ app.post('/render/chart', requireAuth, async (req: Request, res: Response) => {
   req.query.format = 'mp4';
 
   const end = renderDuration.startTimer({ format: 'mp4' });
+  let tmpDir: string | undefined;
 
   try {
     const servedUrl = await ensureBundle();
@@ -347,7 +352,7 @@ app.post('/render/chart', requireAuth, async (req: Request, res: Response) => {
       inputProps: { spec },
     });
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'a2ui-chart-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'a2ui-chart-'));
     const outputFile = path.join(tmpDir, 'chart.mp4');
 
     await renderMedia({
@@ -390,6 +395,9 @@ app.post('/render/chart', requireAuth, async (req: Request, res: Response) => {
 
     res.json({ ok: true, url, format: 'mp4', duration_ms: 6000, scenes: 1 });
   } catch (err) {
+    if (tmpDir) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    }
     renderCounter.inc({ format: 'mp4', status: 'error' });
     end();
     res.status(500).json({
