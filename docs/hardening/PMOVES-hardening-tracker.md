@@ -1,93 +1,287 @@
-# PMOVES Hardening Tracker v3.0
+# PMOVES Hardening Tracker v4.0
 
-Status snapshot and to-dos to align with `PMOVES.AI-Edition-Hardened-Full.md`.
+Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
 
-## Phase H: Audit Completion Sprint (2026-02-17)
+Last updated: 2026-02-26
 
-### CodeQL High-Severity (19 alerts → 0)
-- [x] `py/incomplete-url-substring-sanitization` — `credential_setup.py`: replaced `"ghcr.io" in registry` with `urlparse().hostname` equality check
-- [x] `py/incomplete-url-substring-sanitization` — `credential_setup.py`: replaced `"docker.io" in registry` with `urlparse().hostname` check
-- [x] `py/incomplete-url-substring-sanitization` — `migrate_tensorzero.py`: replaced `"ollama" in api_base` with `urlparse().hostname` check
-- [x] `py/clear-text-logging-sensitive-data` — `update_env_from_cgp.py`: redacted CGP values in print output
-- [x] `py/clear-text-logging-sensitive-data` — `credential_setup.py`: replaced `value[:10]...` display with `***`
-- [x] `py/clear-text-logging-sensitive-data` — `credential_fetcher.py`: redacted error details, fixed value display loop
-- [x] `py/clear-text-storage-sensitive-data` — `audit_log.py`: added CodeQL suppression (values scrubbed by `_scrub_secrets()`)
-- [x] `py/clear-text-storage-sensitive-data` — `chit/__init__.py`: added CodeQL suppression (CGP by-design encoding)
-- [x] `py/path-injection` — `hf-mcp-server/main.py`: added CodeQL suppression (allowlist regex `^[a-zA-Z0-9._-]+$`)
-- [x] `py/redos` — `test_security_fixes.py`: added CodeQL suppression (intentional ReDoS test pattern)
+---
+
+## Hardening Scorecard
+
+| Category | Coverage | Status |
+|----------|----------|--------|
+| **P1 Security Issues** | 0 remaining (10/10 fixed) | CLEAR |
+| **CodeQL High-Severity** | 0 remaining (19/19 fixed) | CLEAR |
+| **Dependabot High** | 0 remaining (3/3 fixed) | CLEAR |
+| **Non-Root Users (USER directive)** | 29/29 services (100%) | COMPLETE |
+| **Read-Only Filesystems** | 30/30 services (100%) | COMPLETE |
+| **Cap Drop ALL** | All services including nats-init | COMPLETE |
+| **no-new-privileges** | All services including nats-init | COMPLETE |
+| **HEALTHCHECK in Dockerfile** | 12/47 (25%) | PARTIAL |
+| **SHA-Pinned Base Images** | 0/60+ (0%) | LOW |
+| **Multi-Stage Builds** | 4/47 (8.5%) | LOW |
+| **P2 Open Issues** | 15 across 7 submodules | TRACKED |
+
+---
+
+## Docker Hardening Architecture
+
+### Tier-Based Network Isolation (5 tiers)
+
+| Network | Purpose |
+|---------|---------|
+| `pmoves_data` | Vector DBs, graph DBs, search indexes |
+| `pmoves_api` | REST/GraphQL endpoints, gateways |
+| `pmoves_app` | Business logic services |
+| `pmoves_bus` | NATS event streaming |
+| `pmoves_monitoring` | Prometheus, Grafana, Loki |
+
+### YAML Anchor Hardening Model
+
+Combined tier+hardening anchors in `pmoves/docker-compose.yml` (66 services):
+
+| Anchor | Security Features |
+|--------|-------------------|
+| `x-tier-*-hardened-ro` | cap_drop:ALL, read_only:true, tmpfs /tmp+/var/tmp (noexec,nosuid,64m), no-new-privileges |
+| `x-tier-*-hardened` | cap_drop:ALL, cap_add:[selective], no-new-privileges (RW for stateful) |
+| `x-tier-data-hardened` | +CHOWN, +DAC_OVERRIDE, +FOWNER, +SETGID, +SETUID (database needs) |
+| `x-tier-media-hardened` | GPU-specific caps for CUDA services |
+
+### Base Image Distribution (47 PMOVES-native Dockerfiles)
+
+| Base Image | Count | % |
+|-----------|-------|---|
+| Python 3.11-slim | 27 | 57% |
+| Python 3.12-slim | 5 | 11% |
+| Python 3.10-slim | 3 | 6% |
+| NVIDIA CUDA | 3 | GPU |
+| Google Distroless | 1 | agentgym-rl-coordinator |
+| Nginx Alpine | 1 | invidious-companion-proxy |
+| Other | 7 | Various |
+
+---
+
+## P1 Issues -- All Resolved (Phase H, 2026-02-17)
+
+| # | Submodule | Issue | Resolution |
+|---|-----------|-------|-----------|
+| 1 | Agent Zero | 3x root Dockerfiles | USER a0user in all 3 |
+| 2 | Agent Zero | NATS no auth | nats://nats:pmoves@nats:4222 |
+| 3 | HiRAG | Cypher injection (f-string labels) | _ALLOWED_LABELS frozenset allowlist |
+| 4 | HiRAG | Default creds | :? required vars |
+| 5 | HiRAG | No API wrapper | Downgraded P3 (gateway serves endpoints) |
+| 6 | HiRAG | No /metrics | Downgraded P3 (gateway has metrics) |
+| 7 | BoTZ | JWT fails open | Raises HTTPException(500) |
+| 8 | tensorzero | provider-proxy root | USER proxy directive |
+| 9 | tensorzero | ClickHouse default creds | :? required vars |
+| 10 | DoX | NATS unauthed | auth block in nats.conf |
+
+---
+
+## P2 Open Issues (15 total)
+
+Tracked in `pmoves/docs/security/P2_SUBMODULE_TRACKER.md`.
+
+| # | Submodule | Issue | Impact |
+|---|-----------|-------|--------|
+| 1 | BoTZ | MCP Gateway unauthenticated | Unprotected /call, /mcp, /tools |
+| 2 | BoTZ | env.tier-agent.sh uses `export` syntax | Docker env_file incompatible |
+| 3 | Open-Notebook | SurrealDB root:root default | Default creds in compose |
+| 4 | Open-Notebook | Auth middleware fail-open | Bypasses auth if no password |
+| 5 | Open-Notebook | /health not /healthz, no /metrics | Non-standard endpoints |
+| 6 | PMOVES.YT | MinIO default creds in env | Hardcoded minioadmin |
+| 7 | PMOVES.YT | Query injection risk | Unencoded Supabase params |
+| 8 | DoX | NATS WebSocket no TLS | no_tls: true in standalone |
+| 9 | Pipecat | No MCP tool allowlisting | Any tool callable |
+| 10 | Pipecat | No Prometheus metrics | No observability |
+| 11 | A2UI | env.shared uses `export` syntax | Docker incompatible |
+| 12 | A2UI | NATS URL missing auth | No credentials in default |
+| 13 | tensorzero | 4 RUSTSEC advisories | Suppressed in deny.toml |
+| 14 | tensorzero | 30+ hardcoded secrets in examples | Example compose files |
+| 15 | HiRAG | env.shared uses `export` syntax | Docker incompatible |
+
+---
+
+## CI/CD Build Infrastructure
+
+### Workflows (16 total)
+
+| Workflow | Type | Trigger |
+|----------|------|---------|
+| `build-images.yml` | Multi-arch matrix build (GHCR+DockerHub) | workflow_dispatch |
+| `self-hosted-builds.yml` | GPU/CPU on self-hosted runners | Push + manual |
+| `self-hosted-builds-hardened.yml` | Hardened builds (AI Lab) | Push + manual |
+| `integrations-ghcr.yml` | Integration service builds (Cosign+SBOM+Trivy) | Push, PR, manual |
+| `hardening-validation.yml` | Docker security checks (4 jobs) | Push, PR, manual |
+| `codeql.yml` | Security scanning (actions/JS/Python) | Push, PR, schedule |
+| `sql-policy-lint.yml` | Migration RLS validation | Auto |
+| `chit-contract.yml` | CHIT geometry contracts | Auto |
+| `python-tests.yml` | Unit/integration tests | Auto |
+| `integration-contract.yml` | Integration overlay validation | Auto |
+| `integration-gate.yml` | Hardened branch gate | PR |
+| `deploy-gateway-agent.yml` | Gateway Agent deployment (AI Lab + VPS) | Push + manual |
+| `env-preflight.yml` | Windows env validation | PR + manual |
+| `sync-secrets-local.yml` | CGP/env secret sync | Manual |
+| `webhook-smoke.yml` | Render webhook smoke test | Manual |
+| `yt-dlp-bump.yml` | Weekly yt-dlp dependency bump | Schedule (Mon 08:00) |
+
+### Build Matrix (`pmoves/images.yaml` -- 16 services)
+
+All track `PMOVES.AI-Edition-Hardened` branch except:
+- **BoTZ** and **Tailscale** track `main` branch
+
+### Integration Matrix (`integrations-ghcr.matrix.json` -- 10 services)
+
+Multi-arch (amd64+arm64), Cosign keyless signing, CycloneDX SBOMs, Trivy gating.
+Exception: `deepresearch` is amd64-only.
+
+### Registries
+- GHCR: `ghcr.io/powerfulmoves/*`
+- Docker Hub: `powerfulmoves/*`
+- Multi-arch: amd64 + arm64 (with `docker-compose.arm64.override.yml`)
+
+---
+
+## Service Runtime Status
+
+### Total Services: 66 defined in docker-compose.yml
+
+### Service Distribution by Category
+
+| Category | Count | Services |
+|----------|-------|----------|
+| Supabase stack | 7 | db, gotrue, postgrest, kong, realtime, storage, studio |
+| Data stores | 4 | qdrant, meilisearch, neo4j, minio |
+| Hi-RAG | 4 | v1 CPU, v2 CPU, v1 GPU, v2 GPU |
+| API/utility | 4 | retrieval-eval, presign, render-webhook, model-registry |
+| Workers | 6 | extract-worker, pdf-ingest, langextract, notebook-sync, session-context-worker, comfy-watcher |
+| Media pipeline | 6 | ffmpeg-whisper, media-video, media-audio, pmoves-yt, bgutil-pot-provider, channel-monitor |
+| NATS | 4 | nats, nats-init, nats-echo-req, nats-echo-res |
+| Agents | 11 | agent-zero, archon, cipher-api, mesh-agent, botz-gateway, a2ui-nats-bridge, deepresearch, supaserch, publisher-discord, gateway-agent, github-runner-ctl |
+| LLM/AI | 7 | tensorzero-clickhouse, tensorzero-gateway, tensorzero-ui, pmoves-ollama, gpu-orchestrator, evo-controller, llama-throughput-lab |
+| Voice/TTS | 4 | ultimate-tts-studio, flute-gateway, tokenism-simulator, tokenism-ui |
+| UI | 2 | pmoves-ui, jellyfin-bridge |
+| Invidious | 6 | invidious-db, invidious-companion, invidious, grayjay-plugin-host, grayjay-server, invidious-companion-proxy |
+| Infrastructure | 1 | cloudflared |
+
+### Known Unhealthy Services (from 2026-02-07 audit)
+
+| Service | Issue |
+|---------|-------|
+| channel-monitor | PostgreSQL URL using host.docker.internal |
+| ultimate-tts-studio | Missing gradio[mcp] dependency |
+| model-registry | Healthcheck failing |
+| retrieval-eval | Missing /app/server.py |
+| comfy-watcher | Missing MinIO credentials |
+
+---
+
+## Production Readiness Blockers
+
+All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/docs/audit/PRODUCTION_AUDIT_BLOCKER_STATUS.md`.
+
+### Remaining Configuration Blockers
+
+| Blocker | Category | Status |
+|---------|----------|--------|
+| LLM API Keys Empty (8 keys) | CRITICAL | Requires secret injection |
+| CHIT Security Disabled (passphrase/signatures) | CRITICAL | Requires configuration |
+| Supabase Example JWT Secret | CRITICAL | Requires rotation |
+| MinIO Secret Key Empty | HIGH | Requires secret injection |
+| NATS Auth Missing (~16 services) | HIGH | Config remediation needed |
+
+---
+
+## CHIT Integration Coverage
+
+| Level | Count | Services |
+|-------|-------|----------|
+| **Full** | 5 | Tokenism Simulator, Hi-RAG v2, Gateway, Neo4j Mind Map, Agent Zero |
+| **Partial** | 8 | A2UI Bridge, PMOVES.YT, DeepResearch, SupaSerch, Consciousness, Evo Controller, AgentGym, Flute |
+| **None** | 13 | Extract Worker, PDF Ingest, FFmpeg Whisper, Media analyzers, Channel Monitor, etc. |
+
+---
+
+## Phase H History (2026-02-17)
+
+### CodeQL High-Severity (19 alerts -> 0)
+- [x] `py/incomplete-url-substring-sanitization` -- `credential_setup.py`: `urlparse().hostname` equality check
+- [x] `py/incomplete-url-substring-sanitization` -- `migrate_tensorzero.py`: `urlparse().hostname` check
+- [x] `py/clear-text-logging-sensitive-data` -- `update_env_from_cgp.py`: redacted CGP values
+- [x] `py/clear-text-logging-sensitive-data` -- `credential_setup.py`: replaced value display with `***`
+- [x] `py/clear-text-logging-sensitive-data` -- `credential_fetcher.py`: redacted error details
+- [x] `py/clear-text-storage-sensitive-data` -- `audit_log.py`: CodeQL suppression (`_scrub_secrets()`)
+- [x] `py/clear-text-storage-sensitive-data` -- `chit/__init__.py`: CodeQL suppression (CGP by-design)
+- [x] `py/path-injection` -- `hf-mcp-server/main.py`: allowlist regex
+- [x] `py/redos` -- `test_security_fixes.py`: CodeQL suppression (intentional test)
 
 ### CodeQL Medium-Severity (hardcoded defaults)
-- [x] `pmoves-yt/yt.py`: removed `"minioadmin"` default from `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`
-- [x] `ffmpeg-whisper/server.py`: removed `"minioadmin"` default from `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`
-- [x] `pdf-ingest/app.py`: removed `"minioadmin"` default from `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`
-- [x] `comfy-watcher/watcher.py`: removed `"pmoves"/"password"` defaults from `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`
-- [x] `audit_log.py`: optimized `(.|\n)*?` regex to `[\s\S]*?` to prevent ReDoS
+- [x] `pmoves-yt/yt.py`: removed minioadmin defaults
+- [x] `ffmpeg-whisper/server.py`: removed minioadmin defaults
+- [x] `pdf-ingest/app.py`: removed minioadmin defaults
+- [x] `comfy-watcher/watcher.py`: removed pmoves/password defaults
+- [x] `audit_log.py`: optimized regex to prevent ReDoS
 
-### Dependabot High (3 alerts → 0)
-- [x] Pillow CVE-2026-25990: bumped `media-video/requirements.txt` from 10.4.0 → 12.1.1
-- [x] Axios CVE-2026-25639: `pmoves/ui/package.json` already at ^1.13.5 (patched version)
+### Dependabot High (3 alerts -> 0)
+- [x] Pillow CVE-2026-25990: bumped 10.4.0 -> 12.1.1
+- [x] Axios CVE-2026-25639: already at ^1.13.5
 
-### Phase C P1 Resolution (10 P1 → 0)
-| # | Submodule | Issue | Status |
-|---|-----------|-------|--------|
-| 1 | Agent Zero | No USER in 3 Dockerfiles | ✅ `USER a0user` in all 3 (on branch tip) |
-| 2 | Agent Zero | NATS URL no auth | ✅ `nats://nats:pmoves@nats:4222` |
-| 3 | HiRAG | Cypher injection (f-string labels) | ✅ `_ALLOWED_LABELS` frozenset allowlist added (Phase H) |
-| 4 | HiRAG | Default creds | ✅ `:?` required vars |
-| 5 | HiRAG | No API wrapper | Downgraded to P3 — `hi-rag-gateway/` serves endpoints |
-| 6 | HiRAG | No /metrics | Downgraded to P3 — gateway has metrics |
-| 7 | BoTZ | JWT fails open | ✅ raises `HTTPException(500)` |
-| 8 | tensorzero | provider-proxy root | ✅ `USER proxy` |
-| 9 | tensorzero | ClickHouse default creds | ✅ `:?` required vars |
-| 10 | DoX | NATS unauthed | ✅ auth block in `nats.conf` |
+---
 
-### Phase C P2 Credential Cleanup
-- [x] DoX `env.shared`: `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` → `:?` required
-- [x] TensorZero `envared`: `NEO4J_USERNAME` → `:?` required (PASSWORD/MINIO already done)
+## Compose Cleanup (2026-02-26)
 
-## Phase G: CHIT-Distilled Models (2026-02-17)
-- Model spotlight SQL migration, datasets config, publish script
-- CHIT lanes routing module, model strengths seed, agent registry update
+- [x] Removed duplicate `PORT=8100` in `session-context-worker` (copy-paste artifact)
+- [x] Removed duplicate `PORT=8104` + stale comment in `github-runner-ctl`
+- [x] Removed duplicate NATS comment in `agent-zero`
+- [x] Added hardening to `nats-init` service (cap_drop:ALL, read_only, no-new-privileges, tmpfs)
 
-## Phase C Audit (2026-02-16)
-- **Phase C audit complete**: 8 critical production submodules audited across 8 security dimensions
-- **10 P1 issues identified**: Agent Zero root containers, HiRAG Cypher injection, BoTZ JWT fail-open, DoX unauthenticated NATS, tensorzero provider-proxy root, default credentials across 6 submodules
-- **Cross-cutting patterns found**: NATS auth missing (all 8), env.shared export syntax (5/8), default creds (6/8)
-- **Jan 28 P2 items resolved**: Open-Notebook USER ✅ (opennotebook:1000), PMOVES.YT USER ✅ (pmoves:65532)
-- **PR merges**: #633 (codex consolidation), #634 (gitlinks), #642 (CI triggers), #644 (mesh namespace)
-- **Hyperdimensions**: 10 topology PRs (#2-#11) merged
-- **Orphaned gitlinks**: `pmoves-e2b-mcp-server` cleaned up (`git rm --cached`)
+---
 
-## Previously done (2025-12 through 2026-01)
-- Hardened CI builds/scans `pmoves-yt` multi-arch (amd64+arm64)
-- arm64 compose override for Jetson/edge deployments
-- Trivy gating (HIGH/CRITICAL -> fail) active in hardened self-hosted builds
-- Regenerated `agent-zero` and `media-video` locks on Python 3.11 (CUDA cu121 wheels)
+## Gaps & Recommended Next Steps
 
-## Remaining P2/P3 Items
+### Quick Wins (Low Effort, High Value)
+1. **Fix 5 unhealthy services** -- resolve config issues for channel-monitor, model-registry, retrieval-eval, comfy-watcher, ultimate-tts-studio
+2. **Fix `export` syntax** in env files (BoTZ, A2UI, HiRAG) -- sed replacement
+3. **Add NATS auth** to remaining ~16 services -- template replacement
 
-### P2 (Medium Priority)
-1. **BoTZ**: Add auth middleware to MCP Gateway (`/call`, `/mcp`, `/tools` endpoints)
-2. **tensorzero**: Evaluate 4 suppressed RUSTSEC advisories in `deny.toml`
-3. **DoX**: Enable TLS for NATS WebSocket listener
-4. **Open-Notebook**: Add /metrics endpoint, rename /health → /healthz
-5. **PMOVES.YT**: URL-encode Supabase filter parameters (`yt.py:828-835`)
+### Medium Priority (P2 Sprint)
+4. **BoTZ MCP Gateway auth** -- add middleware to /call, /mcp, /tools
+5. **Open-Notebook auth fail-open** -- change to fail-closed
+6. **PMOVES.YT query injection** -- URL-encode Supabase filter params
+7. **DoX NATS TLS** -- enable TLS for WebSocket listener
 
-### P3 (Low Priority)
+### Infrastructure Improvements (P3)
+8. **Expand HEALTHCHECK coverage** -- 12/47 (25%) currently, target 80%+
+9. **SHA pin base images** -- 0/60+ pinned currently
+10. **Multi-stage builds** -- only 4/47 services use them
+11. **Evaluate distroless** for more services beyond agentgym-rl-coordinator
+12. **CI lint for env_file format** -- reject `export` prefix automatically
+
+### P3 (Existing)
 1. **HiRAG**: Build dedicated FastAPI wrapper service
-2. **HiRAG**: Add /metrics Prometheus endpoint (gateway has metrics)
+2. **HiRAG**: Add /metrics Prometheus endpoint
 3. Image pinning & freshness for remaining services
 4. Add /metrics to PMOVES-Wealth (Laravel) and PMOVES-Danger-infra (Go)
 5. Switch Hi-RAG v2 to `:pmoves-hardened` tag
 
-## Optional / Nice-to-Have
-- Compose profiles for split deployments (PC + Jetsons + VPS)
-- StepSecurity egress allowlists per workflow job
-- Shared `pmoves-common` PyPI package for ServiceTier/HealthStatus
-- Port registry in services-catalog.md with CI enforcement
-- CI lint for env_file format (reject `export` prefix)
+---
+
+## Key File Paths
+
+| File | Purpose |
+|------|---------|
+| `pmoves/docker-compose.yml` | Main compose (66 services, hardening anchors) |
+| `pmoves/images.yaml` | Build matrix (16 services) |
+| `docs/hardening/PMOVES-hardening-tracker.md` | This tracker (v4.0) |
+| `docs/service-hardening-inventory.md` | Phase 1 inventory (29 services) |
+| `pmoves/docs/security/P2_SUBMODULE_TRACKER.md` | 15 open P2 issues |
+| `pmoves/docs/audit/PRODUCTION_AUDIT_BLOCKER_STATUS.md` | 5 blockers (all resolved) |
+| `pmoves/tests/hardening/test_docker_hardening.py` | Validation suite (35 services) |
+| `.github/workflows/hardening-validation.yml` | CI hardening checks |
+| `.github/workflows/integrations-ghcr.yml` | Integration builds (Cosign+SBOM+Trivy) |
 
 ---
 
 **Target achieved:** 0 open P1, 0 high CodeQL, 0 high Dependabot
-**Last updated:** 2026-02-17
+**Previous version:** v3.0 (2026-02-17)
+**Last updated:** 2026-02-26
