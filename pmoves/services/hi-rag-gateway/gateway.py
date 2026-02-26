@@ -1,4 +1,5 @@
 import os, re, time, threading, ipaddress, math, requests, logging, json, sys, io, socket
+import urllib3
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -531,17 +532,12 @@ def _validate_remote_image_url(raw_url: Any) -> str:
     return url
 
 
-def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response:
-    """Validate URL for SSRF and fetch with DNS-resolved IP check.
+def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> urllib3.HTTPResponse:
+    """Validate URL for SSRF and fetch via resolved IP to prevent DNS rebinding.
 
-    Resolves DNS once and validates all IPs against private ranges before fetch.
-    Note: ``requests.get`` re-resolves DNS independently, so this does not fully
-    prevent DNS-rebinding TOCTOU attacks but raises the bar significantly.
-
-    CodeQL alert #144 accepted risk: 5-layer defense (URL validation, scheme
-    check, DNS resolve, private IP block, redirect block). Only residual gap
-    is DNS-rebinding TOCTOU which requires attacker-controlled DNS and is
-    mitigated by the short TTL window.
+    Resolves DNS once, validates all IPs against private ranges, then connects
+    directly to the validated IP using urllib3 (no second DNS lookup). Sets
+    Host header for correct HTTP routing and server_hostname for TLS SNI.
     """
     url = _validate_remote_image_url(raw_url)
     parsed = urlparse(url)
@@ -567,11 +563,26 @@ def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> requests.Response
             ):
                 raise HTTPException(400, f"private/internal image host blocked: {host}")
 
-    resp = requests.get(url, timeout=timeout, allow_redirects=False)
-    resp.raise_for_status()
-    if 300 <= resp.status_code < 400:
+    resolved_ip = addrs[0][4][0]
+    path = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
+    pool_timeout = urllib3.util.Timeout(connect=10, read=timeout)
+    if parsed.scheme == "https":
+        pool = urllib3.HTTPSConnectionPool(
+            resolved_ip, port=port,
+            timeout=pool_timeout,
+            server_hostname=host,
+        )
+    else:
+        pool = urllib3.HTTPConnectionPool(
+            resolved_ip, port=port,
+            timeout=pool_timeout,
+        )
+    http_resp = pool.request("GET", path, headers={"Host": host}, redirect=False)
+    if http_resp.status >= 400:
+        raise HTTPException(400, f"remote image fetch failed with HTTP {http_resp.status}")
+    if 300 <= http_resp.status < 400:
         raise HTTPException(400, f"redirect responses are not allowed for image URL: {url}")
-    return resp
+    return http_resp
 
 
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
@@ -863,10 +874,10 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         for url in images:
             try:
                 r = _fetch_remote_image(url)
-            except requests.RequestException as e:
+            except (urllib3.exceptions.HTTPError, OSError) as e:
                 raise HTTPException(502, f"failed to fetch image: {e}")
             try:
-                img = Image.open(io.BytesIO(r.content)).convert("RGB")
+                img = Image.open(io.BytesIO(r.data)).convert("RGB")
             except Exception as e:
                 raise HTTPException(400, f"invalid image payload for {url}: {e}")
             img_list.append(img)
