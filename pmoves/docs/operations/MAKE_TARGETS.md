@@ -159,6 +159,18 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Full animated diagnostics with theme support (`RETRO_THEME=green|amber|cb|neon|galaxy`).
 - `make preflight`
   - Combined operator preflight: env check + submodule integrity + CI runner lane check + quick flight check + Codex quick health.
+- `make topology-chit-gate`
+  - Unified topology + CHIT acknowledgement gate.
+  - Audits all running `pmoves` containers for namespace/network drift, host publish collisions, external publish attachment, and critical loopback URL hardcoding.
+  - Enforces manifest-defined service policy from `pmoves/configs/topology_policy_manifest.json` (required networks, required published container ports, loopback/NATS exceptions).
+  - Optional override: `make -C pmoves topology-chit-gate ARGS="--policy pmoves/configs/topology_policy_manifest.json"`.
+  - CHIT enforcement defaults for core services are driven by `CHIT_PROD_REQUIRE_SIGNATURE`, `CHIT_PROD_DECRYPT_ANCHORS`, and `CHIT_PROD_PASSPHRASE` (fallback to `JWT_SECRET`).
+  - Confirms Archon UI/headless Archon topology (ports, shared network, health) and verifies CHIT manifest sync plus CHIT env propagation on CHIT-aware containers.
+  - Warning mode (non-zero only on hard failures).
+- `make topology-chit-gate-strict`
+  - Strict topology + CHIT gate (warnings are treated as failures), including all-container namespace/publish checks.
+  - Used by static production certification (`audit-layers-static`).
+  - Runbook: `pmoves/docs/operations/TOPOLOGY_CHIT_GATE_WORKFLOW.md`.
 - `make ci-runners-check`
   - Queries GitHub Actions runners for the repo and reports whether required self-hosted lanes are online (`self-hosted,vps` and `self-hosted,ai-lab,gpu`).
   - Non-strict mode always exits zero so local developer preflight remains usable.

@@ -11,6 +11,8 @@ CODEX_PY ?= py -3
 else
 CODEX_PY ?= $(PYTHON)
 endif
+CODEX_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
+CODEX_VENV_UNIX ?= .venv-pmoves/bin/python
 
 ifeq ($(CHIT_NO_CLEARTEXT),1)
 CHIT_ENCODE_FLAGS := --no-cleartext
@@ -70,10 +72,18 @@ chit-export: ensure-env-shared ## Export env.shared into a user-scoped CHIT bund
 	@echo CHIT bundle written to $(CHIT_EXPORT_PATH)
 
 chit-manifest-sync: ## Sync v1 CHIT manifest from v2 (file/key targets + alias hints)
-	@$(CODEX_PY) tools/chit_manifest_sync.py --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
+	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@runner="$(CODEX_PY)"; \
+	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
+	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
+	$$runner tools/chit_manifest_sync.py --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
 chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
-	@$(CODEX_PY) tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
+	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
+	@runner="$(CODEX_PY)"; \
+	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
+	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
+	$$runner tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
 secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supabase/container) into env.shared
 	-@$(MAKE) --no-print-directory supa-status

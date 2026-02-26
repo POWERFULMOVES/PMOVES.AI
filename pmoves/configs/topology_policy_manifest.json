@@ -1,0 +1,163 @@
+{
+  "project": "pmoves",
+  "namespace_prefix": "pmoves_",
+  "allowed_extra_networks": [
+    "bridge",
+    "host",
+    "none",
+    "pmoves-net",
+    "cataclysm-net"
+  ],
+  "external_network_suffixes": [
+    "_external"
+  ],
+  "external_network_names": [
+    "pmoves_external",
+    "pmoves-net",
+    "cataclysm-net"
+  ],
+  "published_ports_require_external": true,
+  "published_external_exceptions": [
+    "gpu-orchestrator",
+    "github-runner-ctl",
+    "n8n"
+  ],
+  "critical_url_keys": [
+    "NATS_URL",
+    "SUPA_REST_URL",
+    "SUPA_REST_INTERNAL_URL",
+    "SUPABASE_URL",
+    "SUPABASE_INTERNAL_URL",
+    "AGENT_ZERO_API_BASE",
+    "ARCHON_SERVER_URL",
+    "ARCHON_URL",
+    "HIRAG_URL",
+    "HIRAG_GPU_URL",
+    "HIRAG_CPU_URL",
+    "TENSORZERO_BASE_URL",
+    "MEILI_URL",
+    "QDRANT_URL",
+    "NEO4J_URL",
+    "MINIO_ENDPOINT",
+    "DATABASE_URL",
+    "POSTGRES_URL"
+  ],
+  "loopback_exception_keys_by_service": {
+    "agent-zero": [
+      "AGENT_ZERO_API_BASE"
+    ],
+    "archon": [
+      "ARCHON_SERVER_URL"
+    ]
+  },
+  "require_nats_auth": true,
+  "nats_auth_exceptions": [],
+  "required_networks_by_service": {
+    "agent-zero": [
+      "pmoves_app",
+      "pmoves_bus",
+      "pmoves_external"
+    ],
+    "archon": [
+      "pmoves_api",
+      "pmoves_app",
+      "pmoves_bus",
+      "pmoves_external"
+    ],
+    "archon-ui": [
+      "pmoves_api"
+    ],
+    "channel-monitor": [
+      "pmoves_app",
+      "pmoves_bus",
+      "pmoves_data",
+      "pmoves_external"
+    ],
+    "gpu-orchestrator": [
+      "pmoves_api",
+      "pmoves_bus",
+      "pmoves_monitoring"
+    ],
+    "hi-rag-gateway-v2": [
+      "pmoves_api",
+      "pmoves_bus",
+      "pmoves_data",
+      "pmoves_external"
+    ],
+    "hi-rag-gateway-v2-gpu": [
+      "pmoves_api",
+      "pmoves_bus",
+      "pmoves_data",
+      "pmoves_external"
+    ],
+    "jellyfin-bridge": [
+      "pmoves_app",
+      "pmoves_bus",
+      "pmoves_external"
+    ],
+    "pmoves-yt": [
+      "pmoves_app",
+      "pmoves_bus",
+      "pmoves_external"
+    ],
+    "tensorzero-gateway": [
+      "pmoves_api",
+      "pmoves_bus",
+      "pmoves_data",
+      "pmoves_external"
+    ],
+    "tensorzero-ui": [
+      "pmoves_app",
+      "pmoves_data",
+      "pmoves_external"
+    ]
+  },
+  "required_published_ports_by_service": {
+    "agent-zero": [
+      80
+    ],
+    "archon": [
+      8091
+    ],
+    "archon-ui": [
+      3737
+    ],
+    "channel-monitor": [
+      8097
+    ],
+    "gpu-orchestrator": [
+      8100,
+      8200
+    ],
+    "hi-rag-gateway-v2": [
+      8086
+    ],
+    "hi-rag-gateway-v2-gpu": [
+      8086
+    ],
+    "jellyfin-bridge": [
+      8093
+    ],
+    "pmoves-yt": [
+      8077
+    ],
+    "render-webhook": [
+      8085
+    ],
+    "tensorzero-gateway": [
+      3000
+    ],
+    "tensorzero-ui": [
+      4000
+    ]
+  },
+  "chit_required_services": [
+    "agent-zero",
+    "hi-rag-gateway",
+    "hi-rag-gateway-gpu",
+    "hi-rag-gateway-v2",
+    "hi-rag-gateway-v2-gpu",
+    "flute-gateway",
+    "evo-controller"
+  ]
+}
