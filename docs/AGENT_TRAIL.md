@@ -48,6 +48,35 @@
 
 <!-- /graphiti -->
 
+<!-- graphiti:codex phase:rail-split-dual-signature ts:2026-02-24T08:16:29Z -->
+
+## ■ Codex — Rail Split: Hardened Docs Lane Restored
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** merge-mechanics, governance, cross-repo-orchestration
+**Voice:** Terse
+
+### Done
+- Reviewed PR #707 for mixed scope (docs + runtime + submodule payload).
+- Split runtime/container changes out of the hardened docs lane so runtime can move through Integrations first.
+- Updated KRISS KROSS rules with explicit rail order: `Integrations -> Hardened` for runtime work.
+- Added dual-signature requirement (Graphiti + CHIT attestation) for convergence handoffs.
+- Verified graphiti block integrity remains balanced in this trail.
+
+### Left Behind
+- Runtime payload still needs a dedicated Integrations-targeted PR with build/tests and contract checks.
+- Claude close-review is still required before merge, by design.
+
+### For Next Agent
+- Open runtime PR against `PMOVES.AI-Edition-Hardened-Integrations`.
+- Include A2UI build/runtime evidence and event-contract validation in that PR.
+- Keep #707 as docs/signature lane only and close after Claude review/ack.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:rail-split-handoff ts:2026-02-24T12:00:00Z -->
 
 ## ◆ Claude Opus — KRISS KROSS Rail Split Handoff
@@ -151,7 +180,7 @@ Canonical safe sequence for rail splits with uncommitted work:
 
 <table><tr><td style="background:#2563EB;width:24px"></td><td>
 
-**Resonance:** production-audit, gpu-orchestrator, tensorzero, auth-parity  
+**Resonance:** production-audit, gpu-orchestrator, tensorzero, auth-parity
 **Voice:** terse
 
 ### Done
@@ -179,6 +208,38 @@ Canonical safe sequence for rail splits with uncommitted work:
 - Merge this lane first, then re-run strict parity + stack verify in CI-hosted runtime.
 - In BoTZ lane, emit `agent.graphiti.signed.v1` from gateway auth/attestation completion.
 - After both lanes are green, open release promotion PR with test logs attached (runtime + auth parity).
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:codex phase:hardened-dao-convergence ts:2026-02-24T04:32:28Z -->
+
+## ■ Codex - Hardened DAO Convergence: Planning + Audit Alignment
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** integration, production-audit, cross-repo-orchestration
+**Voice:** Terse
+
+### Done
+- Added `pmoves/docs/PMOVES.AI PLANS/DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md` to normalize DAO projection inputs and ingestion flow.
+- Updated hardened planning docs/timestamps:
+  - `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`
+  - `pmoves/docs/NEXT_STEPS.md`
+  - `pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md`
+- Refreshed `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` with current drift checks and release gates (`RG-1`..`RG-4`).
+- Signed coordination updates in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
+
+### Left Behind
+- Dashboard quantitative counts are still a `2026-02-20` snapshot and need a fresh command-evidence rerun.
+- DAO corpus remains mostly untracked in hardened branch; it is being used as source input but not yet ingested as first-class versioned docs.
+- `agent.graphiti.signed.v1` emission remains manually documented rather than auto-published.
+
+### For Next Agent
+- Execute `RG-1`..`RG-4` command evidence and update the dashboard snapshot counts.
+- Promote high-value DAO files into tracked docs under `pmoves/docs/` with source provenance tags.
+- Keep projection updates inside the normalized scenario envelope until model assumptions are revalidated.
 
 </td></tr></table>
 
@@ -226,7 +287,7 @@ Canonical safe sequence for rail splits with uncommitted work:
 
 <table><tr><td style="background:#2563EB;width:24px"></td><td>
 
-**Resonance:** integration, local-first-gates, release-readiness  
+**Resonance:** integration, local-first-gates, release-readiness
 **Voice:** terse
 
 ### Done
