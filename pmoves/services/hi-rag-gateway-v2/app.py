@@ -2025,14 +2025,8 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
         sims = (img_embs @ text_emb.T).squeeze()  # cosine if normalized
         ranked = sorted(zip(images, sims.tolist()), key=lambda x: x[1], reverse=True)
-        return {
-            "ranked": [{"url": u, "score": float(s)} for u, s in ranked],
-            "namespace": namespace,
-            "modality": modality,
-            "builder_pack": builder_pack,
-        }
-        payload = {"mode": mode, "ranked": [{"url": u, "score": float(s)} for u,s in ranked]}
         if mode == "swarm":
+            payload = {"mode": mode, "ranked": [{"url": u, "score": float(s)} for u, s in ranked]}
             sidecar = _get_gan_sidecar()
             accept_threshold = float(body.get("accept_threshold", 0.55))
             max_edits = int(body.get("max_edits", 0))
@@ -2059,7 +2053,14 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
                     max_edits=max(0, max_edits),
                     accept_threshold=accept_threshold,
                 )
-        return payload
+            return payload
+        else:
+            return {
+                "ranked": [{"url": u, "score": float(s)} for u, s in ranked],
+                "namespace": namespace,
+                "modality": modality,
+                "builder_pack": builder_pack,
+            }
     except HTTPException:
         raise
     except Exception as e:
@@ -2102,14 +2103,8 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
         t = t / (np.linalg.norm(t, axis=1, keepdims=True) + 1e-9)
         sims = (a @ t.T).squeeze()
         ranked = sorted(zip(audios, sims.tolist()), key=lambda x: x[1], reverse=True)
-        return {
-            "ranked": [{"path": u, "score": float(s)} for u, s in ranked],
-            "namespace": namespace,
-            "modality": modality,
-            "builder_pack": builder_pack,
-        }
-        payload = {"mode": mode, "ranked": [{"path": u, "score": float(s)} for u,s in ranked]}
         if mode == "swarm":
+            payload = {"mode": mode, "ranked": [{"path": u, "score": float(s)} for u, s in ranked]}
             sidecar = _get_gan_sidecar()
             accept_threshold = float(body.get("accept_threshold", 0.55))
             max_edits = int(body.get("max_edits", 0))
@@ -2136,7 +2131,14 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
                     max_edits=max(0, max_edits),
                     accept_threshold=accept_threshold,
                 )
-        return payload
+            return payload
+        else:
+            return {
+                "ranked": [{"path": u, "score": float(s)} for u, s in ranked],
+                "namespace": namespace,
+                "modality": modality,
+                "builder_pack": builder_pack,
+            }
     except Exception as e:
         logger.exception("audio decode error")
         raise HTTPException(500, f"audio decode error: {e}")
