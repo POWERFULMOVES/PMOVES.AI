@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-02-19 20:22 UTC",
+  "generated_at": "2026-02-26 18:16 UTC",
   "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Archon",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Archon.git",
       "status_prefix": " ",
-      "commit": "238c401abdc74c3c8e42f51a63f7f038f2dfbfa5",
+      "commit": "6ea1a78fdcb5af140dd9f425fa121f45374bfd51",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
