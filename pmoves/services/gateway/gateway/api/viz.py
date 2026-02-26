@@ -114,7 +114,7 @@ def shape_svg(shape_id: str, super_idx: int = Query(0, ge=0), const_idx: int = Q
         raise HTTPException(status_code=400, detail="invalid shape_id")
     if not resolved.exists():
         raise HTTPException(status_code=404, detail="shape not found")
-    with open(resolved, "r", encoding="utf-8") as f:
+    with open(resolved, "r", encoding="utf-8") as f:  # CodeQL path-injection: sanitized by _SAFE_SHAPE_RE + is_relative_to guard above
         obj = json.load(f)
     try:
         cgp = CGP.model_validate(obj)
@@ -150,7 +150,7 @@ def _decode_with_server(cgp: CGP, per_constellation: int) -> Dict[str, Any]:
 
 @router.post("/preview/decode")
 def preview_decode(const: Constellation, per_constellation: int = 20, codebook_path: Optional[str] = Query(None)):
-    return decode_constellations([const], per_constellation=per_constellation, codebook_path=codebook_path)
+    return decode_constellations([const], per_constellation=per_constellation, codebook_path=codebook_path)  # CodeQL path-injection: codebook_path sanitized by _load_codebook (basename + regex + is_relative_to)
 
 
 @router.post("/mix/decode")
@@ -181,7 +181,7 @@ def mix_and_decode(payload: Dict[str, Any], per_constellation: int = 20, codeboo
         spectrum=spec,
         points=[],
     )
-    return decode_constellations([mixed], per_constellation=per_constellation, codebook_path=codebook_path)
+    return decode_constellations([mixed], per_constellation=per_constellation, codebook_path=codebook_path)  # CodeQL path-injection: codebook_path sanitized by _load_codebook (basename + regex + is_relative_to)
 
 
 @router.get("/recent", response_model=List[str])
@@ -203,7 +203,7 @@ def shape_constellations(shape_id: str):
         raise HTTPException(status_code=400, detail="invalid shape_id")
     if not resolved.exists():
         raise HTTPException(status_code=404, detail="shape not found")
-    obj = json.loads(resolved.read_text(encoding="utf-8"))
+    obj = json.loads(resolved.read_text(encoding="utf-8"))  # CodeQL path-injection: sanitized by _SAFE_SHAPE_RE + is_relative_to guard above
     cgp = CGP.model_validate(obj)
     out = []
     for si, s in enumerate(cgp.super_nodes):

@@ -183,8 +183,12 @@ def ingest_cgp(cgp: Dict[str, Any]) -> str:
 
     shape_store.on_geometry_event({"type": CGP_SPEC_VERSION, "data": cgp})
 
-    os.makedirs("data", exist_ok=True)
-    json.dump(cgp, open(f"data/{shape_id}.json", "w"), indent=2)
+    _data_dir = Path("data").resolve()
+    _data_dir.mkdir(exist_ok=True)
+    _shape_path = (_data_dir / f"{shape_id}.json").resolve()
+    if not _shape_path.is_relative_to(_data_dir):
+        raise ValueError(f"invalid shape_id: {shape_id}")
+    _shape_path.write_text(json.dumps(cgp, indent=2), encoding="utf-8")
 
     try:
         if supa and supa.enabled():
@@ -256,7 +260,7 @@ def _load_codebook(codebook_path: Optional[str] = None):
     items = []
     if not os.path.exists(path):
         return items
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:  # CodeQL path-injection: sanitized by basename + _SAFE_FILENAME regex + is_relative_to guard
         for ln in f:
             ln = ln.strip()
             if ln:
@@ -394,8 +398,15 @@ def geometry_calibration_report(body: GeometryCalibrationRequest):
     def js(p,q):
         m=[(pi+qi)/2 for pi,qi in zip(p,q)]; return 0.5*kl(p,m)+0.5*kl(q,m)
     cov = sum(1 for e in emp if e>0)/bins
-    os.makedirs("artifacts", exist_ok=True)
-    open("artifacts/reconstruction_report.md","w").write(f"# CHIT Calibration Report\n\n- KL: {kl(tgt,emp):.4f}\n- JS: {js(tgt,emp):.4f}\n- Coverage: {cov:.2f}\n")
+    _artifacts_dir = Path("artifacts")
+    try:
+        _artifacts_dir.mkdir(exist_ok=True)
+        (_artifacts_dir / "reconstruction_report.md").write_text(
+            f"# CHIT Calibration Report\n\n- KL: {kl(tgt,emp):.4f}\n- JS: {js(tgt,emp):.4f}\n- Coverage: {cov:.2f}\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        logger.warning("Failed to write calibration report artifact")
     return {"KL": kl(tgt,emp), "JS": js(tgt,emp), "coverage": cov, "report": "artifacts/reconstruction_report.md"}
 
 
