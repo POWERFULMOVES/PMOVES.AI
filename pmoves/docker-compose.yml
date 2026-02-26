@@ -906,8 +906,8 @@ services:
   hi-rag-gateway:
     <<: *tier-api-hardened
     build:
-      context: ./services
-      dockerfile: hi-rag-gateway/Dockerfile
+      context: .
+      dockerfile: services/hi-rag-gateway/Dockerfile
     restart: unless-stopped
     environment:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
@@ -1365,8 +1365,8 @@ services:
   hi-rag-gateway-gpu:
     <<: *tier-api-hardened
     build:
-      context: ./services
-      dockerfile: hi-rag-gateway/Dockerfile
+      context: .
+      dockerfile: services/hi-rag-gateway/Dockerfile
       args:
       - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu128}
       - TORCH_SKIP_CUDA=0
