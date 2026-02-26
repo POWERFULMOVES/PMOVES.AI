@@ -176,16 +176,30 @@ def check_minio_alignment(merged: Dict[str, str]) -> List[Finding]:
     root_password = merged.get("MINIO_ROOT_PASSWORD", "").strip()
 
     if access_key and root_user and access_key != root_user:
-        findings.append(Finding("minio", "error",
-            f"MINIO_ACCESS_KEY ({access_key[:8]}...) != MINIO_ROOT_USER ({root_user[:8]}...)"))
+        if _is_placeholder(access_key) or _is_placeholder(root_user):
+            findings.append(Finding(
+                "minio",
+                "warn",
+                "MINIO_ACCESS_KEY and MINIO_ROOT_USER differ, but at least one value appears to be a placeholder",
+            ))
+        else:
+            findings.append(Finding("minio", "error",
+                f"MINIO_ACCESS_KEY ({access_key[:8]}...) != MINIO_ROOT_USER ({root_user[:8]}...)"))
     elif access_key and root_user:
         findings.append(Finding("minio", "ok", "MINIO_ACCESS_KEY matches MINIO_ROOT_USER"))
     elif not access_key and not root_user:
         findings.append(Finding("minio", "warn", "Neither MINIO_ACCESS_KEY nor MINIO_ROOT_USER set"))
 
     if secret_key and root_password and secret_key != root_password:
-        findings.append(Finding("minio", "error",
-            f"MINIO_SECRET_KEY != MINIO_ROOT_PASSWORD"))
+        if _is_placeholder(secret_key) or _is_placeholder(root_password):
+            findings.append(Finding(
+                "minio",
+                "warn",
+                "MINIO_SECRET_KEY and MINIO_ROOT_PASSWORD differ, but at least one value appears to be a placeholder",
+            ))
+        else:
+            findings.append(Finding("minio", "error",
+                "MINIO_SECRET_KEY != MINIO_ROOT_PASSWORD"))
     elif secret_key and root_password:
         findings.append(Finding("minio", "ok", "MINIO_SECRET_KEY matches MINIO_ROOT_PASSWORD"))
 
