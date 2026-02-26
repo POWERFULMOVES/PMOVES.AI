@@ -60,7 +60,7 @@ services:
     environment:
       - NODE_TYPE=vps
       - NODE_CAPABILITIES=cpu-only,api-gateway
-      - NATS_URL=${NATS_URL:-nats://nats:4222}
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
 
   gateway-agent:
     <<: [*cpu-only, *vps-healthcheck]

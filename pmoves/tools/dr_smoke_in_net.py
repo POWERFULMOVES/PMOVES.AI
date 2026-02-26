@@ -13,7 +13,7 @@ from nats.aio.client import Client as NATS
 
 REQ = os.getenv("DR_REQ_SUBJ", "research.deepresearch.request.v1")
 RES = os.getenv("DR_RES_SUBJ", "research.deepresearch.result.v1")
-NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 
 
 async def main() -> int:

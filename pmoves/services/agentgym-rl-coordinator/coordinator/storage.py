@@ -355,6 +355,35 @@ class SupabaseStorage:
 
         return resp.json()
 
+    async def record_event(
+        self,
+        event_type: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Record a generic event (best-effort).
+
+        Attempts to insert into agentgym_events table.
+        Logs a warning if the table doesn't exist or the insert fails (best-effort).
+
+        Args:
+            event_type: Event type identifier (e.g. 'hf_model_downloaded')
+            payload: Event data as JSON-serializable dict
+        """
+        try:
+            client = await self._get_client()
+            resp = await client.post(
+                f"{self.supabase_url}/rest/v1/agentgym_events",
+                headers=self._headers,
+                json={"event_type": event_type, "payload": payload},
+            )
+            if resp.status_code not in [200, 201]:
+                logger.warning(
+                    "Event record failed (status=%s, table may not exist): %s",
+                    resp.status_code, event_type,
+                )
+        except Exception:
+            logger.warning("Failed to record event %s (best-effort)", event_type, exc_info=True)
+
     async def get_stats(self) -> Dict[str, Any]:
         """Get storage statistics.
 

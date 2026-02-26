@@ -7,7 +7,7 @@ This update adds a clean local Supabase CLI mode (no Compose Postgres/PostgREST 
 - `SUPA_PROVIDER=cli` default; `.env.local` overlay controls endpoints/keys.
 - Helpers: `make supa-init|supa-start|supa-stop|supa-status`, `make supa-use-local|supa-use-remote`, `make supa-extract-remote`.
 - pmoves.yt: import shim for `services.common.events`, `PYTHONPATH=/app`, non‑blocking NATS behind `YT_NATS_ENABLE` (default false).
-- New `make up-nats` starts broker and writes `YT_NATS_ENABLE=true` + `NATS_URL=nats://nats:4222` to `.env.local`.
+- New `make up-nats` starts broker and writes `YT_NATS_ENABLE=true` + `NATS_URL=nats://nats:pmoves@nats:4222` to `.env.local`.
 - Docs: `docs/SUPABASE_SWITCH.md`, `docs/MAKE_TARGETS.md`, and `docs/LOCAL_DEV.md` updates.
 
 ### How to Use (Local Supabase CLI)

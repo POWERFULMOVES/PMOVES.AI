@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("botz-gateway")
 
 # Environment configuration
-NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-kong:8000")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 TENSORZERO_URL = os.getenv("TENSORZERO_URL", "http://tensorzero:3030")

@@ -25,7 +25,7 @@ services:
     ports:
       - "8114:8114"
     environment:
-      - NATS_URL=nats://nats:4222
+      - NATS_URL=nats://nats:pmoves@nats:4222
       - PORT=8114
       - HF_TOKEN=${HF_TOKEN}
       - HF_HOME=/home/nonroot/.cache/huggingface

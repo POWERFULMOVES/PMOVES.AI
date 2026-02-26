@@ -17,7 +17,7 @@ Environment
 - `PDF_DEFAULT_NAMESPACE` (default `pmoves`)
 - `PDF_MAX_PAGES` (default `0`)
 - `PDF_INGEST_EXTRACT_URL` (default `http://extract-worker:8083/ingest`)
-- `NATS_URL` (default `nats://nats:4222`)
+- `NATS_URL` (default `nats://nats:pmoves@nats:4222`)
 
 Smoke
 ```

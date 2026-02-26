@@ -35,7 +35,7 @@ logger = logging.getLogger("pmoves.gateway")
 
 # Shared NATS event bus (publishes contracts + captures workflow events).
 event_bus = EventBus(
-    nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
+    nats_url=os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222"),
     subscribe_topics=[
         "ingest.file.added.v1",
         "ingest.transcript.ready.v1",

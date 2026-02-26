@@ -1,0 +1,35 @@
+{
+  "version": "a2ui.animation.v1",
+  "metadata": {
+    "title": "DARKXSIDE Signature",
+    "compositionId": "DarkxsideSignature",
+    "description": "6s loop — ✦ star glyph pulsing rose-crimson at 10 BPM"
+  },
+  "animation": {
+    "engine": "remotion",
+    "duration_ms": 6000,
+    "bpm": 10,
+    "loop": true
+  },
+  "scenes": [
+    {
+      "id": "signature",
+      "label": "DARKXSIDE Signature",
+      "duration_ms": 6000,
+      "elements": [
+        {
+          "type": "glyph_pulse",
+          "content": {
+            "glyph": "\u2726",
+            "color": "#E11D48",
+            "accent": "#FB7185",
+            "bpm": 10,
+            "text": "DARKXSIDE",
+            "subtitle": "COCREATOR :: WITNESS :: PMOVES.AI"
+          },
+          "enter_at_ms": 0
+        }
+      ]
+    }
+  ]
+}

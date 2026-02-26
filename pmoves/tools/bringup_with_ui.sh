@@ -8,6 +8,8 @@ WAIT_T_SHORT=${WAIT_T_SHORT:-60}
 WAIT_T_MED=${WAIT_T_MED:-120}
 WAIT_T_LONG=${WAIT_T_LONG:-180}
 PUBLISHED_AGENTS=${PUBLISHED_AGENTS:-1}
+RUN_UI_DEV=${RUN_UI_DEV:-0}
+ENABLE_JELLYFIN_AI=${ENABLE_JELLYFIN_AI:-1}
 
 # Service URLs
 YTB=${YTB:-http://localhost:8077}
@@ -141,13 +143,21 @@ echo "⛳ Start media and AI services"
 start_service "Media Pipeline" "up-media" "true" || exit 1
 start_service "TensorZero" "up-tensorzero" "true" || exit 1
 start_service "n8n" "up-n8n" "true" || exit 1
-start_service "Jellyfin AI" "up-jellyfin-ai" "true" || exit 1
+if [ "${ENABLE_JELLYFIN_AI}" = "1" ]; then
+  start_service "Jellyfin AI" "up-jellyfin-ai" "true" || exit 1
+else
+  echo "↷ Skipping Jellyfin AI overlay (ENABLE_JELLYFIN_AI=${ENABLE_JELLYFIN_AI})"
+fi
 
 echo "⛳ Start monitoring stack"
 start_service "Monitoring" "up-monitoring" "true" || exit 1
 
 echo "⛳ Start Console UI"
-start_service "Console UI" "ui-dev-start" "true" || exit 1
+if [ "${RUN_UI_DEV}" = "1" ]; then
+  start_service "Console UI" "ui-dev-start" "true" || exit 1
+else
+  echo "↷ Skipping Console UI dev server (RUN_UI_DEV=${RUN_UI_DEV})"
+fi
 
 echo "⛳ Waiting on key endpoints"
 if [ "${PARALLEL:-0}" = "1" ]; then
@@ -168,7 +178,9 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_http_bg "Channel Monitor" "http://localhost:8097/healthz" "$WAIT_T_SHORT"
   check_http_bg "Monitor Status" "http://localhost:8097/api/monitor/status" "$WAIT_T_SHORT"
   check_http_bg "yt-dlp catalog" "${YTB}/yt/docs/catalog" "$WAIT_T_SHORT"
-  check_http_bg "Console UI" "http://localhost:3001" "$WAIT_T_LONG"
+  if [ "${RUN_UI_DEV}" = "1" ]; then
+    check_http_bg "Console UI" "http://localhost:3001" "$WAIT_T_LONG"
+  fi
   check_http_bg "n8n UI" "http://localhost:5678" "$WAIT_T_SHORT"
   check_http_bg "TensorZero UI" "http://localhost:4000" "$WAIT_T_SHORT"
   check_http_bg "TensorZero GW" "http://localhost:3030" "$WAIT_T_SHORT"
@@ -198,10 +210,12 @@ else
   wait_http "http://localhost:8097/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Channel Monitor")
   wait_http "http://localhost:8097/api/monitor/status" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Monitor Status API")
   wait_http "${YTB}/yt/docs/catalog" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("yt-dlp catalog")
-  if ! wait_http "http://localhost:3001" $WAIT_T_LONG; then
-    echo "⚠ Console UI not responding on :3001; recent dev log:"
-    tail -n 80 ui/.pmoves_ui_dev.log 2>/dev/null || echo "  (No log file found)"
-    TIMEOUT_SERVICES+=("Console UI")
+  if [ "${RUN_UI_DEV}" = "1" ]; then
+    if ! wait_http "http://localhost:3001" $WAIT_T_LONG; then
+      echo "⚠ Console UI not responding on :3001; recent dev log:"
+      tail -n 80 ui/.pmoves_ui_dev.log 2>/dev/null || echo "  (No log file found)"
+      TIMEOUT_SERVICES+=("Console UI")
+    fi
   fi
   wait_http "http://localhost:5678" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("n8n UI")
   wait_http "http://localhost:4000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero UI")
@@ -256,7 +270,9 @@ if [ ${#FAILED_SERVICES[@]} -eq 0 ] && [ ${#TIMEOUT_SERVICES[@]} -eq 0 ]; then
     echo ""
     echo "✅ ALL SERVICES STARTED SUCCESSFULLY"
     echo ""
-    echo "   Console:    http://localhost:3001"
+    if [ "${RUN_UI_DEV}" = "1" ]; then
+      echo "   Console:    http://localhost:3001"
+    fi
     echo "   Grafana:    http://localhost:3002"
     echo "   Agent Zero: http://localhost:8081"
     echo "   Archon:     http://localhost:3737"

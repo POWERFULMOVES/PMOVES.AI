@@ -156,7 +156,7 @@ EXTRACT_URL = (
     or "http://extract-worker:8083/ingest"
 )
 PDF_MAX_PAGES = int(os.environ.get("PDF_MAX_PAGES", "0"))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 
 _nc: Optional[NATS] = None
 

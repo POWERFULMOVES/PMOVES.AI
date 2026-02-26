@@ -464,7 +464,7 @@ Success is measured not by individual training jobs, but by the long-term trajec
 ### Environment Variables
 ```bash
 # NATS connectivity
-NATS_URL=nats://nats:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 AGENTZERO_JETSTREAM=true
 
 # AgentGym-RL service

@@ -1,5 +1,8 @@
-# Prometheus metrics
-prometheus-client==0.21.0 \
-    --hash=sha256:4fa6b4dd0ac16d58bb587c04b1caae65b8c5043e85f778f42f5f632f6af2e166
-
--r requirements.lock
+fastapi==0.114.2
+minio==7.2.8
+nats-py==2.7.2
+prometheus-client==0.21.0
+pydantic==2.9.2
+PyMuPDF==1.24.11
+requests==2.32.4
+uvicorn[standard]==0.30.6

@@ -46,7 +46,7 @@
   - Launches the Jellyfin bridge in isolation.
 
 - `make up-nats`
-  - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:4222`.
+  - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:pmoves@nats:4222`.
   - Use this before opting into the agents profile (Agent Zero, Archon, mesh-agent, Discord publisher).
 - `make notebook-up` / `make notebook-down`
   - Bring the Open Notebook UI/API online (Streamlit on host `:${OPEN_NOTEBOOK_UI_PORT:-8503}`, FastAPI on `:${OPEN_NOTEBOOK_API_PORT:-5055}`) or stop it while leaving data in `pmoves/data/open-notebook/`.

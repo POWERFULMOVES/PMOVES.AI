@@ -80,7 +80,7 @@ async def ingest_youtube(url: str):
 import nats
 
 async def publish_event(subject: str, data: dict):
-    nc = await nats.connect("nats://nats:4222")
+    nc = await nats.connect("nats://nats:pmoves@nats:4222")
     await nc.publish(subject, json.dumps(data).encode())
     await nc.close()
 ```

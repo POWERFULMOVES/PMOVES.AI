@@ -4,7 +4,7 @@ Authoritative tracker for P2 security issues in PMOVES.AI submodules that requir
 
 **All P1 issues were fixed in Phase H (2026-02-17).** This tracker covers remaining P2 items.
 
-Last updated: 2026-02-21
+Last updated: 2026-02-26
 
 ## Open Issues
 
@@ -24,7 +24,8 @@ Last updated: 2026-02-21
 | 12 | A2UI | NATS URL missing auth credentials | `env.shared` | P2 | OPEN |
 | 13 | tensorzero | 4 RUSTSEC advisories in dependencies | `deny.toml` | P2 | OPEN |
 | 14 | tensorzero | 30+ example compose files with hardcoded secrets | `examples/` | P2 | OPEN |
-| 15 | HiRAG | env.shared uses `export` syntax (Docker incompatible) | `env.shared` | P2 | OPEN |
+| 15 | HiRAG | env.shared uses `export` syntax (Docker incompatible) | `env.shared` | P2 | FIXED (stale — env.shared already clean) |
+| 16 | A2UI | env.tier-ui.sh uses `export` syntax (Docker incompatible) | `env.tier-ui.sh` | P2 | OPEN |
 
 ## Resolution Process
 
@@ -39,6 +40,7 @@ Each P2 issue requires:
 | # | Submodule | Issue | Closed | PR |
 |---|-----------|-------|--------|-----|
 | - | All 8 submodules | 10 P1 issues | 2026-02-17 | Phase H batch |
+| 15 | HiRAG | env.shared `export` syntax | 2026-02-26 | Stale — already clean, no fix needed |
 
 ## Priority Definitions
 

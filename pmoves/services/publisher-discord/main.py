@@ -89,7 +89,7 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 # Prefer the n8n-style username if provided, fallback to legacy var
 DISCORD_USERNAME = os.environ.get("DISCORD_USERNAME", os.environ.get("DISCORD_WEBHOOK_USERNAME", "PMOVES"))
 DISCORD_AVATAR_URL = os.environ.get("DISCORD_AVATAR_URL", "")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 YT_NATS_ENABLE = os.environ.get("YT_NATS_ENABLE", "true").lower() in {"1", "true", "yes", "on"}
 SUBJECTS = os.environ.get(
     "DISCORD_SUBJECTS",

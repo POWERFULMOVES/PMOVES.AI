@@ -57,11 +57,12 @@ const show = o => {
 const links = (shapeId, base) => {
   const el = $("#links");
   el.textContent = "";
-  if (!shapeId) return;
+  if (!shapeId || !/^[0-9a-f]{1,64}$/.test(shapeId)) return;
+  const safeId = encodeURIComponent(shapeId);
   const pairs = [
-    [`${base}/viz/shape/${shapeId}.svg`, "Shape SVG"],
-    [`${base}/data/${shapeId}.json`, "Raw JSON"],
-    [`${base}/viz/decode/${shapeId}.html`, "Decode"],
+    [`${base}/viz/shape/${safeId}.svg`, "Shape SVG"],
+    [`${base}/data/${safeId}.json`, "Raw JSON"],
+    [`${base}/viz/decode/${safeId}.html`, "Decode"],
   ];
   el.appendChild(document.createTextNode("View: "));
   pairs.forEach(([href, label], i) => {
