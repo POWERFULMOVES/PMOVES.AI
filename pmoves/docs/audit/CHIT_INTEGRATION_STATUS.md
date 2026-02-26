@@ -4,7 +4,7 @@
 >
 > **See also:** [CHIT Documentation Suite](../PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for all Python tools.
 
-**Last Updated:** February 18, 2026
+**Last Updated:** February 25, 2026
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence
 
@@ -276,7 +276,7 @@ from pmoves.services.common.cgp_mappers import (
 
 async def publish_cgp(data: dict, subject: str = "geometry.cgp.v1"):
     """Publish CGP to NATS geometry bus"""
-    nc = await nats.connect("nats://nats:4222")
+    nc = await nats.connect("nats://nats:pmoves@nats:4222")
 
     # Create CGP from your data using the appropriate domain mapper
     cgp = map_health_weekly_summary_to_cgp(data)  # or build custom CGP
@@ -291,7 +291,7 @@ async def publish_cgp(data: dict, subject: str = "geometry.cgp.v1"):
 ```python
 async def subscribe_geometry():
     """Subscribe to geometry bus events"""
-    nc = await nats.connect("nats://nats:4222")
+    nc = await nats.connect("nats://nats:pmoves@nats:4222")
 
     async def handle_geometry(msg):
         cgp = json.loads(msg.data.decode())
@@ -397,5 +397,26 @@ supaserch.*                  - Multimodal search
 
 ---
 
+## CGP Schema Version Naming Standardization
+
+> **P0 documentation fix** — added 2026-02-25
+
+Three naming schemes exist across the codebase:
+- `cgp.v1` (legacy shorthand)
+- `geometry.cgp.v1` (NATS subject namespace)
+- `chit.cgp.v0.2` / `chit.cgp.v1.0` (KRISS KROSS ACK attestation)
+
+**Canonical format:** `chit.cgp.v{major}.{minor}`
+
+| Legacy Name | Canonical Name | Notes |
+|-------------|----------------|-------|
+| `cgp.v1` | `chit.cgp.v1.0` | Used in early integration code |
+| `geometry.cgp.v1` | `chit.cgp.v1.0` | NATS subject retains `geometry.cgp.v1` for transport; schema `version` field should use `chit.cgp.v1.0` |
+| `chit.cgp.v0.2` | `chit.cgp.v0.2` | Already canonical |
+
+**Migration:** Services should set the JSON `version` field to `chit.cgp.vX.X` format. NATS subject names (`geometry.cgp.v1`) are transport identifiers and do not change.
+
+---
+
 **Document Owner:** PMOVES.AI Infrastructure Team
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-02-25
