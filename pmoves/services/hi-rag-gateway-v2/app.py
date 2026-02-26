@@ -14,6 +14,7 @@ import torch
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 import requests
+import urllib3
 from urllib.parse import quote_plus, urlparse
 from services.common.geometry_params import get_decoder_pack
 from services.common.hrm_sidecar import HrmDecoderController
@@ -1321,17 +1322,12 @@ def _validate_remote_image_url(raw_url: Any) -> str:
     return url
 
 
-def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> "requests.Response":
-    """Validate URL for SSRF and fetch with DNS-resolved IP check.
+def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> urllib3.HTTPResponse:
+    """Validate URL for SSRF and fetch via resolved IP to prevent DNS rebinding.
 
-    Resolves DNS once and validates all IPs against private ranges before fetch.
-    Note: ``requests.get`` re-resolves DNS independently, so this does not fully
-    prevent DNS-rebinding TOCTOU attacks but raises the bar significantly.
-
-    CodeQL alert #143 accepted risk: 5-layer defense (URL validation, scheme
-    check, DNS resolve, private IP block, redirect block). Only residual gap
-    is DNS-rebinding TOCTOU which requires attacker-controlled DNS and is
-    mitigated by the short TTL window.
+    Resolves DNS once, validates all IPs against private ranges, then connects
+    directly to the validated IP using urllib3 (no second DNS lookup). Sets
+    Host header for correct HTTP routing and server_hostname for TLS SNI.
     """
     url = _validate_remote_image_url(raw_url)
     parsed = urlparse(url)
@@ -1357,11 +1353,31 @@ def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> "requests.Respons
             ):
                 raise HTTPException(400, f"private/internal image host blocked: {host}")
 
-    resp = requests.get(url, timeout=timeout, allow_redirects=False)
-    resp.raise_for_status()
-    if 300 <= resp.status_code < 400:
+    resolved_ip = addrs[0][4][0]
+    path = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
+    pool_timeout = urllib3.util.Timeout(connect=10, read=timeout)
+    if parsed.scheme == "https":
+        pool = urllib3.HTTPSConnectionPool(
+            resolved_ip, port=port,
+            timeout=pool_timeout,
+            server_hostname=host,
+        )
+    else:
+        pool = urllib3.HTTPConnectionPool(
+            resolved_ip, port=port,
+            timeout=pool_timeout,
+        )
+    try:
+        http_resp = pool.request("GET", path, headers={"Host": host}, redirect=False)
+    except Exception:
+        pool.close()
+        raise
+    pool.close()
+    if http_resp.status >= 400:
+        raise HTTPException(400, f"remote image fetch failed with HTTP {http_resp.status}")
+    if 300 <= http_resp.status < 400:
         raise HTTPException(400, f"redirect responses are not allowed for image URL: {url}")
-    return resp
+    return http_resp
 
 
 def _build_media_url(media: Dict[str, Any]) -> Optional[str]:
@@ -1994,20 +2010,23 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
         img_list=[]
         for url in images:
-            r = _fetch_remote_image(url)
-            img = Image.open(io.BytesIO(r.content)).convert('RGB')
+            try:
+                r = _fetch_remote_image(url)
+            except (urllib3.exceptions.HTTPError, OSError) as e:
+                raise HTTPException(502, f"failed to fetch image: {e}")
+            image_bytes = r.data
+            if not image_bytes:
+                raise HTTPException(400, f"remote image returned empty body for {url}")
+            try:
+                img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+            except Exception as e:
+                raise HTTPException(400, f"invalid image payload for {url}: {e}")
             img_list.append(img)
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
         sims = (img_embs @ text_emb.T).squeeze()  # cosine if normalized
         ranked = sorted(zip(images, sims.tolist()), key=lambda x: x[1], reverse=True)
-        return {
-            "ranked": [{"url": u, "score": float(s)} for u, s in ranked],
-            "namespace": namespace,
-            "modality": modality,
-            "builder_pack": builder_pack,
-        }
-        payload = {"mode": mode, "ranked": [{"url": u, "score": float(s)} for u,s in ranked]}
         if mode == "swarm":
+            payload = {"mode": mode, "ranked": [{"url": u, "score": float(s)} for u, s in ranked]}
             sidecar = _get_gan_sidecar()
             accept_threshold = float(body.get("accept_threshold", 0.55))
             max_edits = int(body.get("max_edits", 0))
@@ -2034,7 +2053,14 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
                     max_edits=max(0, max_edits),
                     accept_threshold=accept_threshold,
                 )
-        return payload
+            return payload
+        else:
+            return {
+                "ranked": [{"url": u, "score": float(s)} for u, s in ranked],
+                "namespace": namespace,
+                "modality": modality,
+                "builder_pack": builder_pack,
+            }
     except HTTPException:
         raise
     except Exception as e:
@@ -2077,14 +2103,8 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
         t = t / (np.linalg.norm(t, axis=1, keepdims=True) + 1e-9)
         sims = (a @ t.T).squeeze()
         ranked = sorted(zip(audios, sims.tolist()), key=lambda x: x[1], reverse=True)
-        return {
-            "ranked": [{"path": u, "score": float(s)} for u, s in ranked],
-            "namespace": namespace,
-            "modality": modality,
-            "builder_pack": builder_pack,
-        }
-        payload = {"mode": mode, "ranked": [{"path": u, "score": float(s)} for u,s in ranked]}
         if mode == "swarm":
+            payload = {"mode": mode, "ranked": [{"path": u, "score": float(s)} for u, s in ranked]}
             sidecar = _get_gan_sidecar()
             accept_threshold = float(body.get("accept_threshold", 0.55))
             max_edits = int(body.get("max_edits", 0))
@@ -2111,7 +2131,16 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
                     max_edits=max(0, max_edits),
                     accept_threshold=accept_threshold,
                 )
-        return payload
+            return payload
+        else:
+            return {
+                "ranked": [{"path": u, "score": float(s)} for u, s in ranked],
+                "namespace": namespace,
+                "modality": modality,
+                "builder_pack": builder_pack,
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("audio decode error")
         raise HTTPException(500, f"audio decode error: {e}")

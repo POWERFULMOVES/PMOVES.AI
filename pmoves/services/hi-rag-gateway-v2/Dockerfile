@@ -14,6 +14,12 @@ RUN pip install --no-cache-dir --upgrade pip
 # With build context at pmoves/ directory (contains docker-compose.yml)
 COPY libs /app/libs
 COPY services/common /app/services/common
+
+# PMOVES Python namespace package (for ShapeStore → pmoves.chit import)
+RUN mkdir -p /app/pmoves \
+    && printf '"""Minimal pmoves namespace for Docker."""\n' > /app/pmoves/__init__.py
+COPY chit /app/pmoves/chit
+
 COPY services/hi-rag-gateway-v2/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 

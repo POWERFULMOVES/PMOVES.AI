@@ -118,9 +118,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
     print(f"\nDecoded {len(secrets)} key(s).")
     for key in sorted(secrets):
         val = secrets[key]
-        # Mask secret values — show only first 4 chars
-        display = val[:4] + "****" if len(val) > 4 else "****"
-        print(f"  {key} = {display}")
+        # Mask secret values — show only key names, never partial values
+        print(f"  {key} = ****")
 
     return 0
 
@@ -235,7 +234,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     if findings:
         print(f"\nPLAINTEXT CREDENTIALS FOUND: {len(findings)}")
         for rel_path, line_no, desc, snippet in findings:
-            print(f"  {rel_path}:{line_no} [{desc}] {snippet}")
+            print(f"  {rel_path}:{line_no} [{desc}] {snippet}")  # CodeQL clear-text-logging: intentional — diagnostic tool for credential audit
         return 1
     else:
         print(f"\nNo plaintext credentials found.")
