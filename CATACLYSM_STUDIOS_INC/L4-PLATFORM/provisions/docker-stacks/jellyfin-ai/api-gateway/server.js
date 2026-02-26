@@ -16,8 +16,8 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Honor reverse proxy headers so rate limiting sees real client IPs.
-app.set('trust proxy', true);
+// Only trust proxy headers when explicitly enabled by deployment.
+app.set('trust proxy', process.env.TRUST_PROXY === '1' ? 1 : false);
 
 // Security middleware
 app.use(helmet());
@@ -43,7 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 // Initialize clients
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
+  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 );
 
 const neo4jDriver = neo4j.driver(
