@@ -11,7 +11,7 @@ The container image used in CI is built from `services/archon/Dockerfile`. Durin
 ## Prerequisites
 
 - **Supabase CLI stack** or compose provider running locally. The Archon wrapper rewrites Supabase URLs so `http://postgrest:3000` works when the CLI stack runs with `--network-id pmoves-net`.
-- NATS available at `NATS_URL` (defaults to `nats://nats:4222` when `make up-agents` is used).
+- NATS available at `NATS_URL` (defaults to `nats://nats:pmoves@nats:4222` when `make up-agents` is used).
 - `vendor/archon` checked in (included in the repo) or supplied via `ARCHON_VENDOR_ROOT`.
 
 ## Environment Variables
@@ -20,7 +20,7 @@ The container image used in CI is built from `services/archon/Dockerfile`. Durin
 | --- | --- | --- |
 | `SUPABASE_URL` | Root PostgREST URL (CLI stack: `http://api.supabase.internal:8000`) | required |
 | `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY` | Service role key used by Archon when talking to Supabase | required |
-| `NATS_URL` | NATS connection string | `nats://nats:4222` |
+| `NATS_URL` | NATS connection string | `nats://nats:pmoves@nats:4222` |
 | `ARCHON_SUPABASE_BASE_URL` | Derived automatically from `SUPABASE_URL` for PostgREST patching | auto |
 | `ARCHON_HTTP_ALLOW_HOSTS` | Optional comma list of hosts to treat as “local” (used to allow `http://postgrest:3000`) | auto |
 | `ARCHON_SERVER_PORT` | HTTP port for the Archon API/UI | `8090` |

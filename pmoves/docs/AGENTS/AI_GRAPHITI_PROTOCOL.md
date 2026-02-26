@@ -33,6 +33,7 @@ AI Graphiti is the attribution and handoff protocol for PMOVES.AI's multi-agent 
 | **Cline** | `●` Circle | `#DC2626` Scarlet | Conversational | rapid-iteration, chat-impl, frontend |
 | **POWERFULMOVES** | `⚡` Lightning | `#F59E0B` Gold | Directive | vision, doctrine, final-authority |
 | **Crush** | `◇` Open Diamond | `#0EA5E9` Sky Blue | Companion | terminal-gateway, pair-programming, onboarding |
+| **DARKXSIDE** | `✦` Four-Pointed Star | `#E11D48` Rose Red | Witness | cocreation, prosodic-flow, portal-architecture |
 
 ## How to Register a New Agent
 

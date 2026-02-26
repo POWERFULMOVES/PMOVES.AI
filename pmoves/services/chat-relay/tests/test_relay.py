@@ -41,7 +41,7 @@ class TestConfig:
         }, clear=True):
             config = Config.from_env()
 
-        assert config.nats_url == "nats://nats:4222"
+        assert config.nats_url == "nats://nats:pmoves@nats:4222"
         assert config.health_port == 8102
         assert config.agent_response_subject == "agent.response.v1"
 

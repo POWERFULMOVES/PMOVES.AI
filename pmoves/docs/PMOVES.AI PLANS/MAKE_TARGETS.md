@@ -59,7 +59,7 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
   - Launches the Jellyfin bridge in isolation.
 
 - `make up-nats`
-  - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:4222`.
+  - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:pmoves@nats:4222`.
   - Use this before opting into the agents profile (Agent Zero, Archon, mesh-agent, Discord publisher).
 - `make mindmap-notebook-sync`
   - Runs `python pmoves/scripts/mindmap_to_notebook.py` to pull `/mindmap/{constellation_id}` entries out of `hi-rag-gateway-v2` and mirror them into Open Notebook via `/api/sources/json`. Requires `MINDMAP_BASE`, `MINDMAP_CONSTELLATION_ID`, `MINDMAP_NOTEBOOK_ID`, and `OPEN_NOTEBOOK_API_TOKEN`.

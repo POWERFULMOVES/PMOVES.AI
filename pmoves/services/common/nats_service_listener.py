@@ -14,14 +14,14 @@ Usage:
     )
 
     # Subscribe to service announcements
-    listener = ServiceAnnouncementListener(nats_url="nats://nats:4222")
+    listener = ServiceAnnouncementListener(nats_url="nats://nats:pmoves@nats:4222")
     await listener.start()
     # ... service runs ...
     await listener.stop()
 
     # Announce own service on startup
     await announce_service(
-        nats_url="nats://nats:4222",
+        nats_url="nats://nats:pmoves@nats:4222",
         slug="my-service",
         name="My Service",
         url="http://my-service:8080",
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 
 # Default NATS URL from environment or default
-DEFAULT_NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+DEFAULT_NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 
 # Subject for service announcements
 SERVICE_ANNOUNCE_SUBJECT = "services.announce.v1"

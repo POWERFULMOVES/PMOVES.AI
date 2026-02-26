@@ -59,7 +59,7 @@ class NATSPublisher:
         """Initialize NATS publisher.
 
         Args:
-            nats_url: NATS connection URL (e.g., "nats://nats:4222")
+            nats_url: NATS connection URL (e.g., "nats://nats:pmoves@nats:4222")
         """
         self.nats_url = nats_url
         self._nc: Optional[NATS] = None

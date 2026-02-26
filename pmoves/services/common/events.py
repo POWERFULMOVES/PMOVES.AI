@@ -43,7 +43,7 @@ def envelope(topic: str, payload: dict, correlation_id: str|None=None, parent_id
     if parent_id: env["parent_id"] = parent_id
     return env
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 
 async def publish(topic: str, payload: dict, *, correlation_id: str | None = None, parent_id: str | None = None, source: str = "agent"):
     """Publish an envelope to NATS and return the envelope."""

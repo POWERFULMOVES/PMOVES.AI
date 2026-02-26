@@ -68,7 +68,7 @@ Work items specify a `required_skill_level` and can only be claimed by BoTZ inst
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
 | `SUPABASE_URL` | `http://supabase-kong:8000` | Supabase API URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | - | Supabase service role key |
 | `TENSORZERO_URL` | `http://tensorzero:3030` | TensorZero gateway URL |
@@ -82,7 +82,7 @@ botz-gateway:
   build:
     context: ./services/botz-gateway
   environment:
-    - NATS_URL=nats://nats:4222
+    - NATS_URL=nats://nats:pmoves@nats:4222
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
   ports:

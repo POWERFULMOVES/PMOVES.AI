@@ -170,7 +170,7 @@ Use this checklist when onboarding a new submodule or auditing an existing one.
 
 ```bash
 # Check NATS auth in all files
-grep -r "nats://nats:4222" . --include="*.py" --include="*.yml" --include="*.yaml" --include="*.env*"
+grep -r "nats://nats:pmoves@nats:4222" . --include="*.py" --include="*.yml" --include="*.yaml" --include="*.env*"
 # Should return NO results (all should use nats://nats:pmoves@nats:4222)
 
 # Check for export syntax in env files

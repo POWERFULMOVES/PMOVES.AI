@@ -217,7 +217,7 @@ make up-external     # starts pmoves-net integrations published to GHCR or local
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PORT` | 8080 | FastAPI listen port |
-| `NATS_URL` | `nats://nats:4222` | Event bus connection |
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | Event bus connection |
 | `AGENTZERO_JETSTREAM` | `true` | Enable JetStream controller (durable subscriptions) |
 | `AGENT_FORM` | `POWERFULMOVES` | Default agent persona |
 | `AGENT_FORMS_DIR` | `configs/agents/forms` | YAML form definitions |
@@ -301,7 +301,7 @@ PMOVES uses **NATS JetStream** for:
 ```python
 from nats.aio.client import Client as NATS
 nc = NATS()
-await nc.connect(servers=["nats://nats:4222"])
+await nc.connect(servers=["nats://nats:pmoves@nats:4222"])
 
 envelope = {
     "topic": "gen.image.result.v1",

@@ -14,7 +14,7 @@ Usage:
     optimizer = PersonaOptimizer(
         supabase_url="http://postgrest:3000",
         supabase_key="your-key",
-        nats_url="nats://nats:4222"
+        nats_url="nats://nats:pmoves@nats:4222"
     )
     await optimizer.start()
     result = await optimizer.optimize_persona_parameters(persona_id)
@@ -173,7 +173,7 @@ class PersonaOptimizer:
             "SUPABASE_SERVICE_ROLE_KEY",
             get_secret("SUPABASE_SERVICE_KEY")
         )
-        self.nats_url = nats_url or os.getenv("NATS_URL", "nats://nats:4222")
+        self.nats_url = nats_url or os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 
         self.search_space = search_space or PersonaSearchSpace()
         self.max_iterations = max_iterations

@@ -923,7 +923,7 @@ async def main() -> None:
     to research.deepresearch.request.v1 for incoming queries. Also
     starts a health server for Kubernetes probes.
     """
-    nats_url = os.getenv("NATS_URL", "nats://nats:4222")
+    nats_url = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
     runner = DeepResearchRunner()
     publisher = NotebookPublisher()
     nc = NATS()

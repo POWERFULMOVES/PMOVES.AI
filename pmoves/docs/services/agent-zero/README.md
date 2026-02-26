@@ -14,7 +14,7 @@ Compose
 
 Environment (core)
 - `PORT` — FastAPI listen port (default `8080`).
-- `NATS_URL` — NATS connection string (default `nats://nats:4222`).
+- `NATS_URL` — NATS connection string (default `nats://nats:pmoves@nats:4222`).
 - `AGENT_ZERO_API_BASE` — base URL the supervisor uses to talk to the embedded runtime (default `http://127.0.0.1:80` inside the container).
 - `AGENT_ZERO_CAPTURE_OUTPUT` — capture embedded runtime stdout/stderr in the supervisor logs (default `true`).
 - `AGENT_ZERO_EXTRA_ARGS` — additional args for the embedded runtime (default `--port=80`).

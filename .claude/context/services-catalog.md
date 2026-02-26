@@ -399,6 +399,65 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Compose Profile:** `agents`
 - **Health:** `GET http://localhost:8096/health`
 
+## CHIT & Geometry Services
+
+### Tokenism Simulator
+- **Ports:** 8103 (host) → 8100 (internal)
+- **Purpose:** Economic simulation with geometric attribution (CGP v0.2)
+- **Key APIs:**
+  - `GET /healthz` - Service health
+- **NATS Topics:**
+  - Publish: `tokenism.cgp.ready.v1`, `tokenism.simulation.result.v1`, `tokenism.calibration.result.v1`
+- **Features:**
+  - CHIT-enabled (`CHIT_ENABLED=true`)
+  - Geometry Bus integration via NATS
+  - TensorZero LLM routing
+  - Agent Zero MCP integration
+- **CHIT Level:** Full
+- **Dependencies:** NATS (required), TensorZero, Supabase, Agent Zero
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest`
+- **Compose Profile:** `agents`, `orchestration`, `botz`
+
+### Evo Controller
+- **Ports:** 8113
+- **Purpose:** EvoSwarm evolutionary optimization controller
+- **Key APIs:**
+  - Polling-based optimization (no HTTP health endpoint defined)
+- **NATS Topics:** `evoswarm.*`
+- **Features:**
+  - CHIT signature verification (`CHIT_REQUIRE_SIGNATURE=true`)
+  - CHIT anchor decryption (`CHIT_DECRYPT_ANCHORS=true`)
+  - Configurable poll interval (`EVOSWARM_POLL_SECONDS=300`)
+- **CHIT Level:** Full
+- **Dependencies:** Supabase, NATS
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-evo-controller:latest`
+- **Compose Profile:** `orchestration`
+
+### A2UI NATS Bridge
+- **Ports:** 9224
+- **Purpose:** WebSocket bridge for A2UI frontend ↔ NATS
+- **Key APIs:**
+  - `GET /healthz` - Service health
+- **NATS Topics:**
+  - Subscribe: `a2ui.render.v1`, `geometry.>`
+- **Features:**
+  - WebSocket relay for real-time UI updates
+  - Geometry Bus wildcard subscription
+- **CHIT Level:** Partial (relay only)
+- **Dependencies:** NATS (required, service_healthy + nats-init)
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest`
+- **Compose Profile:** `agents`
+
+### Session Context Worker
+- **Ports:** 8102 (host) → 8100 (internal)
+- **Purpose:** Session-scoped context management worker
+- **Features:**
+  - Manages session context for agent interactions
+  - Forwards to Hi-RAG v2 for ingestion
+- **Dependencies:** Hi-RAG v2 (required), NATS
+- **Docker Image:** `ghcr.io/powerfulmoves/pmoves-session-context-worker:latest`
+- **Compose Profile:** `workers`
+
 ## Monitoring Stack
 
 ### Prometheus
@@ -416,6 +475,11 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Datasources:** Prometheus, Loki
 - **Dashboards:** "Services Overview" (pre-configured)
 - **Compose Profile:** `monitoring`
+- **⚠ Port 3000 Conflict Note:** Several services default to port 3000 via env vars:
+  `supabase-postgrest` (`SUPABASE_POSTGREST_PORT`), Invidious (`INVIDIOUS_PORT`),
+  VibeVoice (`VIBEVOICE_HOST_PORT`). When Grafana is active, these services **must**
+  override their port env vars to avoid binding conflicts. Grafana is the canonical
+  owner of host port 3000.
 
 ### Loki
 - **Ports:** 3100
@@ -432,10 +496,12 @@ Comprehensive reference of all production services, ports, APIs, and integration
 ## Data Storage
 
 ### NATS
-- **Ports:** 4222
+- **Ports:** 4222 (TCP), 9222 (WebSocket standalone/DoX), 9223 (WebSocket docked)
 - **Purpose:** Message bus for agent coordination
 - **Version:** 2.10-alpine
 - **Features:** JetStream enabled for persistence
+- **Auth:** `nats://nats:pmoves@nats:4222` (always use authenticated URL)
+- **WebSocket:** DoX standalone uses 9222, docker-compose docked mode uses 9223
 - **Key Subjects:** See `.claude/context/nats-subjects.md`
 - **Compose Profile:** Default (always required)
 
@@ -503,6 +569,10 @@ http://localhost:8083/healthz  # Extract Worker
 http://localhost:8084/healthz  # LangExtract
 http://localhost:8092/healthz  # PDF Ingest
 http://localhost:8095/healthz  # Notebook Sync
+
+# CHIT & Geometry
+http://localhost:8103/healthz  # Tokenism Simulator
+http://localhost:9224/healthz  # A2UI NATS Bridge
 
 # Utilities
 http://localhost:8088/healthz  # Presign
