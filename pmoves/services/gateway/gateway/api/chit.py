@@ -398,8 +398,15 @@ def geometry_calibration_report(body: GeometryCalibrationRequest):
     def js(p,q):
         m=[(pi+qi)/2 for pi,qi in zip(p,q)]; return 0.5*kl(p,m)+0.5*kl(q,m)
     cov = sum(1 for e in emp if e>0)/bins
-    os.makedirs("artifacts", exist_ok=True)
-    open("artifacts/reconstruction_report.md","w").write(f"# CHIT Calibration Report\n\n- KL: {kl(tgt,emp):.4f}\n- JS: {js(tgt,emp):.4f}\n- Coverage: {cov:.2f}\n")
+    _artifacts_dir = Path("artifacts")
+    try:
+        _artifacts_dir.mkdir(exist_ok=True)
+        (_artifacts_dir / "reconstruction_report.md").write_text(
+            f"# CHIT Calibration Report\n\n- KL: {kl(tgt,emp):.4f}\n- JS: {js(tgt,emp):.4f}\n- Coverage: {cov:.2f}\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        logger.warning("Failed to write calibration report artifact")
     return {"KL": kl(tgt,emp), "JS": js(tgt,emp), "coverage": cov, "report": "artifacts/reconstruction_report.md"}
 
 

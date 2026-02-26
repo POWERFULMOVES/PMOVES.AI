@@ -1367,7 +1367,12 @@ def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> urllib3.HTTPRespo
             resolved_ip, port=port,
             timeout=pool_timeout,
         )
-    http_resp = pool.request("GET", path, headers={"Host": host}, redirect=False)
+    try:
+        http_resp = pool.request("GET", path, headers={"Host": host}, redirect=False)
+    except Exception:
+        pool.close()
+        raise
+    pool.close()
     if http_resp.status >= 400:
         raise HTTPException(400, f"remote image fetch failed with HTTP {http_resp.status}")
     if 300 <= http_resp.status < 400:
@@ -2005,8 +2010,17 @@ def geometry_decode_image(body: Dict[str, Any], _=Depends(require_tailscale)):
         text_emb = model.encode([text], normalize_embeddings=True, convert_to_numpy=True)
         img_list=[]
         for url in images:
-            r = _fetch_remote_image(url)
-            img = Image.open(io.BytesIO(r.data)).convert('RGB')
+            try:
+                r = _fetch_remote_image(url)
+            except (urllib3.exceptions.HTTPError, OSError) as e:
+                raise HTTPException(502, f"failed to fetch image: {e}")
+            image_bytes = r.data
+            if not image_bytes:
+                raise HTTPException(400, f"remote image returned empty body for {url}")
+            try:
+                img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+            except Exception as e:
+                raise HTTPException(400, f"invalid image payload for {url}: {e}")
             img_list.append(img)
         img_embs = model.encode(img_list, normalize_embeddings=True, convert_to_numpy=True)
         sims = (img_embs @ text_emb.T).squeeze()  # cosine if normalized
