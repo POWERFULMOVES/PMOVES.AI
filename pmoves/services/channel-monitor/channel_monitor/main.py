@@ -84,7 +84,7 @@ CONFIG = ensure_config(CONFIG_PATH)
 
 QUEUE_URL = os.getenv("CHANNEL_MONITOR_QUEUE_URL", "http://pmoves-yt:8077/yt/ingest")
 DATABASE_URL = os.getenv(
-    "CHANNEL_MONITOR_DATABASE_URL", "postgresql://pmoves:pmoves@postgres:5432/pmoves"
+    "CHANNEL_MONITOR_DATABASE_URL", "postgresql://postgres:postgres@supabase-db:5432/postgres"
 )
 DEFAULT_NAMESPACE = os.getenv("CHANNEL_MONITOR_NAMESPACE", "pmoves")
 STATUS_SECRET = os.getenv("CHANNEL_MONITOR_SECRET")
