@@ -13,7 +13,7 @@ set -u
 # Note: set -e intentionally omitted — add_stream returns non-zero on real
 # failures but we continue trying remaining streams, then fail at the end.
 
-NATS_URL="${NATS_URL:-nats://nats:4222}"
+NATS_URL="${NATS_URL:-nats://nats:pmoves@nats:4222}"
 
 # Wait for NATS to be reachable (healthcheck may pass before JetStream is ready)
 MAX_RETRIES=30

@@ -45,7 +45,7 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://minio:9000")
 PRESIGN_HOURS = _parse_int_env("PRESIGN_EXPIRES_HOURS", 24)
 OUTPUT_DIR = os.environ.get("COMFY_OUTPUT_DIR", "/data/output")
 STATE_PATH = os.environ.get("COMFY_WATCHER_STATE_PATH", "/state/state.json")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 POLL_SECONDS = _parse_int_env("COMFY_WATCHER_POLL_SECONDS", 5)
 
 
@@ -219,7 +219,7 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL","http://localhost:9000")
 PRESIGN_HOURS = int(os.environ.get("PRESIGN_EXPIRES_HOURS","24"))
 OUTPUT_DIR = "/data/output"
 STATE_PATH = "/state/state.json"
-NATS_URL = os.environ.get("NATS_URL","nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL","nats://nats:pmoves@nats:4222")
 
 def load_state():
     try:

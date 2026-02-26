@@ -1146,7 +1146,7 @@ PGPORT = int(os.environ.get("PGPORT","5432"))
 PGUSER = os.environ.get("PGUSER")
 PGPASSWORD = os.environ.get("PGPASSWORD")
 PGDATABASE = os.environ.get("PGDATABASE")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 
 _codebook_cache = None
 _codebook_mtime = None

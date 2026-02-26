@@ -56,7 +56,7 @@ logging.basicConfig(
 logger = logging.getLogger("session_context_worker")
 
 # Environment variables
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 HEALTH_PORT = int(os.environ.get("HEALTH_PORT", "8100"))
 SESSION_CONTEXT_SUBJECT = "claude.code.session.context.v1"
 KB_UPSERT_SUBJECT = "kb.upsert.request.v1"

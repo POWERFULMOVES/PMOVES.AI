@@ -115,7 +115,7 @@ variable "enable_gpu" {
 variable "nats_url" {
   description = "NATS broker URL for event messaging"
   type        = string
-  default     = "nats://nats:4222"
+  default     = "nats://nats:pmoves@nats:4222"
 }
 
 variable "supabase_url" {

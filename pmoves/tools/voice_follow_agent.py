@@ -39,7 +39,7 @@ def _resolve_nats_url() -> str:
     """
     Host-run default should connect to the published NATS port.
 
-    env.shared often sets NATS_URL=nats://nats:4222 (valid inside Docker, invalid on host).
+    env.shared often sets NATS_URL=nats://nats:pmoves@nats:4222 (valid inside Docker, invalid on host).
     Also, localhost may resolve to ::1 first on some systems while NATS only binds IPv4.
     """
     explicit = os.getenv("VOICE_FOLLOW_NATS_URL")
