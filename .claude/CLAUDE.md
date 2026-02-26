@@ -201,9 +201,11 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 
 ### Data Storage
 
-**NATS Message Bus** [Port 4222]
+**NATS Message Bus** [Port 4222, 9222 WS (standalone), 9223 WS (docked)]
 - JetStream-enabled event broker
 - Primary communication bus for all agent coordination
+- WebSocket ports: 9222 (standalone DoX), 9223 (docked via docker-compose)
+- Auth: `nats://nats:pmoves@nats:4222` (always use authenticated URL)
 - **Critical subjects:** See `.claude/context/nats-subjects.md`
 
 **Supabase** [PostgREST Port 3010]
@@ -242,6 +244,7 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 
 **Agent Observability (for Claude Code CLI hooks):**
 - `claude.code.tool.executed.v1` - Claude CLI tool execution events
+- `agent.graphiti.signed.v1` - Agent trail attribution events (emitted by BoTZ gateway; extend to Agent Zero + Archon)
 
 ## Common Development Tasks
 
@@ -471,6 +474,10 @@ See `.claude/context/` for detailed documentation:
 - `pmoves/docs/PMOVESCHIT/Integrating Math into PMOVES.AI.md` - Mathematical foundations
 - `pmoves/docs/PMOVESCHIT/Human_side.md` - User-facing CHIT documentation
 - `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
+- `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md` - Per-service integration status (5 Full, 8 Partial, 15 None)
+- **CGP Schema Version Naming:** Canonical format is `chit.cgp.v{major}.{minor}` (e.g., `chit.cgp.v1.0`). Legacy aliases: `cgp.v1` → `chit.cgp.v1.0`, `geometry.cgp.v1` → `chit.cgp.v1.0`
+- **CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8096), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator
+- **CHIT NATS Subjects:** `geometry.cgp.v1`, `geometry.swarm.meta.v1`, `geometry.event.v1`, `tokenism.cgp.ready.v1`, `tokenism.simulation.result.v1`
 
 ## Claude Code CLI Context Strategy
 
