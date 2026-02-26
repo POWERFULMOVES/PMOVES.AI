@@ -21,7 +21,7 @@ USER pmoves
 # Environment defaults
 ENV SERVICE_NAME=consciousness-service
 ENV SERVICE_PORT=8096
-ENV NATS_URL=nats://nats:4222
+ENV NATS_URL=nats://nats:pmoves@nats:4222
 ENV HIRAG_V2_URL=http://hi-rag-gateway-v2:8086
 
 EXPOSE 8096

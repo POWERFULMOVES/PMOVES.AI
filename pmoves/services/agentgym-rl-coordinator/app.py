@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentgym-coordinator")
 
 # Configuration
-NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase_kong_PMOVES.AI:8000")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -92,6 +92,42 @@ async def lifespan(app: FastAPI):
         await nc.subscribe("geometry.event.v1", cb=geometry_message_handler)
         await nc.subscribe("tokenism.geometry.event.v1", cb=geometry_message_handler)
         logger.info("Subscribed to geometry event subjects")
+
+        # Subscribe to HuggingFace model download events
+        async def hf_model_handler(msg):
+            """Handle HF model download notifications for training pipeline."""
+            try:
+                data = json.loads(msg.data)
+                model_id = data.get("model_id")
+                model_path = data.get("path")
+                if model_id and model_path:
+                    logger.info(
+                        "HF model downloaded: %s at %s — recording for training pipeline",
+                        model_id, model_path,
+                    )
+                    if storage:
+                        await storage.record_event(
+                            event_type="hf_model_downloaded",
+                            payload={"model_id": model_id, "path": model_path},
+                        )
+                else:
+                    logger.warning(
+                        "hf.model.downloaded event missing model_id or path: %s",
+                        data,
+                    )
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Invalid JSON in hf.model.downloaded event: %s",
+                    msg.data[:200] if msg.data else b"<empty>",
+                )
+            except Exception:
+                logger.exception(
+                    "Error processing HF model download event, payload=%s",
+                    msg.data[:500] if msg.data else b"<empty>",
+                )
+
+        await nc.subscribe("hf.model.downloaded.v1", cb=hf_model_handler)
+        logger.info("Subscribed to hf.model.downloaded.v1")
 
     except Exception as e:
         logger.exception("Failed to connect to NATS")

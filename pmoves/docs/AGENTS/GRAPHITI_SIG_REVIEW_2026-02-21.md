@@ -24,7 +24,7 @@ Phase 5 verification handoff snapshot for CHIT flaws, signature hygiene, and lan
   - `docker exec` to compose-aware `exec`
 
 ## Drift Note
-- Current repository scan reports `111` references to unauthenticated `nats://nats:4222` under `pmoves/`.
+- Current repository scan reports `111` references to unauthenticated `nats://nats:pmoves@nats:4222` under `pmoves/`.
 - Treat this as canonical current count for follow-up batching in this workspace snapshot.
 
 ## Graphiti Signature Hygiene

@@ -330,7 +330,7 @@ curl -s http://localhost:8086/hirag/health | jq .  # Hi-RAG
 **Services with incorrect NATS_URL default:**
 - Lines 725, 876, 927, 1266, 1294, 1331, 1365, 1386, 1403, 1420, 1556, 1601, 1654, 1676, 1779, 1858
 
-**Fix:** Remove `NATS_URL=${NATS_URL:-nats://nats:4222}` from environment sections
+**Fix:** Remove `NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}` from environment sections
 The env.tier-agent already provides: `NATS_URL=nats://nats:pmoves@nats:4222`
 
 ### Issue 2: channel-monitor PostgreSQL URL

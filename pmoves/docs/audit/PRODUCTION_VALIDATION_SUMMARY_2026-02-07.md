@@ -38,7 +38,7 @@
 ### 🟡 Configuration Issues (17 services affected)
 
 5. **NATS Authorization Missing**
-   - 17 services use `NATS_URL=${NATS_URL:-nats://nats:4222}` (no credentials)
+   - 17 services use `NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}` (no credentials)
    - Should use `nats://nats:pmoves@nats:4222` from env.tier-agent
    - **Affected Services:**
      - Line 725: tensorzero-gateway
@@ -129,7 +129,7 @@
 
 ```bash
 # View all services with NATS auth issue
-grep -n "NATS_URL=\${NATS_URL:-nats://nats:4222}" docker-compose.yml
+grep -n "NATS_URL=\${NATS_URL:-nats://nats:pmoves@nats:4222}" docker-compose.yml
 
 # Find empty env vars
 grep -E "=$" env.shared | grep -v "^#" | wc -l

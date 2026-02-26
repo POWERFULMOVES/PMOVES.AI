@@ -105,6 +105,10 @@
     "ingest.file.added.v1": {
       "schema": "schemas/ingest/file-added.v1.schema.json"
     },
+    "a2ui.render.completed.v1": {
+      "schema": "schemas/a2ui/render.completed.v1.schema.json",
+      "description": "A2UI renderer finished an animation render and published output metadata."
+    },
     "ingest.transcript.ready.v1": {
       "schema": "schemas/ingest/transcript-ready.v1.schema.json"
     },

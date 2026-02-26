@@ -65,7 +65,8 @@
       "pmoves_external"
     ],
     "archon-ui": [
-      "pmoves_api"
+      "pmoves_api",
+      "pmoves_external"
     ],
     "channel-monitor": [
       "pmoves_app",

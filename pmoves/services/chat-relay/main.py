@@ -63,7 +63,7 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         return cls(
-            nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+            nats_url=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
             supabase_url=os.getenv("SUPABASE_URL", ""),
             supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
             health_port=int(os.getenv("HEALTH_PORT", "8102")),

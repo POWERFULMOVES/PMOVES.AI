@@ -82,7 +82,7 @@ Static mounts: `/web/` (HTML/JS), `/data/` (saved CGP JSON), `/artifacts/` (repo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:4222` | NATS message bus URL |
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS message bus URL |
 | `SUPA_REST_URL` | (none) | Supabase PostgREST URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | (none) | Supabase API key |
 

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A2UI Render Completed",
+  "type": "object",
+  "required": [
+    "render_key",
+    "format",
+    "duration_ms",
+    "scenes",
+    "composition_id",
+    "timestamp"
+  ],
+  "properties": {
+    "render_key": {
+      "type": "string"
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "mp4",
+        "gif",
+        "webm"
+      ]
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "scenes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "composition_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

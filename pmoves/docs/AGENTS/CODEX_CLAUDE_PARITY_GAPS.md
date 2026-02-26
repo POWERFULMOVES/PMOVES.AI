@@ -1,9 +1,9 @@
 # Codex Claude Parity Gaps Report
-_Generated: 2026-02-23_
+_Generated: 2026-02-25_
 
 ## Scope
-- Commands source: `C:\Users\russe\Documents\GitHub\PMOVES.AI-pr-kriss-kross\.claude\commands`
-- Parity map: `C:\Users\russe\Documents\GitHub\PMOVES.AI-pr-kriss-kross\pmoves\docs\AGENTS\CODEX_CLAUDE_PARITY_MAP.md`
+- Commands source: `C:\Users\russe\Documents\GitHub\PMOVES.AI\.claude\commands`
+- Parity map: `C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docs\AGENTS\CODEX_CLAUDE_PARITY_MAP.md`
 
 ## Summary
 - Claude command tokens: **113**

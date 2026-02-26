@@ -26,7 +26,7 @@ procs:
       # TensorZero for LLM routing in docked mode
       TENSORZERO_BASE_URL: "${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}"
       # NATS for cross-service coordination
-      NATS_URL: "${NATS_URL:-nats://nats:4222}"
+      NATS_URL: "${NATS_URL:-nats://nats:pmoves@nats:4222}"
       # HiRAG for knowledge retrieval
       HIRAG_URL: "${HIRAG_URL:-http://hirag:8086}"
 
@@ -137,7 +137,7 @@ procs:
     shell: |
       if [ "${PMOVES_DOCKED_MODE}" = "true" ]; then
         echo "NATS Monitor - Subscribing to agent-zero.* subjects..."
-        echo "NATS URL: ${NATS_URL:-nats://nats:4222}"
+        echo "NATS URL: ${NATS_URL:-nats://nats:pmoves@nats:4222}"
         echo "Subjects:"
         echo "  - agent-zero.agent.thread.started.v1"
         echo "  - agent-zero.agent.thread.completed.v1"
@@ -150,7 +150,7 @@ procs:
     cwd: "."
     autostart: false
     env:
-      NATS_URL: "${NATS_URL:-nats://nats:4222}"
+      NATS_URL: "${NATS_URL:-nats://nats:pmoves@nats:4222}"
 
   # ============================================================================
   # 7. LOG VIEWER
@@ -172,7 +172,7 @@ procs:
         echo "Checking docked dependencies..."
         curl -sf ${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3030}/healthz && echo "TensorZero: OK" || echo "TensorZero: FAIL"
         curl -sf ${HIRAG_URL:-http://hirag:8086}/healthz && echo "HiRAG: OK" || echo "HiRAG: FAIL (optional)"
-        curl -sf ${NATS_URL:-nats://nats:4222} -o /dev/null && echo "NATS: OK" || echo "NATS: FAIL"
+        curl -sf ${NATS_URL:-nats://nats:pmoves@nats:4222} -o /dev/null && echo "NATS: OK" || echo "NATS: FAIL"
       else
         echo "Mode: Standalone - checking local services..."
         echo "Claude API: ${ANTHROPIC_API_KEY:+configured}"

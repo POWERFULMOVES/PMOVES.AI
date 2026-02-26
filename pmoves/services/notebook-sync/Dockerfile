@@ -2,8 +2,8 @@ FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir --upgrade pip
-COPY requirements.txt requirements.lock ./
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Security: Run as non-root user
@@ -11,9 +11,6 @@ RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
     chown -R pmoves:pmoves /app
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# NOTE: Do NOT set USER here - entrypoint needs root for chown, then drops to pmoves via su
 EXPOSE 8095
-ENTRYPOINT ["/entrypoint.sh"]
+USER pmoves:pmoves
+CMD ["uvicorn", "sync:app", "--host", "0.0.0.0", "--port", "8095"]

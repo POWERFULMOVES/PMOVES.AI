@@ -222,7 +222,7 @@ class AgentZeroServiceConfig(BaseModel):
 
     port: int = Field(default=8080, description="Port the FastAPI service listens on")
     nats_url: str = Field(
-        default="nats://nats:4222", description="NATS connection string"
+        default="nats://nats:pmoves@nats:4222", description="NATS connection string"
     )
     geometry_gateway_url: str = Field(
         default="http://localhost:8086",
@@ -268,7 +268,7 @@ class AgentZeroServiceConfig(BaseModel):
 def load_service_config() -> AgentZeroServiceConfig:
     return AgentZeroServiceConfig(
         port=int(os.environ.get("PORT", 8080)),
-        nats_url=os.environ.get("NATS_URL", "nats://nats:4222"),
+        nats_url=os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222"),
         geometry_gateway_url=os.environ.get(
             "HIRAG_URL", os.environ.get("GATEWAY_URL", "http://localhost:8086")
         ),
@@ -638,7 +638,7 @@ async def lifespan(app: FastAPI):
     if NATS_ANNOUNCE_AVAILABLE:
         try:
             await announce_service(
-                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+                nats_url=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
                 slug=slug,
                 name=name,
                 url=url,

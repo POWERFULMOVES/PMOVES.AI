@@ -568,7 +568,7 @@ class WhisperProvider:
 ### Environment Variables
 ```bash
 # Required
-NATS_URL=nats://nats:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 SUPABASE_URL=http://supabase:3010
 SUPABASE_SERVICE_ROLE_KEY=...
 MINIO_ENDPOINT=minio:9000

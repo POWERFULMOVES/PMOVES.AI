@@ -24,11 +24,15 @@ import os
 import re
 import shutil
 import threading
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from contextlib import asynccontextmanager
+
+import nats as nats_lib
 import aiohttp
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -50,7 +54,7 @@ logger = logging.getLogger(__name__)
 # Environment variables
 HF_HOME = os.environ.get("HF_HOME", "/models")
 HF_HUB_CACHE = os.environ.get("HF_HUB_CACHE", "/models/hub")
-NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 SERVER_PORT = int(os.environ.get("PORT", "8096"))
 
 MODELS_BASE = Path(HF_HUB_CACHE) / "models"
@@ -155,6 +159,28 @@ class ModelMetadata:
             dimensions=data.get("dimensions"),
             tags=data.get("tags", []),
         )
+
+
+# Persistent NATS connection (initialised in lifespan)
+_nats_client = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage persistent NATS connection across app lifetime."""
+    global _nats_client
+    try:
+        _nats_client = await nats_lib.connect(NATS_URL)
+        logger.info("Connected to NATS")
+    except Exception as exc:
+        logger.warning("NATS unavailable, download events disabled: %s", exc)
+        _nats_client = None
+    yield
+    if _nats_client:
+        try:
+            await _nats_client.close()
+        except Exception as exc:
+            logger.warning("Error closing NATS connection: %s", exc)
 
 
 # Model catalog with recommended models
@@ -385,7 +411,7 @@ MODEL_CATALOG: Dict[str, Dict[str, Any]] = {
 
 
 # FastAPI app
-app = FastAPI(title="Hugging Face MCP Server", version="1.0.0")
+app = FastAPI(title="Hugging Face MCP Server", version="1.0.0", lifespan=lifespan)
 
 # Hugging Face API client
 hf_api = HfApi()
@@ -519,7 +545,7 @@ async def hf_model_download(
 
     try:
         # Create cache directory (must be inside try block for error handling)
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)  # CodeQL path-injection: sanitized by _safe_model_path (basename + regex allowlist)
 
         # Download model snapshot
         logger.info(f"Downloading model {hf_id} to {cache_dir}")
@@ -627,7 +653,7 @@ async def hf_model_convert_gguf(
 
     cache_dir = _safe_model_path(model_id)
 
-    if not cache_dir.exists():
+    if not cache_dir.exists():  # CodeQL path-injection: sanitized by _safe_model_path (basename + regex allowlist)
         raise HTTPException(
             status_code=404,
             detail=f"Model {model_id} not found in cache. Download first.",
@@ -691,35 +717,28 @@ async def hf_tensorzero_config() -> Dict[str, Any]:
 async def _publish_download_event(model_id: str, path: str):
     """Publish model download event to NATS message bus.
 
+    Uses the persistent ``_nats_client`` initialised in the app lifespan.
+    Falls back gracefully if NATS is unavailable or disconnected.
+
     Args:
         model_id: Hugging Face model identifier (e.g., 'Qwen/Qwen2.5-7B-Instruct')
         path: Local filesystem path where model was cached
-
-    Side effects:
-        Publishes JSON event to 'hf.model.downloaded.v1' NATS subject
-        Logs success or failure of event publication
-
-    Note:
-        Falls back gracefully if NATS is unavailable.
-        Event payload includes: model_id, path, timestamp
     """
+    if _nats_client is None or not _nats_client.is_connected:
+        logger.debug("NATS not connected, skipping download event for %s", model_id)
+        return
+    event = {
+        "model_id": model_id,
+        "path": path,
+        "timestamp": time.time(),
+    }
     try:
-        import nats
-
-        nc = await nats.connect(NATS_URL)
-        event = {
-            "model_id": model_id,
-            "path": path,
-            "timestamp": asyncio.get_event_loop().time(),
-        }
-        await nc.publish("hf.model.downloaded.v1", json.dumps(event).encode())
-        await nc.close()
-        logger.info(f"Published download event for {model_id}")
-
-    except ImportError:
-        logger.warning("nats-py not installed, skipping event publish")
-    except Exception as e:
-        logger.error(f"Failed to publish NATS event: {e}")
+        await _nats_client.publish(
+            "hf.model.downloaded.v1", json.dumps(event).encode(),
+        )
+        logger.info("Published download event for %s", model_id)
+    except Exception as exc:
+        logger.error("Failed to publish NATS event: %s", exc, exc_info=True)
 
 
 # =============================================================================
@@ -741,12 +760,14 @@ async def health_check():
     Note:
         Uses /healthz path to match PMOVES.AI service standards.
     """
+    nats_ok = _nats_client is not None and _nats_client.is_connected
     return {
-        "status": "healthy",
+        "status": "healthy" if nats_ok else "degraded",
         "service": "hf-mcp-server",
         "version": "1.0.0",
         "hf_home": HF_HOME,
         "hf_cache": HF_HUB_CACHE,
+        "nats": "connected" if nats_ok else "disconnected",
     }
 
 

@@ -117,7 +117,7 @@ def get_database():
 | `DB_BACKEND` | `sqlite` | `supabase` | Database selection |
 | `SUPABASE_DUAL_WRITE` | `false` | `true` | Dual-write during migration |
 | `AGENT_ZERO_MCP_ENABLED` | `false` | `true` | Enable MCP API |
-| `NATS_URL` | `nats://localhost:4222` | `nats://nats:4222` | NATS geometry bus |
+| `NATS_URL` | `nats://localhost:4222` | `nats://nats:pmoves@nats:4222` | NATS geometry bus |
 
 ## Network Architecture
 
@@ -221,7 +221,7 @@ Docked submodules expose MCP APIs for parent system integration:
 Real-time geometry packet streaming:
 - **Stream**: `GEOMETRY`
 - **Subjects**: `tokenism.cgp.>`, `geometry.>`
-- **Docked**: `nats://nats:4222`
+- **Docked**: `nats://nats:pmoves@nats:4222`
 - **Standalone**: `nats://localhost:4222`
 
 ## Best Practices

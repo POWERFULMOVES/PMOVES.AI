@@ -94,7 +94,7 @@ import nats
 import json
 
 async def start_deepresearch(topic: str, depth: str = "comprehensive"):
-    nc = await nats.connect("nats://nats:4222")
+    nc = await nats.connect("nats://nats:pmoves@nats:4222")
     request = {
         "task_id": str(uuid.uuid4()),
         "topic": topic,
@@ -113,7 +113,7 @@ async def start_deepresearch(topic: str, depth: str = "comprehensive"):
 ```python
 # Subscribe to research results
 async def listen_for_results(task_id: str, timeout: int = 300):
-    nc = await nats.connect("nats://nats:4222")
+    nc = await nats.connect("nats://nats:pmoves@nats:4222")
     result_future = asyncio.Future()
 
     async def handler(msg):

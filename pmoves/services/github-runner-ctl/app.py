@@ -56,7 +56,7 @@ logger = logging.getLogger("github-runner-ctl")
 
 # Environment configuration (PMOVES pattern: env-based with defaults)
 PORT = int(os.environ.get("PORT", 8100))
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 GITHUB_PAT_FILE = os.environ.get("GITHUB_PAT_FILE", "/run/secrets/github_pat")
 RUNNERS_CONFIG = os.environ.get("RUNNERS_CONFIG", "/app/config/runners.yaml")
 REFRESH_INTERVAL = int(os.environ.get("REFRESH_INTERVAL_SECONDS", "60"))

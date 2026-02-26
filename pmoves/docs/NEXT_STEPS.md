@@ -50,6 +50,12 @@ _Last updated: 2026-02-24_
   - `make -C pmoves ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=CATACLYSMSTUDIOS-INC/PMOVES.AI`
 - `pmoves/tools/push-gh-secrets.sh` now supports `--ghcr-bootstrap` and credential source overrides (`--ghcr-token-from`, `--ghcr-fallback-token-from`, `--ghcr-username-from`) so existing credentials can be reused for rotation.
 - Updated local CI/operator docs to require local build validation before targeted GHCR matrix dispatch, keeping local and self-hosted paths in parity.
+- Added Jellyfin Creator parity audit tooling + worktree review lane:
+  - `make -C pmoves jellyfin-parity-audit`
+  - `make -C pmoves jellyfin-parity-audit-strict`
+  - Runbook: `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+- Jellyfin bridge topology parity fix: `jellyfin-bridge` now joins `pmoves_external`, restoring host reachability at `http://localhost:8093/healthz` for production smoke/ops commands.
+- PMOVES.YT metadata stability fix: `/yt/info` now runs metadata-only extraction (no forced media format, ignores external yt-dlp config), and `make -C pmoves yt-jellyfin-smoke` validates the real `{"ok": true, "info": ...}` response shape.
 
 ### Latest changes (Feb 20, 2026)
 - Channel Monitor gained an authenticated Discord intake endpoint: `POST /api/monitor/discord-drop` with `approval_mode` (`ask`/`auto`) for gated agentic review.

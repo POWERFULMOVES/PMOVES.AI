@@ -51,18 +51,17 @@ export async function probeService(
     };
   }
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+  const safeTimeout = Math.min(Math.max(timeout, 1000), 60_000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), safeTimeout);
 
+  try {
     const response = await fetch(service.healthCheck, {
       method: 'GET',
       signal: controller.signal,
       // Don't cache health checks
       cache: 'no-store',
     });
-
-    clearTimeout(timeoutId);
 
     const responseTime = performance.now() - startTime;
 
@@ -83,6 +82,8 @@ export async function probeService(
       lastCheck: new Date(),
       error: error instanceof Error ? error.message : 'Unknown error',
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
