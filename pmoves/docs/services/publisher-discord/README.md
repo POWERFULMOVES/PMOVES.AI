@@ -16,7 +16,7 @@ Environment
 - `DISCORD_USERNAME` (fallback: `DISCORD_WEBHOOK_USERNAME`, default `PMOVES`)
 - `DISCORD_AVATAR_URL` (optional)
 - `DISCORD_PUBLISH_PREFIX` (optional, prefix for content.published embed titles; default empty)
-- `NATS_URL` (default `nats://nats:4222`)
+- `NATS_URL` (default `nats://nats:pmoves@nats:4222`)
 - `DISCORD_SUBJECTS` (default `ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1,content.published.v1`)
 - `JELLYFIN_URL` (optional; used to build deep links when a jellyfin_public_url is not provided)
 
