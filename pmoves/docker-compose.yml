@@ -935,7 +935,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${HIRAG_V2_HOST_PORT:-8089}:8086
+    - ${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
       qdrant:
         condition: service_started
@@ -2057,8 +2057,8 @@ services:
   evo-controller:
     <<: *tier-agent-hardened-ro
     build:
-      context: ./services/evo-controller
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/evo-controller/Dockerfile
     image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
     restart: unless-stopped
     environment:
@@ -2117,8 +2117,8 @@ services:
   flute-gateway:
     <<: *tier-media-hardened
     build:
-      context: ./services/flute-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/flute-gateway/Dockerfile
     image: ${FLUTE_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-flute-gateway:latest}
     restart: unless-stopped
     environment:
