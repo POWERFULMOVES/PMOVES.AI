@@ -6,8 +6,24 @@ LABEL org.opencontainers.image.description="Flute Gateway - Multimodal Voice Com
 WORKDIR /app
 
 # Install system dependencies
+# - curl: healthcheck
+# - build deps: needed to compile av (PyAV/FFmpeg) and aiortc (WebRTC)
+#   removed after pip install to keep image slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends \
+       curl \
+       gcc \
+       python3-dev \
+       pkg-config \
+       libavformat-dev \
+       libavcodec-dev \
+       libavdevice-dev \
+       libavutil-dev \
+       libswscale-dev \
+       libswresample-dev \
+       libavfilter-dev \
+       libopus-dev \
+       libvpx-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies (locked deps with hash verification)
@@ -18,6 +34,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Pipecat deps separately (no hash verification - external package)
 COPY services/flute-gateway/requirements-pipecat.txt .
 RUN pip install --no-cache-dir -r requirements-pipecat.txt
+
+# Remove build deps to reduce image size (keep runtime libs + curl)
+RUN apt-get purge -y --auto-remove gcc python3-dev pkg-config \
+       libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev \
+       libswscale-dev libswresample-dev libavfilter-dev \
+       libopus-dev libvpx-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash pmoves
