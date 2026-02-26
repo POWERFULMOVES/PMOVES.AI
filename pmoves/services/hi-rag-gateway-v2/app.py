@@ -2139,6 +2139,8 @@ def geometry_decode_audio(body: Dict[str, Any], _=Depends(require_tailscale)):
                 "modality": modality,
                 "builder_pack": builder_pack,
             }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("audio decode error")
         raise HTTPException(500, f"audio decode error: {e}")

@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import threading
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -170,7 +171,7 @@ async def lifespan(app: FastAPI):
     global _nats_client
     try:
         _nats_client = await nats_lib.connect(NATS_URL)
-        logger.info("Connected to NATS at %s", NATS_URL)
+        logger.info("Connected to NATS")
     except Exception as exc:
         logger.warning("NATS unavailable, download events disabled: %s", exc)
         _nats_client = None
@@ -178,8 +179,8 @@ async def lifespan(app: FastAPI):
     if _nats_client:
         try:
             await _nats_client.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Error closing NATS connection: %s", exc)
 
 
 # Model catalog with recommended models
@@ -729,7 +730,7 @@ async def _publish_download_event(model_id: str, path: str):
     event = {
         "model_id": model_id,
         "path": path,
-        "timestamp": asyncio.get_event_loop().time(),
+        "timestamp": time.time(),
     }
     try:
         await _nats_client.publish(
@@ -737,7 +738,7 @@ async def _publish_download_event(model_id: str, path: str):
         )
         logger.info("Published download event for %s", model_id)
     except Exception as exc:
-        logger.error("Failed to publish NATS event: %s", exc)
+        logger.error("Failed to publish NATS event: %s", exc, exc_info=True)
 
 
 # =============================================================================
@@ -759,12 +760,14 @@ async def health_check():
     Note:
         Uses /healthz path to match PMOVES.AI service standards.
     """
+    nats_ok = _nats_client is not None and _nats_client.is_connected
     return {
-        "status": "healthy",
+        "status": "healthy" if nats_ok else "degraded",
         "service": "hf-mcp-server",
         "version": "1.0.0",
         "hf_home": HF_HOME,
         "hf_cache": HF_HUB_CACHE,
+        "nats": "connected" if nats_ok else "disconnected",
     }
 
 

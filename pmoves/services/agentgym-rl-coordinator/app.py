@@ -102,19 +102,29 @@ async def lifespan(app: FastAPI):
                 model_path = data.get("path")
                 if model_id and model_path:
                     logger.info(
-                        "HF model downloaded: %s at %s — evaluating training triggers",
+                        "HF model downloaded: %s at %s — recording for training pipeline",
                         model_id, model_path,
                     )
-                    # Record model availability for future training runs
                     if storage:
                         await storage.record_event(
                             event_type="hf_model_downloaded",
                             payload={"model_id": model_id, "path": model_path},
                         )
+                else:
+                    logger.warning(
+                        "hf.model.downloaded event missing model_id or path: %s",
+                        data,
+                    )
             except json.JSONDecodeError:
-                logger.warning("Invalid JSON in hf.model.downloaded event")
+                logger.warning(
+                    "Invalid JSON in hf.model.downloaded event: %s",
+                    msg.data[:200] if msg.data else b"<empty>",
+                )
             except Exception:
-                logger.exception("Error processing HF model download event")
+                logger.exception(
+                    "Error processing HF model download event, payload=%s",
+                    msg.data[:500] if msg.data else b"<empty>",
+                )
 
         await nc.subscribe("hf.model.downloaded.v1", cb=hf_model_handler)
         logger.info("Subscribed to hf.model.downloaded.v1")

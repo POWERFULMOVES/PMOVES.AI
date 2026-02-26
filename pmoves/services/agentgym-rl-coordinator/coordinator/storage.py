@@ -363,7 +363,7 @@ class SupabaseStorage:
         """Record a generic event (best-effort).
 
         Attempts to insert into agentgym_events table.
-        Logs a warning if the table doesn't exist or the insert fails.
+        Logs a warning if the table doesn't exist or the insert fails (best-effort).
 
         Args:
             event_type: Event type identifier (e.g. 'hf_model_downloaded')
@@ -377,12 +377,12 @@ class SupabaseStorage:
                 json={"event_type": event_type, "payload": payload},
             )
             if resp.status_code not in [200, 201]:
-                logger.debug(
-                    "Event record skipped (table may not exist): %s %s",
+                logger.warning(
+                    "Event record failed (status=%s, table may not exist): %s",
                     resp.status_code, event_type,
                 )
         except Exception:
-            logger.debug("Failed to record event %s (best-effort)", event_type)
+            logger.warning("Failed to record event %s (best-effort)", event_type, exc_info=True)
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get storage statistics.
