@@ -11,7 +11,7 @@ Compose
 - Depends on: `nats`
 
 Environment
-- `NATS_URL` (default `nats://nats:4222`)
+- `NATS_URL` (default `nats://nats:pmoves@nats:4222`)
 - `HIRAG_URL` (default `http://hi-rag-gateway-v2-gpu:8086`)
 - `ANNOUNCE_SEC` (default `15`)
 

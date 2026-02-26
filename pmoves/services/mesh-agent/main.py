@@ -23,7 +23,7 @@ import hashlib
 import hmac
 
 # Configuration
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 NODE_NAME = os.environ.get("NODE_NAME", socket.gethostname())
 HIRAG_URL = os.environ.get("HIRAG_URL", "http://hi-rag-gateway-v2-gpu:8086")
 ANNOUNCE_SEC = int(os.environ.get("ANNOUNCE_SEC", "15"))

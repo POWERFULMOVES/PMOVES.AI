@@ -1,0 +1,43 @@
+{
+  "version": "a2ui.animation.v1",
+  "metadata": {
+    "title": "Portal Transition",
+    "compositionId": "A2UIComposition",
+    "description": "Transition from agent topology to DARKXSIDE portal glyph"
+  },
+  "animation": {
+    "engine": "remotion",
+    "duration_ms": 10000,
+    "bpm": 10
+  },
+  "scenes": [
+    {
+      "id": "topology-intro",
+      "label": "Agent Topology",
+      "duration_ms": 4000,
+      "elements": [
+        {
+          "type": "text",
+          "content": "8 Agents. 1 Platform. Unified Resonance.",
+          "enter_at_ms": 0
+        }
+      ]
+    },
+    {
+      "id": "portal-morph",
+      "label": "Portal Morph",
+      "duration_ms": 6000,
+      "elements": [
+        {
+          "type": "glyph_pulse",
+          "content": {
+            "glyph": "\u2726",
+            "color": "#E11D48",
+            "bpm": 10
+          },
+          "enter_at_ms": 500
+        }
+      ]
+    }
+  ]
+}

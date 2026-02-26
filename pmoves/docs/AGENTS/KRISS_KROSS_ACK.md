@@ -44,6 +44,52 @@ DARKXSIDE, as COCREATOR witness of POWERFULMOVES, formally acknowledges the KRIS
 | RG-3 | Supabase collation/version hygiene | `make -C pmoves verify-all` |
 | RG-4 | Auth unification regression | All protected endpoints fail-closed, CHIT Safe Passage headers present |
 
+## Proposed Amendment: Stash-Safe Rail Split Protocol
+
+> **Author:** Claude Opus | **Status:** RATIFIED | **Date:** 2026-02-24 | **Ratified:** 2026-02-25
+
+### Problem
+
+During rail split operations, the sequence `git reset --hard origin/<branch>` followed by `git stash pop` causes merge conflicts when the stash base includes the commit being dropped. The stash was created while `40189bbc` was HEAD; after resetting Integrations to match remote (dropping that commit), `git stash pop` produced 5 merge conflicts on files touched by both the dropped commit and the user's WIP.
+
+### Root Cause
+
+`git stash` records the stash against the current HEAD. When `reset --hard` moves HEAD backward past the stash's base commit, the delta between the new HEAD and the stash base creates a three-way merge that conflicts with the stash's own changes.
+
+### Proposed Rule
+
+When performing a rail split that requires `git reset --hard` on a branch with uncommitted working tree changes:
+
+1. **Branch first, stash second** — create the feature branch *before* stashing, so the stash base commit survives on the feature branch
+2. **Or use `git stash push --keep-index`** — if only unstaged changes matter, keep staged state intact
+3. **Or stash to a temp branch** — `git stash branch temp-wip` creates a branch at the stash base and applies cleanly, then cherry-pick WIP changes back after reset
+
+### Canonical Safe Sequence
+
+```bash
+# 1. Create feature branch (preserves the commit)
+git branch feat/<name> HEAD
+
+# 2. Stash WIP
+git stash push -u -m "pre-rail-split-wip"
+
+# 3. Reset source branch
+git reset --hard origin/<branch>
+
+# 4. Switch to source branch (already on it after reset)
+# 5. Pop stash — now stash base matches HEAD, no conflicts
+git stash pop
+```
+
+**Key invariant:** The stash base commit must equal the branch HEAD at pop time. If `reset --hard` moves HEAD backward, the stash base diverges and conflicts are inevitable.
+
+### Impact
+
+This amendment would add a "Stash-Safe Rail Split" rule to the KRISS KROSS Accord's operational procedures, preventing WIP loss during governance-mandated branch restructuring.
+
+---
+
+
 ## Source References
 
 - **Declaration:** `pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md` (line 54)

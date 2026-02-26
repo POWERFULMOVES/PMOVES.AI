@@ -927,6 +927,9 @@ services:
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
     - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY:-false}
     - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1028,7 +1031,7 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - wget --no-verbose --tries=1 --spider http://localhost:8110/healthz || exit 1
+      - curl -f http://localhost:8110/healthz || exit 1
       interval: 15s
       timeout: 5s
       retries: 5
@@ -1338,6 +1341,9 @@ services:
     - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
     - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1387,6 +1393,9 @@ services:
     - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
     - RERANK_TOPN=${RERANK_TOPN:-50}
     - RERANK_K=${RERANK_K:-10}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1463,6 +1472,9 @@ services:
     - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
     - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
     - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
     - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1536,6 +1548,12 @@ services:
       nats:
         condition: service_healthy
     restart: "no"
+    cap_drop: ["ALL"]
+    read_only: true
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m,noexec,nosuid
   agent-zero:
     <<: *tier-agent-hardened
     build:
@@ -1545,13 +1563,15 @@ services:
     environment:
     - PORT=8080
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
     - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -2049,6 +2069,9 @@ services:
       - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
       - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+      - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
     ports: ["8113:8113"]
     profiles: ["orchestration"]
     networks: [pmoves_app, pmoves_bus]
@@ -2105,6 +2128,9 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
+      - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+      - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
     ports: ["8055:8055", "8056:8056"]
     profiles: ["orchestration", "media"]
     networks: [pmoves_app, pmoves_bus]
@@ -2133,7 +2159,7 @@ services:
       - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
       - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
       - CHIT_ENABLED=${CHIT_ENABLED:-true}
-      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:4222}
+      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:pmoves@nats:4222}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports: ["${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
@@ -2230,7 +2256,6 @@ services:
     environment:
     - PORT=8100
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - PORT=8100
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     ports:
     - 8102:8100
@@ -2252,8 +2277,8 @@ services:
     environment:
       # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
       - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
@@ -2308,8 +2333,6 @@ services:
     environment:
       - PORT=8104
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-      - PORT=8104
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
       - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}

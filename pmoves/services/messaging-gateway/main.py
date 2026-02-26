@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Messaging Gateway", version="0.1.0", lifespan=lifespan)
 
 # Environment configuration
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DISCORD_APPLICATION_ID = os.environ.get("DISCORD_APPLICATION_ID", "")

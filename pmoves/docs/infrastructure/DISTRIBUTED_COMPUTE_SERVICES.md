@@ -260,7 +260,7 @@ Add to your `env.shared`:
 
 # Node Registry
 NODE_REGISTRY_URL=http://node-registry:8115
-NODE_REGISTRY_NATS_URL=nats://nats:4222
+NODE_REGISTRY_NATS_URL=nats://nats:pmoves@nats:4222
 
 # vLLM Orchestrator
 VLLM_ORCHESTRATOR_URL=http://vllm-orchestrator:8117

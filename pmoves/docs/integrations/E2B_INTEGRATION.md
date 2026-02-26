@@ -114,7 +114,7 @@ E2B_API_KEY=***CHIT_ENCRYPTED***
 E2B_MCP_SERVER_TOKEN=***CHIT_ENCRYPTED***
 E2B_SANDBOX_URL=http://e2b-sandbox:7070
 AGENT_ZERO_URL=http://agent-zero:8080
-NATS_URL=nats://nats:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 ```
 
 #### `pmoves/env.tier-api` (E2B Surf)

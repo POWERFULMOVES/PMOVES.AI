@@ -99,7 +99,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | Finding | Severity | Status |
 |---------|----------|--------|
 | `export` syntax in `env.shared` | P1 | **Open** |
-| NATS_URL missing credentials | P1 | **Open** — defaults to `nats://nats:4222` |
+| NATS_URL missing credentials | P1 | **Open** — defaults to `nats://nats:pmoves@nats:4222` |
 | Hardhat CI wrong `working-directory` | P2 | **Open** |
 | 4 `.new` temp files | P3 | Cleanup needed |
 

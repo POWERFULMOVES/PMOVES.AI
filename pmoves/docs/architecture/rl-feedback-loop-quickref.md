@@ -259,7 +259,7 @@ rate(agent_rl_model_errors_total[5m])
 
 ```bash
 # NATS
-NATS_URL=nats://nats:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 AGENTZERO_JETSTREAM=true
 
 # AgentGym-RL

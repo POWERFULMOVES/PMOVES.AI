@@ -28,7 +28,7 @@ User Input (UI) → POST /api/chat/send
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NATS_URL` | `nats://nats:4222` | NATS server URL |
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
 | `SUPABASE_URL` | (required) | Supabase REST API URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | (required) | Service role key for admin access |
 | `HEALTH_PORT` | `8102` | Health check endpoint port |
@@ -75,7 +75,7 @@ INSERT INTO chat_messages (
 chat-relay:
   build: ./services/chat-relay
   environment:
-    - NATS_URL=nats://nats:4222
+    - NATS_URL=nats://nats:pmoves@nats:4222
     - SUPABASE_URL=${SUPABASE_URL}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
   networks:

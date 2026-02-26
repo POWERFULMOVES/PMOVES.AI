@@ -123,7 +123,7 @@ class SubscriptionConfig:
 
 @dataclass
 class ControllerSettings:
-    nats_url: str = os.environ.get("NATS_URL", "nats://nats:4222")
+    nats_url: str = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
     stream_name: str = os.environ.get("AGENTZERO_STREAM", "AGENTZERO")
     durable_prefix: str = os.environ.get("AGENTZERO_DURABLE_PREFIX", "agentzero")
     queue_name: Optional[str] = os.environ.get(

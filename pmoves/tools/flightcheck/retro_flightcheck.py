@@ -20,7 +20,10 @@ import subprocess
 import time
 from pathlib import Path
 
-import psutil
+try:
+    import psutil
+except Exception:  # pragma: no cover - optional dependency fallback
+    psutil = None
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -175,9 +178,10 @@ def run_cmd(args: list[str]) -> tuple[bool, str]:
 
 def test_port(p: int) -> str:
     # Prefer psutil for speed
-    for c in psutil.net_connections(kind="tcp"):
-        if c.laddr and c.laddr.port == p and c.status == psutil.CONN_LISTEN:
-            return "LISTENING"
+    if psutil is not None:
+        for c in psutil.net_connections(kind="tcp"):
+            if c.laddr and c.laddr.port == p and c.status == psutil.CONN_LISTEN:
+                return "LISTENING"
     # Fallback socket bind check
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -189,6 +193,8 @@ def test_port(p: int) -> str:
 
 
 def who_uses_port(p: int) -> tuple[str | None, int | None]:
+    if psutil is None:
+        return None, None
     try:
         for c in psutil.net_connections(kind="tcp"):
             if c.laddr and c.laddr.port == p and c.status == psutil.CONN_LISTEN and c.pid:

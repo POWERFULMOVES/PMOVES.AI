@@ -41,7 +41,7 @@ services:
       - HF_HUB_ENABLE_HF_TRANSFER=1
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN:-}
       # NATS for event publishing
-      - NATS_URL=nats://nats:4222
+      - NATS_URL=nats://nats:pmoves@nats:4222
       # Server Configuration
       - PORT=8096
       - PYTHONUNBUFFERED=1

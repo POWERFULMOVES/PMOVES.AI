@@ -76,6 +76,7 @@ HARDENED_SERVICES = [
     "gateway-agent",
     "github-runner-ctl",
     "tokenism-ui",
+    "nats-init",
 ]
 
 # Third-party services that we don't control (skip checks)

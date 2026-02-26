@@ -38,7 +38,7 @@ from services.common.events import envelope
 
 logger = logging.getLogger("archon.main")
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 PORT = int(os.environ.get("PORT", 8090))
 
 
@@ -1146,7 +1146,7 @@ async def _supervisor_lifespan(app: FastAPI):
     if NATS_ANNOUNCE_AVAILABLE:
         try:
             await announce_service(
-                nats_url=os.getenv("NATS_URL", "nats://nats:4222"),
+                nats_url=os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
                 slug=slug,
                 name=name,
                 url=url,

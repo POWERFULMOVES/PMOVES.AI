@@ -41,7 +41,7 @@ TIER_FILES = {
 # Branded defaults that work out of the box
 BRANDED_DEFAULTS = {
     # Service URLs
-    "NATS_URL": "nats://nats:4222",
+    "NATS_URL": "nats://nats:pmoves@nats:4222",
     "TENSORZERO_URL": "http://tensorzero-gateway:3030",
     "SUPABASE_URL": "http://supabase_kong_PMOVES.AI:8000",
     "QDRANT_URL": "http://qdrant:6333",

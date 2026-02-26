@@ -303,7 +303,7 @@ make setup-agent-zero
 ```
 
 **Dependencies:**
-- NATS at `nats://nats:4222`
+- NATS at `nats://nats:pmoves@nats:4222`
 - Supabase (for state)
 
 **Example Usage:**
@@ -479,7 +479,7 @@ make setup-supaserch
 ```
 
 **Dependencies:**
-- NATS at `nats://nats:4222`
+- NATS at `nats://nats:pmoves@nats:4222`
 - DeepResearch at `http://deepresearch:8098`
 - Archon/Agent Zero for MCP tools
 
@@ -520,7 +520,7 @@ make setup-deepresearch
 ```
 
 **Dependencies:**
-- NATS at `nats://nats:4222`
+- NATS at `nats://nats:pmoves@nats:4222`
 - TensorZero at `http://tensorzero-gateway:3030` (for local models)
 - OpenRouter API (for cloud models)
 

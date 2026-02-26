@@ -90,7 +90,7 @@ e2b-sandbox:
 | `E2B_SANDBOX_URL` | Sandbox backend URL | `http://e2b-sandbox:7070` |
 | `E2B_DESKTOP_URL` | Desktop service URL | `http://e2b-desktop:6080` |
 | `AGENT_ZERO_URL` | Agent Zero for MCP integration | `http://agent-zero:8080` |
-| `NATS_URL` | NATS message bus | `nats://nats:4222` |
+| `NATS_URL` | NATS message bus | `nats://nats:pmoves@nats:4222` |
 
 ### Optional Variables
 

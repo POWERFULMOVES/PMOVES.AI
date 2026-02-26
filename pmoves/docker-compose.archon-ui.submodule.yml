@@ -28,8 +28,12 @@ services:
       - "archon-server:host-gateway"
     networks:
       api_tier:
+      external_tier:
 
 networks:
   api_tier:
     external: true
     name: pmoves_api
+  external_tier:
+    external: true
+    name: pmoves_external

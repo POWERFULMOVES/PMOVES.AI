@@ -14,7 +14,7 @@ from services.common.events import envelope
 
 logger = logging.getLogger("pmoves.retrieval_eval.publish_gate")
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 SUPA_REST_URL = os.environ.get("SUPA_REST_URL", "http://postgrest:3000")
 SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY")
 DEFAULT_TIMEOUT = float(os.environ.get("RETRIEVAL_EVAL_GATE_TIMEOUT", "30"))

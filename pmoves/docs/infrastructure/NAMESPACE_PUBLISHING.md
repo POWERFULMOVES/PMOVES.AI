@@ -157,7 +157,7 @@ async def on_announce(msg):
     print(f"Node {data['slug']} | tier={ns.get('tier')} | branch={ns.get('branch')}")
 
 nc = nats.NATS()
-await nc.connect("nats://nats:4222")
+await nc.connect("nats://nats:pmoves@nats:4222")
 await nc.subscribe("mesh.node.announce.v2", cb=on_announce)
 ```
 
