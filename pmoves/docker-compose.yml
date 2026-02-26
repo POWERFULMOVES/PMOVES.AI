@@ -1031,7 +1031,7 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - wget --no-verbose --tries=1 --spider http://localhost:8110/healthz || exit 1
+      - curl -f http://localhost:8110/healthz || exit 1
       interval: 15s
       timeout: 5s
       retries: 5
@@ -1548,6 +1548,12 @@ services:
       nats:
         condition: service_healthy
     restart: "no"
+    cap_drop: ["ALL"]
+    read_only: true
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m,noexec,nosuid
   agent-zero:
     <<: *tier-agent-hardened
     build:
@@ -1556,7 +1562,6 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8080
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
@@ -2251,7 +2256,6 @@ services:
     environment:
     - PORT=8100
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - PORT=8100
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     ports:
     - 8102:8100
@@ -2273,8 +2277,8 @@ services:
     environment:
       # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-${MINIO_USER:-minioadmin}}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-${MINIO_PASSWORD:-minioadmin}}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
       - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
@@ -2329,8 +2333,6 @@ services:
     environment:
       - PORT=8104
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-      - PORT=8104
       - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
       - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}

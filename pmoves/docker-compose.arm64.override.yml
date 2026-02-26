@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Arm64 override for Jetson/arm hosts. Apply with:
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml -f docker-compose.arm64.override.yml up -d
 # or set COMPOSE_FILE="docker-compose.yml:docker-compose.hardened.yml:docker-compose.arm64.override.yml"
