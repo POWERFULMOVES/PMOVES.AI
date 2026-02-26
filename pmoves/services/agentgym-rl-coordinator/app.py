@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentgym-coordinator")
 
 # Configuration
-NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase_kong_PMOVES.AI:8000")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 HF_TOKEN = os.getenv("HF_TOKEN")

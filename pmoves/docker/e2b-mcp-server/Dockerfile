@@ -58,7 +58,7 @@ ENV NODE_ENV=production \
     E2B_DESKTOP_URL=http://e2b-desktop:6080 \
     # PMOVES Integration
     AGENT_ZERO_URL=http://agent-zero:8080 \
-    NATS_URL=nats://nats:4222 \
+    NATS_URL=nats://nats:pmoves@nats:4222 \
     # Disable telemetry
     E2B_TELEMETRY_DISABLED=1
 

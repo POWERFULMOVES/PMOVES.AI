@@ -31,7 +31,7 @@ from nats.js.errors import Error as JSError
 from prometheus_client import Counter, Gauge, generate_latest
 
 # Configuration
-NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 A2UI_WS_URL = os.getenv("A2UI_WS_URL", "ws://localhost:9223")
 A2UI_RENDER_SUBJECT = os.getenv("A2UI_RENDER_SUBJECT", "a2ui.render.v1")
 A2UI_REQUEST_SUBJECT = os.getenv("A2UI_REQUEST_SUBJECT", "a2ui.request.v1")
@@ -506,7 +506,7 @@ def main() -> None:
 
     Environment variables:
         PORT: Server port (default: 9224)
-        NATS_URL: NATS server URL (default: nats://nats:4222)
+        NATS_URL: NATS server URL (default: nats://nats:pmoves@nats:4222)
     """
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)

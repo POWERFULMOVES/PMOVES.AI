@@ -2154,7 +2154,7 @@ services:
       - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
       - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
       - CHIT_ENABLED=${CHIT_ENABLED:-true}
-      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:4222}
+      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:pmoves@nats:4222}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports: ["${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]

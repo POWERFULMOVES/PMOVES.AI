@@ -57,7 +57,7 @@ class GatewayConfig:
     )
 
     # NATS for event coordination
-    NATS_URL: str = os.environ.get("NATS_URL", "nats://nats:4222")
+    NATS_URL: str = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 
     # HiRAG for knowledge retrieval
     HIRAG_URL: str = os.environ.get("HIRAG_URL", "http://hirag:8086")

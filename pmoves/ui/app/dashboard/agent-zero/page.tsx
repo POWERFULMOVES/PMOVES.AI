@@ -53,7 +53,7 @@ export default async function AgentZeroPage() {
         <ul className="list-disc pl-5 text-sm text-slate-700">
           <li>Endpoint: <code>{base}</code></li>
           <li>Health path: <code>{(process.env.NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH || '/healthz')}</code></li>
-          <li>Broker: NATS at <code>{process.env.NATS_URL || 'nats://nats:4222'}</code> (internal)</li>
+          <li>Broker: NATS at <code>{process.env.NATS_URL || 'nats://nats:pmoves@nats:4222'}</code> (internal)</li>
         </ul>
         <div className="mt-3 flex gap-3">
           <a href={uiUrl} target="_blank" rel="noreferrer" className="inline-block rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 hover:border-slate-400">Open native UI</a>
