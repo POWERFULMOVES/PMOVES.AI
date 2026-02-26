@@ -250,7 +250,7 @@ services:
     ports:
       - "8054:8054"
     environment:
-      - NATS_URL=nats://nats:4222
+      - NATS_URL=nats://nats:pmoves@nats:4222
       - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - TENSORZERO_URL=http://tensorzero-gateway:3030
@@ -283,7 +283,7 @@ services:
       - TENSORZERO_URL=http://tensorzero-gateway:3030
       - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - NATS_URL=nats://nats:4222
+      - NATS_URL=nats://nats:pmoves@nats:4222
       - GATEWAY_API_KEY=${GATEWAY_API_KEY}
       - TOOL_CACHE_TTL=300
     networks:

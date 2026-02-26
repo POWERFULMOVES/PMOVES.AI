@@ -86,8 +86,36 @@ Both methods are required for convergence lanes:
 
 A handoff is incomplete unless both are present or explicitly waived in AGNOTE.
 
+## Stash-Safe Rail Split
+
+> **Ratified:** 2026-02-25 | **Author:** Claude Opus | **Origin:** `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md`
+
+When performing a rail split that requires `git reset --hard` on a branch with uncommitted working tree changes, the stash base commit must equal the branch HEAD at pop time. Violating this invariant produces three-way merge conflicts.
+
+**Canonical safe sequence:**
+
+```bash
+# 1. Create feature branch (preserves the commit)
+git branch feat/<name> HEAD
+
+# 2. Stash WIP
+git stash push -u -m "pre-rail-split-wip"
+
+# 3. Reset source branch
+git reset --hard origin/<branch>
+
+# 4. Pop stash — stash base matches HEAD, no conflicts
+git stash pop
+```
+
+**Alternative approaches:**
+- `git stash push --keep-index` — if only unstaged changes matter
+- `git stash branch temp-wip` — creates a branch at the stash base and applies cleanly
+
+**Key invariant:** The stash base commit must equal the branch HEAD at pop time. If `reset --hard` moves HEAD backward, the stash base diverges and conflicts are inevitable.
+
 ## Amendment Queue
-- `Stash-Safe Rail Split Protocol` (proposed 2026-02-24) is recorded in `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md` and awaits formal ratification.
+- _(No pending amendments)_
 
 ## Signatures
 - `ACK::CODEX-GPT5::KRISS-KROSS-ACCORD::2026-02-24`

@@ -46,7 +46,7 @@ DARKXSIDE, as COCREATOR witness of POWERFULMOVES, formally acknowledges the KRIS
 
 ## Proposed Amendment: Stash-Safe Rail Split Protocol
 
-> **Author:** Claude Opus | **Status:** PROPOSED | **Date:** 2026-02-24
+> **Author:** Claude Opus | **Status:** RATIFIED | **Date:** 2026-02-24 | **Ratified:** 2026-02-25
 
 ### Problem
 

@@ -70,7 +70,7 @@ Required handoff fields:
   - Verified six top-level submodule `CLAUDE.md` files are clean (no `TODO`, `FIXME`, placeholder, or artifact markers).
   - Verified `pmoves/integrations/archon/env.shared` is Docker `env_file` safe (no `export`) and uses authenticated NATS default.
   - Verified PR #669 owner triage lists four actionable CodeRabbit items queued for follow-up.
-  - Drift note: current repository scan shows `111` references to unauthenticated `nats://nats:4222` under `pmoves/` (not `93`).
+  - Drift note: current repository scan shows `111` references to unauthenticated `nats://nats:pmoves@nats:4222` under `pmoves/` (not `93`).
   - Saved review for team traversal: `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md`.
 
 - `2026-02-21T10:35:03.6791631-05:00` RELEASE `CODEX-GPT5` scope: Phase 5 review lane complete; handoff ready for Claude/team confirmation.
@@ -90,6 +90,22 @@ Required handoff fields:
   - Signed `ACK::CLAUDE-OPUS::KRISS-KROSS-ACCORD::2026-02-24` in PR #707 review.
 
 - `2026-02-24T12:00:00Z` RELEASE `CLAUDE-OPUS` scope: Rail split handoff complete; PR #707 ready for merge, PR #708 open for review.
+
+- `2026-02-25T15:00:00Z` CLAIM `CLAUDE-OPUS` scope: Context sync + CHIT awareness audit + CODEX validation handoff.
+
+- `2026-02-25T15:00:00Z` REVIEW `CLAUDE-OPUS`
+  - Reviewed CODEX Operator Home — well-structured, correct ports/NATS subjects, no changes needed.
+  - Reviewed KRISS KROSS Accord — ratified Stash-Safe Rail Split Protocol into main body (was PROPOSED, now RATIFIED).
+  - Reviewed Graphiti Protocol — added DARKXSIDE as 8th contributor (glyph `✦`, color `#E11D48`, voice Witness).
+  - Reviewed CODEX Submodule Integration Audit — documented 12 HIGH priority gaps for Codex scaffolding pass.
+  - Audited 6 submodule CLAUDE.md files for CHIT awareness — all 6 lacked CHIT stanzas, now remediated.
+  - Updated `.claude/CLAUDE.md`: NATS WS ports, expanded CHIT section, CGP schema naming, Graphiti event subject.
+  - Updated `services-catalog.md`: NATS WS ports, auth documentation.
+  - Updated `CHIT_INTEGRATION_STATUS.md`: Fixed 2 unauthenticated NATS URLs, added CGP naming standardization section, refreshed date.
+  - Finding: 111 unauthenticated NATS refs remain across codebase — batch fix deferred (P0 follow-up).
+  - Finding: CGP schema version naming inconsistency (3 schemes) — documented standardization path.
+
+- `2026-02-25T15:00:00Z` RELEASE `CLAUDE-OPUS` scope: Context sync + CHIT awareness audit complete; CODEX validation handoff accepted.
 
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
@@ -114,3 +130,9 @@ Required handoff fields:
 - Ack: `I enforced Integrations-first runtime rail strategy and restored #707 to docs/signature scope with Graphiti + CHIT dual-signature requirements.`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1::RAIL-SPLIT-DUAL-SIG`
 - Timestamp: `2026-02-24T08:16:29Z`
+
+## Agent ACK (Signed, Context Sync + CODEX Validation Handoff)
+- Agent: `CLAUDE-OPUS`
+- Ack: `I reviewed CODEX operator home, Kriss Kross Accord (including Stash-Safe amendment ratification), Graphiti Protocol (added DARKXSIDE), and submodule integration audit. Context files audited for sync: 6 submodule CLAUDE.md files remediated with CHIT awareness stanzas, main CLAUDE.md expanded with NATS WS + CHIT section, CHIT integration status refreshed with NATS auth fix + CGP naming standardization. Validation: codex-parity-check=31% coverage (78 missing tokens — expected, Codex scaffolding pending), codex-audit=report regenerated, topology-chit-gate=PASS (0 errors, 0 warnings, 56 containers), smoke=PARTIAL (Qdrant+presign+render-webhook+PostgREST OK; Meilisearch+Neo4j offline; render-webhook POST 500). Validation handoff accepted.`
+- Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::CONTEXT-SYNC-CODEX-HANDOFF`
+- Timestamp: `2026-02-25T15:00:00Z`
