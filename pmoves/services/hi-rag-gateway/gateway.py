@@ -563,31 +563,47 @@ def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> urllib3.HTTPRespo
             ):
                 raise HTTPException(400, f"private/internal image host blocked: {host}")
 
-    resolved_ip = addrs[0][4][0]
-    path = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
+    req_path = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
     pool_timeout = urllib3.util.Timeout(connect=10, read=timeout)
-    if parsed.scheme == "https":
-        pool = urllib3.HTTPSConnectionPool(
-            resolved_ip, port=port,
-            timeout=pool_timeout,
-            server_hostname=host,
-        )
-    else:
-        pool = urllib3.HTTPConnectionPool(
-            resolved_ip, port=port,
-            timeout=pool_timeout,
-        )
-    try:
-        http_resp = pool.request("GET", path, headers={"Host": host}, redirect=False)
-    except Exception:
+
+    # Deduplicate resolved IPs while preserving order
+    seen_ips: set = set()
+    unique_ips: list = []
+    for _, _, _, _, sockaddr in addrs:
+        ip = sockaddr[0]
+        if ip not in seen_ips:
+            seen_ips.add(ip)
+            unique_ips.append(ip)
+
+    # Try each resolved address (handles dual-stack AAAA/A and round-robin DNS)
+    last_exc: Optional[Exception] = None
+    for resolved_ip in unique_ips:
+        if parsed.scheme == "https":
+            pool = urllib3.HTTPSConnectionPool(
+                resolved_ip, port=port,
+                timeout=pool_timeout,
+                server_hostname=host,
+            )
+        else:
+            pool = urllib3.HTTPConnectionPool(
+                resolved_ip, port=port,
+                timeout=pool_timeout,
+            )
+        try:
+            http_resp = pool.request("GET", req_path, headers={"Host": host}, redirect=False)
+        except Exception as exc:
+            pool.close()
+            last_exc = exc
+            continue
         pool.close()
-        raise
-    pool.close()
-    if http_resp.status >= 400:
-        raise HTTPException(400, f"remote image fetch failed with HTTP {http_resp.status}")
-    if 300 <= http_resp.status < 400:
-        raise HTTPException(400, f"redirect responses are not allowed for image URL: {url}")
-    return http_resp
+        if http_resp.status >= 400:
+            raise HTTPException(400, f"remote image fetch failed with HTTP {http_resp.status}")
+        if 300 <= http_resp.status < 400:
+            raise HTTPException(400, f"redirect responses are not allowed for image URL: {url}")
+        return http_resp
+
+    # All resolved addresses failed
+    raise HTTPException(400, f"all resolved addresses unreachable for {host}: {last_exc}")
 
 
 def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_types=None):
