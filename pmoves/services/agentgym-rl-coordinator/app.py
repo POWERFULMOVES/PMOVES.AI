@@ -93,6 +93,32 @@ async def lifespan(app: FastAPI):
         await nc.subscribe("tokenism.geometry.event.v1", cb=geometry_message_handler)
         logger.info("Subscribed to geometry event subjects")
 
+        # Subscribe to HuggingFace model download events
+        async def hf_model_handler(msg):
+            """Handle HF model download notifications for training pipeline."""
+            try:
+                data = json.loads(msg.data)
+                model_id = data.get("model_id")
+                model_path = data.get("path")
+                if model_id and model_path:
+                    logger.info(
+                        "HF model downloaded: %s at %s — evaluating training triggers",
+                        model_id, model_path,
+                    )
+                    # Record model availability for future training runs
+                    if storage:
+                        await storage.record_event(
+                            event_type="hf_model_downloaded",
+                            payload={"model_id": model_id, "path": model_path},
+                        )
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON in hf.model.downloaded event")
+            except Exception:
+                logger.exception("Error processing HF model download event")
+
+        await nc.subscribe("hf.model.downloaded.v1", cb=hf_model_handler)
+        logger.info("Subscribed to hf.model.downloaded.v1")
+
     except Exception as e:
         logger.exception("Failed to connect to NATS")
 
