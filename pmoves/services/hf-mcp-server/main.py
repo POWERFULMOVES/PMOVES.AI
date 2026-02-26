@@ -519,7 +519,7 @@ async def hf_model_download(
 
     try:
         # Create cache directory (must be inside try block for error handling)
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)  # CodeQL path-injection: sanitized by _safe_model_path (basename + regex allowlist)
 
         # Download model snapshot
         logger.info(f"Downloading model {hf_id} to {cache_dir}")
@@ -627,7 +627,7 @@ async def hf_model_convert_gguf(
 
     cache_dir = _safe_model_path(model_id)
 
-    if not cache_dir.exists():
+    if not cache_dir.exists():  # CodeQL path-injection: sanitized by _safe_model_path (basename + regex allowlist)
         raise HTTPException(
             status_code=404,
             detail=f"Model {model_id} not found in cache. Download first.",
