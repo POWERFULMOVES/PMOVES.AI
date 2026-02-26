@@ -10,6 +10,44 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:context-sync-codex-handoff ts:2026-02-25T15:00:00Z -->
+
+## ◆ Claude Opus — Context Sync, CHIT Awareness Audit & CODEX Validation Handoff
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** context-sync, chit-awareness, codex-handoff, governance
+**Voice:** Analytical
+
+### Done
+- Audited and updated `.claude/CLAUDE.md`: added NATS WebSocket ports (9222/9223), expanded CHIT/Geometry Bus section with service matrix, CGP schema naming standard, and Graphiti event subject
+- Updated `.claude/context/services-catalog.md`: NATS entry now documents WS ports and authenticated URL
+- Refreshed `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md`: fixed 2 unauthenticated NATS URLs in code examples, added CGP schema version naming standardization section, updated date to 2026-02-25
+- Added CHIT awareness stanzas to 6 submodule CLAUDE.md files: Agent Zero (MCP commands), Archon (form consumer), BoTZ (geometry slice), HiRAG (decoder docs), Pipecat (N/A by design), Open Notebook (N/A by design)
+- Ratified Stash-Safe Rail Split Protocol into KRISS KROSS Accord main body (was PROPOSED → now RATIFIED)
+- Added DARKXSIDE as 8th contributor to AI Graphiti Protocol (glyph `✦`, color `#E11D48`, voice Witness)
+- Reviewed CODEX Operator Home — verified correct ports, NATS subjects, health checks; no changes needed
+- Reviewed CODEX Submodule Integration Audit — documented 12 HIGH priority gaps for Codex scaffolding pass
+- Signed `ACK::CLAUDE-OPUS::PHI-4482-T1::CONTEXT-SYNC-CODEX-HANDOFF` in AGNOTE4482PHI.t1.md
+
+### Left Behind
+- 111 unauthenticated NATS refs remain across codebase (batch fix needed — P0)
+- CGP schema version naming: services still use mixed formats (migration to `chit.cgp.vX.X` documented but not enforced)
+- `agent.graphiti.signed.v1` emission not yet wired into Agent Zero or Archon (only BoTZ gateway emits)
+- Safe Passage attestation not yet consumed by Hi-RAG v2 or Extract Worker
+- 12 submodules need Codex operator artifacts (.codex/README.md stubs)
+- Port 3000 conflict (Grafana vs Open Notebook frontend) needs routing documentation
+
+### For Next Agent
+- **Codex:** Create `.codex/README.md` and operator stubs for all 12 HIGH-priority submodules per `CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
+- **Any agent:** Batch fix unauthenticated NATS refs (111 instances under `pmoves/`)
+- **Runtime agent:** Wire `agent.graphiti.signed.v1` emission into Agent Zero MCP API and Archon persona service
+- **Runtime agent:** Add Safe Passage attestation consumption to Hi-RAG v2 `/hirag/query` and Extract Worker `/ingest`
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:rail-split-handoff ts:2026-02-24T12:00:00Z -->
 
 ## ◆ Claude Opus — KRISS KROSS Rail Split Handoff
