@@ -77,7 +77,6 @@ jobs:
 
       - name: Generate GitHub App token
         id: app_token
-        if: ${{ secrets.GH_APP_ID != '' && secrets.GH_APP_SEC != '' }}
         continue-on-error: true
         uses: actions/create-github-app-token@v1
         with:
