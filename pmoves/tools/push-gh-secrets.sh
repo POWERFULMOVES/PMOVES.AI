@@ -8,6 +8,9 @@ usage() {
   cat <<'EOF'
 push-gh-secrets.sh [-f env_file] [-r owner/repo] [--env ENV] [--only key1,key2] [--all] [--manifest path] [--dry-run] [--ghcr-bootstrap]
 
+NOTE: GHCR auth now prefers the PMOVES.AI GitHub App (GH_APP_ID + GH_APP_SEC secrets).
+      The --ghcr-bootstrap flag is a fallback for environments without a configured App.
+
 Options:
   -f, --file     Path to env file (default: pmoves/env.shared)
   -r, --repo     GitHub repo in owner/name form (default: derive from git remote)

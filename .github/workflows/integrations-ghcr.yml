@@ -226,9 +226,28 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
 
-      - name: Log in to GHCR (PAT preferred)
+      - name: Generate GitHub App token
+        id: app_token
+        if: ${{ secrets.GH_APP_ID != '' && secrets.GH_APP_SEC != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+
+      - name: Log in to GHCR (App token preferred)
+        id: login_ghcr_app
+        if: ${{ steps.app_token.outputs.token != '' }}
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: x-access-token
+          password: ${{ steps.app_token.outputs.token }}
+
+      - name: Log in to GHCR (PAT fallback)
         id: login_ghcr_pat
-        if: ${{ env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
+        if: ${{ steps.login_ghcr_app.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -238,7 +257,7 @@ jobs:
 
       - name: Log in to GHCR (workflow token fallback)
         id: login_ghcr_actions
-        if: ${{ steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
         continue-on-error: true
         uses: docker/login-action@v3
         with:
@@ -247,9 +266,9 @@ jobs:
           password: ${{ github.token }}
 
       - name: Require GHCR authentication
-        if: ${{ steps.login_ghcr_actions.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
         run: |
-          echo "::error::Unable to authenticate to GHCR. Ensure repo Actions has packages:write and/or set GHCR_USERNAME + GHCR_TOKEN (or GH_PAT_PUBLISH)."
+          echo "::error::Unable to authenticate to GHCR. Check GH_APP_ID/GH_APP_SEC, or GHCR_USERNAME/GHCR_TOKEN."
           exit 1
 
       - name: Optional login to Docker Hub
@@ -266,7 +285,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_NAMESPACE: ${{ secrets.CI_DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_NAMESPACE }}
           INCLUDE_DOCKERHUB: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-          USE_GHCR: ${{ steps.login_ghcr_actions.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' }}
+          USE_GHCR: ${{ steps.login_ghcr_app.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' || steps.login_ghcr_actions.outcome == 'success' }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
