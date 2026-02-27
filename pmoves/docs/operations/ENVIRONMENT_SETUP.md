@@ -191,8 +191,14 @@ Generate a 64-character passphrase and write it into `pmoves/env.shared` (gitign
 # Generate passphrase
 PASS=$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64)
 
-# Append to env.shared (or update existing lines)
-printf 'CHIT_PASSPHRASE=%s\nCHIT_PROD_PASSPHRASE=%s\n' "$PASS" "$PASS" >> pmoves/env.shared
+# Write to env.shared (idempotent — updates existing or appends)
+for KEY in CHIT_PASSPHRASE CHIT_PROD_PASSPHRASE; do
+  if grep -q "^${KEY}=" pmoves/env.shared 2>/dev/null; then
+    sed -i "s|^${KEY}=.*|${KEY}=${PASS}|" pmoves/env.shared
+  else
+    printf '%s=%s\n' "$KEY" "$PASS" >> pmoves/env.shared
+  fi
+done
 ```
 
 **PowerShell (Windows):**
@@ -201,9 +207,18 @@ printf 'CHIT_PASSPHRASE=%s\nCHIT_PROD_PASSPHRASE=%s\n' "$PASS" "$PASS" >> pmoves
 # Generate passphrase
 $pass = -join ((1..64) | ForEach-Object { [char](Get-Random -Min 33 -Max 127) })
 
-# Append to env.shared
-Add-Content pmoves\env.shared "CHIT_PASSPHRASE=$pass"
-Add-Content pmoves\env.shared "CHIT_PROD_PASSPHRASE=$pass"
+# Write to env.shared (idempotent — updates existing or appends)
+$file = "pmoves\env.shared"
+if (!(Test-Path $file)) { New-Item -ItemType File -Path $file | Out-Null }
+foreach ($key in @("CHIT_PASSPHRASE", "CHIT_PROD_PASSPHRASE")) {
+  $content = Get-Content $file -Raw -ErrorAction SilentlyContinue
+  if ($content -match "(?m)^${key}=") {
+    $content = $content -replace "(?m)^${key}=.*$", "${key}=$pass"
+    Set-Content $file $content -NoNewline
+  } else {
+    Add-Content $file "${key}=$pass"
+  }
+}
 ```
 
 Verify with `make -C pmoves topology-chit-gate-strict` — must show 0 warnings.
