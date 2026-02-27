@@ -4,11 +4,9 @@
       "type": "stdio",
       "command": "./pmoves-cipher-mcp/.venv/Scripts/python.exe",
       "args": ["-m", "cipher_mcp.server"],
-      "cwd": ".",
       "env": {
         "CIPHER_URL": "http://localhost:8096",
-        "NATS_URL": "nats://nats:pmoves@nats:4222",
-        "PYTHONPATH": "./pmoves-cipher-mcp"
+        "NATS_URL": "nats://nats:pmoves@nats:4222"
       }
     }
   }
