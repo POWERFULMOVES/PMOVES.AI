@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:23 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:18 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "Pmoves-hyperdimensions",
       "url": "https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git",
       "status_prefix": " ",
-      "commit": "448e571c5ecc8739938f15155721d7125cc2b28c",
+      "commit": "eca5305560a934ed729e4dd9ef2eae6c3acb656c",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:25 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:21 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-transcribe-and-fetch",
       "url": "https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git",
       "status_prefix": " ",
-      "commit": "38eca7aeda3589d7dac29a43bf34a78d4830fc54",
+      "commit": "d422acc7e5a4a8eaf75c0e0a7e45694a51e8ec1f",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

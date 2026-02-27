@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:22 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:16 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-BoTZ",
       "url": "https://github.com/POWERFULMOVES/PMOVES-BoTZ.git",
       "status_prefix": " ",
-      "commit": "13332e630efb26ed71955016833d7297f482d304",
+      "commit": "615bb65c0a8d303e5f5b2395f937669138cd4f18",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

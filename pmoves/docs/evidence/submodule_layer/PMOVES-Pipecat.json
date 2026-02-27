@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:24 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:20 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Pipecat",
       "url": "https://github.com/POWERFULMOVES/pmoves-pipecat.git",
       "status_prefix": " ",
-      "commit": "415bb7288e53909cf01ac100e95c461dcb79c285",
+      "commit": "ad5174845b2283746176becb004fa44dea9b0978",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

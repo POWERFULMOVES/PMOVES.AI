@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:23 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:18 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Headscale",
       "url": "https://github.com/POWERFULMOVES/PMOVES-headscale.git",
       "status_prefix": " ",
-      "commit": "a3ef4d7966bc51b0fa08cff145b88921e4250dbd",
+      "commit": "7dc70cb01ebf0a0e4e17fe03f9d9d06485b66704",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

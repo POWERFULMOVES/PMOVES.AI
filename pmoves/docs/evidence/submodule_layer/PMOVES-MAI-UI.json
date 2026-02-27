@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:24 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:19 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-MAI-UI",
       "url": "https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git",
       "status_prefix": " ",
-      "commit": "182bcf4db0889529116cbced1d0896e8bb3bcbba",
+      "commit": "2872e3a053cab2a55a0663632e574cf48e23f706",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
