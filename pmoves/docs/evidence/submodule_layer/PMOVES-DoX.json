@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:23 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:17 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-DoX",
       "url": "https://github.com/POWERFULMOVES/PMOVES-DoX.git",
       "status_prefix": " ",
-      "commit": "3012ce411b1a29ddc486b909455c21b5d97cd9d8",
+      "commit": "456992a428dd60f6677e4e76a2276b16c3f92731",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

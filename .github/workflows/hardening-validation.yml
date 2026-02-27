@@ -225,12 +225,15 @@ jobs:
           done
 
       - name: Validate compose syntax
+        env:
+          # Required by ${:?} guards — CI uses a dummy value for syntax validation only
+          CHIT_PROD_PASSPHRASE: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 
           # Validate main compose file
           # Use --no-consistency because some dependencies are profile-scoped.
-          docker compose -f pmoves/docker-compose.yml config --quiet --no-consistency
+          docker compose -f pmoves/docker-compose.yml --env-file pmoves/env.shared config --quiet --no-consistency
           echo "✓ pmoves/docker-compose.yml syntax is valid"
 
           # Validate hardened compose syntax only (override file is intentionally partial)

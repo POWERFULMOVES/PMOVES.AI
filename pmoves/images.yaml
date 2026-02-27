@@ -119,3 +119,14 @@ images:
     context: .
     dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-health-wger
+
+  # In-tree services (no submodule — context is pmoves/ relative to repo root)
+  - name: pmoves-evo-controller
+    context: pmoves
+    dockerfile: services/evo-controller/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-evo-controller
+
+  - name: pmoves-flute-gateway
+    context: pmoves
+    dockerfile: services/flute-gateway/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-flute-gateway

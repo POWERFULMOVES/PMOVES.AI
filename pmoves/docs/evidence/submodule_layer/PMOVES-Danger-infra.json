@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:23 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-02-26 18:17 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Danger-infra",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git",
       "status_prefix": " ",
-      "commit": "11de679681d4ba6d87272113a20745a0c221332b",
+      "commit": "eeb04436572d1f8797702dbd369a0455a9f46ace",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
