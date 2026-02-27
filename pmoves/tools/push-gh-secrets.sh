@@ -167,6 +167,12 @@ if [[ $GHCR_BOOTSTRAP -eq 1 ]]; then
   if [[ -z "$ghcr_token" ]]; then
     ghcr_token="$(lookup_value "$GHCR_FALLBACK_TOKEN_FROM" || true)"
   fi
+  if [[ -z "$ghcr_token" ]]; then
+    ghcr_token="$(gh auth token 2>/dev/null || true)"
+    if [[ -n "$ghcr_token" ]]; then
+      echo "ℹ Using gh CLI token as GHCR fallback (ensure write:packages scope)"
+    fi
+  fi
   if [[ -z "$ghcr_user" ]]; then
     ghcr_user="${GITHUB_ACTOR:-}"
   fi
