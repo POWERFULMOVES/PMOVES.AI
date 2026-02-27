@@ -2,11 +2,13 @@
   "mcpServers": {
     "pmoves-cipher": {
       "type": "stdio",
-      "command": "uv",
-      "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
+      "command": "./pmoves-cipher-mcp/.venv/Scripts/python.exe",
+      "args": ["-m", "cipher_mcp.server"],
+      "cwd": ".",
       "env": {
         "CIPHER_URL": "http://localhost:8096",
-        "NATS_URL": "nats://nats:pmoves@nats:4222"
+        "NATS_URL": "nats://nats:pmoves@nats:4222",
+        "PYTHONPATH": "./pmoves-cipher-mcp"
       }
     }
   }

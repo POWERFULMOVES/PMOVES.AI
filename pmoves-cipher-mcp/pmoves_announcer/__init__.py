@@ -7,6 +7,7 @@ NATS service discovery for the Cipher MCP bridge.
 import asyncio
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -108,7 +109,7 @@ class ServiceAnnouncer:
 
             return True
         except Exception as e:
-            print(f"Failed to announce: {e}")
+            print(f"Failed to announce: {e}", file=sys.stderr)
             return False
 
 
