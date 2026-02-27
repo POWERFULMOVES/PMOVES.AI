@@ -425,7 +425,7 @@ def main() -> int:
 
     data = {
         "generated_at": generated_at,
-        "manifest": str(args.manifest.resolve()),
+        "manifest": args.manifest.resolve().relative_to(REPO_ROOT).as_posix(),
         "summary": {
             "submodules": len(results),
             "errors": sum(1 for item in findings if item.level == "ERROR"),
