@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-02-26 18:18 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,

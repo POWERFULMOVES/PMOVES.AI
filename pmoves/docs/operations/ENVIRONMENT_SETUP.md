@@ -183,15 +183,27 @@ CHIT (Cognitive Holographic Information Transfer) provides secure encoding/decod
 
 ### CHIT_PROD_PASSPHRASE (Required for Production)
 
-Generate a 64-character passphrase and set it in `pmoves/env.shared` (gitignored):
+Generate a 64-character passphrase and write it into `pmoves/env.shared` (gitignored):
+
+**Linux / macOS / WSL:**
 
 ```bash
-# Generate
-openssl rand -base64 48 | tr -d '\n=' | cut -c1-64
+# Generate passphrase
+PASS=$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64)
 
-# Set both in env.shared
-CHIT_PASSPHRASE=<generated-value>
-CHIT_PROD_PASSPHRASE=<same-value>
+# Append to env.shared (or update existing lines)
+printf 'CHIT_PASSPHRASE=%s\nCHIT_PROD_PASSPHRASE=%s\n' "$PASS" "$PASS" >> pmoves/env.shared
+```
+
+**PowerShell (Windows):**
+
+```powershell
+# Generate passphrase
+$pass = -join ((1..64) | ForEach-Object { [char](Get-Random -Min 33 -Max 127) })
+
+# Append to env.shared
+Add-Content pmoves\env.shared "CHIT_PASSPHRASE=$pass"
+Add-Content pmoves\env.shared "CHIT_PROD_PASSPHRASE=$pass"
 ```
 
 Verify with `make -C pmoves topology-chit-gate-strict` — must show 0 warnings.
