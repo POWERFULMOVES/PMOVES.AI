@@ -1,7 +1,29 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-24_
+_Last updated: 2026-02-28_
+
+### Latest changes (Feb 28, 2026)
+- Production queue hygiene + runner recovery pass executed:
+  - force-cancelled stale GHCR matrix runs:
+    - `22522345591` (`main`, long-running with stuck lanes)
+    - `22523184680` (`PMOVES.AI-Edition-Hardened`, queued)
+    - `22523183016` (`main`, pending)
+  - confirmed canceled status on those queue entries.
+- Local-first image validation rerun for targeted SupaSerch lane:
+  - `make -C pmoves ghcr-prepublish-supaserch` PASS (local image gate).
+  - dispatched targeted GHCR build:
+    - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=PMOVES.AI-Edition-Hardened GHCR_NAMESPACE=cataclysmstudios-inc`
+    - run id: `22529075577` (targeted `Build supaserch` lane).
+- Runner lane incident discovered and mitigated:
+  - scripted `ci-runners-local-cert-up --lane vps` failed because host lacks Docker Loki logging plugin (`error looking up logging plugin loki`).
+  - original `pmoves-vps-runner` remained `offline` with session conflict after restart attempts.
+  - temporary replacement runner `pmoves-vps-runner-hotfix` started with labels `self-hosted,vps,Linux,X64`; `ci-runners-check` now resolves required lane to this runner.
+- PR monitor + CHIT FlOO$ merge-gate lane shipped (`#723`):
+  - new flow wrappers for `pr-monitor` -> FlOO$ -> CHIT packet generation
+  - graphiti trail/protocol docs updated to include CHIT flow strict gate before merge.
+- Current blocking queue remains primarily self-hosted CodeQL backlog:
+  - `#720`, `#722`, `#723` all waiting on queued CodeQL jobs.
 
 ### Latest changes (Feb 24, 2026)
 - Completed lock-step production merge wave:
