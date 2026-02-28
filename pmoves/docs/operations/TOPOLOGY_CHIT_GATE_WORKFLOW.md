@@ -1,13 +1,13 @@
 # Topology + CHIT Gate Workflow
 
-Last updated: 2026-02-25
+Last updated: 2026-02-28
 
 ## Goal
 
 Run a deterministic production gate that validates:
 
 - container topology policy (networks, published ports, namespace rules)
-- Archon UI/headless Archon health/topology
+- Archon API + Archon UI health/topology
 - CHIT manifest sync and CHIT runtime enforcement on required services
 
 ## Source of truth
@@ -22,7 +22,7 @@ Run a deterministic production gate that validates:
 
 ```bash
 make -C pmoves up
-make -C pmoves up-agents
+make -C pmoves up-agents-ui
 make -C pmoves up-yt
 ```
 
