@@ -17,6 +17,17 @@ from submodule_utils import parse_gitmodules_rows  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _repo_relative_or_posix(path: Path) -> str:
+    """Return a repo-relative POSIX path, falling back to absolute if outside the repo."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
 GITMODULES = REPO_ROOT / ".gitmodules"
 DEFAULT_MANIFEST = REPO_ROOT / "pmoves" / "configs" / "submodule_layer_validation_manifest.json"
 DEFAULT_REPORT_MD = REPO_ROOT / "pmoves" / "docs" / "SUBMODULE_LAYER_VALIDATION.md"
@@ -258,7 +269,7 @@ def render_markdown(
         f"_Generated: {generated_at}_",
         "",
         "## Summary",
-        f"- Manifest: `{manifest_path.relative_to(REPO_ROOT).as_posix()}`",
+        f"- Manifest: `{_repo_relative_or_posix(manifest_path)}`",
         f"- Submodules declared: **{len(results)}**",
         f"- Initialized: **{initialized_total}/{len(results)}**",
         f"- Top-level modules: **{top_level_total}**",
@@ -425,7 +436,7 @@ def main() -> int:
 
     data = {
         "generated_at": generated_at,
-        "manifest": args.manifest.resolve().relative_to(REPO_ROOT).as_posix(),
+        "manifest": _repo_relative_or_posix(args.manifest),
         "summary": {
             "submodules": len(results),
             "errors": sum(1 for item in findings if item.level == "ERROR"),

@@ -46,7 +46,7 @@ Core CHIT services now use compose-level production overlays:
 
 - `CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}`
 - `CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}`
-- `CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}`
+- `CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}`
 
 Set these in `env.shared` (gitignored, never committed):
 
@@ -77,16 +77,16 @@ Setting both ensures the passphrase resolves regardless of execution context.
 
 Docker Compose V2 does **not** evaluate nested variable substitution like
 `${A:-${B:-default}}`. The inner expression is treated as a literal string.
-For this reason, all compose CHIT_PASSPHRASE lines use a flat fallback:
+For this reason, all compose CHIT_PASSPHRASE lines use the `:?` (required)
+operator to fail fast if the variable is not set:
 
 ```yaml
-CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
 ```
 
-The `changeme` default is intentional — it is in the topology gate's
-`PLACEHOLDER_VALUES` set, so any deployment that forgets to set
-`CHIT_PROD_PASSPHRASE` will be caught by `make topology-chit-gate-strict`
-rather than silently running with an empty passphrase.
+This causes `docker compose up` to abort with a clear error message if
+`CHIT_PROD_PASSPHRASE` is missing from the environment, rather than
+silently running with a weak default.
 
 ### Verifying the fix
 
