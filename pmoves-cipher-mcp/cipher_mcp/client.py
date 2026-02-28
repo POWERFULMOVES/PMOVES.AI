@@ -52,7 +52,7 @@ class CipherClient:
     def __init__(
         self,
         base_url: str = None,
-        timeout: float = 30.0,
+        timeout: float = 5.0,
     ):
         """
         Initialize Cipher client.

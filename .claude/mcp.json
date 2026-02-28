@@ -1,13 +1,8 @@
 {
   "mcpServers": {
     "pmoves-cipher": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
-      "env": {
-        "CIPHER_URL": "http://localhost:8096",
-        "NATS_URL": "nats://nats:pmoves@nats:4222"
-      }
+      "type": "sse",
+      "url": "http://localhost:8096/sse"
     }
   }
 }
