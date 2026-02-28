@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-02-25 (lock-step release closeout + hardened runtime parity + DAO recontext convergence)
-**Branch:** `main` (synced from Hardened via #707)
-**Commit:** `1a21c038` (main), `0fa4a7d2` (hardened #707)
+**Last Updated:** 2026-02-28 (audit refresh — 7 PRs merged since 2026-02-25, live API counts verified)
+**Branch:** `main`
+**Commit:** `17f73f39` (main HEAD)
 **Consolidated From:** 27 audit documents
 **Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
@@ -15,7 +15,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-02-20 (rerun required for fresh counts) |
+| Quantitative snapshot timestamp | 2026-02-28 (live API verified) |
 | Total tracked items | 24 |
 | Resolved | 22 (+3 since last update) |
 | Active blockers | 4 (AB-4/5/6/9) |
@@ -23,10 +23,10 @@
 | High | 2 |
 | Medium | 2 |
 | Low | 0 |
-| CodeQL alerts (open sample) | **37 open** (34 `error`, 3 `warning`) |
-| Dependabot alerts | **7 open** (2 high, 1 medium, 4 low) |
-| Open PRs | **1** (#705 dependabot yt-dlp bump) |
-| CI (commit 1a21c038) | Hosted gates pass; self-hosted lanes still queue-blocked |
+| CodeQL alerts (open) | **43 open** (35 `error`, 8 `warning`) — PR #715 fixed 25, but expanded scan scope + new code introduced 31 new alerts |
+| Dependabot alerts | **7 open** (5 high, 2 low) — severity recomposition: serialize-javascript x2, minimatch x2, qs x1, fast-xml-parser x1, qs-low x1 |
+| Open PRs | **1** (#717 dependabot npm_and_yarn — awaiting rebase) |
+| CI (commit 17f73f39) | Hosted gates pass; self-hosted lanes still queue-blocked |
 
 ### Release Closeout (2026-02-24)
 
@@ -40,6 +40,18 @@
 | #699 | NATS auth + unified JWT + trails (promotion) | MERGED | `1a21c038` |
 
 Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#issuecomment-3948534322`
+
+### Recent Merge Activity (2026-02-25 to 2026-02-28)
+
+| PR | Scope | Status | Date |
+|----|-------|--------|------|
+| #719 | fix(mcp): cipher MCP SSE migration + review fixes | MERGED | 2026-02-28 |
+| #718 | chore(deps): minimatch bump (solidity) | MERGED | 2026-02-27 |
+| #716 | chore: submodule validation + 5 integration dossiers | MERGED | 2026-02-26 |
+| #715 | fix(security): 25 CodeQL alerts (Tiers 1+2) | MERGED | 2026-02-26 |
+| #714 | chore(deps): requests bump (pdf-ingest) | MERGED | 2026-02-26 |
+| #713 | fix(compose): hardening batch — NATS auth, docs v4.0 | MERGED | 2026-02-26 |
+| #712 | feat: topology+CHIT gate hardening | MERGED | 2026-02-25 |
 
 ### Current Hardening Drift Checks (2026-02-24)
 
@@ -118,28 +130,38 @@ These are tracked as release gates and should be closed with command evidence be
 
 ---
 
-## CodeQL Alert Triage (2026-02-18 Baseline)
+## CodeQL Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
-| Group | Count | Severity | Rule | Files | Remediation |
-|-------|-------|----------|------|-------|-------------|
-| A | 2 | **critical** | `py/full-ssrf` | `hi-rag-gateway/gateway.py:570`, `hi-rag-gateway-v2/app.py:1347` | Validate/allowlist URLs before requests; fix immediately |
-| B | 11 | high | `py/path-injection` | `pmoves-yt/yt.py` (11 locations: L1434-1761) | Add path sanitization utility; bulk fix |
-| C | 6 | high | `py/path-injection` | `gateway/api/viz.py` (4), `gateway/api/chit.py` (2) | Validate/sanitize file path parameters |
-| D | 2 | high | `py/path-injection` | `hf-mcp-server/main.py` (L522, L630) | Validate HuggingFace model paths |
-| E | 5 | medium | `py/stack-trace-exposure` | `consciousness-service/main.py` (3), `gateway/api/workflow.py`, `supaserch/app.py` | Replace traceback in HTTP responses with generic errors |
-| F | 2 | high | `js/xss-through-dom`, `js/resource-exhaustion` | `gateway/web/client.html:69`, `ui/lib/serviceHealth.ts:56` | Sanitize innerHTML; add request limits/timeouts |
-| G | 1 | high | `py/clear-text-logging` | `tools/chit_credential_demo.py:123` | Demo tool; redact or suppress sensitive logging |
+**2026-02-28 status:** PR #715 resolved Groups A–D (25 SSRF + path injection alerts fixed). However, expanded CodeQL scan scope and new code from PRs #716-719 introduced 31 new alerts. Net position: **43 open** (35 error, 8 warning), up from 37 at baseline. The remaining alerts are primarily in new/modified files not covered by the original triage groups.
 
-**Priority order:** A (critical SSRF) > B+C+D (path injection, bulk fix) > E (stack traces) > F (frontend) > G (demo tool)
+| Group | Count | Severity | Rule | Files | Remediation | Status |
+|-------|-------|----------|------|-------|-------------|--------|
+| A | 2 | **critical** | `py/full-ssrf` | `hi-rag-gateway/gateway.py:570`, `hi-rag-gateway-v2/app.py:1347` | Validate/allowlist URLs before requests | **FIXED** (PR #715) |
+| B | 11 | high | `py/path-injection` | `pmoves-yt/yt.py` (11 locations: L1434-1761) | Add path sanitization utility; bulk fix | **FIXED** (PR #715) |
+| C | 6 | high | `py/path-injection` | `gateway/api/viz.py` (4), `gateway/api/chit.py` (2) | Validate/sanitize file path parameters | **FIXED** (PR #715) |
+| D | 2 | high | `py/path-injection` | `hf-mcp-server/main.py` (L522, L630) | Validate HuggingFace model paths | **FIXED** (PR #715) |
+| E | 5 | medium | `py/stack-trace-exposure` | `consciousness-service/main.py` (3), `gateway/api/workflow.py`, `supaserch/app.py` | Replace traceback in HTTP responses with generic errors | **FIXED** (PR #715) |
+| F | 2 | high | `js/xss-through-dom`, `js/resource-exhaustion` | `gateway/web/client.html:69`, `ui/lib/serviceHealth.ts:56` | Sanitize innerHTML; add request limits/timeouts | OPEN |
+| G | 1 | high | `py/clear-text-logging` | `tools/chit_credential_demo.py:123` | Demo tool; redact or suppress sensitive logging | OPEN |
+| H | 31 | mixed | Various | New/expanded scan results from PRs #716-719 | Requires fresh triage pass | **NEW** |
+
+**Priority order:** H (fresh triage needed) > F (frontend XSS/resource) > G (demo tool)
 
 ---
 
-## Dependabot Alert Triage (2026-02-18 Baseline)
+## Dependabot Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
+
+**2026-02-28 status:** 7 open alerts. Severity composition shifted: was 2 high / 1 medium / 4 low, now **5 high / 2 low**. New high-severity alerts for `serialize-javascript` and `minimatch` appeared; previous `transformers` alert auto-dismissed.
 
 | Alert | Severity | Package | Manifest | Assessment |
 |-------|----------|---------|----------|------------|
-| #94 | **HIGH** | `qs` | `CATACLYSM_STUDIOS_INC/PMOVES-PROVISIONS/.../package-lock.json` | Nested submodule dep (Jellyfin AI gateway). Low blast radius. Fix in PROVISIONS submodule. Upgrade to qs >= 6.14.1. |
-| #120 | LOW | `transformers` | `pmoves/services/hi-rag-gateway-v2/requirements.txt` | Current pin `>=4.40.0,<4.50.0` for FlagEmbedding compat. Fix requires >= 4.52.1 which is outside pin range. **Breaking change risk** — requires compatibility testing. |
+| #154 | **HIGH** | `serialize-javascript` | Jellyfin AI gateway | RCE via RegExp.flags and Date.prototype.toISOString(). Upgrade required. |
+| #153 | **HIGH** | `serialize-javascript` | Jellyfin AI gateway | Same vulnerability, different manifest location. |
+| #152 | **HIGH** | `minimatch` | Solidity contracts | ReDoS via matchOne() combinatorial backtracking. PR #718 bumped dep but alert may persist in lockfile. |
+| #151 | **HIGH** | `minimatch` | Solidity contracts | Same vulnerability, different manifest location. |
+| #133 | **HIGH** | `qs` | PMOVES-PROVISIONS submodule | arrayLimit bypass — memory exhaustion DoS. Upgrade to qs >= 6.14.1. |
+| #148 | LOW | `fast-xml-parser` | Jellyfin AI gateway | Stack overflow in XMLBuilder with preserveOrder. Low blast radius. |
+| #134 | LOW | `qs` | PMOVES-PROVISIONS submodule | arrayLimit bypass in comma parsing — DoS. Lower severity variant of #133. |
 
 ---
 
@@ -195,6 +217,7 @@ These items are fully resolved and documented for historical reference.
 - Container hardening patterns documented
 - Security validator with pre-execution hooks deployed
 - 36 CodeQL alerts remediated in PRs #651, #653, #654 (19+17+6 alerts fixed)
+- 25 additional CodeQL alerts (SSRF, path injection, stack trace exposure) fixed in PR #715
 
 ### Context Architecture (Resolved)
 
@@ -294,7 +317,7 @@ gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
 1. **AB-4** first (credentials) -- unblocks AB-5, AB-6
 2. **AB-5 + AB-6** together (bring up stack, validate health + migrations)
 3. **AB-9** runner recovery (drain queued self-hosted lanes, confirm fresh pickup)
-4. **CodeQL remediation** (37 open sample) -- follow-up task, priority: SSRF + path injection + frontend/resource limits
+4. **CodeQL remediation** (43 open; Groups A-E fixed by PR #715, 31 new from expanded scope) -- follow-up: triage Group H, then F (frontend) + G (demo tool)
 
 ---
 
@@ -302,6 +325,7 @@ gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
 
 | Date | Change |
 |------|--------|
+| 2026-02-28 | **Audit refresh**: 7 PRs merged (#712-719). CodeQL: 43 open (35 error, 8 warning) — PR #715 fixed 25 (Groups A-E), 31 new from expanded scan scope. Dependabot: 7 open (5 high, 2 low) — severity recomposed (serialize-javascript, minimatch, qs). PRs #577-581 all CLOSED. Open PR: #717 (dependabot, awaiting rebase). |
 | 2026-02-25 | **Hardened→main sync** (#707): DAO recontext docs, DARKXSIDE registration, KRISS KROSS accord rewrite, release gates RG-1..RG-4, drift checks merged from Hardened. |
 | 2026-02-24 | **Lock-step release closeout refresh**: merged PR sequence `#703 -> #704 -> #700 -> #701 -> #702 -> #699`, promoted to `main` at commit `1a21c038`, and updated dashboard blockers/metrics for remaining queue deadlock + credential/runtime validation. |
 | 2026-02-24 | Hardened convergence update: marked quantitative metrics as `2026-02-20` snapshot values, added current hardening drift checks, and introduced release gates `RG-1`..`RG-4` for production command parity, dynamic port/namespace parity, collation hygiene, and auth-regression validation. |
