@@ -180,10 +180,14 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Use before dispatching heavy GHCR workflows to avoid queued runs when runners are down.
 - `make pr-monitor`
   - Live merge-readiness monitor for open PRs on the hardened lane.
-  - Reports per-PR mergeable/merge-state, check totals (pass/fail/pending), review decision, and bot line-comment counts.
-  - Supports targeted monitoring with `ARGS="--pr=<number>"` (repeat `--pr` for multiple PRs) and JSON evidence export with `ARGS="--json-out pmoves/docs/logs/pr_monitor.json"`.
+  - Reports per-PR mergeable/merge-state, check totals (pass/fail/pending), and review signal totals (`actionable / nitpick / out-of-diff`).
+  - Captures both in-diff and out-of-diff review surfaces (line comments, PR issue comments, and review bodies), then writes:
+    - `pmoves/docs/logs/pr_monitor_latest.json`
+    - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+  - Supports targeted monitoring with `ARGS="--pr=<number>"` (repeat `--pr` for multiple PRs).
 - `make pr-monitor-strict`
-  - Same monitor in strict mode; exits non-zero while blockers remain (conflicts, failed checks, pending checks, draft state, or bot review comments).
+  - Same monitor in strict mode; exits non-zero while blockers remain (conflicts, failed checks, pending checks, draft state, or blocking actionable review comments).
+  - Out-of-diff line comments are still cataloged in learnings, but do not hard-fail strict mode unless they surface as non-line actionable feedback.
   - Use this as a pre-merge guard for targeted PR queues.
 - `make ghcr-bootstrap-secrets`
   - Pushes GHCR auth secrets to GitHub Actions from local `env.shared` credentials.

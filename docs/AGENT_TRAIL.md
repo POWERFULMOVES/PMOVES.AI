@@ -10,6 +10,43 @@
 
 ---
 
+<!-- graphiti:codex phase:pr-monitor-learnings-upgrade ts:2026-02-28T17:25:00Z -->
+
+## ■ Codex — PR Monitor Learnings + Trail Integration
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** review-ops, merge-readiness, trail-governance
+**Voice:** Terse
+
+### Done
+- Added `pmoves/tools/pr_monitor.py` support for full review surfaces:
+  - in-diff line comments
+  - out-of-diff comments
+  - PR issue comments
+  - review body comments
+- Added classification and reporting for `actionable`, `nitpick`, and `out-of-diff`.
+- Added learnings catalog output:
+  - `pmoves/docs/logs/pr_monitor_latest.json`
+  - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+- Wired monitor targets:
+  - `make -C pmoves pr-monitor`
+  - `make -C pmoves pr-monitor-strict`
+- Updated Graphiti/runtime protocol docs so PR learnings are required in handoff flow.
+
+### Left Behind
+- Merge queue still blocked by pending CI checks on active PRs.
+- Learnings artifacts are generated at runtime and should be reviewed each pass, not committed by default.
+
+### For Next Agent
+- Run `make -C pmoves pr-monitor-strict` before any merge attempt.
+- If actionable comments appear, fix in atomic commits and rerun strict monitor.
+- Keep trail entries synchronized with resolved review learnings.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:context-sync-codex-handoff ts:2026-02-25T15:00:00Z -->
 
 ## ◆ Claude Opus — Context Sync, CHIT Awareness Audit & CODEX Validation Handoff
@@ -554,4 +591,3 @@ Welcome home, ◇.
 </td></tr></table>
 
 <!-- /graphiti -->
-

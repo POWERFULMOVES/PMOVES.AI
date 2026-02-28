@@ -209,11 +209,11 @@ topology-chit-gate-strict: ## Strict topology+CHIT gate (warnings fail)
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
 	$$runner tools/topology_chit_gate.py --strict $(ARGS)
 
-pr-monitor: ## Monitor PR merge readiness (checks + review blockers) for hardened base
-	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
+pr-monitor: ## Monitor PR merge readiness incl actionable/nitpick/out-of-diff review learnings
+	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
 
 pr-monitor-strict: ## Strict PR monitor (non-zero when blockers remain)
-	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" --strict $(ARGS)
+	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" --strict --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
 
 ports-resolve: ## Display topology-aware port resolution map for all services
 	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) services/common/port_resolver.py

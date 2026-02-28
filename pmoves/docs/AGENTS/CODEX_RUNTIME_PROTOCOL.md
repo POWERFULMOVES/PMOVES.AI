@@ -59,6 +59,18 @@ Evidence format:
 - pass/fail
 - next action if fail
 
+## PR Review Sweep (Merge Gate)
+
+Before merge or promotion:
+1. Run `make -C pmoves pr-monitor`.
+2. Inspect:
+   - `pmoves/docs/logs/pr_monitor_latest.json`
+   - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+3. Address actionable comments (including out-of-diff review findings) in atomic commits.
+4. Re-run `make -C pmoves pr-monitor-strict` and require exit code `0` before merge.
+
+Nitpicks are cataloged for follow-up. Blocking actionable comments are merge blockers; out-of-diff line comments stay in the learnings queue unless they escalate into blocking feedback.
+
 ## Token/time estimate handshake
 
 For long-running tasks, Codex should provide:
@@ -77,4 +89,3 @@ Template:
 - No optional service assumptions: all required submodules/services are in-scope.
 - Secrets must never be committed; tracked env files must remain placeholders.
 - Geometry Bus + CHIT + EvoSwarm flows must preserve observability and replayability.
-

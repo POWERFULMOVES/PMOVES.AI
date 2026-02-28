@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Live PR monitor for merge readiness (checks + review blockers)."""
+"""Live PR monitor for merge readiness + review learnings."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import subprocess
-import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, List
 
@@ -15,6 +15,28 @@ from typing import Any, Iterable, List
 SUCCESS_STATES = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 BLOCKING_REVIEW_STATES = {"CHANGES_REQUESTED"}
 BOT_REVIEW_LOGINS = {"coderabbitai[bot]", "chatgpt-codex-connector[bot]"}
+NITPICK_TOKENS = ("nitpick", "nit:", "nits", "style-only")
+ACTIONABLE_TOKENS = (
+    "[p0",
+    "[p1",
+    "[p2",
+    "error",
+    "failing",
+    "failed",
+    "hard-fail",
+    "missing",
+    "must",
+    "required",
+    "security",
+    "vulnerability",
+    "unsafe",
+    "leak",
+    "injection",
+    "conflict",
+    "blocker",
+    "invalid",
+    "incompatible",
+)
 
 
 @dataclass
@@ -22,6 +44,36 @@ class CheckSummary:
     passed: int = 0
     failed: int = 0
     pending: int = 0
+
+
+@dataclass
+class ReviewSignal:
+    source: str
+    author: str
+    is_bot: bool
+    kind: str
+    out_of_diff: bool
+    url: str
+    path: str
+    category: str
+    excerpt: str
+
+
+@dataclass
+class ReviewSummary:
+    line_comments_total: int = 0
+    issue_comments_total: int = 0
+    reviews_total: int = 0
+    out_of_diff_total: int = 0
+    nitpick_total: int = 0
+    actionable_total: int = 0
+    actionable_blocking_total: int = 0
+    bot_total: int = 0
+    bot_out_of_diff_total: int = 0
+    bot_nitpick_total: int = 0
+    bot_actionable_total: int = 0
+    actionable_signals: List[ReviewSignal] = field(default_factory=list)
+    nitpick_signals: List[ReviewSignal] = field(default_factory=list)
 
 
 @dataclass
@@ -36,8 +88,7 @@ class PrSummary:
     review_decision: str
     is_draft: bool
     checks: CheckSummary
-    line_comments_total: int
-    bot_line_comments: int
+    review: ReviewSummary
     blockers: List[str]
 
 
@@ -90,22 +141,148 @@ def _check_summary(status_rollup: Iterable[dict[str, Any]] | None) -> CheckSumma
     return summary
 
 
-def _line_comments(repo: str, number: int) -> tuple[int, int]:
-    comments = _run_json(["gh", "api", f"repos/{repo}/pulls/{number}/comments"])
-    if not isinstance(comments, list):
-        return 0, 0
-    total = len(comments)
-    bot_count = 0
-    for comment in comments:
-        if not isinstance(comment, dict):
-            continue
-        user = comment.get("user")
-        if not isinstance(user, dict):
-            continue
-        login = str(user.get("login") or "").strip()
-        if login in BOT_REVIEW_LOGINS:
-            bot_count += 1
-    return total, bot_count
+def _classify_comment(body: str) -> str:
+    text = body.lower()
+    if any(token in text for token in NITPICK_TOKENS):
+        return "nitpick"
+    if any(token in text for token in ACTIONABLE_TOKENS):
+        return "actionable"
+    return "info"
+
+
+def _learning_category(body: str) -> str:
+    text = body.lower()
+    if any(token in text for token in ("security", "vulnerability", "unsafe", "injection", "leak", "auth")):
+        return "Security & Validation"
+    if any(token in text for token in ("audit-layers-static", "runtime", "gate", "ci", "workflow", "checks")):
+        return "CI Gate Order"
+    if any(token in text for token in ("network", "port", "compose", "container", "topology", "host reachability")):
+        return "Runtime Port/Network Parity"
+    if any(token in text for token in ("doc", "runbook", "comment", "readme")):
+        return "Documentation Drift"
+    return "General Quality"
+
+
+def _excerpt(body: str, limit: int = 180) -> str:
+    compact = " ".join((body or "").split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3] + "..."
+
+
+def _to_signal(
+    *,
+    source: str,
+    author: str,
+    body: str,
+    url: str,
+    path: str = "",
+    out_of_diff: bool = False,
+) -> ReviewSignal:
+    kind = _classify_comment(body)
+    return ReviewSignal(
+        source=source,
+        author=author,
+        is_bot=author in BOT_REVIEW_LOGINS,
+        kind=kind,
+        out_of_diff=out_of_diff,
+        url=url,
+        path=path,
+        category=_learning_category(body),
+        excerpt=_excerpt(body),
+    )
+
+
+def _collect_review_summary(repo: str, number: int, detail: dict[str, Any]) -> ReviewSummary:
+    summary = ReviewSummary()
+    signals: List[ReviewSignal] = []
+
+    line_comments = _run_json(["gh", "api", f"repos/{repo}/pulls/{number}/comments"])
+    if isinstance(line_comments, list):
+        summary.line_comments_total = len(line_comments)
+        for comment in line_comments:
+            if not isinstance(comment, dict):
+                continue
+            user = comment.get("user")
+            author = str(user.get("login") or "") if isinstance(user, dict) else ""
+            body = str(comment.get("body") or "")
+            url = str(comment.get("html_url") or "")
+            path = str(comment.get("path") or "")
+            out_of_diff = comment.get("position") is None or comment.get("line") is None
+            signals.append(
+                _to_signal(
+                    source="line_comment",
+                    author=author,
+                    body=body,
+                    url=url,
+                    path=path,
+                    out_of_diff=out_of_diff,
+                )
+            )
+
+    issue_comments = detail.get("comments")
+    if isinstance(issue_comments, list):
+        summary.issue_comments_total = len(issue_comments)
+        for comment in issue_comments:
+            if not isinstance(comment, dict):
+                continue
+            author_obj = comment.get("author")
+            author = str(author_obj.get("login") or "") if isinstance(author_obj, dict) else ""
+            body = str(comment.get("body") or "")
+            url = str(comment.get("url") or "")
+            signals.append(
+                _to_signal(
+                    source="issue_comment",
+                    author=author,
+                    body=body,
+                    url=url,
+                    out_of_diff=True,
+                )
+            )
+
+    reviews = detail.get("reviews")
+    if isinstance(reviews, list):
+        summary.reviews_total = len(reviews)
+        for review in reviews:
+            if not isinstance(review, dict):
+                continue
+            author_obj = review.get("author")
+            author = str(author_obj.get("login") or "") if isinstance(author_obj, dict) else ""
+            body = str(review.get("body") or "")
+            url = str(review.get("url") or "")
+            if not body.strip():
+                continue
+            signals.append(
+                _to_signal(
+                    source="review_body",
+                    author=author,
+                    body=body,
+                    url=url,
+                    out_of_diff=True,
+                )
+            )
+
+    for signal in signals:
+        if signal.is_bot:
+            summary.bot_total += 1
+        if signal.out_of_diff:
+            summary.out_of_diff_total += 1
+            if signal.is_bot:
+                summary.bot_out_of_diff_total += 1
+        if signal.kind == "nitpick":
+            summary.nitpick_total += 1
+            summary.nitpick_signals.append(signal)
+            if signal.is_bot:
+                summary.bot_nitpick_total += 1
+        if signal.kind == "actionable":
+            summary.actionable_total += 1
+            summary.actionable_signals.append(signal)
+            if signal.is_bot:
+                summary.bot_actionable_total += 1
+            # Out-of-diff line comments are still cataloged but don't hard-block strict mode.
+            if not (signal.source == "line_comment" and signal.out_of_diff):
+                summary.actionable_blocking_total += 1
+    return summary
 
 
 def _pr_numbers(repo: str, base: str, state: str, explicit_prs: list[int]) -> list[int]:
@@ -147,13 +324,13 @@ def _pr_summary(repo: str, number: int) -> PrSummary:
             "--repo",
             repo,
             "--json",
-            "number,title,url,headRefName,baseRefName,mergeable,mergeStateStatus,reviewDecision,isDraft,statusCheckRollup",
+            "number,title,url,headRefName,baseRefName,mergeable,mergeStateStatus,reviewDecision,isDraft,statusCheckRollup,comments,reviews",
         ]
     )
     if not isinstance(detail, dict):
         raise RuntimeError(f"invalid PR payload for #{number}")
     checks = _check_summary(detail.get("statusCheckRollup"))
-    line_comments_total, bot_line_comments = _line_comments(repo, number)
+    review = _collect_review_summary(repo, number, detail)
 
     mergeable = str(detail.get("mergeable") or "UNKNOWN")
     merge_state_status = str(detail.get("mergeStateStatus") or "UNKNOWN")
@@ -172,8 +349,8 @@ def _pr_summary(repo: str, number: int) -> PrSummary:
         blockers.append(f"failed_checks={checks.failed}")
     if checks.pending:
         blockers.append(f"pending_checks={checks.pending}")
-    if bot_line_comments:
-        blockers.append(f"bot_line_comments={bot_line_comments}")
+    if review.actionable_blocking_total:
+        blockers.append(f"actionable_comments={review.actionable_blocking_total}")
 
     return PrSummary(
         number=number,
@@ -186,24 +363,23 @@ def _pr_summary(repo: str, number: int) -> PrSummary:
         review_decision=review_decision,
         is_draft=is_draft,
         checks=checks,
-        line_comments_total=line_comments_total,
-        bot_line_comments=bot_line_comments,
+        review=review,
         blockers=blockers,
     )
 
 
 def _print_table(items: list[PrSummary]) -> None:
     print(
-        "| PR | Mergeable | Checks (P/F/Q) | Review | Bot Comments | Blockers | Title |",
+        "| PR | Mergeable | Checks (P/F/Q) | Review (A/N/OOD) | Blockers | Title |",
         flush=True,
     )
-    print("|---:|---|---|---|---:|---|---|", flush=True)
+    print("|---:|---|---|---|---|---|", flush=True)
     for item in items:
         checks = f"{item.checks.passed}/{item.checks.failed}/{item.checks.pending}"
+        review = f"{item.review.actionable_total}/{item.review.nitpick_total}/{item.review.out_of_diff_total}"
         blockers = ", ".join(item.blockers) if item.blockers else "none"
         print(
-            f"| #{item.number} | {item.mergeable}/{item.merge_state_status} | {checks} | {item.review_decision} | "
-            f"{item.bot_line_comments} | {blockers} | {item.title} |",
+            f"| #{item.number} | {item.mergeable}/{item.merge_state_status} | {checks} | {review} | {blockers} | {item.title} |",
             flush=True,
         )
     print("", flush=True)
@@ -211,17 +387,94 @@ def _print_table(items: list[PrSummary]) -> None:
         print(f"#{item.number}: {item.url}", flush=True)
 
 
+def _write_learnings(path: Path, items: list[PrSummary]) -> None:
+    all_actionable: List[tuple[int, ReviewSignal]] = []
+    all_nitpicks: List[tuple[int, ReviewSignal]] = []
+    for item in items:
+        all_actionable.extend((item.number, signal) for signal in item.review.actionable_signals)
+        all_nitpicks.extend((item.number, signal) for signal in item.review.nitpick_signals)
+
+    category_counts: dict[str, int] = {}
+    for _, signal in all_actionable:
+        category_counts[signal.category] = category_counts.get(signal.category, 0) + 1
+
+    lines: list[str] = []
+    lines.append("# PR Review Learnings Catalog")
+    lines.append("")
+    lines.append(f"_Generated: {datetime.now(timezone.utc).isoformat()}_")
+    lines.append("")
+    lines.append("## PR Summary")
+    lines.append("")
+    lines.append("| PR | Actionable | Nitpick | Out-of-Diff | Bot Actionable |")
+    lines.append("|---:|---:|---:|---:|---:|")
+    for item in items:
+        lines.append(
+            f"| #{item.number} | {item.review.actionable_total} | {item.review.nitpick_total} | "
+            f"{item.review.out_of_diff_total} | {item.review.bot_actionable_total} |"
+        )
+    lines.append("")
+    lines.append("## Actionable Learnings")
+    lines.append("")
+    if not all_actionable:
+        lines.append("- No actionable review comments detected.")
+    else:
+        for pr_number, signal in all_actionable:
+            source = signal.source
+            ood = "out-of-diff" if signal.out_of_diff else "in-diff"
+            loc = f" (`{signal.path}`)" if signal.path else ""
+            lines.append(
+                f"- PR #{pr_number} [{signal.category}] {source}/{ood} by `{signal.author}`{loc}: "
+                f"{signal.excerpt} ({signal.url})"
+            )
+    lines.append("")
+    lines.append("## Nitpick Queue")
+    lines.append("")
+    if not all_nitpicks:
+        lines.append("- No nitpick comments detected.")
+    else:
+        for pr_number, signal in all_nitpicks:
+            source = signal.source
+            ood = "out-of-diff" if signal.out_of_diff else "in-diff"
+            lines.append(
+                f"- PR #{pr_number} {source}/{ood} by `{signal.author}`: {signal.excerpt} ({signal.url})"
+            )
+    lines.append("")
+    lines.append("## Implementation Guidance")
+    lines.append("")
+    if not category_counts:
+        lines.append("- No new implementation guidance required.")
+    else:
+        guidance_map = {
+            "Security & Validation": "Apply allowlists, fail-closed auth, and error redaction patterns across services.",
+            "CI Gate Order": "Keep static lanes dependency-free; move runtime probes to runtime certification targets.",
+            "Runtime Port/Network Parity": "Resolve host ports from compose/docker inspect, avoid hardcoded host ports.",
+            "Documentation Drift": "Update runbooks/MAKE targets when behavior or policy changes.",
+            "General Quality": "Triaged as quality debt; schedule targeted cleanup PRs.",
+        }
+        for category, count in sorted(category_counts.items(), key=lambda item: item[1], reverse=True):
+            guidance = guidance_map.get(category, guidance_map["General Quality"])
+            lines.append(f"- `{category}` ({count}): {guidance}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", default="POWERFULMOVES/PMOVES.AI", help="owner/repo (default: POWERFULMOVES/PMOVES.AI)")
+    parser.add_argument(
+        "--repo",
+        default="",
+        help="owner/repo override (default: auto-detect from current checkout, fallback POWERFULMOVES/PMOVES.AI)",
+    )
     parser.add_argument("--base", default="PMOVES.AI-Edition-Hardened", help="base branch filter (default: PMOVES.AI-Edition-Hardened)")
     parser.add_argument("--state", default="open", choices=["open", "closed", "merged", "all"], help="PR state filter")
     parser.add_argument("--pr", dest="prs", action="append", type=int, default=[], help="monitor specific PR number (repeatable)")
     parser.add_argument("--json-out", type=Path, default=None, help="write full monitor payload as JSON")
+    parser.add_argument("--learnings-out", type=Path, default=None, help="write actionable/nitpick learnings markdown")
     parser.add_argument("--strict", action="store_true", help="exit non-zero if any PR has blockers")
     args = parser.parse_args(argv)
 
-    repo = _repo_name(args.repo)
+    repo = args.repo.strip() or _repo_name("POWERFULMOVES/PMOVES.AI")
     numbers = _pr_numbers(repo, args.base, args.state, args.prs)
     if not numbers:
         print(f"No PRs found for repo={repo} state={args.state} base={args.base}")
@@ -239,6 +492,11 @@ def main(argv: list[str] | None = None) -> int:
             {
                 **asdict(item),
                 "checks": asdict(item.checks),
+                "review": {
+                    **asdict(item.review),
+                    "actionable_signals": [asdict(signal) for signal in item.review.actionable_signals],
+                    "nitpick_signals": [asdict(signal) for signal in item.review.nitpick_signals],
+                },
             }
             for item in summaries
         ],
@@ -247,6 +505,9 @@ def main(argv: list[str] | None = None) -> int:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"Wrote JSON report: {args.json_out}")
+    if args.learnings_out:
+        _write_learnings(args.learnings_out, summaries)
+        print(f"Wrote learnings report: {args.learnings_out}")
 
     if args.strict and any(item.blockers for item in summaries):
         return 1
