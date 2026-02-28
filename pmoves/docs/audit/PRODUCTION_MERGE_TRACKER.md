@@ -2,7 +2,7 @@
 
 # PMOVES.AI Production Merge Tracker
 
-**Last Updated**: 2026-02-16 22:15 UTC
+**Last Updated**: 2026-02-28 (audit refresh — live API verified)
 **Production Branch**: `PMOVES.AI-Edition-Hardened`
 **Hardened Branch**: `PMOVES.AI-Edition-Hardened`
 
@@ -16,9 +16,9 @@ This document tracks hardening and bug-fix promotion into the production release
 
 | Category | Value | Notes |
 |----------|-------|-------|
-| **Open PRs** | `0` | Hardened merge queue currently clear. |
-| **Dependabot alerts** | `14` | `3 high`, `9 medium`, `2 low` (open). |
-| **Code scanning alerts (sampled page)** | `100` | `3 critical`, `64 high`, `33 medium`. |
+| **Open PRs** | `1` | #717 (dependabot npm_and_yarn — awaiting rebase). |
+| **Dependabot alerts** | `7` | `5 high`, `2 low` (open). serialize-javascript x2, minimatch x2, qs, fast-xml-parser, qs-low. |
+| **Code scanning alerts** | `43` | `35 error`, `8 warning` (open, live API 2026-02-28). PR #715 fixed 25 (Groups A-E). |
 | **Core hardening workflows** | `active` | Build, CodeQL, Python/SQL tests, integration contract, env preflight all active. |
 | **Promotion policy** | `hardened -> main` | Keep production certification on hardened before promotion to main. |
 
@@ -114,47 +114,39 @@ This document tracks hardening and bug-fix promotion into the production release
 
 ---
 
-## 🔴 Conflicting (Need Rebase)
+## ~~🔴 Conflicting (Need Rebase)~~ — ALL CLOSED (2026-02-28)
+
+All conflicting PRs #577-581 have been **CLOSED** (verified via GitHub API 2026-02-28). Changes were superseded by subsequent hardening PRs (#654-657, #699-704, #712-715).
 
 ### PR #577: fix(volumes) - Qdrant/Meilisearch named volumes
 | Field | Value |
 |-------|-------|
 | **Branch** | `fix/qdrant-meilisearch-volumes` |
-| **Status** | ❌ CONFLICTING |
-| **Issue** | Diverged from base |
-| **Action** | Rebase onto `PMOVES.AI-Edition-Hardened` |
+| **Status** | ✅ CLOSED |
 
 ### PR #578: fix(deps) - Critical service dependencies
 | Field | Value |
 |-------|-------|
 | **Branch** | `fix/service-dependencies` |
-| **Status** | ❌ CONFLICTING |
-| **Issue** | Diverged from base |
-| **Action** | Rebase onto `PMOVES.AI-Edition-Hardened` |
+| **Status** | ✅ CLOSED |
 
 ### PR #579: docs(chit) - CHIT security documentation
 | Field | Value |
 |-------|-------|
 | **Branch** | `fix/chit-security-configuration` |
-| **Status** | ❌ CONFLICTING |
-| **Issue** | Diverged from base |
-| **Action** | Rebase onto `PMOVES.AI-Edition-Hardened` |
+| **Status** | ✅ CLOSED |
 
 ### PR #580: fix(pr) - Agent Zero healthcheck
 | Field | Value |
 |-------|-------|
 | **Branch** | `fix/agent-zero-directories` |
-| **Status** | ❌ CONFLICTING |
-| **Issue** | Diverged from base |
-| **Action** | Rebase onto `PMOVES.AI-Edition-Hardened` |
+| **Status** | ✅ CLOSED |
 
 ### PR #581: fix(security) - GPU Orchestrator hardening
 | Field | Value |
 |-------|-------|
 | **Branch** | `fix/gpu-orchestrator-security` |
-| **Status** | ❌ CONFLICTING |
-| **Issue** | Diverged from base |
-| **Action** | Rebase onto `PMOVES.AI-Edition-Hardened` |
+| **Status** | ✅ CLOSED |
 
 ### ~~PR #582: fix(review) - NetworkPolicy ipBlock~~ ✅ CLOSED
 | Field | Value |
@@ -172,7 +164,7 @@ This document tracks hardening and bug-fix promotion into the production release
 |-------|-------|
 | **PR** | #6 |
 | **Branch** | `feat/personas-clean-rebase` |
-| **Status** | Open |
+| **Status** | ✅ CLOSED (verified 2026-02-28) |
 | **Repo** | POWERFULMOVES/PMOVES-Archon |
 
 ### PMOVES-DoX
@@ -180,7 +172,7 @@ This document tracks hardening and bug-fix promotion into the production release
 |-------|-------|
 | **PR** | #92 |
 | **Branch** | `feat/v5-secrets-bootstrap` |
-| **Status** | Open |
+| **Status** | ✅ MERGED (verified 2026-02-28) |
 | **Repo** | POWERFULMOVES/PMOVES-DoX |
 
 ---
@@ -232,9 +224,9 @@ git push origin main
 
 | Issue | Impact | Resolution |
 |-------|--------|------------|
-| Submodule state | Rebases fail due to submodule changes | Reset submodules before rebase |
+| ~~Submodule state~~ | ~~Rebases fail due to submodule changes~~ | ✅ Resolved — all conflicting PRs closed |
 | Root-owned files | Git operations blocked | Stop containers before git operations |
-| Branch divergence | 6 PRs conflicting | Rebase all onto latest hardened |
+| ~~Branch divergence~~ | ~~6 PRs conflicting~~ | ✅ Resolved — PRs #577-581 all CLOSED, #582 superseded |
 
 ---
 
@@ -317,11 +309,11 @@ main (production)
     │   ├─ ✅ PR #583 (merged)
     │   ├─ ✅ PR #584 (merged after rebase)
     │   ├─ ✅ PR #585 (merged - hybrid NetworkPolicy)
-    │   ├─ ⚠️  PR #577 (conflicting - needs rebase)
-    │   ├─ ⚠️  PR #578 (conflicting - needs rebase)
-    │   ├─ ⚠️  PR #579 (conflicting - needs rebase)
-    │   ├─ ⚠️  PR #580 (conflicting - needs rebase)
-    │   ├─ ⚠️  PR #581 (conflicting - needs rebase)
+    │   ├─ ✅ PR #577 (CLOSED)
+    │   ├─ ✅ PR #578 (CLOSED)
+    │   ├─ ✅ PR #579 (CLOSED)
+    │   ├─ ✅ PR #580 (CLOSED)
+    │   ├─ ✅ PR #581 (CLOSED)
     │   └─ 🚫 PR #582 (closed - superseded by #585)
     │
     └─ feature/* (other features)
@@ -343,12 +335,12 @@ main (production)
 - [x] Migrate `codeql.yml` to self-hosted runners ✅ Completed 2026-02-08
 - [x] Migrate `python-tests.yml` to self-hosted runners ✅ Completed 2026-02-08
 - [x] Verify all workflows use self-hosted runners ✅ Completed 2026-02-08 (see CI_INFRASTRUCTURE_AUDIT_2026-02-08.md)
-- [ ] Rebase PRs #577-581 onto latest hardened
-- [ ] Resolve remaining conflicting PRs
+- [x] ~~Rebase PRs #577-581 onto latest hardened~~ All CLOSED (superseded by subsequent PRs)
+- [x] ~~Resolve remaining conflicting PRs~~ All conflicting PRs #577-581 closed. No rebase needed.
 
-### This Week
-- [ ] Resolve all conflicting PRs
-- [ ] Complete submodule PRs (Archon, DoX)
+### This Week (Updated 2026-02-28)
+- [x] ~~Resolve all conflicting PRs~~ CLOSED
+- [x] ~~Complete submodule PRs (Archon, DoX)~~ Archon #6 CLOSED, DoX #92 MERGED
 - [ ] Test hardened branch with `make up`
 
 ### Before Production Deploy
