@@ -38,11 +38,18 @@ const $ = s => document.querySelector(s);
 const safeBase = (raw) => {
   try {
     const u = new URL(raw);
-    if (u.protocol === "http:" || u.protocol === "https:") return raw;
+    if (u.protocol === "http:" || u.protocol === "https:") return u.origin + u.pathname.replace(/\/+$/, '');
   } catch (_) {
-    if (raw.startsWith("/")) return raw;
+    if (/^\/[a-zA-Z0-9/_-]*$/.test(raw)) return raw;
   }
   return "http://localhost:8000";
+};
+const safeHref = (url) => {
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.protocol === "http:" || u.protocol === "https:") return u.href;
+  } catch (_) { /* invalid URL */ }
+  return "#";
 };
 const show = o => {
   $("#out").textContent = JSON.stringify(o, null, 2);
@@ -67,7 +74,7 @@ const links = (shapeId, base) => {
   el.appendChild(document.createTextNode("View: "));
   pairs.forEach(([href, label], i) => {
     const a = document.createElement("a");
-    a.href = href;
+    a.href = safeHref(href);
     a.target = "_blank";
     a.rel = "noopener noreferrer";
     a.textContent = label;

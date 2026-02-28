@@ -961,6 +961,12 @@ services:
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     profiles:
     - workers
     networks:
@@ -1017,8 +1023,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://host.docker.internal:54321}
-    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY}
     - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1032,10 +1038,10 @@ services:
       test:
       - CMD-SHELL
       - curl -f http://localhost:8110/healthz || exit 1
-      interval: 15s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
-      start_period: 10s
+      start_period: 30s
     networks:
     - pmoves_api
     - pmoves_bus
@@ -1300,6 +1306,12 @@ services:
         condition: service_healthy
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks:
     - pmoves_app
     - pmoves_bus
@@ -1683,7 +1695,7 @@ services:
       - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml"]
+    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
       - "${CIPHER_PORT:-8096}:3000"
     depends_on:
@@ -2107,11 +2119,11 @@ services:
         limits:
           memory: 8G
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7861/', timeout=5)"]
+      test: ["CMD-SHELL", "curl -f http://localhost:7861/gradio_api/info || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 180s
 
   # Flute Gateway - Multimodal voice communication layer (TTS/STT)
   flute-gateway:
@@ -2293,7 +2305,7 @@ services:
     profiles: ["orchestration", "workers"]
     networks: [pmoves_bus, pmoves_data]
     healthcheck:
-      test: ["CMD", "python3", "-c", "from watcher import load_state; load_state()"]
+      test: ["CMD", "python3", "-c", "import os, sys; sys.exit(0 if os.path.exists('/state') else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3

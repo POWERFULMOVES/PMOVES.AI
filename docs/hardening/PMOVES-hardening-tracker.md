@@ -2,7 +2,7 @@
 
 Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
 
-Last updated: 2026-02-26
+Last updated: 2026-02-28
 
 ---
 
@@ -11,8 +11,8 @@ Last updated: 2026-02-26
 | Category | Coverage | Status |
 |----------|----------|--------|
 | **P1 Security Issues** | 0 remaining (10/10 fixed) | CLEAR |
-| **CodeQL High-Severity** | 0 remaining (19/19 fixed) | CLEAR |
-| **Dependabot High** | 0 remaining (3/3 fixed) | CLEAR |
+| **CodeQL High-Severity** | Phase H scope (19/19) fixed; 43 total alerts open (35 error, 8 warning) — see Dashboard for Group H triage | CLEAR (Phase H) |
+| **Dependabot High** | 5 open (serialize-javascript x2, minimatch x2, qs x1) | REGRESSION |
 | **Non-Root Users (USER directive)** | 29/29 services (100%) | COMPLETE |
 | **Read-Only Filesystems** | 30/30 services (100%) | COMPLETE |
 | **Cap Drop ALL** | All services including nats-init | COMPLETE |
@@ -237,6 +237,16 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 ---
 
+## Recent Activity (2026-02-26 to 2026-02-28)
+
+- **PR #715** (2026-02-26): Fixed 25 CodeQL alerts across Tiers 1+2 — SSRF (`py/full-ssrf`), path injection (`py/path-injection`), stack trace exposure (`py/stack-trace-exposure`). Groups A-E from Dashboard triage fully resolved.
+- **PR #713** (2026-02-26): Hardening batch — NATS auth enforcement across services, `nats-init` service hardened with cap_drop:ALL/read_only/no-new-privileges/tmpfs, documentation brought to v4.0.
+- **PR #719** (2026-02-28): Cipher MCP stdio→SSE migration, portable `sed`→`awk` in hooks, PowerShell crypto RNG for Windows, CHIT docs `:?` alignment.
+- **PR #718** (2026-02-27): minimatch dependency bump in Solidity contracts.
+- **Dependabot regression**: 5 new high-severity alerts appeared (serialize-javascript RCE x2, minimatch ReDoS x2, qs DoS x1) replacing the previously-cleared 3 high alerts. Total open: 7 (5H, 2L).
+
+---
+
 ## Gaps & Recommended Next Steps
 
 ### Quick Wins (Low Effort, High Value)
@@ -282,6 +292,7 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 ---
 
-**Target achieved:** 0 open P1, 0 high CodeQL, 0 high Dependabot
+**Target achieved:** 0 open P1, 0 high CodeQL (Phase H scope)
+**Dependabot High regression:** 5 new high alerts (serialize-javascript, minimatch, qs) — requires remediation sprint
 **Previous version:** v3.0 (2026-02-17)
-**Last updated:** 2026-02-26
+**Last updated:** 2026-02-28

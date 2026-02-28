@@ -51,7 +51,9 @@ export async function probeService(
     };
   }
 
-  const safeTimeout = Math.min(Math.max(timeout, 1000), 60_000);
+  const MAX_TIMEOUT = 60_000;
+  const MIN_TIMEOUT = 1_000;
+  const safeTimeout = Number.isFinite(timeout) ? Math.min(Math.max(timeout, MIN_TIMEOUT), MAX_TIMEOUT) : MIN_TIMEOUT;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), safeTimeout);
 
