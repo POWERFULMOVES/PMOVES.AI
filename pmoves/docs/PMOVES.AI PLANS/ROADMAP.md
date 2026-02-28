@@ -1,10 +1,10 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-02-23
+Last updated: 2026-02-28
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-02-23)
+## Audit Snapshot (2026-02-28)
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
@@ -17,6 +17,17 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - PMOVES.YT metadata extraction path for `/yt/info` is now hardened for smoke stability (metadata-only + config-isolated fallback), reducing transient extractor failures that previously blocked Creator pipeline verification.
 - Lock-step production sequence completed and promoted to `main`: `#703 -> #704 -> #700 -> #701 -> #702 -> #699` (final merge commit `1a21c038`).
 - DAO recontext + ingestion planning is now tracked at `DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md` with a normalized projection envelope for operator-safe planning.
+- Open release PR lanes are active and gated by self-hosted CodeQL backlog:
+  - `#720` (`fix/codeql-critical-a2ui-workflow`)
+  - `#722` (`fix/archon-ui-core-parity-clean`)
+  - `#723` (`chore/pr-monitor-live`)
+- GHCR queue hygiene pass completed:
+  - canceled stale/stuck GHCR runs `22522345591`, `22523184680`, `22523183016`
+  - reran local-first SupaSerch prepublish gate (`make -C pmoves ghcr-prepublish-supaserch`) and dispatched targeted hardened run `22529075577`
+- Runner lane recovery in progress:
+  - `pmoves-vps-runner` encountered session conflict after restart
+  - temporary labeled replacement `pmoves-vps-runner-hotfix` is online to satisfy `self-hosted,vps` lane scheduling
+  - `ci-runners-check` now passes lane requirements while the original runner is reconciled
 
 ## Current Sprint Overlay (Hardened)
 
