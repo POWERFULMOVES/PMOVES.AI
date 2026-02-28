@@ -178,6 +178,13 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-runners-check-strict`
   - Same check in strict mode; exits non-zero if any required lane is offline/missing.
   - Use before dispatching heavy GHCR workflows to avoid queued runs when runners are down.
+- `make pr-monitor`
+  - Live merge-readiness monitor for open PRs on the hardened lane.
+  - Reports per-PR mergeable/merge-state, check totals (pass/fail/pending), review decision, and bot line-comment counts.
+  - Supports targeted monitoring with `ARGS="--pr=<number>"` (repeat `--pr` for multiple PRs) and JSON evidence export with `ARGS="--json-out pmoves/docs/logs/pr_monitor.json"`.
+- `make pr-monitor-strict`
+  - Same monitor in strict mode; exits non-zero while blockers remain (conflicts, failed checks, pending checks, draft state, or bot review comments).
+  - Use this as a pre-merge guard for targeted PR queues.
 - `make ghcr-bootstrap-secrets`
   - Pushes GHCR auth secrets to GitHub Actions from local `env.shared` credentials.
   - Uses `tools/push-gh-secrets.sh --ghcr-bootstrap` to reuse `GHCR_TOKEN` (or fallback `GH_PAT_PUBLISH`) and set `GHCR_USERNAME`/`GHCR_TOKEN`.
