@@ -230,6 +230,28 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Buckets: `assets`, `outputs`
 - Stores: videos, audio, images, analysis results
 
+## Credential & Secrets Management
+
+**JWT comes from Supabase** — `JWT_SECRET` is the HMAC key that signs ANON_KEY and
+SERVICE_ROLE_KEY. `SUPABASE_JWT_SECRET = ${JWT_SECRET}` is a legacy alias. All
+service JWT validation uses this single key.
+
+**Bootstrap flow:**
+```bash
+make -C pmoves env-setup          # Brand defaults + registry-driven env population
+make -C pmoves secrets-funnel     # CHIT export → manifest sync → audit gates
+make -C pmoves auth-alignment     # Cross-tier credential consistency check
+```
+
+**Key scripts:**
+- `pmoves/scripts/supabase/generate-keys.sh` - Generates JWT_SECRET, DB_PASSWORD, signs JWT tokens
+- `pmoves/tools/brand_defaults.py` - Applies seeded branded defaults (auto-generates Neo4j, strengthens Meilisearch/Invidious keys)
+- `pmoves/tools/push-gh-secrets.sh` - Syncs env values to GitHub Actions secrets (filtered by CHIT manifest)
+- `pmoves/bootstrap/registry.json` - Declarative service variable definitions
+
+**See:** `.claude/context/credentials-workflow.md` for complete bootstrap sequence and
+`pmoves/docs/operations/SEEDED_BRANDED_DEFAULTS.md` for full credential catalog.
+
 ## NATS Event Subjects (Event-Driven Architecture)
 
 **Research & Search:**
@@ -459,6 +481,7 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
+- `credentials-workflow.md` - Credential bootstrap, env-setup, secrets-funnel, JWT-from-Supabase flow
 - `services-catalog.md` - Complete service listing with all details
 - `submodules.md` - Complete submodules catalog (20 submodules)
 - `nats-subjects.md` - Comprehensive NATS subject catalog
@@ -468,6 +491,7 @@ See `.claude/context/` for detailed documentation:
 - `security-patterns.md` - Cross-cutting security patterns (auth, secrets, hardening)
 - `observability-patterns.md` - Prometheus, Grafana, Loki, TensorZero metrics
 - `agent-zero-orchestration.md` - MCP API reference, task flow, subordinate model
+- `tier-architecture.md` - 7-tier env security model, network segmentation
 
 **GEOMETRY BUS & CHIT Integration:**
 - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide

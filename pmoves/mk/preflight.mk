@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict ports-resolve
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
@@ -104,13 +104,13 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory integration-contract-check-baseline
 	@$(MAKE) --no-print-directory tooling-audit-strict
 	@$(MAKE) --no-print-directory secrets-audit
-	@$(MAKE) --no-print-directory topology-chit-gate-strict
 	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
 	@$(MAKE) --no-print-directory skill-registry-validate
 
 audit-layers-runtime: ## Runtime certification pass once services are online
 	@$(MAKE) --no-print-directory audit-layers-static
+	@$(MAKE) --no-print-directory topology-chit-gate-strict
 	@$(MAKE) --no-print-directory smoke
 	@$(MAKE) --no-print-directory monitoring-smoke-prod
 	@if [ "$${AUDIT_RUNTIME_GPU:-$(AUDIT_RUNTIME_GPU)}" = "1" ]; then \
@@ -208,6 +208,45 @@ topology-chit-gate-strict: ## Strict topology+CHIT gate (warnings fail)
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
 	$$runner tools/topology_chit_gate.py --strict $(ARGS)
+
+pr-monitor: ## Monitor PR merge readiness incl actionable/nitpick/out-of-diff review learnings
+	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
+
+pr-monitor-strict: ## Strict PR monitor (non-zero when blockers remain)
+	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" --strict --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
+
+pr-monitor-chit-packet: ## Encode PR monitor learnings into CHIT packet artifact
+	@$(MAKE) --no-print-directory pr-monitor
+	@cat docs/logs/pr_monitor_learnings_latest.md | $(PRECHECK_PY) tools/chit_encode_hook.py --pretty > docs/logs/pr_monitor_learnings_latest.cgp.json
+	@echo "Wrote CHIT packet: docs/logs/pr_monitor_learnings_latest.cgp.json"
+
+floos-status: ## Show FlOO$ pairing status
+	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
+
+floos-pr-monitor-validate: ## Validate FlOO$ dependencies for PR monitor pairing
+	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver validate "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
+
+floos-pr-monitor-resolve: ## Resolve FlOO$ DAG for PR monitor pairing
+	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver resolve "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
+
+floos-pr-monitor-run-dry: ## Dry-run FlOO$ execution plan for PR monitor pairing
+	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
+
+chit-flow-pr-monitor: ## CHIT flow wrapper: PR monitor + FlOO$ validation/resolve + CHIT packet
+	@$(MAKE) --no-print-directory pr-monitor
+	@$(MAKE) --no-print-directory floos-pr-monitor-validate
+	@$(MAKE) --no-print-directory floos-pr-monitor-resolve
+	@$(MAKE) --no-print-directory floos-pr-monitor-run-dry
+	@cat docs/logs/pr_monitor_learnings_latest.md | $(PRECHECK_PY) tools/chit_encode_hook.py --pretty > docs/logs/pr_monitor_learnings_latest.cgp.json
+	@echo "Wrote CHIT packet: docs/logs/pr_monitor_learnings_latest.cgp.json"
+
+chit-flow-pr-monitor-strict: ## Strict CHIT flow wrapper (fails on PR blockers)
+	@$(MAKE) --no-print-directory pr-monitor-strict
+	@$(MAKE) --no-print-directory floos-pr-monitor-validate
+	@$(MAKE) --no-print-directory floos-pr-monitor-resolve
+	@$(MAKE) --no-print-directory floos-pr-monitor-run-dry
+	@cat docs/logs/pr_monitor_learnings_latest.md | $(PRECHECK_PY) tools/chit_encode_hook.py --pretty > docs/logs/pr_monitor_learnings_latest.cgp.json
+	@echo "Wrote CHIT packet: docs/logs/pr_monitor_learnings_latest.cgp.json"
 
 ports-resolve: ## Display topology-aware port resolution map for all services
 	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) services/common/port_resolver.py
