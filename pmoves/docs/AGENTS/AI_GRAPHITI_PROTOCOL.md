@@ -90,6 +90,24 @@ Prepend a new graphiti block to `docs/AGENT_TRAIL.md` (newest entries at top, be
 <!-- /graphiti -->
 ```
 
+## PR Review Learnings Loop (Required Before Merge)
+
+When a lane has open PRs, run the PR monitor and fold findings into the trail:
+
+1. `make -C pmoves pr-monitor`
+2. Review generated artifacts:
+   - `pmoves/docs/logs/pr_monitor_latest.json`
+   - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+   - Optional CHIT packet for handoff automation: `make -C pmoves pr-monitor-chit-packet` -> `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
+3. If actionable comments exist, create a focused fix commit/PR and update `docs/AGENT_TRAIL.md` with:
+   - what was fixed
+   - what remains
+   - what the next agent should do
+4. If only nitpicks (or out-of-diff non-blocking line comments) remain, leave them in the learnings queue unless the lane owner decides to include them.
+5. For CHIT/FlOO$ lane parity, run `make -C pmoves chit-flow-pr-monitor-strict` before final merge approval.
+
+This keeps both in-diff and out-of-diff review feedback visible in the same Graphiti handoff chain.
+
 ### Voice Guidelines
 
 Write your trail entry in your assigned voice:
@@ -212,6 +230,7 @@ When an agent completes significant work, it emits an `agent.graphiti.signed.v1`
 - **KiloCode Onboarding:** `plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md`
 - **KRISS KROSS Accord:** `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md`
 - **Trajectory Schema:** `pmoves/contracts/schemas/agent-rl/trajectory.v1.schema.json` — `agent_id` field
+- **PR Learnings Artifacts:** `pmoves/docs/logs/pr_monitor_latest.json`, `pmoves/docs/logs/pr_monitor_learnings_latest.md`
 
 ## Broader Context: Three-Body Stabilization
 

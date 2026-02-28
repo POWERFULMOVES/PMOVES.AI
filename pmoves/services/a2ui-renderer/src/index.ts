@@ -19,6 +19,7 @@ import { renderMedia, selectComposition } from '@remotion/renderer';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { connect, NatsConnection, StringCodec } from 'nats';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -104,6 +105,24 @@ const renderDuration = new Histogram({
   help: 'Render duration in seconds',
   labelNames: ['format'],
   buckets: [0.5, 1, 2, 5, 10, 30, 60, 120],
+});
+
+const ALLOWED_RENDER_FORMATS = new Set(['mp4', 'gif', 'webm']);
+
+function normalizeRenderFormat(rawFormat: unknown): string | null {
+  const format = typeof rawFormat === 'string' ? rawFormat.trim().toLowerCase() : 'mp4';
+  if (!ALLOWED_RENDER_FORMATS.has(format)) {
+    return null;
+  }
+  return format;
+}
+
+const renderLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many render requests, try again later' },
 });
 
 type AuthenticatedRequest = Request & { user?: Record<string, unknown> };
@@ -198,8 +217,15 @@ app.get('/metrics', async (_req, res) => {
  *
  * Returns: { ok: true, url: "...", duration_ms: ... }
  */
-app.post('/render', requireAuth, async (req: Request, res: Response) => {
-  const format = (req.query.format as string) || 'mp4';
+app.post('/render', renderLimiter, requireAuth, async (req: Request, res: Response) => {
+  const format = normalizeRenderFormat(req.query.format);
+  if (!format) {
+    res.status(400).json({
+      ok: false,
+      error: `Unsupported format: must be one of ${Array.from(ALLOWED_RENDER_FORMATS).join(', ')}`,
+    });
+    return;
+  }
   const spec = req.body;
   const end = renderDuration.startTimer({ format });
 
@@ -308,7 +334,7 @@ app.post('/render', requireAuth, async (req: Request, res: Response) => {
  * Shorthand for rendering benchmark chart data directly.
  * Wraps the data in an A2UI spec automatically.
  */
-app.post('/render/chart', requireAuth, async (req: Request, res: Response) => {
+app.post('/render/chart', renderLimiter, requireAuth, async (req: Request, res: Response) => {
   const { title, labels, values, type = 'bar_chart' } = req.body;
 
   const spec = {
