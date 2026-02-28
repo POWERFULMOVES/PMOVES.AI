@@ -115,6 +115,14 @@ def _repo_name(default_repo: str) -> str:
     return default_repo
 
 
+def _resolve_repo(explicit_repo: str, default_repo: str) -> str:
+    """Honor explicit --repo; only inspect current checkout when omitted."""
+    repo = explicit_repo.strip()
+    if repo:
+        return repo
+    return _repo_name(default_repo)
+
+
 def _repo_owner_name(repo: str) -> tuple[str, str]:
     if "/" not in repo:
         raise ValueError(f"invalid repo format: {repo!r} (expected owner/name)")
@@ -591,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--strict", action="store_true", help="exit non-zero if any PR has blockers")
     args = parser.parse_args(argv)
 
-    repo = args.repo.strip() or _repo_name("POWERFULMOVES/PMOVES.AI")
+    repo = _resolve_repo(args.repo, "POWERFULMOVES/PMOVES.AI")
     numbers = _pr_numbers(repo, args.base, args.state, args.prs)
     if not numbers:
         print(f"No PRs found for repo={repo} state={args.state} base={args.base}")
