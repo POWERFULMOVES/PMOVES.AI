@@ -8,6 +8,7 @@ Windows/WSL/Linux without manual shell sequences.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -114,13 +115,8 @@ def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
         resources["cpus"],
         "--memory",
         resources["memory"],
-        "--log-driver",
-        "loki",
-        "--log-opt",
-        f"loki-url={LOKI_URL}",
-        "--log-opt",
-        f"loki-external-labels=job=gha-runner,lane={lane.lane},runner={lane.runner_name}",
     ]
+    cmd.extend(_runner_log_args(lane))
     # GPU passthrough for ai-lab lane only
     gpus = resources.get("gpus", "")
     if gpus:
@@ -144,7 +140,28 @@ def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
     ])
     run_cmd(cmd)
 
-
+def _runner_log_args(lane: RunnerLane) -> list[str]:
+    info = run_cmd(
+        ["docker", "info", "--format", "{{json .Plugins.Log}}"],
+        check=False,
+    )
+    if info.returncode == 0:
+        payload = (info.stdout or "").strip()
+        if payload:
+            try:
+                drivers = json.loads(payload)
+                if isinstance(drivers, list) and "loki" in drivers:
+                    return [
+                        "--log-driver",
+                        "loki",
+                        "--log-opt",
+                        f"loki-url={LOKI_URL}",
+                        "--log-opt",
+                        f"loki-external-labels=job=gha-runner,lane={lane.lane},runner={lane.runner_name}",
+                    ]
+            except json.JSONDecodeError:
+                pass
+    return ["--log-driver", "json-file"]
 def _selected_lanes(names: list[str] | None) -> tuple[RunnerLane, ...]:
     if not names:
         return LANES
