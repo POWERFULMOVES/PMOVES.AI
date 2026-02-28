@@ -187,6 +187,7 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Supports targeted monitoring with `ARGS="--pr=<number>"` (repeat `--pr` for multiple PRs).
 - `make pr-monitor-strict`
   - Same monitor in strict mode; exits non-zero while blockers remain (conflicts, failed checks, pending checks, draft state, or blocking actionable review comments).
+  - Blocking comment policy: human actionable comments block; bot actionable comments block only when severity is `P0`/`P1`.
   - Out-of-diff line comments are still cataloged in learnings, but do not hard-fail strict mode unless they surface as non-line actionable feedback.
   - Use this as a pre-merge guard for targeted PR queues.
 - `make ghcr-bootstrap-secrets`

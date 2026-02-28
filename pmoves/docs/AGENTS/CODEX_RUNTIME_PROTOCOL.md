@@ -69,7 +69,7 @@ Before merge or promotion:
 3. Address actionable comments (including out-of-diff review findings) in atomic commits.
 4. Re-run `make -C pmoves pr-monitor-strict` and require exit code `0` before merge.
 
-Nitpicks are cataloged for follow-up. Blocking actionable comments are merge blockers; out-of-diff line comments stay in the learnings queue unless they escalate into blocking feedback.
+Nitpicks are cataloged for follow-up. Blocking actionable comments are merge blockers; out-of-diff line comments stay in the learnings queue unless they escalate into blocking feedback. Bot actionable comments only block when marked `P0`/`P1`.
 
 ## Token/time estimate handshake
 

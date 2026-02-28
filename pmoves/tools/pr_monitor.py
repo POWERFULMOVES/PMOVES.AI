@@ -56,6 +56,7 @@ class ReviewSignal:
     url: str
     path: str
     category: str
+    severity: str
     excerpt: str
 
 
@@ -163,6 +164,17 @@ def _learning_category(body: str) -> str:
     return "General Quality"
 
 
+def _severity(body: str) -> str:
+    text = body.lower()
+    if "[p0" in text:
+        return "p0"
+    if "[p1" in text:
+        return "p1"
+    if "[p2" in text:
+        return "p2"
+    return "unspecified"
+
+
 def _excerpt(body: str, limit: int = 180) -> str:
     compact = " ".join((body or "").split())
     if len(compact) <= limit:
@@ -189,11 +201,12 @@ def _to_signal(
         url=url,
         path=path,
         category=_learning_category(body),
+        severity=_severity(body),
         excerpt=_excerpt(body),
     )
 
 
-def _collect_review_summary(repo: str, number: int, detail: dict[str, Any]) -> ReviewSummary:
+def _collect_review_summary(repo: str, number: int, detail: dict[str, Any], *, head_sha: str) -> ReviewSummary:
     summary = ReviewSummary()
     signals: List[ReviewSignal] = []
 
@@ -208,7 +221,9 @@ def _collect_review_summary(repo: str, number: int, detail: dict[str, Any]) -> R
             body = str(comment.get("body") or "")
             url = str(comment.get("html_url") or "")
             path = str(comment.get("path") or "")
-            out_of_diff = comment.get("position") is None or comment.get("line") is None
+            comment_commit = str(comment.get("commit_id") or "").strip().lower()
+            is_stale_commit = bool(comment_commit and head_sha and comment_commit != head_sha.lower())
+            out_of_diff = comment.get("position") is None or comment.get("line") is None or is_stale_commit
             signals.append(
                 _to_signal(
                     source="line_comment",
@@ -279,9 +294,13 @@ def _collect_review_summary(repo: str, number: int, detail: dict[str, Any]) -> R
             summary.actionable_signals.append(signal)
             if signal.is_bot:
                 summary.bot_actionable_total += 1
-            # Out-of-diff line comments are still cataloged but don't hard-block strict mode.
-            if not (signal.source == "line_comment" and signal.out_of_diff):
-                summary.actionable_blocking_total += 1
+            # Out-of-diff line comments are cataloged but non-blocking.
+            if signal.source == "line_comment" and signal.out_of_diff:
+                continue
+            # Bot actionable comments block strict mode only for P0/P1.
+            if signal.is_bot and signal.severity not in {"p0", "p1"}:
+                continue
+            summary.actionable_blocking_total += 1
     return summary
 
 
@@ -324,13 +343,14 @@ def _pr_summary(repo: str, number: int) -> PrSummary:
             "--repo",
             repo,
             "--json",
-            "number,title,url,headRefName,baseRefName,mergeable,mergeStateStatus,reviewDecision,isDraft,statusCheckRollup,comments,reviews",
+            "number,title,url,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,reviewDecision,isDraft,statusCheckRollup,comments,reviews",
         ]
     )
     if not isinstance(detail, dict):
         raise RuntimeError(f"invalid PR payload for #{number}")
     checks = _check_summary(detail.get("statusCheckRollup"))
-    review = _collect_review_summary(repo, number, detail)
+    head_sha = str(detail.get("headRefOid") or "")
+    review = _collect_review_summary(repo, number, detail, head_sha=head_sha)
 
     mergeable = str(detail.get("mergeable") or "UNKNOWN")
     merge_state_status = str(detail.get("mergeStateStatus") or "UNKNOWN")
