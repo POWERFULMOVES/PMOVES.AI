@@ -86,7 +86,8 @@ CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
 
 This causes `docker compose up` to abort with a clear error message if
 `CHIT_PROD_PASSPHRASE` is missing from the environment, rather than
-silently running with a weak default.
+silently running with a weak default. The topology gate (`make topology-chit-gate-strict`)
+also detects placeholder values as a secondary defense.
 
 ### Verifying the fix
 

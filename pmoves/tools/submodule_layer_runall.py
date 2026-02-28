@@ -14,17 +14,6 @@ from submodule_utils import parse_gitmodules_rows  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _repo_relative_or_posix(path: Path) -> str:
-    """Return a repo-relative POSIX path, falling back to absolute if outside the repo."""
-    resolved = path.resolve()
-    try:
-        return resolved.relative_to(REPO_ROOT).as_posix()
-    except ValueError:
-        return resolved.as_posix()
-
-
 GITMODULES = REPO_ROOT / ".gitmodules"
 VALIDATOR = REPO_ROOT / "pmoves" / "tools" / "submodule_layer_validate.py"
 DEFAULT_MANIFEST = REPO_ROOT / "pmoves" / "configs" / "submodule_layer_validation_manifest.json"
@@ -178,7 +167,7 @@ def main() -> int:
         print(f"[{status}] {module_path} errors={errors} warnings={warnings}")
 
     data = {
-        "manifest": _repo_relative_or_posix(args.manifest),
+        "manifest": args.manifest.resolve().relative_to(REPO_ROOT).as_posix(),
         "modules_checked": len(runs),
         "total_errors": sum(run.errors for run in runs),
         "total_warnings": sum(run.warnings for run in runs),
