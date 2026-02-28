@@ -104,13 +104,13 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory integration-contract-check-baseline
 	@$(MAKE) --no-print-directory tooling-audit-strict
 	@$(MAKE) --no-print-directory secrets-audit
-	@$(MAKE) --no-print-directory topology-chit-gate-strict
 	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
 	@$(MAKE) --no-print-directory skill-registry-validate
 
 audit-layers-runtime: ## Runtime certification pass once services are online
 	@$(MAKE) --no-print-directory audit-layers-static
+	@$(MAKE) --no-print-directory topology-chit-gate-strict
 	@$(MAKE) --no-print-directory smoke
 	@$(MAKE) --no-print-directory monitoring-smoke-prod
 	@if [ "$${AUDIT_RUNTIME_GPU:-$(AUDIT_RUNTIME_GPU)}" = "1" ]; then \
