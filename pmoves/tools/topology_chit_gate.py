@@ -276,6 +276,25 @@ def _ports_published(inspect_data: Mapping[str, object], container_port: int) ->
     return isinstance(value, list) and len(value) > 0
 
 
+def _published_host_port(inspect_data: Mapping[str, object], container_port: int) -> str | None:
+    net = inspect_data.get("NetworkSettings")
+    if not isinstance(net, Mapping):
+        return None
+    ports = net.get("Ports")
+    if not isinstance(ports, Mapping):
+        return None
+    value = ports.get(f"{container_port}/tcp")
+    if not isinstance(value, list) or not value:
+        return None
+    first = value[0]
+    if not isinstance(first, Mapping):
+        return None
+    host_port = first.get("HostPort")
+    if not isinstance(host_port, str) or not host_port.strip():
+        return None
+    return host_port.strip()
+
+
 def _published_bindings(inspect_data: Mapping[str, object]) -> List[tuple[str, str, str]]:
     net = inspect_data.get("NetworkSettings")
     if not isinstance(net, Mapping):
@@ -588,9 +607,11 @@ def _check_archon_topology(
             )
 
         # First request can fail while Vite preview initializes.
-        ui_code = _http_code("http://localhost:3737/", retries=6, delay_s=2.0)
+        ui_host_port = _published_host_port(ui_info, 3737) or "3737"
+        ui_url = f"http://localhost:{ui_host_port}/"
+        ui_code = _http_code(ui_url, retries=6, delay_s=2.0)
         if ui_code != 200:
-            errors.append(f"archon-ui health check failed: http://localhost:3737/ => {ui_code}")
+            errors.append(f"archon-ui health check failed: {ui_url} => {ui_code}")
 
 
 def _check_chit_sync(
