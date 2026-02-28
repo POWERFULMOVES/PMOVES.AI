@@ -158,8 +158,8 @@ async def demo_run(body: DemoRunRequest, request: Request) -> Dict[str, Any]:
                 )
                 if playback_resp.status_code < 500:
                     playback = playback_resp.json()
-            except Exception as exc:  # pragma: no cover
-                playback = {"error": str(exc)}
+            except Exception:  # pragma: no cover
+                playback = {"error": "playback_lookup_failed"}
 
     events = event_bus.recent(10) if event_bus else []
 
