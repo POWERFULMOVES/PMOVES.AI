@@ -190,6 +190,22 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Blocking comment policy: human actionable comments block; bot actionable comments block only when severity is `P0`/`P1`.
   - Out-of-diff line comments are still cataloged in learnings, but do not hard-fail strict mode unless they surface as non-line actionable feedback.
   - Use this as a pre-merge guard for targeted PR queues.
+- `make pr-monitor-chit-packet`
+  - Runs `pr-monitor` and CHIT-encodes the learnings markdown into:
+    - `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
+  - Use when review learnings need machine-parseable CHIT artifact handoff.
+- `make floos-status`
+  - Shows FlOO$ pairing inventory/status from `pmoves/configs/skill-pairings.yaml`.
+- `make floos-pr-monitor-validate`
+  - Validates dependency graph for pairing `pr-monitor-graphiti-chit`.
+- `make floos-pr-monitor-resolve`
+  - Prints the resolved DAG/execution order for pairing `pr-monitor-graphiti-chit`.
+- `make floos-pr-monitor-run-dry`
+  - Runs FlOO$ in `--dry-run` mode for pairing `pr-monitor-graphiti-chit` (no MCP side effects).
+- `make chit-flow-pr-monitor`
+  - Wrapper flow: `pr-monitor` -> FlOO$ validate/resolve/dry-run -> CHIT packet generation.
+- `make chit-flow-pr-monitor-strict`
+  - Same wrapper flow but starts with `pr-monitor-strict` and fails while merge blockers remain.
 - `make ghcr-bootstrap-secrets`
   - Pushes GHCR auth secrets to GitHub Actions from local `env.shared` credentials.
   - Uses `tools/push-gh-secrets.sh --ghcr-bootstrap` to reuse `GHCR_TOKEN` (or fallback `GH_PAT_PUBLISH`) and set `GHCR_USERNAME`/`GHCR_TOKEN`.
@@ -289,6 +305,10 @@ This file summarizes the most-used targets and maps them to what they do under d
   - For full production rollout sequencing, pair this with `pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`.
 - `make chit-export`
   - Exports `env.shared` to a user-scoped CHIT bundle (`~/.config/pmoves/chit/env.cgp.json`) using `--no-cleartext` by default.
+- `make chit-flow-pr-monitor`
+  - CHIT review flow wrapper for PR lanes (monitor -> FlOO$ -> encoded learnings packet).
+- `make chit-flow-pr-monitor-strict`
+  - Strict variant for merge gating.
 - `make chit-manifest-sync`
   - Programmatically regenerates `pmoves/chit/secrets_manifest.yaml` from `pmoves/chit/secrets_manifest_v2.yaml` (keeps file/key targets for v1 consumers and carries label alias hints for Supabase/service naming variants).
 - `make chit-manifest-check`

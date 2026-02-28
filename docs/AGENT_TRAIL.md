@@ -10,6 +10,40 @@
 
 ---
 
+<!-- graphiti:codex phase:chit-floos-pr-monitor-weave ts:2026-02-28T18:05:00Z -->
+
+## ■ Codex — CHIT FlOO$ PR Monitor Flow Integration
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** chit-flows, pr-governance, graphiti-handoff
+**Voice:** Terse
+
+### Done
+- Added CHIT/FlOO$ PR monitor flow targets:
+  - `make -C pmoves pr-monitor-chit-packet`
+  - `make -C pmoves floos-pr-monitor-validate`
+  - `make -C pmoves floos-pr-monitor-resolve`
+  - `make -C pmoves floos-pr-monitor-run-dry`
+  - `make -C pmoves chit-flow-pr-monitor`
+  - `make -C pmoves chit-flow-pr-monitor-strict`
+- Added FlOO$ pairing `pr-monitor-graphiti-chit` in `pmoves/configs/skill-pairings.yaml` with CHIT + Graphiti hook chain.
+- Updated CHIT flow index and operator target docs for the new lane.
+- Updated Graphiti/Codex runtime protocols to include CHIT packet + strict CHIT flow merge gate.
+
+### Left Behind
+- This Windows environment still throws Git Bash pipe/CreateFileMapping errors when invoking these targets through `make`.
+- Direct Python execution validates the same flow successfully (validate/resolve/dry-run + packet encode).
+
+### For Next Agent
+- Re-run `make -C pmoves chit-flow-pr-monitor-strict` on a shell host without the local Git Bash pipe restriction.
+- Keep `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json` runtime-generated; do not commit unless explicitly required as evidence.
+- Continue clearing actionable review comments until `pr-monitor-strict` is clean.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:pr-monitor-learnings-upgrade ts:2026-02-28T17:25:00Z -->
 
 ## ■ Codex — PR Monitor Learnings + Trail Integration

@@ -230,6 +230,42 @@ pairings:
           on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.agent-card-gen.v1"
 
+  # PR Review Monitor -> CHIT Learnings -> Graphiti Trail
+  pr-monitor-graphiti-chit:
+    name: "PR Monitor Graphiti CHIT Flow"
+    description: "Capture merge blockers, encode learnings, and carry Graphiti-ready handoff context"
+    chain:
+      - skill: pr-monitor
+        output: pr_monitor_report
+        agent: codex
+        depends:
+          services: ["nats:4222"]
+        hooks:
+          on_complete: "ops.pr.monitor.completed.v1"
+          on_error: "ops.pr.monitor.failed.v1"
+      - skill: pr-learnings-encode
+        input: pr_monitor_report
+        output: pr_learnings_packet
+        agent: tokenism
+        depends:
+          services: ["nats:4222"]
+          skills: ["pr-monitor"]
+        hooks:
+          on_complete: "ops.pr.learnings.encoded.v1"
+          on_error: "ops.pr.monitor.failed.v1"
+      - skill: graphiti-trail-sync
+        input: pr_learnings_packet
+        output: graphiti_handoff
+        agent: archon
+        depends:
+          services: ["nats:4222"]
+          skills: ["pr-learnings-encode"]
+          health: "http://localhost:8091/healthz"
+        hooks:
+          on_complete: "agent.graphiti.signed.v1"
+          on_error: "ops.pr.monitor.failed.v1"
+    nats_subject: "skills.pipeline.pr-monitor-graphiti-chit.v1"
+
 # Handoff protocol configuration
 handoff:
   # How agents pass work between each other
@@ -254,6 +290,9 @@ skill_sources:
   chit-encode: ".claude/commands/chit/encode.md"
   a2ui-chart: "pmoves/services/a2ui-renderer/"
   extract-worker: "pmoves/services/extract-worker/"
+  pr-monitor: "pmoves/tools/pr_monitor.py"
+  pr-learnings-encode: "pmoves/tools/chit_encode_hook.py"
+  graphiti-trail-sync: "docs/AGENT_TRAIL.md"
 
 # FlOO$ configuration
 floos:

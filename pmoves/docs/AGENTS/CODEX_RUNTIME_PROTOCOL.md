@@ -66,8 +66,10 @@ Before merge or promotion:
 2. Inspect:
    - `pmoves/docs/logs/pr_monitor_latest.json`
    - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
-3. Address actionable comments (including out-of-diff review findings) in atomic commits.
-4. Re-run `make -C pmoves pr-monitor-strict` and require exit code `0` before merge.
+3. Optional CHIT artifact handoff: `make -C pmoves pr-monitor-chit-packet` to generate `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`.
+4. Address actionable comments (including out-of-diff review findings) in atomic commits.
+5. Re-run `make -C pmoves pr-monitor-strict` and require exit code `0` before merge.
+6. For CHIT/FlOO$ parity in production lanes, run `make -C pmoves chit-flow-pr-monitor-strict`.
 
 Nitpicks are cataloged for follow-up. Blocking actionable comments are merge blockers; out-of-diff line comments stay in the learnings queue unless they escalate into blocking feedback. Bot actionable comments only block when marked `P0`/`P1`.
 

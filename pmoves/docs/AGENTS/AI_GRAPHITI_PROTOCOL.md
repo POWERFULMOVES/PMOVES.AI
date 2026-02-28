@@ -98,11 +98,13 @@ When a lane has open PRs, run the PR monitor and fold findings into the trail:
 2. Review generated artifacts:
    - `pmoves/docs/logs/pr_monitor_latest.json`
    - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+   - Optional CHIT packet for handoff automation: `make -C pmoves pr-monitor-chit-packet` -> `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
 3. If actionable comments exist, create a focused fix commit/PR and update `docs/AGENT_TRAIL.md` with:
    - what was fixed
    - what remains
    - what the next agent should do
 4. If only nitpicks (or out-of-diff non-blocking line comments) remain, leave them in the learnings queue unless the lane owner decides to include them.
+5. For CHIT/FlOO$ lane parity, run `make -C pmoves chit-flow-pr-monitor-strict` before final merge approval.
 
 This keeps both in-diff and out-of-diff review feedback visible in the same Graphiti handoff chain.
 
