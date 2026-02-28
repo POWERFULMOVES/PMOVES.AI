@@ -115,6 +115,94 @@ def _repo_name(default_repo: str) -> str:
     return default_repo
 
 
+def _repo_owner_name(repo: str) -> tuple[str, str]:
+    if "/" not in repo:
+        raise ValueError(f"invalid repo format: {repo!r} (expected owner/name)")
+    owner, name = repo.split("/", 1)
+    return owner.strip(), name.strip()
+
+
+def _review_thread_flags(repo: str, number: int) -> dict[str, tuple[bool, bool]]:
+    """Map review comment URL -> (is_resolved, is_outdated) from GraphQL review threads."""
+    owner, name = _repo_owner_name(repo)
+    flags: dict[str, tuple[bool, bool]] = {}
+    cursor: str | None = None
+
+    query = (
+        "query($owner:String!,$name:String!,$number:Int!,$after:String){"
+        "repository(owner:$owner,name:$name){"
+        "pullRequest(number:$number){"
+        "reviewThreads(first:100,after:$after){"
+        "nodes{isResolved isOutdated comments(first:100){nodes{url}}}"
+        "pageInfo{hasNextPage endCursor}"
+        "}}}}"
+    )
+
+    while True:
+        cmd = [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            f"query={query}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={number}",
+        ]
+        if cursor:
+            cmd.extend(["-F", f"after={cursor}"])
+        payload = _run_json(cmd)
+        if not isinstance(payload, dict):
+            break
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            break
+        repository = data.get("repository")
+        if not isinstance(repository, dict):
+            break
+        pull_request = repository.get("pullRequest")
+        if not isinstance(pull_request, dict):
+            break
+        review_threads = pull_request.get("reviewThreads")
+        if not isinstance(review_threads, dict):
+            break
+
+        nodes = review_threads.get("nodes")
+        if isinstance(nodes, list):
+            for node in nodes:
+                if not isinstance(node, dict):
+                    continue
+                is_resolved = bool(node.get("isResolved"))
+                is_outdated = bool(node.get("isOutdated"))
+                comments = node.get("comments")
+                if not isinstance(comments, dict):
+                    continue
+                comment_nodes = comments.get("nodes")
+                if not isinstance(comment_nodes, list):
+                    continue
+                for comment in comment_nodes:
+                    if not isinstance(comment, dict):
+                        continue
+                    url = str(comment.get("url") or "").strip()
+                    if not url:
+                        continue
+                    flags[url] = (is_resolved, is_outdated)
+
+        page_info = review_threads.get("pageInfo")
+        if not isinstance(page_info, dict):
+            break
+        has_next = bool(page_info.get("hasNextPage"))
+        next_cursor = str(page_info.get("endCursor") or "").strip()
+        if not has_next or not next_cursor:
+            break
+        cursor = next_cursor
+
+    return flags
+
+
 def _check_summary(status_rollup: Iterable[dict[str, Any]] | None) -> CheckSummary:
     summary = CheckSummary()
     for item in status_rollup or []:
@@ -209,6 +297,7 @@ def _to_signal(
 def _collect_review_summary(repo: str, number: int, detail: dict[str, Any], *, head_sha: str) -> ReviewSummary:
     summary = ReviewSummary()
     signals: List[ReviewSignal] = []
+    thread_flags = _review_thread_flags(repo, number)
 
     line_comments = _run_json(["gh", "api", f"repos/{repo}/pulls/{number}/comments"])
     if isinstance(line_comments, list):
@@ -221,9 +310,17 @@ def _collect_review_summary(repo: str, number: int, detail: dict[str, Any], *, h
             body = str(comment.get("body") or "")
             url = str(comment.get("html_url") or "")
             path = str(comment.get("path") or "")
+            is_resolved, is_thread_outdated = thread_flags.get(url, (False, False))
+            if is_resolved:
+                continue
             comment_commit = str(comment.get("commit_id") or "").strip().lower()
             is_stale_commit = bool(comment_commit and head_sha and comment_commit != head_sha.lower())
-            out_of_diff = comment.get("position") is None or comment.get("line") is None or is_stale_commit
+            out_of_diff = (
+                comment.get("position") is None
+                or comment.get("line") is None
+                or is_stale_commit
+                or is_thread_outdated
+            )
             signals.append(
                 _to_signal(
                     source="line_comment",
