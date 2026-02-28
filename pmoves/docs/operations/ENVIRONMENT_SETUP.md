@@ -194,7 +194,8 @@ PASS=$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64)
 # Write to env.shared (idempotent — updates existing or appends)
 for KEY in CHIT_PASSPHRASE CHIT_PROD_PASSPHRASE; do
   if grep -q "^${KEY}=" pmoves/env.shared 2>/dev/null; then
-    sed -i "s|^${KEY}=.*|${KEY}=${PASS}|" pmoves/env.shared
+    awk -F= -v k="$KEY" -v v="$PASS" 'BEGIN{OFS="="} $1==k{$0=k OFS v}1' \
+      pmoves/env.shared > pmoves/env.shared.tmp && mv pmoves/env.shared.tmp pmoves/env.shared
   else
     printf '%s=%s\n' "$KEY" "$PASS" >> pmoves/env.shared
   fi
@@ -205,7 +206,9 @@ done
 
 ```powershell
 # Generate passphrase
-$pass = -join ((1..64) | ForEach-Object { [char](Get-Random -Min 33 -Max 127) })
+$bytes = New-Object byte[] 48
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$pass = [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_').Substring(0,64)
 
 # Write to env.shared (idempotent — updates existing or appends)
 $file = "pmoves\env.shared"
