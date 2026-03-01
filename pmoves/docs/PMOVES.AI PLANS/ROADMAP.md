@@ -1,33 +1,31 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-02-28
+Last updated: 2026-03-01
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-02-28)
+## Audit Snapshot (2026-03-01)
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
-- Dependency/code scanning backlog: Dependabot open `7` (2 high, 1 medium, 4 low); Code Scanning open sample `37` (34 error, 3 warning).
+- Dependency/code scanning backlog: Dependabot open `3` (1 high, 2 low); Code Scanning open `36` alerts.
 - Active remediation focus: SSRF hardening landed for CHIT image decode paths in Hi‑RAG gateways and URL safety guards are being completed in SupaSerch HTTP fallback. Production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, and hardened runtime auth consistency across compose and submodules.
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
 - Creator lane now includes Jellyfin parity auditing (`make -C pmoves jellyfin-parity-audit[‑strict]`) plus a dedicated worktree review runbook for PMOVES.YT/Jellyfin/CHIT convergence.
 - Submodule production release lane now has deterministic checklist coverage for all tracked submodules (40/40), including branch policy gating, static/runtime gate packs, and hardened merge-order policy (`pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`).
+- Codex submodule overlay parity is now complete for tracked modules (40/40), with focus-module codex coverage at 14/14 and deterministic refresh via `make -C pmoves codex-audit`.
 - Creator/Jellyfin production lane now has a strict parity gate (`jellyfin-parity-audit-strict`) and a single bring-up path (`jellyfin-stack-prod`) that includes TensorZero, GPU Orchestrator, Jellyfin AI overlay, and bridge verification.
 - PMOVES.YT metadata extraction path for `/yt/info` is now hardened for smoke stability (metadata-only + config-isolated fallback), reducing transient extractor failures that previously blocked Creator pipeline verification.
 - Lock-step production sequence completed and promoted to `main`: `#703 -> #704 -> #700 -> #701 -> #702 -> #699` (final merge commit `1a21c038`).
 - DAO recontext + ingestion planning is now tracked at `DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md` with a normalized projection envelope for operator-safe planning.
-- Open release PR lanes are active and gated by self-hosted CodeQL backlog:
-  - `#720` (`fix/codeql-critical-a2ui-workflow`)
-  - `#722` (`fix/archon-ui-core-parity-clean`)
-  - `#723` (`chore/pr-monitor-live`)
+- Hardened release PR queue is clear (`0` open PRs).
+- Recent production PR closures on hardened: `#720`, `#722`, `#723`, `#724`, `#725`, `#726`, `#727`.
 - GHCR queue hygiene pass completed:
   - canceled stale/stuck GHCR runs `22522345591`, `22523184680`, `22523183016`
   - reran local-first SupaSerch prepublish gate (`make -C pmoves ghcr-prepublish-supaserch`) and dispatched targeted hardened run `22529075577`
-- Runner lane recovery in progress:
-  - `pmoves-vps-runner` encountered session conflict after restart
-  - temporary labeled replacement `pmoves-vps-runner-hotfix` is online to satisfy `self-hosted,vps` lane scheduling
-  - `ci-runners-check` now passes lane requirements while the original runner is reconciled
+- Runner lane stability update:
+  - local-cert runner flow now falls back to `json-file` logging when Docker lacks Loki plugin support (`#725`)
+  - `ci-runners-check` lane validation is passing for required labels
 
 ## Current Sprint Overlay (Hardened)
 
