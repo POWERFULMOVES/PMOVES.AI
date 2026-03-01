@@ -1,5 +1,5 @@
 # Claude -> Codex Parity Map (PMOVES)
-_Last updated: 2026-02-23_
+_Last updated: 2026-03-01_
 
 This map translates common `.claude/commands/*` workflows into Codex-native
 operations (`make`, `curl`, and existing PMOVES scripts).
@@ -44,10 +44,12 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 
 | Claude command | Codex equivalent |
 | --- | --- |
-| `/chit:bus status` | `curl -fsS http://localhost:8086/hirag/admin/stats | jq .` |
+| `/chit:bus` | `curl -fsS http://localhost:8086/hirag/admin/stats | jq .` |
 | `/chit:encode` | publish through PMOVES producers (`pmoves-yt`, `hi-rag-v2`) and validate via `make -C pmoves smoke` |
 | `/chit:decode` | use geometry calibration/report endpoints and retrieval assertions |
 | `/chit:visualize` | use geometry UI/demo targets (`make -C pmoves web-geometry`) |
+| `/chit:bpm` | `curl -fsS http://localhost:8086/geometry/calibration/report | jq .` and validate bpm-derived geometry metadata |
+| `/chit:floos` | `make -C pmoves pr-monitor-flows` then `make -C pmoves pr-monitor-chit-packet` |
 | EvoSwarm checks | `curl -fsS http://localhost:8113/healthz` and `curl -fsS http://localhost:8113/swarm/status | jq .` |
 
 ## Agent orchestration and MCP
@@ -55,9 +57,46 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | Claude command | Codex equivalent |
 | --- | --- |
 | `/agents:status` | `curl -fsS http://localhost:8080/healthz | jq .` and `curl -fsS http://localhost:8091/healthz | jq .` |
+| `/agents:execute` | `curl -fsS http://localhost:8080/healthz | jq .` then execute task through Agent Zero MCP bridge |
 | `/agents:mcp-query` | `curl -fsS http://localhost:8080/mcp/health | jq .` then authenticated `/mcp/*` calls |
+| `/agents:subordinate` | delegate via NATS `agent.handoff.request.v1` and capture completion on `agent.handoff.completed.v1` |
+| `/agents:task-status` | monitor active tasks through Agent Zero runtime status and NATS task subjects |
 | `/botz:mcp` | BotZ config: `PMOVES-BoTZ/config/codex/mcp_gateway.json` and PMOVES root codex profile |
 | Claude Cipher MCP (`pmoves-cipher` in `.claude/mcp.json`) | `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server` and verify `curl -fsS http://localhost:8096/health` |
+
+## High-priority parity wave (Mar 2026)
+
+| Claude command | Codex equivalent |
+| --- | --- |
+| `/agent-sdk:create` | `pmoves agent-sdk create <role> --model openai::qwen3:8b` |
+| `/agent-sdk:run` | `pmoves agent-sdk run <agent-id> "<task>"` |
+| `/agent-sdk:resume` | `pmoves agent-sdk resume list` then `pmoves agent-sdk resume <session-id>` |
+| `/agent-sdk:handoff` | publish NATS `agent.handoff.request.v1` and await `agent.handoff.accepted.v1`/`agent.handoff.completed.v1` |
+| `/archon:status` | `curl -sf http://localhost:8091/healthz | jq .` and `curl -sf -o /dev/null -w "%{http_code}" http://localhost:3737/` |
+| `/archon:forms` | `curl -sf http://localhost:8091/api/forms | jq '.[] | {id,name,agent_type,status}'` |
+| `/archon:prompts` | `curl -sf http://localhost:8091/api/prompts | jq '.[] | {id,name,tags,updated_at}'` |
+| `/cipher:store` | `curl -s -X POST http://localhost:8096/api/memory -H "Content-Type: application/json" -d '{"content":"<content>","category":"<category>","source":"codex"}'` |
+| `/cipher:search` | `curl -s "http://localhost:8096/api/memory/search?q=<query>&limit=10"` |
+| `/cipher:reasoning` | store/retrieve reasoning traces with category `reasoning_trace` via Cipher memory API |
+| `/gpu:status` | `curl -s http://localhost:8200/api/gpu/status | jq .` |
+| `/gpu:models` | `curl -s "http://localhost:8200/api/gpu/models?include_unloaded=true" | jq .` |
+| `/gpu:optimize` | `curl -s -X POST http://localhost:8200/api/gpu/optimize | jq .` |
+| `/n8n:workflows` | `curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" http://localhost:5678/api/v1/workflows | jq .` |
+| `/n8n:execute` | `curl -X POST -H "X-N8N-API-KEY: $N8N_API_KEY" http://localhost:5678/api/v1/workflows/<id>/run` |
+| `/n8n:nodes` | query PMOVES n8n MCP node docs under `PMOVES-BoTZ/features/n8n/n8n-mcp/data/` |
+| `/n8n:suggest` | run n8n MCP suggestion flow via `pmoves-n8n-agent` for AI-assisted workflow synthesis |
+| `/nats:status` | `curl -s http://localhost:8222/varz` and `curl -s http://localhost:8222/jsz` |
+| `/nats:streams` | `curl -s http://localhost:8222/jsz?streams=1` |
+| `/nats:monitor` | `nats sub "<subject-pattern>" --count 20` |
+| `/nats:publish` | `nats pub "<subject>" '<json-payload>'` |
+| `/yt:help` | use `.claude/commands/yt/help.md` as the YouTube operations index |
+| `/yt:list-channels` | `cat pmoves/config/channel_monitor.json | jq '.channels[] | {channel_name,channel_id,enabled,auto_process}'` |
+| `/yt:add-channel` | update `pmoves/config/channel_monitor.json` with channel source and restart `channel-monitor` |
+| `/yt:add-playlist` | update `pmoves/config/channel_monitor.json` with playlist source and restart `channel-monitor` |
+| `/yt:remove-channel` | remove source from `pmoves/config/channel_monitor.json` and restart `channel-monitor` |
+| `/yt:toggle-channel` | toggle `enabled` in `pmoves/config/channel_monitor.json` and restart `channel-monitor` |
+| `/yt:ingest-video` | `curl -X POST http://localhost:8077/yt/ingest -H "Content-Type: application/json" -d '{"url":"<youtube-url>","namespace":"pmoves.manual"}'` |
+| `/yt:pending` | inspect pending/discovered queue via channel-monitor logs and Supabase status tables |
 
 ## Voice stack (Flute/TTS/Pipecat)
 
@@ -91,6 +130,7 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/github:pr-review` | `gh pr checks <pr-number>` and `gh pr view <pr-number> --comments` |
 | `/github:issues` | `gh issue list --limit 20` |
 | `/github:security` | `gh api repos/POWERFULMOVES/PMOVES.AI/code-scanning/alerts` |
+| `/pr-monitor` | `make -C pmoves pr-monitor` then `make -C pmoves pr-monitor-live` |
 
 ## Submodule integration audit
 
