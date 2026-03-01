@@ -10,6 +10,34 @@
 
 ---
 
+<!-- graphiti:codex phase:submodule-parity-wave2 ts:2026-03-01T04:22:00Z -->
+
+## ■ Codex — Submodule Codex Home Coverage Expansion
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** submodule-parity, documentation-governance, release-readiness
+**Voice:** Terse
+
+### Done
+- Added 32 new overlay docs under `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES`, bringing codex overlay coverage to **40/40** tracked submodules.
+- Closed all prior focus-module gaps; focus coverage is now **14/14**, including BotZ gateway, A2UI, AgentGym lanes, Creator, and `pmoves/integrations/archon`.
+- Regenerated the deterministic audit artifact with `make -C pmoves codex-audit` and updated `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`.
+- Kept this lane docs-only with no submodule pointer churn.
+
+### Left Behind
+- Submodules remain not checked out in this workspace lane (`checked_out=0`), so this pass provides operator parity overlays rather than in-module native `.codex` assets.
+- Per-module native Codex docs still need upstream adoption in each submodule repo over time.
+
+### For Next Agent
+- When touching a submodule, port the overlay guidance into native `.codex` assets and link from that module README.
+- Re-run `make -C pmoves codex-audit` after any submodule add/rename to keep matrix parity deterministic.
+- Keep Graphiti + CHIT handoff updates in sync before hardened promotion PRs.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:chit-floos-pr-monitor-weave ts:2026-02-28T18:05:00Z -->
 
 ## ■ Codex — CHIT FlOO$ PR Monitor Flow Integration

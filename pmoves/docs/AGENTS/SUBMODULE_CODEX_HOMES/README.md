@@ -14,3 +14,8 @@ Naming:
 
 The audit script records these as:
 - `overlay:pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/<name>.md`
+
+Maintenance:
+- Regenerate and verify coverage with `make -C pmoves codex-audit`.
+- If a new submodule is added to `.gitmodules`, add a matching overlay file in this folder in the same PR.
+- Keep overlays docs-only and deterministic; do not change submodule pointers in this lane.

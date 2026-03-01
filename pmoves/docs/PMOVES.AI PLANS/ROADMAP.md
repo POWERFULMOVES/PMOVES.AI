@@ -13,6 +13,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
 - Creator lane now includes Jellyfin parity auditing (`make -C pmoves jellyfin-parity-audit[‑strict]`) plus a dedicated worktree review runbook for PMOVES.YT/Jellyfin/CHIT convergence.
 - Submodule production release lane now has deterministic checklist coverage for all tracked submodules (40/40), including branch policy gating, static/runtime gate packs, and hardened merge-order policy (`pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`).
+- Codex submodule overlay parity is now complete for tracked modules (40/40), with focus-module codex coverage at 14/14 and deterministic refresh via `make -C pmoves codex-audit`.
 - Creator/Jellyfin production lane now has a strict parity gate (`jellyfin-parity-audit-strict`) and a single bring-up path (`jellyfin-stack-prod`) that includes TensorZero, GPU Orchestrator, Jellyfin AI overlay, and bridge verification.
 - PMOVES.YT metadata extraction path for `/yt/info` is now hardened for smoke stability (metadata-only + config-isolated fallback), reducing transient extractor failures that previously blocked Creator pipeline verification.
 - Lock-step production sequence completed and promoted to `main`: `#703 -> #704 -> #700 -> #701 -> #702 -> #699` (final merge commit `1a21c038`).
