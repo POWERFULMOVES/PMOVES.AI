@@ -1,11 +1,14 @@
 -- Seed data: Model Registry for PMOVES.AI
--- Purpose: Initial model configuration for quick start
+-- Purpose: Complete model configuration for production readiness
 --
 -- This seed provides:
--- 1. Default providers (Ollama local, Z.ai cloud, OpenAI, Venice)
--- 2. Common local models for immediate use
--- 3. Service mappings for agent_zero and langextract functions
+-- 1. All providers (Ollama local/edge, cloud, Anthropic, TTS)
+-- 2. Local models reconciled with gpu-models.yaml VRAM values
+-- 3. Anthropic Claude models (persona backbone: sonnet/opus/haiku)
+-- 4. TTS models (6 engines from Ultimate TTS Studio)
+-- 5. Service-model mappings for 15+ TensorZero functions and services
 --
+-- Version: 2.0 (reconciled with gpu-models.yaml + tensorzero.toml)
 -- Idempotent: Uses ON CONFLICT to allow safe re-seeding
 
 -- =============================================================================
@@ -146,6 +149,39 @@ ON CONFLICT (name) DO UPDATE SET
   description = EXCLUDED.description,
   updated_at = NOW();
 
+-- Anthropic (Claude models — primary persona backbone)
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'anthropic_primary',
+  'anthropic',
+  'https://api.anthropic.com/v1',
+  'ANTHROPIC_API_KEY',
+  'Anthropic Claude models - Primary persona backbone for grounded agent identities',
+  true,
+  '{"location": "cloud", "persona_backbone": true}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
+  description = EXCLUDED.description,
+  updated_at = NOW();
+
+-- TTS (Ultimate TTS Studio — local GPU inference)
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'tts_local',
+  'custom',
+  'http://ultimate-tts-studio:7861',
+  NULL,
+  'Ultimate TTS Studio - Multi-engine local TTS with GPU acceleration',
+  true,
+  '{"network": "internal", "location": "local", "engines": 7}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  api_base = EXCLUDED.api_base,
+  description = EXCLUDED.description,
+  updated_at = NOW();
+
 -- =============================================================================
 -- Local Chat Models (Ollama)
 -- =============================================================================
@@ -167,7 +203,7 @@ BEGIN
     'qwen3:8b',
     'chat',
     '["chat", "function_calling", "json_mode"]'::jsonb,
-    8000,
+    6144,
     32768,
     'Qwen3 8B - Efficient general-purpose model for orchestration and research',
     true
@@ -296,6 +332,111 @@ BEGIN
     5000,
     128000,
     'Llama3.1 - Meta open-source chat model',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Qwen3 32B - Advanced reasoning (from gpu-models.yaml)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'qwen3_32b_local',
+    'qwen3:32b',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use"]'::jsonb,
+    20480,
+    8192,
+    'Qwen3 32B - Advanced reasoning model for complex orchestration',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Qwen3 1.7B - Lightweight tasks (from gpu-models.yaml)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'qwen3_1_7b_local',
+    'qwen3:1.7b',
+    'chat',
+    '["chat", "json_mode"]'::jsonb,
+    1536,
+    4096,
+    'Qwen3 1.7B - Lightweight model for simple tasks and classification',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Llama 3.2 3B - General purpose (from gpu-models.yaml)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'llama3_2_3b_local',
+    'llama3.2:3b',
+    'chat',
+    '["chat", "function_calling"]'::jsonb,
+    2048,
+    8192,
+    'Llama 3.2 3B - Compact general-purpose model',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Code Llama 7B - Code generation (from gpu-models.yaml)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'codellama_7b_local',
+    'codellama:7b',
+    'chat',
+    '["chat", "code_generation", "code_completion"]'::jsonb,
+    4096,
+    16384,
+    'Code Llama 7B - Meta code generation and completion model',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- DeepSeek Coder 6.7B (from gpu-models.yaml)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'deepseek_coder_6_7b_local',
+    'deepseek-coder:6.7b',
+    'chat',
+    '["chat", "code_generation", "code_completion"]'::jsonb,
+    4608,
+    16384,
+    'DeepSeek Coder 6.7B - Code generation and analysis',
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -514,6 +655,156 @@ BEGIN
 END $$;
 
 -- =============================================================================
+-- Anthropic Claude Models (Persona Backbone)
+-- =============================================================================
+
+DO $$
+DECLARE
+  v_anthropic_id UUID;
+BEGIN
+  SELECT id INTO v_anthropic_id FROM pmoves_core.model_providers WHERE name = 'anthropic_primary';
+
+  -- Claude Sonnet 4.5 - Balanced speed/quality (primary persona model)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_anthropic_id,
+    'claude_sonnet_4_5',
+    'claude-sonnet-4-5',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use", "vision", "code_generation"]'::jsonb,
+    0,
+    200000,
+    'Claude Sonnet 4.5 - Balanced speed/quality, primary persona model for Developer/Communicator/Analyst/Creative',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Claude Opus 4.5 - Maximum capability (flagship persona model)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_anthropic_id,
+    'claude_opus_4_5',
+    'claude-opus-4-5',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use", "vision", "code_generation", "deep_reasoning"]'::jsonb,
+    0,
+    200000,
+    'Claude Opus 4.5 - Maximum capability, flagship persona model for Researcher/Strategist/Guardian',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Claude Haiku 4.5 - Fast/efficient (lightweight persona model)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_anthropic_id,
+    'claude_haiku_4_5',
+    'claude-haiku-4-5',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use"]'::jsonb,
+    0,
+    200000,
+    'Claude Haiku 4.5 - Fast and efficient, persona model for Operator and subordinate agents',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+END $$;
+
+-- =============================================================================
+-- TTS Models (Ultimate TTS Studio)
+-- =============================================================================
+
+DO $$
+DECLARE
+  v_tts_id UUID;
+BEGIN
+  SELECT id INTO v_tts_id FROM pmoves_core.model_providers WHERE name = 'tts_local';
+
+  -- Kokoro TTS - Japanese/English
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_tts_id, 'kokoro_tts', 'kokoro', 'tts',
+    '["tts", "japanese", "english"]'::jsonb, 2048, 0,
+    'Kokoro TTS - Japanese/English high-quality synthesis', true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name, capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb, description = EXCLUDED.description, updated_at = NOW();
+
+  -- F5-TTS - High quality synthesis
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_tts_id, 'f5_tts', 'f5-tts', 'tts',
+    '["tts", "high_quality"]'::jsonb, 3072, 0,
+    'F5-TTS - High quality speech synthesis', true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name, capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb, description = EXCLUDED.description, updated_at = NOW();
+
+  -- VoxCPM - Voice cloning capable
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_tts_id, 'voxcpm_tts', 'voxcpm', 'tts',
+    '["tts", "voice_cloning"]'::jsonb, 2560, 0,
+    'VoxCPM - Voice cloning capable TTS', true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name, capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb, description = EXCLUDED.description, updated_at = NOW();
+
+  -- KittenTTS - Fast and light
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_tts_id, 'kitten_tts', 'kitten-tts', 'tts',
+    '["tts", "fast"]'::jsonb, 1536, 0,
+    'KittenTTS - Fast and lightweight synthesis', true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name, capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb, description = EXCLUDED.description, updated_at = NOW();
+
+  -- MeloTTS - Multilingual
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_tts_id, 'melo_tts', 'melo-tts', 'tts',
+    '["tts", "multilingual"]'::jsonb, 1024, 0,
+    'MeloTTS - Multilingual speech synthesis', true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name, capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb, description = EXCLUDED.description, updated_at = NOW();
+
+  -- Piper TTS - Fast CPU/GPU
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_tts_id, 'piper_tts', 'piper', 'tts',
+    '["tts", "fast", "cpu_compatible"]'::jsonb, 512, 0,
+    'Piper TTS - Fast CPU/GPU synthesis', true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name, capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb, description = EXCLUDED.description, updated_at = NOW();
+
+END $$;
+
+-- =============================================================================
 -- Embedding Models
 -- =============================================================================
 
@@ -609,7 +900,7 @@ BEGIN
     'nomic-embed-text',
     'embedding',
     '["embeddings"]'::jsonb,
-    1000,
+    512,
     8192,
     'Nomic Embed Text - Popular local embedding model',
     true
@@ -897,6 +1188,217 @@ BEGIN
 END $$;
 
 -- =============================================================================
+-- Extended Service Model Mappings (Branch C)
+-- =============================================================================
+-- Maps TensorZero functions and PMOVES services to their preferred models.
+-- Covers: hirag_rerank, archon_work_orders, archon_code_review, coding,
+-- orchestrator, vl_sentinel, agent_zero_subordinate, pmoves_media_processor,
+-- tts_synthesis, embedding, research_coordinator, knowledge_manager
+
+DO $$
+DECLARE
+  -- Local models
+  v_qwen3_8b_id UUID;
+  v_qwen2_5_32b_id UUID;
+  v_qwen2_5_14b_id UUID;
+  v_qwen3_reranker_id UUID;
+  v_codellama_id UUID;
+  v_deepseek_coder_id UUID;
+  v_qwen2_vl_id UUID;
+  v_nomic_embed_id UUID;
+  v_qwen3_emb_4b_id UUID;
+  v_nemotron_id UUID;
+
+  -- Cloud models
+  v_openai_id UUID;
+  v_openrouter_id UUID;
+
+  -- Anthropic models
+  v_claude_sonnet_id UUID;
+  v_claude_opus_id UUID;
+  v_claude_haiku_id UUID;
+
+  -- TTS models
+  v_kokoro_id UUID;
+  v_f5_tts_id UUID;
+  v_piper_id UUID;
+BEGIN
+  -- Look up local model IDs
+  SELECT id INTO v_qwen3_8b_id FROM pmoves_core.models WHERE model_id = 'qwen3:8b' LIMIT 1;
+  SELECT id INTO v_qwen2_5_32b_id FROM pmoves_core.models WHERE model_id = 'qwen2.5:32b' LIMIT 1;
+  SELECT id INTO v_qwen2_5_14b_id FROM pmoves_core.models WHERE model_id = 'qwen2.5:14b' LIMIT 1;
+  SELECT id INTO v_qwen3_reranker_id FROM pmoves_core.models WHERE model_id = 'qwen3-reranker:4b' LIMIT 1;
+  SELECT id INTO v_codellama_id FROM pmoves_core.models WHERE model_id = 'codellama:7b' LIMIT 1;
+  SELECT id INTO v_deepseek_coder_id FROM pmoves_core.models WHERE model_id = 'deepseek-coder:6.7b' LIMIT 1;
+  SELECT id INTO v_qwen2_vl_id FROM pmoves_core.models WHERE model_id = 'qwen2-vl:7b' LIMIT 1;
+  SELECT id INTO v_nomic_embed_id FROM pmoves_core.models WHERE model_id = 'nomic-embed-text' LIMIT 1;
+  SELECT id INTO v_qwen3_emb_4b_id FROM pmoves_core.models WHERE model_id = 'qwen3-embedding:4b' LIMIT 1;
+  SELECT id INTO v_nemotron_id FROM pmoves_core.models WHERE model_id = 'nemotron-mini' LIMIT 1;
+
+  -- Look up cloud model IDs
+  SELECT id INTO v_openai_id FROM pmoves_core.models WHERE model_id = 'gpt-4o-mini' AND name = 'chat_openai_platform' LIMIT 1;
+  SELECT id INTO v_openrouter_id FROM pmoves_core.models WHERE model_id = 'openai/gpt-4o-mini' LIMIT 1;
+
+  -- Look up Anthropic model IDs
+  SELECT id INTO v_claude_sonnet_id FROM pmoves_core.models WHERE model_id = 'claude-sonnet-4-5' LIMIT 1;
+  SELECT id INTO v_claude_opus_id FROM pmoves_core.models WHERE model_id = 'claude-opus-4-5' LIMIT 1;
+  SELECT id INTO v_claude_haiku_id FROM pmoves_core.models WHERE model_id = 'claude-haiku-4-5' LIMIT 1;
+
+  -- Look up TTS model IDs
+  SELECT id INTO v_kokoro_id FROM pmoves_core.models WHERE model_id = 'kokoro' LIMIT 1;
+  SELECT id INTO v_f5_tts_id FROM pmoves_core.models WHERE model_id = 'f5-tts' LIMIT 1;
+  SELECT id INTO v_piper_id FROM pmoves_core.models WHERE model_id = 'piper' LIMIT 1;
+
+  -- hirag_rerank — cross-encoder reranking for Hi-RAG v2
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('hirag', 'rerank', v_qwen3_reranker_id, 'local_reranker', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('hirag', 'rerank', v_qwen2_5_14b_id, 'local_qwen14b_fallback', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- archon_work_orders — autonomous workflow execution
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('archon', 'work_orders', v_claude_sonnet_id, 'anthropic_sonnet', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('archon', 'work_orders', v_qwen2_5_32b_id, 'local_qwen32b', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('archon', 'work_orders', v_openrouter_id, 'hosted_openrouter', 10, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- archon_code_review — PR review step
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('archon', 'code_review', v_claude_sonnet_id, 'anthropic_sonnet', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('archon', 'code_review', v_qwen2_5_32b_id, 'local_qwen32b', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- coding — code generation and completion
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('coding', 'generation', v_codellama_id, 'local_codellama', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('coding', 'generation', v_deepseek_coder_id, 'local_deepseek', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('coding', 'generation', v_claude_sonnet_id, 'anthropic_sonnet', 10, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- orchestrator — high-level task orchestration
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('orchestrator', 'planning', v_claude_opus_id, 'anthropic_opus', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('orchestrator', 'planning', v_openai_id, 'hosted_openai', 10, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- vl_sentinel — vision-language analysis
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('vl_sentinel', 'analysis', v_qwen2_vl_id, 'local_qwen2_vl', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- agent_zero_subordinate — lightweight subordinate agents
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('agent_zero_subordinate', 'chat', v_claude_haiku_id, 'anthropic_haiku', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('agent_zero_subordinate', 'chat', v_qwen2_5_14b_id, 'local_qwen14b', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('agent_zero_subordinate', 'chat', v_openrouter_id, 'hosted_openrouter', 10, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- pmoves_media_processor — transcription analysis
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('pmoves_media_processor', 'analysis', v_qwen2_5_14b_id, 'local_qwen14b', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('pmoves_media_processor', 'analysis', v_qwen3_8b_id, 'local_qwen8b', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- tts_synthesis — text-to-speech pipeline
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('tts', 'synthesis', v_kokoro_id, 'kokoro_primary', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('tts', 'synthesis', v_f5_tts_id, 'f5_high_quality', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('tts', 'synthesis', v_piper_id, 'piper_fast', 3, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- embedding — extract-worker indexing
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('extract_worker', 'embedding', v_nomic_embed_id, 'nomic_local', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('extract_worker', 'embedding', v_qwen3_emb_4b_id, 'qwen3_emb_local', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- research_coordinator — complex research synthesis
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('research_coordinator', 'synthesis', v_claude_opus_id, 'anthropic_opus', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('research_coordinator', 'synthesis', v_qwen2_5_32b_id, 'local_qwen32b', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  -- knowledge_manager — RAG and indexing operations
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('knowledge_manager', 'indexing', v_qwen2_5_14b_id, 'local_qwen14b', 1, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+  INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
+  VALUES ('knowledge_manager', 'indexing', v_qwen3_8b_id, 'local_qwen8b', 2, 1.0)
+  ON CONFLICT (service_name, function_name, variant_name) DO UPDATE SET
+    model_id = EXCLUDED.model_id, priority = EXCLUDED.priority, weight = EXCLUDED.weight;
+
+END $$;
+
+-- =============================================================================
 -- Audit Log Entry
 -- =============================================================================
 
@@ -906,7 +1408,7 @@ VALUES (
   'custom',
   'Model registry seed data initialized',
   true,
-  jsonb_build_object('seeded_at', NOW()::text, 'version', '1.0')
+  jsonb_build_object('seeded_at', NOW()::text, 'version', '2.0')
 )
 ON CONFLICT (name) DO UPDATE SET
   metadata = EXCLUDED.metadata,
