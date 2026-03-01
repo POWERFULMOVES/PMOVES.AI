@@ -901,7 +901,13 @@ END $$;
 -- =============================================================================
 
 INSERT INTO pmoves_core.model_providers (name, type, description, active, metadata)
-VALUES ('_seed_audit', 'custom', 'Model registry seed data initialized', true, '{"seeded_at": "' || NOW()::text || '", "version": "1.0"}'::jsonb)
+VALUES (
+  '_seed_audit',
+  'custom',
+  'Model registry seed data initialized',
+  true,
+  jsonb_build_object('seeded_at', NOW()::text, 'version', '1.0')
+)
 ON CONFLICT (name) DO UPDATE SET
   metadata = EXCLUDED.metadata,
   updated_at = NOW();
