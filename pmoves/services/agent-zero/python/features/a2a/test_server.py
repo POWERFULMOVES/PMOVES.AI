@@ -16,8 +16,9 @@ from typing import Generator
 import pytest
 from httpx import AsyncClient, ASGITransport
 from fastapi import status
+from jose import jwt as jose_jwt
 
-from .server import create_app, lifespan, _tasks, _tasks_lock
+from .server import JWT_ALGORITHM, create_app, lifespan, _tasks, _tasks_lock
 from .types import (
     AgentCard,
     Task,
@@ -64,13 +65,28 @@ async def clear_tasks():
         _tasks.clear()
 
 
+@pytest.fixture(autouse=True)
+def discovery_auth_config(monkeypatch):
+    monkeypatch.setenv("A2A_DISCOVERY_PUBLIC", "false")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-discovery-secret")
+
+
+def auth_headers(role: str = "service_role") -> dict[str, str]:
+    payload = {
+        "sub": "test-agent",
+        "role": role,
+    }
+    token = jose_jwt.encode(payload, "test-discovery-secret", algorithm=JWT_ALGORITHM)
+    return {"Authorization": f"Bearer {token}"}
+
+
 class TestAgentCard:
     """Tests for agent discovery and card endpoint."""
 
     @pytest.mark.asyncio
     async def test_get_agent_card(self, client: AsyncClient):
         """Test retrieving the agent card from well-known endpoint."""
-        response = await client.get("/.well-known/agent.json")
+        response = await client.get("/.well-known/agent.json", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -86,7 +102,7 @@ class TestAgentCard:
     @pytest.mark.asyncio
     async def test_agent_card_has_required_fields(self, client: AsyncClient):
         """Test agent card contains all required A2A fields."""
-        response = await client.get("/.well-known/agent.json")
+        response = await client.get("/.well-known/agent.json", headers=auth_headers())
 
         data = response.json()
         required_fields = [
@@ -100,7 +116,7 @@ class TestAgentCard:
     @pytest.mark.asyncio
     async def test_agent_card_skills(self, client: AsyncClient):
         """Test agent card has expected skills defined."""
-        response = await client.get("/.well-known/agent.json")
+        response = await client.get("/.well-known/agent.json", headers=auth_headers())
 
         data = response.json()
         expected_skills = [
@@ -112,6 +128,16 @@ class TestAgentCard:
         skill_ids = [skill["id"] for skill in data.get("skills", [])]
         for skill_id in expected_skills:
             assert skill_id in skill_ids, f"Missing skill: {skill_id}"
+
+    @pytest.mark.asyncio
+    async def test_get_agent_card_requires_auth(self, client: AsyncClient):
+        response = await client.get("/.well-known/agent.json")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @pytest.mark.asyncio
+    async def test_get_agent_card_rejects_anon_role(self, client: AsyncClient):
+        response = await client.get("/.well-known/agent.json", headers=auth_headers(role="anon"))
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 class TestHealthCheck:

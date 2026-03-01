@@ -48,6 +48,7 @@ psutil
 pymupdf
 pypdf
 python-dotenv
+python-jose[cryptography]==3.3.0
 pytesseract
 pytz
 sentence-transformers
