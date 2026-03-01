@@ -13,6 +13,8 @@
 env.tier-*
 # Runtime-populated credential files (never commit populated values)
 pmoves/env.shared
+pmoves/.supabase.status.env
+pmoves/env.supa.runtime
 secrets/
 !pmoves/integrations/**/secrets/
 !pmoves/integrations/**/secrets/labels.yaml
