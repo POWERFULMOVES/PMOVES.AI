@@ -1,43 +1,66 @@
----
-description: Monitor CI/CD status of v3-clean → Hardened migration PRs
----
+# PR Monitor
 
-# PR Monitor for v3-clean Migration
+Monitor PR merge readiness including actionable, nitpick, and out-of-diff review learnings.
 
-## What It Does
+## Arguments
 
-Monitors the CI/CD status, mergeability, and review status of all targeted PRs created for the v3-clean → Hardened migration.
+- `$ARGUMENTS` - Optional: `--strict` for gate mode, `--chit` for CGP packet, `--floos` for full FlOO$ parity
 
-## Usage
+## Instructions
+
+Parse `$ARGUMENTS` and run the appropriate Make target from the `pmoves/` directory.
+
+### Default (no args)
+
+Collect current PR state and review learnings.
+
+1. Run `make -C pmoves pr-monitor`
+2. Display generated artifacts:
+   - `pmoves/docs/logs/pr_monitor_latest.json` — raw PR state snapshot
+   - `pmoves/docs/logs/pr_monitor_learnings_latest.md` — human-readable learnings
+3. Summarize: open PRs count, actionable comments, nitpicks, out-of-diff items
+
+### `--chit`
+
+Generate a CHIT-encoded CGP packet from PR learnings for Graphiti trail handoff.
+
+1. Run `make -C pmoves pr-monitor` (if not already fresh)
+2. Run `make -C pmoves pr-monitor-chit-packet`
+3. Display: `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
+
+### `--strict`
+
+Gate mode — exit 0 required before merge approval.
+
+1. Run `make -C pmoves pr-monitor-strict`
+2. If exit code is non-zero, list blocking items
+3. If exit code is 0, confirm merge readiness
+
+### `--floos`
+
+Full FlOO$ parity check — validates the `pr-monitor-graphiti-chit` skill pairing pipeline.
+
+1. Run `make -C pmoves chit-flow-pr-monitor-strict`
+2. Report: DAG validity, dependency satisfaction, CHIT encoding status, Graphiti sync
+
+## Examples
 
 ```bash
-# Run PR monitoring
-.claude/scripts/pr-monitor.sh
+# Quick PR status check
+/pr-monitor
+
+# Generate CHIT packet for handoff
+/pr-monitor --chit
+
+# Pre-merge gate check
+/pr-monitor --strict
+
+# Full FlOO$ pipeline validation
+/pr-monitor --floos
 ```
 
-## Output
+## Related
 
-The script displays:
-- **Summary table**: PR #, title, mergeable status, CI checks, review status
-- **Detailed status**: URL, mergeable state, check results for each PR
-- **Next steps**: Commands for approving and merging PRs
-
-## PRs Monitored
-
-| PR | Service | Files |
-|----|---------|-------|
-| #528 | Hi-RAG v2 | 2 |
-| #529 | Flute Gateway | 1 |
-| #530 | Presign | 1 |
-| #531 | Publisher Discord | 1 |
-| #532 | Session Context Worker | 1 |
-| #533 | Agent Zero | 1 |
-| #534 | Gateway Agent | 2 |
-
-## Status Icons
-
-- ✅ = PASS / MERGEABLE / APPROVED
-- ❌ = FAIL / CONFLICTING / CHANGES REQUESTED
-- ⏳ = PENDING
-- 👀 = REVIEW REQUIRED
-- 🔄 = CHANGES REQUESTED
+- `/chit:floos validate pr-monitor-graphiti-chit` — Validate the FlOO$ pipeline DAG
+- `/chit:encode` — Encode data as CGP v2 packet
+- `/github:pr-review` — Review a specific PR
