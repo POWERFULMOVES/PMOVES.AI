@@ -1,4 +1,4 @@
-import os, json, base64, hashlib, logging
+import os, json, base64, hashlib, hmac, logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -53,13 +53,12 @@ def verify_hmac(cgp: Dict[str, Any]) -> bool:
     if not sig: return not CHIT_REQUIRE_SIGNATURE
     mac_b64 = sig.get("hmac","")
     doc = dict(cgp); doc.pop("sig", None)
-    mac2 = hashlib.new("sha256", CHIT_PASSPHRASE.encode())
-    mac2.update(canon(doc))
+    mac2 = hmac.new(CHIT_PASSPHRASE.encode("utf-8"), canon(doc), hashlib.sha256).digest()
     try:
         mac1 = base64.b64decode(mac_b64)
     except Exception:
         return False
-    return mac1 == mac2.digest()
+    return hmac.compare_digest(mac1, mac2)
 
 def decrypt_anchor(const: Dict[str, Any]) -> None:
     if "anchor" in const: return
