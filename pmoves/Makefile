@@ -50,8 +50,6 @@ else ifeq ($(SUPABASE_RUNTIME),cli)
   supa_profile :=
 		else
 supa_profile := ,supabase-local
-SUPABASE_RUNTIME ?= cli
-SUPA_PROVIDER := $(SUPABASE_RUNTIME)
 endif
 COMPOSE_PROFILES ?= $(compose_profiles)$(neo4j_profile)$(meili_profile)$(qdrant_profile)$(supa_profile)
 export COMPOSE_PROFILES
