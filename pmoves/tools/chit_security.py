@@ -93,9 +93,16 @@ def encrypt_anchors(cgp: Dict[str, Any], passphrase: str, kid: str | None = None
 
 
 def decrypt_anchors(cgp: Dict[str, Any], passphrase: str) -> Dict[str, Any]:
+    doc = json.loads(json.dumps(cgp))
+    has_encrypted_anchors = any(
+        const.get("anchor_enc")
+        for s in doc.get("super_nodes", []) or []
+        for const in s.get("constellations", []) or []
+    )
+    if not has_encrypted_anchors:
+        return doc
     if not _CRYPTO_OK:
         raise RuntimeError("cryptography not installed")
-    doc = json.loads(json.dumps(cgp))
     for s in doc.get("super_nodes", []) or []:
         for const in s.get("constellations", []) or []:
             enc = const.get("anchor_enc")
@@ -119,4 +126,3 @@ __all__ = [
     "encrypt_anchors",
     "decrypt_anchors",
 ]
-

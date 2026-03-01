@@ -20,6 +20,12 @@ app.mount('/static', StaticFiles(directory='static'), name='static')
 @app.get('/')
 def idx(): return {'ok':True, 'routes':['/samples','/query']}
 
+@app.get('/health')
+def health(): return {'ok': True, 'service': 'retrieval-eval'}
+
+@app.get('/healthz')
+def healthz(): return {'ok': True, 'service': 'retrieval-eval'}
+
 @app.get('/samples')
 def samples(namespace: str = Query('pmoves'), limit: int = Query(20, ge=1, le=200)):
     qc = QdrantClient(url=QDRANT_URL, timeout=20.0)

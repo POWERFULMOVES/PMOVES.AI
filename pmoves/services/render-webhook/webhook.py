@@ -29,14 +29,30 @@ SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
 DEFAULT_NAMESPACE = os.environ.get("DEFAULT_NAMESPACE","pmoves")
 SHARED = os.environ.get("RENDER_WEBHOOK_SHARED_SECRET","")
 AUTO_APPROVE = os.environ.get("RENDER_AUTO_APPROVE","false").lower()=="true"
-SUPA_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-SUPA_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+SUPA_SERVICE_KEY = (
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_KEY")
+    or os.environ.get("SERVICE_ROLE_KEY")
+)
+SUPA_ANON_KEY = (
+    os.environ.get("SUPABASE_ANON_KEY")
+    or os.environ.get("SUPABASE_PUBLISHABLE_KEY")
+    or os.environ.get("ANON_KEY")
+)
+
+
+def _usable_jwt(token: Optional[str]) -> bool:
+    if not token:
+        return False
+    if "${" in token:
+        return False
+    return token.count(".") >= 2
 
 def inject_auth_headers(headers: Dict[str,str]):
     token = None
-    if SUPA_SERVICE_KEY and "." in SUPA_SERVICE_KEY:
+    if _usable_jwt(SUPA_SERVICE_KEY):
         token = SUPA_SERVICE_KEY
-    elif SUPA_ANON_KEY and "." in SUPA_ANON_KEY:
+    elif _usable_jwt(SUPA_ANON_KEY):
         token = SUPA_ANON_KEY
     if token:
         headers["apikey"] = token
