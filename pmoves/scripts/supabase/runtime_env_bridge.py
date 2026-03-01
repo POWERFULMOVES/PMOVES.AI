@@ -64,12 +64,6 @@ def main() -> int:
         "SUPABASE_EXTERNAL_URL": external_api_url,
         "SUPABASE_REST_EXTERNAL_URL": external_rest_url,
         "SUPA_REST_EXTERNAL_URL": external_rest_url,
-        # Keys mirrored from supabase status --output env.
-        "SUPABASE_ANON_KEY": src.get("ANON_KEY", ""),
-        "SUPABASE_PUBLISHABLE_KEY": src.get("ANON_KEY", ""),
-        "SUPABASE_SERVICE_ROLE_KEY": src.get("SERVICE_ROLE_KEY", ""),
-        "SUPABASE_SECRET_KEY": src.get("SERVICE_ROLE_KEY", ""),
-        "SUPABASE_JWT_SECRET": src.get("JWT_SECRET", ""),
     }
 
     write_env_file(Path(args.output), bridge)
