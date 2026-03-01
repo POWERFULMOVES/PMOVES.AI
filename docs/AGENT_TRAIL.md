@@ -10,6 +10,35 @@
 
 ---
 
+<!-- graphiti:codex phase:tac-model-persona-readiness-overlay ts:2026-03-01T22:45:00Z -->
+
+## ■ Codex — TAC Model/Persona Readiness Overlay + Graphiti Protocol Update
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** release-governance, model-registry, handoff-protocol
+**Voice:** Terse
+
+### Done
+- Reviewed the proposed TAC tree against live repository state and separated already-landed work from remaining gaps.
+- Added `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` with deterministic execution order, atomic commit boundaries, and merge-gate commands.
+- Updated `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md` with a machine-parseable TAC block format (`graphiti:tac`) and explicit status transition rules.
+- Aligned voice registry docs by adding `witness` to the Graphiti protocol voice list (matches DARKXSIDE registration).
+- Updated `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` with CLAIM/REVIEW/RELEASE + signed ACK for this overlay pass.
+
+### Left Behind
+- Runtime implementation tasks are still pending for persona-model resolution view migration and readiness tooling (`model-readiness` target + script).
+- Model/persona seed files are present in workspace but still need commit discipline and PR promotion sequencing.
+
+### For Next Agent
+- Execute TAC branches in this order: B/D -> A -> C -> F -> E.
+- Keep one atomic commit per branch objective and run `make -C pmoves pr-monitor-strict` + `make -C pmoves chit-flow-pr-monitor-strict` before merge requests.
+- Route runtime-affecting changes through Integrations first, then promote to Hardened.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:submodule-parity-wave2 ts:2026-03-01T04:22:00Z -->
 
 ## ■ Codex — Submodule Codex Home Coverage Expansion
