@@ -221,16 +221,16 @@ pr-monitor-chit-packet: ## Encode PR monitor learnings into CHIT packet artifact
 	@echo "Wrote CHIT packet: docs/logs/pr_monitor_learnings_latest.cgp.json"
 
 floos-status: ## Show FlOO$ pairing status
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
 
 floos-pr-monitor-validate: ## Validate FlOO$ dependencies for PR monitor pairing
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver validate "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver validate "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
 
 floos-pr-monitor-resolve: ## Resolve FlOO$ DAG for PR monitor pairing
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver resolve "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver resolve "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
 
 floos-pr-monitor-run-dry: ## Dry-run FlOO$ execution plan for PR monitor pairing
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
 
 chit-flow-pr-monitor: ## CHIT flow wrapper: PR monitor + FlOO$ validation/resolve + CHIT packet
 	@$(MAKE) --no-print-directory pr-monitor
