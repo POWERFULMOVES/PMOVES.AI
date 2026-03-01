@@ -999,7 +999,7 @@ services:
     build: ./services/render-webhook
     restart: unless-stopped
     environment:
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+    - SUPA_REST_URL=${RENDER_WEBHOOK_SUPA_REST_URL:-http://supabase-postgrest:3000}
     - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
     ports:
@@ -2076,7 +2076,7 @@ services:
     environment:
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - PORT=8113
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
       - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
       - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
       - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
@@ -2086,7 +2086,9 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8113:8113"]
     profiles: ["orchestration"]
-    networks: [pmoves_app, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    extra_hosts:
+    - host.docker.internal:host-gateway
 
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
   ultimate-tts-studio:
@@ -2137,7 +2139,8 @@ services:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
       - PORT=8055
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
+      - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
@@ -2145,7 +2148,9 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8055:8055", "8056:8056"]
     profiles: ["orchestration", "media"]
-    networks: [pmoves_app, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    extra_hosts:
+    - host.docker.internal:host-gateway
 
   # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
   tokenism-simulator:

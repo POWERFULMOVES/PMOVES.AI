@@ -21,8 +21,11 @@ services:
       - WEBHOOK_URL=http://localhost:5678
       - GENERIC_TIMEZONE=${TZ:-America/New_York}
       - TZ=${TZ:-America/New_York}
-      - N8N_RUNNERS_ENABLED=true
-      - N8N_RUNNERS_MODE=external
+      - N8N_RUNNERS_ENABLED=${N8N_RUNNERS_ENABLED:-true}
+      # Default to internal mode so n8n doesn't crash-loop when external runner
+      # auth token is unset. Set N8N_RUNNERS_MODE=external for split-runner deployments.
+      - N8N_RUNNERS_MODE=${N8N_RUNNERS_MODE:-internal}
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN:-}
       - N8N_RUNNERS_PAYLOAD_MODE=filesystem
       - N8N_PUBLIC_API_ENABLED=true
       # Public API auth (n8n >= 1.0)
@@ -54,6 +57,7 @@ services:
     <<: *env-tier-worker
     environment:
       - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN:-}
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
     depends_on:
       - n8n
