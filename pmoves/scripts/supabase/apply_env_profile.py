@@ -76,9 +76,6 @@ def main() -> int:
             "SUPABASE_REST_URL": rest_url,
             "SUPA_REST_URL": rest_url,
             "SUPA_REST_INTERNAL_URL": internal_rest_url or rest_url,
-            "SUPABASE_ANON_KEY": status.get("ANON_KEY", ""),
-            "SUPABASE_SERVICE_ROLE_KEY": status.get("SERVICE_ROLE_KEY", ""),
-            "SUPABASE_JWT_SECRET": status.get("JWT_SECRET", ""),
         }
     else:
         updates = {}
