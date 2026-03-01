@@ -152,6 +152,49 @@ switching from direct overlap to a controlled overlay handoff.
 - `parity_report_path`
 - `agent_signature`
 
+## Claude Review Lane (Scout Role)
+
+When Claude operates in the scout role under the KRISS KROSS Accord, it feeds
+security review findings, submodule audits, and dependency triage into the
+CHIT/FlOO$ pipeline. This formalizes the handshake between Claude's review work
+and Codex's `pr-monitor-graphiti-chit` skill pairing.
+
+### Lane Definition
+
+| Field | Value |
+|-------|-------|
+| **Lane** | PR security review, submodule audit, dependency triage |
+| **Agent** | `claude-opus` (◆ Diamond / `#7C3AED`) |
+| **NATS Subject** | `ops.pr.review.completed.v1` |
+| **Artifact** | `pmoves/docs/logs/claude_review_latest.cgp.json` |
+| **Trail** | `docs/AGENT_TRAIL.md` with ◆ Diamond / `#7C3AED` signature |
+| **Handoff** | Learnings feed `pr-monitor-graphiti-chit` pairing |
+
+### Workflow
+
+1. Claude reviews PRs, merges approved changes, documents findings
+2. `/chit:review-sweep` collects PR state via `make -C pmoves pr-monitor`
+3. `make -C pmoves pr-monitor-chit-packet` encodes learnings as CGP
+4. Optional: trail entry written to `docs/AGENT_TRAIL.md`
+5. `ops.pr.review.completed.v1` published to NATS (best-effort)
+6. Codex's `pr-monitor-graphiti-chit` pairing picks up the CGP packet
+
+### Hook Integration
+
+The `.claude/hooks/post-review-chit.sh` hook provides lightweight automation:
+- Encodes review output via `chit_encode_hook.py`
+- Writes `pmoves/docs/logs/claude_review_latest.cgp.json`
+- Best-effort NATS publish (graceful skip when offline)
+
+### Parallel to Codex's Lane
+
+| | Codex (Lead) | Claude (Scout) |
+|---|---|---|
+| **Trigger** | `make -C pmoves pr-monitor` | `/chit:review-sweep` |
+| **NATS** | `ops.pr.monitor.completed.v1` | `ops.pr.review.completed.v1` |
+| **Artifact** | `pr_monitor_learnings_latest.cgp.json` | `claude_review_latest.cgp.json` |
+| **Pipeline** | `pr-monitor-graphiti-chit` | Feeds into same pipeline |
+
 ## How Signatures Connect to CGP
 
 CGP v2 attribution records use `contributor.address` to identify who contributed to a geometry packet. The AI Graphiti `agent_id` maps directly to this field:

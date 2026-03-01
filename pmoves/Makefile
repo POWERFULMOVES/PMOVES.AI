@@ -100,7 +100,11 @@ ifneq ("$(wildcard .env.local)","")
   COMPOSE_ENV_FILES += --env-file .env.local
 endif
 ifneq ("$(wildcard env.supa.runtime)","")
-  COMPOSE_ENV_FILES += --env-file env.supa.runtime
+  # Runtime overlay is generated from Supabase CLI status output.
+  # In compose runtime it can become stale and override valid in-network URLs.
+  ifeq ($(SUPABASE_RUNTIME),cli)
+    COMPOSE_ENV_FILES += --env-file env.supa.runtime
+  endif
 endif
 ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
@@ -1042,15 +1046,25 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 
 yt-docs-sync: ## Ask PMOVES.YT to capture yt-dlp help/extractors and upsert into Supabase
 	@$(LOAD_ENV_SHARED); \
-	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8091}; \
+	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
+	  if echo "$$base" | grep -q "pmoves-yt"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Syncing yt-dlp docs via $$base/yt/docs/sync"; \
-	  curl -fsS -X POST "$$base/yt/docs/sync" | jq .
+	  if command -v jq >/dev/null 2>&1; then \
+	    curl -fsS -X POST "$$base/yt/docs/sync" | jq .; \
+	  else \
+	    curl -fsS -X POST "$$base/yt/docs/sync"; echo; \
+	  fi
 
 yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
 	@$(LOAD_ENV_SHARED); \
-	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8091}; \
+	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
+	  if echo "$$base" | grep -q "pmoves-yt"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Hitting $$base/yt/docs/catalog"; \
-	  curl -fsS "$$base/yt/docs/catalog" | jq '{ok, meta, counts}'
+	  if command -v jq >/dev/null 2>&1; then \
+	    curl -fsS "$$base/yt/docs/catalog" | jq "{ok, meta, counts}"; \
+	  else \
+	    curl -fsS "$$base/yt/docs/catalog"; echo; \
+	  fi
 
 .PHONY: gpu-rerank-evidence
 gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmoves/docs/logs/
@@ -1062,7 +1076,11 @@ gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmov
 
 .PHONY: evidence-auto
 evidence-auto: ## Capture basic evidence (yt-dlp, Loki, hi-rag v2 CPU/GPU, presign) into pmoves/PR_EVIDENCE
-	@bash tools/capture_evidence.sh
+	@if [ -f tools/capture_evidence.sh ]; then \
+	  bash tools/capture_evidence.sh; \
+	else \
+	  echo "↷ tools/capture_evidence.sh missing — skipping evidence capture"; \
+	fi
 
 .PHONY: bringup-with-ui
 bringup-with-ui: ## One-shot: supabase, core, agents, externals, monitoring, UI (dev), then auto-capture evidence
@@ -1071,7 +1089,7 @@ bringup-with-ui: ## One-shot: supabase, core, agents, externals, monitoring, UI 
 .PHONY: verify-all
 verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + monitoring report + core/gpu smokes
 	@echo "-> Full verify starting (parallel readiness)"
-	@$(MAKE) --no-print-directory bringup-with-ui PARALLEL=1 WAIT_T_LONG=$(or $(WAIT_T_LONG),300)
+	@$(MAKE) --no-print-directory bringup-with-ui PARALLEL=$(or $(VERIFY_PARALLEL),1) WAIT_T_LONG=$(or $(WAIT_T_LONG),300)
 	@echo "-> Retro preflight"
 	@$(MAKE) --no-print-directory preflight-retro
 	@echo "-> Monitoring report"
@@ -1938,16 +1956,41 @@ archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload)
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
-	@bash -lc 'url="http://127.0.0.1:65421/rest/v1"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth=""; \
-	if [ -f pmoves/.env.local ]; then \
-	  v=$$(grep -m1 '^SUPA_REST_URL=' pmoves/.env.local | cut -d= -f2-); [ -n "$$v" ] && url="$$v"; \
-	  a=$$(grep -m1 '^SUPABASE_ANON_KEY=' pmoves/.env.local | cut -d= -f2-); [ -n "$$a" ] && auth="$$a"; \
+	@bash -lc 'url="$${SUPA_REST_URL:-$${SUPABASE_REST_URL:-}}"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth="$${SUPABASE_ANON_KEY:-$${ANON_KEY:-}}"; \
+	stripq() { printf "%s" "$$1" | sed -e "s/^\\\"//" -e "s/\\\"$$//"; }; \
+	if [ -z "$$url" ] && [ -f .supabase.status.env ]; then \
+	  v=$$(grep -m1 "^API_URL=" .supabase.status.env | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v/rest/v1"; \
+	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^ANON_KEY=" .supabase.status.env | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
 	fi; \
-	hdr=""; [ -n "$$auth" ] && hdr="-H Authorization: Bearer $$auth"; echo "→ REST policy probe $$url/$$table"; \
-	code=$$(curl -s -o /dev/null -w "%{http_code}" $$hdr "$$url/$$table" || true); \
+	if [ -z "$$url" ] && [ -f env.supa.runtime ]; then \
+	  v=$$(grep -m1 "^SUPA_REST_URL=" env.supa.runtime | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v"; \
+	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^SUPABASE_ANON_KEY=" env.supa.runtime | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
+	fi; \
+	if [ -z "$$url" ] && [ -f .env.local ]; then \
+	  v=$$(grep -m1 "^SUPA_REST_URL=" .env.local | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v"; \
+	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^SUPABASE_ANON_KEY=" .env.local | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
+	fi; \
+	if [ -n "$$url" ]; then \
+	  c=$$(curl -s -o /dev/null -w "%{http_code}" "$$url/" || true); \
+	  if echo "$$c" | grep -Eq "^0+$$"; then url=""; fi; \
+	fi; \
+	if [ -z "$$url" ]; then \
+	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3000"; do \
+	    c=$$(curl -s -o /dev/null -w "%{http_code}" "$$cand/" || true); \
+	    case "$$c" in 2*|3*|4*) url="$$cand"; break;; esac; \
+	  done; \
+	fi; \
+	[ -z "$$url" ] && url="http://127.0.0.1:65421/rest/v1"; \
+	echo "→ REST policy probe $$url/$$table"; \
+	if [ -n "$$auth" ]; then \
+	  raw=$$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$auth" "$$url/$$table" || true); \
+	else \
+	  raw=$$(curl -s -o /dev/null -w "%{http_code}" "$$url/$$table" || true); \
+	fi; \
+	code=$$(printf "%s" "$$raw" | grep -Eo "[0-9]{3}" | tail -1); \
 	if [ "$$code" = "200" ]; then echo "✔ $$table accessible (200)"; \
 	elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; \
-	elif [ -z "$$code" ] || [ "$$code" = "000" ] || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
+	elif [ -z "$$code" ] || echo "$$code" | grep -Eq "^0+$$" || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
 	else echo "↷ REST probe HTTP $$code"; fi'
 
 .PHONY: archon-headless-smoke

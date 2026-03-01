@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
@@ -570,13 +571,32 @@ def get_service_url_sync(slug: str, *, default_port: int = 80) -> str:
     Returns:
         Resolved service URL
     """
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    coro = get_service_url(slug, default_port=default_port)
 
-    return loop.run_until_complete(get_service_url(slug, default_port=default_port))
+    # No running loop in this thread: normal sync execution path.
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    # Running loop exists (e.g., uvicorn import/startup path). Execute in a
+    # dedicated thread with its own loop to avoid nested-loop RuntimeError.
+    result: dict[str, str] = {}
+    error: dict[str, BaseException] = {}
+
+    def _runner() -> None:
+        try:
+            result["url"] = asyncio.run(coro)
+        except BaseException as exc:  # pragma: no cover - defensive
+            error["exc"] = exc
+
+    worker = threading.Thread(target=_runner, name="service-registry-sync", daemon=True)
+    worker.start()
+    worker.join()
+
+    if "exc" in error:
+        raise error["exc"]
+    return result["url"]
 
 
 @lru_cache(maxsize=128)
