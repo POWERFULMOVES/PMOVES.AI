@@ -602,3 +602,74 @@ When developing features for PMOVES.AI:
 7. **Respect context tiers** - Load only appropriate context level for your task
 
 PMOVES.AI is a sophisticated production system. Your role is to build features that integrate with this ecosystem, not replace it.
+
+## Skill Pairing Awareness
+
+When orchestrating multi-step work, consult `pmoves/configs/skill-pairings.yaml` to identify the correct pipeline and agent chain for the task at hand.
+
+**How to use:**
+1. Match the current task to one of the 7 defined pairings below
+2. Check `depends` for each chain step — verify services are healthy before proceeding
+3. Assign work to the agent specified in each step (or delegate via Agent Zero MCP)
+4. Publish completion hooks to NATS as each step finishes
+
+**Quick Reference — Skill Pairings:**
+
+| Pairing | Steps | Agents | NATS Subject |
+|---------|-------|--------|-------------|
+| `model-benchmark-viz` | model-trainer → benchmark → chart → render | agent-zero → archon → creator | `skills.pipeline.model-benchmark-viz.v1` |
+| `ingest-chit-index` | extract → chit-encode → hirag-index | extract-worker → tokenism → hirag | `skills.pipeline.ingest-chit-index.v1` |
+| `research-summarize-render` | deepresearch → chart → render | deepresearch → archon → creator | `skills.pipeline.research-render.v1` |
+| `chit-3d-viz` | chit-encode → threejs-render | tokenism → hyperdimensions | `skills.pipeline.chit-3d-viz.v1` |
+| `voice-synthesis` | text-generate → prosodic → tts | agent-zero → flute → ultimate-tts | `skills.pipeline.voice-synthesis.v1` |
+| `agent-card-gen` | theme → comfyui → card | archon → creator → archon | `skills.pipeline.agent-card-gen.v1` |
+| `pr-monitor-graphiti-chit` | pr-monitor → encode → trail-sync | codex → tokenism → archon | `skills.pipeline.pr-monitor-graphiti-chit.v1` |
+
+**Commands:**
+- `/chit:floos status` — Show all pairing statuses
+- `/chit:floos validate <pairing>` — Validate dependencies for a pairing
+- `make -C pmoves floos-status` — CLI equivalent
+
+Skill pairing consultation is **advisory** — use it to inform agent assignment, not as a hard gate.
+
+## CHIT-Signed Graphiti Trail
+
+After significant work, sign a Graphiti trail entry with CHIT HMAC for provenance and attribution.
+
+**Flow:** Write trail entry → Sign with `sign_cgp()` → Emit `agent.graphiti.signed.v1` to NATS
+
+**When to sign:**
+- Multi-file changes (3+ files modified)
+- Task or subtask completion
+- Agent handoff (passing work to another contributor)
+- PR review completion
+- Session end with meaningful changes
+
+**Trail entry format:**
+```
+◆ Claude Opus | #7C3AED | Phase H | <timestamp>
+Summary: <one-line summary of work>
+Resonance: security-audit, architecture, ...
+```
+
+**How to sign:**
+```bash
+# Via Make target (preferred)
+make -C pmoves sign-trail SUMMARY="Completed security hardening" AGENT=claude-opus PHASE="Phase H"
+
+# Via skill command
+/chit:sign-trail "Completed security hardening"
+
+# Via Python directly
+python pmoves/tools/sign_trail.py --agent-id claude-opus --summary "Completed security hardening"
+```
+
+**Automatic signing:** A PostToolUse hook on Edit/Write auto-signs when the file path contains `AGENT_TRAIL` or `graphiti`. No manual action needed for trail file writes.
+
+**Signing is optional locally** — if `CHIT_PASSPHRASE` is not set, payloads are emitted unsigned with a stderr warning. This is expected in development. Never hardcode passphrases.
+
+**Infrastructure:**
+- Signing tool: `pmoves/tools/sign_trail.py` (imports `sign_cgp()` from `chit_security.py`)
+- Agent registry: `pmoves/config/agent_signatures.yaml` (glyph, color, voice per agent)
+- Schema: `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json`
+- Log artifact: `pmoves/docs/logs/graphiti_signed_latest.json` (runtime, gitignored)
