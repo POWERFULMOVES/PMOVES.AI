@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 
-PARITY_CMD_RE = re.compile(r"`/([a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*)`")
+PARITY_CMD_RE = re.compile(r"`/([a-z0-9][a-z0-9-]*(?::[a-z0-9][a-z0-9-]*)?)`")
 
 
 def _repo_root() -> Path:
