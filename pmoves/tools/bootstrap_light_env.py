@@ -105,10 +105,44 @@ def host_tool_report(strict: bool) -> int:
         else:
             print(f"  MISSING {name}")
             missing.append(name)
+    dotnet_ok, dotnet_detail = has_dotnet_sdk(8)
+    if dotnet_ok:
+        print(f"  OK     dotnet-sdk: {dotnet_detail}")
+    else:
+        print("  MISSING dotnet-sdk: required .NET SDK 8+ not found")
+        print("          Install: winget install --id Microsoft.DotNet.SDK.8 --exact")
+        missing.append("dotnet-sdk")
     if strict and missing:
         print(f"ERROR: missing required host tools: {', '.join(missing)}")
         return 1
     return 0
+
+
+def has_dotnet_sdk(min_major: int) -> tuple[bool, str]:
+    dotnet_bin = shutil.which("dotnet")
+    if not dotnet_bin:
+        return False, "dotnet CLI not found"
+    try:
+        completed = subprocess.run(
+            [dotnet_bin, "--list-sdks"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as exc:
+        return False, f"failed to query SDKs: {exc}"
+    lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    if not lines:
+        return False, "no SDKs installed"
+    majors: list[int] = []
+    for line in lines:
+        version_token = line.split(" ", 1)[0]
+        major_token = version_token.split(".", 1)[0]
+        if major_token.isdigit():
+            majors.append(int(major_token))
+    if not majors or max(majors) < min_major:
+        return False, f"highest SDK major {max(majors) if majors else 'none'}"
+    return True, lines[0]
 
 
 def activation_hint(venv_path: Path) -> None:
