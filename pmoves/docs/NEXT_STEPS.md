@@ -5,6 +5,7 @@ _Last updated: 2026-03-01_
 
 ### Latest changes (Mar 1, 2026)
 - Hardened release PR queue is clear (`0` open PRs).
+- Codex submodule overlay parity pass completed: `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/` now covers all tracked submodules (40/40), and `make -C pmoves codex-audit` reports focus coverage at 14/14.
 - Closed hardened production PR wave:
   - `#720` fix(security): resolve 3 critical CodeQL alerts
   - `#722` fix(topology): clean core archon-ui gate parity
