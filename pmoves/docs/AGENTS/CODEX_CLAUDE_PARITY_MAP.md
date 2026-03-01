@@ -98,6 +98,53 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/yt:ingest-video` | `curl -X POST http://localhost:8077/yt/ingest -H "Content-Type: application/json" -d '{"url":"<youtube-url>","namespace":"pmoves.manual"}'` |
 | `/yt:pending` | inspect pending/discovered queue via channel-monitor logs and Supabase status tables |
 
+## Wave-2 completion map (Mar 2026)
+
+| Claude command | Codex equivalent |
+| --- | --- |
+| `/botz:init` | bootstrap BoTZ runtime using `PMOVES-BoTZ/config/codex/mcp_gateway.json` plus `make -C pmoves codex-config` |
+| `/botz:profile` | set BoTZ profile via BoTZ config and verify with `make -C pmoves codex-health-quick` |
+| `/botz:secrets` | run `make -C pmoves secrets-funnel` and validate with `make -C pmoves secrets-audit` |
+| `/crush:setup` | configure local Crush/TensorZero provider lane and validate with `make -C pmoves codex-health-quick` |
+| `/crush:status` | inspect Crush/GPU provider health through TensorZero and GPU status endpoints |
+| `/db:backup` | run backup workflow for active runtime DB (`make -C pmoves supa-status` then DB backup script) |
+| `/db:migrate` | apply migrations with `make -C pmoves supabase-bootstrap` |
+| `/db:query` | query runtime DB via `docker exec`/`psql` against Supabase/Postgres containers |
+| `/deploy:audit-layers` | run `make -C pmoves audit-layers-static && make -C pmoves audit-layers-runtime` |
+| `/discord:notify` | publish notification payloads via `services/publisher-discord` webhook path and verify `/healthz` on `:8094` |
+| `/health:metrics` | inspect Prometheus/Grafana targets: `make -C pmoves monitoring-report` |
+| `/hyperdim:animate` | run Hyperdimensions animation path via geometry UI lane (`make -C pmoves web-geometry`) |
+| `/hyperdim:export` | export Hyperdimensions/geometry packet artifacts from geometry services and overlays |
+| `/hyperdim:render` | render Hyperdimensions boundary views using geometry + EvoSwarm control-plane endpoints |
+| `/jellyfin:sync` | trigger bridge refresh and validate with `make -C pmoves jellyfin-verify` |
+| `/k8s:deploy` | apply deployment manifests from K8s ops lane for target environment |
+| `/k8s:logs` | inspect pod logs via `kubectl logs` for target namespace/workload |
+| `/k8s:status` | inspect cluster workload state via `kubectl get pods,svc -A` |
+| `/langextract:extract` | execute extraction lane using configured provider (`tensorzero`/Workers AI) |
+| `/langextract:process` | run LangExtract processing pipeline against queued items |
+| `/langextract:provider` | set provider route and validate via `LANGEXTRACT_PROVIDER` plus health checks |
+| `/langextract:status` | inspect LangExtract runtime health/telemetry outputs |
+| `/minio:presign` | validate presign service with `make -C pmoves smoke-presign-put` |
+| `/minio:status` | verify storage endpoint and credentials with `make -C pmoves preflight` |
+| `/minio:upload` | upload through presign PUT flow and confirm object availability |
+| `/model:load` | load runtime model profile via `make -C pmoves model-apply` or `model-swap` |
+| `/model:unload` | unload/retire model lane using model profile controls and GPU optimize path |
+| `/notebook:query` | query notebook service/API state and data path on `:8095` |
+| `/notebook:sync` | sync notebook ingestion/indexing through notebook ops workflow |
+| `/observability:alerts` | inspect alert status in Grafana/Prometheus alerting lanes |
+| `/observability:dashboard` | open runtime dashboards (`Grafana`, services overview) and verify panels |
+| `/observability:query` | run Prometheus/Loki queries for live runtime diagnostics |
+| `/pipecat:connect` | validate Flute/Pipecat connectivity using voice session endpoints |
+| `/tensorzero:models` | query TensorZero model registry endpoint and active providers |
+| `/tts:test-all` | run full TTS validation across configured voices/providers |
+| `/tts:voices` | list available TTS voices from the runtime provider |
+| `/voice:status` | inspect voice pipeline health (`Flute`, TTS backend) |
+| `/voice:synthesize` | synthesize sample output via Flute `/v1/voice/synthesize/prosodic` |
+| `/workitems:claim` | claim work item in team queue and emit tracking note via PR/CHIT flow |
+| `/workitems:complete` | close work item and record completion evidence in trail/docs |
+| `/workitems:list` | list current work items from task board/queue source |
+| `/ultrathink` | run deep-dive reasoning mode and attach structured output to execution notes |
+
 ## Voice stack (Flute/TTS/Pipecat)
 
 | Claude command | Codex equivalent |
