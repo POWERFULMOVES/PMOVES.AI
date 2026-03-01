@@ -87,6 +87,12 @@ function Resolve-SupabaseRestUrl {
 }
 
 function Resolve-SupabaseAnonKey {
+  $tierSupabase = Join-Path $Script:ProjectRoot 'env.tier-supabase'
+  $tierAnon = Get-EnvFileValue -Path $tierSupabase -Key 'SUPABASE_ANON_KEY'
+  if (-not [string]::IsNullOrWhiteSpace($tierAnon)) {
+    return $tierAnon.Trim()
+  }
+
   $direct = $env:SUPABASE_ANON_KEY
   if (-not [string]::IsNullOrWhiteSpace($direct)) {
     return $direct.Trim()
@@ -98,13 +104,77 @@ function Resolve-SupabaseAnonKey {
     return $overlayAnon.Trim()
   }
 
+  return $null
+}
+
+function Resolve-SupabaseServiceKey {
   $tierSupabase = Join-Path $Script:ProjectRoot 'env.tier-supabase'
-  $tierAnon = Get-EnvFileValue -Path $tierSupabase -Key 'SUPABASE_ANON_KEY'
-  if (-not [string]::IsNullOrWhiteSpace($tierAnon)) {
-    return $tierAnon.Trim()
+  foreach ($k in @('SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY')) {
+    $v = Get-EnvFileValue -Path $tierSupabase -Key $k
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
+  }
+
+  $direct = $env:SERVICE_ROLE_KEY
+  if ([string]::IsNullOrWhiteSpace($direct)) { $direct = $env:SUPABASE_SECRET_KEY }
+  if ([string]::IsNullOrWhiteSpace($direct)) { $direct = $env:SUPABASE_SERVICE_ROLE_KEY }
+  if (-not [string]::IsNullOrWhiteSpace($direct)) {
+    return $direct.Trim()
+  }
+
+  $runtimeOverlay = Join-Path $Script:ProjectRoot 'env.supa.runtime'
+  foreach ($k in @('SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY')) {
+    $v = Get-EnvFileValue -Path $runtimeOverlay -Key $k
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
   }
 
   return $null
+}
+
+function Resolve-ChitPassphrase {
+  foreach ($k in @('CHIT_PASSPHRASE', 'CHIT_PROD_PASSPHRASE')) {
+    $v = (Get-Item -Path "Env:$k" -ErrorAction SilentlyContinue).Value
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
+  }
+
+  foreach ($path in @(
+    (Join-Path $Script:ProjectRoot 'env.tier-agent'),
+    (Join-Path $Script:ProjectRoot 'env.shared'),
+    (Join-Path $Script:ProjectRoot 'env.tier-api')
+  )) {
+    foreach ($k in @('CHIT_PASSPHRASE', 'CHIT_PROD_PASSPHRASE')) {
+      $v = Get-EnvFileValue -Path $path -Key $k
+      if (-not [string]::IsNullOrWhiteSpace($v)) {
+        return $v.Trim()
+      }
+    }
+  }
+  return $null
+}
+
+function Sign-CgpJson {
+  param(
+    [Parameter(Mandatory)][string]$CgpJson,
+    [Parameter(Mandatory)][string]$Passphrase
+  )
+  $py = @'
+import json, sys
+from tools.chit_security import sign_cgp
+
+doc = json.loads(sys.stdin.read())
+signed = sign_cgp(doc, sys.argv[1])
+sys.stdout.write(json.dumps(signed, separators=(",", ":")))
+'@
+  $signed = ($CgpJson | python -c $py $Passphrase)
+  if ([string]::IsNullOrWhiteSpace($signed)) {
+    throw "Failed to sign CGP payload"
+  }
+  return $signed
 }
 
 function Escape-ShSingleQuotes {
@@ -296,8 +366,18 @@ function Test-QdrantReady {
 try {
   $supaRestBase = Resolve-SupabaseRestUrl
   $supaAnonKey = Resolve-SupabaseAnonKey
+  $supaServiceKey = Resolve-SupabaseServiceKey
+  $chitPassphrase = Resolve-ChitPassphrase
   $supaHeaders = $null
-  if (-not [string]::IsNullOrWhiteSpace($supaAnonKey)) {
+  $supaServiceHeaders = $null
+  if (-not [string]::IsNullOrWhiteSpace($supaServiceKey)) {
+    $supaServiceHeaders = @{
+      'apikey' = $supaServiceKey
+      'Authorization' = "Bearer $supaServiceKey"
+    }
+    # Prefer service-role auth for smoke verification when available.
+    $supaHeaders = $supaServiceHeaders
+  } elseif (-not [string]::IsNullOrWhiteSpace($supaAnonKey)) {
     $supaHeaders = @{
       'apikey' = $supaAnonKey
       'Authorization' = "Bearer $supaAnonKey"
@@ -358,7 +438,17 @@ try {
 
   # 8. Verify studio_board row
   Write-Step "[8/12] Verify studio_board row..."
-  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "http://supabase-postgrest:3000/studio_board?order=id.desc&limit=1" -Headers $supaHeaders }
+  $rows = $null
+  try {
+    $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
+      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "http://supabase-postgrest:3000/studio_board?order=id.desc&limit=1" -Headers $supaHeaders
+    }
+  } catch {
+    if ($null -eq $supaServiceHeaders) { throw }
+    $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
+      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "http://supabase-postgrest:3000/studio_board?order=id.desc&limit=1" -Headers $supaServiceHeaders
+    }
+  }
   if ($null -eq $rows -or $rows.Count -lt 1 -or $null -eq $rows[0].title) { throw 'No row with title found' }
   Write-OK
 
@@ -419,6 +509,11 @@ try {
     )
   }
   $eventBody = @{ type = "geometry.cgp.v1"; data = $cgp } | ConvertTo-Json -Depth 10
+  if (-not [string]::IsNullOrWhiteSpace($chitPassphrase)) {
+    $cgpJson = $cgp | ConvertTo-Json -Depth 10 -Compress
+    $signedCgpJson = Sign-CgpJson -CgpJson $cgpJson -Passphrase $chitPassphrase
+    $eventBody = '{"type":"geometry.cgp.v1","data":' + $signedCgpJson + '}'
+  }
   Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8086/geometry/event' -BodyJson $eventBody } | Out-Null
   Write-OK
 
