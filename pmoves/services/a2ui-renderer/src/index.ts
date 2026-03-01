@@ -125,6 +125,7 @@ const renderLimiter = rateLimit({
   message: { ok: false, error: 'Too many render requests, try again later' },
 });
 
+
 type AuthenticatedRequest = Request & { user?: Record<string, unknown> };
 
 // --- JWT Auth Middleware (fail-closed) ---
