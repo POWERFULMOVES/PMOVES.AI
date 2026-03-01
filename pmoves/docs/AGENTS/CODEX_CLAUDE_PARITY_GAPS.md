@@ -1,32 +1,32 @@
 # Codex Claude Parity Gaps Report
-_Generated: 2026-02-25_
+_Generated: 2026-02-28_
 
 ## Scope
-- Commands source: `C:\Users\russe\Documents\GitHub\PMOVES.AI\.claude\commands`
-- Parity map: `C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docs\AGENTS\CODEX_CLAUDE_PARITY_MAP.md`
+- Commands source: `.claude\commands`
+- Parity map: `pmoves\docs\AGENTS\CODEX_CLAUDE_PARITY_MAP.md`
 
 ## Summary
 - Claude command tokens: **113**
-- Parity map tokens: **35**
-- Mapped tokens: **35**
-- Missing tokens: **78**
-- Coverage: **31.0%**
+- Parity map tokens: **70**
+- Mapped tokens: **70**
+- Missing tokens: **43**
+- Coverage: **61.9%**
 
 ## Prefix Coverage
 | Prefix | Claude Tokens | Mapped Tokens | Missing Tokens |
 | --- | ---: | ---: | ---: |
-| `agent-sdk` | 4 | 0 | 4 |
-| `agents` | 5 | 2 | 3 |
-| `archon` | 3 | 0 | 3 |
+| `agent-sdk` | 4 | 4 | 0 |
+| `agents` | 5 | 5 | 0 |
+| `archon` | 3 | 3 | 0 |
 | `botz` | 4 | 1 | 3 |
-| `chit` | 6 | 3 | 3 |
-| `cipher` | 3 | 0 | 3 |
+| `chit` | 6 | 6 | 0 |
+| `cipher` | 3 | 3 | 0 |
 | `crush` | 2 | 0 | 2 |
 | `db` | 3 | 0 | 3 |
 | `deploy` | 7 | 6 | 1 |
 | `discord` | 2 | 1 | 1 |
 | `github` | 4 | 4 | 0 |
-| `gpu` | 3 | 0 | 3 |
+| `gpu` | 3 | 3 | 0 |
 | `health` | 3 | 2 | 1 |
 | `hyperdim` | 3 | 0 | 3 |
 | `jellyfin` | 2 | 1 | 1 |
@@ -34,8 +34,8 @@ _Generated: 2026-02-25_
 | `langextract` | 4 | 0 | 4 |
 | `minio` | 3 | 0 | 3 |
 | `model` | 2 | 0 | 2 |
-| `n8n` | 4 | 0 | 4 |
-| `nats` | 4 | 0 | 4 |
+| `n8n` | 4 | 4 | 0 |
+| `nats` | 4 | 4 | 0 |
 | `notebook` | 3 | 1 | 2 |
 | `observability` | 3 | 0 | 3 |
 | `pipecat` | 2 | 1 | 1 |
@@ -47,34 +47,13 @@ _Generated: 2026-02-25_
 | `voice` | 2 | 0 | 2 |
 | `workitems` | 3 | 0 | 3 |
 | `worktree` | 4 | 4 | 0 |
-| `yt` | 10 | 2 | 8 |
+| `yt` | 10 | 10 | 0 |
 
 ## Missing Tokens by Prefix
-- `agent-sdk`
-  - `agent-sdk:create`
-  - `agent-sdk:handoff`
-  - `agent-sdk:resume`
-  - `agent-sdk:run`
-- `agents`
-  - `agents:execute`
-  - `agents:subordinate`
-  - `agents:task-status`
-- `archon`
-  - `archon:forms`
-  - `archon:prompts`
-  - `archon:status`
 - `botz`
   - `botz:init`
   - `botz:profile`
   - `botz:secrets`
-- `chit`
-  - `chit:bpm`
-  - `chit:bus`
-  - `chit:floos`
-- `cipher`
-  - `cipher:reasoning`
-  - `cipher:search`
-  - `cipher:store`
 - `crush`
   - `crush:setup`
   - `crush:status`
@@ -86,10 +65,6 @@ _Generated: 2026-02-25_
   - `deploy:audit-layers`
 - `discord`
   - `discord:notify`
-- `gpu`
-  - `gpu:models`
-  - `gpu:optimize`
-  - `gpu:status`
 - `health`
   - `health:metrics`
 - `hyperdim`
@@ -114,16 +89,6 @@ _Generated: 2026-02-25_
 - `model`
   - `model:load`
   - `model:unload`
-- `n8n`
-  - `n8n:execute`
-  - `n8n:nodes`
-  - `n8n:suggest`
-  - `n8n:workflows`
-- `nats`
-  - `nats:monitor`
-  - `nats:publish`
-  - `nats:status`
-  - `nats:streams`
 - `notebook`
   - `notebook:query`
   - `notebook:sync`
@@ -148,12 +113,3 @@ _Generated: 2026-02-25_
   - `workitems:claim`
   - `workitems:complete`
   - `workitems:list`
-- `yt`
-  - `yt:add-channel`
-  - `yt:add-playlist`
-  - `yt:help`
-  - `yt:ingest-video`
-  - `yt:list-channels`
-  - `yt:pending`
-  - `yt:remove-channel`
-  - `yt:toggle-channel`
