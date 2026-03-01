@@ -10,12 +10,13 @@ A2A Protocol v1.0 - Release Candidate
 
 import asyncio
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 import uvicorn
 
@@ -40,9 +41,85 @@ from .types import (
 # Configure logging
 logger = logging.getLogger(__name__)
 
+JWT_ALGORITHM = "HS256"
+
+try:
+    from jose import jwt as jose_jwt
+
+    HAS_JOSE = True
+except Exception:
+    jose_jwt = None
+    HAS_JOSE = False
+
 # In-memory task storage (replace with persistent storage in production)
 _tasks: Dict[str, Task] = {}
 _tasks_lock = asyncio.Lock()
+
+
+def _is_discovery_public() -> bool:
+    value = os.getenv("A2A_DISCOVERY_PUBLIC", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _require_discovery_auth(authorization: Optional[str]) -> None:
+    if _is_discovery_public():
+        return
+
+    if not HAS_JOSE:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="python-jose not installed - JWT validation unavailable",
+        )
+
+    jwt_secret = os.getenv("SUPABASE_JWT_SECRET", "").strip()
+    if not jwt_secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="SUPABASE_JWT_SECRET not configured - authentication unavailable",
+        )
+
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header",
+        )
+
+    token = authorization[7:] if authorization.startswith("Bearer ") else authorization
+    token = token.strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Empty token",
+        )
+
+    try:
+        payload = jose_jwt.decode(
+            token,
+            jwt_secret,
+            algorithms=[JWT_ALGORITHM],
+            options={"verify_signature": True, "verify_aud": False, "verify_exp": True},
+        )
+    except jose_jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
+        ) from None
+    except jose_jwt.InvalidSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid token signature",
+        ) from None
+    except jose_jwt.JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"JWT validation failed: {exc}",
+        ) from None
+
+    if payload.get("role", "") == "anon":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Anonymous keys are not permitted",
+        )
 
 
 @asynccontextmanager
@@ -122,7 +199,9 @@ def _register_endpoints(app: FastAPI) -> None:
     """Register all route handlers with the application."""
 
     @app.get("/.well-known/agent.json", tags=["Discovery"])
-    async def get_agent_card() -> AgentCard:
+    async def get_agent_card(
+        authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    ) -> AgentCard:
         """
         Discovery endpoint for A2A clients.
 
@@ -132,6 +211,7 @@ def _register_endpoints(app: FastAPI) -> None:
         Returns:
             AgentCard: Agent identity and capability statement
         """
+        _require_discovery_auth(authorization)
         return app.state.agent_card
 
     @app.get("/healthz", tags=["Health"])
