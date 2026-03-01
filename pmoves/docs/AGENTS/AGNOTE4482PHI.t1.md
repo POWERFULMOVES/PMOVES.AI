@@ -133,7 +133,7 @@ Required handoff fields:
   - Confirmed current lane reality:
     - model registry work is already substantially present in `pmoves/supabase/initdb/12_model_registry_seed.sql`
     - persona seed file exists at `pmoves/supabase/initdb/17_persona_seed.sql` and needs promotion path
-    - persona-model resolution view migration and model readiness tooling remain missing and are now explicitly sequenced
+    - persona-model resolution migration and model readiness tooling are present in local working-tree artifacts and now explicitly sequenced for commit/promotion
   - Updated `AI_GRAPHITI_PROTOCOL.md` with machine-parseable TAC block format and added `witness` voice enum parity with DARKXSIDE registration.
   - Updated `docs/AGENT_TRAIL.md` with codex trail entry to preserve Done/Left Behind/For Next Agent handoff continuity.
 

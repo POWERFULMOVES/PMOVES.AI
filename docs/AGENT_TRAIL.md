@@ -27,7 +27,7 @@
 - Updated `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` with CLAIM/REVIEW/RELEASE + signed ACK for this overlay pass.
 
 ### Left Behind
-- Runtime implementation tasks are still pending for persona-model resolution view migration and readiness tooling (`model-readiness` target + script).
+- Runtime implementation tasks are staged in local working-tree artifacts for persona-model resolution migration and readiness tooling (`model-readiness` target + script), but still need commit/promotion sequencing.
 - Model/persona seed files are present in workspace but still need commit discipline and PR promotion sequencing.
 
 ### For Next Agent

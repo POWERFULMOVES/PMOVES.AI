@@ -14,9 +14,9 @@ Constraint:
   - TTS provider + TTS model entries
   - broad `service_model_mappings` sections
 - `pmoves/supabase/initdb/17_persona_seed.sql` exists and contains seeded personas, but is currently not yet merged.
-- Missing from this lane:
-  - persona-model resolution view migration
-  - model readiness script + Make target wiring
+- Not yet promoted as committed lane artifacts in this branch snapshot:
+  - persona-model resolution view migration (currently present as local working-tree artifact)
+  - model readiness script + Make target wiring (currently present as local working-tree artifact)
   - deterministic verification evidence bundle attached to PR comments/trail
 
 ## Tactical Branches (Enhanced)
