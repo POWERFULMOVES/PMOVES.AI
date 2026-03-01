@@ -1,7 +1,21 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-28_
+_Last updated: 2026-03-01_
+
+### Latest changes (Mar 1, 2026)
+- Hardened release PR queue is clear (`0` open PRs).
+- Closed hardened production PR wave:
+  - `#720` fix(security): resolve 3 critical CodeQL alerts
+  - `#722` fix(topology): clean core archon-ui gate parity
+  - `#723` chore(ops): add live PR monitor targets
+  - `#724` docs(ops): roadmap/next-steps queue sitrep refresh
+  - `#725` fix(runners): local-cert log-driver fallback (`loki` -> `json-file` when plugin missing)
+  - `#726` docs(ops): credential bootstrap workflow
+  - `#727` fix(bootstrap): MinIO defaults + Jellyfin service URL
+- Live security backlog snapshot:
+  - Dependabot alerts open: `3` (`1 high`, `2 low`)
+  - Code scanning alerts open: `36`
 
 ### Latest changes (Feb 28, 2026)
 - Production queue hygiene + runner recovery pass executed:
@@ -22,8 +36,7 @@ _Last updated: 2026-02-28_
 - PR monitor + CHIT FlOO$ merge-gate lane shipped (`#723`):
   - new flow wrappers for `pr-monitor` -> FlOO$ -> CHIT packet generation
   - graphiti trail/protocol docs updated to include CHIT flow strict gate before merge.
-- Current blocking queue remains primarily self-hosted CodeQL backlog:
-  - `#720`, `#722`, `#723` all waiting on queued CodeQL jobs.
+- Queue status update: those lanes are now merged; use this section as historical trace.
 
 ### Latest changes (Feb 24, 2026)
 - Completed lock-step production merge wave:
@@ -162,7 +175,7 @@ _Last updated: 2026-02-28_
 
 ### Latest changes (Feb 16, 2026)
 - Hardened release queue is currently clear: open PRs on `POWERFULMOVES/PMOVES.AI` = `0`.
-- Current security backlog snapshot (live): Dependabot `14` open (`3 high`, `9 medium`, `2 low`); Code Scanning open in first-page sample (`3 critical`, `64 high`, `33 medium`).
+- Current security backlog snapshot (live): Dependabot `3` open (`1 high`, `2 low`); Code Scanning open `36`.
 - Security remediation in progress for production audit:
   - Hi‑RAG gateway (`services/hi-rag-gateway/gateway.py`) now validates remote image URL scheme/host/credentials, blocks private/internal hosts by default, and disallows redirects for CHIT image decode fetches.
   - Hi‑RAG v2 (`services/hi-rag-gateway-v2/app.py`) now applies the same URL/redirect controls for image decode and preserves explicit HTTP errors instead of collapsing them into 500s.
