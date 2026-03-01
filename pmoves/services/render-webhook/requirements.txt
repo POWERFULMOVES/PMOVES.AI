@@ -1,1 +1,5 @@
--r requirements.lock
+fastapi>=0.114,<1
+uvicorn[standard]>=0.30,<1
+requests>=2.31,<3
+prometheus-client>=0.20,<1
+pydantic>=2,<3

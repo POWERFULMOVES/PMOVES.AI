@@ -284,7 +284,15 @@ class EvoSwarmController:
 async def health() -> Dict[str, Any]:
     """Liveness check."""
 
-    return {"ok": True, "loop_running": _controller._task is not None}
+    loop_running = bool(_controller and _controller._task and not _controller._task.done())
+    return {"ok": True, "loop_running": loop_running}
+
+
+@app.get("/healthz")
+async def healthz() -> Dict[str, Any]:
+    """Compatibility liveness endpoint used by existing compose probes."""
+
+    return await health()
 
 
 @app.get("/config")

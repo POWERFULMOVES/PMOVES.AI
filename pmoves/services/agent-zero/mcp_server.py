@@ -10,7 +10,11 @@ from typing import Any, Dict, List, Optional
 import requests
 import yaml
 
-from pmoves.chit import CGP_SPEC_VERSION
+try:
+    from pmoves.chit import CGP_SPEC_VERSION
+except ModuleNotFoundError:
+    # Container fallback: allow direct import when pmoves package wrappers are unavailable.
+    from chit import CGP_SPEC_VERSION
 from services.common.env import get_secret
 from services.common.forms import (
     DEFAULT_AGENT_FORM,
@@ -594,4 +598,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
