@@ -63,10 +63,12 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, Body, HTTPException, BackgroundTasks, Response
 from contextlib import asynccontextmanager
-import yt_dlp
 try:
+    import yt_dlp
     from yt_dlp.utils import DownloadError, PostProcessingError
-except Exception:  # pragma: no cover - fallback when utils module missing
+except Exception:  # pragma: no cover - fallback when yt-dlp is unavailable
+    yt_dlp = None  # type: ignore[assignment]
+
     class DownloadError(Exception):
         """Exception raised when yt-dlp fails to download media.
 
@@ -82,11 +84,59 @@ except Exception:  # pragma: no cover - fallback when utils module missing
         module is unavailable in the runtime environment.
         """
         pass
-import boto3
+try:
+    import boto3
+except Exception:  # pragma: no cover - fallback when boto3 is unavailable
+    boto3 = None  # type: ignore[assignment]
 import requests
 from urllib.parse import urlparse, parse_qs, urlunparse, quote
 from nats.aio.client import Client as NATS
-from tenacity import AsyncRetrying, retry_if_exception, wait_exponential, stop_after_attempt, RetryError
+try:
+    from tenacity import AsyncRetrying, retry_if_exception, wait_exponential, stop_after_attempt, RetryError
+except Exception:  # pragma: no cover - fallback when tenacity is unavailable
+    class _FallbackRetryState:
+        def __init__(self, attempt_number: int = 1):
+            self.attempt_number = attempt_number
+
+    class _FallbackAttempt:
+        def __init__(self, attempt_number: int = 1):
+            self.retry_state = _FallbackRetryState(attempt_number)
+
+    class _FallbackLastAttempt:
+        def __init__(self, exc: Optional[BaseException] = None):
+            self._exc = exc
+
+        def exception(self) -> Optional[BaseException]:
+            return self._exc
+
+    class RetryError(Exception):
+        def __init__(self, last_attempt: Optional[_FallbackLastAttempt] = None):
+            super().__init__("retry failed")
+            self.last_attempt = last_attempt or _FallbackLastAttempt()
+
+    class AsyncRetrying:
+        """Minimal async iterator fallback: executes a single attempt without retries."""
+
+        def __init__(self, *args, **kwargs):
+            self._yielded = False
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if self._yielded:
+                raise StopAsyncIteration
+            self._yielded = True
+            return _FallbackAttempt(1)
+
+    def retry_if_exception(*args, **kwargs):
+        return None
+
+    def wait_exponential(*args, **kwargs):
+        return None
+
+    def stop_after_attempt(*args, **kwargs):
+        return None
 # Prefer shared envelope util if present; otherwise, fall back to a local stub
 try:
     from services.common.events import envelope  # type: ignore
@@ -412,6 +462,13 @@ _emit_jobs: Dict[str, Dict[str, Any]] = {}
 _emit_job_lock = threading.Lock()
 
 
+def _youtube_dl(ydl_opts: Dict[str, Any]):
+    """Return a YoutubeDL client or fail with a clear runtime error."""
+    if yt_dlp is None:
+        raise HTTPException(503, "yt_dlp is not installed in this runtime")
+    return yt_dlp.YoutubeDL(ydl_opts)
+
+
 def _record_emit_job(job_id: str, state: Dict[str, Any]) -> None:
     """Record or create an async emit job state.
 
@@ -591,6 +648,8 @@ def s3_client():
         Uses MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, and MINIO_SECURE
         environment variables for configuration.
     """
+    if boto3 is None:
+        raise HTTPException(503, "boto3 is not installed in this runtime")
     endpoint_url = MINIO_ENDPOINT if "://" in MINIO_ENDPOINT else f"{'https' if MINIO_SECURE else 'http'}://{MINIO_ENDPOINT}"
     return boto3.client("s3", aws_access_key_id=MINIO_ACCESS_KEY, aws_secret_access_key=MINIO_SECRET_KEY, endpoint_url=endpoint_url)
 
@@ -1217,7 +1276,7 @@ def _download_with_yt_dlp(
     vid_dir: Optional[Path] = None
     platform_key = platform or "youtube"
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with _youtube_dl(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             if info is None:
                 raise DownloadError(f"yt_dlp returned no info for {url}")
@@ -1693,7 +1752,7 @@ def yt_info(body: Dict[str,Any] = Body(...)):
     # Ignore external yt-dlp config files to keep API behavior deterministic.
     ydl_opts['ignoreconfig'] = True
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with _youtube_dl(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception:
         # Conservative fallback that avoids hardened defaults entirely.
@@ -1704,7 +1763,7 @@ def yt_info(body: Dict[str,Any] = Body(...)):
             'extract_flat': True,
             'ignoreconfig': True,
         }
-        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+        with _youtube_dl(fallback_opts) as ydl:
             info = ydl.extract_info(url, download=False)
     wanted = {k: info.get(k) for k in ('id','title','uploader','duration','webpage_url')}
     return {'ok': True, 'info': wanted}
@@ -2101,7 +2160,7 @@ def _extract_entries(url: str) -> List[Dict[str,Any]]:
         List of dictionaries with 'id' and 'title' for each entry.
     """
     ydl_opts = _with_ytdlp_defaults({'quiet': True, 'noprogress': True, 'skip_download': True, 'extract_flat': True})
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    with _youtube_dl(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         entries = info.get('entries') or []
         out = []

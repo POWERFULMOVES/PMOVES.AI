@@ -234,7 +234,8 @@ class AgentCard(BaseModel):
     """
     Agent identity and capability statement.
 
-    Served at /.well-known/agent.json for discovery by other agents.
+    Served at /.well-known/agent-card.json for discovery by other agents
+    (legacy alias: /.well-known/agent.json).
     Based on Google's A2A Agent Card specification.
 
     Normative source: A2A proto AgentCard message

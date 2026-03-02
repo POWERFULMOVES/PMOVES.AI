@@ -31,6 +31,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\post-tool-sign-trail.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {

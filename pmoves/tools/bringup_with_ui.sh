@@ -13,6 +13,19 @@ ENABLE_JELLYFIN_AI=${ENABLE_JELLYFIN_AI:-1}
 
 # Service URLs
 YTB=${YTB:-http://localhost:8077}
+SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:65421/rest/v1}
+SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:65433}
+
+if [ -f .supabase.status.env ]; then
+  api_url="$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
+  studio_url="$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
+  if [ -n "${api_url:-}" ]; then
+    SUPABASE_REST_READY_URL="${api_url}/rest/v1"
+  fi
+  if [ -n "${studio_url:-}" ]; then
+    SUPABASE_STUDIO_READY_URL="${studio_url}"
+  fi
+fi
 
 # Track failed services for reporting
 declare -a FAILED_SERVICES=()
@@ -161,18 +174,18 @@ fi
 
 echo "⛳ Waiting on key endpoints"
 if [ "${PARALLEL:-0}" = "1" ]; then
-  check_http_bg "Supabase REST" "http://127.0.0.1:65421/rest/v1" "$WAIT_T_LONG"
+  check_http_bg "Supabase REST" "$SUPABASE_REST_READY_URL" "$WAIT_T_LONG"
   check_http_bg "Hi-RAG v2 CPU" "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" "$WAIT_T_MED"
   check_http_bg "Hi-RAG v2 GPU" "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" "$WAIT_T_LONG"
   check_http_bg "Presign" "http://localhost:8088/healthz" "$WAIT_T_SHORT"
-  check_http_bg "Archon API" "http://localhost:8091/healthz" "$WAIT_T_SHORT"
+  check_http_bg "Archon API" "http://localhost:8091/healthz" "$WAIT_T_MED"
   check_http_bg "Archon UI" "http://localhost:3737" "$WAIT_T_SHORT"
   check_http_bg "Archon MCP" "http://localhost:8091/mcp/describe" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero API" "http://localhost:8080/healthz" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero UI" "http://localhost:8081" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero Env" "http://localhost:8080/config/environment" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero MCP" "http://localhost:8080/mcp/commands" "$WAIT_T_SHORT"
-  check_http_bg "PMOVES.YT" "http://localhost:8077/" "$WAIT_T_SHORT"
+  check_http_bg "PMOVES.YT" "http://localhost:8077/healthz" "$WAIT_T_SHORT"
   check_http_bg "Grafana" "http://localhost:3002" "$WAIT_T_SHORT"
   check_http_bg "Loki /ready" "http://localhost:3100/ready" "$WAIT_T_SHORT"
   check_http_bg "Channel Monitor" "http://localhost:8097/healthz" "$WAIT_T_SHORT"
@@ -183,27 +196,27 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   fi
   check_http_bg "n8n UI" "http://localhost:5678" "$WAIT_T_SHORT"
   check_http_bg "TensorZero UI" "http://localhost:4000" "$WAIT_T_SHORT"
-  check_http_bg "TensorZero GW" "http://localhost:3030" "$WAIT_T_SHORT"
+  check_http_bg "TensorZero GW" "http://localhost:3030/healthz" "$WAIT_T_SHORT"
   check_http_bg "Jellyfin" "http://localhost:8096" "$WAIT_T_SHORT"
   check_http_bg "Firefly" "http://localhost:8082" "$WAIT_T_SHORT"
   check_http_bg "Wger" "http://localhost:8000" "$WAIT_T_SHORT"
   check_http_bg "Open Notebook" "http://localhost:8503" "$WAIT_T_SHORT"
-  check_http_bg "Supabase Studio" "http://127.0.0.1:65433" "$WAIT_T_SHORT"
+  check_http_bg "Supabase Studio" "$SUPABASE_STUDIO_READY_URL" "$WAIT_T_SHORT"
   ready_barrier
   wait_prom_targets "$WAIT_T_MED"
 else
-  wait_http "http://127.0.0.1:65421/rest/v1" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase REST")
+  wait_http "$SUPABASE_REST_READY_URL" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase REST")
   wait_http "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" $WAIT_T_MED || TIMEOUT_SERVICES+=("Hi-RAG v2 CPU")
   wait_http "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Hi-RAG v2 GPU")
   wait_http "http://localhost:8088/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Presign")
-  wait_http "http://localhost:8091/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon API")
+  wait_http "http://localhost:8091/healthz" $WAIT_T_MED || TIMEOUT_SERVICES+=("Archon API")
   wait_http "http://localhost:3737" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon UI")
   wait_http "http://localhost:8091/mcp/describe" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon MCP")
   wait_http "http://localhost:8080/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero API")
   wait_http "http://localhost:8081" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero UI")
   wait_http "http://localhost:8080/config/environment" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero Env")
   wait_http "http://localhost:8080/mcp/commands" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero MCP")
-  wait_http "http://localhost:8077/" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("PMOVES.YT")
+  wait_http "http://localhost:8077/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("PMOVES.YT")
   wait_http "http://localhost:3002" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Grafana")
   wait_http "http://localhost:3100/ready" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Loki")
   wait_prom_targets $WAIT_T_MED || TIMEOUT_SERVICES+=("Prometheus targets")
@@ -219,21 +232,27 @@ else
   fi
   wait_http "http://localhost:5678" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("n8n UI")
   wait_http "http://localhost:4000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero UI")
-  wait_http "http://localhost:3030" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero GW")
+  wait_http "http://localhost:3030/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero GW")
   wait_http "http://localhost:8096" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Jellyfin")
   wait_http "http://localhost:8082" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Firefly")
   wait_http "http://localhost:8000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Wger")
   wait_http "http://localhost:8503" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Open Notebook")
-  wait_http "http://127.0.0.1:65433" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Supabase Studio")
+  wait_http "$SUPABASE_STUDIO_READY_URL" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Supabase Studio")
 fi
 
 echo "⛳ Capturing evidence"
 # Ensure PMOVES.YT docs are fresh before capture
-make yt-docs-sync
-make evidence-auto
+if ! make yt-docs-sync; then
+  echo "⚠ yt-docs-sync failed; continuing with stack validation"
+  TIMEOUT_SERVICES+=("yt-docs-sync")
+fi
+if ! make evidence-auto; then
+  echo "⚠ evidence-auto failed; continuing with stack validation"
+  TIMEOUT_SERVICES+=("evidence-auto")
+fi
 
 echo "⛳ Retro preflight summary (parallel table)"
-PMOVES_RETRO_TIMEOUT=5 python3 pmoves/tools/flight_check_retro.py
+PMOVES_RETRO_TIMEOUT=5 python3 tools/flight_check_retro.py
 
 # Final status report
 echo ""

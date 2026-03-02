@@ -9,7 +9,7 @@ Flags:
   --passphrase: when provided, HMAC-SHA256 is computed over the CGP (sans 'sig').
   --encrypt-anchors: replaces 'anchor' with 'anchor_enc' (AES-GCM with key derived via scrypt).
 """
-import os, json, base64, hashlib, secrets, argparse
+import os, json, base64, hashlib, hmac, secrets, argparse
 from typing import Any, Dict
 
 def canon(obj: Dict[str, Any]) -> bytes:
@@ -18,13 +18,12 @@ def canon(obj: Dict[str, Any]) -> bytes:
 def hmac_sign(doc: Dict[str, Any], passphrase: str) -> Dict[str, Any]:
     d = dict(doc)
     d.pop("sig", None)
-    mac = hashlib.new("sha256", passphrase.encode("utf-8"))
-    mac.update(canon(d))
+    mac = hmac.new(passphrase.encode("utf-8"), canon(d), hashlib.sha256).digest()
     sig = {
         "alg": "HMAC-SHA256",
         "kid": "demo",
         "ts": int(__import__("time").time()),
-        "hmac": base64.b64encode(mac.digest()).decode("ascii"),
+        "hmac": base64.b64encode(mac).decode("ascii"),
     }
     doc["sig"] = sig
     return doc

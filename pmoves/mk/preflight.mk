@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
@@ -34,14 +34,14 @@ flight-check: ## Fast readiness scan (quick mode, no boot animation)
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
-	$$runner tools/flightcheck/retro_flightcheck.py --quick --theme "$(RETRO_THEME_QUICK)"
+	PYTHONUTF8=1 PYTHONIOENCODING=utf-8 $$runner tools/flightcheck/retro_flightcheck.py --quick --theme "$(RETRO_THEME_QUICK)"
 
 flight-check-retro: ## Full retro diagnostics with optional CRT boot animation
 	@$(MAKE) --no-print-directory env-bootstrap-lite >/dev/null
 	@runner="$(PRECHECK_PY)"; \
 	if [ -x "$(PRECHECK_VENV_WIN)" ]; then runner="$(PRECHECK_VENV_WIN)"; \
 	elif [ -x "$(PRECHECK_VENV_UNIX)" ]; then runner="$(PRECHECK_VENV_UNIX)"; fi; \
-	$$runner tools/flightcheck/retro_flightcheck.py --theme "$(RETRO_THEME_FULL)" $(RETRO_FLAGS)
+	PYTHONUTF8=1 PYTHONIOENCODING=utf-8 $$runner tools/flightcheck/retro_flightcheck.py --theme "$(RETRO_THEME_FULL)" $(RETRO_FLAGS)
 
 preflight-retro: ## Alias for full retro diagnostics
 	@$(MAKE) --no-print-directory flight-check-retro
@@ -221,16 +221,16 @@ pr-monitor-chit-packet: ## Encode PR monitor learnings into CHIT packet artifact
 	@echo "Wrote CHIT packet: docs/logs/pr_monitor_learnings_latest.cgp.json"
 
 floos-status: ## Show FlOO$ pairing status
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)
 
 floos-pr-monitor-validate: ## Validate FlOO$ dependencies for PR monitor pairing
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver validate "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver validate "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
 
 floos-pr-monitor-resolve: ## Resolve FlOO$ DAG for PR monitor pairing
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver resolve "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver resolve "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" $(ARGS)
 
 floos-pr-monitor-run-dry: ## Dry-run FlOO$ execution plan for PR monitor pairing
-	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver run "$${FLOOS_PAIRING:-pr-monitor-graphiti-chit}" --dry-run --context base="$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" $(ARGS)
 
 chit-flow-pr-monitor: ## CHIT flow wrapper: PR monitor + FlOO$ validation/resolve + CHIT packet
 	@$(MAKE) --no-print-directory pr-monitor
@@ -250,3 +250,10 @@ chit-flow-pr-monitor-strict: ## Strict CHIT flow wrapper (fails on PR blockers)
 
 ports-resolve: ## Display topology-aware port resolution map for all services
 	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) services/common/port_resolver.py
+
+sign-trail: ## Sign a Graphiti trail entry with CHIT HMAC
+	@$(PRECHECK_PY) tools/sign_trail.py \
+		--agent-id "$${AGENT:-claude-opus}" \
+		--summary "$${SUMMARY:-Trail entry signed}" \
+		--phase "$${PHASE:-Phase H}" \
+		$(ARGS)
