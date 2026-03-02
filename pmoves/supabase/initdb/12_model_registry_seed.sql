@@ -175,7 +175,7 @@ VALUES (
   NULL,
   'Ultimate TTS Studio - Multi-engine local TTS with GPU acceleration',
   true,
-  '{"network": "internal", "location": "local", "engines": 7}'::jsonb
+  '{"network": "internal", "location": "local", "engines": 6}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
   api_base = EXCLUDED.api_base,
@@ -1041,6 +1041,15 @@ END $$;
 
 DO $$
 DECLARE
+  -- Provider IDs for deterministic model resolution
+  v_ollama_local_provider_id UUID;
+  v_ollama_edge_provider_id UUID;
+  v_zai_provider_id UUID;
+  v_openai_provider_id UUID;
+  v_venice_provider_id UUID;
+  v_groq_provider_id UUID;
+  v_openrouter_provider_id UUID;
+
   -- Local model IDs
   v_qwen3_8b_id UUID;
   v_qwen2_5_32b_id UUID;
@@ -1058,22 +1067,42 @@ DECLARE
   v_groq_id UUID;
   v_openrouter_id UUID;
 BEGIN
+  -- Resolve provider IDs first
+  SELECT id INTO STRICT v_ollama_local_provider_id FROM pmoves_core.model_providers WHERE name = 'ollama_local';
+  SELECT id INTO STRICT v_ollama_edge_provider_id FROM pmoves_core.model_providers WHERE name = 'ollama_edge';
+  SELECT id INTO STRICT v_zai_provider_id FROM pmoves_core.model_providers WHERE name = 'zai_primary';
+  SELECT id INTO STRICT v_openai_provider_id FROM pmoves_core.model_providers WHERE name = 'openai_platform';
+  SELECT id INTO STRICT v_venice_provider_id FROM pmoves_core.model_providers WHERE name = 'venice_primary';
+  SELECT id INTO STRICT v_groq_provider_id FROM pmoves_core.model_providers WHERE name = 'groq_primary';
+  SELECT id INTO STRICT v_openrouter_provider_id FROM pmoves_core.model_providers WHERE name = 'openrouter_primary';
+
   -- Get local model IDs
-  SELECT id INTO v_qwen3_8b_id FROM pmoves_core.models WHERE model_id = 'qwen3:8b' LIMIT 1;
-  SELECT id INTO v_qwen2_5_32b_id FROM pmoves_core.models WHERE model_id = 'qwen2.5:32b' LIMIT 1;
-  SELECT id INTO v_nemotron_id FROM pmoves_core.models WHERE model_id = 'nemotron-mini' LIMIT 1;
-  SELECT id INTO v_qwen3_emb_4b_id FROM pmoves_core.models WHERE model_id = 'qwen3-embedding:4b' LIMIT 1;
+  SELECT id INTO STRICT v_qwen3_8b_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen3:8b';
+  SELECT id INTO STRICT v_qwen2_5_32b_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen2.5:32b';
+  SELECT id INTO STRICT v_nemotron_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'nemotron-mini';
+  SELECT id INTO STRICT v_qwen3_emb_4b_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen3-embedding:4b';
 
   -- Get edge model IDs
-  SELECT id INTO v_mistral_edge_id FROM pmoves_core.models WHERE model_id = 'mistral:7b-instruct' AND name LIKE '%edge%' LIMIT 1;
-  SELECT id INTO v_phi3_edge_id FROM pmoves_core.models WHERE model_id = 'phi3:3.8b-mini-128k-instruct' AND name LIKE '%edge%' LIMIT 1;
+  SELECT id INTO STRICT v_mistral_edge_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_edge_provider_id AND model_id = 'mistral:7b-instruct';
+  SELECT id INTO STRICT v_phi3_edge_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_edge_provider_id AND model_id = 'phi3:3.8b-mini-128k-instruct';
 
   -- Get cloud model IDs
-  SELECT id INTO v_zai_id FROM pmoves_core.models WHERE model_id = 'gpt-4o-mini' AND name = 'chat_zai' LIMIT 1;
-  SELECT id INTO v_openai_id FROM pmoves_core.models WHERE model_id = 'gpt-4o-mini' AND name = 'chat_openai_platform' LIMIT 1;
-  SELECT id INTO v_venice_id FROM pmoves_core.models WHERE model_id = 'venice/gpt-4o-mini' LIMIT 1;
-  SELECT id INTO v_groq_id FROM pmoves_core.models WHERE model_id = 'llama-3.1-8b-instant' LIMIT 1;
-  SELECT id INTO v_openrouter_id FROM pmoves_core.models WHERE model_id = 'openai/gpt-4o-mini' LIMIT 1;
+  SELECT id INTO STRICT v_zai_id FROM pmoves_core.models
+  WHERE provider_id = v_zai_provider_id AND model_id = 'gpt-4o-mini' AND name = 'chat_zai';
+  SELECT id INTO STRICT v_openai_id FROM pmoves_core.models
+  WHERE provider_id = v_openai_provider_id AND model_id = 'gpt-4o-mini' AND name = 'chat_openai_platform';
+  SELECT id INTO STRICT v_venice_id FROM pmoves_core.models
+  WHERE provider_id = v_venice_provider_id AND model_id = 'venice/gpt-4o-mini';
+  SELECT id INTO STRICT v_groq_id FROM pmoves_core.models
+  WHERE provider_id = v_groq_provider_id AND model_id = 'llama-3.1-8b-instant';
+  SELECT id INTO STRICT v_openrouter_id FROM pmoves_core.models
+  WHERE provider_id = v_openrouter_provider_id AND model_id = 'openai/gpt-4o-mini';
 
   -- agent_zero function mappings
   -- Local Qwen3 8B (default local)
@@ -1197,6 +1226,13 @@ END $$;
 
 DO $$
 DECLARE
+  -- Provider IDs for deterministic model resolution
+  v_ollama_local_provider_id UUID;
+  v_openai_provider_id UUID;
+  v_openrouter_provider_id UUID;
+  v_anthropic_provider_id UUID;
+  v_tts_provider_id UUID;
+
   -- Local models
   v_qwen3_8b_id UUID;
   v_qwen2_5_32b_id UUID;
@@ -1223,31 +1259,56 @@ DECLARE
   v_f5_tts_id UUID;
   v_piper_id UUID;
 BEGIN
+  -- Resolve provider IDs first
+  SELECT id INTO STRICT v_ollama_local_provider_id FROM pmoves_core.model_providers WHERE name = 'ollama_local';
+  SELECT id INTO STRICT v_openai_provider_id FROM pmoves_core.model_providers WHERE name = 'openai_platform';
+  SELECT id INTO STRICT v_openrouter_provider_id FROM pmoves_core.model_providers WHERE name = 'openrouter_primary';
+  SELECT id INTO STRICT v_anthropic_provider_id FROM pmoves_core.model_providers WHERE name = 'anthropic_primary';
+  SELECT id INTO STRICT v_tts_provider_id FROM pmoves_core.model_providers WHERE name = 'tts_local';
+
   -- Look up local model IDs
-  SELECT id INTO v_qwen3_8b_id FROM pmoves_core.models WHERE model_id = 'qwen3:8b' LIMIT 1;
-  SELECT id INTO v_qwen2_5_32b_id FROM pmoves_core.models WHERE model_id = 'qwen2.5:32b' LIMIT 1;
-  SELECT id INTO v_qwen2_5_14b_id FROM pmoves_core.models WHERE model_id = 'qwen2.5:14b' LIMIT 1;
-  SELECT id INTO v_qwen3_reranker_id FROM pmoves_core.models WHERE model_id = 'qwen3-reranker:4b' LIMIT 1;
-  SELECT id INTO v_codellama_id FROM pmoves_core.models WHERE model_id = 'codellama:7b' LIMIT 1;
-  SELECT id INTO v_deepseek_coder_id FROM pmoves_core.models WHERE model_id = 'deepseek-coder:6.7b' LIMIT 1;
-  SELECT id INTO v_qwen2_vl_id FROM pmoves_core.models WHERE model_id = 'qwen2-vl:7b' LIMIT 1;
-  SELECT id INTO v_nomic_embed_id FROM pmoves_core.models WHERE model_id = 'nomic-embed-text' LIMIT 1;
-  SELECT id INTO v_qwen3_emb_4b_id FROM pmoves_core.models WHERE model_id = 'qwen3-embedding:4b' LIMIT 1;
-  SELECT id INTO v_nemotron_id FROM pmoves_core.models WHERE model_id = 'nemotron-mini' LIMIT 1;
+  SELECT id INTO STRICT v_qwen3_8b_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen3:8b';
+  SELECT id INTO STRICT v_qwen2_5_32b_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen2.5:32b';
+  SELECT id INTO STRICT v_qwen2_5_14b_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen2.5:14b';
+  SELECT id INTO STRICT v_qwen3_reranker_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen3-reranker:4b';
+  SELECT id INTO STRICT v_codellama_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'codellama:7b';
+  SELECT id INTO STRICT v_deepseek_coder_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'deepseek-coder:6.7b';
+  SELECT id INTO STRICT v_qwen2_vl_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen2-vl:7b';
+  SELECT id INTO STRICT v_nomic_embed_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'nomic-embed-text';
+  SELECT id INTO STRICT v_qwen3_emb_4b_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'qwen3-embedding:4b';
+  SELECT id INTO STRICT v_nemotron_id FROM pmoves_core.models
+  WHERE provider_id = v_ollama_local_provider_id AND model_id = 'nemotron-mini';
 
   -- Look up cloud model IDs
-  SELECT id INTO v_openai_id FROM pmoves_core.models WHERE model_id = 'gpt-4o-mini' AND name = 'chat_openai_platform' LIMIT 1;
-  SELECT id INTO v_openrouter_id FROM pmoves_core.models WHERE model_id = 'openai/gpt-4o-mini' LIMIT 1;
+  SELECT id INTO STRICT v_openai_id FROM pmoves_core.models
+  WHERE provider_id = v_openai_provider_id AND model_id = 'gpt-4o-mini' AND name = 'chat_openai_platform';
+  SELECT id INTO STRICT v_openrouter_id FROM pmoves_core.models
+  WHERE provider_id = v_openrouter_provider_id AND model_id = 'openai/gpt-4o-mini';
 
   -- Look up Anthropic model IDs
-  SELECT id INTO v_claude_sonnet_id FROM pmoves_core.models WHERE model_id = 'claude-sonnet-4-5' LIMIT 1;
-  SELECT id INTO v_claude_opus_id FROM pmoves_core.models WHERE model_id = 'claude-opus-4-5' LIMIT 1;
-  SELECT id INTO v_claude_haiku_id FROM pmoves_core.models WHERE model_id = 'claude-haiku-4-5' LIMIT 1;
+  SELECT id INTO STRICT v_claude_sonnet_id FROM pmoves_core.models
+  WHERE provider_id = v_anthropic_provider_id AND model_id = 'claude-sonnet-4-5';
+  SELECT id INTO STRICT v_claude_opus_id FROM pmoves_core.models
+  WHERE provider_id = v_anthropic_provider_id AND model_id = 'claude-opus-4-5';
+  SELECT id INTO STRICT v_claude_haiku_id FROM pmoves_core.models
+  WHERE provider_id = v_anthropic_provider_id AND model_id = 'claude-haiku-4-5';
 
   -- Look up TTS model IDs
-  SELECT id INTO v_kokoro_id FROM pmoves_core.models WHERE model_id = 'kokoro' LIMIT 1;
-  SELECT id INTO v_f5_tts_id FROM pmoves_core.models WHERE model_id = 'f5-tts' LIMIT 1;
-  SELECT id INTO v_piper_id FROM pmoves_core.models WHERE model_id = 'piper' LIMIT 1;
+  SELECT id INTO STRICT v_kokoro_id FROM pmoves_core.models
+  WHERE provider_id = v_tts_provider_id AND model_id = 'kokoro';
+  SELECT id INTO STRICT v_f5_tts_id FROM pmoves_core.models
+  WHERE provider_id = v_tts_provider_id AND model_id = 'f5-tts';
+  SELECT id INTO STRICT v_piper_id FROM pmoves_core.models
+  WHERE provider_id = v_tts_provider_id AND model_id = 'piper';
 
   -- hirag_rerank — cross-encoder reranking for Hi-RAG v2
   INSERT INTO pmoves_core.service_model_mappings (service_name, function_name, model_id, variant_name, priority, weight)
@@ -1407,9 +1468,10 @@ VALUES (
   '_seed_audit',
   'custom',
   'Model registry seed data initialized',
-  true,
+  false,
   jsonb_build_object('seeded_at', NOW()::text, 'version', '2.0')
 )
 ON CONFLICT (name) DO UPDATE SET
+  active = false,
   metadata = EXCLUDED.metadata,
   updated_at = NOW();

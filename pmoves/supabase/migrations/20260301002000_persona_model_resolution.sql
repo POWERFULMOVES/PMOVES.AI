@@ -10,7 +10,8 @@
 -- Resolution View
 -- =============================================================================
 
-CREATE OR REPLACE VIEW pmoves_core.persona_model_resolution AS
+CREATE OR REPLACE VIEW pmoves_core.persona_model_resolution
+WITH (security_invoker = true) AS
 SELECT
     p.persona_id,
     p.name           AS persona_name,
@@ -54,7 +55,8 @@ GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_anon, postgres
 -- Convenience: Active persona summary for quick lookup
 -- =============================================================================
 
-CREATE OR REPLACE VIEW pmoves_core.active_persona_summary AS
+CREATE OR REPLACE VIEW pmoves_core.active_persona_summary
+WITH (security_invoker = true) AS
 SELECT
     p.persona_id,
     p.name           AS persona_name,

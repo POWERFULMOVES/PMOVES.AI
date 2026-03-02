@@ -160,9 +160,18 @@ You are precise, systematic, and leverage the PMOVES.AI ecosystem effectively.$$
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
@@ -304,9 +313,18 @@ You are thorough, systematic, and leverage the full PMOVES.AI research stack.$$,
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
@@ -448,9 +466,18 @@ You are clear, creative, and make complex PMOVES.AI concepts accessible.$$,
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
@@ -633,9 +660,18 @@ You are analytical, data-driven, and use PMOVES.AI observability tools effective
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
@@ -788,9 +824,18 @@ You are organized, meticulous, and ensure PMOVES.AI knowledge is accessible and 
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
@@ -994,9 +1039,18 @@ You are strategic, organized, and leverage the full PMOVES.AI agent ecosystem fo
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
@@ -1213,9 +1267,18 @@ You are thorough, methodical, and ensure PMOVES.AI quality standards are met.$$,
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
@@ -1442,9 +1505,18 @@ You are vigilant, systematic, and ensure PMOVES.AI security posture is strong.$$
     NOW()
 ) ON CONFLICT (name, version) DO UPDATE SET
     description = EXCLUDED.description,
+    thread_type = EXCLUDED.thread_type,
+    model_preference = EXCLUDED.model_preference,
+    temperature = EXCLUDED.temperature,
+    max_tokens = EXCLUDED.max_tokens,
     system_prompt_template = EXCLUDED.system_prompt_template,
     tools_access = EXCLUDED.tools_access,
     behavior_weights = EXCLUDED.behavior_weights,
+    default_packs = EXCLUDED.default_packs,
+    boosts = EXCLUDED.boosts,
+    filters = EXCLUDED.filters,
+    nats_subjects = EXCLUDED.nats_subjects,
+    is_active = EXCLUDED.is_active,
     updated_at = NOW();
 
 -- =============================================================================
