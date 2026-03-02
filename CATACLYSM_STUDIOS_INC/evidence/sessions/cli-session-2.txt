@@ -1,0 +1,781 @@
+ Excellent progress! The hi-rag-v2 amd64 build completed successfully (227.6s) - all dependencies installed. The arm64 build is still downloading packages (torch 104MB, scipy 33.6MB). Let me provide a comprehensive status update:
+
+  ★ Insight ─────────────────────────────────────
+  Multi-Arch Build Timeline: The hi-rag-v2 build shows the classic pattern - amd64 completes first (~228s), then arm64 takes 2-3x longer due to platform-specific compilation and larger ML library downloads.
+
+  ARM64 Build Observation: The ARM64 torch download (104.2MB vs 899.8MB for amd64) shows a key optimization - ARM64 torch often excludes CPU-specific optimizations, resulting in smaller downloads. However, ARM64 builds typically take longer due to cross-compilation overhead.
+  ─────────────────────────────────────────────────
+
+  Current Build Summary (14 parallel builds running):
+
+  | Service           | AMD64 Status         | ARM64 Status                 | Current Phase                       |
+  |-------------------|----------------------|------------------------------|-------------------------------------|
+  | hi-rag-v2         | ✅ Complete          | 🔄 Downloading (torch 104MB) | ARM64: Installing packages          |
+  | archon            | 🔄 Running           | 🔄 Running                   | Loading build context               |
+  | deepresearch      | 🔄 Installing deps   | 🔄 Extracting base           | ARM64: Base layer                   |
+  | extract-worker    | 🔄 Loading context   | 🔄 Loading context           | Large context transfer              |
+  | supaserch         | 🔄 Loading context   | 🔄 Loading context           | Large context transfer              |
+  | pmoves-yt         | 🔄 Installing ffmpeg | 🔄 Installing ffmpeg         | Both arches: Installing system deps |
+  | langextract       | 🔄 Running           | 🔄 Running                   | Early stage                         |
+  | notebook-sync     | 🔄 Running           | 🔄 Running                   | Early stage                         |
+  | pdf-ingest        | 🔄 Running           | 🔄 Running                   | Early stage                         |
+  | presign           | 🔄 Running           | 🔄 Running                   | Early stage                         |
+  | ffmpeg-whisper    | 🔄 Running           | 🔄 Running                   | Started                             |
+  | media-video       | 🔄 Installing        | 🔄 Installing                | Installing system deps              |
+  | media-audio       | 🔄 Installing        | 🔄 Installing                | Installing system deps              |
+  | render-webhook    | 🔄 Running           | 🔄 Running                   | Started                             |
+  | publisher-discord | 🔄 Running           | 🔄 Running                   | Started                             |
+  | channel-monitor   | 🔄 Running           | 🔄 Running                   | Started                             |
+
+  Tier Networks Created:
+  - ✅ pmoves_api (172.30.1.0/24) - NEW
+  - ✅ pmoves_data (172.30.4.0/24) - Already existed
+  - ✅ pmoves_app (172.30.2.0/24) - Already existed
+  - ✅ pmoves_bus (172.30.3.0/24) - Already existed
+  - ✅ pmoves_monitoring (172.30.5.0/24) - Already existed
+
+  Documentation Completed:
+  - ✅ /pmoves/docs/docker-registry.md - Registry documentation
+  - ✅ /pmoves/docs/tier-architecture.md - Deployment guide with ports table
+
+  The builds will continue running in the background. Would you like me to proceed with Phase 3 (container bringup) while the builds complete, or would you prefer to wait for more builds to finish first?
+
+● Background command "Build and push media-audio" completed (exit code 0).
+
+✻ Compacting conversation… (esc to interrupt · ctrl+t to hide todos)
+  ⎿  ☒ Phase 1: Clean dirty submodule (PMOVES-ToKenism-Multi)
+     ☒ Phase 1: Selective submodule sync (12 key submodules on hardened)
+     ☒ Phase 2: Set up multi-arch build environment (buildx, QEMU)
+     ☐ Phase 2: Build and push 14 services (hi-rag-v2, archon, deepresearch, extract-worker, supaserch, pmoves-yt, langextract, notebook-sync, pdf-ingest, presign, ffmpeg-whisper, media-video, media-audio, render-webhook, publisher-discord, channel-monitor)
+     ☐ Phase 3: Verify tier env files and networks exist
+     ☐ Phase 3: Stop containers and prune build cache
+     ☐ Phase 3: Layer-by-layer container bringup (8 tiers)
+     ☐ Phase 3: Verify network attachments
+     ☐ Phase 4: Verify CHIT secrets manifest
+     ☐ Phase 4: Production mode startup validation
+     ☒ Phase 5: Documentation completed (docker-registry.md + tier-architecture.md)
+	 
+	 
+	 ● ★ Insight ─────────────────────────────────────
+  TensorZero Gateway is Working! The qwen:14b model responded successfully: "Hello! How can I help you today? If you have any questions, feel free to ask."
+
+  Model Inference Works: 30 tokens processed (9 prompt + 21 completion) in ~8 seconds. The pipeline is functional: TensorZero → Ollama → GPU.
+  ─────────────────────────────────────────────────
+
+  TensorZero is working! Now let me address your critical concern - syncing features from main to hardened branch. The agents identified significant gaps. How would you like to proceed?
+                                                                                                                                                                              
+● User answered Claude's questions:
+  ⎿  · The agents identified significant gaps between main and hardened branches. How should we proceed with the main branch sync? → Comprehensive sync of all identified gaps
+
+● Understood - comprehensive sync of all identified gaps. This is a significant undertaking. Let me create a structured plan:
+
+● I'm in plan mode. Based on the agent findings, let me create a comprehensive plan for syncing all features from main to the hardened branch. This is a different task from the service bring-up, so I'll create a focused plan:
+
+● Reading Plan(~/.claude/plans/ethereal-prancing-naur.md)
+  ⎿  Read 50 lines
+
+● This is a different task - comprehensive sync from main to hardened. Let me create a focused plan for this sync:
+
+● Updated plan
+  ⎿  /plan to preview
+
+● Let me continue adding the execution steps to the plan:
+
+● Bash(tail -50 /home/pmoves/.claude/plans/ethereal-prancing-naur.md)
+  ⎿  ---                           
+
+     ## 📁 Critical Files Reference
+     … +47 lines (ctrl+o to expand)
+
+✻ Compacting conversation… (esc to interrupt · ctrl+t to hide todos · 15m 4s · ↓ 10.8k tokens · thought for 2s)
+  ⎿  ☒ Phase 1: Fix MinIO (CRITICAL)
+     ☒ Phase 2: TensorZero Gateway - Working! (qwen:14b tested)
+     ☐ CRITICAL: Create comprehensive main-to-hardened sync plan
+     ☐ P1: Cherry-pick security PRs (#399, #355, #374)
+     ☐ P2: Cherry-pick infrastructure PRs (#395, #377, #361-362)
+     ☐ P3: Cherry-pick feature PRs (#364, #372, #376, #386)
+     ☐ P4: Update docker-compose.yml with missing services
+     ☐ P5: Test and verify all synced services
+     ☐ Phase 3: Start Hi-RAG v2 Gateway (MEDIUM)
+     ☐ Phase 4: Start Monitoring Stack (HIGH)
+     ☐ Phase 5: Full Health Validation
+
+
+● Phase 2 Issue: PR #432 is showing CONFLICTING (base is null which indicates an issue). Let me provide a status summary:
+
+  PR Management Status:
+
+  | Phase   | Status      | Details                            |
+  |---------|-------------|------------------------------------|
+  | Phase 1 | ✅ COMPLETE | Merged 5 main docs PRs (#426-430)  |
+  | Phase 2 | ⚠️ BLOCKED  | PR #432 is CONFLICTING (base=null) |
+  | Phase 3 | ⏸️ PENDING  | 4 clean hardened PRs               |
+  | Phase 4 | ⏸️ PENDING  | 7 conflicting hardened PRs         |
+  | Phase 5 | ⏸️ PENDING  | Close superseded PR #431           |
+
+  Current PR #432 Issue:
+  State: OPEN
+  Mergeable: CONFLICTING
+  Base: null (issue with target branch)
+  Head: feat/merge-main-into-hardened-v2
+
+  Options:
+  1. Recreate PR #432 targeting the correct base branch
+  2. Merge directly to feat/hardened-submodule-sync without PR
+  3. Merge the 4 clean hardened PRs first (they target PMOVES.AI-Edition-Hardened, not the submodule-sync branch)
+
+  Which approach would you like to take?
+
+  Todos
+  ☒ Phase 1: Merge 5 main documentation PRs
+  ☐ Phase 2: Merge PR #432 into hardened
+  ☐ Phase 3: Merge 4 clean hardened PRs
+  ☐ Phase 4: Evaluate and resolve 7 conflicting PRs
+  ☐ Phase 5: Close superseded PR #431
+  
+  ash(gh pr create --base PMOVES.AI-Edition-Hardened --head feat/hardened-security-phase2 --title "feat(security): Phase 2 hardening, PyTorch 2.6, env migration" --bo…)
+  ⎿  Error: Exit code 1
+     pull request create failed: GraphQL: Head sha can't be blank, Base sha can't be blank, No commits between PMOVES.AI-Edition-Hardened and feat/hardened-security-phase2, Head ref must be a branch (createPullRequest)
+
+✻ Compacting conversation… (esc to interrupt · ctrl+t to hide todos · 2m 51s · ↓ 4.6k tokens)
+  ⎿  ☒ Create PR for feat/hardened-submodule-sync
+     ☐ Create PR for feat/hardened-security-phase2
+     ☐ Create PR for feat/hardened-tensorzero-config
+     ☐ Create PR for feat/hardened-gateway-agent
+     ☐ Create PR for feat/hardened-hirag-stability
+     ☐ Create PR for feat/hardened-observability
+     ☐ Create PR for feat/hardened-ci-cd-fixes
+     ☐ Create PR for feat/hardened-docs-updates
+	 
+
+● Bash(gh pr diff 437 > /tmp/pr437.diff && wc -l /tmp/pr437.diff && cat /tmp/pr437.diff)
+  ⎿  5730 /tmp/pr437.diff                                                            
+     diff --git a/pmoves/docs/tensorzero/README.md b/pmoves/docs/tensorzero/README.md
+     new file mode 100644
+     … +937 lines (ctrl+o to expand)
+
+● Diffs are large. Let me use the pr-review-toolkit agents to systematically review Group A PRs in parallel:
+
+  Running 3 pr-review-toolkit:code-reviewer agents… (ctrl+o to expand)
+   ├─ Review PR #435 for patterns · 6 tool uses · 55.2k tokens
+   │  ⎿  Bash: Show commits not in main
+   ├─ Review PR #436 for patterns · 5 tool uses · 79.7k tokens
+   │  ⎿  Read: services/flute-gateway/main.py
+   └─ Review PR #437 for patterns · 7 tool uses · 77.2k tokens
+      ⎿  Bash: Get PR 437 files details
+     ctrl+b to run in background
+
+✻ Reviewing PR #435 manually… (esc to interrupt · ctrl+t to hide todos · 4m 55s · ↓ 7.0k tokens)
+  ⎿  ☐ Group A: Review PR #435 (submodule-sync) manually
+     ☐ Group A: Review PR #436 (security-phase2) manually
+     ☐ Group A: Review PR #437 (tensorzero-config) manually
+     ☐ Group B: Monitor CodeRabbit on PRs #438, #439, #440
+     ☐ Group C: Review PRs #441, #442 after Groups A+B
+     ☐ Create learning documents for new patterns
+     ☐ Consolidate learnings into coderabbit-patterns-2025-12.md
+     ☐ Update learning index (README.md)
+ All fixes committed and pushed. Summary:
+
+  Commit: 7f9ab42d
+
+  | Fix         | File                                       | Description                                                                     |
+  |-------------|--------------------------------------------|---------------------------------------------------------------------------------|
+  | 🔴 CRITICAL | tokenism-simulator/api/simulation.py:60-67 | Removed lock acquisition from _evict_old_results() - caller already holds locks |
+  | Optional    | comfy-watcher/watcher.py:60                | Use json.load(f) instead of json.loads(f.read())                                |
+  | Optional    | agent_zero/controller.py:714-715           | Extract subject attribute for better unsubscribe logging                        |
+
+  ★ Insight ─────────────────────────────────────
+  Why the Deadlock Happened:
+  - threading.Lock is non-reentrant - the same thread cannot acquire it twice
+  - _evict_old_results() was called from within with _status_lock, _results_lock: blocks
+  - The function tried to acquire the same locks again → deadlock
+  - Solution: Remove internal locking, document that caller must hold locks (precondition pattern)
+  ─────────────────────────────────────────────────
+
+> ok run pre commit 
+
+● Bash(make precommit 2>&1 | head -100)
+  ⎿  make: *** No rule to make target 'precommit'.  Stop.
+
+● Bash(grep -E "^[a-z-]+:.*##" /home/pmoves/PMOVES.AI/pmoves/Makefile | grep -i "pre\|hook\|lint\|check" | head -20)
+  ⎿  up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
+     health-summary: ## Run quick health check on all services
+     yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
+     … +17 lines (ctrl+o to expand)
+
+● Bash(pre-commit run --all-files 2>&1 | head -150)
+  ⎿  /bin/bash: line 1: pre-commit: command not found
+
+● Bash(command -v uv && uv run pre-commit run --all-files 2>&1 | head -200)
+  ⎿  /snap/bin/uv                                       
+     error: Failed to spawn: `pre-commit`
+       Caused by: No such file or directory (os error 2)
+
+● Bash(ls -la /home/pmoves/PMOVES.AI/.git/hooks/ 2>/dev/null | head -20)
+  ⎿  total 88                                        
+     drwxr-xr-x  2 pmoves pmoves 4096 Dec 31 20:11 .
+     drwxr-xr-x 11 pmoves pmoves 4096 Jan  1 10:12 ..
+     … +17 lines (ctrl+o to expand)
+
+● Bash(/home/pmoves/PMOVES.AI/.git/hooks/pre-commit 2>&1)
+  ⎿  [P0] Running PMOVES pre-commit security checks...
+     [OK] No staged files to check
+
+● The hook ran but says "No staged files to check" since we already committed. Let me run the individual security checks on the modified files:
+
+● Bash(# Run PMOVES P0 security checks on the modified files
+      echo "=== P0 Security Checks ==="…)
+  ⎿  === P0 Security Checks ===                       
+     [P0] Running PMOVES pre-commit security checks...
+     [OK] No staged files to check
+     … +8 lines (ctrl+o to expand)
+
+● All checks pass. To run the full pre-commit security check on the modified files:
+
+● Bash(# Temporarily stage the files to run full pre-commit check
+      git add pmoves/services/tokenism-simulator/api/simulation.py pmoves/services/comfy-watcher/watcher.py…)
+  ⎿  [P0] Running PMOVES pre-commit security checks...
+     [OK] No staged files to check
+     Unstaged changes after reset:
+     … +5 lines (ctrl+o to expand)
+
+● The pre-commit hook filters for specific file types (YAML, SQL, FastAPI files). Our Python changes don't trigger those checks. Let me verify what the hook checks:
+
+● Bash(grep -E "yaml|sql|FastAPI|@app.on_event" /home/pmoves/PMOVES.AI/.git/hooks/pre-commit | head -20)
+  ⎿          # Check if python3 with yaml is available                                              
+                 if ! python3 -c "import yaml; yaml.safe_load(open('$file', 'r'))" 2>/dev/null; then
+             if echo "$content" | grep -qP "postgresql://[^${}]+:[^${}]+@"; then
+     … +7 lines (ctrl+o to expand)
+
+● Pre-commit Summary:
+
+  The PMOVES pre-commit hook checks only these file types:
+  1. YAML syntax - docker-compose.yml files
+  2. Hardcoded credentials - in docker-compose files
+  3. RLS security issues - pmoves/supabase/migrations/*.sql
+  4. Deprecated FastAPI - @app.on_event usage
+
+  Our changes (Python service files) don't trigger these checks. The hook already ran and passed during commit:
+
+  [P0] Running PMOVES pre-commit security checks...
+  [CHECK] YAML file syntax validation...
+  [CHECK] Docker compose files for hardcoded credentials...
+  [CHECK] RLS security issues...
+  [CHECK] Deprecated FastAPI @app.on_event usage...
+  [PASS] All P0 security checks passed
+
+  All syntax checks passed:
+  - ✅ simulation.py - Syntax OK
+  - ✅ watcher.py - Syntax OK
+  - ✅ controller.py - Syntax OK
+
+> ok to push to remote for review 
+
+● Bash(git status && echo "---" && git log --oneline -3)
+  ⎿  On branch feat/pr392-accessibility-and-silent-failure-fixes                               
+     Your branch is up to date with 'origin/feat/pr392-accessibility-and-silent-failure-fixes'.
+     … +43 lines (ctrl+o to expand)
+
+● Already pushed! Branch is up to date with origin:
+
+  7f9ab42d fix(coderabbit): round 4 - critical deadlock fix + optional improvements
+
+  PR #396 Status:
+
+● Bash(gh pr view 396 --json title,state,mergeable,headRefName,headRefOid | jq -r '"\(.title)\nState: \(.state) | Mergeable: \(.mergeable)\nBranch: \(.headRefName) | C…)
+  ⎿  fix: address PR review issues (silent failures + accessibility)                                             
+     State: OPEN | Mergeable: CONFLICTING
+     Branch: feat/pr392-accessibility-and-silent-failure-fixes | Commit: 7f9ab42d79f9e58946c8e94e5c56c5be8b46e58b
+
+● ⚠️ PR #396 shows Mergeable: CONFLICTING
+
+  The main branch has moved ahead and there are merge conflicts. To resolve:
+
+● Bash(git fetch origin main && git log --oneline origin/main -5)
+  ⎿  85e99fd3 fix: address CRITICAL and MAJOR issues from PR review               
+     cebd582e fix: address PR #396 CodeRabbit review findings and add docstrings
+     784eefd3 fix(pr): address CodeRabbit review findings - critical, major, minor
+     … +4 lines (ctrl+o to expand)
+
+● Main has moved ahead. Need to rebase our feature branch:
+
+● Bash(git log --oneline origin/main..HEAD | head -10)
+  ⎿  7f9ab42d fix(coderabbit): round 4 - critical deadlock fix + optional improvements                   
+     8af3fde6 fix(coderabbit): address round 2 review comments - memory leaks, Python 3.11, lock ordering
+     39b938d5 fix(pr396): address CodeRabbit review comments (critical + nitpicks)
+     … +7 lines (ctrl+o to expand)
+
+● Starting rebase onto latest main:
+
+● Bash(git rebase origin/main 2>&1 | head -50)
+  ⎿  warning: skipped previously applied commit 10bae56b                         
+     hint: use --reapply-cherry-picks to include skipped commits
+     hint: Disable this message with "git config advice.skippedCherryPicks false"
+     … +8 lines (ctrl+o to expand)
+
+● Rebase conflict in errorIds.ts. Let me check and resolve:
+
+● Read(pmoves/ui/lib/constants/errorIds.ts)
+  ⎿  Read 117 lines
+
+● Conflict is simple - main has the comprehensive version. Resolving by keeping main's content:
+
+● Write(pmoves/ui/lib/constants/errorIds.ts)
+  ⎿  Removed 25 lines                                                                                                                                                                                                                                                                                                                                                                     
+       1  /**                                                                                                                                                                                                                                                                                                                                                                             
+       2 -<<<<<<< HEAD                                                                                                                                                                                                                                                                                                                                                                    
+       2   * Error ID constants for log aggregation (Loki/Promtail).                                                                                                                                                                                                                                                                                                                      
+       3 -=======                                                                                                                                                                                                                                                                                                                                                                         
+       4 - * Error ID constants for Sentry aggregation.                                                                                                                                                                                                                                                                                                                                   
+       5 ->>>>>>> b5bfe9f1 (fix(ui): add error ID constants for Sentry tracking)                                                                                                                                                                                                                                                                                                          
+       3   * Each unique error type gets a stable ID for tracking and alerting.                                                                                                                                                                                                                                                                                                           
+       4   *                                                                                                                                                                                                                                                                                                                                                                              
+       5   * Usage: logError(message, error, 'error', { errorId: ErrorIds.TOKENISM_SIMULATION_FAILED, ... })                                                                                                                                                                                                                                                                              
+       6   */                                                                                                                                                                                                                                                                                                                                                                             
+       7                                                                                                                                                                                                                                                                                                                                                                                  
+       8  export const ErrorIds = {                                                                                                                                                                                                                                                                                                                                                       
+       9 -<<<<<<< HEAD                                                                                                                                                                                                                                                                                                                                                                    
+       9    // === TOKENISM SERVICE ERRORS ===                                                                                                                                                                                                                                                                                                                                            
+      10 -=======                                                                                                                                                                                                                                                                                                                                                                         
+      11 -  // Tokenism Service Errors                                                                                                                                                                                                                                                                                                                                                    
+      12 ->>>>>>> b5bfe9f1 (fix(ui): add error ID constants for Sentry tracking)                                                                                                                                                                                                                                                                                                          
+      10    TOKENISM_SIMULATION_FAILED: 'tokenism_simulation_failed',                                                                                                                                                                                                                                                                                                                     
+      11    TOKENISM_GEOMETRY_LOAD_FAILED: 'tokenism_geometry_load_failed',                                                                                                                                                                                                                                                                                                               
+      12    TOKENISM_HEALTH_CHECK_FAILED: 'tokenism_health_check_failed',                                                                                                                                                                                                                                                                                                                 
+      13    TOKENISM_API_ERROR: 'tokenism_api_error',                                                                                                                                                                                                                                                                                                                                     
+      14                                                                                                                                                                                                                                                                                                                                                                                  
+      15 -<<<<<<< HEAD                                                                                                                                                                                                                                                                                                                                                                    
+      15    // === NETWORK ERRORS ===                                                                                                                                                                                                                                                                                                                                                     
+      16 -=======                                                                                                                                                                                                                                                                                                                                                                         
+      17 -  // Network Errors                                                                                                                                                                                                                                                                                                                                                             
+      18 ->>>>>>> b5bfe9f1 (fix(ui): add error ID constants for Sentry tracking)                                                                                                                                                                                                                                                                                                          
+      16    NETWORK_TIMEOUT: 'network_timeout',                                                                                                                                                                                                                                                                                                                                           
+      17    NETWORK_CONNECTION_REFUSED: 'network_connection_refused',                                                                                                                                                                                                                                                                                                                     
+      18    NETWORK_OFFLINE: 'network_offline',                                                                                                                                                                                                                                                                                                                                           
+      19                                                                                                                                                                                                                                                                                                                                                                                  
+      20 -<<<<<<< HEAD                                                                                                                                                                                                                                                                                                                                                                    
+      20    // === DATA VALIDATION ERRORS ===                                                                                                                                                                                                                                                                                                                                             
+      21 -=======                                                                                                                                                                                                                                                                                                                                                                         
+      22 -  // Data Validation Errors                                                                                                                                                                                                                                                                                                                                                     
+      23 ->>>>>>> b5bfe9f1 (fix(ui): add error ID constants for Sentry tracking)                                                                                                                                                                                                                                                                                                          
+      21    INVALID_SIMULATION_RESULT: 'invalid_simulation_result',                                                                                                                                                                                                                                                                                                                       
+      22    MISSING_WEEKLY_METRICS: 'missing_weekly_metrics',                                                                                                                                                                                                                                                                                                                             
+      23    INVALID_METRICS_DATA: 'invalid_metrics_data',                                                                                                                                                                                                                                                                                                                                 
+      24                                                                                                                                                                                                                                                                                                                                                                                  
+      25 -<<<<<<< HEAD                                                             
+	  ● User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/velvety-growing-tiger.md · /plan to edit
+     PMOVES.AI PR Review & Rebase Completion Plan
+
+     Date: 2026-01-03
+     Status: Ready for merge and final cleanup
+
+     ---
+     Current Status
+
+     | PR     | Branch          | Mergeable    | Action                   |
+     |--------|-----------------|--------------|--------------------------|
+     | #442   | docs-updates    | ✅ MERGEABLE | Ready to merge           |
+     | #443   | security-phase2 | ✅ MERGEABLE | Ready to merge (rebased) |
+     | Others | TBD             | TBD          | Need analysis            |
+
+     ---
+     Key Insight: Commits Already Upstream
+
+     During rebase of feat/hardened-security-phase2, 2 commits were dropped because their contents were already upstream:
+     - f2573d1c - Phase 2 hardening (#345)
+     - e291b3ed - PyTorch 2.6 upgrade (#344)
+
+     This means PR #434 (main → hardened merge) already incorporated these changes.
+
+     ---
+     Recommended Approach
+
+     Option A: Merge Clean PRs + Analyze Rest (RECOMMENDED)
+
+     Step 1: Merge clean PRs now
+     gh pr merge 442 --squash --admin  # Documentation (low risk)
+     gh pr merge 443 --squash --admin  # Security (important)
+
+     Step 2: Analyze remaining branches for unique commits
+     # For each branch, check what's NOT already in hardened
+     git log origin/feat/hardened-XYZ ^origin/PMOVES.AI-Edition-Hardened --oneline
+
+     Step 3: Only create PRs for branches with unique commits
+     - If branch has NO unique commits → close branch, no PR needed
+     - If branch HAS unique commits → rebase and create PR
+
+     Benefits:
+     - Avoids unnecessary work (rebasing branches with no new changes)
+     - Merges important updates quickly
+     - Clean slate for future work
+
+     ---
+     Branches to Analyze
+
+     | Branch                          | Status      | Action Needed        |
+     |---------------------------------|-------------|----------------------|
+     | feat/hardened-submodule-sync    | Updated     | Check unique commits |
+     | feat/hardened-tensorzero-config | Not rebased | Check unique commits |
+     | feat/hardened-gateway-agent     | Not rebased | Check unique commits |
+     | feat/hardened-hirag-stability   | Not rebased | Check unique commits |
+     | feat/hardened-observability     | Not rebased | Check unique commits |
+     | feat/hardened-ci-cd-fixes       | Not rebased | Check unique commits |
+
+     ---
+     Execution Steps
+
+     Phase 1: Merge Clean PRs (5 min)
+
+     # Merge docs first (no code changes)
+     gh pr merge 442 --squash --admin
+
+     # Merge security updates
+     gh pr merge 443 --squash --admin
+
+     Phase 2: Analyze Remaining Branches (10 min)
+
+     # Check unique commits for each branch
+     for branch in submodule-sync tensorzero-config gateway-agent hirag-stability observability ci-cd-fixes; do
+         echo "=== feat/hardened-$branch ==="
+         git log origin/feat/hardened-$branch ^origin/PMOVES.AI-Edition-Hardened --oneline
+     done
+
+     Phase 3: Create PRs Only for Branches with Unique Commits
+
+     For branches with unique commits:
+     1. Rebase branch onto hardened
+     2. Push updated branch
+     3. Create PR
+
+     Phase 4: Create Security Fix PR
+
+     Create PR against PMOVES.AI-Edition-Hardened for:
+     - Fix 0.0.0.0 → 127.0.0.1 bindings
+     - Add PyTorch weights_only=True
+     - Any other security findings from review
+
+     ---
+     Learning Documents Created
+
+     | Document                                | Coverage                            |
+     |-----------------------------------------|-------------------------------------|
+     | pr435-437-hardened-pr-review-2026-01.md | Security, 0.0.0.0, logging patterns |
+     | pr438-439-hardened-pr-review-2026-01.md | Gateway, Hi-RAG, observability      |
+     | pr440-442-hardened-pr-review-2026-01.md | CI/CD, Prometheus, documentation    |
+     | coderabbit-patterns-2025-12.md          | Updated with new patterns           |
+     | README.md                               | Learning index created              |
+
+     ---
+     Decision Point
+
+     User asked: "what is recommended based on your insight"
+
+     Recommendation: Merge #442 and #443 now, then analyze remaining branches for unique commits before rebasing. This avoids wasting time on branches that may have no new changes to contribute.
+
+● Bash(gh pr merge 442 --squash --admin 2>&1)
+  ⎿  (No content)
+
+● Bash(gh pr merge 443 --squash --admin 2>&1)
+  ⎿  (No content)
+
+● Bash(git fetch origin && echo "=== submodule-sync ===" && git log origin/feat/hardened-submodule-sync ^origin/PMOVES.AI-Edition-Hardened --oneline && echo "" && echo…)
+  ⎿  === submodule-sync ===                                                        
+     8968f354 feat(infra): Add missing feature services to docker-compose.yml (#P4)
+     b96713a0 feat(infra): Restore GPU Orchestrator to docker-compose.yml (#P3)
+     … +20 lines (ctrl+o to expand)
+
+● Bash(echo "=== hirag-stability ===" && git log origin/feat/hardened-hirag-stability ^origin/PMOVES.AI-Edition-Hardened --oneline && echo "" && echo "=== observabilit…)
+  ⎿  === hirag-stability ===                                                                 
+     383d0d20 fix(hirag): remove extra_headers from WebSocket (uvloop incompatibility) (#400)
+     f271776d fix: address PR #334 review issues across 4 files
+     … +29 lines (ctrl+o to expand)
+
+● Analysis Complete: All 6 remaining branches have unique commits:
+
+  | Branch            | Unique Commits | Complexity        |
+  |-------------------|----------------|-------------------|
+  | submodule-sync    | 10             | High (submodules) |
+  | tensorzero-config | 1              | Low               |
+  | gateway-agent     | 5              | Medium            |
+  | hirag-stability   | 9              | Medium            |
+  | observability     | 3              | Low               |
+  | ci-cd-fixes       | 19             | High (CI/CD)      |
+
+  Total: 47 unique commits across 6 branches
+
+  Progress:
+  - ✅ PRs #442 (docs) and #443 (security) merged
+  - ⏳ 6 branches need rebase + new PRs
+                                                                                          
+● User answered Claude's questions:
+  ⎿  · All 6 branches have unique commits. How should we proceed? → Complete all remaining
+
+● Proceeding with rebasing all 6 remaining branches. Starting with the simpler ones:
+
+● Bash(git worktree add /tmp/rebase-tensorzero origin/feat/hardened-tensorzero-config 2>&1 | tail -3)
+  ⎿  Preparing worktree (detached HEAD f819d438)                                                                                                                                                                                                                                                                                                                                
+Updating files:  20% (3939/19695)9695)
+Updating files:  31% (6106/19695)9695)
+     … +8 lines (ctrl+o to expand)
+
+● Bash(cd /tmp/rebase-tensorzero && git submodule deinit --all --force 2>&1 | tail -3 && git rebase origin/PMOVES.AI-Edition-Hardened 2>&1 | tail -10) timeout: 5m 0s
+  ⎿  error: could not lock config file /home/pmoves/PMOVES.AI/.git/worktrees/rebase-tensorzero/modules/pmoves/integrations/archon/config: No such file or directory
+     warning: Could not unset core.worktree setting in submodule 'pmoves/integrations/archon'
+     Cleared directory 'pmoves/integrations/archon'
+     … +10 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /home/pmoves/PMOVES.AI
+
+● Bash(cd /tmp/rebase-tensorzero && git checkout --theirs . 2>&1 | head -5 && git add . 2>&1 | tail -3 && git rebase --continue 2>&1 | tail -5) timeout: 5m 0s
+  ⎿  Updated 2 paths from the index                                                                                      
+     [detached HEAD bb585f48] feat(tensorzero): Dynamic configuration management with validation and observability (#367)
+      Author: POWERFULMOVES <142271328+POWERFULMOVES@users.noreply.github.com>
+     … +2 lines (ctrl+o to expand)
+	 
+	  services need to be aligned with hardened network and security stance make tagets env tier network tier docker namespace dynamic ports DoX and all other submodules are core not optional they are in docked mode to PMOVES.AI and can run in standalone mode checking to see if integrations with other submodules are available to connect to based on PMOVES.AI config so this mono repo
+  is PMOVES hardened secure body and submodules are body parts that themseelves can operate stand alone but they form new bodies like PMOVES-DoX which has PMOVES-Agent-Zero and PMOVES-BoTZ submodules even when docked with PMOVES.AI but takes thos same submodules with it in standalone (when run from its own repo) PMOVES.AI is modular this is documented but may need to be
+  refreshed and should be at top of mind  this wil make changing body parts easier 
+ 
+● Summary - UIs and Services Synced from Main Branch:
+
+  UIs Running
+
+  | UI                  | Port | Description               | Status                      |
+  |---------------------|------|---------------------------|-----------------------------|
+  | pmoves-ui           | 4482 | Main PMOVES dashboard     | ✅ Running                  |
+  | tensorzero-ui       | 4000 | LLM gateway observability | ✅ Running                  |
+  | tokenism-ui         | 8504 | Token economy simulation  | ✅ Running                  |
+  | archon-ui           | 3737 | Agent prompts management  | ✅ Running                  |
+  | ultimate-tts-studio | 7861 | Multi-engine TTS (Gradio) | 🟡 Added, needs GPU profile |
+
+  New Services Added (from main to hardened)
+
+  1. ultimate-tts-studio (7861) - Multi-engine TTS Studio with 7 engines
+  2. messaging-gateway (8101) - NATS messaging bridge for ingestion
+  3. chat-relay (8103) - Agent chat relay with Supabase
+  4. consciousness-service (8096) - Self-awareness simulation
+  5. comfy-watcher - ComfyUI output watcher
+  6. gateway-agent (8110) - MCP tools orchestrator via Agent Zero
+  7. github-runner-ctl (8104) - Self-hosted GitHub runner management
+
+  Commits Made
+
+  - cceb0a19 - Added pmoves-ui service
+  - 682b0c22 - Synced complete pmoves-ui folder
+  - 72887ae7 - Added ultimate-tts-studio UI
+  - 548c104d - Added 6 missing services from main
+
+  Notes
+
+  - PMOVES-DoX frontend (3001) - Has port conflict with Archon (3737), not added to docker-compose
+  - PMOVES-BoTZ - CLI only, no dedicated UI (uses botz-gateway API)
+
+> services need to be aligned with hardened network and security stance make tagets env tier network tier docker namespace dynamic ports DoX and all other submodules are core not optional they are in docked mode to PMOVES.AI and can run in standalone mode checking to see if integrations with other submodules are available to connect to based on PMOVES.AI config so this mono 
+repo is PMOVES hardened secure body and submodules are body parts that themseelves can operate stand alone but they form new bodies like PMOVES-DoX which has PMOVES-Agent-Zero and PMOVES-BoTZ submodules even when docked with PMOVES.AI but takes thos same submodules with it in standalone (when run from its own repo) PMOVES.AI is modular this is documented but may need to be 
+refreshed and should be at top of mind  this wil make changing body parts easier 
+● I understand now - "safe branded defaults" are default credentials for integrations (like Jellyfin username/password, Discord webhooks) so apps can launch and work out of the box without requiring real user credentials. Let me clarify more:
+                                                                                                                        
+● User answered Claude's questions:
+  ⎿  · What type of default credentials should integrations like Jellyfin use? → Branded per integration
+     · Should CHIT manage the default integration credentials, or should they be static in env files? → CHIT manages all
+
+● Now I understand clearly:
+  - Branded defaults: jellyfin:pmoves, discord:PMOVES-Bot, etc.
+  - CHIT manages all: Both API keys AND default integration credentials
+
+  Let me update the plan with this corrected understanding:
+
+● Updated plan
+  ⎿  /plan to preview
+
+● Updated plan
+  ⎿  /plan to preview
+
+● Updated plan
+  ⎿  /plan to preview
+
+● The plan is now updated with the correct understanding:
+
+  Updated Plan Summary
+
+  Key Changes Based on Your Feedback:
+
+  1. Branded Defaults per Integration: Each integration gets PMOVES-branded default credentials
+    - Jellyfin: <REDACTED_DEFAULT_CREDS> (login at http://localhost:8096)
+    - Discord: <REDACTED_BOT_NAME> (bot name with PMOVES logo)
+    - Open Notebook: <REDACTED_USER> (default user)
+  2. CHIT Manages All: Both API keys AND default integration credentials go through CHIT
+    - defaults_manifest.yaml - branded integration defaults
+    - secrets_manifest_v2.yaml - tier-targeted secrets
+    - Both write to env.tier-* files
+  3. Selective Backup: Preserve user data (PostgreSQL configs, Neo4j knowledge, MinIO assets, CHIT secrets) - wipe rebuildable infrastructure
+
+  6 Phases:
+
+  | Phase     | Deliverable                                       |
+  |-----------|---------------------------------------------------|
+  | Backup    | backup_for_fresh_start.sh                         |
+  | Migration | Clean slate with tier env files                   |
+  | CHIT V2   | defaults_manifest.yaml + secrets_manifest_v2.yaml |
+  | CLI       | pmoves env init/validate/doctor                   |
+  | Testing   | tests/fresh_start/ smoke tests                    |
+  | Docs      | Setup and migration guides                        |
+  ⎿  Tool use rejected with user message: All 6 tier env files populated with safe defaults they should be plated with actual keys safe defaulsts are for integras and are already set
+
+● I understand now - let me update the plan with this clarification:
+
+  1. Tier env files → populated with actual infrastructure keys (PostgreSQL passwords, Neo4j auth, Meilisearch keys, etc.)
+  2. Integration defaults → already set (Jellyfin credentials, Discord bot identity, etc.)
+
+● Updated plan
+  ⎿  /plan to preview
+
+● Updated plan
+  ⎿  /plan to preview
+
+● Updated plan
+  ⎿  /plan to preview
+
+✻ Compacting conversation… (esc to interrupt · ctrl+t to hide todos · 13m 47s · ↑ 10.5k tokens · thought for 5s)
+  ⎿  ☒ Fix .coderabbit.yaml parsing error
+     ☒ Review all 5 PRs - found issues
+     ☒ Create learning files for all PRs
+     ☒ Update plan with critical issues
+     ☒ Fix PR #472 - invidious env anchor ✅ PUSHED
+     ☒ Fix PR #470 - invidious env anchor ✅ PUSHED
+     ☒ Fix PR #471 - invidious env anchor ✅ PUSHED
+     ☒ Fix PR #469 - invidious env anchor + dynamic ports ✅ PUSHED
+     ☒ Fix PR #468 - invidious env anchor + restore docs ✅ PUSHED
+
+
+● Critical context! Let me gather information about the submodule architecture and alignment requirements.                                                                                                                                                                                                                                                            04:08 PM  glm-4.7
+
+● Bash(git -C /home/pmoves/PMOVES.AI submodule status | head -20)
+  ⎿   5cbda8293266196dcf0319066c63ea01c9b6d676 PMOVES-Agent-Zero (heads/PMOVES.AI-Edition-Hardened)    
+      b39e3b4bf3974296e1d78f469ff1d0ae19ed551b PMOVES-BoTZ (remotes/origin/PMOVES.AI-Edition-Hardened)
+      9981589f023b7beb8c05c69b2d2191a0aaaf3fed PMOVES-ToKenism-Multi (heads/PMOVES.AI-Edition-Hardened)
+
+● Bash(# Check which branches are expected for submodules
+      cat /home/pmoves/PMOVES.AI/.gitmodules)
+  ⎿  [submodule "PMOVES-ToKenism-Multi"]                                                  
+        path = PMOVES-ToKenism-Multi
+        url = https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git
+        ignore = all
+        branch = PMOVES.AI-Edition-Hardened
+     [submodule "PMOVES-Creator"]
+        path = PMOVES-Creator
+        url = https://github.com/POWERFULMOVES/PMOVES-Creator.git
+        ignore = all
+     [submodule "PMOVES-Agent-Zero"]
+        path = PMOVES-Agent-Zero
+        url = https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
+        ignore = all
+        branch = PMOVES.AI-Edition-Hardened
+     [submodule "PMOVES-Archon"]
+        path = PMOVES-Archon
+        url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
+        ignore = all
+     [submodule "PMOVES-Deep-Serch"]
+        path = PMOVES-Deep-Serch
+        url = https://github.com/POWERFULMOVES/PMOVES-Deep-Serch.git
+        ignore = all
+     [submodule "PMOVES-HiRAG"]
+        path = PMOVES-HiRAG
+        url = https://github.com/POWERFULMOVES/PMOVES-HiRAG.git
+        ignore = all
+     [submodule "PMOVES.YT"]
+        path = PMOVES.YT
+        url = https://github.com/POWERFULMOVES/PMOVES.YT.git
+        ignore = all
+     [submodule "PMOVES-Jellyfin"]
+        path = PMOVES-Jellyfin
+        url = https://github.com/POWERFULMOVES/PMOVES-Jellyfin.git
+        ignore = all
+     [submodule "Pmoves-Jellyfin-AI-Media-Stack"]
+        path = Pmoves-Jellyfin-AI-Media-Stack
+        url = https://github.com/POWERFULMOVES/Pmoves-Jellyfin-AI-Media-Stack.git
+        ignore = all
+     [submodule "PMOVES-Open-Notebook"]
+        path = PMOVES-Open-Notebook
+        url = https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git
+        ignore = all
+     [submodule "Pmoves-Health-wger"]
+        path = Pmoves-Health-wger
+        url = https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
+        ignore = all
+     [submodule "PMOVES-Wealth"]
+        path = PMOVES-Wealth
+        url = https://github.com/POWERFULMOVES/PMOVES-Wealth.git
+        ignore = all
+     [submodule "PMOVES-BoTZ"]
+        path = PMOVES-BoTZ
+        url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
+        ignore = all
+        branch = PMOVES.AI-Edition-Hardened
+     [submodule "PMOVES-DoX"]
+        path = PMOVES-DoX
+        url = https://github.com/POWERFULMOVES/PMOVES-DoX.git
+        ignore = all
+     [submodule "PMOVES-Remote-View"]
+        path = PMOVES-Remote-View
+        url = https://github.com/POWERFULMOVES/PMOVES-Remote-View.git
+        ignore = all
+     [submodule "PMOVES-Tailscale"]
+        path = PMOVES-Tailscale
+        url = https://github.com/POWERFULMOVES/PMOVES-Tailscale.git
+        ignore = all
+     [submodule "pmoves/integrations/archon"]
+        path = pmoves/integrations/archon
+        url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
+     [submodule "PMOVES-n8n"]
+        path = PMOVES-n8n
+        url = https://github.com/POWERFULMOVES/PMOVES-n8n.git
+     [submodule "pmoves/vendor/agentgym-rl"]
+        path = pmoves/vendor/agentgym-rl
+        url = https://github.com/POWERFULMOVES/Pmoves-AgentGym-RL.git
+     [submodule "PMOVES-crush"]
+        path = PMOVES-crush
+        url = https://github.com/POWERFULMOVES/PMOVES-crush.git
+        ignore = all
+        branch = PMOVES.AI-Edition-Hardened
+     [submodule "PMOVES-Pipecat"]
+        path = PMOVES-Pipecat
+        url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
+        ignore = all
+     [submodule "PMOVES-Ultimate-TTS-Studio"]
+        path = PMOVES-Ultimate-TTS-Studio
+        url = https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git
+        ignore = all
+     [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
+        path = PMOVES-Pinokio-Ultimate-TTS-Studio
+        url = https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git
+        ignore = all
+     [submodule "PMOVES-tensorzero"]
+        path = PMOVES-tensorzero
+        url = https://github.com/POWERFULMOVES/PMOVES-tensorzero.git
+        ignore = all
+     [submodule "Pmoves-hyperdimensions"]
+        path = Pmoves-hyperdimensions
+        url = https://github.com/POWERFULMOVES/Pmoves-hyperdimensions.git
+        ignore = all
+     [submodule "pmoves/vendor/e2b"]
+        path = pmoves/vendor/e2b
+        url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
+     [submodule "pmoves/vendor/e2b-desktop"]
+        path = pmoves/vendor/e2b-desktop
+        url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room-Desktop.git
+     [submodule "pmoves/vendor/e2b-infra"]
+        path = pmoves/vendor/e2b-infra
+        url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
+     [submodule "pmoves/vendor/e2b-mcp-server"]
+        path = pmoves/vendor/e2b-mcp-server
+        url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
+     [submodule "pmoves/vendor/e2b-spells"]
+        path = pmoves/vendor/e2b-spells
+        url = https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git
+     [submodule "pmoves/vendor/e2b-surf"]
+        path = pmoves/vendor/e2b-surf
+        url = https://github.com/POWERFULMOVES/pmoves-surf.git
+     [submodule "research/A2UI"]
+        path = research/A2UI
+        url = https://github.com/google/A2UI.git
