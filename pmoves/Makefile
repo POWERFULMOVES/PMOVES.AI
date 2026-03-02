@@ -812,8 +812,8 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d
-	@timeout 60 bash -c 'until curl -sf http://localhost:3030/healthz; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
 	@echo "   UI:           http://localhost:4000"

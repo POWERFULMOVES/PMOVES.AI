@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-02 (Mar 2 merge wave — PRs #748-#751 merged, worktree cleanup 11→1)
-**Branch:** `main`
-**Commit:** `5833d363` (main HEAD)
+**Last Updated:** 2026-03-02 (post-split-lane cleanup + live CI/status sync)
+**Branch:** `chore/submodule-bumps-mar02` (PR #758)
+**Commit:** (merge with origin/main)
 **Consolidated From:** 27 audit documents
 **Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
@@ -15,7 +15,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-02-28 (live API verified) |
+| Quantitative snapshot timestamp | 2026-03-02 (live GitHub + CI snapshot) |
 | Total tracked items | 24 |
 | Resolved | 22 (+3 since last update) |
 | Active blockers | 4 (AB-4/5/6/9) |
@@ -23,10 +23,31 @@
 | High | 2 |
 | Medium | 2 |
 | Low | 0 |
-| CodeQL alerts (open) | **43 open** (35 `error`, 8 `warning`) — PR #715 fixed 25, but expanded scan scope + new code introduced 31 new alerts |
-| Dependabot alerts | **7 open** (5 high, 2 low) — severity recomposition: serialize-javascript x2, minimatch x2, qs x1, fast-xml-parser x1, qs-low x1 |
-| Open PRs | **1** (#752 submodule bumps — Agent-Zero, cipher, transcribe-and-fetch) |
-| CI (commit 17f73f39) | Hosted gates pass; self-hosted lanes still queue-blocked |
+| CodeQL alerts (open) | **36 open** (live count via GitHub API on 2026-03-02) |
+| Dependabot alerts | **5 open** (live count via GitHub API on 2026-03-02) |
+| Open PRs | **5** (#754, #755, #756, #757, #758) |
+| CI (PR #758 @ `db6b3a13`) | Hosted gates pass; self-hosted lanes queued due runner capacity |
+
+### Local Atomic Lanes (2026-03-02)
+
+| Commit | Lane | Scope | Status |
+|---|---|---|---|
+| `bd336349` | YT + Supabase docs sync parity | `pmoves-yt` import fallback, schema-aware upsert, `tool_docs` migration, Supabase schema exposure | Pushed (local branch) |
+| `c7e227b6` | Runtime bring-up hardening | TensorZero startup scope, bring-up readiness checks, retro endpoint parity | Pushed (local branch) |
+| `8db4e472` | Env/compose resilience | Compose fallback defaults + bootstrap placeholder resolution | Pushed (local branch) |
+| `19dae85b` | DB migration compatibility | Persona schema normalization + role-compatible grants across Supabase migrations | Pushed (local branch) |
+
+### Submodule Targeted PR Map (Local Review)
+
+| Submodule | Local State | Targeted PR Recommendation |
+|---|---|---|
+| `PMOVES-Archon` | docs + split integration lanes merged | PR #9, PR #10, PR #11 merged |
+| `PMOVES-HiRAG` | `CLAUDE.md` lane merged | PR #4 merged |
+| `PMOVES-Open-Notebook` | docs lane + CI guard merged | PR #10 merged (includes fail-open guard for missing Claude auth secrets) |
+| `PMOVES-Pipecat` | auth/default + lint lane merged | PR #2 merged |
+| `PMOVES-transcribe-and-fetch` | local checkout shows 4 modified LFS/assets; clean hardened worktree shows no content delta | Treat as local LFS/worktree artifact until checkout normalized; do not promote pointer bump yet |
+| `pmoves/integrations/archon` | split lanes merged and synced | runtime auth/default lane + pointer sync lane merged via Archon PR #10/#11 |
+| `PMOVES-A2UI` | docs artifact lane merged | PR #4 merged (`A2UI_EVALUATION_REPORT.md`) |
 
 ### Release Closeout (2026-02-24)
 
@@ -52,6 +73,25 @@ Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#
 | #714 | chore(deps): requests bump (pdf-ingest) | MERGED | 2026-02-26 |
 | #713 | fix(compose): hardening batch — NATS auth, docs v4.0 | MERGED | 2026-02-26 |
 | #712 | feat: topology+CHIT gate hardening | MERGED | 2026-02-25 |
+
+### Recent Merge Activity (2026-03-02 — Main Branch)
+
+| PR | Scope | Status | Date |
+|----|-------|--------|------|
+| #753 | feat(ci): queued-run guard and drain targets for self-hosted deadlocks | MERGED | 2026-03-02 |
+| #752 | chore(submodules): bump Agent-Zero, cipher, transcribe-and-fetch | MERGED | 2026-03-02 |
+
+### Submodule Targeted PR Merges (Split-Lane Wave)
+
+| Submodule | PR | Scope | Date |
+|-----------|-----|-------|------|
+| PMOVES-A2UI | #4 | docs artifact (`A2UI_EVALUATION_REPORT.md`) | 2026-03-02 |
+| PMOVES-Archon | #9 | targeted hardening lane | 2026-03-02 |
+| PMOVES-Archon | #10 | runtime auth defaults | 2026-03-02 |
+| PMOVES-Archon | #11 | nested pointer sync | 2026-03-02 |
+| PMOVES-HiRAG | #4 | CLAUDE.md lane | 2026-03-02 |
+| PMOVES-Open-Notebook | #10 | docs + CI guard (fail-open for missing Claude auth) | 2026-03-02 |
+| pmoves-pipecat | #2 | auth/default + lint lane | 2026-03-02 |
 
 ### Current Hardening Drift Checks (2026-02-24)
 
@@ -354,6 +394,12 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **Live metrics sync (Codex):** refreshed executive summary from GitHub live data: CodeQL open alerts `36`, Dependabot open alerts `5`, open PRs `5`; CI snapshot synced to PR #758 head `db6b3a13` with self-hosted queue-capacity note. Ran queue guard and canceled stale queued runs `22565935122`, `22565935100`, `22565816518` to reduce deadlock pressure while preserving active PR lanes. |
+| 2026-03-02 | **Post-split-lane cleanup:** merged origin/main (PRs #752, #753), resolved conflicts, fixed env churn idempotency, addressed 13 CodeRabbit review comments (SQL grants, credential fallbacks, docs_sync hardening, PostgREST schema, bringup runtime detection). |
+| 2026-03-02 | **Split-lane merge closeout (Codex):** merged PMOVES-A2UI `#4`, PMOVES-Archon `#10`, and PMOVES-Archon `#11`; pushed final parent gitlink bump `a115a040` (A2UI + Archon + integrations/archon). |
+| 2026-03-02 | **Submodule merge + split closeout (Codex):** merged PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, and pmoves-pipecat `#2`; pushed parent gitlink bump commit `51f71013`. Opened follow-on split lanes: PMOVES-A2UI `#4`, PMOVES-Archon `#10` (runtime auth defaults), PMOVES-Archon `#11` (nested pointer sync). Transcribe-and-fetch asset lane validated as a local LFS/worktree artifact in primary checkout (no delta in clean hardened worktree). |
+| 2026-03-02 | **Submodule atomic PR wave (Codex):** opened targeted lanes — PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, pmoves-pipecat `#2`. Remaining mixed lanes held for split/verification: transcribe-and-fetch PR `#46` asset/LFS edits, `pmoves/integrations/archon` runtime+pointer mix, and detached `PMOVES-A2UI` docs artifact. |
+| 2026-03-02 | **Local production remediation + commit-lane audit**: pushed 4 atomic commits (`bd336349`, `c7e227b6`, `8db4e472`, `19dae85b`) covering yt-docs sync parity, bring-up hardening, env/compose resilience, and DB migration compatibility. Updated live backlog metrics (Open PRs `4`, CodeQL `36`, Dependabot `5`) and added submodule-targeted PR map for dirty submodules. |
 | 2026-03-02 | **Mar 2 merge wave**: PRs #748-#751 merged. Dashboard hydration (#750) with staleness + source hints. Presign port fix (#751). Audit summary API (#749). Roadmap refresh (#748). 3 submodule bumps landed (Agent-Zero, cipher, transcribe-and-fetch — PR #752). Worktree cleanup (11→1). 8 stale CodeQL runs cancelled. |
 | 2026-02-28 | **Audit refresh**: 7 PRs merged (#712-719). CodeQL: 43 open (35 error, 8 warning) — PR #715 fixed 25 (Groups A-E), 31 new from expanded scan scope. Dependabot: 7 open (5 high, 2 low) — severity recomposed (serialize-javascript, minimatch, qs). PRs #577-581 all CLOSED. Open PR: #717 (dependabot, awaiting rebase). |
 | 2026-02-25 | **Hardened→main sync** (#707): DAO recontext docs, DARKXSIDE registration, KRISS KROSS accord rewrite, release gates RG-1..RG-4, drift checks merged from Hardened. |

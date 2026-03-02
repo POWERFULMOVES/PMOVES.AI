@@ -11,7 +11,8 @@ _Last updated: 2026-03-02_
   - `#745` chore(submodules): transcribe-and-fetch + cipher parity bumps (hardened)
   - `#744` fix(a2a): discovery/task hardening + upstream agent-card parity (hardened)
   - promotion sync: `#746` hardened -> main
-- Open PR queue is currently `0` (`gh pr list --state open`).
+- Open PR queue is currently `5` (`#754`, `#755`, `#756`, `#757`, `#758`).
+- CI status: hosted gates are moving; self-hosted lanes remain capacity-constrained/queued and require queue hygiene before merge promotion.
 - Live security backlog snapshot:
   - Dependabot alerts open: `5` (`1 critical`, `1 high`, `1 medium`, `2 low`)
   - Code scanning alerts open: `36` (`33 error`, `3 warning`)
