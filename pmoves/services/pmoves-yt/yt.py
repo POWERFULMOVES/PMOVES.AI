@@ -281,12 +281,17 @@ if not logger.handlers:
     logger.addHandler(handler)
 logger.propagate = True
 
-# Optional import for docs sync helpers (underscore package path is import-safe)
+# Optional import for docs sync helpers.
+# Container images run /app directly, so absolute "pmoves.services..." imports
+# are not always available. Fall back to local module import.
 try:
     from pmoves.services.pmoves_yt.docs_sync import collect_yt_dlp_docs, sync_to_supabase  # type: ignore
 except Exception:  # pragma: no cover
-    collect_yt_dlp_docs = None  # type: ignore
-    sync_to_supabase = None  # type: ignore
+    try:
+        from docs_sync import collect_yt_dlp_docs, sync_to_supabase  # type: ignore
+    except Exception:
+        collect_yt_dlp_docs = None  # type: ignore
+        sync_to_supabase = None  # type: ignore
 try:
     from .docs_catalog import options_catalog, extractor_count, version_info  # type: ignore
 except Exception:  # pragma: no cover
