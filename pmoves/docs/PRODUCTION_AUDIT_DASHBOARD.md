@@ -321,6 +321,35 @@ gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
 
 ---
 
+## Dashboard Hydration Contract
+
+The static `docs/audit/dashboard.html` optionally fetches `GET /api/audit/summary?includeHealth=true&timeout=3000` when served over HTTP(S). On `file://` it renders baked data only.
+
+### Consumed Fields
+
+| Aggregator Field | Dashboard Section | Fallback |
+|---|---|---|
+| `generatedAt` | Header timestamp + staleness check | `new Date().toISOString()` |
+| `productionAudit.branch` | Header branch label | `"main"` |
+| `productionAudit.source` | Warning bar source hint | omitted |
+| `productionAudit.activeBlockers[]` | Blockers panel + KPI card | `BLOCKER_DATA` |
+| `releaseGates.source` | Warning bar source hint | omitted |
+| `releaseGates.items[]` | Release Gates table + KPI card | `GATE_DATA` |
+| `prMonitor.count` | KPI card + PR badge | `PR_DATA.count` |
+| `prMonitor.totalBlockers` | KPI card sub-text | computed from `PR_DATA` |
+| `runtimeHealth.*` | KPI card (Runtime Health) | replaced by Dependabot KPI |
+| `warnings[]` | Warning bar below header | none |
+
+### Not Consumed (baked-only sections)
+
+Service Catalog, Submodule Grid, CodeQL Security, CHIT Integration — these are baked as JS literals and not available from the aggregator.
+
+### Staleness
+
+If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside the timestamp.
+
+---
+
 ## Change Log
 
 | Date | Change |
