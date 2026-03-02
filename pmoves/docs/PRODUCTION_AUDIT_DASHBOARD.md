@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-02 (Mar 2 merge wave — PRs #748-#751 merged, worktree cleanup 11→1)
-**Branch:** `main`
-**Commit:** `5833d363` (main HEAD)
+**Last Updated:** 2026-03-02 (local atomic-lane review + runtime remediation wave)
+**Branch:** `chore/submodule-bumps-mar02` (local integration lane)
+**Commit:** `19dae85b` (local HEAD)
 **Consolidated From:** 27 audit documents
 **Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
@@ -23,10 +23,30 @@
 | High | 2 |
 | Medium | 2 |
 | Low | 0 |
-| CodeQL alerts (open) | **43 open** (35 `error`, 8 `warning`) — PR #715 fixed 25, but expanded scan scope + new code introduced 31 new alerts |
-| Dependabot alerts | **7 open** (5 high, 2 low) — severity recomposition: serialize-javascript x2, minimatch x2, qs x1, fast-xml-parser x1, qs-low x1 |
-| Open PRs | **1** (#752 submodule bumps — Agent-Zero, cipher, transcribe-and-fetch) |
+| CodeQL alerts (open) | **36 open** (33 `error`, 3 `warning`) |
+| Dependabot alerts | **5 open** (1 critical, 1 high, 1 medium, 2 low) |
+| Open PRs | **4** (#754, #755, #756, #757 — Dependabot queue) |
 | CI (commit 17f73f39) | Hosted gates pass; self-hosted lanes still queue-blocked |
+
+### Local Atomic Lanes (2026-03-02)
+
+| Commit | Lane | Scope | Status |
+|---|---|---|---|
+| `bd336349` | YT + Supabase docs sync parity | `pmoves-yt` import fallback, schema-aware upsert, `tool_docs` migration, Supabase schema exposure | Pushed (local branch) |
+| `c7e227b6` | Runtime bring-up hardening | TensorZero startup scope, bring-up readiness checks, retro endpoint parity | Pushed (local branch) |
+| `8db4e472` | Env/compose resilience | Compose fallback defaults + bootstrap placeholder resolution | Pushed (local branch) |
+| `19dae85b` | DB migration compatibility | Persona schema normalization + role-compatible grants across Supabase migrations | Pushed (local branch) |
+
+### Submodule Targeted PR Map (Local Review)
+
+| Submodule | Local State | Targeted PR Recommendation |
+|---|---|---|
+| `PMOVES-Archon` | `CLAUDE.md` + nested `external/PMOVES-BoTZ` dirty | docs-only cleanup PR in submodule; separate nested BoTZ pointer PR |
+| `PMOVES-HiRAG` | `CLAUDE.md` dirty | docs-only PR (single-file atomic) |
+| `PMOVES-Open-Notebook` | `CLAUDE.md` dirty | docs-only PR (single-file atomic) |
+| `PMOVES-Pipecat` | `CLAUDE.md`, `docker-compose.pmoves.yml`, `envared`, announcer/health/registry modules, new `PMOVES_VERSION_PIN.md` | split into infra/env PR + package/module PR + docs PR |
+| `PMOVES-transcribe-and-fetch` | 4 static asset file edits under `font/` and `public/` | UI-assets-only PR |
+| `pmoves/integrations/archon` | compose/env + announcer/health/registry + nested submodule pointers dirty | split into integration runtime PR + nested pointer PR |
 
 ### Release Closeout (2026-02-24)
 
@@ -354,6 +374,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **Local production remediation + commit-lane audit**: pushed 4 atomic commits (`bd336349`, `c7e227b6`, `8db4e472`, `19dae85b`) covering yt-docs sync parity, bring-up hardening, env/compose resilience, and DB migration compatibility. Updated live backlog metrics (Open PRs `4`, CodeQL `36`, Dependabot `5`) and added submodule-targeted PR map for dirty submodules. |
 | 2026-03-02 | **Mar 2 merge wave**: PRs #748-#751 merged. Dashboard hydration (#750) with staleness + source hints. Presign port fix (#751). Audit summary API (#749). Roadmap refresh (#748). 3 submodule bumps landed (Agent-Zero, cipher, transcribe-and-fetch — PR #752). Worktree cleanup (11→1). 8 stale CodeQL runs cancelled. |
 | 2026-02-28 | **Audit refresh**: 7 PRs merged (#712-719). CodeQL: 43 open (35 error, 8 warning) — PR #715 fixed 25 (Groups A-E), 31 new from expanded scan scope. Dependabot: 7 open (5 high, 2 low) — severity recomposed (serialize-javascript, minimatch, qs). PRs #577-581 all CLOSED. Open PR: #717 (dependabot, awaiting rebase). |
 | 2026-02-25 | **Hardened→main sync** (#707): DAO recontext docs, DARKXSIDE registration, KRISS KROSS accord rewrite, release gates RG-1..RG-4, drift checks merged from Hardened. |
