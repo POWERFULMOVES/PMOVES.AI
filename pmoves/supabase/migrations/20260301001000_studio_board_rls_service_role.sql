@@ -15,7 +15,7 @@ BEGIN
     SELECT 1 FROM information_schema.tables
     WHERE table_schema = 'public' AND table_name = 'studio_board'
   ) THEN
-    EXECUTE 'REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_board FROM anon, authenticated';
+    EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE public.studio_board FROM anon, authenticated';
   END IF;
 
   IF EXISTS (
@@ -30,7 +30,7 @@ BEGIN
     SELECT 1 FROM information_schema.sequences
     WHERE sequence_schema = 'public' AND sequence_name = 'studio_board_id_seq'
   ) THEN
-    EXECUTE 'REVOKE USAGE, SELECT ON SEQUENCE public.studio_board_id_seq FROM anon, authenticated';
+    EXECUTE 'REVOKE ALL PRIVILEGES ON SEQUENCE public.studio_board_id_seq FROM anon, authenticated';
     EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE public.studio_board_id_seq TO service_role';
   END IF;
 END $$;

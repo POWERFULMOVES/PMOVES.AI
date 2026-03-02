@@ -34,6 +34,8 @@ PERSONA_MODEL_PREFERENCES: set[str] = {
 }
 
 CRITICAL_OLLAMA_MODELS: tuple[str, ...] = ("qwen3", "nomic-embed-text")
+MIN_ACTIVE_MODELS = 35
+MIN_SERVICE_MODEL_MAPPINGS = 15
 
 
 def _is_allowed_scheme(url: str) -> bool:
@@ -134,6 +136,26 @@ class ReadinessChecker:
         self._check("TTS provider exists", "tts_local" in names,
                      "tts_local" + (" found" if "tts_local" in names else " MISSING"))
 
+        # Check model registry size threshold
+        models_url = f"{self.supabase_url}/rest/v1/models?select=id&active=eq.true"
+        models_data = http_get_supabase(models_url, self.supabase_key)
+        if not isinstance(models_data, list):
+            self._check("Models table reachable", False, "cannot query /rest/v1/models")
+        else:
+            self._check("Models seeded", len(models_data) >= MIN_ACTIVE_MODELS,
+                        f"{len(models_data)} active models (need >={MIN_ACTIVE_MODELS})")
+
+        # Check service-model mapping threshold (table has no active flag)
+        mappings_url = f"{self.supabase_url}/rest/v1/service_model_mappings?select=id"
+        mappings_data = http_get_supabase(mappings_url, self.supabase_key)
+        if not isinstance(mappings_data, list):
+            self._check("Service-model mappings reachable", False,
+                        "cannot query /rest/v1/service_model_mappings")
+        else:
+            self._check("Service-model mappings seeded",
+                        len(mappings_data) >= MIN_SERVICE_MODEL_MAPPINGS,
+                        f"{len(mappings_data)} mappings (need >={MIN_SERVICE_MODEL_MAPPINGS})")
+
     def check_supabase_personas(self) -> None:
         """Check personas table has ≥8 rows."""
         print("\n[2] Supabase personas")
@@ -215,6 +237,9 @@ class ReadinessChecker:
                 for p in unresolved:
                     self._warn(f"  Unresolved: {p.get('persona_name')}",
                                f"model_preference={p.get('model_preference')}")
+        else:
+            self._check("Resolution payload format", False,
+                        f"expected JSON array, got {type(data).__name__}")
 
     def run(self) -> int:
         """Run all checks and return exit code."""
