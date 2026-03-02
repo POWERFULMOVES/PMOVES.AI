@@ -50,19 +50,26 @@ COMMENT ON VIEW pmoves_core.persona_model_resolution IS
 -- Views inherit RLS from base tables; grant explicit SELECT to API roles.
 
 DO $$
+DECLARE
+  api_anon_role text;
+  api_auth_role text;
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_anon';
+    api_anon_role := 'postgrest_anon';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    api_anon_role := 'anon';
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO anon';
+  IF api_anon_role IS NOT NULL THEN
+    EXECUTE format('GRANT SELECT ON pmoves_core.persona_model_resolution TO %I', api_anon_role);
   END IF;
 
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_auth_user';
+    api_auth_role := 'postgrest_auth_user';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    api_auth_role := 'authenticated';
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO authenticated';
+  IF api_auth_role IS NOT NULL THEN
+    EXECUTE format('GRANT SELECT ON pmoves_core.persona_model_resolution TO %I', api_auth_role);
   END IF;
 END $$;
 
@@ -94,18 +101,25 @@ COMMENT ON VIEW pmoves_core.active_persona_summary IS
     'Quick-lookup view of active personas with resolved model/provider info.';
 
 DO $$
+DECLARE
+  api_anon_role text;
+  api_auth_role text;
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO postgrest_anon';
+    api_anon_role := 'postgrest_anon';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    api_anon_role := 'anon';
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO anon';
+  IF api_anon_role IS NOT NULL THEN
+    EXECUTE format('GRANT SELECT ON pmoves_core.active_persona_summary TO %I', api_anon_role);
   END IF;
 
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO postgrest_auth_user';
+    api_auth_role := 'postgrest_auth_user';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    api_auth_role := 'authenticated';
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO authenticated';
+  IF api_auth_role IS NOT NULL THEN
+    EXECUTE format('GRANT SELECT ON pmoves_core.active_persona_summary TO %I', api_auth_role);
   END IF;
 END $$;

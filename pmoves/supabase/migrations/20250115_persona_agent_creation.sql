@@ -260,25 +260,30 @@ CREATE TRIGGER update_persona_enhancements_updated_at
 
 -- Grant permissions for PostgREST / Supabase API roles
 DO $$
+DECLARE
+    api_anon_role text;
+    api_auth_role text;
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
-        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon';
-        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon';
+        api_anon_role := 'postgrest_anon';
     ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO anon';
-        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO anon';
+        api_anon_role := 'anon';
+    END IF;
+    IF api_anon_role IS NOT NULL THEN
+        EXECUTE format('GRANT USAGE ON SCHEMA pmoves_core TO %I', api_anon_role);
+        EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO %I', api_anon_role);
     END IF;
 
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
-        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_auth_user';
-        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
-        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.personas TO postgrest_auth_user';
-        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.persona_enhancements TO postgrest_auth_user';
+        api_auth_role := 'postgrest_auth_user';
     ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO authenticated';
-        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';
-        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.personas TO authenticated';
-        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.persona_enhancements TO authenticated';
+        api_auth_role := 'authenticated';
+    END IF;
+    IF api_auth_role IS NOT NULL THEN
+        EXECUTE format('GRANT USAGE ON SCHEMA pmoves_core TO %I', api_auth_role);
+        EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO %I', api_auth_role);
+        EXECUTE format('GRANT INSERT, UPDATE ON pmoves_core.personas TO %I', api_auth_role);
+        EXECUTE format('GRANT INSERT, UPDATE ON pmoves_core.persona_enhancements TO %I', api_auth_role);
     END IF;
 END $$;
 
