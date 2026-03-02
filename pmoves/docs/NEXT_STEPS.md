@@ -23,7 +23,7 @@ _Last updated: 2026-03-02_
   - `#759` CI SQL/Python collision fixes
   - `#760` ToKenism submodule gitlink bump (after merged submodule PR #46)
 - Open PR queue is currently `1` (`#761` docs cataclysm closeout).
-- CI status: hosted gates complete quickly; self-hosted lanes still re-queue and require queue hygiene/cancellation of stale main-branch jobs.
+- CI status: hosted gates complete quickly; self-hosted lanes experience recurring queue starvation (CodeQL/GHCR lanes); mitigate by cancelling stale main-branch runs.
 - Live security backlog snapshot:
   - Dependabot alerts open: `2` (`1 high`, `1 low`)
   - Code scanning alerts open: `34` (`31 error`, `3 warning`)
