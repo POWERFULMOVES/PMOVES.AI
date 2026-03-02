@@ -15,6 +15,13 @@ BEGIN
     SELECT 1 FROM information_schema.tables
     WHERE table_schema = 'public' AND table_name = 'studio_board'
   ) THEN
+    EXECUTE 'REVOKE ALL PRIVILEGES ON TABLE public.studio_board FROM anon, authenticated';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'studio_board'
+  ) THEN
     EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_board TO service_role';
     EXECUTE 'ALTER TABLE public.studio_board ENABLE ROW LEVEL SECURITY';
   END IF;
@@ -23,6 +30,7 @@ BEGIN
     SELECT 1 FROM information_schema.sequences
     WHERE sequence_schema = 'public' AND sequence_name = 'studio_board_id_seq'
   ) THEN
+    EXECUTE 'REVOKE ALL PRIVILEGES ON SEQUENCE public.studio_board_id_seq FROM anon, authenticated';
     EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE public.studio_board_id_seq TO service_role';
   END IF;
 END $$;
@@ -35,17 +43,8 @@ BEGIN
   ) THEN
     DROP POLICY IF EXISTS studio_board_anon_all ON public.studio_board;
     DROP POLICY IF EXISTS studio_board_authenticated_all ON public.studio_board;
-  END IF;
+    DROP POLICY IF EXISTS studio_board_service_role_all ON public.studio_board;
 
-  IF EXISTS (
-    SELECT 1 FROM information_schema.tables
-    WHERE table_schema = 'public' AND table_name = 'studio_board'
-  ) AND NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'studio_board'
-      AND policyname = 'studio_board_service_role_all'
-  ) THEN
     CREATE POLICY studio_board_service_role_all
       ON public.studio_board
       FOR ALL

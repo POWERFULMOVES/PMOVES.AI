@@ -119,6 +119,8 @@ git worktree prune                   # Clean stale
 
 ### Agent Behavior in Worktrees
 
+> **Hook Portability Warning:** Claude Code CLI hooks (damage-control, `.env` protections, Known Roads redirects) only apply in the parent PMOVES.AI repo. When agents operate in submodule worktrees, these hooks are absent. See [AGENT_RESILIENCE_PATTERNS.md § Known Limitation](./AGENT_RESILIENCE_PATTERNS.md#known-limitation-hooksettings-portability) for workaround patterns.
+
 **Critical Rule:** When an agent operates in a worktree, it loads context from THAT worktree's location, not the main repo.
 
 **Example:**

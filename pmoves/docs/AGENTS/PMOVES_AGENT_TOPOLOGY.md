@@ -47,7 +47,7 @@ graph TD
     subgraph RESEARCH_KNOWLEDGE["Research & Knowledge"]
         supaserch["SupaSerch<br/>:8099"]:::standard
         deep_research["DeepResearch<br/>:8098"]:::standard
-        hirag_v2["Hi-RAG v2<br/>:8086"]:::standard
+        hirag_v2["Hi-RAG v2<br/>:8086, :8087"]:::standard
         open_notebook["Open Notebook"]:::standard
     end
 

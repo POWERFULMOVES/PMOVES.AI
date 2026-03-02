@@ -41,6 +41,18 @@ This dossier maps where Codex integration and Cipher Memory integration exist in
 - `pmoves/tools/submodule_layer_runall.py`
 - `pmoves/tools/showtime_verify_links.py`
 
+## Cipher Memory Resilience Categories
+
+Cipher Memory serves as the Layer 2 recovery backbone for all PMOVES agents. The following categories are defined in [AGENT_RESILIENCE_PATTERNS.md](./AGENT_RESILIENCE_PATTERNS.md#layer-2-cipher-memory-integration):
+
+| Category | Purpose | TTL |
+|----------|---------|-----|
+| `agent_plan` | Pre-flight plan for resumable work | 7 days |
+| `agent_checkpoint` | Mid-work progress snapshot (after each commit+push) | 3 days |
+| `agent_completion` | Final summary of all changes (after PR creation) | 30 days |
+
+These categories are declared per-agent in `pmoves/config/agent_registry.yaml` under the `resilience.cipher_categories` field.
+
 ## Cipher Memory implementation locations
 
 ### Cipher MCP bridge (repo-local)
