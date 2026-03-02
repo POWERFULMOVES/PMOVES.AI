@@ -1,5 +1,5 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-02-23_
+_Last updated: 2026-03-02_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
@@ -24,6 +24,19 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
    - `codex --profile pmoves`
 3. Open this runbook plus parity map:
    - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+
+## Codex Config Parity (Mar 2026)
+
+- Keep web search configured at top-level:
+  - `web_search = "live"` (or `"cached"` / `"disabled"`).
+- Keep Windows sandbox under current keys:
+  - `[features].experimental_windows_sandbox = true`
+  - `[windows.sandbox]` for runtime sandbox controls.
+- For Docker MCP startup stability, set:
+  - `[mcp_servers.MCP_DOCKER] startup_timeout_sec = 60` (or higher for slower hosts).
+- Validate discovered Docker MCP servers before agent sessions:
+  - `docker mcp server ls`
+  - `docker mcp gateway run --dry-run --servers filesystem --servers github`
 
 ## Core Codex commands
 

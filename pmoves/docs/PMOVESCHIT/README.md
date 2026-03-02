@@ -100,6 +100,7 @@ Pick the path that matches your goal:
 - **TypeScript modules:** `PMOVES-ToKenism-Multi/integrations/contracts/chit/`
 - **Python tools:** `pmoves/tools/chit/` --- see [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for full documentation
 - **CLI commands:** `/chit:encode`, `/chit:decode`, `/chit:visualize`, `/chit:bus`
+- **Codex MCP parity checks:** `make -C pmoves a0-mcp-seed`, `make -C pmoves archon-mcp-smoke`, `make -C pmoves codex-health-quick`
 - **Integration Layer:** [PMOVES.AI Integration Overview](../INTEGRATIONS_OVERVIEW.md) --- master entry point for all integration docs
 
 ## Documentation Infrastructure
