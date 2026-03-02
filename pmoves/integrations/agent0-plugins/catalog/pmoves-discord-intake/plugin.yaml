@@ -1,6 +1,6 @@
 title: PMOVES Discord Intake
 description: Discord drop intake, gated review, and routed ingestion into PMOVES channel monitor pipelines.
-github: https://github.com/CATACLYSMSTUDIOS-INC/a0-pmoves-discord-intake
+github: https://github.com/CATACLYSM-STUDIOS-INC/a0-pmoves-discord-intake
 tags:
   - discord
   - webhooks
