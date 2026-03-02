@@ -2,10 +2,10 @@
 _Generated: 2026-03-02_
 
 ## Summary
-- PMOVES scripts/tools scanned: **211**
+- PMOVES scripts/tools scanned: **212**
 - PMOVES auth/user/login-focused entries: **34**
-- Submodule keyword-matched scripts/tools: **105**
-- Potential overlap rows: **112**
+- Submodule keyword-matched scripts/tools: **119**
+- Potential overlap rows: **117**
 - Keywords with overlap: **auth, bootstrap, credential, profile, secret, token, user**
 - Findings: **0 error(s)**, **0 warning(s)**
 
@@ -114,12 +114,16 @@ _Generated: 2026-03-02_
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
+| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/tokenizers/tools/visualizer.py` | py, tools |
+| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/tokenizers/tools/__init__.py` | py, tools |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/api/csrf_token.py` | py, token |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/open_notebook/utils/token_utils.py` | py, token |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `Pmoves-Health-wger` | `Pmoves-Health-wger/wger/utils/api_token.py` | py, token |
 | `token` | 0.18 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-HiRAG` | `PMOVES-HiRAG/eval/cal_tokens.py` | pmoves, py |
 | `token` | 0.15 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Ultimate-TTS-Studio` | `PMOVES-Ultimate-TTS-Studio/fish_speech/tokenizer.py` | pmoves, py |
 | `token` | 0.10 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/tokens.py` | py |
+| `token` | 0.10 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/setuptools/_vendor/packaging/_tokenizer.py` | py |
+| `token` | 0.10 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/setuptools/_vendor/wheel/vendored/packaging/_tokenizer.py` | py |
 | `token` | 0.08 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Creator` | `PMOVES-Creator/comfy/text_encoders/spiece_tokenizer.py` | py |
 | `token` | 0.08 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/.claude/skills/tokenism-analysis/tools/export-metrics.ts` | tools |
 | `token` | 0.08 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/.claude/skills/tokenism-analysis/tools/run-simulation.ts` | tools |
@@ -137,6 +141,7 @@ _Generated: 2026-03-02_
 | `user` | 0.14 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-n8n-mcp/scripts/test-user-id-persistence.ts` | pmoves, user |
 | `user` | 0.10 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-postman-mcp-server/src/tools/getAuthenticatedUser.ts` | tools |
 | `user` | 0.10 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-postman-mcp-server/src/tools/getCollectionsForkedByUser.ts` | tools |
+| `user` | 0.09 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/mpmath/usertools.py` | py |
 | `user` | 0.08 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/pmoves-nextjs/lighthouserc.js` | pmoves |
 
 ## Findings

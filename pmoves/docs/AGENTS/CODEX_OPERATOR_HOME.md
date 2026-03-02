@@ -94,6 +94,28 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
 - [IMPLEMENTATION_GAP_ANALYSIS.md](./IMPLEMENTATION_GAP_ANALYSIS.md) — Full gap analysis with Phase 1 completion status
 - Key gaps: A2A server (`/.well-known/agent.json`) not exposed, probabilistic safety hooks not implemented, CGP pipeline incomplete
 
+## Session Notes (2026-03-02)
+
+### CI gates unblocked (PR #759)
+- `SQL Policy Lint` — no longer fails on `TO anon` grants (role-alias resolution via `format()`)
+- `Python Tests` — no longer hits `CollectorRegistry` collision (service-local registry in `yt.py`)
+- **Codex implication:** `--admin` bypass no longer needed for these two checks
+- Verify: `make -C pmoves codex-parity-check` should still show 100% coverage
+
+### Production baseline
+- `make -C pmoves verify-all` → 25/25 parallel readiness, 19/24 retro
+- 5 retro ERR are container-only checks (Jellyfin, Firefly, Wger, Open Notebook, Presign)
+- Prometheus targets timeout is pre-existing, non-blocking
+
+### Supabase runtime
+- Reconciled to `SUPABASE_RUNTIME=compose` via `make -C pmoves supa-runtime-reconcile`
+- 11 CLI containers stopped; compose-managed containers start with next `make -C pmoves up`
+
+### Housekeeping
+- Worktrees: 1 (main only) — all merged/stale worktrees cleaned
+- Stashes: 13 on Hardened/older branches
+- Queue guard log: `pmoves/docs/logs/queue_guard_20260302_074034.json`
+
 ## Priority links
 
 - Codex submodule audit:
