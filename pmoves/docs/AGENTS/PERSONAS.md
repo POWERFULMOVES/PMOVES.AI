@@ -1,8 +1,9 @@
 # PMOVES Persona Framework
 
-**Version:** 1.0
-**Last Updated:** December 2025
-**Status:** Architecture Definition
+**Version:** 1.1
+**Last Updated:** 2026-03-01 (seed examples added)
+**Status:** Architecture Definition + 8 Production Seeds Deployed
+**Seed SQL:** `pmoves/supabase/initdb/17_persona_seed.sql`
 
 ---
 
@@ -232,6 +233,122 @@ research-scientist traits: ["curious", "methodical", "patient"]
 + quantum-physicist traits: ["analytical", "precise"]
 = ["curious", "methodical", "patient", "analytical", "precise"]
 ```
+
+---
+
+## Concrete Persona Seed Examples
+
+The following personas are seeded in production via `pmoves/supabase/initdb/17_persona_seed.sql`. These serve as canonical examples of the schema in action.
+
+### Example 1: Developer Persona
+
+```sql
+-- From 17_persona_seed.sql
+name: 'Developer'
+version: '1.0'
+thread_type: 'chained'           -- Sequential reasoning for code analysis
+model_preference: 'claude-sonnet-4-5'  -- Balanced speed/quality
+temperature: 0.3                 -- Focused, deterministic
+max_tokens: 8192
+behavior_weights: {"decode": 0.4, "retrieve": 0.3, "generate": 0.3}
+tools_access: ["code_review", "git_operations", "terminal", "file_system", "search"]
+```
+
+**Why chained thread type?** Code review requires sequential reasoning — read the diff, understand context, identify issues, suggest fixes. Each step depends on the previous.
+
+### Example 2: Researcher Persona
+
+```sql
+name: 'Researcher'
+version: '1.0'
+thread_type: 'parallel'          -- Multi-threaded exploration
+model_preference: 'claude-opus-4-5'   -- Maximum capability for deep analysis
+temperature: 0.7                 -- Creative exploration
+max_tokens: 16384
+behavior_weights: {"decode": 0.3, "retrieve": 0.5, "generate": 0.2}
+tools_access: ["search", "web_browse", "file_system", "knowledge_graph", "hirag_query"]
+```
+
+**Why parallel thread type?** Research benefits from exploring multiple angles simultaneously. The higher temperature encourages diverse exploration paths.
+
+### Example 3: Security Auditor Persona
+
+```sql
+name: 'Security Auditor'
+version: '1.0'
+thread_type: 'chained'
+model_preference: 'claude-opus-4-5'   -- High capability for security analysis
+temperature: 0.2                 -- Very focused, minimal hallucination
+max_tokens: 8192
+behavior_weights: {"decode": 0.5, "retrieve": 0.3, "generate": 0.2}
+tools_access: ["code_review", "terminal", "file_system", "search", "security_scan"]
+```
+
+### Example 4: Archivist Persona (Cost-Optimized)
+
+```sql
+name: 'Archivist'
+version: '1.0'
+thread_type: 'base'              -- Simple catalog operations
+model_preference: 'claude-haiku-4-5'  -- Fast, cheap for routine tasks
+temperature: 0.1                 -- Highly deterministic
+max_tokens: 4096
+behavior_weights: {"decode": 0.6, "retrieve": 0.3, "generate": 0.1}
+tools_access: ["file_system", "search", "knowledge_graph"]
+```
+
+**Why Haiku?** Archival tasks (indexing, cataloging, metadata extraction) are routine and benefit more from speed/cost efficiency than reasoning depth.
+
+### Inheritance Chain Example
+
+```
+Coordinator (parent)
+├── thread_type: 'big'
+├── model_preference: 'claude-opus-4-5'
+├── personality_traits: ["strategic", "organized", "decisive"]
+│
+└── Project Manager (child, extends Coordinator)
+    ├── inheritance_mode: 'extend'
+    ├── additional traits: ["detail-oriented", "deadline-aware"]
+    ├── domain: ["project management", "sprint planning"]
+    └── effective traits: ["strategic", "organized", "decisive",
+                           "detail-oriented", "deadline-aware"]
+```
+
+### CHIT Attribution Config (Worked Example)
+
+```json
+{
+    "chit_attribution_config": {
+        "dirichlet_alpha": [1.2, 1.0, 0.8],
+        "hyperbolic_curvature": -1.0,
+        "swarm_participation": true,
+        "zeta_filter_enabled": true,
+        "attribution_weight": 0.35
+    }
+}
+```
+
+**Field meanings:**
+- `dirichlet_alpha: [1.2, 1.0, 0.8]` — Prior favoring the first contributor (orchestrator gets slightly more credit)
+- `hyperbolic_curvature: -1.0` — Standard Poincare disk curvature for similarity search
+- `attribution_weight: 0.35` — This persona contributes ~35% base weight in multi-persona responses
+- `swarm_participation: true` — Participates in EvoSwarm consensus rounds
+
+### All 8 Seeded Personas
+
+| Name | Thread Type | Model | Temperature | Key Behavior |
+|------|-------------|-------|-------------|--------------|
+| Developer | chained | claude-sonnet-4-5 | 0.3 | Code-focused, sequential |
+| Creator | parallel | claude-sonnet-4-5 | 0.8 | Creative, multi-path |
+| Researcher | parallel | claude-opus-4-5 | 0.7 | Deep analysis, exploration |
+| Analyst | fusion | claude-sonnet-4-5 | 0.4 | Multi-source synthesis |
+| Coordinator | big | claude-opus-4-5 | 0.5 | Orchestration, delegation |
+| Security Auditor | chained | claude-opus-4-5 | 0.2 | Strict, deterministic |
+| Tester | chained | claude-sonnet-4-5 | 0.3 | Test generation, validation |
+| Archivist | base | claude-haiku-4-5 | 0.1 | Cataloging, fast/cheap |
+
+**Source:** `pmoves/supabase/initdb/17_persona_seed.sql`
 
 ---
 
