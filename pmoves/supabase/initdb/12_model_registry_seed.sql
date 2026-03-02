@@ -27,8 +27,12 @@ VALUES (
   '{"network": "internal", "location": "local"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- Ollama edge (for edge/Jetson devices)
@@ -43,8 +47,12 @@ VALUES (
   '{"network": "internal", "location": "edge"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- Z.ai (primary cloud provider)
@@ -59,9 +67,12 @@ VALUES (
   '{"location": "cloud", "supports_chinese": true}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
   api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- OpenAI (standard cloud provider)
@@ -76,9 +87,12 @@ VALUES (
   '{"location": "cloud"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
   api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- Venice (privacy-focused cloud provider)
@@ -93,9 +107,12 @@ VALUES (
   '{"location": "cloud", "privacy": "high"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
   api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- Groq (fast inference)
@@ -110,9 +127,12 @@ VALUES (
   '{"location": "cloud", "speed": "fast"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
   api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- OpenRouter (multi-model aggregator)
@@ -127,9 +147,12 @@ VALUES (
   '{"location": "cloud", "model_count": "high"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
   api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- Together AI
@@ -144,9 +167,12 @@ VALUES (
   '{"location": "cloud", "model_type": "opensource"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
   api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- Anthropic (Claude models — primary persona backbone)
@@ -161,9 +187,12 @@ VALUES (
   '{"location": "cloud", "persona_backbone": true}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
   api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- TTS (Ultimate TTS Studio — local GPU inference)
@@ -178,8 +207,12 @@ VALUES (
   '{"network": "internal", "location": "local", "engines": 6}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
   api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
   description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
 -- =============================================================================
@@ -1475,3 +1508,4 @@ ON CONFLICT (name) DO UPDATE SET
   active = false,
   metadata = EXCLUDED.metadata,
   updated_at = NOW();
+

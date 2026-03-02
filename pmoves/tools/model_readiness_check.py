@@ -27,6 +27,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+PERSONA_MODEL_PREFERENCES: set[str] = {
+    "claude-sonnet-4-5",
+    "claude-opus-4-5",
+    "claude-haiku-4-5",
+}
+
+CRITICAL_OLLAMA_MODELS: tuple[str, ...] = ("qwen3", "nomic-embed-text")
+MIN_ACTIVE_MODELS = 35
+MIN_SERVICE_MODEL_MAPPINGS = 15
+
 
 def _is_allowed_scheme(url: str) -> bool:
     """Allow only HTTP(S) URLs for outbound readiness probes."""
@@ -35,13 +45,26 @@ def _is_allowed_scheme(url: str) -> bool:
 
 def http_get(url: str, timeout: int = 10) -> dict | None:
     """GET request returning parsed JSON or None on failure."""
+    raw = http_get_raw(url, timeout=timeout)
+    if raw is None:
+        return None
+    _, body = raw
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        return None
+
+
+def http_get_raw(url: str, timeout: int = 10) -> tuple[int, str] | None:
+    """GET request returning (status_code, text_body) or None on failure."""
     if not _is_allowed_scheme(url):
         return None
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
-    except (urllib.error.URLError, json.JSONDecodeError, OSError):
+            body = resp.read().decode(errors="replace")
+            return int(getattr(resp, "status", 200)), body
+    except (urllib.error.URLError, OSError):
         return None
 
 
@@ -63,7 +86,7 @@ def http_get_supabase(url: str, key: str, timeout: int = 10) -> dict | list | No
 
 class ReadinessChecker:
     def __init__(self, supabase_url: str, supabase_key: str,
-                 ollama_url: str, tensorzero_url: str):
+                 ollama_url: str, tensorzero_url: str) -> None:
         """Store service endpoints and counters for a readiness run."""
         self.supabase_url = supabase_url.rstrip("/")
         self.supabase_key = supabase_key
@@ -73,7 +96,7 @@ class ReadinessChecker:
         self.failed = 0
         self.warnings = 0
 
-    def _check(self, name: str, ok: bool, detail: str = ""):
+    def _check(self, name: str, ok: bool, detail: str = "") -> None:
         """Record and print a pass/fail check result."""
         status = "PASS" if ok else "FAIL"
         icon = "+" if ok else "!"
@@ -86,7 +109,7 @@ class ReadinessChecker:
         else:
             self.failed += 1
 
-    def _warn(self, name: str, detail: str = ""):
+    def _warn(self, name: str, detail: str = "") -> None:
         """Record and print a non-fatal warning."""
         print(f"  [~] {name}: WARN — {detail}")
         self.warnings += 1
@@ -113,6 +136,26 @@ class ReadinessChecker:
         self._check("TTS provider exists", "tts_local" in names,
                      "tts_local" + (" found" if "tts_local" in names else " MISSING"))
 
+        # Check model registry size threshold
+        models_url = f"{self.supabase_url}/rest/v1/models?select=id&active=eq.true"
+        models_data = http_get_supabase(models_url, self.supabase_key)
+        if not isinstance(models_data, list):
+            self._check("Models table reachable", False, "cannot query /rest/v1/models")
+        else:
+            self._check("Models seeded", len(models_data) >= MIN_ACTIVE_MODELS,
+                        f"{len(models_data)} active models (need >={MIN_ACTIVE_MODELS})")
+
+        # Check service-model mapping threshold (table has no active flag)
+        mappings_url = f"{self.supabase_url}/rest/v1/service_model_mappings?select=id"
+        mappings_data = http_get_supabase(mappings_url, self.supabase_key)
+        if not isinstance(mappings_data, list):
+            self._check("Service-model mappings reachable", False,
+                        "cannot query /rest/v1/service_model_mappings")
+        else:
+            self._check("Service-model mappings seeded",
+                        len(mappings_data) >= MIN_SERVICE_MODEL_MAPPINGS,
+                        f"{len(mappings_data)} mappings (need >={MIN_SERVICE_MODEL_MAPPINGS})")
+
     def check_supabase_personas(self) -> None:
         """Check personas table has ≥8 rows."""
         print("\n[2] Supabase personas")
@@ -129,8 +172,7 @@ class ReadinessChecker:
 
         if isinstance(data, list) and count > 0:
             models = {p.get("model_preference") for p in data}
-            expected = {"claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-4-5"}
-            missing = expected - models
+            missing = PERSONA_MODEL_PREFERENCES - models
             self._check("Persona model preferences valid",
                          len(missing) == 0,
                          f"missing model refs: {missing}" if missing else "all 3 Claude models referenced")
@@ -148,8 +190,7 @@ class ReadinessChecker:
         self._check("Ollama responding", True, f"{len(models)} models loaded")
 
         # Check critical models
-        critical = ["qwen3", "nomic-embed-text"]
-        for model in critical:
+        for model in CRITICAL_OLLAMA_MODELS:
             found = model.strip().lower() in pulled_base
             if not found:
                 self._check(f"Model '{model}'", False, "not pulled")
@@ -159,15 +200,14 @@ class ReadinessChecker:
     def check_tensorzero(self) -> None:
         """Check TensorZero gateway is operational."""
         print("\n[4] TensorZero gateway")
-        # TensorZero doesn't have a /v1/models endpoint like OpenAI
-        # Check if the service responds at all
-        data = http_get(f"{self.tensorzero_url}/health")
+        # TensorZero doesn't always return JSON on health/root; use HTTP success for reachability.
+        data = http_get_raw(f"{self.tensorzero_url}/health")
         if data is not None:
             self._check("TensorZero health", True, "gateway responding")
             return
 
         # Fallback: try root
-        data = http_get(self.tensorzero_url)
+        data = http_get_raw(self.tensorzero_url)
         if data is not None:
             self._check("TensorZero reachable", True, "gateway responding (root)")
         else:
@@ -197,6 +237,9 @@ class ReadinessChecker:
                 for p in unresolved:
                     self._warn(f"  Unresolved: {p.get('persona_name')}",
                                f"model_preference={p.get('model_preference')}")
+        else:
+            self._check("Resolution payload format", False,
+                        f"expected JSON array, got {type(data).__name__}")
 
     def run(self) -> int:
         """Run all checks and return exit code."""
@@ -219,7 +262,7 @@ class ReadinessChecker:
         return 0 if self.failed == 0 else 1
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Model & Persona Readiness Check")
     parser.add_argument("--supabase-url",
                         default=os.environ.get("SUPABASE_URL", "http://localhost:3010"),

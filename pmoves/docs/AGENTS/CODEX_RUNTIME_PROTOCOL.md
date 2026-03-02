@@ -85,6 +85,18 @@ Template:
 - `mode`: focus or open-chat+scout
 - `next evidence checkpoint`: command or artifact to expect
 
+## Codex-Claude Collision Handling
+
+When Codex and Claude operate in overlapping scope (same branch, same files):
+
+1. **Check KRISS KROSS Accord** — [KRISS_KROSS_ACCORD.md](./KRISS_KROSS_ACCORD.md) defines the handshake protocol
+2. **Parity work** uses `CODEX_CLAUDE_PARITY_MAP.md` as the canonical token-mapping reference
+3. **Codex-led windows**: Codex is implementation owner; Claude is scout/reviewer
+4. **Claude-led windows**: Claude is implementation owner; Codex validates via `codex-parity-check`
+5. **Neither overrides the other** without a KRISS KROSS handshake block recorded in `AGNOTE4482PHI.t1.md`
+
+If the Codex Runtime Protocol's `focus` mode and the KRISS KROSS Accord's lane rules conflict, the KRISS KROSS Accord takes precedence (it is the collision-safety layer, while this protocol governs individual agent discipline).
+
 ## PMOVES-specific production notes
 
 - Production audit is local-first and hardened-first.
