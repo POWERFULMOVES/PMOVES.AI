@@ -42,6 +42,8 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 JWT_ALGORITHM = "HS256"
+WELL_KNOWN_AGENT_CARD_PATH = "/.well-known/agent-card.json"
+LEGACY_AGENT_CARD_PATH = "/.well-known/agent.json"
 
 try:
     from jose import jwt as jose_jwt
@@ -56,13 +58,21 @@ _tasks: Dict[str, Task] = {}
 _tasks_lock = asyncio.Lock()
 
 
-def _is_discovery_public() -> bool:
-    value = os.getenv("A2A_DISCOVERY_PUBLIC", "false").strip().lower()
+def _is_enabled_env(var_name: str, default: str = "false") -> bool:
+    value = os.getenv(var_name, default).strip().lower()
     return value in {"1", "true", "yes", "on"}
 
 
-def _require_discovery_auth(authorization: Optional[str]) -> None:
-    if _is_discovery_public():
+def _is_discovery_public() -> bool:
+    return _is_enabled_env("A2A_DISCOVERY_PUBLIC")
+
+
+def _is_task_api_public() -> bool:
+    return _is_enabled_env("A2A_TASKS_PUBLIC")
+
+
+def _require_a2a_auth(authorization: Optional[str], public_mode: bool = False) -> None:
+    if public_mode:
         return
 
     if not HAS_JOSE:
@@ -82,6 +92,7 @@ def _require_discovery_auth(authorization: Optional[str]) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     token = authorization[7:] if authorization.startswith("Bearer ") else authorization
@@ -90,6 +101,7 @@ def _require_discovery_auth(authorization: Optional[str]) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Empty token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     try:
@@ -103,16 +115,17 @@ def _require_discovery_auth(authorization: Optional[str]) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
         ) from None
     except jose_jwt.InvalidSignatureError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid token signature",
         ) from None
-    except jose_jwt.JWTError as exc:
+    except jose_jwt.JWTError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"JWT validation failed: {exc}",
+            detail="JWT validation failed",
         ) from None
 
     if payload.get("role", "") == "anon":
@@ -120,6 +133,14 @@ def _require_discovery_auth(authorization: Optional[str]) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Anonymous keys are not permitted",
         )
+
+
+def _require_discovery_auth(authorization: Optional[str]) -> None:
+    _require_a2a_auth(authorization, public_mode=_is_discovery_public())
+
+
+def _require_task_auth(authorization: Optional[str]) -> None:
+    _require_a2a_auth(authorization, public_mode=_is_task_api_public())
 
 
 @asynccontextmanager
@@ -198,7 +219,8 @@ def create_app(
 def _register_endpoints(app: FastAPI) -> None:
     """Register all route handlers with the application."""
 
-    @app.get("/.well-known/agent.json", tags=["Discovery"])
+    @app.get(WELL_KNOWN_AGENT_CARD_PATH, tags=["Discovery"])
+    @app.get(LEGACY_AGENT_CARD_PATH, include_in_schema=False, tags=["Discovery"])
     async def get_agent_card(
         authorization: Optional[str] = Header(default=None, alias="Authorization"),
     ) -> AgentCard:
@@ -229,7 +251,10 @@ def _register_endpoints(app: FastAPI) -> None:
         }
 
     @app.post("/a2a/v1/tasks", response_model=SendMessageResponse, tags=["Tasks"])
-    async def create_task(request: Dict[str, Any]) -> SendMessageResponse:
+    async def create_task(
+        request: Dict[str, Any],
+        authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    ) -> SendMessageResponse:
         """
         Create a new task on Agent Zero (A2A message/send endpoint).
 
@@ -249,6 +274,8 @@ def _register_endpoints(app: FastAPI) -> None:
         Raises:
             HTTPException: If task creation fails
         """
+        _require_task_auth(authorization)
+
         try:
             # Support backward compatibility with old TaskCreateRequest format
             if "id" in request and "instruction" in request and "message" not in request:
@@ -313,7 +340,10 @@ def _register_endpoints(app: FastAPI) -> None:
             )
 
     @app.get("/a2a/v1/tasks/{task_id}", tags=["Tasks"])
-    async def get_task(task_id: str) -> Task:
+    async def get_task(
+        task_id: str,
+        authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    ) -> Task:
         """
         Get task status.
 
@@ -328,6 +358,8 @@ def _register_endpoints(app: FastAPI) -> None:
         Raises:
             HTTPException: If task not found
         """
+        _require_task_auth(authorization)
+
         async with _tasks_lock:
             task = _tasks.get(task_id)
 
@@ -344,7 +376,10 @@ def _register_endpoints(app: FastAPI) -> None:
         return task
 
     @app.post("/a2a/v1/tasks/{task_id}/cancel", tags=["Tasks"])
-    async def cancel_task(task_id: str) -> Task:
+    async def cancel_task(
+        task_id: str,
+        authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    ) -> Task:
         """
         Cancel a running task.
 
@@ -359,6 +394,8 @@ def _register_endpoints(app: FastAPI) -> None:
         Raises:
             HTTPException: If task not found or cannot be cancelled
         """
+        _require_task_auth(authorization)
+
         async with _tasks_lock:
             task = _tasks.get(task_id)
 
@@ -390,7 +427,8 @@ def _register_endpoints(app: FastAPI) -> None:
     @app.post("/a2a/v1/tasks/{task_id}/artifacts", tags=["Tasks"])
     async def add_artifact(
         task_id: str,
-        artifact: Dict[str, Any]
+        artifact: Dict[str, Any],
+        authorization: Optional[str] = Header(default=None, alias="Authorization"),
     ) -> Task:
         """
         Add an artifact to a task.
@@ -407,6 +445,8 @@ def _register_endpoints(app: FastAPI) -> None:
         Raises:
             HTTPException: If task not found
         """
+        _require_task_auth(authorization)
+
         async with _tasks_lock:
             task = _tasks.get(task_id)
 
@@ -434,7 +474,8 @@ def _register_endpoints(app: FastAPI) -> None:
     @app.get("/a2a/v1/tasks", tags=["Tasks"])
     async def list_tasks(
         status_filter: Optional[TaskState] = None,
-        limit: int = 100
+        limit: int = 100,
+        authorization: Optional[str] = Header(default=None, alias="Authorization"),
     ) -> List[Task]:
         """
         List all tasks with optional filtering.
@@ -446,6 +487,8 @@ def _register_endpoints(app: FastAPI) -> None:
         Returns:
             List of tasks matching the filter
         """
+        _require_task_auth(authorization)
+
         async with _tasks_lock:
             tasks = list(_tasks.values())
 
@@ -455,7 +498,9 @@ def _register_endpoints(app: FastAPI) -> None:
         return tasks[:limit]
 
     @app.post("/a2a/v1/discover", response_model=AgentDiscoveryResponse, tags=["Discovery"])
-    async def discover_agents() -> AgentDiscoveryResponse:
+    async def discover_agents(
+        authorization: Optional[str] = Header(default=None, alias="Authorization"),
+    ) -> AgentDiscoveryResponse:
         """
         Agent discovery endpoint.
 
@@ -465,6 +510,8 @@ def _register_endpoints(app: FastAPI) -> None:
         Returns:
             AgentDiscoveryResponse: List of discoverable agents
         """
+        _require_discovery_auth(authorization)
+
         return AgentDiscoveryResponse(
             agents=[app.state.agent_card],
             total=1
