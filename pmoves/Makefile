@@ -1938,9 +1938,15 @@ up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use 
 	@$(DC) --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
-.PHONY: a0-mcp-seed
+.PHONY: a0-mcp-seed a0-mcp-show
 a0-mcp-seed: ## Write A0_MCP_SERVERS into Agent Zero runtime (data/agent-zero/runtime/mcp/servers.env)
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/seed_agent_zero_mcp.py
+	@$(LOAD_ENV_SHARED); $(PYTHON) tools/seed_agent_zero_mcp.py
+
+a0-mcp-show: ## Print Agent Zero runtime MCP server map
+	@file="data/agent-zero/runtime/mcp/servers.env"; \
+	if [ ! -f "$$file" ]; then echo "✖ $$file not found (run: make -C pmoves a0-mcp-seed)"; exit 1; fi; \
+	echo "→ $$file"; \
+	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
 .PHONY: archon-mcp-smoke
 archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)

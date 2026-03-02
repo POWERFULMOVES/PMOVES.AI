@@ -1,0 +1,8 @@
+title: PMOVES MCP Mesh
+description: MCP bridge and topology wiring for Agent Zero, Archon, Supabase, and Neo4j in PMOVES.
+github: https://github.com/CATACLYSMSTUDIOS-INC/a0-pmoves-mcp-mesh
+tags:
+  - tools
+  - integration
+  - orchestration
+  - docker

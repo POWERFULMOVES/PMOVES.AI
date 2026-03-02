@@ -1,5 +1,17 @@
 # Config
 
+## PMOVES Addendum (2026-03-02)
+
+- Use top-level `web_search` with string values: `"live"`, `"cached"`, or `"disabled"`.
+- Keep Windows sandbox under:
+  - `[features].experimental_windows_sandbox = true`
+  - `[windows.sandbox]` runtime controls
+- For Docker MCP stability on Windows, set `startup_timeout_sec` under
+  `[mcp_servers.MCP_DOCKER]` (recommend `60+` seconds for slower startup hosts).
+- PMOVES Agent Zero runtime MCP map is seeded via:
+  - `make -C pmoves a0-mcp-seed`
+  - output file: `pmoves/data/agent-zero/runtime/mcp/servers.env`
+
 
 Codex supports several mechanisms for setting config values:
 
