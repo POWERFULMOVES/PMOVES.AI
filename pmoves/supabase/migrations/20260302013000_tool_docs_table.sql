@@ -34,26 +34,33 @@ for each row
 execute function pmoves_core.set_tool_docs_updated_at();
 
 do $$
+declare
+  api_anon_role text;
+  api_auth_role text;
 begin
-  if exists (select 1 from pg_roles where rolname = 'anon') then
-    grant usage on schema pmoves_core to anon;
-    grant select on pmoves_core.tool_docs to anon;
+  if exists (select 1 from pg_roles where rolname = 'postgrest_anon') then
+    api_anon_role := 'postgrest_anon';
+  elsif exists (select 1 from pg_roles where rolname = 'anon') then
+    api_anon_role := 'anon';
   end if;
-  if exists (select 1 from pg_roles where rolname = 'authenticated') then
-    grant usage on schema pmoves_core to authenticated;
-    grant select on pmoves_core.tool_docs to authenticated;
+  if api_anon_role is not null then
+    execute format('grant usage on schema pmoves_core to %I', api_anon_role);
+    execute format('grant select on pmoves_core.tool_docs to %I', api_anon_role);
   end if;
+
+  if exists (select 1 from pg_roles where rolname = 'postgrest_auth_user') then
+    api_auth_role := 'postgrest_auth_user';
+  elsif exists (select 1 from pg_roles where rolname = 'authenticated') then
+    api_auth_role := 'authenticated';
+  end if;
+  if api_auth_role is not null then
+    execute format('grant usage on schema pmoves_core to %I', api_auth_role);
+    execute format('grant select on pmoves_core.tool_docs to %I', api_auth_role);
+  end if;
+
   if exists (select 1 from pg_roles where rolname = 'service_role') then
     grant usage on schema pmoves_core to service_role;
     grant select, insert, update, delete on pmoves_core.tool_docs to service_role;
-  end if;
-  if exists (select 1 from pg_roles where rolname = 'postgrest_anon') then
-    grant usage on schema pmoves_core to postgrest_anon;
-    grant select on pmoves_core.tool_docs to postgrest_anon;
-  end if;
-  if exists (select 1 from pg_roles where rolname = 'postgrest_auth_user') then
-    grant usage on schema pmoves_core to postgrest_auth_user;
-    grant select on pmoves_core.tool_docs to postgrest_auth_user;
   end if;
 end;
 $$;
