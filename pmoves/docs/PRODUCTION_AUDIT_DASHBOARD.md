@@ -394,7 +394,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
-| 2026-03-02 | **Live metrics sync (Codex):** refreshed executive summary from GitHub live data: CodeQL open alerts `36`, Dependabot open alerts `5`, open PRs `5`; CI snapshot synced to PR #758 head `db6b3a13` with self-hosted queue-capacity note. |
+| 2026-03-02 | **Live metrics sync (Codex):** refreshed executive summary from GitHub live data: CodeQL open alerts `36`, Dependabot open alerts `5`, open PRs `5`; CI snapshot synced to PR #758 head `db6b3a13` with self-hosted queue-capacity note. Ran queue guard and canceled stale queued runs `22565935122`, `22565935100`, `22565816518` to reduce deadlock pressure while preserving active PR lanes. |
 | 2026-03-02 | **Post-split-lane cleanup:** merged origin/main (PRs #752, #753), resolved conflicts, fixed env churn idempotency, addressed 13 CodeRabbit review comments (SQL grants, credential fallbacks, docs_sync hardening, PostgREST schema, bringup runtime detection). |
 | 2026-03-02 | **Split-lane merge closeout (Codex):** merged PMOVES-A2UI `#4`, PMOVES-Archon `#10`, and PMOVES-Archon `#11`; pushed final parent gitlink bump `a115a040` (A2UI + Archon + integrations/archon). |
 | 2026-03-02 | **Submodule merge + split closeout (Codex):** merged PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, and pmoves-pipecat `#2`; pushed parent gitlink bump commit `51f71013`. Opened follow-on split lanes: PMOVES-A2UI `#4`, PMOVES-Archon `#10` (runtime auth defaults), PMOVES-Archon `#11` (nested pointer sync). Transcribe-and-fetch asset lane validated as a local LFS/worktree artifact in primary checkout (no delta in clean hardened worktree). |
