@@ -45,9 +45,9 @@ COMMENT ON VIEW pmoves_core.persona_model_resolution IS
     'Used by Agent Zero and Archon to resolve which API endpoint to call for each persona.';
 
 -- =============================================================================
--- RLS Policy (service_role read access)
+-- View grants (PostgREST read access)
 -- =============================================================================
--- Views inherit RLS from base tables; grant explicit SELECT to service roles
+-- Views inherit RLS from base tables; grant explicit SELECT to API roles.
 
 GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_anon, postgrest_auth_user;
 

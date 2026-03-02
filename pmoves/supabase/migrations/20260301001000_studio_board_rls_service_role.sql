@@ -35,17 +35,8 @@ BEGIN
   ) THEN
     DROP POLICY IF EXISTS studio_board_anon_all ON public.studio_board;
     DROP POLICY IF EXISTS studio_board_authenticated_all ON public.studio_board;
-  END IF;
+    DROP POLICY IF EXISTS studio_board_service_role_all ON public.studio_board;
 
-  IF EXISTS (
-    SELECT 1 FROM information_schema.tables
-    WHERE table_schema = 'public' AND table_name = 'studio_board'
-  ) AND NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'studio_board'
-      AND policyname = 'studio_board_service_role_all'
-  ) THEN
     CREATE POLICY studio_board_service_role_all
       ON public.studio_board
       FOR ALL

@@ -27,6 +27,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+PERSONA_MODEL_PREFERENCES: set[str] = {
+    "claude-sonnet-4-5",
+    "claude-opus-4-5",
+    "claude-haiku-4-5",
+}
+
+CRITICAL_OLLAMA_MODELS: tuple[str, ...] = ("qwen3", "nomic-embed-text")
+
 
 def _is_allowed_scheme(url: str) -> bool:
     """Allow only HTTP(S) URLs for outbound readiness probes."""
@@ -63,7 +71,7 @@ def http_get_supabase(url: str, key: str, timeout: int = 10) -> dict | list | No
 
 class ReadinessChecker:
     def __init__(self, supabase_url: str, supabase_key: str,
-                 ollama_url: str, tensorzero_url: str):
+                 ollama_url: str, tensorzero_url: str) -> None:
         """Store service endpoints and counters for a readiness run."""
         self.supabase_url = supabase_url.rstrip("/")
         self.supabase_key = supabase_key
@@ -73,7 +81,7 @@ class ReadinessChecker:
         self.failed = 0
         self.warnings = 0
 
-    def _check(self, name: str, ok: bool, detail: str = ""):
+    def _check(self, name: str, ok: bool, detail: str = "") -> None:
         """Record and print a pass/fail check result."""
         status = "PASS" if ok else "FAIL"
         icon = "+" if ok else "!"
@@ -86,7 +94,7 @@ class ReadinessChecker:
         else:
             self.failed += 1
 
-    def _warn(self, name: str, detail: str = ""):
+    def _warn(self, name: str, detail: str = "") -> None:
         """Record and print a non-fatal warning."""
         print(f"  [~] {name}: WARN — {detail}")
         self.warnings += 1
@@ -129,8 +137,7 @@ class ReadinessChecker:
 
         if isinstance(data, list) and count > 0:
             models = {p.get("model_preference") for p in data}
-            expected = {"claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-4-5"}
-            missing = expected - models
+            missing = PERSONA_MODEL_PREFERENCES - models
             self._check("Persona model preferences valid",
                          len(missing) == 0,
                          f"missing model refs: {missing}" if missing else "all 3 Claude models referenced")
@@ -148,8 +155,7 @@ class ReadinessChecker:
         self._check("Ollama responding", True, f"{len(models)} models loaded")
 
         # Check critical models
-        critical = ["qwen3", "nomic-embed-text"]
-        for model in critical:
+        for model in CRITICAL_OLLAMA_MODELS:
             found = model.strip().lower() in pulled_base
             if not found:
                 self._check(f"Model '{model}'", False, "not pulled")
@@ -219,7 +225,7 @@ class ReadinessChecker:
         return 0 if self.failed == 0 else 1
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Model & Persona Readiness Check")
     parser.add_argument("--supabase-url",
                         default=os.environ.get("SUPABASE_URL", "http://localhost:3010"),
