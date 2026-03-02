@@ -17,14 +17,18 @@ BEGIN
 
     ALTER TABLE pmoves_core.personas
       ALTER COLUMN tools_access TYPE jsonb
-      USING COALESCE(
-        CASE WHEN json_typeof(to_jsonb(tools_access)) = 'array' THEN
-          (SELECT COALESCE(jsonb_object_agg(elem, 'true'::jsonb), '{}'::jsonb)
-           FROM unnest(tools_access) AS elem)
-        ELSE to_jsonb(tools_access)
-        END,
-        '{}'::jsonb
-      );
+      USING COALESCE(to_jsonb(tools_access), '{}'::jsonb);
+
+    -- Normalize JSON arrays into capability maps: ["tool_a"] -> {"tool_a": true}
+    UPDATE pmoves_core.personas p
+       SET tools_access = COALESCE(
+         (
+           SELECT jsonb_object_agg(elem, 'true'::jsonb)
+             FROM jsonb_array_elements_text(p.tools_access) AS elem
+         ),
+         '{}'::jsonb
+       )
+     WHERE jsonb_typeof(p.tools_access) = 'array';
 
     ALTER TABLE pmoves_core.personas
       ALTER COLUMN tools_access SET DEFAULT '{}'::jsonb;
