@@ -1110,6 +1110,8 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory agents-headless-smoke
 	@echo "-> Archon MCP evidence"
 	-@$(MAKE) --no-print-directory archon-mcp-evidence
+	@echo "-> Model & persona readiness"
+	@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
 .PHONY: archon-mcp-evidence
@@ -1675,6 +1677,12 @@ brand-verify: ## Verify key branded endpoints respond
 	@echo "Meili:" && curl -fsS -o /dev/null -w '%{http_code}\n' http://localhost:7700/health || true
 	@echo "Neo4j bolt (mapped):" && echo 'EXPECT 7474/7687 open' || true
 	@echo "✔ Brand verification complete (inspect codes above)"
+
+# -------- Model & persona readiness --------
+.PHONY: model-readiness
+
+model-readiness: ## Validate model registry, persona seeds, Ollama models, TensorZero gateway
+	@$(PYTHON) tools/model_readiness_check.py
 
 # -------- Model profiles / management --------
 .PHONY: model-profiles model-apply model-swap models-sync models-seed-ollama models-registry-snapshot
