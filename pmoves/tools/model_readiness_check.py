@@ -24,11 +24,19 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
+
+
+def _is_allowed_scheme(url: str) -> bool:
+    """Allow only HTTP(S) URLs for outbound readiness probes."""
+    return urllib.parse.urlparse(url).scheme in {"http", "https"}
 
 
 def http_get(url: str, timeout: int = 10) -> dict | None:
     """GET request returning parsed JSON or None on failure."""
+    if not _is_allowed_scheme(url):
+        return None
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -39,6 +47,8 @@ def http_get(url: str, timeout: int = 10) -> dict | None:
 
 def http_get_supabase(url: str, key: str, timeout: int = 10) -> dict | list | None:
     """GET request with Supabase anon key auth."""
+    if not _is_allowed_scheme(url):
+        return None
     try:
         req = urllib.request.Request(url, headers={
             "Accept": "application/json",
@@ -54,6 +64,7 @@ def http_get_supabase(url: str, key: str, timeout: int = 10) -> dict | list | No
 class ReadinessChecker:
     def __init__(self, supabase_url: str, supabase_key: str,
                  ollama_url: str, tensorzero_url: str):
+        """Store service endpoints and counters for a readiness run."""
         self.supabase_url = supabase_url.rstrip("/")
         self.supabase_key = supabase_key
         self.ollama_url = ollama_url.rstrip("/")
@@ -63,6 +74,7 @@ class ReadinessChecker:
         self.warnings = 0
 
     def _check(self, name: str, ok: bool, detail: str = ""):
+        """Record and print a pass/fail check result."""
         status = "PASS" if ok else "FAIL"
         icon = "+" if ok else "!"
         msg = f"  [{icon}] {name}: {status}"
@@ -75,6 +87,7 @@ class ReadinessChecker:
             self.failed += 1
 
     def _warn(self, name: str, detail: str = ""):
+        """Record and print a non-fatal warning."""
         print(f"  [~] {name}: WARN — {detail}")
         self.warnings += 1
 
@@ -127,19 +140,19 @@ class ReadinessChecker:
         print("\n[3] Ollama local models")
         data = http_get(f"{self.ollama_url}/api/tags")
         if data is None:
-            self._warn("Ollama reachable", f"cannot reach {self.ollama_url} (may not be running)")
+            self._check("Ollama reachable", False, f"cannot reach {self.ollama_url}")
             return
 
         models = data.get("models", [])
-        pulled = {m.get("name", "").split(":")[0] for m in models}
+        pulled_base = {m.get("name", "").split(":")[0].strip().lower() for m in models if m.get("name")}
         self._check("Ollama responding", True, f"{len(models)} models loaded")
 
         # Check critical models
         critical = ["qwen3", "nomic-embed-text"]
         for model in critical:
-            found = any(model in name for name in pulled)
+            found = model.strip().lower() in pulled_base
             if not found:
-                self._warn(f"Model '{model}'", "not pulled (may need: ollama pull)")
+                self._check(f"Model '{model}'", False, "not pulled")
             else:
                 self._check(f"Model '{model}'", True, "available")
 
@@ -158,8 +171,7 @@ class ReadinessChecker:
         if data is not None:
             self._check("TensorZero reachable", True, "gateway responding (root)")
         else:
-            self._warn("TensorZero reachable",
-                        f"cannot reach {self.tensorzero_url} (may not be running)")
+            self._check("TensorZero reachable", False, f"cannot reach {self.tensorzero_url}")
 
     def check_persona_resolution(self) -> None:
         """Check persona_model_resolution view returns valid data."""
@@ -170,7 +182,7 @@ class ReadinessChecker:
         data = http_get_supabase(url, self.supabase_key)
 
         if data is None:
-            self._warn("Resolution view", "view may not exist yet (run migration first)")
+            self._check("Resolution view reachable", False, "view missing or query failed")
             return
 
         if isinstance(data, list):

@@ -1111,7 +1111,7 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	@echo "-> Archon MCP evidence"
 	-@$(MAKE) --no-print-directory archon-mcp-evidence
 	@echo "-> Model & persona readiness"
-	-@$(MAKE) --no-print-directory model-readiness
+	@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
 .PHONY: archon-mcp-evidence

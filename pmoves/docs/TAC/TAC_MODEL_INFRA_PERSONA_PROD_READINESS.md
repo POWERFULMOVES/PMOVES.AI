@@ -14,10 +14,11 @@ Constraint:
   - TTS provider + TTS model entries
   - broad `service_model_mappings` sections
 - `pmoves/supabase/initdb/17_persona_seed.sql` exists and contains seeded personas, but is currently not yet merged.
-- Not yet promoted as committed lane artifacts in this branch snapshot:
-  - persona-model resolution view migration (currently present as local working-tree artifact)
-  - model readiness script + Make target wiring (currently present as local working-tree artifact)
-  - deterministic verification evidence bundle attached to PR comments/trail
+- Included in this lane:
+  - persona-model resolution view migration (`pmoves/supabase/migrations/20260301002000_persona_model_resolution.sql`)
+  - model readiness script + Make target wiring (`pmoves/tools/model_readiness_check.py`, `pmoves/Makefile`)
+- Remaining operator step:
+  - attach deterministic verification evidence bundle in PR comments/trail after runtime validation
 
 ## Tactical Branches (Enhanced)
 
@@ -57,7 +58,7 @@ Owner: implementation lane owner
 
 Scope:
 - add migration:
-  - `pmoves/supabase/migrations/20260301_persona_model_resolution.sql`
+  - `pmoves/supabase/migrations/20260301002000_persona_model_resolution.sql`
 - create view `pmoves_core.persona_model_resolution`
 - grant read policy for service/runtime roles
 
