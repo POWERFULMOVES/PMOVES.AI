@@ -111,7 +111,7 @@ BEGIN
         RAISE NOTICE 'Added system_prompt_template column';
     END IF;
 
-    -- Tools access list for MCP
+    -- Tools access capability map for MCP
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'pmoves_core'
@@ -119,7 +119,7 @@ BEGIN
         AND column_name = 'tools_access'
     ) THEN
         ALTER TABLE pmoves_core.personas
-        ADD COLUMN tools_access text[] DEFAULT '{}';
+        ADD COLUMN tools_access jsonb DEFAULT '{}'::jsonb;
         RAISE NOTICE 'Added tools_access column';
     END IF;
 
@@ -258,13 +258,29 @@ CREATE TRIGGER update_persona_enhancements_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION pmoves_core.update_updated_at_column();
 
--- Grant permissions for PostgREST
-GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
-GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
+-- Grant permissions for PostgREST / Supabase API roles
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon';
+    ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO anon';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO anon';
+    END IF;
 
--- Allow authenticated users to insert/update personas
-GRANT INSERT, UPDATE ON pmoves_core.personas TO postgrest_auth_user;
-GRANT INSERT, UPDATE ON pmoves_core.persona_enhancements TO postgrest_auth_user;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_auth_user';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
+        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.personas TO postgrest_auth_user';
+        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.persona_enhancements TO postgrest_auth_user';
+    ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO authenticated';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';
+        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.personas TO authenticated';
+        EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.persona_enhancements TO authenticated';
+    END IF;
+END $$;
 
 COMMENT ON TABLE pmoves_core.personas IS 'Agent persona definitions for PMOVES.AI - supports Agent Zero and Archon agent creation';
 COMMENT ON TABLE pmoves_core.persona_enhancements IS 'Modular enhancements for personas - supports dynamic configuration';

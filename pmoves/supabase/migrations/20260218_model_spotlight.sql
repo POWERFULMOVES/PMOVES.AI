@@ -128,10 +128,28 @@ CREATE POLICY "Service write model_strengths" ON pmoves_core.model_strengths
 -- =============================================================================
 -- Grant Permissions for PostgREST
 -- =============================================================================
-GRANT SELECT ON pmoves_core.model_metrics TO postgrest_anon, postgrest_auth_user;
-GRANT SELECT ON pmoves_core.model_strengths TO postgrest_anon, postgrest_auth_user;
-GRANT INSERT, UPDATE ON pmoves_core.model_metrics TO postgrest_auth_user;
-GRANT INSERT, UPDATE ON pmoves_core.model_strengths TO postgrest_auth_user;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_metrics TO postgrest_anon';
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO postgrest_anon';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_metrics TO anon';
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_metrics TO postgrest_auth_user';
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO postgrest_auth_user';
+    EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.model_metrics TO postgrest_auth_user';
+    EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.model_strengths TO postgrest_auth_user';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_metrics TO authenticated';
+    EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO authenticated';
+    EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.model_metrics TO authenticated';
+    EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.model_strengths TO authenticated';
+  END IF;
+END $$;
 
 -- =============================================================================
 -- Helper: Refresh model strengths from model_metrics

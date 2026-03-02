@@ -277,10 +277,30 @@ CREATE TRIGGER update_models_updated_at
 -- =============================================================================
 -- Grant Permissions for PostgREST
 -- =============================================================================
-GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
-GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
-GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_anon';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO anon';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO anon';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_auth_user';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
+    EXECUTE 'GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_auth_user';
+  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO authenticated';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';
+    EXECUTE 'GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO authenticated';
+  END IF;
+END $$;
 
 -- =============================================================================
 -- Helper Functions
