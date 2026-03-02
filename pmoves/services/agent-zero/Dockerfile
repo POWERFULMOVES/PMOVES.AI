@@ -42,6 +42,12 @@ COPY contracts /app/contracts
 # Include PMOVES agent forms (used by /mcp/execute form.get and related flows).
 COPY configs /app/configs
 
+# Include PMOVES python package modules (e.g. pmoves.chit).
+COPY __init__.py /app/pmoves/__init__.py
+COPY pmoves /app/pmoves
+COPY chit /app/pmoves/chit
+COPY chit /app/chit
+
 # Copy PMOVES service implementation on top of the upstream runtime
 COPY services /app/services
 
@@ -61,4 +67,4 @@ RUN groupadd -r pmoves --gid=65532 && \
 USER pmoves:pmoves
 
 # Entrypoint handles optional privileged setup then drops to pmoves user
-ENTRYPOINT ["/bin/bash", "-lc", "/ins/copy_A0.sh 2>/dev/null || true && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true && exec /opt/venv-a0/bin/python services/agent-zero/main.py"]
+ENTRYPOINT ["/bin/bash", "-lc", "/ins/copy_A0.sh 2>/dev/null || true && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true && export PYTHONPATH=/app:${PYTHONPATH:-} && exec /opt/venv-a0/bin/python /app/services/agent-zero/main.py"]

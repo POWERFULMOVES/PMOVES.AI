@@ -224,7 +224,9 @@ The following submodules have been through security audit and integration review
 
 - **Connection Pattern:** Routes tool calls to 6 upstream MCP servers (Docling, Cipher, E2B, VL Sentinel, Postman, n8n)
 - **Auth:** Protected endpoints (`/call`, `/mcp`, `/a2a/v1/tasks`) require `Authorization: Bearer <Supabase-JWT>` (validated via `SUPABASE_JWT_SECRET`; fail-closed if secret is missing)
-- **Public:** `/healthz`, `/health`, `/metrics`, `/servers`, `/tools`, `/.well-known/agent.json`
+- **A2A Discovery:** Canonical endpoint is `/.well-known/agent-card.json` (legacy alias `/.well-known/agent.json`); both are auth-gated in production by default
+- **Public:** `/healthz`, `/health`, `/metrics`, `/servers`, `/tools`
+- **Dev-only override:** `A2A_DISCOVERY_PUBLIC=true` and `A2A_TASKS_PUBLIC=true` explicitly opt into public A2A routes for local experiments
 - **NATS:** Publishes `botz.mcp.tool.executed.v1`, `botz.gateway.task.dispatched.v1`
 - **See:** `PMOVES-BoTZ/.claude/CLAUDE.md` for full MCP server catalog
 

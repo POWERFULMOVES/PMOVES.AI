@@ -366,7 +366,7 @@ async def lifespan(app: FastAPI):
         if NATS_ANNOUNCE_AVAILABLE:
             try:
                 await announce_service(
-                    nats_url=NATS_URL_REDACTED,
+                    nats_url=NATS_URL,
                     slug=slug,
                     name=name,
                     url=url,

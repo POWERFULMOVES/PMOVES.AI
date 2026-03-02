@@ -145,10 +145,15 @@ SELECT
   p.type as provider_type,
   p.api_base,
   p.api_key_env_var,
-  json_agg(DISTINCT jsonb_build_object(
-    'alias', a.alias,
-    'context', a.context
-  ) ORDER BY a.context) as aliases
+  COALESCE(
+    jsonb_agg(
+      DISTINCT jsonb_build_object(
+        'alias', a.alias,
+        'context', a.context
+      )
+    ) FILTER (WHERE a.alias IS NOT NULL),
+    '[]'::jsonb
+  ) as aliases
 FROM pmoves_core.models m
 JOIN pmoves_core.model_providers p ON m.provider_id = p.id
 LEFT JOIN pmoves_core.model_aliases a ON m.id = a.model_id

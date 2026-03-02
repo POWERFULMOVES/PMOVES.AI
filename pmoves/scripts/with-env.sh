@@ -42,8 +42,11 @@ load_env_file() {
     fi
   done < "$f"
   set -a
+  # Allow forward references like SUPABASE_ANON_KEY=${ANON_KEY} while loading.
+  set +u
   # shellcheck source=/dev/null
   . "$tmpfile"
+  set -u
   set +a
   rm -f "$tmpfile"
   set -H 2>/dev/null || true
@@ -66,7 +69,12 @@ load_env_file "$ROOT_DIR/env.tier-ui"
 # Local/runtime overlays last.
 load_env_file "$ROOT_DIR/.env.generated"
 load_env_file "$ROOT_DIR/.env.local"
-load_env_file "$ROOT_DIR/env.supa.runtime"
+
+# Supabase runtime overlay is generated from CLI status output.
+# Only apply it when running in CLI mode to avoid stale overrides in compose mode.
+if [ "${SUPABASE_RUNTIME:-compose}" = "cli" ]; then
+  load_env_file "$ROOT_DIR/env.supa.runtime"
+fi
 
 # Back-compat: some docs/manifests use MINIO_USER/MINIO_PASSWORD. Services use MINIO_ACCESS_KEY/MINIO_SECRET_KEY.
 if [ -z "${MINIO_ACCESS_KEY:-}" ] && [ -n "${MINIO_USER:-}" ]; then
@@ -84,6 +92,22 @@ if [ -z "${MINIO_ROOT_USER:-}" ] && [ -n "${MINIO_ACCESS_KEY:-}" ]; then
 fi
 if [ -z "${MINIO_ROOT_PASSWORD:-}" ] && [ -n "${MINIO_SECRET_KEY:-}" ]; then
   export MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY"
+fi
+
+# Supabase alias normalization:
+# env.shared can contain forward refs (e.g. SUPABASE_ANON_KEY=${ANON_KEY})
+# before ANON_KEY/SERVICE_ROLE_KEY are defined. Normalize here after all files load.
+if [ -z "${SUPABASE_ANON_KEY:-}" ] && [ -n "${ANON_KEY:-}" ]; then
+  export SUPABASE_ANON_KEY="$ANON_KEY"
+fi
+if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && [ -n "${SERVICE_ROLE_KEY:-}" ]; then
+  export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+fi
+if [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+  export SUPABASE_PUBLISHABLE_KEY="$SUPABASE_ANON_KEY"
+fi
+if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+  export SUPABASE_SECRET_KEY="$SUPABASE_SERVICE_ROLE_KEY"
 fi
 
 export PMOVES_ENV_LOADER=1

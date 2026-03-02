@@ -64,6 +64,15 @@ services:
     # pre-creating the data directory with correct ownership if
     # running as non-root is required for your security policy.
     user: "0:0"
+    command:
+      - start
+      - --bind
+      - 0.0.0.0:8000
+      - --user
+      - ${OPEN_NOTEBOOK_SURREAL_USER:-test}
+      - --pass
+      - ${OPEN_NOTEBOOK_SURREAL_PASS:-test}
+      - rocksdb:/mydata/surreal.db
     networks:
       pmoves_app:
         aliases:
@@ -82,11 +91,24 @@ services:
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD}
+      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-${OPEN_NOTEBOOK_PASSWORD}}
+      # Ensure notebook can reach SurrealDB over the compose network.
+      SURREAL_URL: ws://open-notebook-surrealdb-ext:8000/rpc
+      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
+      SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
+      SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:-test}
+      SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-test}
+      SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
+      SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
     container_name: pmoves-jellyfin
     restart: unless-stopped
+    # Use numeric UID/GID so runtime stays valid even when image passwd lacks a named
+    # `jellyfin` user entry (observed on some GHCR variants).
+    user: "${JELLYFIN_CONTAINER_USER:-0:0}"
     networks:
       pmoves_app:
         aliases:
