@@ -28,12 +28,14 @@ import signal
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import nats
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
-from supabase import create_client, Client as SupabaseClient
+
+if TYPE_CHECKING:
+    from supabase import Client as SupabaseClient
 
 # Configure logging
 logging.basicConfig(
@@ -86,7 +88,7 @@ class ChatRelayService:
         self.nc: Optional[NATS] = None
         self.js = None  # JetStream context
         self.sub = None
-        self.supabase: Optional[SupabaseClient] = None
+        self.supabase: Optional["SupabaseClient"] = None
         self.running = False
         self.messages_relayed = 0
         self.errors = 0
@@ -110,6 +112,10 @@ class ChatRelayService:
         self.js = self.nc.jetstream()
 
         logger.info(f"Connecting to Supabase at {self.config.supabase_url}")
+        # Import lazily so config/unit tests can import this module even when
+        # repository paths shadow third-party package names in CI.
+        from supabase import create_client
+
         self.supabase = create_client(
             self.config.supabase_url,
             self.config.supabase_service_role_key,

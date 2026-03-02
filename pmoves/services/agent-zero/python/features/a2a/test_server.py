@@ -68,6 +68,7 @@ async def clear_tasks():
 @pytest.fixture(autouse=True)
 def discovery_auth_config(monkeypatch):
     monkeypatch.setenv("A2A_DISCOVERY_PUBLIC", "false")
+    monkeypatch.setenv("A2A_TASKS_PUBLIC", "false")
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-discovery-secret")
 
 
@@ -85,8 +86,8 @@ class TestAgentCard:
 
     @pytest.mark.asyncio
     async def test_get_agent_card(self, client: AsyncClient):
-        """Test retrieving the agent card from well-known endpoint."""
-        response = await client.get("/.well-known/agent.json", headers=auth_headers())
+        """Test retrieving the agent card from canonical well-known endpoint."""
+        response = await client.get("/.well-known/agent-card.json", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -102,7 +103,7 @@ class TestAgentCard:
     @pytest.mark.asyncio
     async def test_agent_card_has_required_fields(self, client: AsyncClient):
         """Test agent card contains all required A2A fields."""
-        response = await client.get("/.well-known/agent.json", headers=auth_headers())
+        response = await client.get("/.well-known/agent-card.json", headers=auth_headers())
 
         data = response.json()
         required_fields = [
@@ -116,7 +117,7 @@ class TestAgentCard:
     @pytest.mark.asyncio
     async def test_agent_card_skills(self, client: AsyncClient):
         """Test agent card has expected skills defined."""
-        response = await client.get("/.well-known/agent.json", headers=auth_headers())
+        response = await client.get("/.well-known/agent-card.json", headers=auth_headers())
 
         data = response.json()
         expected_skills = [
@@ -131,13 +132,18 @@ class TestAgentCard:
 
     @pytest.mark.asyncio
     async def test_get_agent_card_requires_auth(self, client: AsyncClient):
-        response = await client.get("/.well-known/agent.json")
+        response = await client.get("/.well-known/agent-card.json")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     @pytest.mark.asyncio
     async def test_get_agent_card_rejects_anon_role(self, client: AsyncClient):
-        response = await client.get("/.well-known/agent.json", headers=auth_headers(role="anon"))
+        response = await client.get("/.well-known/agent-card.json", headers=auth_headers(role="anon"))
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    @pytest.mark.asyncio
+    async def test_legacy_agent_card_path_still_supported(self, client: AsyncClient):
+        response = await client.get("/.well-known/agent.json", headers=auth_headers())
+        assert response.status_code == status.HTTP_200_OK
 
 
 class TestHealthCheck:
@@ -173,7 +179,7 @@ class TestTaskCreation:
             }
         }
 
-        response = await client.post("/a2a/v1/tasks", json=payload)
+        response = await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -192,7 +198,7 @@ class TestTaskCreation:
             "instruction": "Write a hello world function in Python"
         }
 
-        response = await client.post("/a2a/v1/tasks", json=payload)
+        response = await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -217,7 +223,7 @@ class TestTaskCreation:
             }
         }
 
-        response = await client.post("/a2a/v1/tasks", json=payload)
+        response = await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -235,11 +241,23 @@ class TestTaskCreation:
             }
         }
 
-        response = await client.post("/a2a/v1/tasks", json=payload)
+        response = await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         # Should return 500 (server error) due to Message validation failure
         # since we're accepting Dict[str, Any] for flexibility
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+
+    @pytest.mark.asyncio
+    async def test_create_task_requires_auth(self, client: AsyncClient):
+        payload = {
+            "message": {
+                "message_id": str(uuid.uuid4()),
+                "role": "user",
+                "content": "auth check"
+            }
+        }
+        response = await client.post("/a2a/v1/tasks", json=payload)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 class TestTaskRetrieval:
@@ -256,11 +274,11 @@ class TestTaskRetrieval:
                 "content": "Test instruction"
             }
         }
-        create_response = await client.post("/a2a/v1/tasks", json=create_payload)
+        create_response = await client.post("/a2a/v1/tasks", json=create_payload, headers=auth_headers())
         task_id = create_response.json()["task"]["id"]
 
         # Then retrieve it
-        response = await client.get(f"/a2a/v1/tasks/{task_id}")
+        response = await client.get(f"/a2a/v1/tasks/{task_id}", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -273,7 +291,7 @@ class TestTaskRetrieval:
     async def test_get_task_not_found(self, client: AsyncClient):
         """Test retrieving non-existent task returns 404."""
         fake_id = str(uuid.uuid4())
-        response = await client.get(f"/a2a/v1/tasks/{fake_id}")
+        response = await client.get(f"/a2a/v1/tasks/{fake_id}", headers=auth_headers())
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -289,10 +307,10 @@ class TestTaskRetrieval:
                     "content": f"Test task {i}"
                 }
             }
-            await client.post("/a2a/v1/tasks", json=payload)
+            await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         # List all tasks
-        response = await client.get("/a2a/v1/tasks")
+        response = await client.get("/a2a/v1/tasks", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -311,10 +329,10 @@ class TestTaskRetrieval:
                     "content": f"Test task {i}"
                 }
             }
-            await client.post("/a2a/v1/tasks", json=payload)
+            await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         # Filter by working status
-        response = await client.get("/a2a/v1/tasks?status_filter=TASK_STATE_WORKING")
+        response = await client.get("/a2a/v1/tasks?status_filter=TASK_STATE_WORKING", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -335,10 +353,10 @@ class TestTaskRetrieval:
                     "content": f"Test task {i}"
                 }
             }
-            await client.post("/a2a/v1/tasks", json=payload)
+            await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         # List with limit of 3
-        response = await client.get("/a2a/v1/tasks?limit=3")
+        response = await client.get("/a2a/v1/tasks?limit=3", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -360,11 +378,11 @@ class TestTaskCancellation:
                 "content": "Long running task"
             }
         }
-        create_response = await client.post("/a2a/v1/tasks", json=create_payload)
+        create_response = await client.post("/a2a/v1/tasks", json=create_payload, headers=auth_headers())
         task_id = create_response.json()["task"]["id"]
 
         # Cancel the task
-        response = await client.post(f"/a2a/v1/tasks/{task_id}/cancel")
+        response = await client.post(f"/a2a/v1/tasks/{task_id}/cancel", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -375,7 +393,7 @@ class TestTaskCancellation:
     async def test_cancel_task_not_found(self, client: AsyncClient):
         """Test cancelling non-existent task returns 404."""
         fake_id = str(uuid.uuid4())
-        response = await client.post(f"/a2a/v1/tasks/{fake_id}/cancel")
+        response = await client.post(f"/a2a/v1/tasks/{fake_id}/cancel", headers=auth_headers())
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -394,16 +412,17 @@ class TestArtifacts:
                 "content": "Generate code"
             }
         }
-        create_response = await client.post("/a2a/v1/tasks", json=create_payload)
+        create_response = await client.post("/a2a/v1/tasks", json=create_payload, headers=auth_headers())
         task_id = create_response.json()["task"]["id"]
 
         # Add artifact with JSON body
         response = await client.post(
             f"/a2a/v1/tasks/{task_id}/artifacts",
+            headers=auth_headers(),
             json={
                 "type": ArtifactType.CODE,
                 "data": "def hello(): return 'world'"
-            }
+            },
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -423,7 +442,7 @@ class TestArtifacts:
                 "content": "Generate documentation"
             }
         }
-        create_response = await client.post("/a2a/v1/tasks", json=create_payload)
+        create_response = await client.post("/a2a/v1/tasks", json=create_payload, headers=auth_headers())
         task_id = create_response.json()["task"]["id"]
 
         # Add multiple artifacts
@@ -436,11 +455,12 @@ class TestArtifacts:
         for artifact in artifacts:
             await client.post(
                 f"/a2a/v1/tasks/{task_id}/artifacts",
-                json=artifact
+                headers=auth_headers(),
+                json=artifact,
             )
 
         # Verify all artifacts were added
-        response = await client.get(f"/a2a/v1/tasks/{task_id}")
+        response = await client.get(f"/a2a/v1/tasks/{task_id}", headers=auth_headers())
         task = response.json()
 
         assert len(task["artifacts"]) == 3
@@ -452,7 +472,7 @@ class TestAgentDiscovery:
     @pytest.mark.asyncio
     async def test_discover_agents(self, client: AsyncClient):
         """Test discovering available agents."""
-        response = await client.post("/a2a/v1/discover")
+        response = await client.post("/a2a/v1/discover", headers=auth_headers())
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -461,6 +481,11 @@ class TestAgentDiscovery:
         assert "total" in data
         assert data["total"] >= 1
         assert len(data["agents"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_discover_agents_requires_auth(self, client: AsyncClient):
+        response = await client.post("/a2a/v1/discover")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 class TestJSONRPCResponses:
@@ -477,7 +502,7 @@ class TestJSONRPCResponses:
             }
         }
 
-        response = await client.post("/a2a/v1/tasks", json=payload)
+        response = await client.post("/a2a/v1/tasks", json=payload, headers=auth_headers())
 
         data = response.json()
         assert "task" in data
@@ -522,6 +547,7 @@ class TestIntegration:
         # Create
         create_response = await client.post(
             "/a2a/v1/tasks",
+            headers=auth_headers(),
             json={
                 "message": {
                     "message_id": str(uuid.uuid4()),
@@ -536,7 +562,7 @@ class TestIntegration:
         task_id = create_response.json()["task"]["id"]
 
         # Get
-        get_response = await client.get(f"/a2a/v1/tasks/{task_id}")
+        get_response = await client.get(f"/a2a/v1/tasks/{task_id}", headers=auth_headers())
         assert get_response.status_code == status.HTTP_200_OK
         task_data = get_response.json()
         assert task_data["metadata"]["test"] == "integration"
@@ -544,23 +570,25 @@ class TestIntegration:
         # Add artifact
         artifact_response = await client.post(
             f"/a2a/v1/tasks/{task_id}/artifacts",
+            headers=auth_headers(),
             json={
                 "type": ArtifactType.TEXT,
                 "data": "Test result"
-            }
+            },
         )
         assert artifact_response.status_code == status.HTTP_200_OK
 
         # Verify artifact
-        get_response = await client.get(f"/a2a/v1/tasks/{task_id}")
+        get_response = await client.get(f"/a2a/v1/tasks/{task_id}", headers=auth_headers())
         task_data = get_response.json()
         assert len(task_data["artifacts"]) == 1
 
         # Cancel
-        cancel_response = await client.post(f"/a2a/v1/tasks/{task_id}/cancel")
+        cancel_response = await client.post(f"/a2a/v1/tasks/{task_id}/cancel", headers=auth_headers())
         assert cancel_response.status_code == status.HTTP_200_OK
         assert cancel_response.json()["status"]["state"] == TaskState.CANCELLED
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
