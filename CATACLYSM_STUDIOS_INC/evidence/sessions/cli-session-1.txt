@@ -1,0 +1,73 @@
+● I can see there's a double-nested path (pmoves/pmoves/vendor/e2b) which is an artifact. The main E2B submodule is correctly added at pmoves/vendor/e2b.
+
+  Summary of Work Completed
+
+  ★ Insight ─────────────────────────────────────
+  TAC Worktree Pattern: Created dedicated worktrees (tac-stabilization-nats, tac-geometric-framework) to isolate large stabilization efforts. This allows parallel development without blocking main branch progress.
+
+  E2B Submodule: Successfully added PMOVES-E2B-Danger-Room at pmoves/vendor/e2b. The double-nested pmoves/pmoves/vendor/e2b path contains additional E2B components (desktop, infra, mcp-server, spells, surf) that may need reorganization.
+  ─────────────────────────────────────────────────
+
+  Completed
+
+  1. ✅ Tokenism UI Integration (tac-tokenism-ui)
+    - Service catalog entries for tokenism and tokenism-ui
+    - Dashboard page at /dashboard/tokenism
+    - Components: SimulationPanel, ResultsPanel, GeometricView (Poincaré disk)
+    - Navigation link added
+    - Standalone UI service in docker-compose (port 8504)
+  2. ✅ TAC Worktrees Created
+    - tac-stabilization-nats - NATS connection fixes
+    - tac-geometric-framework - Full framework upgrade
+  3. ✅ E2B Submodule Added
+    - PMOVES-E2B-Danger-Room at pmoves/vendor/e2b
+  4. ✅ Stabilization Plan
+    - Document at .claude/plan/PRODUCTION_READINESS_STABILIZATION.md
+
+  Remaining Work (Next Steps)
+
+  | Priority | Task                                          | Status                               |
+  |----------|-----------------------------------------------|--------------------------------------|
+  | P0       | Fix PMOVES-DoX NATS connection                | Pending - use tac-stabilization-nats |
+  | P0       | Create A2UI NATS bridge (ws://localhost:9223) | Pending                              |
+  | P1       | Add Tokenism Prometheus metrics               | Pending                              |
+  | P1       | Fix UI bugs (chart rendering, health refresh) | Pending                              |
+  | P2       | Add E2B Desktop submodule                     | Pending                              |
+  | P2       | Reorganize double-nested E2B paths            | Pending                              |
+
+  Current File State for Commits
+
+  Modified files ready to commit:
+  - /pmoves/docker-compose.yml - Added tokenism-ui service
+  - /PMOVES-ToKenism-Multi/pmoves-nextjs/Dockerfile - Created
+  - /PMOVES-ToKenism-Multi/pmoves-nextjs/next.config.mjs - Added standalone output
+
+  Ready for PR from worktree:
+  - tac-tokenism-ui branch has complete Tokenism UI integration
+
+  Would you like me to:
+  1. Commit the Tokenism UI integration work?
+  2. Start working on the DoX NATS connection fix?
+  3. Create the A2UI NATS bridge service?
+
+> The double-nested pmoves/pmoves/vendor/e2b path contains additional E2B components (desktop, infra, mcp-server, spells, surf) that may need reorganization. these should be submodules of of E2B which is used thoughout PMOVES.AI and allows self hosting the sandbox and adding computer use and browswer use with mcp tools great for our agents to work in safely yes lets commit work 
+ stabilize items 2 and 3 while we task the worktrees to orchestrate remaining 
+ 
+      -a, --assignee login       Assign people by their login. Use "@me" to self-assign.
+       -B, --base branch          The branch into which you want your code merged
+       -b, --body string          Body for the pull request
+       -F, --body-file file       Read body text from file (use "-" to read from standard input)
+     … +16 lines (ctrl+o to see all)
+
+✻ Compacting conversation… (esc to interrupt · ctrl+t to hide todos · 10m 12s · ↑ 10.8k tokens)
+  ⎿  ☐ PR 1: Documentation updates (3d70571a, a021f78b)
+     ☐ PR 2: Gateway Agent (1c0c9f86, f506931f, 8c3ce201, cefd71d3, 0c268075)
+     ☐ PR 3: TensorZero Config (0f828340, 3bbaa488)
+     ☐ PR 4: Agent SDK CLI (ec5120e0, c1fe4bf8)
+     ☐ PR 5: A2UI NATS Bridge (e0fd7699, c8153892, fdd390ad, 46edbbaf, 82214470, 0f67282a)
+     ☐ PR 6: Centralized UI (912721a5, 4bd5c1d4, 6c97210a)
+     ☐ PR 7: Observability (cad99bb3, 769a9383, 6532c343, 923ecce1, 3bee9185)
+     ☐ PR 8: Terraform MCP (f2c5822c)
+     ☐ PR 9: CI/CD updates (6b5192fb, 7657b97f, c23791b3, 752b66a1, 3f66bbe5, 4ce14f0c, e3f03e8b, 6aebcca6)
+     ☐ PR 10: Submodule sync (d8d46bb5, 84a3075e, d28032f0, 5131efed)
+     ☐ PR 11: Bug fixes (85e99fd3, cebd582e, 784eefd3, 1de86222, ceffd71d3, 5eefec51)
