@@ -1,3 +1,9 @@
+"""Tests for AI provider fallback logic in the Jellyfin audio processor.
+
+Validates that MediaProcessor correctly falls back between Ollama and
+HuggingFace providers based on availability and cross-fallback settings.
+"""
+
 import asyncio
 import importlib.util
 import sys
@@ -50,7 +56,8 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(MODULE)
 
 
-def _new_processor(provider: str, allow_cross_fallback: bool = True):
+def _new_processor(provider: str, allow_cross_fallback: bool = True) -> object:
+    """Create a MediaProcessor configured for a specific provider."""
     processor = MODULE.MediaProcessor(skip_external_clients=True)
     processor.audio_provider = provider
     processor.allow_cross_fallback = allow_cross_fallback
@@ -58,6 +65,7 @@ def _new_processor(provider: str, allow_cross_fallback: bool = True):
 
 
 def test_auto_falls_back_from_ollama_to_huggingface():
+    """Verify auto mode tries Ollama first, then falls back to HuggingFace."""
     processor = _new_processor("auto")
     calls = []
 
@@ -78,6 +86,7 @@ def test_auto_falls_back_from_ollama_to_huggingface():
 
 
 def test_ollama_only_without_cross_fallback():
+    """Verify Ollama-only mode does not fall back when cross-fallback is disabled."""
     processor = _new_processor("ollama", allow_cross_fallback=False)
     calls = []
 
@@ -98,6 +107,7 @@ def test_ollama_only_without_cross_fallback():
 
 
 def test_ollama_with_cross_fallback_enabled():
+    """Verify Ollama mode falls back to HuggingFace when cross-fallback is enabled."""
     processor = _new_processor("ollama", allow_cross_fallback=True)
     calls = []
 
@@ -118,6 +128,7 @@ def test_ollama_with_cross_fallback_enabled():
 
 
 def test_huggingface_with_cross_fallback_to_ollama():
+    """Verify HuggingFace mode falls back to Ollama when cross-fallback is enabled."""
     processor = _new_processor("huggingface", allow_cross_fallback=True)
     calls = []
 

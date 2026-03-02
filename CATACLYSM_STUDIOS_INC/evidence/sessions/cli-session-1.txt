@@ -50,8 +50,7 @@
   2. Start working on the DoX NATS connection fix?
   3. Create the A2UI NATS bridge service?
 
-> The double-nested pmoves/pmoves/vendor/e2b path contains additional E2B components (desktop, infra, mcp-server, spells, surf) that may need reorganization. these should be submodules of of E2B which is used thoughout PMOVES.AI and allows self hosting the sandbox and adding computer use and browswer use with mcp tools great for our agents to work in safely yes lets commit work 
- stabilize items 2 and 3 while we task the worktrees to orchestrate remaining 
+> The double-nested pmoves/pmoves/vendor/e2b path contains additional E2B components (desktop, infra, mcp-server, spells, surf) that may need reorganization. These should be submodules of E2B which is used throughout PMOVES.AI and allows self-hosting the sandbox and adding computer use and browser use with MCP tools — great for our agents to work in safely. Yes, lets commit work. Stabilize items 2 and 3 while we task the worktrees to orchestrate remaining
  
       -a, --assignee login       Assign people by their login. Use "@me" to self-assign.
        -B, --base branch          The branch into which you want your code merged

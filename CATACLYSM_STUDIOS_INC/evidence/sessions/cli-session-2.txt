@@ -601,9 +601,9 @@ refreshed and should be at top of mind  this wil make changing body parts easier
   Key Changes Based on Your Feedback:
 
   1. Branded Defaults per Integration: Each integration gets PMOVES-branded default credentials
-    - Jellyfin: jellyfin:pmoves2024 (login at http://localhost:8096)
-    - Discord: PMOVES-Bot (bot name with PMOVES logo)
-    - Open Notebook: pmoves-user (default user)
+    - Jellyfin: <REDACTED_DEFAULT_CREDS> (login at http://localhost:8096)
+    - Discord: <REDACTED_BOT_NAME> (bot name with PMOVES logo)
+    - Open Notebook: <REDACTED_USER> (default user)
   2. CHIT Manages All: Both API keys AND default integration credentials go through CHIT
     - defaults_manifest.yaml - branded integration defaults
     - secrets_manifest_v2.yaml - tier-targeted secrets
