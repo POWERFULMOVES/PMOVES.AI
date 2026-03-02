@@ -1,7 +1,7 @@
 # PMOVES.AI Agents Documentation
 
 **Last updated:** 2026-03-01
-**Files:** 69+ documents across 7 tiers
+**Files:** 72+ documents across 7 tiers
 **Registry:** 60 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
 
 ---
@@ -136,7 +136,7 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 
 ---
 
-## Known Gaps (P0-P1)
+## Known Gaps (P0-P2)
 
 | Priority | Gap | Owner |
 |----------|-----|-------|

@@ -2,7 +2,7 @@
 
 **Version:** 1.1
 **Last Updated:** 2026-03-01 (seed examples added)
-**Status:** Architecture Definition + 8 Production Seeds Deployed
+**Status:** Phase 1 in progress — architecture defined, 8/12 core seeds deployed
 **Seed SQL:** `pmoves/supabase/initdb/17_persona_seed.sql`
 
 ---
@@ -242,7 +242,7 @@ The following personas are seeded in production via `pmoves/supabase/initdb/17_p
 
 ### Example 1: Developer Persona
 
-```sql
+```yaml
 -- From 17_persona_seed.sql
 name: 'Developer'
 version: '1.0'
@@ -258,7 +258,7 @@ tools_access: ["code_review", "git_operations", "terminal", "file_system", "sear
 
 ### Example 2: Researcher Persona
 
-```sql
+```yaml
 name: 'Researcher'
 version: '1.0'
 thread_type: 'parallel'          -- Multi-threaded exploration
@@ -273,7 +273,7 @@ tools_access: ["search", "web_browse", "file_system", "knowledge_graph", "hirag_
 
 ### Example 3: Security Auditor Persona
 
-```sql
+```yaml
 name: 'Security Auditor'
 version: '1.0'
 thread_type: 'chained'
@@ -286,7 +286,7 @@ tools_access: ["code_review", "terminal", "file_system", "search", "security_sca
 
 ### Example 4: Archivist Persona (Cost-Optimized)
 
-```sql
+```yaml
 name: 'Archivist'
 version: '1.0'
 thread_type: 'base'              -- Simple catalog operations
@@ -301,7 +301,7 @@ tools_access: ["file_system", "search", "knowledge_graph"]
 
 ### Inheritance Chain Example
 
-```
+```text
 Coordinator (parent)
 ├── thread_type: 'big'
 ├── model_preference: 'claude-opus-4-5'
@@ -389,8 +389,8 @@ JSON configuration for persona behavior limits:
 
 ## Implementation Roadmap
 
-### Phase 1: Core Personas (Q1 2026)
-- [ ] Define 12 core agent personas
+### Phase 1: Core Personas (Q1 2026) (In Progress)
+- [ ] Define 12 core agent personas (8/12 seeded in production)
 - [ ] Implement persona schema in Supabase
 - [ ] Link to existing voice personas
 - [ ] Basic CHIT attribution integration
