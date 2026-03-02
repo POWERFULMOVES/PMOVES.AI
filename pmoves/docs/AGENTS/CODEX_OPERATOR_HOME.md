@@ -46,6 +46,8 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 - `make -C pmoves verify-all`
 - `make -C pmoves codex-audit`
 - `make -C pmoves codex-parity-check`
+- `make -C pmoves a0-plugins-check`
+- `make -C pmoves a0-plugins-check-remote`
 
 ## CHIT Geometry Bus
 
