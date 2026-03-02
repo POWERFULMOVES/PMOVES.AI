@@ -1,6 +1,6 @@
 title: PMOVES CHIT Geometry Bus
 description: CHIT packet encode/decode and geometry bus event publishing for PMOVES agent workflows.
-github: https://github.com/CATACLYSMSTUDIOS-INC/a0-pmoves-chit-geometry-bus
+github: https://github.com/CATACLYSM-STUDIOS-INC/a0-pmoves-chit-geometry-bus
 tags:
   - agents
   - rag
