@@ -48,5 +48,5 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy studio_board_service_role_all on studio_board for all to service_role
-    using (true) with check (true);
+    using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
 exception when duplicate_object then null; end $$;

@@ -510,7 +510,7 @@ def _register_endpoints(app: FastAPI) -> None:
         Returns:
             AgentDiscoveryResponse: List of discoverable agents
         """
-        _require_task_auth(authorization)
+        _require_discovery_auth(authorization)
 
         return AgentDiscoveryResponse(
             agents=[app.state.agent_card],
