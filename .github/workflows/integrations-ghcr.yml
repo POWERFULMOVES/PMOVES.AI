@@ -399,7 +399,7 @@ jobs:
 
       - name: Upload SBOM artifact
         if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
@@ -452,7 +452,7 @@ jobs:
 
       - name: Upload Trivy report artifact
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
