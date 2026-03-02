@@ -207,13 +207,39 @@ def _resolve_service_url(
     return docker_fallback
 
 # Prometheus metrics
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CollectorRegistry, Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
-http_requests_total = Counter('pmoves_yt_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-http_request_duration = Histogram('pmoves_yt_http_request_duration_seconds', 'HTTP request duration')
-videos_downloaded_total = Counter('pmoves_yt_videos_downloaded_total', 'Videos downloaded')
-transcripts_processed_total = Counter('pmoves_yt_transcripts_processed_total', 'Transcripts processed')
-nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages published', ['subject'])
+# Use a service-local registry so duplicate module imports in tests do not collide
+# on the process-global default CollectorRegistry.
+PROM_REGISTRY = CollectorRegistry()
+
+http_requests_total = Counter(
+    'pmoves_yt_http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status'],
+    registry=PROM_REGISTRY,
+)
+http_request_duration = Histogram(
+    'pmoves_yt_http_request_duration_seconds',
+    'HTTP request duration',
+    registry=PROM_REGISTRY,
+)
+videos_downloaded_total = Counter(
+    'pmoves_yt_videos_downloaded_total',
+    'Videos downloaded',
+    registry=PROM_REGISTRY,
+)
+transcripts_processed_total = Counter(
+    'pmoves_yt_transcripts_processed_total',
+    'Transcripts processed',
+    registry=PROM_REGISTRY,
+)
+nats_messages_total = Counter(
+    'pmoves_yt_nats_messages_total',
+    'NATS messages published',
+    ['subject'],
+    registry=PROM_REGISTRY,
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -744,7 +770,7 @@ def metrics():
     Returns:
         Response with Prometheus metrics text/plain content.
     """
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return Response(generate_latest(PROM_REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 def _publish_event(topic: str, payload: Dict[str, Any]):
     """Publish an event to the NATS message bus.
