@@ -8,8 +8,9 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
-- Dependency/code scanning backlog: Dependabot open `5` (1 critical, 1 high, 1 medium, 2 low); Code Scanning open `36` alerts.
-- Active remediation focus: SSRF hardening landed for CHIT image decode paths in Hi‑RAG gateways and URL safety guards are being completed in SupaSerch HTTP fallback. Production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, and hardened runtime auth consistency across compose and submodules.
+- Open PR queue (live): `1` open (`#761` docs cataclysm closeout; currently queue-blocked on self-hosted CI capacity).
+- Dependency/code scanning backlog (live): Dependabot open `2` (`1 high`, `1 low`); Code Scanning open `34` (`31 error`, `3 warning`).
+- Active remediation focus: production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, hardened runtime auth consistency across compose/submodules, and recurring self-hosted queue starvation for CodeQL/GHCR lanes.
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
 - Creator lane now includes Jellyfin parity auditing (`make -C pmoves jellyfin-parity-audit[‑strict]`) plus a dedicated worktree review runbook for PMOVES.YT/Jellyfin/CHIT convergence.
 - Submodule production release lane now has deterministic checklist coverage for all tracked submodules (40/40), including branch policy gating, static/runtime gate packs, and hardened merge-order policy (`pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`).
@@ -24,6 +25,17 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - `#745` submodule parity bumps (hardened)
   - `#744` A2A hardening + agent-card parity (hardened)
   - hardened->main sync landed via `#746`
+- March 2 follow-on merge wave completed on `main`:
+  - `#748` roadmap refresh
+  - `#749` audit summary API
+  - `#750` dashboard hydration closeout
+  - `#751` presign health port fix
+  - `#752` submodule bumps (Agent-Zero, cipher, transcribe-and-fetch)
+  - `#753` CI queue guard/drain commands
+  - `#754`, `#755`, `#756`, `#757` dependabot workflow/dependency updates
+  - `#758` production runtime/db/env hardening sitrep
+  - `#759` CI SQL/Python collision fixes
+  - `#760` ToKenism submodule gitlink bump after merged PR #46
 - DAO recontext + ingestion planning is now tracked at `DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md` with a normalized projection envelope for operator-safe planning.
 - Hardened release PR queue is clear (`0` open PRs).
 - Recent production PR closures on hardened: `#720`, `#722`, `#723`, `#724`, `#725`, `#726`, `#727`.
