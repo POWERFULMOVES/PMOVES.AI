@@ -63,10 +63,12 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, Body, HTTPException, BackgroundTasks, Response
 from contextlib import asynccontextmanager
-import yt_dlp
 try:
+    import yt_dlp
     from yt_dlp.utils import DownloadError, PostProcessingError
-except Exception:  # pragma: no cover - fallback when utils module missing
+except Exception:  # pragma: no cover - fallback when yt-dlp is unavailable
+    yt_dlp = None  # type: ignore[assignment]
+
     class DownloadError(Exception):
         """Exception raised when yt-dlp fails to download media.
 
@@ -410,6 +412,13 @@ _periodic_docs_task: Optional[asyncio.Task] = None
 
 _emit_jobs: Dict[str, Dict[str, Any]] = {}
 _emit_job_lock = threading.Lock()
+
+
+def _youtube_dl(ydl_opts: Dict[str, Any]):
+    """Return a YoutubeDL client or fail with a clear runtime error."""
+    if yt_dlp is None:
+        raise HTTPException(503, "yt_dlp is not installed in this runtime")
+    return yt_dlp.YoutubeDL(ydl_opts)
 
 
 def _record_emit_job(job_id: str, state: Dict[str, Any]) -> None:
@@ -1217,7 +1226,7 @@ def _download_with_yt_dlp(
     vid_dir: Optional[Path] = None
     platform_key = platform or "youtube"
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with _youtube_dl(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             if info is None:
                 raise DownloadError(f"yt_dlp returned no info for {url}")
@@ -1693,7 +1702,7 @@ def yt_info(body: Dict[str,Any] = Body(...)):
     # Ignore external yt-dlp config files to keep API behavior deterministic.
     ydl_opts['ignoreconfig'] = True
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with _youtube_dl(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception:
         # Conservative fallback that avoids hardened defaults entirely.
@@ -1704,7 +1713,7 @@ def yt_info(body: Dict[str,Any] = Body(...)):
             'extract_flat': True,
             'ignoreconfig': True,
         }
-        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+        with _youtube_dl(fallback_opts) as ydl:
             info = ydl.extract_info(url, download=False)
     wanted = {k: info.get(k) for k in ('id','title','uploader','duration','webpage_url')}
     return {'ok': True, 'info': wanted}
@@ -2101,7 +2110,7 @@ def _extract_entries(url: str) -> List[Dict[str,Any]]:
         List of dictionaries with 'id' and 'title' for each entry.
     """
     ydl_opts = _with_ytdlp_defaults({'quiet': True, 'noprogress': True, 'skip_download': True, 'extract_flat': True})
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    with _youtube_dl(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         entries = info.get('entries') or []
         out = []
